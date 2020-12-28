@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+    <title>Cairo Tracer</title>
+    <link rel="icon" href="favicon.png">
+    <link rel="stylesheet" type="text/css" href="tracer.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script type="text/javascript" src="tracer.js"></script>
+</head>
+
+<body style="display: flex;">
+    <div id="code_div_parent">
+        <div id="code_div"></div>
+    </div>
+    <div id="memory_div_parent">
+        <div id="memory_div"></div>
+        <div style="padding: 5px;">
+            Follow:
+            <select id="memory_follow">
+                <option value="">None</option>
+                <option value="ap" selected>ap</option>
+                <option value="fp">fp</option>
+                <option value="pc">pc</option>
+            </select>
+        </div>
+    </div>
+    <div id="info_td">
+        <div id="slider_div"></div>
+        <b>(s)</b> Step<br />
+        <b>(S)</b> Previous step<br />
+        <b>(n)</b> Step over<br />
+        <b>(N)</b> Previous step over<br />
+        <b>(o)</b> Step out<br />
+        <b>(b)</b> Run until next breakpoint<br />
+        <b>(B)</b> Run until previous breakpoint<br />
+        <br />
+        pc = <span id="pc"></span><br />
+        ap = <span id="ap"></span><br />
+        fp = <span id="fp"></span><br />
+        <br />
+        dst_addr = <span id="dst_addr"></span><br />
+        op0_addr = <span id="op0_addr"></span><br />
+        op1_addr = <span id="op1_addr"></span><br />
+        <br />
+        <b>Stack trace:</b>
+        <table id="stack_trace" class="table_with_border"></table>
+        <br />
+        <b>Watch:</b>
+        <table id="watch_table"></table>
+    </div>
+</body>
+
+</html>

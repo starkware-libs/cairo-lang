@@ -1,0 +1,357 @@
+[
+    {
+        "dependencies": [],
+        "package": {
+            "installed_version": "20.2.0",
+            "key": "attrs",
+            "package_name": "attrs"
+        }
+    },
+    {
+        "dependencies": [
+            {
+                "installed_version": "1.15.0",
+                "key": "six",
+                "package_name": "six",
+                "required_version": ">=1.9.0"
+            }
+        ],
+        "package": {
+            "installed_version": "0.16.0",
+            "key": "ecdsa",
+            "package_name": "ecdsa"
+        }
+    },
+    {
+        "dependencies": [],
+        "package": {
+            "installed_version": "2.1.5",
+            "key": "fastecdsa",
+            "package_name": "fastecdsa"
+        }
+    },
+    {
+        "dependencies": [
+            {
+                "installed_version": "3.4.0",
+                "key": "zipp",
+                "package_name": "zipp",
+                "required_version": ">=0.5"
+            }
+        ],
+        "package": {
+            "installed_version": "2.0.0",
+            "key": "importlib-metadata",
+            "package_name": "importlib-metadata"
+        }
+    },
+    {
+        "dependencies": [],
+        "package": {
+            "installed_version": "1.1.1",
+            "key": "iniconfig",
+            "package_name": "iniconfig"
+        }
+    },
+    {
+        "dependencies": [],
+        "package": {
+            "installed_version": "0.8.5",
+            "key": "lark-parser",
+            "package_name": "lark-parser"
+        }
+    },
+    {
+        "dependencies": [],
+        "package": {
+            "installed_version": "3.8.0",
+            "key": "marshmallow",
+            "package_name": "marshmallow"
+        }
+    },
+    {
+        "dependencies": [
+            {
+                "installed_version": "3.8.0",
+                "key": "marshmallow",
+                "package_name": "marshmallow",
+                "required_version": ">=3.0.0,<4.0"
+            },
+            {
+                "installed_version": "0.6.0",
+                "key": "typing-inspect",
+                "package_name": "typing-inspect",
+                "required_version": null
+            }
+        ],
+        "package": {
+            "installed_version": "8.1.0",
+            "key": "marshmallow-dataclass",
+            "package_name": "marshmallow-dataclass"
+        }
+    },
+    {
+        "dependencies": [
+            {
+                "installed_version": "3.8.0",
+                "key": "marshmallow",
+                "package_name": "marshmallow",
+                "required_version": ">=2.0.0"
+            }
+        ],
+        "package": {
+            "installed_version": "1.5.1",
+            "key": "marshmallow-enum",
+            "package_name": "marshmallow-enum"
+        }
+    },
+    {
+        "dependencies": [
+            {
+                "installed_version": "3.8.0",
+                "key": "marshmallow",
+                "package_name": "marshmallow",
+                "required_version": ">=3.0.0rc6,<4.0.0"
+            }
+        ],
+        "package": {
+            "installed_version": "2.1.0",
+            "key": "marshmallow-oneofschema",
+            "package_name": "marshmallow-oneofschema"
+        }
+    },
+    {
+        "dependencies": [],
+        "package": {
+            "installed_version": "1.1.0",
+            "key": "mpmath",
+            "package_name": "mpmath"
+        }
+    },
+    {
+        "dependencies": [],
+        "package": {
+            "installed_version": "0.4.3",
+            "key": "mypy-extensions",
+            "package_name": "mypy-extensions"
+        }
+    },
+    {
+        "dependencies": [],
+        "package": {
+            "installed_version": "1.19.2",
+            "key": "numpy",
+            "package_name": "numpy"
+        }
+    },
+    {
+        "dependencies": [
+            {
+                "installed_version": "2.4.7",
+                "key": "pyparsing",
+                "package_name": "pyparsing",
+                "required_version": ">=2.0.2"
+            },
+            {
+                "installed_version": "1.15.0",
+                "key": "six",
+                "package_name": "six",
+                "required_version": null
+            }
+        ],
+        "package": {
+            "installed_version": "20.4",
+            "key": "packaging",
+            "package_name": "packaging"
+        }
+    },
+    {
+        "dependencies": [],
+        "package": {
+            "installed_version": "20.1.1",
+            "key": "pip",
+            "package_name": "pip"
+        }
+    },
+    {
+        "dependencies": [
+            {
+                "installed_version": "20.1.1",
+                "key": "pip",
+                "package_name": "pip",
+                "required_version": ">=6.0.0"
+            }
+        ],
+        "package": {
+            "installed_version": "1.0.0",
+            "key": "pipdeptree",
+            "package_name": "pipdeptree"
+        }
+    },
+    {
+        "dependencies": [
+            {
+                "installed_version": "2.0.0",
+                "key": "importlib-metadata",
+                "package_name": "importlib-metadata",
+                "required_version": ">=0.12"
+            }
+        ],
+        "package": {
+            "installed_version": "0.13.1",
+            "key": "pluggy",
+            "package_name": "pluggy"
+        }
+    },
+    {
+        "dependencies": [],
+        "package": {
+            "installed_version": "1.9.0",
+            "key": "py",
+            "package_name": "py"
+        }
+    },
+    {
+        "dependencies": [],
+        "package": {
+            "installed_version": "2.4.7",
+            "key": "pyparsing",
+            "package_name": "pyparsing"
+        }
+    },
+    {
+        "dependencies": [
+            {
+                "installed_version": "20.2.0",
+                "key": "attrs",
+                "package_name": "attrs",
+                "required_version": ">=17.4.0"
+            },
+            {
+                "installed_version": "2.0.0",
+                "key": "importlib-metadata",
+                "package_name": "importlib-metadata",
+                "required_version": ">=0.12"
+            },
+            {
+                "installed_version": "1.1.1",
+                "key": "iniconfig",
+                "package_name": "iniconfig",
+                "required_version": null
+            },
+            {
+                "installed_version": "20.4",
+                "key": "packaging",
+                "package_name": "packaging",
+                "required_version": null
+            },
+            {
+                "installed_version": "0.13.1",
+                "key": "pluggy",
+                "package_name": "pluggy",
+                "required_version": ">=0.12,<1.0"
+            },
+            {
+                "installed_version": "1.9.0",
+                "key": "py",
+                "package_name": "py",
+                "required_version": ">=1.8.2"
+            },
+            {
+                "installed_version": "0.10.1",
+                "key": "toml",
+                "package_name": "toml",
+                "required_version": null
+            }
+        ],
+        "package": {
+            "installed_version": "6.1.1",
+            "key": "pytest",
+            "package_name": "pytest"
+        }
+    },
+    {
+        "dependencies": [],
+        "package": {
+            "installed_version": "47.1.1",
+            "key": "setuptools",
+            "package_name": "setuptools"
+        }
+    },
+    {
+        "dependencies": [],
+        "package": {
+            "installed_version": "1.15.0",
+            "key": "six",
+            "package_name": "six"
+        }
+    },
+    {
+        "dependencies": [
+            {
+                "installed_version": "1.1.0",
+                "key": "mpmath",
+                "package_name": "mpmath",
+                "required_version": ">=0.19"
+            }
+        ],
+        "package": {
+            "installed_version": "1.6.2",
+            "key": "sympy",
+            "package_name": "sympy"
+        }
+    },
+    {
+        "dependencies": [],
+        "package": {
+            "installed_version": "0.10.1",
+            "key": "toml",
+            "package_name": "toml"
+        }
+    },
+    {
+        "dependencies": [],
+        "package": {
+            "installed_version": "3.7.4.3",
+            "key": "typing-extensions",
+            "package_name": "typing-extensions"
+        }
+    },
+    {
+        "dependencies": [
+            {
+                "installed_version": "0.4.3",
+                "key": "mypy-extensions",
+                "package_name": "mypy-extensions",
+                "required_version": ">=0.3.0"
+            },
+            {
+                "installed_version": "3.7.4.3",
+                "key": "typing-extensions",
+                "package_name": "typing-extensions",
+                "required_version": ">=3.7.4"
+            }
+        ],
+        "package": {
+            "installed_version": "0.6.0",
+            "key": "typing-inspect",
+            "package_name": "typing-inspect"
+        }
+    },
+    {
+        "dependencies": [],
+        "package": {
+            "installed_version": "0.34.2",
+            "key": "wheel",
+            "package_name": "wheel"
+        }
+    },
+    {
+        "dependencies": [],
+        "package": {
+            "installed_version": "3.4.0",
+            "key": "zipp",
+            "package_name": "zipp"
+        }
+    }
+]

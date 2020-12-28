@@ -1,0 +1,25 @@
+import pytest
+
+from starkware.cairo.lang.builtins.builtin_runner_test_utils import PRIME, compile_and_run
+from starkware.cairo.lang.vm.vm import VmException
+
+
+def test_validation_rules():
+    CODE_FORMAT = """
+%builtins range_check
+
+func main(range_check_ptr) -> (range_check_ptr):
+    assert [range_check_ptr] = {value}
+    return (range_check_ptr=range_check_ptr + 1)
+end
+"""
+
+    # Test valid values.
+    compile_and_run(CODE_FORMAT.format(value=0))
+    compile_and_run(CODE_FORMAT.format(value=1))
+
+    with pytest.raises(
+            VmException,
+            match=f'Value {PRIME - 1}, in range check builtin 0, is out of range '
+            r'\[0, {bound}\)'.format(bound=2**128)):
+        compile_and_run(CODE_FORMAT.format(value=-1))

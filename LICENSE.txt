@@ -1,0 +1,15 @@
+The files in this repository are governed by several licenses,
+which are located under the licenses/ directory.
+
+All code in this project except for the files under
+'src/starkware/cairo/apps/starkex2_0/' and its subdirectories is
+subject to the Cairo Toolchain License (Source Available), which
+can be found under 'licenses/CairoToolchainLicense.txt'.
+
+The code under 'src/starkware/cairo/apps/starkex2_0/' and its
+subdirectories is subject to the Cairo Program License (Source
+Available), which can be found under
+'licenses/CairoProgramLicense.txt'.
+
+For more infromation regarding licenses visit
+https://starkware.co/licenses/.

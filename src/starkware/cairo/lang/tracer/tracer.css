@@ -1,0 +1,81 @@
+html, body {
+    margin: 0px;
+    padding: 0px;
+    height: 100%;
+}
+
+#code_div, #info_td, #memory_div_parent {
+    font-family: monospace;
+}
+
+.current_instruction, .current_pc_mem {
+    background: yellow !important;
+}
+
+.highlight_instruction {
+    background: lightblue;
+}
+
+.breakpoint {
+    background: #99ccff;
+}
+
+#code_div_parent, #memory_div_parent {
+    flex-flow: column;
+    height: 100%;
+    vertical-align: top;
+}
+
+#code_div_parent {
+    background: rgb(238, 255, 255);
+    overflow-y: scroll;
+}
+
+#memory_div_parent {
+    background: rgb(255, 255, 250);
+    display: flex;
+}
+
+#memory_div {
+    overflow-y: scroll;
+    flex-flow: row;
+}
+
+.mem_info {
+    display: inline-block;
+    width: 40px;
+    text-align: right;
+    font-size: 70%;
+}
+
+#main_table {
+    height: 100%;
+}
+
+#code_div {
+    margin: 10px;
+}
+
+#memory_div>table {
+    height: 100%;
+    margin: 10px;
+}
+
+.table_with_border {
+    border-collapse: collapse;
+}
+
+.table_with_border>tr>td, .table_with_border>tr>th {
+    border: 1px black solid;
+}
+
+.filename {
+    font-weight: bold;
+    text-decoration: underline;
+    margin-top: 10px;
+    margin-bottom: 5px;
+}
+
+.public_memory {
+    background-color: #f0fff8;
+}

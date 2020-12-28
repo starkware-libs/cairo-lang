@@ -1,0 +1,3 @@
+[submodule "repos/starkware-public"]
+	path = repos/starkware-public
+	url = git@github.com:starkware-libs/starkex-resources-wip.git

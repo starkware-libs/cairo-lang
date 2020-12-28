@@ -1,0 +1,35 @@
+Cairo Toolchain License (Source Available)
+
+Version 1.0 dated December 22, 2020
+
+This license contains the terms and conditions under which StarkWare
+Industries, Ltd ("StarkWare") makes available its Cairo Toolchain
+("Toolchain"). Your use of the Toolchain is subject to these terms and
+conditions.
+
+StarkWare grants you ("Licensee") a license to use the Toolchain, only
+for the purpose of developing and compiling Cairo programs. Licensee's
+use of the Toolchain is limited to non-commercial use, which means academic,
+scientific, or research and development use, or evaluating the Cairo
+language and Toolchain.
+
+StarkWare grants Licensee a license to modify the Toolchain, only as
+necessary to fix errors. Licensee may, but is not obligated to, provide
+any of Licensee's modifications to StarkWare. This license grants Licensee no
+right to distribute the Toolchain or make copies of the Toolchain available
+to others.
+
+These terms do not allow Licensee to sublicense or transfer any of Licensee's
+rights to anyone else. These terms do not imply any other licenses not
+expressly granted in this license.
+
+If Licensee violates any of these terms, or uses the Toolchain in a way not
+authorized under this license, the license granted to Licensee ends immediately.
+If Licensee makes, or authorizes any other person to make, any written claim
+that the Toolchain infringes or contributes to infringement of any patent, all
+rights granted to Licensee under this license end immediately.
+
+As far as the law allows, the Toolchain is provided AS IS, without any warranty
+or condition, and StarkWare will not be liable to Licensee for any damages
+arising out of these terms or the use or nature of the Toolchain, under any kind
+of legal claim.

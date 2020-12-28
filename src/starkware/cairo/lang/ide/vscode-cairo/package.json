@@ -1,0 +1,76 @@
+{
+    "name": "cairo",
+    "displayName": "Cairo",
+    "description": "Support Cairo syntax",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.30.0"
+    },
+    "dependencies": {
+        "vscode-languageclient": "^5.0.0"
+    },
+    "categories": [
+        "Programming Languages"
+    ],
+    "activationEvents": [
+        "onLanguage:cairo"
+    ],
+    "main": "./out/extension",
+    "contributes": {
+        "languages": [
+            {
+                "id": "cairo",
+                "aliases": [
+                    "Cairo",
+                    "cairo"
+                ],
+                "extensions": [
+                    ".cairo"
+                ],
+                "configuration": "./language-configuration.json"
+            }
+        ],
+        "grammars": [
+            {
+                "language": "cairo",
+                "scopeName": "source.cairo",
+                "path": "./syntaxes/cairo.tmLanguage.json",
+                "embeddedLanguages": {
+                    "meta.embedded.block.python": "source.python"
+                }
+            }
+        ],
+        "configuration": [
+            {
+                "title": "Cairo",
+                "properties": {
+                    "cairo.cairoFormatPath": {
+                        "type": "string",
+                        "default": "cairo-format",
+                        "description": "Path to the cairo-format utility.",
+                        "scope": "window"
+                    }
+                }
+            }
+        ],
+        "configurationDefaults": {
+            "[cairo]": {
+                "editor.tabSize": 4,
+                "editor.insertSpaces": true
+            }
+        }
+    },
+    "publisher": "Starkware",
+    "repository": "https://github.com/starkware-libs/cairo-lang/",
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./",
+        "postinstall": "node ./node_modules/vscode/bin/install"
+    },
+    "devDependencies": {
+        "typescript": "^3.1.4",
+        "vscode": "^1.1.25",
+        "@types/node": "^8.10.25"
+    }
+}

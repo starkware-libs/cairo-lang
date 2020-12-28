@@ -1,0 +1,128 @@
+%import common.INT
+%import common.WS_INLINE
+%import common.NEWLINE
+%ignore WS_INLINE
+
+IDENTIFIER: /[a-zA-Z_][a-zA-Z_0-9]*/
+PYCONST: /%\[.*?%\]/s
+_DBL_EQ: "=="
+_ELLIPSIS: "..."
+
+// Types.
+type: "felt"       -> type_felt
+    | identifier   -> type_struct
+    | type "*"     -> type_pointer
+
+// Expressions.
+expr_assignment: expr | identifier_def "=" expr
+?arg_list_item: expr_assignment
+              | _ELLIPSIS                    -> ellipsis
+arg_list: ((notes arg_list_item notes ",")* notes arg_list_item (notes ",")?)? notes
+
+?expr: sum
+?sum: product
+    | sum "+" notes product   -> expr_add
+    | sum "-" notes product   -> expr_sub
+?product: unary
+        | product "*" notes unary  -> expr_mul
+        | product "/" notes unary  -> expr_div
+?unary: atom
+      | "&" unary                             -> unary_addressof
+      | "-" unary                             -> unary_neg
+identifier: IDENTIFIER ("." IDENTIFIER)*
+identifier_def: IDENTIFIER
+?atom: INT                                    -> atom_number
+     | PYCONST                                -> atom_pyconst
+     | reg                                    -> atom_reg
+     | identifier
+     | "(" notes expr ")"                     -> atom_parentheses
+     | "[" notes expr "]"                     -> atom_deref
+     | "cast" "(" notes expr "," type ")"     -> atom_cast
+     | "(" arg_list ")"                       -> atom_tuple
+!reg: "ap" -> reg_ap
+    | "fp" -> reg_fp
+
+bool_expr: expr "==" expr      -> bool_expr_eq
+         | expr "!=" expr      -> bool_expr_neq
+
+!modifier: "local" -> modifier_local
+
+typed_identifier: (modifier)? identifier_def (":" type)?
+
+_ref_binding: typed_identifier | "(" identifier_list ")"
+
+identifier_list: notes ((typed_identifier notes "," notes)* typed_identifier notes ","?)? notes
+
+// Instructions.
+// Define RET as a terminal to get the location of the instruction correctly.
+RET: "ret"
+call_instruction: "call" "rel" expr                   -> inst_call_rel
+                | "call" "abs" expr                   -> inst_call_abs
+                | "call" identifier                   -> inst_call_label
+?instruction_body: expr "=" expr                       -> inst_assert_eq
+                 | "jmp" "rel" expr                    -> inst_jmp_rel
+                 | "jmp" "abs" expr                    -> inst_jmp_abs
+                 | "jmp" identifier                    -> inst_jmp_to_label
+                 | "jmp" "rel" expr "if" expr "!=" INT -> inst_jnz
+                 | "jmp" identifier "if" expr "!=" INT -> inst_jnz_to_label
+                 | call_instruction
+                 | RET                                 -> inst_ret
+                 | "ap" "+=" expr                      -> inst_add_ap
+instruction: instruction_body                    -> instruction_noap
+           | instruction_body ";" "ap" "++"      -> instruction_ap
+
+function_call: identifier "(" arg_list ")"
+
+// Reference expressions.
+?rvalue: expr                                    -> rvalue_expr
+      | call_instruction                         -> rvalue_call_instruction
+      | function_call
+
+// Directives.
+directive: "%builtins" identifier+  -> directive_builtins
+
+// Import statement.
+_import: "from" identifier "import" identifier_def ("as" identifier_def)?
+
+// Function/Namespace/Struct definition.
+_returns:  "->" _NEWLINE* "(" identifier_list ")"
+_arguments: "(" identifier_list ")"
+_func: "func" identifier_def _arguments _NEWLINE* _returns? ":" _NEWLINE code_block "end"
+_if: "if" bool_expr ":" _NEWLINE code_block ("else" ":" _NEWLINE code_block)? "end"
+
+!_some_namespace: "struct" | "namespace"
+_struct: _some_namespace identifier_def ":"_NEWLINE code_block "end"
+
+// Cairo file.
+_NEWLINE: "\n"
+COMMENT: /#.*/
+HINT: /%\{(.*?)%\}/s
+code_element: instruction                                       -> code_element_instruction
+            | "const" identifier_def "=" expr                   -> code_element_const
+            | "member" typed_identifier "=" expr                -> code_element_member
+            | "let" _ref_binding "=" rvalue                     -> code_element_reference
+            | "local" typed_identifier ("=" expr)?              -> code_element_local_var
+            | "tempvar" typed_identifier "=" expr               -> code_element_temp_var
+            | "assert" expr "=" expr                            -> code_element_compound_assert_eq
+            | "static_assert" expr _DBL_EQ expr                 -> code_element_static_assert
+            | "return" "(" arg_list ")"                         -> code_element_return
+            | _if                                               -> code_element_if
+            | function_call                                     -> code_element_func_call
+            | identifier_def ":"                                -> code_element_label
+            | _func                                             -> code_element_function
+            | _struct                                           -> code_element_struct
+            | HINT                                              -> code_element_hint
+            | directive                                         -> code_element_directive
+            | _import                                           -> code_element_import
+            | "alloc_locals"                                    -> code_element_alloc_locals
+            |                                                   -> code_element_empty_line
+commented_code_element: code_element [COMMENT]
+code_block: (commented_code_element _NEWLINE)+
+
+cairo_file: code_block
+
+// Notes (comments inside parentheses).
+note_new_line: _NEWLINE
+notes: (note_new_line | COMMENT)*
+
+?repl: expr | code_element

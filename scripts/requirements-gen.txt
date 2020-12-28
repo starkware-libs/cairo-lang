@@ -1,0 +1,12 @@
+ecdsa
+fastecdsa
+lark-parser==0.8.5
+marshmallow-dataclass>=7.1.0
+marshmallow-enum
+marshmallow-oneofschema
+marshmallow>=3.2.1
+mpmath
+numpy
+pipdeptree
+pytest
+sympy
