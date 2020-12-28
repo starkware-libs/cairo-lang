@@ -24,8 +24,12 @@ are installed. Alternatively, you can try following the commands in the
 
 ## Building using the dockerfile
 
+*Note*: This section is relevant only if you wish to build the Cairo python-package yourself,
+rather than downloading it.
+
 The root directory holds a dedicated Dockerfile, which automatically builds the package and runs
 the unit tests on a simulated Ubuntu 18.04 environment.
+You should have docker installed (see https://docs.docker.com/get-docker/).
 
 Clone the repository and initialize the git submodules using:
 
