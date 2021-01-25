@@ -10,6 +10,7 @@ python_lib(cairo_compile_lib
     ast/code_elements.py
     ast/expr.py
     ast/formatting_utils.py
+    ast/imports.py
     ast/instructions.py
     ast/module.py
     ast/node.py
@@ -55,6 +56,7 @@ python_lib(cairo_compile_lib
     type_system_visitor.py
 
     LIBS
+    cairo_version_lib
     starkware_expression_string_lib
     starkware_python_utils_lib
     pip_marshmallow_dataclass

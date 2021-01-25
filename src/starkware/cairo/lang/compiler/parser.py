@@ -1,4 +1,5 @@
 import os
+from functools import lru_cache
 from typing import List, Optional
 
 import lark
@@ -146,6 +147,7 @@ def parse_instruction(code: str) -> InstructionAst:
     return parse(None, code, 'instruction', InstructionAst)
 
 
+@lru_cache(None)
 def parse_expr(code: str) -> Expression:
     """
     Parses the given string and returns an Expression instance.

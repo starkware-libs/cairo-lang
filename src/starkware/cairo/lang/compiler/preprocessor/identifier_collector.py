@@ -181,18 +181,19 @@ class IdentifierCollector(Visitor):
             self.visit(elm.code_elm)
 
     def visit_CodeElementImport(self, elm: CodeElementImport):
-        alias_dst = ScopedName.from_string(elm.path.name) + elm.orig_identifier.name
-        local_identifier = elm.identifier
+        for import_item in elm.import_items:
+            alias_dst = ScopedName.from_string(elm.path.name) + import_item.orig_identifier.name
+            local_identifier = import_item.identifier
 
-        # Ensure destination is a valid identifier.
-        if self.identifiers.get_by_full_name(alias_dst) is None:
-            raise PreprocessorError(
-                f"Scope '{elm.path.name}' does not include identifier "
-                f"'{elm.orig_identifier.name}'.",
-                location=elm.orig_identifier.location)
+            # Ensure destination is a valid identifier.
+            if self.identifiers.get_by_full_name(alias_dst) is None:
+                raise PreprocessorError(
+                    f"Scope '{elm.path.name}' does not include identifier "
+                    f"'{import_item.orig_identifier.name}'.",
+                    location=import_item.orig_identifier.location)
 
-        # Add alias to identifiers.
-        self.add_identifier(
-            name=self.current_scope + local_identifier.name,
-            identifier_definition=AliasDefinition(destination=alias_dst),
-            location=elm.identifier.location)
+            # Add alias to identifiers.
+            self.add_identifier(
+                name=self.current_scope + local_identifier.name,
+                identifier_definition=AliasDefinition(destination=alias_dst),
+                location=import_item.identifier.location)

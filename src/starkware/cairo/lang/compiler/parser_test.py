@@ -5,6 +5,7 @@ from starkware.cairo.lang.compiler.ast.code_elements import CodeElementImport
 from starkware.cairo.lang.compiler.ast.expr import (
     ExprConst, ExprDeref, ExprIdentifier, ExprOperator, ExprPyConst, ExprReg)
 from starkware.cairo.lang.compiler.ast.formatting_utils import FormattingError
+from starkware.cairo.lang.compiler.ast.imports import ImportItem
 from starkware.cairo.lang.compiler.ast.instructions import (
     AddApInstruction, AssertEqInstruction, CallInstruction, CallLabelInstruction, InstructionAst,
     JnzInstruction, JumpInstruction, JumpToLabelInstruction, RetInstruction)
@@ -330,24 +331,49 @@ def test_import():
     res = parse_code_element('from   a    import  b')
     assert res == CodeElementImport(
         path=ExprIdentifier(name='a'),
-        orig_identifier=ExprIdentifier(name='b'),
-        local_name=None)
+        import_items=[ImportItem(
+            orig_identifier=ExprIdentifier(name='b'),
+            local_name=None)])
     assert res.format(allowed_line_length=100) == 'from a import b'
 
     # Test module names without periods, with aliasing.
     res = parse_code_element('from   a    import  b   as   c')
     assert res == CodeElementImport(
         path=ExprIdentifier(name='a'),
-        orig_identifier=ExprIdentifier(name='b'),
-        local_name=ExprIdentifier(name='c'))
+        import_items=[ImportItem(
+            orig_identifier=ExprIdentifier(name='b'),
+            local_name=ExprIdentifier(name='c'))])
     assert res.format(allowed_line_length=100) == 'from a import b as c'
 
     # Test module names with periods.
     res = parse_code_element('from   a.b12.c4    import  lib345')
     assert res == CodeElementImport(
         path=ExprIdentifier(name='a.b12.c4'),
-        orig_identifier=ExprIdentifier(name='lib345'))
+        import_items=[ImportItem(
+            orig_identifier=ExprIdentifier(name='lib345'),
+            local_name=None)])
     assert res.format(allowed_line_length=100) == 'from a.b12.c4 import lib345'
+
+    # Test multiple imports.
+    res = parse_code_element('from  lib    import  a,b as    b2,   c')
+
+    assert res == CodeElementImport(
+        path=ExprIdentifier(name='lib'),
+        import_items=[
+            ImportItem(
+                orig_identifier=ExprIdentifier(name='a'),
+                local_name=None),
+            ImportItem(
+                orig_identifier=ExprIdentifier(name='b'),
+                local_name=ExprIdentifier(name='b2')),
+            ImportItem(
+                orig_identifier=ExprIdentifier(name='c'),
+                local_name=None),
+        ])
+    assert res.format(allowed_line_length=100) == 'from lib import a, b as b2, c'
+    assert res.format(allowed_line_length=20) == 'from lib import (\n    a, b as b2, c)'
+
+    assert res == parse_code_element('from lib import (\n    a, b as b2, c)')
 
     # Test module with bad identifier (with periods).
     with pytest.raises(ParserError):

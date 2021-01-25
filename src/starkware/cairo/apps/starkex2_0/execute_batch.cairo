@@ -3,13 +3,13 @@
 # * The license can be found in: licenses/CairoProgramLicense.txt       *
 # ***********************************************************************
 
-from starkware.cairo.apps.starkex2_0.common.cairo_builtins import HashBuiltin
-from starkware.cairo.apps.starkex2_0.common.cairo_builtins import SignatureBuiltin
+from starkware.cairo.apps.starkex2_0.common.cairo_builtins import HashBuiltin, SignatureBuiltin
 from starkware.cairo.apps.starkex2_0.common.dict import DictAccess
 from starkware.cairo.apps.starkex2_0.dex_context import DexContext
-from starkware.cairo.apps.starkex2_0.execute_false_full_withdrawal import execute_false_full_withdrawal
-from starkware.cairo.apps.starkex2_0.execute_modification import ModificationOutput
-from starkware.cairo.apps.starkex2_0.execute_modification import execute_modification
+from starkware.cairo.apps.starkex2_0.execute_false_full_withdrawal import (
+    execute_false_full_withdrawal)
+from starkware.cairo.apps.starkex2_0.execute_modification import (
+    ModificationOutput, execute_modification)
 from starkware.cairo.apps.starkex2_0.execute_settlement import execute_settlement
 from starkware.cairo.apps.starkex2_0.execute_transfer import execute_transfer
 

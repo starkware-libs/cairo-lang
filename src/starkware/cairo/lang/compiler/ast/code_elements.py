@@ -8,8 +8,10 @@ from starkware.cairo.lang.compiler.ast.expr import ArgListItem, Expression, Expr
 from starkware.cairo.lang.compiler.ast.formatting_utils import (
     INDENTATION, LocationField, ParticleFormattingConfig, create_particle_sublist,
     particles_in_lines)
+from starkware.cairo.lang.compiler.ast.imports import ImportItem
 from starkware.cairo.lang.compiler.ast.instructions import InstructionAst
 from starkware.cairo.lang.compiler.ast.node import AstNode
+from starkware.cairo.lang.compiler.ast.notes import NoteListField, Notes
 from starkware.cairo.lang.compiler.ast.rvalue import Rvalue, RvalueCall, RvalueFuncCall
 from starkware.cairo.lang.compiler.ast.types import TypedIdentifier
 from starkware.cairo.lang.compiler.error_handling import Location
@@ -463,20 +465,31 @@ class CodeElementDirective(CodeElement):
 @dataclasses.dataclass
 class CodeElementImport(CodeElement):
     path: ExprIdentifier
-    orig_identifier: ExprIdentifier
-    local_name: Optional[ExprIdentifier] = None
+    import_items: List[ImportItem]
+    notes: List[Notes] = NoteListField  # type: ignore
     location: Optional[Location] = LocationField
 
     def format(self, allowed_line_length):
-        return f'from {self.path.format()} import {self.orig_identifier.format()}' + \
-            (f' as {self.local_name.format()}' if self.local_name else '')
+        for note in self.notes:
+            note.assert_no_comments()
 
-    @property
-    def identifier(self):
-        return self.local_name if self.local_name is not None else self.orig_identifier
+        items = [item.format() for item in self.import_items]
+        prefix = f'from {self.path.format()} import '
+        one_liner = prefix + ', '.join(items)
+
+        if len(one_liner) <= allowed_line_length:
+            return one_liner
+
+        particles = [f'{prefix}(', create_particle_sublist(items, ')')]
+        return particles_in_lines(
+            particles=particles,
+            config=ParticleFormattingConfig(
+                allowed_line_length=allowed_line_length,
+                line_indent=INDENTATION,
+                one_per_line=False))
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
-        return [self.path, self.orig_identifier, self.local_name]
+        return [self.path, *self.import_items]
 
 
 @dataclasses.dataclass
@@ -509,6 +522,7 @@ def remove_redundant_empty_lines(
     Redundant empty lines are empty lines which are after:
     1. Empty lines.
     2. Labels.
+    or at the end of the list.
     """
     new_code_elements = []
     skip_empty_lines = True
@@ -523,6 +537,10 @@ def remove_redundant_empty_lines(
         else:
             skip_empty_lines = False
         new_code_elements.append(code_elm)
+
+    while len(new_code_elements) > 0 and is_empty_line(new_code_elements[-1]):
+        new_code_elements.pop()
+
     return new_code_elements
 
 

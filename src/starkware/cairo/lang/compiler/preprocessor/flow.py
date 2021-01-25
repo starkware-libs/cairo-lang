@@ -109,8 +109,18 @@ class FlowTrackingDataActual(FlowTrackingData):
             reference = reference_manager.get_ref(ref_id)
             other_ref = reference_manager.get_ref(other_ref_id)
             try:
-                if simplifier.visit(reference.eval(new_ap_tracking)) == \
-                        simplifier.visit(other_ref.eval(new_ap_tracking)):
+                ref_expr = reference.eval(self.ap_tracking)
+                if simplifier.visit(ref_expr) == \
+                        simplifier.visit(other_ref.eval(other.ap_tracking)):
+                    # Same expression.
+                    if self.ap_tracking != new_ap_tracking:
+                        # Create a new reference on the new ap tracking.
+                        new_reference = Reference(
+                            pc=reference.pc,
+                            value=ref_expr,
+                            ap_tracking_data=new_ap_tracking,
+                        )
+                        ref_id = reference_manager.get_id(new_reference)
                     reference_ids[name] = ref_id
             except FlowTrackingError:
                 pass

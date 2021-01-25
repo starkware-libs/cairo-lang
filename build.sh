@@ -11,5 +11,6 @@ VENV_SITE_DIR=build/Release/src/starkware/cairo/lang/cairo_lang_venv-site
 cp src/starkware/cairo/lang/setup.py ${VENV_SITE_DIR}
 cp src/starkware/cairo/lang/MANIFEST.in ${VENV_SITE_DIR}
 cp scripts/requirements-gen.txt ${VENV_SITE_DIR}/requirements.txt
+cp README.md ${VENV_SITE_DIR}
 ( cd ${VENV_SITE_DIR}; python3 setup.py sdist --format=zip )
-cp ${VENV_SITE_DIR}/dist/cairo-starkware-0.0.1.zip .
+cp ${VENV_SITE_DIR}/dist/cairo-lang-$(cat src/starkware/cairo/lang/VERSION).zip .

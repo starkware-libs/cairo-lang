@@ -7,6 +7,7 @@ python_lib(cairo_hash_program_lib
     LIBS
     cairo_common_lib
     cairo_compile_lib
+    cairo_version_lib
     cairo_vm_crypto_lib
 )
 

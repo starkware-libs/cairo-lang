@@ -6,8 +6,7 @@
 from starkware.cairo.apps.starkex2_0.common.cairo_builtins import HashBuiltin
 from starkware.cairo.apps.starkex2_0.common.dict import DictAccess
 from starkware.cairo.apps.starkex2_0.common.merkle_update import merkle_update
-from starkware.cairo.apps.starkex2_0.dex_constants import BALANCE_BOUND
-from starkware.cairo.apps.starkex2_0.dex_constants import ZERO_VAULT_HASH
+from starkware.cairo.apps.starkex2_0.dex_constants import BALANCE_BOUND, ZERO_VAULT_HASH
 
 struct VaultState:
     member stark_key = 0

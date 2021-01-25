@@ -3,8 +3,7 @@
 # * The license can be found in: licenses/CairoProgramLicense.txt       *
 # ***********************************************************************
 
-from starkware.cairo.apps.starkex2_0.common.cairo_builtins import HashBuiltin
-from starkware.cairo.apps.starkex2_0.common.cairo_builtins import SignatureBuiltin
+from starkware.cairo.apps.starkex2_0.common.cairo_builtins import HashBuiltin, SignatureBuiltin
 from starkware.cairo.apps.starkex2_0.dex_constants import PackedOrderMsg
 from starkware.cairo.apps.starkex2_0.verify_order_id import verify_order_id
 

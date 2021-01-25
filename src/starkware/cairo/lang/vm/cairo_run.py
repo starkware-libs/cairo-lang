@@ -12,6 +12,7 @@ import starkware.python.python_dependencies as python_dependencies
 from starkware.cairo.lang.compiler.debug_info import DebugInfo
 from starkware.cairo.lang.compiler.program import Program, ProgramBase
 from starkware.cairo.lang.instances import LAYOUTS
+from starkware.cairo.lang.version import __version__
 from starkware.cairo.lang.vm.air_public_input import PublicInput, PublicMemoryEntry
 from starkware.cairo.lang.vm.cairo_pie import CairoPie
 from starkware.cairo.lang.vm.cairo_runner import CairoRunner
@@ -28,6 +29,7 @@ def main():
 
     parser = argparse.ArgumentParser(
         description='A tool to run Cairo programs.')
+    parser.add_argument('-v', '--version', action='version', version=f'%(prog)s {__version__}')
     parser.add_argument(
         '--program', type=argparse.FileType('r'), help='The name of the program json file.')
     parser.add_argument(

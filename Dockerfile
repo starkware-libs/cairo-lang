@@ -20,3 +20,5 @@ WORKDIR /app/src/starkware/cairo/lang/ide/vscode-cairo
 RUN npm install -g vsce
 RUN npm install
 RUN vsce package
+
+WORKDIR /app/

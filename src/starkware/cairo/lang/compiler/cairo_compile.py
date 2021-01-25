@@ -14,6 +14,7 @@ from starkware.cairo.lang.compiler.module_reader import ModuleReader
 from starkware.cairo.lang.compiler.preprocessor.preprocessor import Preprocessor, preprocess_codes
 from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
+from starkware.cairo.lang.version import __version__
 
 DEFAULT_PRIME = 2**251 + 17 * 2**192 + 1
 
@@ -21,8 +22,8 @@ DEFAULT_PRIME = 2**251 + 17 * 2**192 + 1
 def main():
     start_time = time.time()
 
-    parser = argparse.ArgumentParser(
-        description='A tool to compile Cairo code.')
+    parser = argparse.ArgumentParser(description='A tool to compile Cairo code.')
+    parser.add_argument('-v', '--version', action='version', version=f'%(prog)s {__version__}')
     parser.add_argument('files', metavar='file', type=str, nargs='+', help='File names')
     parser.add_argument(
         '--prime', type=int, default=DEFAULT_PRIME, help='The size of the finite field.')

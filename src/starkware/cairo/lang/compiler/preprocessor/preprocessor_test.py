@@ -701,6 +701,33 @@ ret
 """
 
 
+@pytest.mark.parametrize('jmp_code', [
+    'jmp loop if [ap] != 0',
+    'jmp rel 3',
+    'jmp abs 3',
+    'jmp rel [ap + 3] if [ap] != 0',
+])
+def test_function_flow_revoke(jmp_code):
+    verify_exception(f"""
+func foo():
+    loop:
+    {jmp_code}
+    ret
+end
+
+func bar():
+    tempvar x = 0
+    foo()
+    assert x = 0
+    ret
+end
+""", """
+file:?:?: Reference 'x' was revoked.
+    assert x = 0
+           ^
+""")
+
+
 def test_scope_label():
     code = """\
 x:
@@ -736,12 +763,17 @@ call rel -12
 def test_import():
     files = {
         '.': """
-from a import f as g
+from a import f as g, h as h2
 call g
+call h2
 """,
         'a': """
 func f():
   jmp f
+end
+
+func h():
+  jmp h
 end
 """
     }
@@ -750,7 +782,9 @@ end
 
     assert program.format() == """\
 jmp rel 0
-call rel -2
+jmp rel 0
+call rel -4
+call rel -4
 """
 
 

@@ -82,7 +82,12 @@ function_call: identifier "(" arg_list ")"
 directive: "%builtins" identifier+  -> directive_builtins
 
 // Import statement.
-_import: "from" identifier "import" identifier_def ("as" identifier_def)?
+import_item: identifier_def ("as" identifier_def)?
+
+_import_body: import_item ("," import_item)*
+            | "(" notes (import_item notes "," notes)* import_item notes ","? notes ")"
+
+_import: "from" identifier "import" _import_body
 
 // Function/Namespace/Struct definition.
 _returns:  "->" _NEWLINE* "(" identifier_list ")"
@@ -117,7 +122,7 @@ code_element: instruction                                       -> code_element_
             | "alloc_locals"                                    -> code_element_alloc_locals
             |                                                   -> code_element_empty_line
 commented_code_element: code_element [COMMENT]
-code_block: (commented_code_element _NEWLINE)+
+code_block: (commented_code_element _NEWLINE)*
 
 cairo_file: code_block
 

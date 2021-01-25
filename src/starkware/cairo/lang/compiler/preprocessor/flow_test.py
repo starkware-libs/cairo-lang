@@ -95,8 +95,8 @@ def test_flow_tracking_labels_diverge(changes):
 ])
 def test_flow_tracking_converge_references(refs):
     flow_tracking = FlowTracking()
-    flow_tracking.add_flow_to_label(ScopedName.from_string('a'), 7)
-    flow_tracking.add_flow_to_label(ScopedName.from_string('b'), 5)
+    flow_tracking.add_flow_to_label(ScopedName.from_string('a'), RegChangeUnknown())
+    flow_tracking.add_flow_to_label(ScopedName.from_string('b'), RegChangeUnknown())
 
     # Label a.
     flow_tracking.revoke()

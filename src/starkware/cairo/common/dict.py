@@ -46,7 +46,9 @@ class DictManager:
         """
         if isinstance(dict_ptr, VmConstsReference):
             dict_ptr = dict_ptr.address_
-        dict_tracker = self.trackers[dict_ptr.segment_index]
+        dict_tracker = self.trackers.get(dict_ptr.segment_index)
+        if dict_tracker is None:
+            raise ValueError(f'Dictionary pointer {dict_ptr} was not created using dict_new().')
         assert dict_tracker.current_ptr == dict_ptr, 'Wrong dict pointer supplied. ' \
             f'Got {dict_ptr}, expected {dict_tracker.current_ptr}.'
         return dict_tracker

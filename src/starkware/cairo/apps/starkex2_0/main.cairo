@@ -5,10 +5,8 @@
 
 %builtins output pedersen range_check ecdsa
 
-from starkware.cairo.apps.starkex2_0.common.cairo_builtins import HashBuiltin
-from starkware.cairo.apps.starkex2_0.common.cairo_builtins import SignatureBuiltin
-from starkware.cairo.apps.starkex2_0.common.dict import DictAccess
-from starkware.cairo.apps.starkex2_0.common.dict import squash_dict
+from starkware.cairo.apps.starkex2_0.common.cairo_builtins import HashBuiltin, SignatureBuiltin
+from starkware.cairo.apps.starkex2_0.common.dict import DictAccess, squash_dict
 from starkware.cairo.apps.starkex2_0.common.merkle_multi_update import merkle_multi_update
 from starkware.cairo.apps.starkex2_0.dex_context import make_dex_context
 from starkware.cairo.apps.starkex2_0.execute_batch import execute_batch

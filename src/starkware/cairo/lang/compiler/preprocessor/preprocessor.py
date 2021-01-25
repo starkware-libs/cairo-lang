@@ -938,6 +938,7 @@ Expected expression of type '{member_def.cairo_type.format()}', got '{cairo_type
             location=instruction.location)
 
     def visit_JumpInstruction(self, instruction: JumpInstruction):
+        self.revoke_function_ap_change()
         return InstructionFlows(), JumpInstruction(
             val=self.simplify_expr_as_felt(instruction.val),
             relative=instruction.relative,
@@ -969,6 +970,9 @@ Expected expression of type '{member_def.cairo_type.format()}', got '{cairo_type
                     condition=self.simplify_expr_as_felt(instruction.condition),
                     location=instruction.location)
 
+            if label_pc <= self.current_pc:
+                self.revoke_function_ap_change()
+
         flow_next = None if instruction.condition is None else RegChangeKnown(0)
         if label_full_name is None:
             raise PreprocessorError(
@@ -978,10 +982,19 @@ Expected expression of type '{member_def.cairo_type.format()}', got '{cairo_type
         return InstructionFlows(next_inst=flow_next, jumps=jumps), res_instruction
 
     def visit_JnzInstruction(self, instruction: JnzInstruction):
+        self.revoke_function_ap_change()
         return InstructionFlows(next_inst=RegChangeKnown(0)), JnzInstruction(
             jump_offset=self.simplify_expr_as_felt(instruction.jump_offset),
             condition=self.simplify_expr_as_felt(instruction.condition),
             location=instruction.location)
+
+    def revoke_function_ap_change(self):
+        """
+        Revokes the total_ap_change tracking of the function (which implies that calling it will
+        revoke the ap tracking).
+        """
+        if self.current_scope in self.function_metadata:
+            self.function_metadata[self.current_scope].total_ap_change = RegChangeUnknown()
 
     def visit_CallInstruction(self, instruction: CallInstruction):
         return InstructionFlows(next_inst=RegChangeUnknown()), CallInstruction(

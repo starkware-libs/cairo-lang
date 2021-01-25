@@ -3,14 +3,11 @@
 # * The license can be found in: licenses/CairoProgramLicense.txt       *
 # ***********************************************************************
 
-from starkware.cairo.apps.starkex2_0.common.cairo_builtins import HashBuiltin
-from starkware.cairo.apps.starkex2_0.common.cairo_builtins import SignatureBuiltin
+from starkware.cairo.apps.starkex2_0.common.cairo_builtins import HashBuiltin, SignatureBuiltin
 from starkware.cairo.apps.starkex2_0.common.dict import DictAccess
 from starkware.cairo.apps.starkex2_0.common.merkle_update import merkle_update
-from starkware.cairo.apps.starkex2_0.dex_constants import BALANCE_BOUND
-from starkware.cairo.apps.starkex2_0.dex_constants import EXPIRATION_TIMESTAMP_BOUND
-from starkware.cairo.apps.starkex2_0.dex_constants import NONCE_BOUND
-from starkware.cairo.apps.starkex2_0.dex_constants import PackedOrderMsg
+from starkware.cairo.apps.starkex2_0.dex_constants import (
+    BALANCE_BOUND, EXPIRATION_TIMESTAMP_BOUND, NONCE_BOUND, PackedOrderMsg)
 from starkware.cairo.apps.starkex2_0.dex_context import DexContext
 from starkware.cairo.apps.starkex2_0.vault_update import vault_update_diff
 from starkware.cairo.apps.starkex2_0.verify_order_signature import verify_order_signature

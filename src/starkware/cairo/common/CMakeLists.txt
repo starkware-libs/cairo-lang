@@ -4,22 +4,28 @@ python_lib(cairo_common_lib
     alloc.cairo
     cairo_builtins.cairo
     dict.cairo
+    dict_access.cairo
     dict.py
     find_element.cairo
-    hash.cairo
     hash_chain.cairo
     hash_chain.py
     hash_state.cairo
-    math.cairo
+    hash.cairo
     math_utils.py
+    math.cairo
     memcpy.cairo
     merkle_multi_update.cairo
     merkle_update.cairo
     registers.cairo
     serialize.cairo
     signature.cairo
+    small_merkle_tree.cairo
+    small_merkle_tree.py
+    squash_dict.cairo
     ${CAIRO_COMMON_LIB_ADDITIONAL_FILES}
 
     LIBS
+    cairo_vm_crypto_lib
+    starkware_merkle_tree_lib
     ${CAIRO_COMMON_LIB_ADDITIONAL_LIBS}
 )

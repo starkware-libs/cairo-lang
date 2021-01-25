@@ -43,6 +43,15 @@ class Location:
             return dataclasses.replace(self, parent_location=(
                 new_self_parent_location, self_parent_location_message))
 
+    def topmost_location(self):
+        """
+        Returns the location of the topmost parent.
+        """
+        location = self
+        while location.parent_location is not None:
+            location = location.parent_location[0]
+        return location
+
     @post_dump
     def remove_none_values(self, data, many=False):
         return {

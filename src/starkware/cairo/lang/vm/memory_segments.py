@@ -116,7 +116,7 @@ class MemorySegmentManager:
     def write_arg(self, ptr, arg, apply_modulo_to_args=True):
         assert isinstance(arg, Iterable)
         data = [self.gen_arg(arg=x, apply_modulo_to_args=apply_modulo_to_args) for x in arg]
-        self.load_data(ptr, data)
+        return self.load_data(ptr, data)
 
 
 def get_segment_used_size(segment_index: int, memory: MemoryDict) -> int:

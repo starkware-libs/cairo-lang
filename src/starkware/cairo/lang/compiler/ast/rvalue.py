@@ -8,6 +8,7 @@ from starkware.cairo.lang.compiler.ast.formatting_utils import (
     particles_in_lines)
 from starkware.cairo.lang.compiler.ast.instructions import CallInstruction
 from starkware.cairo.lang.compiler.ast.node import AstNode
+from starkware.cairo.lang.compiler.ast.notes import Notes
 from starkware.cairo.lang.compiler.error_handling import Location
 
 
@@ -100,15 +101,22 @@ class RvalueFuncCall(RvalueCall):
     """
     func_ident: ExprIdentifier
     exprs: List[ArgListItem]
+    notes: List[Notes]
     location: Optional[Location] = LocationField
 
+    def assert_no_comments(self):
+        for note in self.notes:
+            note.assert_no_comments()
+
     def get_particles(self):
+        self.assert_no_comments()
         expr_codes = [x.format() for x in self.exprs]
         particles = [
             f'{self.func_ident.format()}(', create_particle_sublist(expr_codes, ')')]
         return particles
 
     def format(self, allowed_line_length):
+        self.assert_no_comments()
         return particles_in_lines(
             particles=self.get_particles(),
             config=ParticleFormattingConfig(

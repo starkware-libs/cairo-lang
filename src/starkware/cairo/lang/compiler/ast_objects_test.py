@@ -318,16 +318,22 @@ end  # Comment.
 
 def test_parse_namespace():
     before = """\
-namespace MyNS:
+namespace MyNamespace:
 x = 5
       y=3
  end # Comment.
+
+namespace MyNamespace2:
+ end
 """
     after = """\
-namespace MyNS:
+namespace MyNamespace:
     x = 5
     y = 3
 end  # Comment.
+
+namespace MyNamespace2:
+end
 """
     assert parse_file(before).format() == after
 
@@ -354,7 +360,6 @@ func fib():
     [ap] = 2; ap++
     ap += 3
     ret
-
 end  # Comment.
 
 call fib

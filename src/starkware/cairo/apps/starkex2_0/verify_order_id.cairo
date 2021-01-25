@@ -3,7 +3,8 @@
 # * The license can be found in: licenses/CairoProgramLicense.txt       *
 # ***********************************************************************
 
-from starkware.cairo.apps.starkex2_0.dex_constants import HASH_MESSAGE_BOUND as DEX_HASH_MESSAGE_BOUND
+from starkware.cairo.apps.starkex2_0.dex_constants import (
+    HASH_MESSAGE_BOUND as DEX_HASH_MESSAGE_BOUND)
 from starkware.cairo.apps.starkex2_0.dex_constants import ORDER_ID_BOUND as DEX_ORDER_ID_BOUND
 from starkware.cairo.apps.starkex2_0.dex_constants import RANGE_CHECK_BOUND as DEX_RANGE_CHECK_BOUND
 

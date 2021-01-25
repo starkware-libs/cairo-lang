@@ -77,6 +77,8 @@ def indent(code, indentation):
     Indent code by 'indentation' spaces.
     For example, indent('hello\nworld\n', 2) -> '  hello\n  world\n'.
     """
+    if len(code) == 0:
+        return code
     if isinstance(indentation, int):
         indentation = ' ' * indentation
     elif not isinstance(indentation, str):

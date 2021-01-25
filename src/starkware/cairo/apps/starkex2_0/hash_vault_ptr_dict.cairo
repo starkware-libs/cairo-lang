@@ -5,8 +5,7 @@
 
 from starkware.cairo.apps.starkex2_0.common.cairo_builtins import HashBuiltin
 from starkware.cairo.apps.starkex2_0.common.dict import DictAccess
-from starkware.cairo.apps.starkex2_0.vault_update import compute_vault_hash
-from starkware.cairo.apps.starkex2_0.vault_update import VaultState
+from starkware.cairo.apps.starkex2_0.vault_update import VaultState, compute_vault_hash
 
 # Gets a single pointer to a vault state and outputs the hash of that vault.
 func hash_vault_state_ptr(hash_ptr : HashBuiltin*, vault_state_ptr : VaultState*) -> (

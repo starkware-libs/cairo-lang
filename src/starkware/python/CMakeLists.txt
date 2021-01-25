@@ -16,6 +16,12 @@ python_lib(starkware_expression_string_lib
     expression_string.py
 )
 
+python_lib(starkware_merkle_tree_lib
+    PREFIX starkware/python
+    FILES
+    merkle_tree.py
+)
+
 python_lib(starkware_python_test_utils_lib
     PREFIX starkware/python
     FILES

@@ -1,5 +1,4 @@
-from starkware.cairo.common.math import assert_nn_le
-from starkware.cairo.common.math import assert_le
+from starkware.cairo.common.math import assert_le, assert_nn_le
 
 # Finds an element in the array whose first field is key and returns a pointer
 # to this element.

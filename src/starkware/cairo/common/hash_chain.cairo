@@ -5,7 +5,8 @@ from starkware.cairo.common.cairo_builtins import HashBuiltin
 # For example, for the 3-element sequence [x, y, z] the hash is:
 #   h(3, h(x, h(y, z)))
 # If data_length = 0, the function does not return (takes more than field prime steps).
-func hash_chain(pedersen_ptr, data_ptr : felt*) -> (pedersen_ptr, hash):
+func hash_chain(pedersen_ptr : HashBuiltin*, data_ptr : felt*) -> (
+        pedersen_ptr : HashBuiltin*, hash : felt):
     struct LoopLocals:
         member data_ptr : felt* = 0
         member pedersen_ptr : HashBuiltin* = 1

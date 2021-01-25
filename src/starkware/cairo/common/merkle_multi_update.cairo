@@ -1,5 +1,5 @@
 from starkware.cairo.common.cairo_builtins import HashBuiltin
-from starkware.cairo.common.dict import DictAccess
+from starkware.cairo.common.dict_access import DictAccess
 
 # Helper function for merkle_multi_update().
 func merkle_multi_update_inner(
@@ -129,9 +129,9 @@ end
 # Arguments:
 # hash_ptr - hash builtin pointer.
 # update_ptr - a list of DictAccess instances sorted by key (e.g., the result of squash_dict).
-# height - height of merkle tree.
-# prev_root - root value before the multi update.
-# new_root - root value after the multi update.
+# height - the height of the merkle tree.
+# prev_root - the value of the root before the update.
+# new_root - the value of the root after the update.
 #
 # Hint arguments:
 # preimage - a dictionary from the hash value of a merkle node to the pair of children values.
@@ -158,7 +158,7 @@ func merkle_multi_update(
     end
 
     %{
-        from starkware.starkware_utils.merkle_tree.merkle_tree import build_update_tree
+        from starkware.python.merkle_tree import build_update_tree
 
         # Build modifications list.
         modifications = []

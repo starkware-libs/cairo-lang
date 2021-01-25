@@ -229,7 +229,7 @@ end
 #   0 < div <= PRIME / (rc_bound)
 #   bound <= rc_bound / 2.
 # Prover assumption:   -bound <= value / div < bound.
-
+#
 # The values of div and bound are restricted to make sure there is no overflow.
 # q * div + r <  (q + 1) * div <=  rc_bound / 2 * (PRIME / rc_bound)
 # q * div + r >=  q * div      >= -rc_bound / 2 * (PRIME / rc_bound)
