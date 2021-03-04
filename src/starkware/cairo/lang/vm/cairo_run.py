@@ -150,8 +150,14 @@ def cairo_run(args):
         initial_memory = MemoryDict()
         steps_input = args.steps
     else:
-        raise NotImplementedError('--run_from_cairo_pie is not supported.')
-
+        assert args.run_from_cairo_pie is not None
+        assert args.steps is None and args.min_steps is None, \
+            '--steps and --min_steps cannot be specified in --run_from_cairo_pie mode.'
+        cairo_pie_input = CairoPie.from_file(args.run_from_cairo_pie)
+        program = cairo_pie_input.program
+        initial_memory = cairo_pie_input.memory
+        cairo_pie_input.metadata.validate_segment_order()
+        steps_input = cairo_pie_input.execution_resources.n_steps
     runner = CairoRunner(
         program=program, layout=args.layout, memory=initial_memory, proof_mode=args.proof_mode)
 
@@ -168,7 +174,7 @@ def cairo_run(args):
 
     try:
         if args.no_end:
-            assert args.steps is not None, '--steps must specified when running with --no-end.'
+            assert args.steps is not None, '--steps must be specified when running with --no-end.'
         else:
             additional_steps = 1 if args.proof_mode else 0
             max_steps = steps_input - additional_steps if steps_input is not None else None

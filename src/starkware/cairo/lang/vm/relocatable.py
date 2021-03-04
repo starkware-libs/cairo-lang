@@ -20,7 +20,8 @@ class RelocatableValue:
     def __add__(self, other: MaybeRelocatable) -> 'RelocatableValue':
         if isinstance(other, int):
             return RelocatableValue(self.segment_index, self.offset + other)
-        assert not isinstance(other, RelocatableValue), 'Cannot add two relocatable values'
+        assert not isinstance(other, RelocatableValue), \
+            f'Cannot add two relocatable values: {self} + {other}.'
         return NotImplemented
 
     def __radd__(self, other: MaybeRelocatable) -> 'RelocatableValue':

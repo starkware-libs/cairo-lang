@@ -58,7 +58,7 @@ class HashBuiltinRunner(SimpleBuiltinRunner):
         return {self.name: sorted(res.values(), key=lambda item: item['index'])}
 
     def get_additional_data(self):
-        return list(map(RelocatableValue.to_tuple, self.verified_addresses))
+        return [list(RelocatableValue.to_tuple(x)) for x in sorted(self.verified_addresses)]
 
     def extend_additional_data(self, data, relocate_callback):
         for addr in data:

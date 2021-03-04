@@ -47,6 +47,10 @@ class OutputBuiltinRunner(BuiltinRunner):
         size = get_segment_used_size(self.base.segment_index, runner.vm_memory)
         return size
 
+    def get_used_instances(self, runner):
+        # Output builtin has one cell per instance.
+        return self.get_used_cells(runner)
+
     def get_used_cells_and_allocated_size(self, runner):
         size = self.get_used_cells(runner)
         return size, size
@@ -100,8 +104,8 @@ class OutputBuiltinRunner(BuiltinRunner):
     def get_additional_data(self):
         return {
             'pages': {
-                page_id: (page_info.start, page_info.size)
-                for page_id, page_info in self.pages.items()},
+                str(page_id): [page_info.start, page_info.size]
+                for page_id, page_info in sorted(self.pages.items())},
             'attributes': self.attributes,
         }
 

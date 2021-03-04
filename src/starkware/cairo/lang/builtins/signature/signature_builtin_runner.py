@@ -83,8 +83,8 @@ class SignatureBuiltinRunner(SimpleBuiltinRunner):
 
     def get_additional_data(self):
         return [
-            (RelocatableValue.to_tuple(addr), signature)
-            for addr, signature in self.signatures.items()]
+            [list(RelocatableValue.to_tuple(addr)), signature]
+            for addr, signature in sorted(self.signatures.items())]
 
     def extend_additional_data(self, data, relocate_callback):
         for addr, signature in data:

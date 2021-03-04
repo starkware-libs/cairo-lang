@@ -39,6 +39,12 @@ class BuiltinRunner(ABC):
         """
 
     @abstractmethod
+    def get_used_instances(self, runner) -> int:
+        """
+        Returns the number of used instances.
+        """
+
+    @abstractmethod
     def get_used_cells_and_allocated_size(self, runner) -> Tuple[int, int]:
         """
         Returns the number of used cells and the allocated size, and raises
@@ -161,6 +167,9 @@ class SimpleBuiltinRunner(BuiltinRunner):
     def get_used_cells(self, runner):
         used = get_segment_used_size(self.base.segment_index, runner.vm_memory)
         return used
+
+    def get_used_instances(self, runner):
+        return safe_div(self.get_used_cells(runner), self.cells_per_instance)
 
     def get_used_cells_and_allocated_size(self, runner):
         if runner.vm.current_step < self.ratio:

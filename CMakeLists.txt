@@ -12,13 +12,7 @@ endif()
 # Python library macro.
 find_program(PYTHON "python3")
 
-include("repos/starkware-public/cmake_utils/exe_rules.cmake")
-include("repos/starkware-public/cmake_utils/python_rules.cmake")
-include("repos/starkware-public/cmake_utils/pip_rules.cmake")
-python_get_pip_deps(main_reqs
-    python3.7:${CMAKE_SOURCE_DIR}/scripts/requirements-deps.json
-)
+include("src/cmake_utils/cmake_rules.cmake")
 
 # Repos needs to be first as it defines macros that are needed by src.
-add_subdirectory(repos)
 add_subdirectory(src)

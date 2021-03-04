@@ -7,8 +7,14 @@ class MerkleTree:
     def __init__(self, tree_height: int, default_leaf: int):
         self.tree_height = tree_height
         self.default_leaf = default_leaf
+
+        # Compute the root of an empty tree.
+        empty_tree_root = default_leaf
+        for _ in range(tree_height):
+            empty_tree_root = pedersen_hash(empty_tree_root, empty_tree_root)
+
         # A map from node indices to their values.
-        self.node_values: Dict[int, int] = {}
+        self.node_values: Dict[int, int] = {1: empty_tree_root}
         # A map from node hash to its two children.
         self.preimage: Dict[int, Tuple[int, int]] = {}
 
@@ -17,6 +23,10 @@ class MerkleTree:
         Applies the given modifications (a list of (leaf index, value)) to the tree and returns
         the Merkle root.
         """
+
+        if len(modifications) == 0:
+            return self.node_values[1]
+
         default_node = self.default_leaf
         indices = set()
         leaves_offset = 2 ** self.tree_height

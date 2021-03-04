@@ -31,9 +31,9 @@ def test_cairo_pie_serialize_deserialize():
     additional_data = {'c': ['d', 3]}
     execution_resources = ExecutionResources(
         n_steps=10,
-        builtin_cell_counter={
+        builtin_instance_counter={
             'output': 6,
-            'pedersen': 9,
+            'pedersen': 3,
         }
     )
     cairo_pie = CairoPie(

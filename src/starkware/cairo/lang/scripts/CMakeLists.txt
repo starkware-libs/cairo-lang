@@ -5,4 +5,5 @@ python_lib(cairo_script_lib
     cairo-format
     cairo-hash-program
     cairo-run
+    cairo-sharp
 )

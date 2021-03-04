@@ -4,10 +4,10 @@ mkdir -p build/Release
 (
     cd build/Release
     cmake ../.. -DCMAKE_BUILD_TYPE=Release
-    make -j8 cairo_lang_venv
+    make -j8 cairo_lang_package_venv
 )
 
-VENV_SITE_DIR=build/Release/src/starkware/cairo/lang/cairo_lang_venv-site
+VENV_SITE_DIR=build/Release/src/starkware/cairo/lang/cairo_lang_package_venv-site
 cp src/starkware/cairo/lang/setup.py ${VENV_SITE_DIR}
 cp src/starkware/cairo/lang/MANIFEST.in ${VENV_SITE_DIR}
 cp scripts/requirements-gen.txt ${VENV_SITE_DIR}/requirements.txt

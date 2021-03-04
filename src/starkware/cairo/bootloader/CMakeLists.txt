@@ -34,3 +34,28 @@ full_python_test(cairo_hash_program_test
     cairo_hash_program_lib
     pip_pytest
 )
+
+python_lib(cairo_bootloader_fact_topology_lib
+    PREFIX starkware/cairo/bootloader
+    FILES
+    fact_topology.py
+
+    LIBS
+    pip_marshmallow
+    pip_marshmallow_dataclass
+)
+
+python_lib(cairo_bootloader_generate_fact_lib
+    PREFIX starkware/cairo/bootloader
+    FILES
+    compute_fact.py
+    generate_fact.py
+
+    LIBS
+    cairo_bootloader_fact_topology_lib
+    cairo_hash_program_lib
+    cairo_relocatable
+    cairo_vm_lib
+    pip_eth_hash
+    pip_pycryptodome
+)

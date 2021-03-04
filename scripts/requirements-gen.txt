@@ -1,4 +1,5 @@
 ecdsa
+eth-hash[pycryptodome]==0.2.0
 fastecdsa
 lark-parser==0.8.5
 marshmallow-dataclass>=7.1.0
@@ -10,3 +11,4 @@ numpy
 pipdeptree
 pytest
 sympy
+Web3

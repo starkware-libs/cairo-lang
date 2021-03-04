@@ -68,7 +68,8 @@ class ExecutionResources:
     builtin.
     """
     n_steps: int
-    builtin_cell_counter: Dict[str, int]
+    builtin_instance_counter: Dict[str, int]
+    n_memory_holes: int = 0
     Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
 
 

@@ -15,6 +15,7 @@ setuptools.setup(
     description='Compiler and runner for the Cairo language',
     install_requires=requirements,
     long_description=long_description,
+    long_description_content_type='text/markdown',
     packages=setuptools.find_packages(),
     python_requires='>=3.6',
     setup_requires=['wheel'],
@@ -25,11 +26,13 @@ setuptools.setup(
         'starkware.cairo.lang.tracer': ['*.html', '*.css', '*.js', '*.png'],
         'starkware.cairo.common': ['*.cairo'],
         'starkware.crypto.signature': ['pedersen_params.json'],
+        'starkware.cairo.sharp': ['config.json'],
     },
     scripts=[
         'starkware/cairo/lang/scripts/cairo-format',
         'starkware/cairo/lang/scripts/cairo-compile',
         'starkware/cairo/lang/scripts/cairo-run',
         'starkware/cairo/lang/scripts/cairo-hash-program',
+        'starkware/cairo/lang/scripts/cairo-sharp',
     ]
 )

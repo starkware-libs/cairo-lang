@@ -24,7 +24,7 @@ from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableVal
 from starkware.cairo.lang.vm.trace_entry import relocate_trace
 from starkware.cairo.lang.vm.utils import MemorySegmentAddresses
 from starkware.cairo.lang.vm.vm import RunContext, VirtualMachine, get_perm_range_check_limits
-from starkware.crypto.signature import inv_mod_curve_size
+from starkware.crypto.signature.signature import inv_mod_curve_size
 from starkware.python.math_utils import next_power_of_2
 from starkware.python.utils import WriteOnceDict
 
@@ -403,7 +403,7 @@ class CairoRunner:
             old_addr = addr
         print()
 
-    def print_output(self):
+    def print_output(self, output_callback=to_field_element):
         if 'output_builtin' not in self.builtin_runners:
             return
 
@@ -413,7 +413,7 @@ class CairoRunner:
         for i in range(size):
             val = self.vm_memory.get(output_runner.base + i)
             if val is not None:
-                print(f'  {to_field_element(val=val, prime=self.program.prime)}')
+                print(f'  {output_callback(val=val, prime=self.program.prime)}')
             else:
                 print('  <missing>')
 
@@ -467,11 +467,13 @@ fp = {fp}
 
     def get_execution_resources(self) -> ExecutionResources:
         n_steps = len(self.vm.trace) if self.original_steps is None else self.original_steps
-        builtin_cell_counter = {
-            builtin_name: builtin_runner.get_used_cells(self)
+        builtin_instance_counter = {
+            builtin_name: builtin_runner.get_used_instances(self)
             for builtin_name, builtin_runner in self.builtin_runners.items()
         }
-        return ExecutionResources(n_steps=n_steps, builtin_cell_counter=builtin_cell_counter)
+        return ExecutionResources(
+            n_steps=n_steps,
+            builtin_instance_counter=builtin_instance_counter)
 
     def get_cairo_pie(self) -> CairoPie:
         """

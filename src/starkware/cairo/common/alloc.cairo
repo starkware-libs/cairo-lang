@@ -1,5 +1,5 @@
 # Allocates a new memory segment.
-func alloc() -> (ptr):
+func alloc() -> (ptr : felt*):
     %{ memory[ap] = segments.add() %}
     ap += 1
     return (...)
