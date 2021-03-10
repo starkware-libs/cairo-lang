@@ -1,3 +1,8 @@
+# To run this demo, type:
+#   python3 -m demo.amm_demo.demo
+# .
+
+import argparse
 import os
 import random
 import subprocess
@@ -6,7 +11,7 @@ from typing import Dict
 
 from web3 import HTTPProvider, Web3, eth
 
-from starkware.cairo.apps.amm_demo.prove_batch import Account, Balance, BatchProver, SwapTransaction
+from demo.amm_demo.prove_batch import Account, Balance, BatchProver, SwapTransaction
 from starkware.cairo.bootloader.hash_program import compute_program_hash_chain
 from starkware.cairo.common.small_merkle_tree import MerkleTree
 from starkware.cairo.lang.vm.crypto import get_crypto_lib_context_manager, pedersen_hash
@@ -19,10 +24,9 @@ BATCH_SIZE = 10
 GAS_PRICE = 10000000000
 AMM_SOURCE_PATH = os.path.join(os.path.dirname(__file__), 'amm.cairo')
 CONTRACT_SOURCE_PATH = os.path.join(os.path.dirname(__file__), 'amm_contract.sol')
-SCRIPTS_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../lang/scripts'))
 
 
-def init_prover(node_rpc_url: str) -> BatchProver:
+def init_prover(bin_dir: str, node_rpc_url: str) -> BatchProver:
     """
     Initializes the prover client, with a random AMM state.
 
@@ -34,7 +38,7 @@ def init_prover(node_rpc_url: str) -> BatchProver:
             pub_key=i,
             balance=Balance(a=random.randint(10**5, 10**7), b=random.randint(10**5, 10**7)))
         for i in range(N_ACCOUNTS)}
-    sharp_client = init_client(bin_dir=SCRIPTS_PATH, node_rpc_url=node_rpc_url)
+    sharp_client = init_client(bin_dir=bin_dir, node_rpc_url=node_rpc_url)
     program = sharp_client.compile_cairo(source_code_path=AMM_SOURCE_PATH)
     prover = BatchProver(
         program=program, balance=balance, accounts=accounts, sharp_client=sharp_client)
@@ -88,6 +92,14 @@ def main():
     The main demonstration program.
     """
 
+    parser = argparse.ArgumentParser(description='AMM demo')
+    parser.add_argument(
+        '--bin_dir', type=str, default='',
+        help='The path to a directory that contains the cairo-compile and cairo-run scripts. '
+        "If not specified, files are assumed to be in the system's PATH.")
+
+    args = parser.parse_args()
+
     # Connect to an Ethereum node.
     node_rpc_url = input(
         'Please provide an RPC URL to communicate with an Ethereum node on Ropsten: ')
@@ -118,7 +130,7 @@ def main():
             sleep(15)
 
     # Initialize the system.
-    prover = init_prover(node_rpc_url)
+    prover = init_prover(bin_dir=args.bin_dir, node_rpc_url=node_rpc_url)
     amm_contract = deploy_contract(prover, w3, operator)
 
     # Generate and prove batches.

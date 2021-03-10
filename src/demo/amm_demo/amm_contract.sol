@@ -53,7 +53,7 @@ contract AmmDemo {
         bytes32 fact = keccak256(abi.encodePacked(cairoProgramHash_, outputHash));
         require(cairoVerifier_.isValid(fact), "MISSING_CAIRO_PROOF");
 
-        // Ensure that output consistency with current system state.
+        // Ensure the output consistency with current system state.
         require(programOutput.length == 6, "INVALID_PROGRAM_OUTPUT");
         require(accountTreeRoot_ == programOutput[4], "ACCOUNT_TREE_ROOT_MISMATCH");
         require(amountTokenA_ == programOutput[0], "TOKEN_A_MISMATCH");
