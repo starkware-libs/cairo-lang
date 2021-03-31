@@ -4,10 +4,9 @@
 # ***********************************************************************
 
 struct DictAccess:
-    member key = 0
-    member prev_value = 1
-    member new_value = 2
-    const SIZE = 3
+    member key : felt
+    member prev_value : felt
+    member new_value : felt
 end
 
 # Inner tail-recursive function for squash_dict.
@@ -42,10 +41,9 @@ func squash_dict_inner(
 
     # Locals.
     struct Locals:
-        member key = 0
-        member should_skip_loop = 1
-        member first_value = 2
-        const SIZE = 3
+        member key : felt
+        member should_skip_loop : felt
+        member first_value : felt
     end
     let locals = cast(fp, Locals*)
     let key = locals.key
@@ -60,18 +58,16 @@ func squash_dict_inner(
     # Loop to verify chronological accesses to the key.
     # These values are not needed from previous iteration.
     struct LoopTemps:
-        member index_delta_minus1 = 0
-        member index_delta = 1
-        member ptr_delta = 2
-        member should_continue = 3
-        const SIZE = 4
+        member index_delta_minus1 : felt
+        member index_delta : felt
+        member ptr_delta : felt
+        member should_continue : felt
     end
     # These values are needed from previous iteration.
     struct LoopLocals:
-        member value = 0
-        member access_ptr : DictAccess* = 1
-        member range_check_ptr = 2
-        const SIZE = 3
+        member value : felt
+        member access_ptr : DictAccess*
+        member range_check_ptr : felt
     end
 
     # Prepare first iteration.
@@ -149,14 +145,13 @@ func squash_dict_inner(
     last_loop_locals.value = dict_diff.new_value
 
     # Call squashed_dict_inner recursively.
-    squash_dict_inner(
+    return squash_dict_inner(
         range_check_ptr=last_loop_locals.range_check_ptr + 1,
         dict_accesses=dict_accesses,
         dict_accesses_end_minus1=dict_accesses_end_minus1,
         min_key=key + 1,
         remaining_accesses=remaining_accesses - n_used_accesses,
         squashed_dict=squashed_dict + DictAccess.SIZE)
-    return (...)
 end
 
 # Verifies that dict_accesses lists valid chronological accesses (and updates)
@@ -170,7 +165,6 @@ end
 #   Output: {(key1, 0, 5), (key2, 4, 2)}
 #
 # Arguments:
-# range_check_ptr - range check builtin pointer.
 # dict_accesses - a pointer to the beginning of an array of DictAccess instances. The format of each
 #   entry is a triplet (key, prev_value, new_value).
 # dict_accesses_end - a pointer to the end of said array.
@@ -178,11 +172,13 @@ end
 #   DictAccess instances sorted by key with the first and last value for each key.
 #
 # Returns:
-# range_check_ptr - updated range check builtin pointer.
 # squashed_dict - end pointer to squashed_dict.
-func squash_dict(
-        range_check_ptr, dict_accesses : DictAccess*, dict_accesses_end : DictAccess*,
-        squashed_dict : DictAccess*) -> (range_check_ptr, squashed_dict : DictAccess*):
+#
+# Implicit arguments:
+# range_check_ptr - range check builtin pointer.
+func squash_dict{range_check_ptr}(
+        dict_accesses : DictAccess*, dict_accesses_end : DictAccess*,
+        squashed_dict : DictAccess*) -> (squashed_dict : DictAccess*):
     let ptr_diff = [fp]
     %{ vm_enter_scope() %}
     ptr_diff = dict_accesses_end - dict_accesses; ap++
@@ -190,7 +186,7 @@ func squash_dict(
     if ptr_diff == 0:
         # Access array is empty, nothing to check.
         %{ vm_exit_scope() %}
-        return (range_check_ptr=range_check_ptr, squashed_dict=squashed_dict)
+        return (squashed_dict=squashed_dict)
     end
 
     tempvar n_accesses = ptr_diff / DictAccess.SIZE
@@ -207,7 +203,7 @@ func squash_dict(
     %}
 
     # Call inner.
-    squash_dict_inner(
+    let (range_check_ptr, squashed_dict) = squash_dict_inner(
         range_check_ptr=range_check_ptr,
         dict_accesses=dict_accesses,
         dict_accesses_end_minus1=dict_accesses_end - 1,
@@ -215,5 +211,5 @@ func squash_dict(
         remaining_accesses=n_accesses,
         squashed_dict=squashed_dict)
     %{ vm_exit_scope() %}
-    return (...)
+    return (squashed_dict=squashed_dict)
 end

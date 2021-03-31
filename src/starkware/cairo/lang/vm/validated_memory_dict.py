@@ -26,10 +26,7 @@ class ValidatedMemoryDict:
 
     def __setitem__(self, addr: MaybeRelocatable, value: MaybeRelocatable):
         self.__memory[addr] = value
-        if isinstance(addr, RelocatableValue) and addr not in self.__validated_addresses:
-            for rule, args in self.__validation_rules.get(addr.segment_index, []):
-                validated_addresses = rule(self.__memory, addr, *args)
-                self.__validated_addresses |= validated_addresses
+        self._validate_memory_cell(addr, value)
 
     def __getattr__(self, name: str):
         if name in ['__deepcopy__', '__getstate__', '__setstate__']:
@@ -38,6 +35,9 @@ class ValidatedMemoryDict:
 
     def __iter__(self):
         return iter(self.__memory)
+
+    def __len__(self):
+        return len(self.__memory)
 
     def add_validation_rule(self, segment_index, rule: ValidationRule, *args):
         """
@@ -48,3 +48,13 @@ class ValidatedMemoryDict:
         The rule output is assumed to be the set of memory addresses validated by it.
         """
         self.__validation_rules.setdefault(segment_index, []).append((rule, args))
+
+    def _validate_memory_cell(self, addr: MaybeRelocatable, value: MaybeRelocatable):
+        if isinstance(addr, RelocatableValue) and addr not in self.__validated_addresses:
+            for rule, args in self.__validation_rules.get(addr.segment_index, []):
+                validated_addresses = rule(self.__memory, addr, *args)
+                self.__validated_addresses |= validated_addresses
+
+    def validate_existing_memory(self):
+        for addr, value in self.__memory.items():
+            self._validate_memory_cell(addr, value)

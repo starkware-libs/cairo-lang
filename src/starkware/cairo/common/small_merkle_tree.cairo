@@ -20,8 +20,8 @@ from starkware.cairo.common.merkle_multi_update import merkle_multi_update
 #       dict_accesses_start=dict_ptr_start,
 #       dict_accesses_end=dict_ptr)
 #   const HEIGHT = 3
-#   let (hash_ptr, prev_root, new_root) = small_merkle_tree(
-#        hash_ptr, squashed_dict_start, squashed_dict_end, HEIGHT)
+#   let (prev_root, new_root) = small_merkle_tree(
+#        squashed_dict_start, squashed_dict_end, HEIGHT)
 #
 # In this example prev_root is the Merkle root of [0, 2, 0, 4, 0, 6, 0, 0], and new_root
 # is the Merkle root of [0, 20, 0, 4, 0, 6, 0, 0].
@@ -29,13 +29,14 @@ from starkware.cairo.common.merkle_multi_update import merkle_multi_update
 # 20 -- it doesn't know anything about the other leaves (except that they haven't changed).
 #
 # Arguments:
-# hash_ptr - hash builtin pointer.
 # squashed_dict, squashed_dict_end - a list of DictAccess instances sorted by key
 # (e.g., the result of dict_squash).
 # height - the height of the merkle tree.
 #
+# Implicit arguments:
+# hash_ptr - hash builtin pointer.
+#
 # Returns:
-# hash_ptr - updated hash builtin pointer.
 # prev_root - the value of the root before the update.
 # new_root - the value of the root after the update.
 #
@@ -45,10 +46,9 @@ from starkware.cairo.common.merkle_multi_update import merkle_multi_update
 # * squashed_dict was created using the higher-level API dict_squash() (rather than squash_dict()).
 # * This function can be used for (relatively) small Merkle trees whose leaves can be loaded
 #   to the memory.
-func small_merkle_tree(
-        hash_ptr : HashBuiltin*, squashed_dict_start : DictAccess*,
-        squashed_dict_end : DictAccess*, height : felt) -> (
-        hash_ptr : HashBuiltin*, prev_root : felt, new_root : felt):
+func small_merkle_tree{hash_ptr : HashBuiltin*}(
+        squashed_dict_start : DictAccess*, squashed_dict_end : DictAccess*, height : felt) -> (
+        prev_root : felt, new_root : felt):
     %{ vm_enter_scope({'__dict_manager': __dict_manager}) %}
     alloc_locals
     # Allocate memory cells for the roots.
@@ -90,13 +90,12 @@ func small_merkle_tree(
     %}
 
     # Call merkle_multi_update() to verify the two roots.
-    let (hash_ptr) = merkle_multi_update(
-        hash_ptr=hash_ptr,
+    merkle_multi_update(
         update_ptr=squashed_dict_start,
         n_updates=(squashed_dict_end - squashed_dict_start) / DictAccess.SIZE,
         height=height,
         prev_root=prev_root,
         new_root=new_root)
     %{ vm_exit_scope() %}
-    return (hash_ptr=hash_ptr, prev_root=prev_root, new_root=new_root)
+    return (prev_root=prev_root, new_root=new_root)
 end

@@ -47,6 +47,16 @@ def test_validated_memory_dict():
     memory_validator[addr3] = 1
     assert memory_validator._ValidatedMemoryDict__validated_addresses == {addr1, addr2, addr3}
 
+    # Test validation of existing valid memory.
+    assert len(memory_validator) > 0
+    memory_validator.validate_existing_memory()
+
+    # Invalidate existing memory and test negative case.
     with pytest.raises(
             AssertionError, match='Expected value in address 4:0 to be 0, got 1.'):
         memory_validator[addr4] = 1
+
+    # Test validation of existing invalid memory.
+    with pytest.raises(
+            AssertionError, match='Expected value in address 4:0 to be 0, got 1.'):
+        memory_validator.validate_existing_memory()

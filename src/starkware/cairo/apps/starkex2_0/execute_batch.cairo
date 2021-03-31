@@ -15,12 +15,12 @@ from starkware.cairo.apps.starkex2_0.execute_transfer import execute_transfer
 
 # Executes a batch of transactions (settlements, transfers, modifications).
 func execute_batch(
-        modification_ptr : ModificationOutput*, conditional_transfer_ptr, hash_ptr : HashBuiltin*,
-        range_check_ptr, ecdsa_ptr : SignatureBuiltin*, vault_dict : DictAccess*,
-        order_dict : DictAccess*, dex_context_ptr : DexContext*) -> (
-        modification_ptr : ModificationOutput*, conditional_transfer_ptr, hash_ptr : HashBuiltin*,
-        range_check_ptr, ecdsa_ptr : SignatureBuiltin*, vault_dict : DictAccess*,
-        order_dict : DictAccess*):
+        modification_ptr : ModificationOutput*, conditional_transfer_ptr : felt*,
+        hash_ptr : HashBuiltin*, range_check_ptr, ecdsa_ptr : SignatureBuiltin*,
+        vault_dict : DictAccess*, order_dict : DictAccess*, dex_context_ptr : DexContext*) -> (
+        modification_ptr : ModificationOutput*, conditional_transfer_ptr : felt*,
+        hash_ptr : HashBuiltin*, range_check_ptr, ecdsa_ptr : SignatureBuiltin*,
+        vault_dict : DictAccess*, order_dict : DictAccess*):
     # Guess if the first transaction is a settlement.
     jmp handle_settlement if [ap] != 0; ap++
 
@@ -51,7 +51,7 @@ func execute_batch(
         dex_context_ptr=dex_context_ptr)
 
     # Call execute_batch recursively.
-    execute_batch(
+    return execute_batch(
         modification_ptr=modification_ptr,
         conditional_transfer_ptr=conditional_transfer_ptr,
         hash_ptr=settlement_res.hash_ptr,
@@ -60,7 +60,6 @@ func execute_batch(
         vault_dict=settlement_res.vault_dict,
         order_dict=settlement_res.order_dict,
         dex_context_ptr=dex_context_ptr)
-    return (...)
 
     handle_transfer:
     # Call execute_transfer.
@@ -74,7 +73,7 @@ func execute_batch(
         dex_context_ptr=dex_context_ptr)
 
     # Call execute_batch recursively.
-    execute_batch(
+    return execute_batch(
         modification_ptr=modification_ptr,
         conditional_transfer_ptr=transfer_res.conditional_transfer_ptr,
         hash_ptr=transfer_res.hash_ptr,
@@ -83,7 +82,6 @@ func execute_batch(
         vault_dict=transfer_res.vault_dict,
         order_dict=transfer_res.order_dict,
         dex_context_ptr=dex_context_ptr)
-    return (...)
 
     handle_modification:
     # Guess if the first modification is a false full withdrawal.
@@ -97,7 +95,7 @@ func execute_batch(
         vault_dict=vault_dict)
 
     # Call execute_batch recursively.
-    execute_batch(
+    return execute_batch(
         modification_ptr=modification_ptr,
         conditional_transfer_ptr=conditional_transfer_ptr,
         hash_ptr=hash_ptr,
@@ -106,7 +104,6 @@ func execute_batch(
         vault_dict=vault_dict,
         order_dict=order_dict,
         dex_context_ptr=dex_context_ptr)
-    return (...)
 
     handle_false_full_withdrawal:
     # Call execute_false_full_withdrawal.
@@ -114,7 +111,10 @@ func execute_batch(
         modification_ptr=modification_ptr, dex_context_ptr=dex_context_ptr, vault_dict=vault_dict)
 
     # Call execute_batch recursively.
-    execute_batch(
+    # Make a copy of the first argument to avoid a compiler optimization that was added after the
+    # code was deployed.
+    tempvar modification_ptr = modification_ptr
+    return execute_batch(
         modification_ptr=modification_ptr,
         conditional_transfer_ptr=conditional_transfer_ptr,
         hash_ptr=hash_ptr,
@@ -123,5 +123,4 @@ func execute_batch(
         vault_dict=vault_dict,
         order_dict=order_dict,
         dex_context_ptr=dex_context_ptr)
-    return (...)
 end

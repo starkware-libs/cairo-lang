@@ -1,4 +1,6 @@
+import asyncio
 import os
+import random
 import re
 import subprocess
 from collections import UserDict
@@ -91,6 +93,34 @@ def indent(code, indentation):
     return indentation + re.sub(r'\n(?!\n|$)', '\n' + indentation, code)
 
 
+def get_random_instance() -> random.Random:
+    """
+    Returns the Random instance in the random module level.
+    """
+    return random._inst  # type: ignore[attr-defined]
+
+
+def initialize_random(
+        random_object: Optional[random.Random] = None, seed: Optional[int] = None) -> random.Random:
+    """
+    Returns a Random object initialized according to the given parameters.
+    If both are None, the Random instance instantiated in the random module is returned.
+    """
+    if random_object is not None:
+        return random_object
+
+    return random.Random(seed) if seed is not None else get_random_instance()
+
+
+def get_random_bytes(random_object: Optional[random.Random] = None, *, n: int):
+    """
+    Returns a random bytes object of length n.
+    NOTE: This function is unsafe and should only be used for testing.
+    """
+    r = initialize_random(random_object=random_object)
+    return bytes(r.getrandbits(8) for _ in range(n))
+
+
 def compare_files(src, dst, fix):
     """
     If 'fix' is False, checks that the files are the same.
@@ -129,3 +159,34 @@ class WriteOnceDict(UserDict):
         assert key not in self.data, \
             f"Trying to set key={key} to '{value}' but key={key} is already set to '{self[key]}'."
         self.data[key] = value
+
+
+def camel_to_snake_case(camel_case_name: str) -> str:
+    """
+    Converts a name with Capital first letters to lower case with '_' as separators.
+    For example, CamelToSnakeCase -> camel_to_snake_case.
+    """
+    return (camel_case_name[0] + re.sub(r'([A-Z])', r'_\1', camel_case_name[1:])).lower()
+
+
+def snake_to_camel_case(snake_case_name: str) -> str:
+    """
+    Converts the first letter to upper case (if possible) and all the '_l' to 'L'.
+    For example snake_to_camel_case -> SnakeToCamelCase.
+    """
+    return re.subn(r'(^|_)([a-z])', lambda m: m.group(2).upper(), snake_case_name)[0]
+
+
+async def cancel_futures(*futures: asyncio.Future):
+    """
+    Cancels given futures and awaits on them in order to reveal exceptions.
+    Used in a process' teardown.
+    """
+    for future in futures:
+        future.cancel()
+
+    for future in futures:
+        try:
+            await future
+        except asyncio.CancelledError:
+            pass

@@ -1,24 +1,25 @@
-from starkware.cairo.lang.compiler.preprocessor.preprocessor import preprocess_str
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_test_utils import (
-    PRIME, verify_exception)
+    PRIME, preprocess_str, verify_exception)
+from starkware.cairo.lang.compiler.type_casts import CairoTypeError
 
 
 def test_local_variable():
     code = """\
-struct Mystruct:
-    member a = 0
-    member b = 1
-    const SIZE = 2
+struct MyStruct:
+    member a : felt
+    member b : felt
 end
 
 func main():
     ap += 5 + SIZEOF_LOCALS
     local x
-    local y : Mystruct
+    local y : MyStruct
     local z = x * y.a
     x = y.a
     y.b = z
-    local w : Mystruct* = 17
+    local w : MyStruct* = cast(17, MyStruct*)
+    # Check implicit cast from MyStruct* to felt*.
+    local w_as_felt_ptr : felt* = w
     z = w.b
     ret
 end
@@ -30,14 +31,51 @@ end
 """
     program = preprocess_str(code=code, prime=PRIME)
     assert program.format() == """\
-ap += 10
+ap += 11
 [fp + 3] = [fp] * [fp + 1]
 [fp] = [fp + 1]
 [fp + 2] = [fp + 3]
 [fp + 4] = 17
+[fp + 5] = [fp + 4]
 [fp + 3] = [[fp + 4] + 1]
 ret
 ap += 0
+ret
+"""
+
+
+def test_local_variable_unpack_binding():
+    code = """\
+struct MyStruct:
+    member a : felt
+    member b : felt
+end
+
+func foo() -> (x : MyStruct*, y : MyStruct, z):
+    ret
+end
+
+func main():
+    alloc_locals
+    let (local x, y, local z) = foo()
+    x.b = z
+    y.a = z
+    y.b = z
+    z = z
+    ret
+end
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert program.format() == """\
+ret
+ap += 2
+call rel -3
+[fp] = [ap + (-4)]
+[fp + 1] = [ap + (-1)]
+[[fp] + 1] = [fp + 1]
+[ap + (-3)] = [fp + 1]
+[ap + (-2)] = [fp + 1]
+[fp + 1] = [fp + 1]
 ret
 """
 
@@ -126,6 +164,24 @@ file:?:?: alloc_locals cannot be used outside of a function.
 alloc_locals
 ^**********^
 """)
+
+
+def test_local_variable_type_failures():
+    verify_exception(f"""
+struct T:
+    member a : felt
+end
+
+func main():
+    alloc_locals
+    local x : T* = [ap]
+    ret
+end
+""", """
+file:?:?: Cannot cast 'felt' to 'test_scope.T*'.
+    local x : T* = [ap]
+                   ^**^
+""", exc_type=CairoTypeError)
 
 
 def test_local_variable_modifier_failures():

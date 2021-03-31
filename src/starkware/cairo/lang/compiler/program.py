@@ -1,4 +1,5 @@
 import dataclasses
+import string
 from abc import ABC, abstractmethod
 from dataclasses import field
 from typing import ClassVar, Dict, List, Optional, Type, Union
@@ -9,7 +10,7 @@ import marshmallow_dataclass
 
 from starkware.cairo.lang.compiler.debug_info import DebugInfo
 from starkware.cairo.lang.compiler.identifier_definition import (
-    ConstDefinition, IdentifierDefinition, LabelDefinition, MemberDefinition, ReferenceDefinition)
+    ConstDefinition, IdentifierDefinition, LabelDefinition, ReferenceDefinition)
 from starkware.cairo.lang.compiler.identifier_manager import (
     IdentifierManager, MissingIdentifierError)
 from starkware.cairo.lang.compiler.identifier_manager_field import IdentifierManagerField
@@ -52,6 +53,18 @@ class StrippedProgram(ProgramBase):
 
     def stripped(self) -> 'StrippedProgram':
         return self
+
+    def run_validity_checks(self):
+        assert isinstance(self.prime, int) and self.prime > 2**63, 'Invalid prime.'
+        assert isinstance(self.data, list) and all(
+            isinstance(x, int) and 0 <= x < self.prime for x in self.data), \
+            'Invalid program data.'
+        assert isinstance(self.builtins, list) and \
+            all(is_valid_builtin_name(builtin) for builtin in self.builtins) and \
+            len(set(self.builtins)) == len(self.builtins), \
+            'Invalid builtin list.'
+        assert isinstance(self.main, int) and 0 <= self.main < len(self.data), \
+            'Invalid main() address.'
 
 
 @marshmallow_dataclass.dataclass
@@ -96,9 +109,6 @@ class Program(ProgramBase):
     def get_const(self, name: Union[str, ScopedName]):
         return self.get_identifier(name, ConstDefinition).value
 
-    def get_member_offset(self, name: Union[str, ScopedName]):
-        return self.get_identifier(name, MemberDefinition).offset
-
     def get_reference_binds(self, name: Union[str, ScopedName]) -> List[Reference]:
         """
         Returns all the references associated with the given name. Returns more than one value if
@@ -119,3 +129,11 @@ class Program(ProgramBase):
             return self.get_label('__start__')
         except MissingIdentifierError:
             return 0
+
+
+def is_valid_builtin_name(name: str) -> bool:
+    """
+    Returns true if name may be used as a builtin name.
+    """
+    return isinstance(name, str) and len(name) < 1000 and set(name) <= {
+        *string.ascii_lowercase, *string.digits, '_'}

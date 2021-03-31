@@ -10,9 +10,8 @@ from starkware.cairo.lang.compiler.parser import parse_expr
 from starkware.cairo.lang.compiler.preprocessor.compound_expressions import (
     CompoundExpressionContext, CompoundExpressionVisitor, SimplicityLevel,
     process_compound_expressions)
-from starkware.cairo.lang.compiler.preprocessor.preprocessor import preprocess_str
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_test_utils import (
-    PRIME, verify_exception)
+    PRIME, preprocess_str, verify_exception)
 
 
 class CompoundExpressionTestContext(CompoundExpressionContext):
@@ -343,4 +342,24 @@ assert [ap] = [ap + 32768]  # Offset is out of bounds.
 file:?:?: ap may only be used in an expression of the form [ap + <const>].
 assert [ap] = [ap + 32768]  # Offset is out of bounds.
                ^^
+""")
+    verify_exception("""\
+struct T:
+    member a : felt
+end
+assert cast([ap], T) = cast([ap], T)
+""", """
+file:?:?: Expected a 'felt' or a pointer type. Got: 'test_scope.T'.
+assert cast([ap], T) = cast([ap], T)
+       ^***********^
+""")
+    verify_exception("""\
+struct T:
+    member a : felt
+end
+assert 7 = cast(7, T*)
+""", """
+file:?:?: Cannot compare 'felt' and 'test_scope.T*'.
+assert 7 = cast(7, T*)
+^********************^
 """)

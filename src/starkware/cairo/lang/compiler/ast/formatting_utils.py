@@ -8,10 +8,13 @@ from contextvars import ContextVar
 from dataclasses import field
 from typing import List
 
+import marshmallow
+
 from starkware.cairo.lang.compiler.error_handling import LocationError
 
 INDENTATION = 4
-LocationField = field(default=None, hash=False, compare=False)
+LocationField = field(default=None, hash=False, compare=False, metadata=dict(
+    marshmallow_field=marshmallow.fields.Field(load_only=True, dump_only=True)))
 max_line_length_ctx_var: ContextVar[int] = ContextVar('max_line_length', default=100)
 
 

@@ -17,11 +17,10 @@ func hash_vault_state_ptr(hash_ptr : HashBuiltin*, vault_state_ptr : VaultState*
     assert hash_builtin.y = vault_state.token_id
 
     # Compute new hash.
-    compute_vault_hash(
+    return compute_vault_hash(
         hash_ptr=hash_ptr + HashBuiltin.SIZE,
         key_token_hash=hash_builtin.result,
         amount=vault_state.balance)
-    return (...)
 end
 
 # Takes a vault_ptr_dict with pointers to vault states and writes a new vault_hash_dict with
@@ -45,15 +44,20 @@ func hash_vault_ptr_dict(
         hash_ptr=hash_ptr, vault_state_ptr=cast(vault_access.prev_value, VaultState*))
     hashed_vault_access.prev_value = prev_hash_res.vault_hash
 
+    # Make a copy of the first argument to avoid a compiler optimization that was added after the
+    # code was deployed.
+    tempvar hash_ptr = prev_hash_res.hash_ptr
     let new_hash_res = hash_vault_state_ptr(
-        hash_ptr=prev_hash_res.hash_ptr, vault_state_ptr=cast(vault_access.new_value, VaultState*))
+        hash_ptr=hash_ptr, vault_state_ptr=cast(vault_access.new_value, VaultState*))
     hashed_vault_access.new_value = new_hash_res.vault_hash
 
     # Tail call.
-    hash_vault_ptr_dict(
-        hash_ptr=new_hash_res.hash_ptr,
+    # Make a copy of the first argument to avoid a compiler optimization that was added after the
+    # code was deployed.
+    tempvar hash_ptr = new_hash_res.hash_ptr
+    return hash_vault_ptr_dict(
+        hash_ptr=hash_ptr,
         vault_ptr_dict=vault_ptr_dict + DictAccess.SIZE,
         n_entries=n_entries - 1,
         vault_hash_dict=vault_hash_dict + DictAccess.SIZE)
-    return (...)
 end

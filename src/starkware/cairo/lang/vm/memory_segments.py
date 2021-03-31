@@ -1,7 +1,10 @@
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from collections import defaultdict
+from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
+
+FIRST_MEMORY_ADDR = 1
 
 
 class MemorySegmentManager:
@@ -57,7 +60,7 @@ class MemorySegmentManager:
             self.public_memory_offsets[segment_index] = []
 
     def relocate_segments(self) -> Dict[int, int]:
-        current_addr = 0
+        current_addr = FIRST_MEMORY_ADDR
         res = {}
         for segment_index in range(self.n_segments):
             res[segment_index] = current_addr
@@ -117,6 +120,21 @@ class MemorySegmentManager:
         assert isinstance(arg, Iterable)
         data = [self.gen_arg(arg=x, apply_modulo_to_args=apply_modulo_to_args) for x in arg]
         return self.load_data(ptr, data)
+
+    def get_memory_holes(self) -> int:
+        """
+        Returns the total number of memory holes in all segments.
+        """
+        used_offsets_sets: Dict[int, Set] = defaultdict(set)
+        for addr in self.memory.keys():
+            assert isinstance(addr, RelocatableValue), \
+                f'Expected memory address to be relocatable value. Found: {addr}.'
+            assert addr.offset >= 0, \
+                f'Address offsets must be non-negative. Found: {addr.offset}.'
+            used_offsets_sets[addr.segment_index].add(addr.offset)
+        return sum(
+            max(used_offsets) + 1 - len(used_offsets)
+            for used_offsets in used_offsets_sets.values())
 
 
 def get_segment_used_size(segment_index: int, memory: MemoryDict) -> int:

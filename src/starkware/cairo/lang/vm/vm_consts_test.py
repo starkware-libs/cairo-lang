@@ -7,7 +7,7 @@ from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt, TypePointer,
 from starkware.cairo.lang.compiler.expression_evaluator import ExpressionEvaluator
 from starkware.cairo.lang.compiler.identifier_definition import (
     AliasDefinition, ConstDefinition, IdentifierDefinition, LabelDefinition, MemberDefinition,
-    ReferenceDefinition)
+    ReferenceDefinition, StructDefinition)
 from starkware.cairo.lang.compiler.identifier_manager import (
     IdentifierError, IdentifierManager, MissingIdentifierError)
 from starkware.cairo.lang.compiler.parser import parse_expr
@@ -53,6 +53,7 @@ def test_label():
         reference_manager=ReferenceManager(),
         flow_tracking_data=FlowTrackingDataActual(ap_tracking=RegTrackingData()), memory={}, pc=0)
     consts = VmConsts(context=context, accessible_scopes=[ScopedName()])
+    assert consts.x.instruction_offset_ == 10
     assert consts.y == 2
     assert consts.x.y == 1
 
@@ -89,50 +90,57 @@ def test_scope_order():
 def test_references():
     reference_manager = ReferenceManager()
     references = {
-        scope('x.ref'): reference_manager.get_id(Reference(
+        scope('x.ref'): reference_manager.alloc_id(Reference(
             pc=0,
             value=parse_expr('[ap + 1]'),
             ap_tracking_data=RegTrackingData(group=0, offset=2),
         )),
-        scope('x.ref2'): reference_manager.get_id(Reference(
+        scope('x.ref2'): reference_manager.alloc_id(Reference(
             pc=0,
             value=parse_expr('[ap + 1] + 0'),
             ap_tracking_data=RegTrackingData(group=0, offset=2),
         )),
-        scope('x.ref3'): reference_manager.get_id(Reference(
+        scope('x.ref3'): reference_manager.alloc_id(Reference(
             pc=0,
             value=parse_expr('ap + 1'),
             ap_tracking_data=RegTrackingData(group=0, offset=2),
         )),
-        scope('x.typeref'): reference_manager.get_id(Reference(
+        scope('x.typeref'): reference_manager.alloc_id(Reference(
             pc=0,
-            value=mark_types_in_expr_resolved(parse_expr('cast(ap + 1, a*)')),
+            value=mark_types_in_expr_resolved(parse_expr('cast(ap + 1, MyStruct*)')),
             ap_tracking_data=RegTrackingData(group=0, offset=3),
         )),
-        scope('x.typeref2'): reference_manager.get_id(Reference(
+        scope('x.typeref2'): reference_manager.alloc_id(Reference(
             pc=0,
-            value=mark_types_in_expr_resolved(parse_expr('cast([ap + 1], a*)')),
+            value=mark_types_in_expr_resolved(parse_expr('cast([ap + 1], MyStruct*)')),
             ap_tracking_data=RegTrackingData(group=0, offset=3),
         )),
     }
+    my_struct_star = TypePointer(pointee=TypeStruct(
+        scope=scope('MyStruct'), is_fully_resolved=True))
     identifier_values = {
         scope('x.ref'): ReferenceDefinition(
-            full_name=scope('x.ref'), references=[]
+            full_name=scope('x.ref'), cairo_type=TypeFelt(), references=[]
         ),
         scope('x.ref2'): ReferenceDefinition(
-            full_name=scope('x.ref2'), references=[]
+            full_name=scope('x.ref2'), cairo_type=TypeFelt(), references=[]
         ),
         scope('x.ref3'): ReferenceDefinition(
-            full_name=scope('x.ref3'), references=[]
+            full_name=scope('x.ref3'), cairo_type=TypeFelt(), references=[]
         ),
         scope('x.typeref'): ReferenceDefinition(
-            full_name=scope('x.typeref'), references=[]
+            full_name=scope('x.typeref'), cairo_type=my_struct_star, references=[]
         ),
         scope('x.typeref2'): ReferenceDefinition(
-            full_name=scope('x.typeref2'), references=[]
+            full_name=scope('x.typeref2'), cairo_type=my_struct_star, references=[]
         ),
-        scope('a.member'): MemberDefinition(offset=10, cairo_type=TypeFelt()),
-        scope('a.scope0.member'): MemberDefinition(offset=2, cairo_type=TypeFelt()),
+        scope('MyStruct'): StructDefinition(
+            full_name=scope('MyStruct'),
+            members={
+                'member': MemberDefinition(offset=10, cairo_type=TypeFelt()),
+            },
+            size=11,
+        ),
     }
     prime = 2**64 + 13
     ap = 100
@@ -161,9 +169,36 @@ def test_references():
     assert consts.x.typeref.address_ == (ap - 1) + 1
     assert consts.x.typeref.member == memory[(ap - 1) + 1 + 10]
     with pytest.raises(
-            NotImplementedError,
-            match="Expected a member, found 'scope0' which is 'scope'"):
-        consts.x.typeref.scope0
+            IdentifierError,
+            match="'abc' is not a member of 'MyStruct'."):
+        consts.x.typeref.abc
+
+    with pytest.raises(
+            IdentifierError,
+            match="'SIZE' is not a member of 'MyStruct'."):
+        consts.x.typeref.SIZE
+
+    with pytest.raises(
+            AssertionError,
+            match='Cannot change the value of a struct definition.'):
+        consts.MyStruct = 13
+
+    assert consts.MyStruct.member == 10
+    with pytest.raises(
+            AssertionError,
+            match='Cannot change the value of a constant.'):
+        consts.MyStruct.member = 13
+
+    assert consts.MyStruct.SIZE == 11
+    with pytest.raises(
+            AssertionError,
+            match='Cannot change the value of a constant.'):
+        consts.MyStruct.SIZE = 13
+
+    with pytest.raises(
+            IdentifierError,
+            match="'abc' is not a member of 'MyStruct'."):
+        consts.MyStruct.abc
 
     # Test that VmConsts can be used to assign values to references of the form '[...]'.
     memory.clear()
@@ -214,7 +249,7 @@ def get_vm_consts(identifier_values, reference_manager, flow_tracking_data, memo
 def test_reference_rebinding():
     identifier_values = {
         scope('ref'): ReferenceDefinition(
-            full_name=scope('ref'), references=[]
+            full_name=scope('ref'), cairo_type=TypeFelt(), references=[],
         )
     }
 
@@ -231,7 +266,8 @@ def test_reference_rebinding():
             pc=10,
             value=parse_expr('10'),
             ap_tracking_data=RegTrackingData(group=0, offset=2),
-        ))
+        ),
+    )
     consts = get_vm_consts(identifier_values, reference_manager, flow_tracking_data)
     assert consts.ref == 10
 
@@ -241,9 +277,15 @@ def test_reference_to_structs():
     t_star = TypePointer(pointee=t)
     identifier_values = {
         scope('ref'): ReferenceDefinition(
-            full_name=scope('ref'), references=[]
+            full_name=scope('ref'), cairo_type=t, references=[]
         ),
-        scope('T.x'): MemberDefinition(offset=3, cairo_type=t_star),
+        scope('T'): StructDefinition(
+            full_name=scope('T'),
+            members={
+                'x': MemberDefinition(offset=3, cairo_type=t_star),
+            },
+            size=4,
+        ),
     }
     reference_manager = ReferenceManager()
     flow_tracking_data = FlowTrackingDataActual(ap_tracking=RegTrackingData())
@@ -254,12 +296,18 @@ def test_reference_to_structs():
             pc=0,
             value=mark_types_in_expr_resolved(parse_expr('cast([100], T)')),
             ap_tracking_data=RegTrackingData(group=0, offset=2),
-        ))
+        ),
+    )
+    memory = {103: 200}
     consts = get_vm_consts(
-        identifier_values, reference_manager, flow_tracking_data, memory={103: 200})
+        identifier_values, reference_manager, flow_tracking_data, memory=memory)
 
     assert consts.ref.address_ == 100
-    assert consts.ref.x == 200
+    assert consts.ref.x.address_ == 200
+    # Set the pointer ref.x.x to 300.
+    consts.ref.x.x = 300
+    assert memory[203] == 300
+    assert consts.ref.x.x.address_ == 300
 
 
 def test_missing_attributes():
@@ -335,3 +383,53 @@ def test_get_dunder_something():
             AttributeError,
             match=re.escape("'VmConsts' object has no attribute '__something'")):
         consts.__something
+
+
+def test_unparsed():
+    identifier_values = {
+        scope('x'): LabelDefinition(10),
+    }
+    context = VmConstsContext(
+        identifiers=IdentifierManager.from_dict(identifier_values),
+        evaluator=dummy_evaluator,
+        reference_manager=ReferenceManager(),
+        flow_tracking_data=FlowTrackingDataActual(ap_tracking=RegTrackingData()), memory={}, pc=0)
+    consts = VmConsts(context=context, accessible_scopes=[scope('')])
+
+    with pytest.raises(IdentifierError, match="Unexpected '.' after 'x' which is label."):
+        consts.x.z
+
+
+def test_revoked_reference():
+    reference_manager = ReferenceManager()
+    ref_id = reference_manager.alloc_id(reference=Reference(
+        pc=0,
+        value=parse_expr('[ap + 1]'),
+        ap_tracking_data=RegTrackingData(group=0, offset=2),
+    ))
+
+    identifier_values = {
+        scope('x'): ReferenceDefinition(
+            full_name=scope('x'), cairo_type=TypeFelt(), references=[]
+        ),
+    }
+    prime = 2**64 + 13
+    ap = 100
+    fp = 200
+    memory = {}
+
+    flow_tracking_data = FlowTrackingDataActual(
+        ap_tracking=RegTrackingData(group=1, offset=4),
+        reference_ids={scope('x'): ref_id},
+    )
+    context = VmConstsContext(
+        identifiers=IdentifierManager.from_dict(identifier_values),
+        evaluator=ExpressionEvaluator(prime, ap, fp, memory).eval,
+        reference_manager=reference_manager,
+        flow_tracking_data=flow_tracking_data,
+        memory=memory,
+        pc=0)
+    consts = VmConsts(context=context, accessible_scopes=[ScopedName()])
+
+    with pytest.raises(FlowTrackingError, match='Failed to deduce ap.'):
+        assert consts.x

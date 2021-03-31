@@ -23,9 +23,9 @@ def test_relocate_segments():
         segments.finalize(i, size=size, public_memory=public_memory)
 
     segment_offsets = segments.relocate_segments()
-    assert segment_offsets == {0: 0, 1: 3, 2: 11, 3: 11, 4: 12}
+    assert segment_offsets == {0: 1, 1: 4, 2: 12, 3: 12, 4: 13}
     assert segments.get_public_memory_addresses(segment_offsets) == [
-        (0, 0), (1, 1), (3, 0), (4, 0), (5, 0), (6, 0), (7, 0), (8, 0), (9, 0), (10, 0), (13, 2)]
+        (1, 0), (2, 1), (4, 0), (5, 0), (6, 0), (7, 0), (8, 0), (9, 0), (10, 0), (11, 0), (14, 2)]
 
 
 def test_get_segment_used_size():

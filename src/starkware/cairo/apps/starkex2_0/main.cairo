@@ -15,16 +15,15 @@ from starkware.cairo.apps.starkex2_0.hash_vault_ptr_dict import hash_vault_ptr_d
 from starkware.cairo.apps.starkex2_0.vault_update import VaultState
 
 struct DexOutput:
-    member initial_vault_root = 0
-    member final_vault_root = 1
-    member initial_order_root = 2
-    member final_order_root = 3
-    member global_expiration_timestamp = 4
-    member vault_tree_height = 5
-    member order_tree_height = 6
-    member n_modifications = 7
-    member n_conditional_transfers = 8
-    const SIZE = 9
+    member initial_vault_root : felt
+    member final_vault_root : felt
+    member initial_order_root : felt
+    member final_order_root : felt
+    member global_expiration_timestamp : felt
+    member vault_tree_height : felt
+    member order_tree_height : felt
+    member n_modifications : felt
+    member n_conditional_transfers : felt
 end
 
 func main(
@@ -42,7 +41,7 @@ func main(
 
     local vault_dict : DictAccess*
     local order_dict : DictAccess*
-    local conditional_transfer_ptr
+    local conditional_transfer_ptr : felt*
     # Call execute_batch.
     # Advance output_ptr by DexOutput.SIZE, since DexOutput appears before other stuff.
     let executed_batch = execute_batch(
@@ -54,12 +53,14 @@ func main(
         vault_dict=vault_dict,
         order_dict=order_dict,
         dex_context_ptr=dex_context_ptr)
+    let range_check_ptr = executed_batch.range_check_ptr
 
     # Assert conditional transfer data starts where modification data ends.
     conditional_transfer_ptr = executed_batch.modification_ptr
 
     # Store conditional transfer end pointer.
-    local conditional_transfer_end_ptr : felt* = executed_batch.conditional_transfer_ptr
+    local conditional_transfer_end_ptr : felt* = cast(
+        executed_batch.conditional_transfer_ptr, felt*)
 
     # Assert that the number of modifications that appear in the output is correct.
     assert dex_output.n_modifications = (
@@ -81,21 +82,21 @@ func main(
     # (value before and value after) which summarizes all the accesses to that key.
 
     # Squash the vault_dict.
-    local squashed_vault_dict : DictAccess*
-    let (range_check_ptr, squash_vault_dict_ret) = squash_dict(
-        range_check_ptr=executed_batch.range_check_ptr,
-        dict_accesses=vault_dict,
-        dict_accesses_end=executed_batch.vault_dict,
-        squashed_dict=squashed_vault_dict)
-    local squashed_vault_dict_segment_size = squash_vault_dict_ret - squashed_vault_dict
+    with range_check_ptr:
+        local squashed_vault_dict : DictAccess*
+        let (squash_vault_dict_ret) = squash_dict(
+            dict_accesses=vault_dict,
+            dict_accesses_end=executed_batch.vault_dict,
+            squashed_dict=squashed_vault_dict)
+        local squashed_vault_dict_segment_size = squash_vault_dict_ret - squashed_vault_dict
 
-    # Squash the order_dict.
-    local squashed_order_dict : DictAccess*
-    let (range_check_ptr, squash_order_dict_ret) = squash_dict(
-        range_check_ptr=range_check_ptr,
-        dict_accesses=order_dict,
-        dict_accesses_end=order_dict_end,
-        squashed_dict=squashed_order_dict)
+        # Squash the order_dict.
+        local squashed_order_dict : DictAccess*
+        let (squash_order_dict_ret) = squash_dict(
+            dict_accesses=order_dict,
+            dict_accesses_end=order_dict_end,
+            squashed_dict=squashed_order_dict)
+    end
     local squashed_order_dict_segment_size = squash_order_dict_ret - squashed_order_dict
     local range_check_ptr_after_squash_order_dict = range_check_ptr
 
@@ -109,27 +110,33 @@ func main(
         vault_hash_dict=hashed_vault_dict)
 
     # Verify hashed_vault_dict consistency with the vault merkle root.
-    let (vault_merkle_multi_update_ptr) = merkle_multi_update(
-        hash_ptr=hash_vault_dict_ptr,
-        update_ptr=hashed_vault_dict,
-        n_updates=squashed_vault_dict_segment_size / DictAccess.SIZE,
-        height=dex_output.vault_tree_height,
-        prev_root=dex_output.initial_vault_root,
-        new_root=dex_output.final_vault_root)
+    # Make a copy of the first argument to avoid a compiler optimization that was added after the
+    # code was deployed.
+    tempvar hash_ptr = hash_vault_dict_ptr
+    with hash_ptr:
+        merkle_multi_update(
+            update_ptr=hashed_vault_dict,
+            n_updates=squashed_vault_dict_segment_size / DictAccess.SIZE,
+            height=dex_output.vault_tree_height,
+            prev_root=dex_output.initial_vault_root,
+            new_root=dex_output.final_vault_root)
 
-    # Verify squashed_order_dict consistency with the order merkle root.
-    let (order_merkle_multi_update_ptr) = merkle_multi_update(
-        hash_ptr=vault_merkle_multi_update_ptr,
-        update_ptr=squashed_order_dict,
-        n_updates=squashed_order_dict_segment_size / DictAccess.SIZE,
-        height=dex_output.order_tree_height,
-        prev_root=dex_output.initial_order_root,
-        new_root=dex_output.final_order_root)
+        # Verify squashed_order_dict consistency with the order merkle root.
+        # Make a copy of the first argument to avoid a compiler optimization that was added after
+        # the code was deployed.
+        tempvar hash_ptr = hash_ptr
+        merkle_multi_update(
+            update_ptr=squashed_order_dict,
+            n_updates=squashed_order_dict_segment_size / DictAccess.SIZE,
+            height=dex_output.order_tree_height,
+            prev_root=dex_output.initial_order_root,
+            new_root=dex_output.final_order_root)
+    end
 
     # Return updated pointers.
     return (
         output_ptr=conditional_transfer_end_ptr,
-        pedersen_ptr=order_merkle_multi_update_ptr,
+        pedersen_ptr=hash_ptr,
         range_check_ptr=range_check_ptr_after_squash_order_dict,
         ecdsa_ptr=ecdsa_ptr_after_execute_batch)
 end

@@ -1,6 +1,5 @@
 struct DictAccess:
-    member key = 0
-    member prev_value = 1
-    member new_value = 2
-    const SIZE = 3
+    member key : felt
+    member prev_value : felt
+    member new_value : felt
 end

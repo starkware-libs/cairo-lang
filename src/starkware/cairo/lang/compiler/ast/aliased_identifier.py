@@ -8,7 +8,7 @@ from starkware.cairo.lang.compiler.error_handling import Location
 
 
 @dataclasses.dataclass
-class ImportItem(AstNode):
+class AliasedIdentifier(AstNode):
     orig_identifier: ExprIdentifier
     local_name: Optional[ExprIdentifier]
     location: Optional[Location] = LocationField

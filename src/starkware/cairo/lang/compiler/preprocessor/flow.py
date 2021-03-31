@@ -18,12 +18,12 @@ from starkware.cairo.lang.compiler.scoped_name import ScopedName, ScopedNameAsSt
 class ReferenceManager:
     references: List[Reference] = field(default_factory=list)
 
-    def get_id(self, reference: Reference) -> int:
+    def alloc_id(self, reference: Reference) -> int:
         self.references.append(reference)
         return len(self.references) - 1
 
-    def get_ref(self, id: int) -> Reference:
-        return self.references[id]
+    def get_ref(self, ref_id: int) -> Reference:
+        return self.references[ref_id]
 
 
 class FlowTrackingData(ABC):
@@ -113,14 +113,14 @@ class FlowTrackingDataActual(FlowTrackingData):
                 if simplifier.visit(ref_expr) == \
                         simplifier.visit(other_ref.eval(other.ap_tracking)):
                     # Same expression.
-                    if self.ap_tracking != new_ap_tracking:
-                        # Create a new reference on the new ap tracking.
-                        new_reference = Reference(
-                            pc=reference.pc,
-                            value=ref_expr,
-                            ap_tracking_data=new_ap_tracking,
-                        )
-                        ref_id = reference_manager.get_id(new_reference)
+                    # Create a new reference on the new ap tracking.
+                    new_reference = Reference(
+                        pc=reference.pc,
+                        value=ref_expr,
+                        ap_tracking_data=new_ap_tracking,
+                        locations=reference.locations + other_ref.locations,
+                    )
+                    ref_id = reference_manager.alloc_id(new_reference)
                     reference_ids[name] = ref_id
             except FlowTrackingError:
                 pass
@@ -140,7 +140,7 @@ class FlowTrackingDataActual(FlowTrackingData):
         """
         Adds or rebinds a reference.
         """
-        ref_id = reference_manager.get_id(ref)
+        ref_id = reference_manager.alloc_id(ref)
         return dataclasses.replace(
             self,
             reference_ids={**self.reference_ids, name: ref_id},

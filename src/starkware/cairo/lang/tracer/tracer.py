@@ -24,7 +24,10 @@ def trace_runner(runner):
     memory = runner.relocated_memory
     trace = runner.relocated_trace
 
-    run_tracer(TracerData(program=runner.program, memory=memory, trace=trace))
+    run_tracer(
+        TracerData(
+            program=runner.program, memory=memory, trace=trace,
+            program_base=runner.relocate_value(runner.program_base)))
 
 
 class SimpleTCPServer(socketserver.TCPServer):
@@ -119,6 +122,7 @@ def main():
     )
 
     run_tracer(tracer_data)
+    return 0
 
 
 if __name__ == '__main__':

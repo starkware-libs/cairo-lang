@@ -21,10 +21,10 @@ from starkware.cairo.apps.starkex2_0.verify_order_signature import verify_order_
 # * 0 <= global_expiration_timestamp, and it has not expired yet.
 func execute_transfer(
         hash_ptr : HashBuiltin*, range_check_ptr, ecdsa_ptr : SignatureBuiltin*,
-        conditional_transfer_ptr, vault_dict : DictAccess*, order_dict : DictAccess*,
+        conditional_transfer_ptr : felt*, vault_dict : DictAccess*, order_dict : DictAccess*,
         dex_context_ptr : DexContext*) -> (
         hash_ptr : HashBuiltin*, range_check_ptr, ecdsa_ptr : SignatureBuiltin*,
-        conditional_transfer_ptr, vault_dict : DictAccess*, order_dict : DictAccess*):
+        conditional_transfer_ptr : felt*, vault_dict : DictAccess*, order_dict : DictAccess*):
     # Local variables.
     alloc_locals
     local amount
@@ -38,7 +38,7 @@ func execute_transfer(
     local expiration_timestamp
     local order_type
     local condition
-    local new_conditional_transfer_pointer
+    local new_conditional_transfer_pointer : felt*
 
     let dex_context : DexContext* = dex_context_ptr
 
@@ -76,8 +76,11 @@ func execute_transfer(
         vault_change_ptr=vault_dict)
 
     # Call vault_update for the receiver.
+    # Make a copy of the first argument to avoid a compiler optimization that was added after the
+    # code was deployed.
+    tempvar range_check_ptr = sender_vault_update_ret.range_check_ptr
     let receiver_vault_update_ret = vault_update_diff(
-        range_check_ptr=sender_vault_update_ret.range_check_ptr,
+        range_check_ptr=range_check_ptr,
         diff=amount,
         stark_key=receiver_stark_key,
         token_id=token_id,

@@ -36,7 +36,6 @@ Clone the repository and initialize the git submodules using:
 ```bash
 > git clone git@github.com:starkware-libs/cairo-lang.git
 > cd cairo-lang
-> git submodule update --init
 ```
 
 Build the docker image:
@@ -55,7 +54,7 @@ Once the docker image is built, you can fetch the python package zip file using:
 
 ```bash
 > container_id=$(docker create cairo)
-> docker cp ${container_id}:/app/cairo-lang-0.0.3.zip .
+> docker cp ${container_id}:/app/cairo-lang-0.1.0.zip .
 > docker rm -v ${container_id}
 ```
 

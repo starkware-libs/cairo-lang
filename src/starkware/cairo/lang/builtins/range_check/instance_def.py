@@ -1,5 +1,7 @@
 import dataclasses
 
+CELLS_PER_RANGE_CHECK = 1
+
 
 @dataclasses.dataclass
 class RangeCheckInstanceDef:

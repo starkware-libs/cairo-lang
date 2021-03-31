@@ -1,16 +1,19 @@
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 
-# Computes the Pedersen hash of two given field elements.
+# Computes the hash of two given field elements.
+# The hash function is defined by the hash_ptr used.
+# For example, pass the pedersen builtin pointer to compute Pedersen hash.
 #
 # Arguments:
-# pedersen_ptr - the Pedersen hash builtin pointer.
+# hash_ptr - the hash builtin pointer.
 # x, y - the two field elements to be hashed, in this order.
 #
 # Returns:
-# pedersen_ptr - the new Pedersen builtin pointer.
 # result - the field element result of the hash.
-func pedersen_hash(pedersen_ptr : HashBuiltin*, x, y) -> (pedersen_ptr : HashBuiltin*, result):
-    pedersen_ptr.x = x
-    pedersen_ptr.y = y
-    return (pedersen_ptr=pedersen_ptr + HashBuiltin.SIZE, result=pedersen_ptr.result)
+func hash2{hash_ptr : HashBuiltin*}(x, y) -> (result):
+    hash_ptr.x = x
+    hash_ptr.y = y
+    let result = hash_ptr.result
+    let hash_ptr = hash_ptr + HashBuiltin.SIZE
+    return (result=result)
 end

@@ -27,6 +27,30 @@
             }
         },
         {
+            "name": "meta.control.with",
+            "begin": "\\b(with)\\s+(.+)\\s*\\:",
+            "beginCaptures": {
+                "1": {
+                    "name": "keyword.control.with"
+                },
+                "2": {
+                    "name": "entity.name.identifiers"
+                }
+            },
+            "contentName": "source.cairo",
+            "end": "\\bend\\b",
+            "patterns": [
+                {
+                    "include": "source.cairo"
+                }
+            ],
+            "endCaptures": {
+                "0": {
+                    "name": "keyword.control.end"
+                }
+            }
+        },
+        {
             "name": "keyword.control.else",
             "match": "\\belse\\b"
         },
@@ -40,7 +64,7 @@
         },
         {
             "name": "keyword.other.meta",
-            "match": "\\b(const|let|local|tempvar|felt|as|from|import|static_assert|return|assert|member|cast|alloc_locals)\\b"
+            "match": "\\b(const|let|local|tempvar|felt|as|from|import|static_assert|return|assert|member|cast|alloc_locals|with)\\b"
         },
         {
             "name": "markup.italic",
@@ -56,7 +80,7 @@
         },
         {
             "name": "meta.function.cairo",
-            "begin": "\\b(func)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(",
+            "begin": "\\b(func)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*[({]",
             "beginCaptures": {
                 "1": {
                     "name": "storage.type.function.cairo"

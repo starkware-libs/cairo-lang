@@ -33,7 +33,7 @@ class InstructionLocation:
 
 @marshmallow_dataclass.dataclass
 class DebugInfo:
-    # A map from PC to the location of the instruction.
+    # A map from (relative) PC to the location of the instruction.
     instruction_locations: Dict[int, InstructionLocation]
     # A partial map from file name to its content. Files that are not in the map, are assumed to
     # exist in the file system.

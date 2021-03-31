@@ -1,11 +1,11 @@
 import pytest
 
-from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt
+from starkware.cairo.lang.compiler.ast.aliased_identifier import AliasedIdentifier
+from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt, TypeTuple
 from starkware.cairo.lang.compiler.ast.code_elements import CodeElementImport
 from starkware.cairo.lang.compiler.ast.expr import (
     ExprConst, ExprDeref, ExprIdentifier, ExprOperator, ExprPyConst, ExprReg)
 from starkware.cairo.lang.compiler.ast.formatting_utils import FormattingError
-from starkware.cairo.lang.compiler.ast.imports import ImportItem
 from starkware.cairo.lang.compiler.ast.instructions import (
     AddApInstruction, AssertEqInstruction, CallInstruction, CallLabelInstruction, InstructionAst,
     JnzInstruction, JumpInstruction, JumpToLabelInstruction, RetInstruction)
@@ -21,6 +21,13 @@ from starkware.cairo.lang.compiler.parser_transformer import ParserError
 def test_types():
     assert isinstance(parse_type('felt'), TypeFelt)
     assert parse_type('my_namespace.MyStruct  *  *').format() == 'my_namespace.MyStruct**'
+
+
+def test_type_tuple():
+    typ = parse_type('(felt)')
+    assert typ == TypeTuple(members=[TypeFelt()])
+    assert typ.format() == '(felt)'
+    assert parse_type('( felt, felt* , (felt, T.S,)* )').format() == '(felt, felt*, (felt, T.S)*)'
 
 
 def test_identifier():
@@ -121,9 +128,6 @@ def test_tuple_expr():
     assert parse_expr('(  2)').format() == '(2)'  # Not a tuple.
     assert parse_expr('(a= 2)').format() == '(a=2)'  # Tuple.
     assert parse_expr('(  2,)').format() == '(2,)'
-    assert parse_expr('( ...,1)').format() == '(..., 1)'
-    assert parse_expr('( ...,)').format() == '(...,)'
-    assert parse_expr('( ...   )').format() == '(...)'
     assert parse_expr('( 1  , ap)').format() == '(1, ap)'
     assert parse_expr('( 1  , ap, )').format() == '(1, ap,)'
     assert parse_expr('( 1 , a=2, b=(c=()))').format() == '(1, a=2, b=(c=()))'
@@ -331,7 +335,7 @@ def test_import():
     res = parse_code_element('from   a    import  b')
     assert res == CodeElementImport(
         path=ExprIdentifier(name='a'),
-        import_items=[ImportItem(
+        import_items=[AliasedIdentifier(
             orig_identifier=ExprIdentifier(name='b'),
             local_name=None)])
     assert res.format(allowed_line_length=100) == 'from a import b'
@@ -340,7 +344,7 @@ def test_import():
     res = parse_code_element('from   a    import  b   as   c')
     assert res == CodeElementImport(
         path=ExprIdentifier(name='a'),
-        import_items=[ImportItem(
+        import_items=[AliasedIdentifier(
             orig_identifier=ExprIdentifier(name='b'),
             local_name=ExprIdentifier(name='c'))])
     assert res.format(allowed_line_length=100) == 'from a import b as c'
@@ -349,7 +353,7 @@ def test_import():
     res = parse_code_element('from   a.b12.c4    import  lib345')
     assert res == CodeElementImport(
         path=ExprIdentifier(name='a.b12.c4'),
-        import_items=[ImportItem(
+        import_items=[AliasedIdentifier(
             orig_identifier=ExprIdentifier(name='lib345'),
             local_name=None)])
     assert res.format(allowed_line_length=100) == 'from a.b12.c4 import lib345'
@@ -360,13 +364,13 @@ def test_import():
     assert res == CodeElementImport(
         path=ExprIdentifier(name='lib'),
         import_items=[
-            ImportItem(
+            AliasedIdentifier(
                 orig_identifier=ExprIdentifier(name='a'),
                 local_name=None),
-            ImportItem(
+            AliasedIdentifier(
                 orig_identifier=ExprIdentifier(name='b'),
                 local_name=ExprIdentifier(name='b2')),
-            ImportItem(
+            AliasedIdentifier(
                 orig_identifier=ExprIdentifier(name='c'),
                 local_name=None),
         ])
@@ -433,8 +437,18 @@ def test_return():
 
 
 def test_func_call():
-    res = parse_code_element('fibonacci(   ... ,  1, \na= 2  )')
-    assert res.format(allowed_line_length=100) == 'fibonacci(..., 1, a=2)'
+    res = parse_code_element('fibonacci(  1, \na= 2  )')
+    assert res.format(allowed_line_length=100) == 'fibonacci(1, a=2)'
+
+    res = parse_code_element('fibonacci  {a=b,c = d}(  1, \na= 2  )')
+    assert res.format(allowed_line_length=100) == 'fibonacci{a=b, c=d}(1, a=2)'
+    assert res.format(allowed_line_length=20) == 'fibonacci{a=b, c=d}(\n    1, a=2)'
+    assert res.format(allowed_line_length=15) == 'fibonacci{\n    a=b, c=d}(\n    1, a=2)'
+
+
+def test_tail_call():
+    res = parse_code_element('return    fibonacci(  1, \na= 2  )')
+    assert res.format(allowed_line_length=100) == 'return fibonacci(1, a=2)'
 
 
 def test_func_with_args():
@@ -459,6 +473,9 @@ end"""
     test_format('(x,y,z,)->   (a,b,c)', '(x, y, z) -> (a, b, c)')
     test_format('()->(a,b,c)', '() -> (a, b, c)')
     test_format('(x,y,z)      ->()', '(x, y, z) -> ()')
+
+    # Implicit arguments.
+    test_format('{x,y\n\n}(z,w)->()', '{x, y}(z, w) -> ()')
 
     with pytest.raises(ParserError):
         test_format('')

@@ -3,6 +3,7 @@ python_lib(cairo_common_lib
     FILES
     alloc.cairo
     cairo_builtins.cairo
+    default_dict.cairo
     dict.cairo
     dict_access.cairo
     dict.py

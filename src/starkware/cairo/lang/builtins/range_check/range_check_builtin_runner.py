@@ -15,6 +15,9 @@ class RangeCheckBuiltinRunner(SimpleBuiltinRunner):
     def add_validation_rules(self, runner):
         def rule(memory, addr):
             value = memory[addr]
+            assert isinstance(value, int), \
+                f'Range-check builtin: Expected value at address {addr} to be an integer. ' \
+                f'Got: {value}.'
             # The range check builtin asserts that 0 <= value < BOUND.
             # For example, if the layout uses 8 16-bit range-checks per instance,
             # bound will be 2**(16 * 8) = 2**128.

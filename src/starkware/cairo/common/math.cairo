@@ -23,38 +23,39 @@ func assert_not_equal(a, b):
 end
 
 # Verifies that a >= 0 (or more precisely 0 <= a < RANGE_CHECK_BOUND).
-func assert_nn(range_check_ptr, a) -> (range_check_ptr):
+func assert_nn{range_check_ptr}(a):
     %{ assert 0 <= ids.a % PRIME < range_check_builtin.bound, f'a = {ids.a} is out of range.' %}
     a = [range_check_ptr]
-    return (range_check_ptr + 1)
+    let range_check_ptr = range_check_ptr + 1
+    return ()
 end
 
 # Verifies that a <= b (or more precisely 0 <= b - a < RANGE_CHECK_BOUND).
-func assert_le(range_check_ptr, a, b) -> (range_check_ptr):
-    let (range_check_ptr) = assert_nn(range_check_ptr, b - a)
-    return (range_check_ptr)
+func assert_le{range_check_ptr}(a, b):
+    assert_nn(b - a)
+    return ()
 end
 
 # Verifies that a <= b - 1 (or more precisely 0 <= b - 1 - a < RANGE_CHECK_BOUND).
-func assert_lt(range_check_ptr, a, b) -> (range_check_ptr):
-    let (range_check_ptr) = assert_le(range_check_ptr, a, b - 1)
-    return (range_check_ptr)
+func assert_lt{range_check_ptr}(a, b):
+    assert_le(a, b - 1)
+    return ()
 end
 
 # Verifies that 0 <= a <= b.
 #
 # Prover assumption: a, b < RANGE_CHECK_BOUND.
-func assert_nn_le(range_check_ptr, a, b) -> (range_check_ptr):
-    let (range_check_ptr) = assert_nn(range_check_ptr, a)
-    let (range_check_ptr) = assert_le(range_check_ptr, a, b)
-    return (range_check_ptr)
+func assert_nn_le{range_check_ptr}(a, b):
+    assert_nn(a)
+    assert_le(a, b)
+    return ()
 end
 
 # Asserts that value is in the range [lower, upper).
-func assert_in_range(range_check_ptr, value, lower, upper) -> (range_check_ptr):
-    let (range_check_ptr) = assert_le(range_check_ptr, lower, value)
-    let (range_check_ptr) = assert_le(range_check_ptr, value, upper - 1)
-    return (range_check_ptr)
+func assert_in_range{range_check_ptr}(value, lower, upper):
+    assert_le(lower, value)
+    assert_le(value, upper - 1)
+    return ()
 end
 
 # Asserts that a <= b.
@@ -62,9 +63,10 @@ end
 # Assumptions:
 #    a and b are in the range [0, 2**250).
 #    PRIME - 2**250 > 2**(250 - 128) + 1 * RC_BOUND.
-func assert_le_250_bit(range_check_ptr, a, b) -> (range_check_ptr):
+func assert_le_250_bit{range_check_ptr}(a, b):
     let low = [range_check_ptr]
     let high = [range_check_ptr + 1]
+    let range_check_ptr = range_check_ptr + 2
     const UPPER_BOUND = %[2**(250)%]
     const HIGH_PART_SHIFT = %[2**250 // 2**128 %]
     %{
@@ -91,14 +93,14 @@ func assert_le_250_bit(range_check_ptr, a, b) -> (range_check_ptr):
     # So given the soundness assumptions listed above it must be the case that a <= b.
     assert diff = high * HIGH_PART_SHIFT + low
 
-    return (range_check_ptr=range_check_ptr + 2)
+    return ()
 end
 
 # Splits the unsigned integer lift of a field element into the higher 128 bit and lower 128 bit.
 # The unsigned integer lift is the unique integer in the range [0, PRIME) that represents the field
 # element.
 # For example, if value=17 * 2^128 + 8, then high=17 and low=8.
-func split_felt(range_check_ptr, value) -> (range_check_ptr, high, low):
+func split_felt{range_check_ptr}(value) -> (high, low):
     const MAX_HIGH = %[(PRIME - 1) >> 128%]
     const MAX_LOW = %[(PRIME - 1) & ((1 << 128) - 1)%]
 
@@ -114,76 +116,78 @@ func split_felt(range_check_ptr, value) -> (range_check_ptr, high, low):
     %}
     assert value = high * %[2**128%] + low
     if high == MAX_HIGH:
-        let (range_check_ptr) = assert_le(range_check_ptr, low, MAX_LOW)
+        assert_le(low, MAX_LOW)
     else:
-        let (range_check_ptr) = assert_le(range_check_ptr, high, MAX_HIGH)
+        assert_le(high, MAX_HIGH)
     end
-    return (range_check_ptr=range_check_ptr, high=high, low=low)
+    return (high=high, low=low)
 end
 
 # Asserts that the unsigned integer lift (as a number in the range [0, PRIME)) of a is lower than
 # or equal to that of b.
 # See split_felt() for more details.
-func assert_le_felt(range_check_ptr, a, b) -> (range_check_ptr):
+func assert_le_felt{range_check_ptr}(a, b):
     %{
         assert (ids.a % PRIME) <= (ids.b % PRIME), \
             f'a = {ids.a % PRIME} is not less than or equal to b = {ids.b % PRIME}.'
     %}
     alloc_locals
-    let (range_check_ptr, local a_high, local a_low) = split_felt(range_check_ptr, a)
-    let (range_check_ptr, b_high, b_low) = split_felt(range_check_ptr, b)
+    let (local a_high, local a_low) = split_felt(a)
+    let (b_high, b_low) = split_felt(b)
 
     if a_high == b_high:
-        let (range_check_ptr) = assert_le(range_check_ptr, a_low, b_low)
-        return (range_check_ptr)
+        assert_le(a_low, b_low)
+        return ()
     end
-    let (range_check_ptr) = assert_le(range_check_ptr, a_high, b_high)
-    return (range_check_ptr)
+    assert_le(a_high, b_high)
+    return ()
 end
 
 # Asserts that the unsigned integer lift (as a number in the range [0, PRIME)) of a is lower than
 # that of b.
-func assert_lt_felt(range_check_ptr, a, b) -> (range_check_ptr):
+func assert_lt_felt{range_check_ptr}(a, b):
     %{
         assert (ids.a % PRIME) < (ids.b % PRIME), \
             f'a = {ids.a % PRIME} is not less than b = {ids.b % PRIME}.'
     %}
     alloc_locals
-    let (range_check_ptr, local a_high, local a_low) = split_felt(range_check_ptr, a)
-    let (range_check_ptr, b_high, b_low) = split_felt(range_check_ptr, b)
+    let (local a_high, local a_low) = split_felt(a)
+    let (b_high, b_low) = split_felt(b)
 
     if a_high == b_high:
-        let (range_check_ptr) = assert_lt(range_check_ptr, a_low, b_low)
-        return (range_check_ptr)
+        assert_lt(a_low, b_low)
+        return ()
     end
-    let (range_check_ptr) = assert_lt(range_check_ptr, a_high, b_high)
-    return (range_check_ptr)
+    assert_lt(a_high, b_high)
+    return ()
 end
 
 # Returns the absolute value of value.
 # Prover asumption: -rc_bound < value < rc_bound.
-func abs_value(range_check_ptr, value) -> (range_check_ptr, abs_value):
+func abs_value{range_check_ptr}(value) -> (abs_value):
     %{
         from starkware.cairo.common.math_utils import is_positive
         memory[ap] = 1 if is_positive(
             value=ids.value, prime=PRIME, rc_bound=range_check_builtin.bound) else 0
     %}
     jmp is_positive if [ap] != 0; ap++
-    [ap] = range_check_ptr + 1; ap++  # range_check_ptr
-    [ap] = value * (-1); ap++  # abs_value
-    [range_check_ptr] = [ap - 1]
-    return (...)
+    tempvar new_range_check_ptr = range_check_ptr + 1
+    tempvar abs_value = value * (-1)
+    [range_check_ptr] = abs_value
+    let range_check_ptr = new_range_check_ptr
+    return (abs_value=abs_value)
 
     is_positive:
     [range_check_ptr] = value
-    return (range_check_ptr=range_check_ptr + 1, abs_value=value)
+    let range_check_ptr = range_check_ptr + 1
+    return (abs_value=value)
 end
 
 # Returns the sign of value: -1, 0 or 1.
 # Prover asumption: -rc_bound < value < rc_bound.
-func sign(range_check_ptr, value) -> (range_check_ptr, sign):
+func sign{range_check_ptr}(value) -> (sign):
     if value == 0:
-        return (range_check_ptr=range_check_ptr, sign=0)
+        return (sign=0)
     end
 
     %{
@@ -193,11 +197,13 @@ func sign(range_check_ptr, value) -> (range_check_ptr, sign):
     %}
     jmp is_positive if [ap] != 0; ap++
     assert [range_check_ptr] = value * (-1)
-    return (range_check_ptr=range_check_ptr + 1, sign=-1)
+    let range_check_ptr = range_check_ptr + 1
+    return (sign=-1)
 
     is_positive:
     [range_check_ptr] = value
-    return (range_check_ptr=range_check_ptr + 1, sign=1)
+    let range_check_ptr = range_check_ptr + 1
+    return (sign=1)
 end
 
 # Returns q and r such that:
@@ -208,18 +214,19 @@ end
 #
 # The value of div is restricted to make sure there is no overflow.
 # q * div + r < (q + 1) * div <= rc_bound * (PRIME / rc_bound) = PRIME.
-func unsigned_div_rem(range_check_ptr, value, div) -> (range_check_ptr, q, r):
+func unsigned_div_rem{range_check_ptr}(value, div) -> (q, r):
     let r = [range_check_ptr]
     let q = [range_check_ptr + 1]
+    let range_check_ptr = range_check_ptr + 2
     %{
         assert 0 < ids.div <= PRIME // range_check_builtin.bound, \
             f'div={hex(ids.div)} is out of the valid range.'
         ids.q, ids.r = divmod(ids.value, ids.div)
     %}
-    let (range_check_ptr) = assert_le(range_check_ptr + 2, r, div - 1)
+    assert_le(r, div - 1)
 
     assert value = q * div + r
-    return (range_check_ptr, q, r)
+    return (q, r)
 end
 
 # Returns q and r such that. -bound <= q < bound, 0 <= r < div -1 and value = q * div + r.
@@ -233,9 +240,10 @@ end
 # The values of div and bound are restricted to make sure there is no overflow.
 # q * div + r <  (q + 1) * div <=  rc_bound / 2 * (PRIME / rc_bound)
 # q * div + r >=  q * div      >= -rc_bound / 2 * (PRIME / rc_bound)
-func signed_div_rem(range_check_ptr, value, div, bound) -> (range_check_ptr, q, r):
+func signed_div_rem{range_check_ptr}(value, div, bound) -> (q, r):
     let r = [range_check_ptr]
     let biased_q = [range_check_ptr + 1]  # == q + bound.
+    let range_check_ptr = range_check_ptr + 2
     %{
         def as_int(val):
             return val if val < PRIME // 2 else val - PRIME
@@ -256,7 +264,7 @@ func signed_div_rem(range_check_ptr, value, div, bound) -> (range_check_ptr, q, 
     %}
     let q = biased_q - bound
     assert value = q * div + r
-    let (range_check_ptr) = assert_le(range_check_ptr + 2, r, div - 1)
-    let (range_check_ptr) = assert_le(range_check_ptr, biased_q, 2 * bound - 1)
-    return (range_check_ptr, q, r)
+    assert_le(r, div - 1)
+    assert_le(biased_q, 2 * bound - 1)
+    return (q, r)
 end

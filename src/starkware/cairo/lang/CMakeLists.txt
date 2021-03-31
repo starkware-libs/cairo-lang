@@ -12,8 +12,12 @@ python_lib(cairo_version_lib
     version.py
 )
 
+if (NOT DEFINED CAIRO_PYTHON_INTERPRETER)
+    set(CAIRO_PYTHON_INTERPRETER python3.7)
+endif()
+
 python_venv(cairo_lang_venv
-    PYTHON python3.7
+    PYTHON ${CAIRO_PYTHON_INTERPRETER}
     LIBS
     cairo_bootloader_generate_fact_lib
     cairo_common_lib
@@ -46,4 +50,11 @@ python_lib(cairo_instances_lib
 
     LIBS
     cairo_run_builtins_lib
+)
+
+python_lib(cairo_constants_lib
+    PREFIX starkware/cairo/lang
+
+    FILES
+    cairo_constants.py
 )

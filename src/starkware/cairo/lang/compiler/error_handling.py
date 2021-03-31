@@ -108,12 +108,14 @@ class LocationError(Exception):
     Represents an error which refers to a specific location (line, column) in a file.
     """
 
-    def __init__(self, message, location: Optional[Location], traceback: Optional[str] = None):
+    def __init__(
+            self, message, location: Optional[Location], traceback: Optional[str] = None,
+            notes: Optional[List[str]] = None):
         super().__init__(message, location)
         self.message = message
         self.location = location
         self.traceback = traceback
-        self.notes: List[str] = []
+        self.notes: List[str] = [] if notes is None else notes
 
     def __str__(self):
         if self.location is None:

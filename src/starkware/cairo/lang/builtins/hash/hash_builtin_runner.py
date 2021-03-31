@@ -1,11 +1,9 @@
 from typing import Any, Dict, Optional, Set
 
+from starkware.cairo.lang.builtins.hash.instance_def import CELLS_PER_HASH
 from starkware.cairo.lang.vm.builtin_runner import BuiltinVerifier, SimpleBuiltinRunner
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 from starkware.python.math_utils import safe_div
-
-# Each hash consists of 3 cells (two inputs and one output).
-CELLS_PER_HASH = 3
 
 
 class HashBuiltinRunner(SimpleBuiltinRunner):
@@ -60,7 +58,10 @@ class HashBuiltinRunner(SimpleBuiltinRunner):
     def get_additional_data(self):
         return [list(RelocatableValue.to_tuple(x)) for x in sorted(self.verified_addresses)]
 
-    def extend_additional_data(self, data, relocate_callback):
+    def extend_additional_data(self, data, relocate_callback, data_is_trusted=True):
+        if not data_is_trusted:
+            return
+
         for addr in data:
             self.verified_addresses.add(relocate_callback(RelocatableValue.from_tuple(addr)))
 

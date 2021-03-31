@@ -39,9 +39,9 @@ class MemoryDict(UserDict):
         if isinstance(num, RelocatableValue):
             return
         if not isinstance(num, int):
-            raise ValueError(f'{name} must be an int, not {type(num).__name__}')
+            raise ValueError(f'{name} must be an int, not {type(num).__name__}.')
         if num < 0:
-            raise ValueError(f'{name} must be positive. Got {num}')
+            raise ValueError(f'{name} must be nonnegative. Got {num}.')
 
     def __getitem__(self, addr: MaybeRelocatable) -> MaybeRelocatable:
         self._check_element(addr, 'Memory address')
@@ -54,6 +54,11 @@ class MemoryDict(UserDict):
         self._check_element(addr, 'Memory address')
         self._check_element(value, 'Memory value')
 
+        # Additionally, check that address doesn't have a negative offset.
+        if isinstance(addr, RelocatableValue) and addr.offset < 0:
+            raise ValueError(
+                f'The offset of a relocatable value must be nonnegative. Found: {addr}.')
+
         current = self.data.setdefault(addr, value)
         self.verify_same_value(addr, current, value)
 
@@ -64,6 +69,13 @@ class MemoryDict(UserDict):
         """
         if current != value:
             raise InconsistentMemoryError(addr, current, value)
+
+    def set_without_checks(self, addr: MaybeRelocatable, value: MaybeRelocatable):
+        """
+        Same as __setitem__() except that no checks are performed on addr and value.
+        This function should only be used in tests.
+        """
+        self.data[addr] = value
 
     def serialize(self, field_bytes):
         return b''.join(

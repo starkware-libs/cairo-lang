@@ -1,6 +1,9 @@
 import dataclasses
 from typing import Optional
 
+# Each hash consists of 3 cells (two inputs and one output).
+CELLS_PER_HASH = 3
+
 
 @dataclasses.dataclass
 class PedersenInstanceDef:

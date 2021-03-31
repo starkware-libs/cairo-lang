@@ -69,6 +69,7 @@ class ExpressionTransformer:
         return ExprCast(
             expr=inner_expr,
             dest_type=expr.dest_type,
+            cast_type=expr.cast_type,
             location=self.location_modifier(expr.location))
 
     def visit_ExprTuple(self, expr: ExprTuple):

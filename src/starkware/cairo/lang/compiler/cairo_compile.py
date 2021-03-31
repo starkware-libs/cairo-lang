@@ -5,18 +5,17 @@ import sys
 import time
 from typing import List, Sequence, Set, Tuple, Type, Union
 
+from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.cairo.lang.compiler.assembler import assemble
 from starkware.cairo.lang.compiler.constants import LIBS_DIR_ENVVAR, MAIN_SCOPE, START_FILE_NAME
 from starkware.cairo.lang.compiler.error_handling import LocationError
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierError
-from starkware.cairo.lang.compiler.identifier_utils import get_struct_members
+from starkware.cairo.lang.compiler.identifier_utils import get_struct_definition
 from starkware.cairo.lang.compiler.module_reader import ModuleReader
 from starkware.cairo.lang.compiler.preprocessor.preprocessor import Preprocessor, preprocess_codes
 from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.version import __version__
-
-DEFAULT_PRIME = 2**251 + 17 * 2**192 + 1
 
 
 def main():
@@ -71,7 +70,7 @@ def main():
             module_reader = get_module_reader(cairo_path)
             preprocessed = preprocess_codes(codes, args.prime, module_reader.read, MAIN_SCOPE)
             source_files = module_reader.source_files
-            print(preprocessed.format(), end='', file=out)
+            print(preprocessed.format(with_locations=debug_info), end='', file=out)
         else:
             program, source_files = compile_cairo_extended(
                 codes, args.prime, cairo_path, debug_info, simple=args.simple)
@@ -186,10 +185,18 @@ def check_main_args(program: Program):
     argument to main() and is subsequently returned.
     """
     expected_builtin_ptrs = [f'{builtin_name}_ptr' for builtin_name in program.builtins]
+
     try:
-        main_args = list(get_struct_members(
+        implicit_args = list(get_struct_definition(
+            struct_name=ScopedName.from_string('__main__.main.ImplicitArgs'),
+            identifier_manager=program.identifiers).members)
+    except IdentifierError:
+        return
+
+    try:
+        main_args = implicit_args + list(get_struct_definition(
             struct_name=ScopedName.from_string('__main__.main.Args'),
-            identifier_manager=program.identifiers))
+            identifier_manager=program.identifiers).members)
     except IdentifierError:
         pass
     else:
@@ -198,9 +205,9 @@ def check_main_args(program: Program):
             f'{expected_builtin_ptrs}. Found: {main_args}.'
 
     try:
-        main_returns = list(get_struct_members(
+        main_returns = implicit_args + list(get_struct_definition(
             struct_name=ScopedName.from_string('__main__.main.Return'),
-            identifier_manager=program.identifiers))
+            identifier_manager=program.identifiers).members)
     except IdentifierError:
         pass
     else:

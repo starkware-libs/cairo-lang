@@ -3,7 +3,7 @@ import re
 from abc import abstractmethod
 from typing import List, Optional, Sequence
 
-from starkware.cairo.lang.compiler.ast.cairo_types import CairoType
+from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, CastType
 from starkware.cairo.lang.compiler.ast.formatting_utils import INDENTATION, LocationField
 from starkware.cairo.lang.compiler.ast.node import AstNode
 from starkware.cairo.lang.compiler.ast.notes import Notes, NotesField
@@ -78,8 +78,7 @@ class ExprIdentifier(Expression):
 
 class ArgListItem(AstNode):
     """
-    Represents an item in function call or return statement. This can be either ExprAssignment or
-    EllipsisSymbol.
+    Represents an item in function call or return statement.
     """
 
     location: Optional[Location]
@@ -87,17 +86,6 @@ class ArgListItem(AstNode):
     @abstractmethod
     def format(self):
         pass
-
-
-@dataclasses.dataclass
-class EllipsisSymbol(ArgListItem):
-    location: Optional[Location] = LocationField
-
-    def format(self):
-        return '...'
-
-    def get_children(self) -> Sequence[Optional[AstNode]]:
-        return []
 
 
 @dataclasses.dataclass
@@ -128,6 +116,10 @@ class ArgList(AstNode):
     notes: List[Notes]
     has_trailing_comma: bool
     location: Optional[Location] = LocationField
+
+    def assert_no_comments(self):
+        for note in self.notes:
+            note.assert_no_comments()
 
     def format(self):
         if len(self.args) == 0:
@@ -259,6 +251,9 @@ class ExprCast(Expression):
     """
     expr: Expression
     dest_type: CairoType
+    # Cast expressions resulting from the Cairo code always have cast_type=CastType.EXPLICIT.
+    # 'cast_type' is only used when an ExprCast instance is created during compilation.
+    cast_type: CastType = CastType.EXPLICIT
     notes: Notes = NotesField
     location: Optional[Location] = LocationField
 

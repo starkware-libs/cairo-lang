@@ -1,4 +1,5 @@
 import dataclasses
+from collections import defaultdict
 from typing import Dict
 
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
@@ -36,6 +37,18 @@ class DictManager:
         self.trackers[base.segment_index] = DictTracker(
             data={
                 key: segments.gen_arg(value) for key, value in initial_dict.items()},
+            current_ptr=base,
+        )
+        return base
+
+    def new_default_dict(self, segments, default_value):
+        """
+        Creates a new Cairo default dictionary.
+        """
+        base = segments.add()
+        assert base.segment_index not in self.trackers
+        self.trackers[base.segment_index] = DictTracker(
+            data=defaultdict(lambda: default_value),
             current_ptr=base,
         )
         return base

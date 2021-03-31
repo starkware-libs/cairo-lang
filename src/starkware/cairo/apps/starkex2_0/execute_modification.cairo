@@ -8,24 +8,25 @@ from starkware.cairo.apps.starkex2_0.dex_constants import BALANCE_BOUND
 from starkware.cairo.apps.starkex2_0.dex_context import DexContext
 from starkware.cairo.apps.starkex2_0.vault_update import vault_update_balances
 
-# Represents the struct of data written to the program output for each modification.
-namespace ModificationOutput:
+namespace ModificationConstants:
     const BALANCE_SHIFT = %[ 2**64 %]
     const VAULT_SHIFT = %[ 2**31 %]
     const FULL_WITHDRAWAL_SHIFT = BALANCE_SHIFT * VAULT_SHIFT
+end
 
+# Represents the struct of data written to the program output for each modification.
+struct ModificationOutput:
     # The stark_key of the changed vault.
-    member stark_key = 0
+    member stark_key : felt
     # The token_id of the token which was deposited or withdrawn.
-    member token_id = 1
+    member token_id : felt
     # A packed field which consists of the balances and vault_id.
     # The format is as follows:
     # +--------------------+------------------+----------------LSB-+
     # | full_withdraw (1b) |  vault_idx (31b) | balance_diff (64b) |
     # +--------------------+------------------+--------------------+
     # where balance_diff is represented using a 2**63 biased-notation.
-    member action = 2
-    const SIZE = 3
+    member action : felt
 end
 
 # Executes a modification (deposit or withdrawal) which changes the balance in a single vault
@@ -46,8 +47,8 @@ func execute_modification(
     let output : ModificationOutput* = modification_ptr
 
     # Copy constants to allow overriding them in the tests.
-    const BALANCE_SHIFT = ModificationOutput.BALANCE_SHIFT
-    const VAULT_SHIFT = ModificationOutput.VAULT_SHIFT
+    const BALANCE_SHIFT = ModificationConstants.BALANCE_SHIFT
+    const VAULT_SHIFT = ModificationConstants.VAULT_SHIFT
 
     # Perform range checks on balance_before, balance_after and vault_index to make sure
     # their values are valid, and that they do not overlap in the modification action field.

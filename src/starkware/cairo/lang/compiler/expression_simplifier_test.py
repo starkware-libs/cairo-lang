@@ -10,8 +10,8 @@ from starkware.cairo.lang.compiler.substitute_identifiers import substitute_iden
 def test_simplifier(prime):
     assignments = {'x': 10, 'y': 3, 'z': -2, 'w': -60}
     simplifier = ExpressionSimplifier(prime)
-    simplify = lambda expr: simplifier.visit(
-        substitute_identifiers(expr, lambda var: assignments[var.name]))
+    simplify = lambda expr: simplifier.visit(substitute_identifiers(
+        expr=expr, get_identifier_callback=lambda var: assignments[var.name]))
     assert simplify(parse_expr('fp + x * (y + -1)')).format() == 'fp + 20'
     assert simplify(parse_expr('[fp + x] + [ap - (-z)]')).format() == \
         '[fp + 10] + [ap + (-2)]'

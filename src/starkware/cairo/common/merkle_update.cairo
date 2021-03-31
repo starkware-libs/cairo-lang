@@ -6,8 +6,8 @@ from starkware.cairo.common.cairo_builtins import HashBuiltin
 # In particular, given a secret authentication path (of the siblings of the nodes in the path from
 # the root to the leaf), this function computes the roots twice - once with prev_leaf and once with
 # new_leaf, where the verifier is guaranteed that the same authentication path is used.
-func merkle_update(hash_ptr : HashBuiltin*, height, prev_leaf, new_leaf, index) -> (
-        prev_root, new_root, hash_ptr : HashBuiltin*):
+func merkle_update{hash_ptr : HashBuiltin*}(height, prev_leaf, new_leaf, index) -> (
+        prev_root, new_root):
     if height == 0:
         # Assert that index is 0.
         index = 0
@@ -16,11 +16,12 @@ func merkle_update(hash_ptr : HashBuiltin*, height, prev_leaf, new_leaf, index) 
             # Check that auth_path had the right number of elements.
             assert len(auth_path) == 0, 'Got too many values in auth_path.'
         %}
-        return (prev_root=prev_leaf, new_root=new_leaf, hash_ptr=hash_ptr)
+        return (prev_root=prev_leaf, new_root=new_leaf)
     end
 
     let prev_node_hash = hash_ptr
     let new_node_hash = hash_ptr + HashBuiltin.SIZE
+    let hash_ptr = hash_ptr + 2 * HashBuiltin.SIZE
 
     %{ memory[ap] = ids.index % 2 %}
     jmp update_right if [ap] != 0; ap++
@@ -41,16 +42,11 @@ func merkle_update(hash_ptr : HashBuiltin*, height, prev_leaf, new_leaf, index) 
     [right_sibling] = new_node_hash.y; ap++
 
     # Call merkle_update recursively.
-    [ap] = hash_ptr + 2 * HashBuiltin.SIZE; ap++  # hash_ptr.
-    [ap] = height - 1; ap++  # height.
-    [ap] = prev_node_hash.result; ap++  # prev_leaf.
-    [ap] = new_node_hash.result; ap++  # new_leaf.
-
-    let update_left_index = ap
-    %{ memory[ap] = ids.index // 2 %}
-    index = [update_left_index] * 2; ap++  # index.
-    merkle_update(...)  # Tail recursion.
-    return (...)
+    return merkle_update(
+        height=height - 1,
+        prev_leaf=prev_node_hash.result,
+        new_leaf=new_node_hash.result,
+        index=index / 2)
 
     update_right:
     %{
@@ -67,19 +63,9 @@ func merkle_update(hash_ptr : HashBuiltin*, height, prev_leaf, new_leaf, index) 
     [left_sibling] = prev_node_hash.x
     [left_sibling] = new_node_hash.x; ap++
 
-    # Compute index - 1.
-    tempvar index_minus_one = index - 1
-
-    # Call merkle_update recursively.
-    [ap] = hash_ptr + 2 * HashBuiltin.SIZE; ap++  # hash_ptr.
-    [ap] = height - 1; ap++  # height.
-    [ap] = prev_node_hash.result; ap++  # prev_leaf.
-    [ap] = new_node_hash.result; ap++  # new_leaf.
-
-    let update_right_index = ap
-    %{ memory[ap] = ids.index // 2 %}
-    # Compute (index - 1) / 2.
-    index_minus_one = [update_right_index] * 2; ap++  # index.
-    merkle_update(...)  # Tail recursion.
-    return (...)
+    return merkle_update(
+        height=height - 1,
+        prev_leaf=prev_node_hash.result,
+        new_leaf=new_node_hash.result,
+        index=(index - 1) / 2)
 end

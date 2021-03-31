@@ -1,18 +1,17 @@
 %builtins output pedersen range_check
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
-from starkware.cairo.common.dict import dict_new, dict_squash, dict_update
+from starkware.cairo.common.dict import dict_new, dict_read, dict_squash, dict_update, dict_write
 from starkware.cairo.common.dict_access import DictAccess
-from starkware.cairo.common.hash import pedersen_hash
+from starkware.cairo.common.hash import hash2
 from starkware.cairo.common.math import assert_nn_le, unsigned_div_rem
 from starkware.cairo.common.registers import get_fp_and_pc
 from starkware.cairo.common.small_merkle_tree import small_merkle_tree
 
 struct Account:
-    member public_key : felt = 0
-    member token_a_balance : felt = 1
-    member token_b_balance : felt = 2
-    const SIZE = 3
+    member public_key : felt
+    member token_a_balance : felt
+    member token_b_balance : felt
 end
 
 # The maximum amount of each token that belongs to the AMM.
@@ -20,25 +19,24 @@ const MAX_BALANCE = %[ 2**64 - 1 %]
 
 struct AmmState:
     # A dictionary that tracks the accounts' state.
-    member account_dict_start : DictAccess* = 0
-    member account_dict_end : DictAccess* = 1
+    member account_dict_start : DictAccess*
+    member account_dict_end : DictAccess*
     # The amount of the tokens currently in the AMM.
     # Must be in the range [0, MAX_BALANCE].
-    member token_a_balance : felt = 2
-    member token_b_balance : felt = 3
-    const SIZE = 4
+    member token_a_balance : felt
+    member token_b_balance : felt
 end
 
-func modify_account(range_check_ptr, state : AmmState, account_id, diff_a, diff_b) -> (
-        range_check_ptr, state : AmmState, key):
+func modify_account{range_check_ptr}(state : AmmState, account_id, diff_a, diff_b) -> (
+        state : AmmState, key):
     alloc_locals
-    local old_account : Account*
-    %{
-        # Retrieve the pointer to the current state of the
-        # account using the dict manager (see dict.cairo).
-        ids.old_account = __dict_manager.get_dict(
-            ids.state.account_dict_end)[ids.account_id]
-    %}
+
+    # Define a reference to state.account_dict_end so that we
+    # can use it as an implicit argument to the dict functions.
+    let account_dict_end = state.account_dict_end
+
+    # Retrieve the pointer to the current state of the account.
+    let (local old_account : Account*) = dict_read{dict_ptr=account_dict_end}(key=account_id)
 
     # Compute the new account values.
     tempvar new_token_a_balance = (
@@ -47,8 +45,8 @@ func modify_account(range_check_ptr, state : AmmState, account_id, diff_a, diff_
         old_account.token_b_balance + diff_b)
 
     # Verify that the new balances are positive.
-    let (range_check_ptr) = assert_nn_le(range_check_ptr, new_token_a_balance, MAX_BALANCE)
-    let (range_check_ptr) = assert_nn_le(range_check_ptr, new_token_b_balance, MAX_BALANCE)
+    assert_nn_le(new_token_a_balance, MAX_BALANCE)
+    assert_nn_le(new_token_b_balance, MAX_BALANCE)
 
     # Create a new Account instance.
     local new_account : Account
@@ -58,32 +56,26 @@ func modify_account(range_check_ptr, state : AmmState, account_id, diff_a, diff_
 
     # Perform the account update.
     let (__fp__, _) = get_fp_and_pc()
-    let (dict_ptr) = dict_update(
-        dict_ptr=state.account_dict_end,
-        key=account_id,
-        prev_value=cast(old_account, felt),
-        new_value=cast(&new_account, felt))
+    dict_write{dict_ptr=account_dict_end}(key=account_id, new_value=cast(&new_account, felt))
 
     # Construct and return the new state.
     local new_state : AmmState
     assert new_state.account_dict_start = (
         state.account_dict_start)
-    assert new_state.account_dict_end = dict_ptr
+    assert new_state.account_dict_end = account_dict_end
     assert new_state.token_a_balance = state.token_a_balance
     assert new_state.token_b_balance = state.token_b_balance
 
-    return (range_check_ptr=range_check_ptr, state=new_state, key=old_account.public_key)
+    return (state=new_state, key=old_account.public_key)
 end
 
 # Represents a swap transaction between a user and the AMM.
 struct SwapTransaction:
-    member account_id = 0
-    member token_a_amount = 1
-    const SIZE = 2
+    member account_id : felt
+    member token_a_amount : felt
 end
 
-func swap(range_check_ptr, state : AmmState, transaction : SwapTransaction*) -> (
-        range_check_ptr, state : AmmState):
+func swap{range_check_ptr}(state : AmmState, transaction : SwapTransaction*) -> (state : AmmState):
     alloc_locals
 
     tempvar a = transaction.token_a_amount
@@ -91,21 +83,17 @@ func swap(range_check_ptr, state : AmmState, transaction : SwapTransaction*) -> 
     tempvar y = state.token_b_balance
 
     # Check that a is in range.
-    let (range_check_ptr) = assert_nn_le(range_check_ptr, a, MAX_BALANCE)
+    assert_nn_le(a, MAX_BALANCE)
 
     # Compute the amount of token_b the user will get:
     #   b = (y * a) / (x + a).
-    let (range_check_ptr, b, _) = unsigned_div_rem(range_check_ptr, y * a, x + a)
+    let (b, _) = unsigned_div_rem(y * a, x + a)
     # Make sure that b is also in range.
-    let (range_check_ptr) = assert_nn_le(range_check_ptr, b, MAX_BALANCE)
+    assert_nn_le(b, MAX_BALANCE)
 
     # Update the user's account.
-    let (range_check_ptr, state, key) = modify_account(
-        range_check_ptr=range_check_ptr,
-        state=state,
-        account_id=transaction.account_id,
-        diff_a=-a,
-        diff_b=b)
+    let (state, key) = modify_account(
+        state=state, account_id=transaction.account_id, diff_a=-a, diff_b=b)
 
     # Here you should verify the user has signed on a message
     # specifying that they would like to sell 'a' tokens of
@@ -116,8 +104,8 @@ func swap(range_check_ptr, state : AmmState, transaction : SwapTransaction*) -> 
     # are in range.
     tempvar new_x = x + a
     tempvar new_y = y - b
-    let (range_check_ptr) = assert_nn_le(range_check_ptr, new_x, MAX_BALANCE)
-    let (range_check_ptr) = assert_nn_le(range_check_ptr, new_y, MAX_BALANCE)
+    assert_nn_le(new_x, MAX_BALANCE)
+    assert_nn_le(new_y, MAX_BALANCE)
 
     # Update the state.
     local new_state : AmmState
@@ -136,68 +124,56 @@ func swap(range_check_ptr, state : AmmState, transaction : SwapTransaction*) -> 
             f'received {ids.b} tokens of type token_b.')
     %}
 
-    return (range_check_ptr=range_check_ptr, state=new_state)
+    return (state=new_state)
 end
 
-func transaction_loop(
-        range_check_ptr, state : AmmState, transactions : SwapTransaction**, n_transactions) -> (
-        range_check_ptr, state : AmmState):
+func transaction_loop{range_check_ptr}(
+        state : AmmState, transactions : SwapTransaction**, n_transactions) -> (state : AmmState):
     if n_transactions == 0:
-        return (range_check_ptr=range_check_ptr, state=state)
+        return (state=state)
     end
 
     let first_transaction : SwapTransaction* = [transactions]
-    let (range_check_ptr, state) = swap(
-        range_check_ptr=range_check_ptr, state=state, transaction=first_transaction)
+    let (state) = swap(state=state, transaction=first_transaction)
 
-    transaction_loop(
-        range_check_ptr=range_check_ptr,
-        state=state,
-        transactions=transactions + 1,
-        n_transactions=n_transactions - 1)
-    return (...)
+    return transaction_loop(
+        state=state, transactions=transactions + 1, n_transactions=n_transactions - 1)
 end
 
 # Returns a hash committing to the account's state using the
 # following formula:
 #   H(H(public_key, token_a_balance), token_b_balance).
 # where H is the Pedersen hash function.
-func hash_account(pedersen_ptr : HashBuiltin*, account : Account*) -> (
-        pedersen_ptr : HashBuiltin*, res : felt):
+func hash_account{pedersen_ptr : HashBuiltin*}(account : Account*) -> (res : felt):
     let res = account.public_key
-    let (pedersen_ptr, res) = pedersen_hash(pedersen_ptr, res, account.token_a_balance)
-    let (pedersen_ptr, res) = pedersen_hash(pedersen_ptr, res, account.token_b_balance)
-    return (pedersen_ptr=pedersen_ptr, res=res)
+    let (res) = hash2{hash_ptr=pedersen_ptr}(res, account.token_a_balance)
+    let (res) = hash2{hash_ptr=pedersen_ptr}(res, account.token_b_balance)
+    return (res=res)
 end
 
 # For each entry in the input dict (represented by dict_start
 # and dict_end) write an entry to the output dict (represented by
 # hash_dict_start and hash_dict_end) after applying hash_account
 # on prev_value and new_value and keeping the same key.
-func hash_dict_values(
-        pedersen_ptr : HashBuiltin*, dict_start : DictAccess*, dict_end : DictAccess*,
-        hash_dict_start : DictAccess*) -> (
-        pedersen_ptr : HashBuiltin*, hash_dict_end : DictAccess*):
+func hash_dict_values{pedersen_ptr : HashBuiltin*}(
+        dict_start : DictAccess*, dict_end : DictAccess*, hash_dict_start : DictAccess*) -> (
+        hash_dict_end : DictAccess*):
     if dict_start == dict_end:
-        return (pedersen_ptr=pedersen_ptr, hash_dict_end=hash_dict_start)
+        return (hash_dict_end=hash_dict_start)
     end
 
     # Compute the hash of the account before and after the
     # change.
-    let (pedersen_ptr, prev_hash) = hash_account(
-        pedersen_ptr, account=cast(dict_start.prev_value, Account*))
-    let (pedersen_ptr, new_hash) = hash_account(
-        pedersen_ptr, account=cast(dict_start.new_value, Account*))
+    let (prev_hash) = hash_account(account=cast(dict_start.prev_value, Account*))
+    let (new_hash) = hash_account(account=cast(dict_start.new_value, Account*))
 
     # Add an entry to the output dict.
-    let (hash_dict_start) = dict_update(
-        dict_ptr=hash_dict_start, key=dict_start.key, prev_value=prev_hash, new_value=new_hash)
-    hash_dict_values(
-        pedersen_ptr=pedersen_ptr,
+    dict_update{dict_ptr=hash_dict_start}(
+        key=dict_start.key, prev_value=prev_hash, new_value=new_hash)
+    return hash_dict_values(
         dict_start=dict_start + DictAccess.SIZE,
         dict_end=dict_end,
         hash_dict_start=hash_dict_start)
-    return (...)
 end
 
 const LOG_N_ACCOUNTS = 10
@@ -205,15 +181,14 @@ const LOG_N_ACCOUNTS = 10
 # Computes the Merkle roots before and after the batch.
 # Hint argument: initial_account_dict should be a dictionary
 # from account_id to an address in memory of the Account struct.
-func compute_merkle_roots(pedersen_ptr : HashBuiltin*, range_check_ptr, state : AmmState) -> (
-        pedersen_ptr : HashBuiltin*, range_check_ptr, root_before, root_after):
+func compute_merkle_roots{pedersen_ptr : HashBuiltin*, range_check_ptr}(state : AmmState) -> (
+        root_before, root_after):
     alloc_locals
 
     # Squash the account dictionary.
-    let (local range_check_ptr, squashed_dict_start, squashed_dict_end) = dict_squash(
-        range_check_ptr=range_check_ptr,
-        dict_accesses_start=state.account_dict_start,
-        dict_accesses_end=state.account_dict_end)
+    let (squashed_dict_start, squashed_dict_end) = dict_squash(
+        dict_accesses_start=state.account_dict_start, dict_accesses_end=state.account_dict_end)
+    local range_check_ptr = range_check_ptr
 
     # Hash the dict values.
     %{
@@ -232,24 +207,18 @@ func compute_merkle_roots(pedersen_ptr : HashBuiltin*, range_check_ptr, state : 
                 token_b_balance)
     %}
     let (local hash_dict_start : DictAccess*) = dict_new()
-    let (pedersen_ptr, hash_dict_end) = hash_dict_values(
-        pedersen_ptr=pedersen_ptr,
+    let (hash_dict_end) = hash_dict_values(
         dict_start=squashed_dict_start,
         dict_end=squashed_dict_end,
         hash_dict_start=hash_dict_start)
 
     # Compute the two Merkle roots.
-    let (pedersen_ptr, root_before, root_after) = small_merkle_tree(
-        hash_ptr=pedersen_ptr,
+    let (root_before, root_after) = small_merkle_tree{hash_ptr=pedersen_ptr}(
         squashed_dict_start=hash_dict_start,
         squashed_dict_end=hash_dict_end,
         height=LOG_N_ACCOUNTS)
 
-    return (
-        pedersen_ptr=pedersen_ptr,
-        range_check_ptr=range_check_ptr,
-        root_before=root_before,
-        root_after=root_after)
+    return (root_before=root_before, root_after=root_after)
 end
 
 func get_transactions() -> (transactions : SwapTransaction**, n_transactions : felt):
@@ -296,20 +265,18 @@ end
 # The output of the AMM program.
 struct AmmBatchOutput:
     # The balances of the AMM before applying the batch.
-    member token_a_before : felt = 0
-    member token_b_before : felt = 1
+    member token_a_before : felt
+    member token_b_before : felt
     # The balances of the AMM after applying the batch.
-    member token_a_after : felt = 2
-    member token_b_after : felt = 3
+    member token_a_after : felt
+    member token_b_after : felt
     # The account Merkle roots before and after applying
     # the batch.
-    member account_root_before : felt = 4
-    member account_root_after : felt = 5
-    const SIZE = 6
+    member account_root_before : felt
+    member account_root_after : felt
 end
 
-func main(output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr) -> (
-        output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr):
+func main{output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}():
     alloc_locals
 
     # Create the initial state.
@@ -338,21 +305,17 @@ func main(output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr) -> (
 
     # Execute the transactions.
     let (transactions, n_transactions) = get_transactions()
-    let (range_check_ptr, state : AmmState) = transaction_loop(
-        range_check_ptr=range_check_ptr,
-        state=state,
-        transactions=transactions,
-        n_transactions=n_transactions)
+    let (state : AmmState) = transaction_loop(
+        state=state, transactions=transactions, n_transactions=n_transactions)
 
     # Output the AMM's balances after applying the batch.
     assert output.token_a_after = state.token_a_balance
     assert output.token_b_after = state.token_b_balance
 
     # Write the Merkle roots to the output.
-    let (pedersen_ptr, range_check_ptr, root_before, root_after) = compute_merkle_roots(
-        pedersen_ptr=pedersen_ptr, range_check_ptr=range_check_ptr, state=state)
+    let (root_before, root_after) = compute_merkle_roots(state=state)
     assert output.account_root_before = root_before
     assert output.account_root_after = root_after
 
-    return (output_ptr=output_ptr, pedersen_ptr=pedersen_ptr, range_check_ptr=range_check_ptr)
+    return ()
 end

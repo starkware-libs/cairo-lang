@@ -51,6 +51,10 @@ class OutputBuiltinRunner(BuiltinRunner):
         # Output builtin has one cell per instance.
         return self.get_used_cells(runner)
 
+    def get_allocated_memory_units(self, runner):
+        # The output builtin uses only public memory units.
+        return 0
+
     def get_used_cells_and_allocated_size(self, runner):
         size = self.get_used_cells(runner)
         return size, size
@@ -108,6 +112,27 @@ class OutputBuiltinRunner(BuiltinRunner):
                 for page_id, page_info in sorted(self.pages.items())},
             'attributes': self.attributes,
         }
+
+    def extend_additional_data(self, data, relocate_callback, data_is_trusted=True):
+        assert isinstance(data, dict) and sorted(data.keys()) == ['attributes', 'pages'], \
+            'Invalid output builtin data.'
+
+        # Process the 'pages' field.
+        assert isinstance(data['pages'], dict), 'Invalid output builtin pages field.'
+        for page_id_str, values in data['pages'].items():
+            assert isinstance(page_id_str, str) and \
+                isinstance(values, list) and \
+                len(values) == 2 and \
+                all(isinstance(x, int) and 0 < x < 2**30 for x in values), \
+                'Invalid output builtin pages field.'
+            self.pages[int(page_id_str)] = PublicMemoryPage(start=values[0], size=values[1])
+
+        # Process the 'attributes' field.
+        assert isinstance(data['attributes'], dict), 'Invalid output builtin attributes field.'
+        self.attributes.update(data['attributes'])
+
+    def run_security_checks(self, runner):
+        return
 
     def set_state(self, state):
         """

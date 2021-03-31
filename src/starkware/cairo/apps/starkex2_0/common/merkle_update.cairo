@@ -42,15 +42,19 @@ func merkle_update(hash_ptr, height, prev_leaf, new_leaf, index) -> (prev_root, 
     [right_sibling] = [hash_ptr + 1 * HashBuiltin.SIZE + HashBuiltin.y]; ap++
 
     # Call merkle_update recursively.
-    [ap] = hash_ptr + 2 * HashBuiltin.SIZE; ap++  # hash_ptr.
-    [ap] = height - 1; ap++  # height.
-    [ap] = [hash_ptr + 0 * HashBuiltin.SIZE + HashBuiltin.result]; ap++  # prev_leaf.
-    [ap] = [hash_ptr + 1 * HashBuiltin.SIZE + HashBuiltin.result]; ap++  # new_leaf.
+    tempvar new_hash_ptr = hash_ptr + 2 * HashBuiltin.SIZE
+    tempvar height_minus_1 = height - 1
+    tempvar prev_leaf = [hash_ptr + 0 * HashBuiltin.SIZE + HashBuiltin.result]
+    tempvar new_leaf = [hash_ptr + 1 * HashBuiltin.SIZE + HashBuiltin.result]
 
     let update_left_index = ap
     index = [update_left_index] * 2; ap++  # index.
-    merkle_update(...)  # Tail recursion.
-    return (...)
+    return merkle_update(
+        hash_ptr=new_hash_ptr,
+        height=height_minus_1,
+        prev_leaf=prev_leaf,
+        new_leaf=new_leaf,
+        index=[update_left_index])
 
     update_right:
     %{
@@ -71,14 +75,17 @@ func merkle_update(hash_ptr, height, prev_leaf, new_leaf, index) -> (prev_root, 
     tempvar index_minus_one = index - 1
 
     # Call merkle_update recursively.
-    [ap] = hash_ptr + 2 * HashBuiltin.SIZE; ap++  # hash_ptr.
-    [ap] = height - 1; ap++  # height.
-    [ap] = [hash_ptr + 0 * HashBuiltin.SIZE + HashBuiltin.result]; ap++  # prev_leaf.
-    [ap] = [hash_ptr + 1 * HashBuiltin.SIZE + HashBuiltin.result]; ap++  # new_leaf.
+    tempvar new_hash_ptr = hash_ptr + 2 * HashBuiltin.SIZE
+    tempvar height_minus_1 = height - 1
+    tempvar prev_leaf = [hash_ptr + 0 * HashBuiltin.SIZE + HashBuiltin.result]
+    tempvar new_leaf = [hash_ptr + 1 * HashBuiltin.SIZE + HashBuiltin.result]
 
     let update_right_index = ap
-    # Compute (index - 1) / 2.
     index_minus_one = [update_right_index] * 2; ap++  # index.
-    merkle_update(...)  # Tail recursion.
-    return (...)
+    return merkle_update(
+        hash_ptr=new_hash_ptr,
+        height=height_minus_1,
+        prev_leaf=prev_leaf,
+        new_leaf=new_leaf,
+        index=[update_right_index])
 end

@@ -89,8 +89,10 @@ full_python_test(cairo_vm_test
     vm_test.py
 
     LIBS
+    cairo_constants_lib
     cairo_run_lib
     cairo_vm_lib
+    starkware_python_utils_lib
     pip_marshmallow
     pip_marshmallow_dataclass
     pip_pytest

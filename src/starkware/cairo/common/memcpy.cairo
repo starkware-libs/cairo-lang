@@ -1,9 +1,8 @@
 # Copies len field elements from src to dst.
 func memcpy(dst : felt*, src : felt*, len):
     struct LoopFrame:
-        member dst : felt* = 0
-        member src : felt* = 1
-        const SIZE = 2
+        member dst : felt*
+        member src : felt*
     end
 
     if len == 0:

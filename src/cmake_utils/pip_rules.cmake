@@ -1,4 +1,3 @@
-# Note: Consider having multiple pip setups (a different requirements.txt)
 # Note: STAMP_FILE is a dummy output file for a target that holds all of the reqeuired file level
 # dependencies of the target. If you have a custom command that needs a dependency target to run
 # before, it should depend on the target and the stamp file.
