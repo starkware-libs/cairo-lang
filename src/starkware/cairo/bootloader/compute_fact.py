@@ -50,6 +50,7 @@ def generate_output_root(
     node_stack: List[FactNode] = []
     for n_pages, n_nodes in zip(tree_structure[::2], tree_structure[1::2]):
         # Push n_pages to the stack.
+        assert 0 <= n_pages <= len(page_sizes), 'Invalid tree structure: n_pages is out of range.'
         for _ in range(n_pages):
             page_size = page_sizes.pop(0)
             page_hash = int(keccak_ints(program_output[offset:offset + page_size]), 16)
@@ -58,6 +59,8 @@ def generate_output_root(
 
             node_stack.append(FactNode(
                 node_hash=page_hash, end_offset=offset, size=page_size, children=[]))
+
+        assert 0 <= n_nodes <= len(node_stack), 'Invalid tree structure: n_nodes is out of range.'
         if n_nodes > 0:
             # Create a parent node to the last n_nodes in the head of the stack.
             node_stack, child_nodes = node_stack[:-n_nodes], node_stack[-n_nodes:]
@@ -70,9 +73,9 @@ def generate_output_root(
                 children=child_nodes))
 
     # Make sure there is one node in the stack (hash and end).
-    assert len(node_stack) == 1
+    assert len(node_stack) == 1, 'Invalid tree structure: stack contains more than one node.'
     # Make sure all pages were processed.
-    assert len(page_sizes) == 0
+    assert len(page_sizes) == 0, 'Invalid tree structure: not all pages were processed.'
     assert offset == node_stack[0].end_offset == len(program_output)
 
     return node_stack[0]

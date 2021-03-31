@@ -2,7 +2,8 @@ import re
 
 import pytest
 
-from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt, TypePointer, TypeStruct
+from starkware.cairo.lang.compiler.ast.cairo_types import (
+    TypeFelt, TypePointer, TypeStruct, TypeTuple)
 from starkware.cairo.lang.compiler.parser import parse_expr
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.compiler.type_system_visitor import CairoTypeError, simplify_type_system
@@ -34,6 +35,26 @@ def test_type_visitor():
         parse_expr('[fp]'), t_star)
     assert simplify_type_system(parse_expr('&&[[cast(fp, T**)]]')) == (
         parse_expr('fp'), t_star2)
+
+
+def test_type_tuples():
+    t = TypeStruct(scope=scope('T'), is_fully_resolved=False)
+    t_star = TypePointer(pointee=t)
+
+    # Simple tuple.
+    assert simplify_type_system(parse_expr('(fp, [cast(fp, T*)], cast(fp,T*))')) == (
+        parse_expr('(fp, [fp], fp)'), TypeTuple(members=[TypeFelt(), t, t_star],)
+    )
+
+    # Nested.
+    assert simplify_type_system(parse_expr('(fp, (), ([cast(fp, T*)],))')) == (
+        parse_expr('(fp, (), ([fp],))'), TypeTuple(
+            members=[
+                TypeFelt(),
+                TypeTuple(members=[]),
+                TypeTuple(members=[t])],
+        )
+    )
 
 
 def test_type_visitor_failures():

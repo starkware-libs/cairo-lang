@@ -7,10 +7,8 @@
 # The pc register's value is the address of the instruction that follows directly after the
 # invocation of get_fp_and_pc().
 func get_fp_and_pc() -> (fp_val, pc_val):
-    # The call instruction itself already places the old fp and the return pc at [fp - 2], [fp - 1].
-    # Thus, we can simply return, and the calling function may regard these as the return values
-    # of this function.
-    return (...)
+    # The call instruction itself already places the old fp and the return pc at [ap - 2], [ap - 1].
+    return (fp_val=[ap - 2], pc_val=[ap - 1])
 end
 
 # Returns the content of the ap register just before this function was invoked.

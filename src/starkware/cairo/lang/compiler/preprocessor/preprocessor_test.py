@@ -8,9 +8,9 @@ from starkware.cairo.lang.compiler.identifier_definition import (
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierError
 from starkware.cairo.lang.compiler.instruction_builder import InstructionBuilderError
 from starkware.cairo.lang.compiler.parser import parse_type
-from starkware.cairo.lang.compiler.preprocessor.preprocessor import preprocess_codes, preprocess_str
+from starkware.cairo.lang.compiler.preprocessor.preprocessor import preprocess_codes
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_test_utils import (
-    PRIME, verify_exception)
+    PRIME, TEST_SCOPE, preprocess_str, verify_exception)
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.compiler.test_utils import read_file_from_dict
 from starkware.cairo.lang.compiler.type_system_visitor import (
@@ -114,7 +114,8 @@ future_label2:
 def test_temporary_variable():
     code = """\
 struct T:
-    member t = 100
+    member pad0 : felt
+    member t : felt
 end
 tempvar x = [ap - 1] + [fp - 3]
 ap += 3
@@ -128,20 +129,27 @@ ap += 4
 ap += 3
 [ap] = [ap + (-4)]; ap++
 ap += 4
-[fp] = [[ap + (-5)] + 100]
+[fp] = [[ap + (-5)] + 1]
 """
 
 
 def test_temporary_variable_failures():
     verify_exception("""
 struct T:
-    member t = 100
+    member t : felt
 end
 tempvar x : T = 0
 """, """
 file:?:?: tempvar type annotation must be 'felt' or a pointer.
 tempvar x : T = 0
             ^
+""")
+    verify_exception("""
+tempvar _ = 0
+""", """
+file:?:?: Reference name cannot be '_'.
+tempvar _ = 0
+        ^
 """)
 
 
@@ -249,8 +257,15 @@ def test_return():
     code = """\
 func f() -> (a, b, c):
     return (1, [fp], c=[fp + 1] + 2)
-    return (..., c=3)
-    return (...)
+
+    tempvar z = 5
+    tempvar x = 1
+    tempvar y = 2
+    return (x, y, z)
+
+    tempvar x = 1
+    tempvar y = 2
+    return (x, y, x + x + y)
 end
 func g():
   return ()
@@ -262,8 +277,17 @@ end
 [ap] = [fp]; ap++
 [ap] = [fp + 1] + 2; ap++
 ret
-[ap] = 3; ap++
+[ap] = 5; ap++
+[ap] = 1; ap++
+[ap] = 2; ap++
+[ap] = [ap + (-3)]; ap++
 ret
+[ap] = 1; ap++
+[ap] = 2; ap++
+[ap] = [ap + (-2)] + [ap + (-2)]; ap++
+[ap] = [ap + (-3)]; ap++
+[ap] = [ap + (-3)]; ap++
+[ap] = [ap + (-3)] + [ap + (-4)]; ap++
 ret
 ret
 """
@@ -273,45 +297,14 @@ def test_return_failures():
     # Named after positional.
     verify_exception("""
 func f() -> (a, b, c):
-    return (..., b=1, [fp] + 1)
+    return (a=1, b=1, [fp] + 1)
 end
 """, """
 file:?:?: Positional arguments must not appear after named arguments.
-    return (..., b=1, [fp] + 1)
+    return (a=1, b=1, [fp] + 1)
                       ^******^
 """)
-    # Using ellipsis in a void function.
-    verify_exception("""
-func f():
-    return (...)
-end
-""", """
-file:?:?: Ellipsis ("...") is not supported for functions with no return values. \
-Use 'return()' instead.
-    return (...)
-    ^**********^
-""")
-    # Wrong num: greater by one, with ellipsis, hence removing the ellipsis may help.
-    verify_exception("""
-func f() -> (a, b):
-    return (..., 1, [fp] + 1)
-end
-""", """
-file:?:?: Too many expressions. Expected at most 1, got 2. Ellipsis ("...") should be removed.
-    return (..., 1, [fp] + 1)
-    ^***********************^
-""")
-    # Wrong num: greater by more than one, with ellipsis, thus removing the ellipsis is not helpful.
-    verify_exception("""
-func f() -> (a):
-    return (..., 1, [fp] + 1)
-end
-""", """
-file:?:?: Too many expressions. Expected none, got 2.
-    return (..., 1, [fp] + 1)
-    ^***********************^
-""")
-    # Wrong num, without ellipsis.
+    # Wrong num.
     verify_exception("""
 func f() -> (a, b, c, d):
     return (1, [fp] + 1)
@@ -321,7 +314,7 @@ file:?:?: Expected exactly 4 expressions, got 2.
     return (1, [fp] + 1)
     ^******************^
 """)
-    # Wrong num, without ellipsis.
+    # Wrong num.
     verify_exception("""
 func f() -> (a, b):
     return ()
@@ -334,108 +327,148 @@ file:?:?: Expected exactly 2 expressions, got 0.
     # Unknown name.
     verify_exception("""
 func f() -> (a, b, c):
-    return (..., d=1, [fp] + 1)
+    return (a=1, d=1, [fp] + 1)
 end
 """, """
 file:?:?: Expected named arg 'b' found 'd'.
-    return (..., d=1, [fp] + 1)
+    return (a=1, d=1, [fp] + 1)
                  ^
 """)
     # Not in func.
     verify_exception("""
 return (a=1, [fp] + 1)
 """, """
-file:?:?: Unknown identifier 'Return'.
+file:?:?: return cannot be used outside of a function.
 return (a=1, [fp] + 1)
 ^********************^
 """)
 
 
-def test_ellipsis_failures():
-    # Ellipsis in a wrong place.
+def test_tail_call():
+    code = """\
+func f(a) -> (a):
+    return f(a)
+end
+func g(a, b) -> (a):
+    return f(a)
+end
+"""
+    program = preprocess_str(
+        code=code, prime=PRIME, main_scope=ScopedName.from_string('test_scope'))
+    assert program.format() == """\
+[ap] = [fp + (-3)]; ap++
+call rel -1
+ret
+[ap] = [fp + (-4)]; ap++
+call rel -5
+ret
+"""
+
+
+def test_tail_call_failure():
     verify_exception("""
-func f() -> (a, b, c):
-    return (1, ...)
+func g() -> (a):
+    return (a=0)
+end
+return g()
+""", """
+file:?:?: return cannot be used outside of a function.
+return g()
+^********^
+""")
+
+    verify_exception("""
+func g() -> (a):
+    return (a=0)
+end
+func f(x, y) -> (a, b, c, d, e):
+    return g()
 end
 """, """
-file:?:?: Ellipsis ("...") can only be used at the beginning of the list.
-    return (1, ...)
+file:?:?: Cannot convert the return type of g to the return type of f.
+    return g()
+           ^*^
+""")
+
+    verify_exception("""
+func g{x}() -> (a):
+    return (a=0)
+end
+func f(x, y) -> (a):
+    with x:
+        return g()
+    end
+end
+""", """
+file:?:?: Cannot convert the implicit arguments of g to the implicit arguments of f.
+        return g()
                ^*^
 """)
-    # Wrong place, with ellipsis.
-    verify_exception("""
-func f() -> (a, b, c):
-    return (..., a=1, c=[fp] + 1)
-end
-""", """
-file:?:?: Expected named arg 'b' found 'a'.
-    return (..., a=1, c=[fp] + 1)
-                 ^
-""")
-    # Missing arg, with ellipsis.
-    verify_exception("""
-func f() -> (a, b, c):
-    return (..., a=1, b=[fp] + 1)
-end
-""", """
-file:?:?: Expected named arg 'b' found 'a'.
-    return (..., a=1, b=[fp] + 1)
-                 ^
-""")
-    # Wrong place, without ellipsis.
-    verify_exception("""
-func f() -> (a, b, c):
-    return (a=1, c=[fp] + 1, b=0)
-end
-""", """
-file:?:?: Expected named arg 'b' found 'c'.
-    return (a=1, c=[fp] + 1, b=0)
-                 ^
-""")
-    # Compound expressions with ellipsis.
+
     verify_exception("""
 func f(x, y) -> (a, b, c, d, e):
-    return (..., c=x + y, d=(x + y) * 2, e=x * y)
+    return g()
 end
 """, """
-file:?:?: Compound expressions cannot be used with an ellipsis ("...").
-    return (..., c=x + y, d=(x + y) * 2, e=x * y)
-                            ^*********^
+file:?:?: Unknown identifier 'g'.
+    return g()
+           ^*^
+""")
+
+    verify_exception("""
+func g(x, y) -> (a : felt):
+    return (a=5)
+end
+func f(x, y) -> (a : felt*):
+    return g(x, y)
+end
+""", """
+file:?:?: Cannot convert the return type of g to the return type of f.
+    return g(x, y)
+           ^*****^
 """)
 
 
 def test_function_call():
     code = """\
 func foo(a, b) -> (c):
+    bar(a=a)
     return (1)
+end
+func bar(a):
+    return ()
 end
 foo(2, 3)
 foo(2, b=3)
-let res = foo(..., b=3)
+let res = foo(a=2, b=3)
 res.c = 1
 """
     program = preprocess_str(code=code, prime=PRIME)
     assert program.format() == """\
+[ap] = [fp + (-4)]; ap++
+call rel 5
 [ap] = 1; ap++
+ret
 ret
 [ap] = 2; ap++
 [ap] = 3; ap++
-call rel -7
+call rel -11
 [ap] = 2; ap++
 [ap] = 3; ap++
-call rel -13
-[ap] = 3; ap++
 call rel -17
+[ap] = 2; ap++
+[ap] = 3; ap++
+call rel -23
 [ap + (-1)] = 1
 """
 
 
 def test_func_args():
+    scope = TEST_SCOPE
     code = """\
 struct T:
-    member s = 0
-    member t = 1
-    const SIZE = 2
+    member s : felt
+    member t : felt
 end
 func f(x, y : T, z : T*):
     x = 1; ap++
@@ -444,16 +477,16 @@ func f(x, y : T, z : T*):
     ret
 end
 """
-    program = preprocess_str(code=code, prime=PRIME)
+    program = preprocess_str(code=code, prime=PRIME, main_scope=scope)
     reference_x = program.instructions[-1].flow_tracking_data.resolve_reference(
-        reference_manager=program.reference_manager, name=ScopedName.from_string('f.x'))
+        reference_manager=program.reference_manager, name=scope + 'f.x')
     assert reference_x.value.format() == 'cast([fp + (-6)], felt)'
     reference_y = program.instructions[-1].flow_tracking_data.resolve_reference(
-        reference_manager=program.reference_manager, name=ScopedName.from_string('f.y'))
-    assert reference_y.value.format() == 'cast([fp + (-5)], T)'
+        reference_manager=program.reference_manager, name=scope + 'f.y')
+    assert reference_y.value.format() == f'cast([fp + (-5)], {scope}.T)'
     reference_z = program.instructions[-1].flow_tracking_data.resolve_reference(
-        reference_manager=program.reference_manager, name=ScopedName.from_string('f.z'))
-    assert reference_z.value.format() == 'cast([fp + (-3)], T*)'
+        reference_manager=program.reference_manager, name=scope + 'f.z')
+    assert reference_z.value.format() == f'cast([fp + (-3)], {scope}.T*)'
     assert program.format() == """\
 [fp + (-6)] = 1; ap++
 [fp + (-5)] = 2; ap++
@@ -477,17 +510,307 @@ func f(x):
 Preprocessed instruction:
 [ap] = [[fp + (-3)]] + 1
 """, exc_type=InstructionBuilderError)
-    verify_exception("""
-func f(x):
-    g(x=x)
+
+
+def test_with_statement():
+    code = """
+let x = 1000
+[ap] = 0
+with x:
+    [ap] = 1
+    [ap] = 2
+    [ap] = x
+    let x = 1001
 end
-func g(x):
+[ap] = x
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert program.format() == """\
+[ap] = 0
+[ap] = 1
+[ap] = 2
+[ap] = 1000
+[ap] = 1001
+"""
+
+
+def test_with_statement_locals():
+    code = """
+func foo() -> (z):
+    ret
+end
+
+func bar():
+    alloc_locals
+    local x = 0
+    with x:
+        let (local z) = foo()
+    end
+    ret
+end
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert program.format() == """\
+ret
+ap += 2
+[fp] = 0
+call rel -5
+[fp + 1] = [ap + (-1)]
+ret
+"""
+
+
+def test_with_statement_failure():
+    verify_exception("""
+with x:
+    [ap] = [ap]
+end
+""", """
+file:?:?: Unknown reference 'x'.
+with x:
+     ^
+""")
+    verify_exception("""
+const x = 0
+with x:
+    [ap] = [ap]
+end
+""", """
+file:?:?: Expected 'x' to be a reference, found: const.
+with x:
+     ^
+""")
+    verify_exception("""
+let x = 0
+with x as y:
+    [ap] = [ap]
+end
+""", """
+file:?:?: The 'as' keyword is not supported in 'with' statements.
+with x as y:
+          ^
+""")
+
+
+def test_implicit_args():
+    code = """\
+struct T:
+    member a : felt
+    member b : felt
+end
+
+func f{x: T}() -> ():
+    # Rebind x.
+    let x = cast([fp - 1234], T)
+    return ()
+end
+
+func g{x: T, y}(z, w) -> (res):
+    x.a = 0
+    x.b = 1
+    y = 2
+    z = 3
+    w = 4
+    # Rebind y. This affects the implicit return values.
+    let y = z
+    # We don't need a 'with' statement, since x and y are implicit arguments.
+    f()
+    return (res=z + w)
+end
+
+func h():
+    let y = 10
+    let x: T = cast([fp - 100], T)
+    with x, y:
+        let (res2) = g(0, 0)
+    end
+    # Below, x and y refer to the implicit return values.
+    tempvar a = x.a + y
+    tempvar b = res2
+    ret
+end
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert program.format() == """\
+[ap] = [fp + (-1234)]; ap++
+[ap] = [fp + (-1233)]; ap++
+ret
+[fp + (-7)] = 0
+[fp + (-6)] = 1
+[fp + (-5)] = 2
+[fp + (-4)] = 3
+[fp + (-3)] = 4
+[ap] = [fp + (-7)]; ap++
+[ap] = [fp + (-6)]; ap++
+call rel -15
+[ap] = [fp + (-4)]; ap++
+[ap] = [fp + (-4)] + [fp + (-3)]; ap++
+ret
+[ap] = [fp + (-100)]; ap++
+[ap] = [fp + (-99)]; ap++
+[ap] = 10; ap++
+[ap] = 0; ap++
+[ap] = 0; ap++
+call rel -25
+[ap] = [ap + (-4)] + [ap + (-2)]; ap++
+[ap] = [ap + (-2)]; ap++
+ret
+"""
+
+
+def test_implicit_args_failures():
+    verify_exception("""
+func f{x}(x):
     ret
 end
 """, """
-file:?:?: The called function must be defined before the call site.
-    g(x=x)
-    ^****^
+file:?:?: Arguments and return values cannot have the same name of an implicit argument.
+func f{x}(x):
+          ^
+""")
+    verify_exception("""
+func f{x}() -> (x):
+    ret
+end
+""", """
+file:?:?: Arguments and return values cannot have the same name of an implicit argument.
+func f{x}() -> (x):
+                ^
+""")
+    verify_exception("""
+func f{x}():
+    ret
+end
+
+func g():
+    f()
+    ret
+end
+""", """
+file:?:?: While trying to retrieve the implicit argument 'x' in:
+    f()
+    ^*^
+file:?:?: Unknown identifier 'x'.
+func f{x}():
+       ^
+""")
+    verify_exception("""
+func f{x}(y):
+    ret
+end
+func g(x):
+    with x:
+        f(0)
+    end
+    # This should fail, as it is outside the "with x".
+    f(1)
+    ret
+end
+""", """
+file:?:?: While trying to update the implicit return value 'x' in:
+    f(1)
+    ^**^
+file:?:?: 'x' cannot be used as an implicit return value. Consider using a 'with' statement.
+func f{x}(y):
+       ^
+""")
+    verify_exception("""
+func f{x}():
+    let x = cast(0, felt*)
+    return ()
+end
+""", """
+file:?:?: Reference rebinding must preserve the reference type. Previous type: 'felt', new type: \
+'felt*'.
+    let x = cast(0, felt*)
+        ^
+""")
+    verify_exception("""
+func f{x}():
+    ret
+end
+func g():
+    const x = 0
+    f()
+    ret
+end
+""", """
+file:?:?: While trying to update the implicit return value 'x' in:
+    f()
+    ^*^
+file:?:?: Redefinition of 'test_scope.g.x'.
+func f{x}():
+       ^
+""")
+
+
+def test_implcit_argument_bindings():
+    code = """\
+func f{x, y}():
+    ret
+end
+
+func g{x, y, z}():
+    f{y=z}()
+    return ()
+end
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert program.format() == """\
+ret
+[ap] = [fp + (-5)]; ap++
+[ap] = [fp + (-3)]; ap++
+call rel -3
+[ap] = [ap + (-2)]; ap++
+[ap] = [fp + (-4)]; ap++
+[ap] = [ap + (-3)]; ap++
+ret
+"""
+
+
+def test_implcit_argument_bindings_failures():
+    verify_exception("""
+func foo{x}(y) -> (z):
+    ret
+end
+
+func bar():
+    let x = foo{5}(0)
+    ret
+end
+""", """
+file:?:?: Implicit argument binding must be of the form: arg_name=var.
+    let x = foo{5}(0)
+                ^
+""")
+    verify_exception("""
+func foo{x}(y) -> (z):
+    ret
+end
+
+func bar():
+    let x = 0
+    let (res) = foo{y=x}(0)
+    ret
+end
+""", """
+file:?:?: Unexpected implicit argument binding: y.
+    let (res) = foo{y=x}(0)
+                    ^
+""")
+    verify_exception("""
+func foo{x}(y) -> (z):
+    ret
+end
+
+func bar():
+    foo{x=2}(0)
+    ret
+end
+""", """
+file:?:?: Implicit argument binding must be an identifier.
+    foo{x=2}(0)
+          ^
 """)
 
 
@@ -587,9 +910,8 @@ static_assert f_args + f.Args.SIZE == ap
 def test_function_call_by_value_args():
     code = """\
 struct T:
-    member s = 0
-    member t = 1
-    const SIZE = 2
+    member s : felt
+    member t : felt
 end
 func f(x, y : T, z : T):
     let t : T = cast([ap], T)
@@ -617,14 +939,12 @@ ret
 def test_func_by_value_args_failures(test_line, expected_type, actual_type, arrow):
     verify_exception(f"""
 struct T:
-    member s = 0
-    member t = 1
-    const SIZE = 2
+    member s : felt
+    member t : felt
 end
 struct S:
-    member s = 0
-    member t = 1
-    const SIZE = 2
+    member s : felt
+    member t : felt
 end
 func f(x, y : {expected_type}):
     local t : {actual_type}
@@ -636,37 +956,18 @@ end
 file:?:?: Expected expression of type '{expected_type}', got '{actual_type}'.
     {test_line}
            {arrow}
-""")
-
-
-def test_func_by_value_discontinuous_struct_failures():
-    verify_exception("""
-struct T:
-    member s = 0
-    member t = 2
-    const SIZE = 3
-end
-func f(x, y : T):
-    f(1, y=y)
-    ret
-end
-""", """
-file:?:?: Discontinuous structs are not supported.
-    f(1, y=y)
-           ^
-""")
+""", main_scope=ScopedName())
 
 
 def test_func_by_value_nested_struct_failures():
     verify_exception("""
 struct S:
-    const SIZE = 0
+    member a : felt
 end
 
 struct T:
-    member s = 0
-    member t : S = 1
-    const SIZE = 2
+    member s : felt
+    member t : S
 end
 func f(x, y : T):
     f(1, y=y)
@@ -682,9 +983,8 @@ file:?:?: Nested structs are not supported.
 def test_func_by_value_return():
     code = """\
 struct T:
-    member s = 0
-    member t = 1
-    const SIZE = 2
+    member s : felt
+    member t : felt
 end
 func f(s : T) -> (x : T, y : T):
     let t : T = cast([ap - 100], T)
@@ -725,6 +1025,10 @@ end
 file:?:?: Reference 'x' was revoked.
     assert x = 0
            ^
+Reference was defined here:
+file:?:?
+    tempvar x = 0
+            ^
 """)
 
 
@@ -867,16 +1171,16 @@ file:?:?: Unknown identifier 'bar'.
 const bar = 0
 from foo import bar
 """, """
-file:?:?: Redefinition of 'bar'.
+file:?:?: Redefinition of 'test_scope.bar'.
 from foo import bar
                 ^*^
 """, files={'foo': 'const bar=0'})
 
-    verify_exception("""
+    verify_exception(f"""
 const lambda = 0
 from foo import bar as lambda
 """, """
-file:?:?: Redefinition of 'lambda'.
+file:?:?: Redefinition of 'test_scope.lambda'.
 from foo import bar as lambda
                        ^****^
 """, files={'foo': 'const bar=0'})
@@ -940,7 +1244,7 @@ const x = y
 const x = 0
 [ap] = x.y.z
 """, """
-file:?:?: Unexpected '.' after 'x' which is const.
+file:?:?: Unexpected '.' after 'test_scope.x' which is const.
 [ap] = x.y.z
        ^***^
 """)
@@ -1041,7 +1345,7 @@ def test_redefinition_failures():
 name:
 const name = 0
 """, """
-file:?:?: Redefinition of 'name'.
+file:?:?: Redefinition of 'test_scope.name'.
 const name = 0
       ^**^
 """)
@@ -1049,7 +1353,7 @@ const name = 0
 const name = 0
 let name = ap
 """, """
-file:?:?: Redefinition of 'name'.
+file:?:?: Redefinition of 'test_scope.name'.
 let name = ap
     ^**^
 """)
@@ -1057,7 +1361,7 @@ let name = ap
 let name = ap
 name:
 """, """
-file:?:?: Redefinition of 'name'.
+file:?:?: Redefinition of 'test_scope.name'.
 name:
 ^**^
 """)
@@ -1067,7 +1371,7 @@ func f(name, x, name):
     [ap + x] = 2
 end
 """, """
-file:?:?: Redefinition of 'f.Args.name'.
+file:?:?: Redefinition of 'test_scope.f.Args.name'.
 func f(name, x, name):
                 ^**^
 """)
@@ -1077,7 +1381,7 @@ func f() -> (name, x, name):
     [ap + x] = 2
 end
 """, """
-file:?:?: Redefinition of 'f.Return.name'.
+file:?:?: Redefinition of 'test_scope.f.Return.name'.
 func f() -> (name, x, name):
                       ^**^
 """)
@@ -1382,9 +1686,10 @@ ret
 
 
 def test_reference_type_deduction():
+    scope = TEST_SCOPE
     program = preprocess_str(code="""
 struct T:
-    const SIZE = 0
+    member t : felt
 end
 
 func foo():
@@ -1395,42 +1700,54 @@ func foo():
     let e : felt* = [b]
     return ()
 end
-""", prime=PRIME)
+""", prime=PRIME, main_scope=scope)
 
     def get_reference_type(name):
-        identifier_definition = program.identifiers.get_by_full_name(ScopedName.from_string(name))
+        identifier_definition = program.identifiers.get_by_full_name(scope + name)
         assert isinstance(identifier_definition, ReferenceDefinition)
         assert len(identifier_definition.references) == 1
         _, expr_type = simplify_type_system(identifier_definition.references[0].value)
         return expr_type
 
-    assert get_reference_type('foo.a').format() == 'T***'
-    assert get_reference_type('foo.b').format() == 'T**'
+    assert get_reference_type('foo.a').format() == f'{scope}.T***'
+    assert get_reference_type('foo.b').format() == f'{scope}.T**'
     assert get_reference_type('foo.c').format() == 'felt*'
-    assert get_reference_type('foo.d').format() == 'T*'
+    assert get_reference_type('foo.d').format() == f'{scope}.T*'
     assert get_reference_type('foo.e').format() == 'felt*'
 
 
 def test_rebind_reference():
     program = preprocess_str(code="""
 struct T:
-    member t = 100
+    member pad0 : felt
+    member pad1 : felt
+    member t : felt
 end
-struct S:
-    member s = 1000
-end
+
 let x : T* = cast(ap + 1, T*)
 let y = &x.t
 [cast(x, felt)] = x.t
-let x : S* = cast(fp - 3, S*)
-[cast(x, felt)] = x.s
+let x : T* = cast(fp - 3, T*)
+[cast(x, felt)] = x.t
 [y] = [y]
 """, prime=PRIME)
     assert program.format() == """\
-[ap + 1] = [ap + 101]
-[fp + (-3)] = [fp + 997]
-[ap + 101] = [ap + 101]
+[ap + 1] = [ap + 3]
+[fp + (-3)] = [fp + (-1)]
+[ap + 3] = [ap + 3]
 """
+
+
+def test_rebind_reference_failures():
+    verify_exception("""
+let x = cast(ap, felt*)
+let x = cast(ap, felt**)
+""", """
+file:?:?: Reference rebinding must preserve the reference type. Previous type: 'felt*', \
+new type: 'felt**'.
+let x = cast(ap, felt**)
+    ^
+""")
 
 
 def test_reference_over_calls():
@@ -1480,6 +1797,10 @@ call f
 file:?:?: Reference 'x' was revoked.
 [x] = 0
  ^
+Reference was defined here:
+file:?:?
+let x = ap + 1
+    ^
 """)
 
     verify_exception(f"""
@@ -1499,28 +1820,65 @@ call f
 file:?:?: Reference 'x' was revoked.
 [x] = 0
  ^
+Reference was defined here:
+file:?:?
+let x = ap + 1
+    ^
 """)
 
 
-@pytest.mark.parametrize('revoking_instruction', [
-    'ap += [fp]',
-    'call label',
-    'call rel 0',
-    'ret',
-    'jmp label',
-    'jmp rel 0',
-    'jmp abs 0',
+@pytest.mark.parametrize('revoking_instruction, has_def_location', [
+    ('ap += [fp]', True),
+    ('call label', True),
+    ('call rel 0', True),
+    ('ret', False),
+    ('jmp label', False),
+    ('jmp rel 0', False),
+    ('jmp abs 0', False),
 ])
-def test_references_revoked(revoking_instruction):
+def test_references_revoked(revoking_instruction, has_def_location):
+    def_loction_str = """\
+Reference was defined here:
+file:?:?
+let x = ap
+    ^
+""" if has_def_location else ''
+
     verify_exception(f"""
 label:
 let x = ap
 {revoking_instruction}
 [x] = 0
-""", """
+""", f"""
 file:?:?: Reference 'x' was revoked.
 [x] = 0
  ^
+{def_loction_str}
+""")
+
+
+def test_references_revoked_multiple_location():
+    verify_exception(f"""
+if [ap] == 0:
+    let x = ap
+else:
+    let y = ap
+    let x = y
+end
+ap += [fp]
+[x] = 0
+""", """
+
+file:?:?: Reference 'x' was revoked.
+[x] = 0
+ ^
+Reference was defined here:
+file:?:?
+    let x = y
+        ^
+file:?:?
+    let x = ap
+        ^
 """)
 
 
@@ -1578,6 +1936,27 @@ file:?:?: Reference 'ref' was revoked.
 """)
 
 
+def test_implicit_arg_revocation():
+    verify_exception("""
+func foo{x}(y):
+    foo(y=1)
+    ap += [fp]
+    return foo(y=2)
+end
+""", """
+file:?:?: While trying to retrieve the implicit argument 'x' in:
+    return foo(y=2)
+           ^******^
+file:?:?: Reference 'x' was revoked.
+func foo{x}(y):
+         ^
+Reference was defined here:
+file:?:?
+    foo(y=1)
+    ^******^
+""")
+
+
 def test_reference_flow_converge():
     program = preprocess_str("""
 if [ap] != 0:
@@ -1598,45 +1977,49 @@ jmp rel 4
 
 
 def test_typed_references():
+    scope = TEST_SCOPE
     program = preprocess_str(code="""
 func main():
     struct T:
-        member b : T* = 3
+        member pad0 : felt
+        member pad1 : felt
+        member pad2 : felt
+        member b : T*
     end
 
     struct Struct:
-        member a : T* = 2
+        member pad0 : felt
+        member pad1 : felt
+        member a : T*
     end
 
     let x : Struct* = cast(ap + 10, Struct*)
     let y : Struct = [x]
 
     [fp] = x.a
-    assert [fp] = x.a.b
-    assert [fp] = x.a.b.b
+    assert [fp] = cast(x.a.b, felt)
+    assert [fp] = cast(x.a.b.b, felt)
 
     [fp] = y.a + 1
     ret
 end
-""", prime=PRIME)
-    scope = ScopedName.from_string
+""", prime=PRIME, main_scope=scope)
 
-    assert isinstance(program.identifiers.get_by_full_name(scope('main.x')), ReferenceDefinition)
-    expected_type_x = mark_type_resolved(parse_type('main.Struct*'))
-    reference = program.instructions[-1].flow_tracking_data.resolve_reference(
-        reference_manager=program.reference_manager, name=scope('main.x'))
-    assert simplify_type_system(reference.value)[1] == \
-        expected_type_x
+    def get_reference(name):
+        scoped_name = scope + name
+        assert isinstance(program.identifiers.get_by_full_name(scoped_name), ReferenceDefinition)
 
-    assert isinstance(program.identifiers.get_by_full_name(scope('main.y')), ReferenceDefinition)
-    expected_type_y = mark_type_resolved(parse_type('main.Struct'))
-    reference = program.instructions[-1].flow_tracking_data.resolve_reference(
-        reference_manager=program.reference_manager, name=scope('main.y'))
-    assert simplify_type_system(reference.value)[1] == \
-        expected_type_y
+        return program.instructions[-1].flow_tracking_data.resolve_reference(
+            reference_manager=program.reference_manager, name=scoped_name)
 
-    assert reference.value.format() == \
-        'cast([ap + 10], main.Struct)'
+    expected_type_x = mark_type_resolved(parse_type(f'{scope}.main.Struct*'))
+    assert simplify_type_system(get_reference('main.x').value)[1] == expected_type_x
+
+    expected_type_y = mark_type_resolved(parse_type(f'{scope}.main.Struct'))
+    reference = get_reference('main.y')
+    assert simplify_type_system(reference.value)[1] == expected_type_y
+
+    assert reference.value.format() == f'cast([ap + 10], {scope}.main.Struct)'
     assert program.format() == """\
 [fp] = [ap + 12]
 [fp] = [[ap + 12] + 3]
@@ -1649,18 +2032,6 @@ ret
 
 def test_typed_references_failures():
     verify_exception(f"""
-struct T:
-    const z = 0
-end
-
-let x : T* = cast(ap, T*)
-x.z = x.z
-""", """
-file:?:?: Expected reference offset 'T.z' to be a member, found const.
-x.z = x.z
-^*^
-""")
-    verify_exception(f"""
 let x = fp
 x.a = x.a
 """, """
@@ -1670,30 +2041,31 @@ x.a = x.a
 """)
     verify_exception(f"""
 struct T:
-    member z = 0
+    member z : felt
 end
 
 let x : T = ap
 x.z = x.z
 """, """
-file:?:?: Cannot assign an expression of type 'felt' to a reference of type 'T'.
+file:?:?: Cannot assign an expression of type 'felt' to a reference of type 'test_scope.T'.
 let x : T = ap
         ^
 """)
     verify_exception(f"""
 struct T:
-    member z = 0
+    member z : felt
 end
 
 let x : T* = cast([ap], T)
 """, """
-file:?:?: Cannot assign an expression of type 'T' to a reference of type 'T*'.
+file:?:?: Cannot assign an expression of type 'test_scope.T' to a reference of type 'test_scope.T*'.
 let x : T* = cast([ap], T)
         ^^
 """)
 
 
 def test_return_value_reference():
+    scope = TEST_SCOPE
     program = preprocess_str(code="""
 func foo() -> (val, x, y):
     ret
@@ -1709,26 +2081,25 @@ func main():
     let z = call abs 0
     ret
 end
-""", prime=PRIME)
-    scope = ScopedName.from_string
+""", prime=PRIME, main_scope=scope)
 
-    assert isinstance(program.identifiers.get_by_full_name(scope('main.x')), ReferenceDefinition)
-    expected_type = mark_type_resolved(parse_type(f'foo.{CodeElementFunction.RETURN_SCOPE}'))
-    reference = program.instructions[-1].flow_tracking_data.resolve_reference(
-        reference_manager=program.reference_manager, name=scope('main.x'))
-    assert simplify_type_system(reference.value)[1] == expected_type
+    def get_reference(name):
+        scoped_name = scope + name
+        assert isinstance(program.identifiers.get_by_full_name(scoped_name), ReferenceDefinition)
 
-    assert isinstance(program.identifiers.get_by_full_name(scope('main.y')), ReferenceDefinition)
-    expected_type = mark_type_resolved(parse_type(f'main.{CodeElementFunction.RETURN_SCOPE}'))
-    reference = program.instructions[-1].flow_tracking_data.resolve_reference(
-        reference_manager=program.reference_manager, name=scope('main.y'))
-    assert simplify_type_system(reference.value)[1] == expected_type
+        return program.instructions[-1].flow_tracking_data.resolve_reference(
+            reference_manager=program.reference_manager, name=scoped_name)
 
-    assert isinstance(program.identifiers.get_by_full_name(scope('main.z')), ReferenceDefinition)
+    expected_type = mark_type_resolved(parse_type(
+        f'{scope}.foo.{CodeElementFunction.RETURN_SCOPE}'))
+    assert simplify_type_system(get_reference('main.x').value)[1] == expected_type
+
+    expected_type = mark_type_resolved(parse_type(
+        f'{scope}.main.{CodeElementFunction.RETURN_SCOPE}'))
+    assert simplify_type_system(get_reference('main.y').value)[1] == expected_type
+
     expected_type = parse_type('felt')
-    reference = program.instructions[-1].flow_tracking_data.resolve_reference(
-        reference_manager=program.reference_manager, name=scope('main.z'))
-    assert simplify_type_system(reference.value)[1] == expected_type
+    assert simplify_type_system(get_reference('main.z').value)[1] == expected_type
 
     assert program.format() == """\
 ret
@@ -1756,7 +2127,7 @@ end
 let x = call foo
 [x.a] = 0
 """, """
-file:?:?: Member 'foo.Return.a' was not found.
+file:?:?: 'a' is not a member of 'test_scope.foo.Return'.
 [x.a] = 0
  ^*^
 """)
@@ -1772,12 +2143,12 @@ let x : unknown_type* = call foo
 """)
     verify_exception(f"""
 struct T:
-  const s = 1000
+  member s : felt
 end
 let x : T* = cast(ap, T*)
 [ap] = x.a
 """, """
-file:?:?: Member 'T.a' was not found.
+file:?:?: 'a' is not a member of 'test_scope.T'.
 [ap] = x.a
        ^*^
 """)
@@ -1786,12 +2157,11 @@ file:?:?: Member 'T.a' was not found.
 def test_unpacking():
     code = """\
 struct T:
-    member a = 0
-    member b = 1
-    const SIZE = 2
+    member a : felt
+    member b : felt
 end
 func f() -> (a, b, c, d , e : T):
-    return (...)
+    return (1,2,3,4,[cast(5,T*)])
 end
 func g():
     alloc_locals
@@ -1801,20 +2171,31 @@ func g():
     a = b + c
     # The type of e is deduced from the return type of f().
     a = e.b
+    let (_, _, local c, _, _) = f()
     ret
 end
 """
     program = preprocess_str(code=code, prime=PRIME)
     assert program.format() == """\
+[ap] = 5; ap++
+[ap] = 6; ap++
+[ap] = 1; ap++
+[ap] = 2; ap++
+[ap] = 3; ap++
+[ap] = 4; ap++
+[ap] = [[ap + (-6)]]; ap++
+[ap] = [[ap + (-6)]]; ap++
 ret
-ap += 2
-call rel -3
+ap += 3
+call rel -17
 [fp] = [ap + (-5)]
 [fp + 1] = [ap + (-4)]
 [ap + (-6)] = [[ap + (-3)] + 1]
 [ap + (-6)] = [fp] + [fp + 1]; ap++
 [ap + (-7)] = [fp] + [fp + 1]
 [ap + (-7)] = [ap + (-2)]
+call rel -25
+[fp + 2] = [ap + (-4)]
 ret
 """
 
@@ -1822,7 +2203,7 @@ ret
 def test_unpacking_failures():
     verify_exception(f"""
 func foo() -> (a):
-  ret
+    ret
 end
 let (a, b) = foo()
 """, """
@@ -1841,12 +2222,11 @@ let (a, b) = 1 + 3
 
     verify_exception(f"""
 struct T:
-    member a = 0
-    member b = 1
-    const SIZE = 2
+    member a : felt
+    member b : felt
 end
 func foo() -> (a, b : T):
-  ret
+    ret
 end
 let (a, b, c) = foo()
 """, """
@@ -1857,28 +2237,26 @@ let (a, b, c) = foo()
 
     verify_exception(f"""
 struct T:
-    member a = 0
-    member b = 1
-    const SIZE = 2
+    member a : felt
+    member b : felt
 end
 func foo() -> (a, b):
-  ret
+    ret
 end
 let (a, b : T) = foo()
 """, """
-file:?:?: Expected expression of type 'felt', got 'T'.
+file:?:?: Expected expression of type 'felt', got 'test_scope.T'.
 let (a, b : T) = foo()
         ^***^
 """)
 
     verify_exception(f"""
 struct T:
-    member a = 0
-    member b = 1
-    const SIZE = 2
+    member a : felt
+    member b : felt
 end
 func foo() -> (a, b : T):
-  ret
+    ret
 end
 func test():
     alloc_locals
@@ -1886,9 +2264,28 @@ func test():
     ret
 end
 """, """
-file:?:?: Expected a 'felt' or a pointer type. Got: 'T'.
+file:?:?: Expected a 'felt' or a pointer type. Got: 'test_scope.T'.
     let (a, local b : T) = foo()
                   ^
+""")
+
+    verify_exception(f"""
+struct T:
+end
+
+func foo() -> (a : T*):
+    ret
+end
+
+func test():
+    alloc_locals
+    let (local _ : T*) = foo()
+    ret
+end
+""", """
+file:?:?: Reference name cannot be '_'.
+    let (local _ : T*) = foo()
+         ^**********^
 """)
 
     verify_exception(f"""
@@ -1922,25 +2319,142 @@ let (a, local b) = foo()
 """)
 
 
-def test_member_def_failure():
+def test_member_def_failures():
     verify_exception("""
 struct T:
-    member t = ap + 5
+    member t
 end
 """, """
-file:?:?: Expected a constant expression.
-    member t = ap + 5
-               ^****^
+file:?:?: Struct members must be explicitly typed (e.g., member x : felt).
+    member t
+           ^
 """)
 
+    verify_exception("""
+member t : felt
+""", """
+file:?:?: The member keyword may only be used inside a struct.
+member t : felt
+       ^******^
+""")
 
-def test_member_def_modifier_failure():
     verify_exception("""
 struct T:
-    member local t = 17
+    member local t
 end
 """, """
 file:?:?: Unexpected modifier 'local'.
-    member local t = 17
+    member local t
            ^***^
+""")
+
+
+def test_bad_struct():
+    verify_exception("""
+struct T:
+    return()
+end
+""", """
+file:?:?: Unexpected statement inside a struct definition.
+    return()
+    ^******^
+""")
+
+
+def test_bad_type_annotation():
+    verify_exception("""
+func foo():
+    local a : foo
+    ret
+end
+""", """
+file:?:?: Expected 'test_scope.foo' to be a struct. Found: 'label'.
+    local a : foo
+              ^*^
+""")
+
+    verify_exception("""
+func foo():
+    struct test:
+        member a : foo*
+    end
+
+    ret
+end
+""", """
+file:?:?: Expected 'foo' to be a struct. Found: 'label'.
+        member a : foo*
+                   ^*^
+""")
+
+    verify_exception("""
+func foo():
+    struct test:
+        member a : foo.abc*
+    end
+
+    ret
+end
+""", """
+file:?:?: Unknown identifier 'test_scope.foo.abc'.
+        member a : foo.abc*
+                   ^*****^
+""")
+
+
+def test_nested_function_failure():
+    verify_exception("""
+func foo():
+    func bar():
+        return()
+    end
+    return()
+end
+""", """
+file:?:?: Nested functions are not supported.
+    func bar():
+         ^*^
+Outer function was defined here: file:?:?
+func foo():
+     ^*^
+""")
+
+
+def test_namespace_inside_function_failure():
+    verify_exception("""
+func foo():
+    namespace MyNamespace:
+    end
+    return()
+end
+
+
+""", """
+file:?:?: Cannot define a namespace inside a function.
+    namespace MyNamespace:
+              ^*********^
+Outer function was defined here: file:?:?
+func foo():
+     ^*^
+""")
+
+
+def test_tuple_failures():
+    verify_exception("""
+func foo(x : (felt, felt)):
+end
+""", """
+file:?:?: Tuples are not supported yet.
+func foo(x : (felt, felt)):
+             ^**********^
+""")
+    verify_exception("""
+func foo():
+    alloc_locals
+    local x : (felt, felt)
+end
+""", """
+file:?:?: Tuples are not supported yet.
+    local x : (felt, felt)
+              ^**********^
 """)

@@ -24,6 +24,10 @@ from starkware.cairo.lang.vm.utils import MemorySegmentAddresses
 from starkware.cairo.lang.vm.vm import VmException
 
 
+class CairoRunError(Exception):
+    pass
+
+
 def main():
     start_time = time.time()
 
@@ -57,8 +61,12 @@ def main():
         '--relocate_prints', action='store_true',
         help='Print memory and info after memory relocation.')
     parser.add_argument(
-        '--secure_run', action='store_true',
-        help='Verify the run is secure and can be run safely using the bootloader.')
+        '--secure_run', action='store_true', default=None,
+        help='Verify that the run is secure and can be run safely using the bootloader '
+        '(the default).')
+    parser.add_argument(
+        '--no_secure_run', dest='secure_run', action='store_false',
+        help="Don't verify that the run is secure (see --secure_run).")
     parser.add_argument(
         '--print_info', action='store_true',
         help='Print information on the execution of the program.')
@@ -93,6 +101,10 @@ def main():
     parser.add_argument(
         '--tracer', action='store_true', help='Run the tracer.')
     parser.add_argument(
+        '--profile_output', type=str,
+        help='A path to an output file to write profile data to. Can be opened in pprof. '
+        'Usually "profile.pb.gz".')
+    parser.add_argument(
         '--proof_mode', action='store_true', help='Prepare a provable execution trace.')
     parser.add_argument(
         '--flavor', type=str, choices=['Debug', 'Release', 'RelWithDebInfo'], help='Build flavor.')
@@ -107,10 +119,16 @@ def main():
     assert not (args.steps and args.min_steps), '--steps and --min_steps cannot be both specified.'
     assert not (args.cairo_pie_output and args.no_end), \
         '--no_end and --cairo_pie_output cannot be both specified.'
+    assert not (args.cairo_pie_output and args.proof_mode), \
+        '--proof_mode and --cairo_pie_output cannot be both specified.'
     if args.air_public_input:
         assert args.proof_mode, '--air_public_input can only be used in proof_mode.'
     if args.air_private_input:
         assert args.proof_mode, '--air_private_input can only be used in proof_mode.'
+
+    # If secure_run is not specified, the default is False in proof mode and True otherwise.
+    if args.secure_run is None:
+        args.secure_run = not args.proof_mode
 
     with get_crypto_lib_context_manager(args.flavor):
         try:
@@ -128,25 +146,38 @@ def main():
     return res
 
 
+def load_program(program) -> ProgramBase:
+    try:
+        program_json = json.load(program)
+    except json.JSONDecodeError as err:
+        raise CairoRunError(
+            'Failed to load compiled program (not a valid JSON file). '
+            'Did you compile the code before running it? '
+            f"Error: '{err}'")
+    return Program.Schema().load(program_json)
+
+
 def cairo_run(args):
+    trace_needed = args.tracer or args.profile_output is not None
     trace_file = args.trace_file
-    if trace_file is None and args.tracer:
-        # If --tracer is used, use a temporary file as trace_file.
+    if trace_file is None and trace_needed:
+        # If --tracer or --profile_output is used, use a temporary file as trace_file.
         trace_file = tempfile.NamedTemporaryFile(mode='wb')
 
     memory_file = args.memory_file
-    if memory_file is None and args.tracer:
-        # If --tracer is used, use a temporary file as memory_file.
+    if memory_file is None and trace_needed:
+        # If --tracer or --profile_output is used, use a temporary file as memory_file.
         memory_file = tempfile.NamedTemporaryFile(mode='wb')
 
     debug_info_file = args.debug_info_file
-    if debug_info_file is None and args.tracer:
-        # If --tracer is used, use a temporary file as debug_info_file.
+    if debug_info_file is None and trace_needed:
+        # If --tracer or --profile_output is used, use a temporary file as debug_info_file.
         debug_info_file = tempfile.NamedTemporaryFile(mode='w')
 
     ret_code = 0
+    cairo_pie_input = None
     if args.program is not None:
-        program: ProgramBase = Program.Schema().load(json.load(args.program))
+        program: ProgramBase = load_program(args.program)
         initial_memory = MemoryDict()
         steps_input = args.steps
     else:
@@ -154,10 +185,16 @@ def cairo_run(args):
         assert args.steps is None and args.min_steps is None, \
             '--steps and --min_steps cannot be specified in --run_from_cairo_pie mode.'
         cairo_pie_input = CairoPie.from_file(args.run_from_cairo_pie)
+        try:
+            cairo_pie_input.run_validity_checks()
+        except Exception as exc:
+            # Trim error message in case it's too long.
+            msg = str(exc)[:10000]
+            raise CairoRunError(f'Security check for the CairoPIE input failed: {msg}')
         program = cairo_pie_input.program
         initial_memory = cairo_pie_input.memory
-        cairo_pie_input.metadata.validate_segment_order()
         steps_input = cairo_pie_input.execution_resources.n_steps
+
     runner = CairoRunner(
         program=program, layout=args.layout, memory=initial_memory, proof_mode=args.proof_mode)
 
@@ -168,6 +205,13 @@ def cairo_run(args):
         # Add extra_segments.
         for segment_info in cairo_pie_input.metadata.extra_segments:
             runner.segments.add(size=segment_info.size)
+        # Update the builtin runners' additional_data.
+        for name, builtin_runner in runner.builtin_runners.items():
+            if name in cairo_pie_input.additional_data:
+                builtin_runner.extend_additional_data(
+                    data=cairo_pie_input.additional_data[name],
+                    relocate_callback=lambda x: x,
+                    data_is_trusted=not args.secure_run)
 
     program_input = json.load(args.program_input) if args.program_input else {}
     runner.initialize_vm(hint_locals={'program_input': program_input})
@@ -216,6 +260,11 @@ def cairo_run(args):
 
     if args.secure_run:
         verify_secure_runner(runner)
+        if args.run_from_cairo_pie is not None:
+            assert cairo_pie_input is not None
+            assert cairo_pie_input == runner.get_cairo_pie(), \
+                'The Cairo PIE input is not identical to the resulting Cairo PIE. ' \
+                'This may indicate that the Cairo PIE was not generated by cairo_run.'
 
     if args.cairo_pie_output:
         runner.get_cairo_pie().to_file(args.cairo_pie_output)
@@ -287,6 +336,20 @@ def cairo_run(args):
             f'--memory={memory_file.name}',
             f'--air_public_input={args.air_public_input.name}' if args.air_public_input else None,
             f'--debug_info={debug_info_file.name}',
+        ])))
+
+    if args.profile_output is not None:
+        CAIRO_PROFILER = 'starkware.cairo.lang.tracer.profiler'
+        subprocess.call(list(filter(None, [
+            sys.executable,
+            '-m',
+            CAIRO_PROFILER,
+            f'--program={args.program.name}',
+            f'--trace={trace_file.name}',
+            f'--memory={memory_file.name}',
+            f'--air_public_input={args.air_public_input.name}' if args.air_public_input else None,
+            f'--debug_info={debug_info_file.name}',
+            f'--profile_output={args.profile_output}',
         ])))
 
     return ret_code

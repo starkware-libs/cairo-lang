@@ -1,20 +1,14 @@
 import dataclasses
-from typing import Tuple
+from typing import Tuple, cast
 
 from starkware.cairo.lang.compiler.ast.cairo_types import (
-    CairoType, TypeFelt, TypePointer, TypeStruct)
+    CairoType, TypeFelt, TypePointer, TypeStruct, TypeTuple)
 from starkware.cairo.lang.compiler.ast.expr import (
-    ExprAddressOf, ExprCast, ExprConst, ExprDeref, Expression, ExprFutureLabel, ExprIdentifier,
-    ExprNeg, ExprOperator, ExprParentheses, ExprPyConst, ExprReg)
+    ExprAddressOf, ExprAssignment, ExprCast, ExprConst, ExprDeref, Expression, ExprFutureLabel,
+    ExprIdentifier, ExprNeg, ExprOperator, ExprParentheses, ExprPyConst, ExprReg, ExprTuple)
 from starkware.cairo.lang.compiler.ast.visitor import Visitor
-from starkware.cairo.lang.compiler.error_handling import LocationError
 from starkware.cairo.lang.compiler.expression_transformer import ExpressionTransformer
-
-FELT_STAR = TypePointer(pointee=TypeFelt())
-
-
-class CairoTypeError(LocationError):
-    pass
+from starkware.cairo.lang.compiler.type_casts import CairoTypeError, check_cast
 
 
 def get_expr_addr(expr: Expression):
@@ -96,7 +90,9 @@ class TypeSystemVisitor(Visitor):
         inner_expr, inner_type = self.visit(expr.expr)
         dest_type = expr.dest_type
 
-        if not check_cast(src_type=inner_type, dest_type=dest_type, expr=inner_expr):
+        if not check_cast(
+                src_type=inner_type, dest_type=dest_type, expr=inner_expr,
+                cast_type=expr.cast_type):
             raise CairoTypeError(
                 f"Cannot cast '{inner_type.format()}' to '{dest_type.format()}'.",
                 location=expr.location)
@@ -104,52 +100,17 @@ class TypeSystemVisitor(Visitor):
         # Remove the cast() from the expression.
         return inner_expr, dest_type
 
-
-def check_cast(src_type: CairoType, dest_type: CairoType, expr):
-    """
-    Returns true if the given expression can be casted from src_type to dest_type
-    as part of an explicit cast() call.
-    In some cases of cast failure, an exception with more specific details is raised.
-    """
-
-    # Allow casting to T if the expression is of the form [...].
-    if isinstance(dest_type, TypeStruct):
-        if expr is not None and not isinstance(expr, ExprDeref):
-            raise CairoTypeError(
-                f"Cannot cast to '{dest_type.format()}' since the expression has no address.",
-                location=expr.location)
-        return True
-
-    return check_unpack_cast(src_type=src_type, dest_type=dest_type)
-
-
-def check_unpack_cast(src_type: CairoType, dest_type: CairoType) -> bool:
-    """
-    Returns true if an expression of the given source type can be explicitly casted to
-    a reference of type dest_type as part of an unpacking.
-    """
-    # Allow explicit cast between felts and pointers.
-    if isinstance(src_type, (TypeFelt, TypePointer)) and \
-            isinstance(dest_type, (TypeFelt, TypePointer)):
-        return True
-
-    return check_assign_cast(src_type=src_type, dest_type=dest_type)
-
-
-def check_assign_cast(src_type: CairoType, dest_type: CairoType) -> bool:
-    """
-    Returns true if an expression of the given source type can be assigned (using an implicit cast)
-    to a reference of type dest_type (for example, in the statement "let x : dest_type = expr").
-    """
-
-    if src_type == dest_type:
-        return True
-
-    # Allow implicit cast from pointers to felt*.
-    if isinstance(src_type, TypePointer) and dest_type == FELT_STAR:
-        return True
-
-    return False
+    def visit_ExprTuple(self, expr: ExprTuple) -> Tuple[Expression, CairoType]:
+        args = expr.members.args
+        member_expr_types = [self.visit(cast(ExprAssignment, arg).expr) for arg in args]
+        result_members = [
+            dataclasses.replace(arg, expr=expr) for arg, (expr, _) in zip(args, member_expr_types)]
+        result_expr = dataclasses.replace(
+            expr, members=dataclasses.replace(expr.members, args=result_members))
+        cairo_type = TypeTuple(
+            members=[expr_type for expr, expr_type in member_expr_types],
+            location=expr.location)
+        return result_expr, cairo_type
 
 
 def simplify_type_system(expr: Expression) -> Tuple[Expression, CairoType]:

@@ -45,6 +45,12 @@ class BuiltinRunner(ABC):
         """
 
     @abstractmethod
+    def get_allocated_memory_units(self, runner) -> int:
+        """
+        Returns the number of memory units used by the builtin.
+        """
+
+    @abstractmethod
     def get_used_cells_and_allocated_size(self, runner) -> Tuple[int, int]:
         """
         Returns the number of used cells and the allocated size, and raises
@@ -62,6 +68,12 @@ class BuiltinRunner(ABC):
         """
         Returns a dict from segment name to MemorySegmentAddresses (begin_addr and stop_ptr of the
         corresponding segment).
+        """
+
+    @abstractmethod
+    def run_security_checks(self, runner):
+        """
+        Runs some security checks to make sure a proof can be generated given the memory.
         """
 
     def relocate(self, relocate_value: Callable[[MaybeRelocatable], MaybeRelocatable]):
@@ -114,10 +126,13 @@ class BuiltinRunner(ABC):
         return
 
     def extend_additional_data(
-            self, data: Any, relocate_callback: Callable[[MaybeRelocatable], MaybeRelocatable]):
+            self, data: Any, relocate_callback: Callable[[MaybeRelocatable], MaybeRelocatable],
+            data_is_trusted: bool = True):
         """
         Adds the additional data created by another instance of the builtin runner.
         relocate_callback is a callback function used to relocate the addresses.
+        If data_is_trusted is False, the function does not assume that instances
+        that were processed by the other builtin runner were properly validated.
         """
         return
 
@@ -171,6 +186,9 @@ class SimpleBuiltinRunner(BuiltinRunner):
     def get_used_instances(self, runner):
         return safe_div(self.get_used_cells(runner), self.cells_per_instance)
 
+    def get_allocated_memory_units(self, runner):
+        return self.cells_per_instance * safe_div(runner.vm.current_step, self.ratio)
+
     def get_used_cells_and_allocated_size(self, runner):
         if runner.vm.current_step < self.ratio:
             raise InsufficientAllocatedCells(
@@ -192,3 +210,18 @@ class SimpleBuiltinRunner(BuiltinRunner):
             begin_addr=self.base,
             stop_ptr=self.stop_ptr,
         )}
+
+    def run_security_checks(self, runner):
+        offsets = {
+            addr.offset
+            for addr in runner.vm_memory.keys()
+            if isinstance(addr, RelocatableValue) and addr.segment_index == self.base.segment_index
+        }
+        expected_size = max(offsets) + 1 if len(offsets) > 0 else 0
+
+        # Check that the offsets form a contiguous range of addresses. The length is verified
+        # before constructing the expected range to avoid possibility of creating a huge set.
+        assert len(offsets) == expected_size and offsets == set(range(expected_size)), \
+            f'Missing memory cells for {self.name}.'
+        assert expected_size % self.cells_per_instance == 0, \
+            f'Unexpected number of memory cells for {self.name}: {expected_size}.'

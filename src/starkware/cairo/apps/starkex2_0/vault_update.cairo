@@ -9,32 +9,31 @@ from starkware.cairo.apps.starkex2_0.common.merkle_update import merkle_update
 from starkware.cairo.apps.starkex2_0.dex_constants import BALANCE_BOUND, ZERO_VAULT_HASH
 
 struct VaultState:
-    member stark_key = 0
-    member token_id = 1
-    member balance = 2
-    const SIZE = 3
+    member stark_key : felt
+    member token_id : felt
+    member balance : felt
 end
 
 # Retrieves a pointer to a VaultState with the corresponding vault.
 # Returns an empty vault if balance == 0 (stark_key and token_id are ignored).
 func get_vault_state(stark_key, token_id, balance) -> (vault_state_ptr : VaultState*):
-    local vault_state_ptr : VaultState*
+    let vault_state_ptr = cast([fp], VaultState*)
+    let vault_state_ap_ptr = cast([ap], VaultState*)
 
     # Allocate 1 slot for our local which is also the return value.
     vault_state_ptr.balance = balance; ap++
-    static_assert SIZEOF_LOCALS == 1
 
     if balance == 0:
         # Balance is 0 here, use it for initialization.
         let zero = balance
         vault_state_ptr.stark_key = zero
         vault_state_ptr.token_id = zero
-        return (...)
+        return (vault_state_ptr=vault_state_ap_ptr)
     end
 
     vault_state_ptr.stark_key = stark_key
     vault_state_ptr.token_id = token_id
-    return (...)
+    return (vault_state_ptr=vault_state_ap_ptr)
 end
 
 # Computes the hash h(key_token_hash, amount), where key_token_hash := h(stark_key, token_id).

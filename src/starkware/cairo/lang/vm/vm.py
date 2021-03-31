@@ -272,6 +272,13 @@ class VirtualMachine:
             'safe_div': math_utils.safe_div,
         })
 
+    def validate_existing_memory(self):
+        """
+        Validates the builtin values (e.g., range-checks) that are already written to the VM's
+        memory.
+        """
+        self.validated_memory.validate_existing_memory()
+
     def load_hints(self, program: Program, program_base: MaybeRelocatable):
         for i, (pc, hint) in enumerate(program.hints.items(), len(self.hint_pcs)):
             self.hints[pc + program_base] = CompiledHint(

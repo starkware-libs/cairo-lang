@@ -3,20 +3,22 @@ from typing import Optional
 
 from lark import Transformer, v_args
 
+from starkware.cairo.lang.compiler.ast.aliased_identifier import AliasedIdentifier
 from starkware.cairo.lang.compiler.ast.arguments import IdentifierList
 from starkware.cairo.lang.compiler.ast.bool_expr import BoolExpr
-from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt, TypePointer, TypeStruct
+from starkware.cairo.lang.compiler.ast.cairo_types import (
+    TypeFelt, TypePointer, TypeStruct, TypeTuple)
 from starkware.cairo.lang.compiler.ast.code_elements import (
     BuiltinsDirective, CodeBlock, CodeElementAllocLocals, CodeElementCompoundAssertEq,
     CodeElementConst, CodeElementDirective, CodeElementEmptyLine, CodeElementFuncCall,
     CodeElementFunction, CodeElementHint, CodeElementIf, CodeElementImport, CodeElementInstruction,
     CodeElementLabel, CodeElementLocalVariable, CodeElementMember, CodeElementReference,
     CodeElementReturn, CodeElementReturnValueReference, CodeElementStaticAssert,
-    CodeElementTemporaryVariable, CodeElementUnpackBinding, CommentedCodeElement)
+    CodeElementTailCall, CodeElementTemporaryVariable, CodeElementUnpackBinding, CodeElementWith,
+    CommentedCodeElement)
 from starkware.cairo.lang.compiler.ast.expr import (
-    ArgList, EllipsisSymbol, ExprAddressOf, ExprAssignment, ExprCast, ExprConst, ExprDeref,
-    ExprIdentifier, ExprNeg, ExprOperator, ExprParentheses, ExprPyConst, ExprReg, ExprTuple)
-from starkware.cairo.lang.compiler.ast.imports import ImportItem
+    ArgList, ExprAddressOf, ExprAssignment, ExprCast, ExprConst, ExprDeref, ExprIdentifier, ExprNeg,
+    ExprOperator, ExprParentheses, ExprPyConst, ExprReg, ExprTuple)
 from starkware.cairo.lang.compiler.ast.instructions import (
     AddApInstruction, AssertEqInstruction, CallInstruction, CallLabelInstruction, InstructionAst,
     JnzInstruction, JumpInstruction, JumpToLabelInstruction, RetInstruction)
@@ -62,6 +64,10 @@ class ParserTransformer(Transformer):
     def type_pointer(self, value, meta):
         return TypePointer(pointee=value[0], location=self.meta2loc(meta))
 
+    @v_args(meta=True)
+    def type_tuple(self, value, meta):
+        return TypeTuple(members=value, location=self.meta2loc(meta))
+
     # Expression.
     @v_args(meta=True)
     def arg_list(self, value, meta):
@@ -80,10 +86,6 @@ class ParserTransformer(Transformer):
         return ArgList(
             args=args, notes=notes, has_trailing_comma=has_trailing_comma,
             location=self.meta2loc(meta))
-
-    @v_args(meta=True)
-    def ellipsis(self, value, meta):
-        return EllipsisSymbol(location=self.meta2loc(meta))
 
     @v_args(meta=True)
     def expr_assignment(self, value, meta):
@@ -274,9 +276,16 @@ class ParserTransformer(Transformer):
 
     @v_args(meta=True)
     def function_call(self, value, meta):
-        func_ident, arg_list = value
+        if len(value) == 2:
+            func_ident, arg_list = value
+            implicit_args = None
+        elif len(value) == 3:
+            func_ident, implicit_args, arg_list = value
+        else:
+            raise NotImplementedError(f'Unexpected argument: value={value}')
+
         return RvalueFuncCall(
-            func_ident=func_ident, exprs=arg_list.args, notes=arg_list.notes,
+            func_ident=func_ident, arguments=arg_list, implicit_arguments=implicit_args,
             location=self.meta2loc(meta))
 
     # CairoFile.
@@ -288,7 +297,7 @@ class ParserTransformer(Transformer):
         return CodeElementConst(identifier=value[0], expr=value[1])
 
     def code_element_member(self, value):
-        return CodeElementMember(typed_identifier=value[0], expr=value[1])
+        return CodeElementMember(typed_identifier=value[0])
 
     def code_element_reference(self, value):
         ref_binding, rvalue = value
@@ -334,6 +343,10 @@ class ParserTransformer(Transformer):
         arglist, = value
         return CodeElementReturn(exprs=arglist.args, location=self.meta2loc(meta))
 
+    @v_args(meta=True)
+    def code_element_tail_call(self, value, meta):
+        return CodeElementTailCall(func_call=value[0], location=self.meta2loc(meta))
+
     def code_element_func_call(self, value):
         return CodeElementFuncCall(func_call=value[0])
 
@@ -377,24 +390,36 @@ class ParserTransformer(Transformer):
         notes = [value[0]] + [value[i] + value[i + 1] for i in range(2, len(value) - 1, 3)]
         return IdentifierList(identifiers=identifiers, notes=notes, location=self.meta2loc(meta))
 
-    def code_element_function(self, value):
-        identifier = value[0]
-        arguments = value[1]
+    def implicit_arguments(self, value):
+        if len(value) == 0:
+            return None
+        elif len(value) == 1:
+            return value[0]
+        else:
+            raise NotImplementedError(f'Unexpected argument: value={value}')
 
-        if len(value) == 4:
+    def code_element_function(self, value):
+        identifier, implicit_arguments, arguments = value[:3]
+
+        if len(value) == 5:
             # Return values present.
-            returns = value[2]
-            code_block = value[3]
-        elif len(value) == 3:
+            returns = value[3]
+            code_block = value[4]
+        elif len(value) == 4:
             # Return values not present.
             returns = None
-            code_block = value[2]
+            code_block = value[3]
         else:
             raise NotImplementedError(f'Unexpected argument: value={value}')
 
         return CodeElementFunction(
-            element_type='func', identifier=identifier, arguments=arguments,
-            returns=returns, code_block=code_block)
+            element_type='func',
+            identifier=identifier,
+            arguments=arguments,
+            implicit_arguments=implicit_arguments,
+            returns=returns,
+            code_block=code_block,
+        )
 
     def code_element_struct(self, value):
         element_type, identifier, code_block = value
@@ -402,8 +427,16 @@ class ParserTransformer(Transformer):
             element_type=element_type.value,
             identifier=identifier,
             arguments=IdentifierList(identifiers=[], notes=[]),
+            implicit_arguments=None,
             returns=None,
             code_block=code_block,
+        )
+
+    def code_element_with(self, value):
+        assert len(value) > 1
+        return CodeElementWith(
+            identifiers=value[:-1],
+            code_block=value[-1],
         )
 
     @v_args(meta=True)
@@ -442,7 +475,7 @@ class ParserTransformer(Transformer):
         return BuiltinsDirective(builtins=builtins, location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def import_item(self, value, meta):
+    def aliased_identifier(self, value, meta):
         if len(value) == 1:
             # Element of the form: <identifier>.
             identifier, = value
@@ -453,7 +486,7 @@ class ParserTransformer(Transformer):
         else:
             raise NotImplementedError(f'Unexpected argument: value={value}')
 
-        return ImportItem(
+        return AliasedIdentifier(
             orig_identifier=identifier,
             local_name=local_name,
             location=self.meta2loc(meta))
@@ -461,7 +494,7 @@ class ParserTransformer(Transformer):
     @v_args(meta=True)
     def code_element_import(self, value, meta):
         path = value[0]
-        if isinstance(value[1], ImportItem):
+        if isinstance(value[1], AliasedIdentifier):
             # Single line.
             import_items = value[1:]
             notes = []

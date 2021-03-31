@@ -2,13 +2,13 @@ import dataclasses
 from abc import abstractmethod
 from typing import List, Optional, Sequence
 
+from starkware.cairo.lang.compiler.ast.aliased_identifier import AliasedIdentifier
 from starkware.cairo.lang.compiler.ast.arguments import IdentifierList
 from starkware.cairo.lang.compiler.ast.bool_expr import BoolExpr
 from starkware.cairo.lang.compiler.ast.expr import ArgListItem, Expression, ExprIdentifier
 from starkware.cairo.lang.compiler.ast.formatting_utils import (
     INDENTATION, LocationField, ParticleFormattingConfig, create_particle_sublist,
     particles_in_lines)
-from starkware.cairo.lang.compiler.ast.imports import ImportItem
 from starkware.cairo.lang.compiler.ast.instructions import InstructionAst
 from starkware.cairo.lang.compiler.ast.node import AstNode
 from starkware.cairo.lang.compiler.ast.notes import NoteListField, Notes
@@ -56,13 +56,12 @@ class CodeElementConst(CodeElement):
 @dataclasses.dataclass
 class CodeElementMember(CodeElement):
     typed_identifier: TypedIdentifier
-    expr: Expression
 
     def format(self, allowed_line_length):
-        return f'member {self.typed_identifier.format()} = {self.expr.format()}'
+        return f'member {self.typed_identifier.format()}'
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
-        return [self.typed_identifier, self.expr]
+        return [self.typed_identifier]
 
 
 @dataclasses.dataclass
@@ -167,6 +166,31 @@ class CodeElementReturn(CodeElement):
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return self.exprs
+
+
+@dataclasses.dataclass
+class CodeElementTailCall(CodeElement):
+    """
+    Represents a statement of the form:
+      return func_ident([ident=]expr, ...).
+    """
+    func_call: RvalueFuncCall
+    location: Optional[Location] = LocationField
+
+    def get_particles(self):
+        particales = self.func_call.get_particles()
+        return ['return ' + particales[0]] + particales[1:]
+
+    def format(self, allowed_line_length):
+        return particles_in_lines(
+            particles=self.get_particles(),
+            config=ParticleFormattingConfig(
+                allowed_line_length=allowed_line_length,
+                line_indent=INDENTATION,
+                one_per_line=True))
+
+    def get_children(self) -> Sequence[Optional[AstNode]]:
+        return [self.func_call]
 
 
 @dataclasses.dataclass
@@ -364,10 +388,12 @@ class CodeElementFunction(CodeElement):
     element_type: str
     identifier: ExprIdentifier
     arguments: IdentifierList
+    implicit_arguments: Optional[IdentifierList]
     returns: Optional[IdentifierList]
     code_block: CodeBlock
 
     ARGUMENT_SCOPE = ScopedName.from_string('Args')
+    IMPLICIT_ARGUMENT_SCOPE = ScopedName.from_string('ImplicitArgs')
     RETURN_SCOPE = ScopedName.from_string('Return')
 
     @property
@@ -379,15 +405,26 @@ class CodeElementFunction(CodeElement):
         code = indent(code, INDENTATION)
         if self.element_type in ['struct', 'namespace']:
             particles = [f'{self.element_type} {self.name}:']
-        elif self.returns is not None:
-            particles = [
-                f'{self.element_type} {self.name}(',
-                create_particle_sublist(self.arguments.get_particles(), ') -> ('),
-                create_particle_sublist(self.returns.get_particles(), '):')]
         else:
-            particles = [
-                f'{self.element_type} {self.name}(',
-                create_particle_sublist(self.arguments.get_particles(), '):')]
+            if self.implicit_arguments is not None:
+                first_particle_suffix = '{'
+                implicit_args_particles = [
+                    create_particle_sublist(self.implicit_arguments.get_particles(), '}(')]
+            else:
+                first_particle_suffix = '('
+                implicit_args_particles = []
+
+            if self.returns is not None:
+                particles = [
+                    f'{self.element_type} {self.name}{first_particle_suffix}',
+                    *implicit_args_particles,
+                    create_particle_sublist(self.arguments.get_particles(), ') -> ('),
+                    create_particle_sublist(self.returns.get_particles(), '):')]
+            else:
+                particles = [
+                    f'{self.element_type} {self.name}{first_particle_suffix}',
+                    *implicit_args_particles,
+                    create_particle_sublist(self.arguments.get_particles(), '):')]
 
         header = particles_in_lines(
             particles=particles,
@@ -397,7 +434,23 @@ class CodeElementFunction(CodeElement):
         return f'{header}\n{code}end'
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
-        return [self.identifier, self.arguments, self.returns, self.code_block]
+        return [
+            self.identifier, self.arguments, self.implicit_arguments, self.returns, self.code_block]
+
+
+@dataclasses.dataclass
+class CodeElementWith(CodeElement):
+    identifiers: List[AliasedIdentifier]
+    code_block: CodeBlock
+
+    def format(self, allowed_line_length):
+        identifier_list_str = ', '.join(identifier.format() for identifier in self.identifiers)
+        inner_code = self.code_block.format(allowed_line_length=allowed_line_length - INDENTATION)
+        inner_code = indent(inner_code, INDENTATION)
+        return f'with {identifier_list_str}:\n{inner_code}end'
+
+    def get_children(self) -> Sequence[Optional[AstNode]]:
+        return [*self.identifiers, self.code_block]
 
 
 @dataclasses.dataclass
@@ -405,6 +458,8 @@ class CodeElementIf(CodeElement):
     condition: BoolExpr
     main_code_block: CodeBlock
     else_code_block: Optional[CodeBlock]
+    label_neq: Optional[str] = None
+    label_end: Optional[str] = None
     location: Optional[Location] = LocationField
 
     def format(self, allowed_line_length):
@@ -465,7 +520,7 @@ class CodeElementDirective(CodeElement):
 @dataclasses.dataclass
 class CodeElementImport(CodeElement):
     path: ExprIdentifier
-    import_items: List[ImportItem]
+    import_items: List[AliasedIdentifier]
     notes: List[Notes] = NoteListField  # type: ignore
     location: Optional[Location] = LocationField
 

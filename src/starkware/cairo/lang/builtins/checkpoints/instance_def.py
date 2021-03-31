@@ -1,5 +1,8 @@
 import dataclasses
 
+# Each sample consists of 2 cells (required pc and required fp).
+CELLS_PER_SAMPLE = 2
+
 
 @dataclasses.dataclass
 class CheckpointsInstanceDef:

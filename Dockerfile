@@ -1,7 +1,7 @@
 FROM ubuntu:18.04
 
 RUN apt update
-RUN apt install -y cmake python3.7 libgmp3-dev g++ python3-pip python3.7-dev npm
+RUN apt install -y cmake python3.7 libgmp3-dev g++ python3-pip python3.7-dev python3.7-venv npm
 
 COPY . /app/
 
@@ -14,6 +14,9 @@ RUN make all -j8
 
 # Run tests.
 RUN ctest -V
+
+WORKDIR /app/
+RUN src/starkware/cairo/lang/package_test/run_test.sh
 
 # Build the Visual Studio Code extension.
 WORKDIR /app/src/starkware/cairo/lang/ide/vscode-cairo

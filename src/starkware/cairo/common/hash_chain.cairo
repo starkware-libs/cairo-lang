@@ -5,13 +5,11 @@ from starkware.cairo.common.cairo_builtins import HashBuiltin
 # For example, for the 3-element sequence [x, y, z] the hash is:
 #   h(3, h(x, h(y, z)))
 # If data_length = 0, the function does not return (takes more than field prime steps).
-func hash_chain(pedersen_ptr : HashBuiltin*, data_ptr : felt*) -> (
-        pedersen_ptr : HashBuiltin*, hash : felt):
+func hash_chain{hash_ptr : HashBuiltin*}(data_ptr : felt*) -> (hash : felt):
     struct LoopLocals:
-        member data_ptr : felt* = 0
-        member pedersen_ptr : HashBuiltin* = 1
-        member cur_hash = 2
-        const SIZE = 3
+        member data_ptr : felt*
+        member hash_ptr : HashBuiltin*
+        member cur_hash : felt
     end
 
     let data_length = ap
@@ -20,12 +18,12 @@ func hash_chain(pedersen_ptr : HashBuiltin*, data_ptr : felt*) -> (
 
     # Prepare the loop_frame for the first iteration of the hash_loop.
     loop_frame.data_ptr = data_ptr + [data_length]; ap++
-    loop_frame.pedersen_ptr = pedersen_ptr; ap++
+    loop_frame.hash_ptr = hash_ptr; ap++
     loop_frame.cur_hash = [loop_frame.data_ptr]; ap++
 
     hash_loop:
     let curr_frame = cast(ap - LoopLocals.SIZE, LoopLocals*)
-    let current_hash : HashBuiltin* = curr_frame.pedersen_ptr
+    let current_hash : HashBuiltin* = curr_frame.hash_ptr
 
     let new_data_ptr = curr_frame.data_ptr - 1
     let new_data = ap
@@ -39,14 +37,14 @@ func hash_chain(pedersen_ptr : HashBuiltin*, data_ptr : felt*) -> (
     # Set the frame for the next loop iteration (going backwards).
     let next_frame = cast(ap, LoopLocals*)
     next_frame.data_ptr = new_data_ptr; ap++
-    next_frame.pedersen_ptr = curr_frame.pedersen_ptr + HashBuiltin.SIZE; ap++
+    next_frame.hash_ptr = curr_frame.hash_ptr + HashBuiltin.SIZE; ap++
     next_frame.cur_hash = current_hash.result; ap++
 
     # Update n_elements_to_hash and loop accordingly. Note that the hash is calculated backwards.
     [n_elements_to_hash] = next_frame.data_ptr - data_ptr
     jmp hash_loop if [n_elements_to_hash] != 0
 
-    # Note that the function return values (pedersen_ptr, hash) are at the end of next_frame so
-    # they are already located in the correct location.
-    ret
+    # Set the hash_ptr implicit argument and return the result.
+    let hash_ptr = next_frame.hash_ptr
+    return (hash=next_frame.cur_hash)
 end

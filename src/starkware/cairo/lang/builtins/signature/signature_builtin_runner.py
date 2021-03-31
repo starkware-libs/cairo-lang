@@ -1,11 +1,9 @@
 from typing import Any, Dict
 
+from starkware.cairo.lang.builtins.signature.instance_def import CELLS_PER_SIGNATURE
 from starkware.cairo.lang.vm.builtin_runner import BuiltinVerifier, SimpleBuiltinRunner
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
 from starkware.python.math_utils import safe_div
-
-# Each signature consists of 2 cells (a public key and a message).
-CELLS_PER_SIGNATURE = 2
 
 
 class SignatureBuiltinRunner(SimpleBuiltinRunner):
@@ -86,7 +84,7 @@ class SignatureBuiltinRunner(SimpleBuiltinRunner):
             [list(RelocatableValue.to_tuple(addr)), signature]
             for addr, signature in sorted(self.signatures.items())]
 
-    def extend_additional_data(self, data, relocate_callback):
+    def extend_additional_data(self, data, relocate_callback, data_is_trusted=True):
         for addr, signature in data:
             self.signatures[relocate_callback(RelocatableValue.from_tuple(addr))] = signature
 

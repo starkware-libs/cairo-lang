@@ -8,10 +8,9 @@ from starkware.cairo.apps.starkex2_0.common.registers import get_fp_and_pc
 # A representation of a DEX context struct.
 
 struct DexContext:
-    member vault_tree_height = 0
-    member order_tree_height = 1
-    member global_expiration_timestamp = 2
-    const SIZE = 3
+    member vault_tree_height : felt
+    member order_tree_height : felt
+    member global_expiration_timestamp : felt
 end
 
 # Returns a pointer to a new DexContext struct.

@@ -110,7 +110,7 @@ func execute_limit_order(
     # Call vault_update for buying, to update the vault tree with the new balance of the buy vault.
     # range_check_ptr is already in [ap - 1].
     let buy_vault_update_ret = vault_update_diff(
-        ...,
+        range_check_ptr=sell_vault_update_ret.range_check_ptr,
         diff=amount_bought,
         stark_key=stark_key,
         token_id=token_buy,

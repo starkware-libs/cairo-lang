@@ -4,13 +4,13 @@ python_lib(cairo_compile_lib
     __init__.py
     assembler.py
     ast/__init__.py
+    ast/aliased_identifier.py
     ast/arguments.py
     ast/bool_expr.py
     ast/cairo_types.py
     ast/code_elements.py
     ast/expr.py
     ast/formatting_utils.py
-    ast/imports.py
     ast/instructions.py
     ast/module.py
     ast/node.py
@@ -39,23 +39,30 @@ python_lib(cairo_compile_lib
     instruction.py
     location_utils.py
     module_reader.py
+    offset_reference.py
     parser_transformer.py
     parser.py
     preprocessor/compound_expressions.py
+    preprocessor/dependency_graph.py
     preprocessor/flow.py
+    preprocessor/identifier_aware_visitor.py
     preprocessor/identifier_collector.py
     preprocessor/local_variables.py
     preprocessor/preprocessor_error.py
     preprocessor/preprocessor_utils.py
     preprocessor/preprocessor.py
     preprocessor/reg_tracking.py
+    preprocessor/struct_collector.py
+    preprocessor/unique_labels.py
     program.py
     references.py
     scoped_name.py
     substitute_identifiers.py
+    type_casts.py
     type_system_visitor.py
 
     LIBS
+    cairo_constants_lib
     cairo_version_lib
     starkware_expression_string_lib
     starkware_python_utils_lib
@@ -115,16 +122,21 @@ full_python_test(cairo_compile_test
     instruction_builder_test.py
     instruction_test.py
     module_reader_test.py
+    offset_reference_test.py
     parser_errors_test.py
     parser_test.py
     preprocessor/compound_expressions_test.py
+    preprocessor/dependency_graph_test.py
     preprocessor/flow_test.py
     preprocessor/identifier_collector_test.py
     preprocessor/local_variables_test.py
     preprocessor/preprocessor_test.py
     preprocessor/reg_tracking_test.py
+    preprocessor/struct_collector_test.py
+    preprocessor/unique_labels_test.py
     references_test.py
     scoped_name_test.py
+    type_casts_test.py
     type_system_visitor_test.py
 
     LIBS

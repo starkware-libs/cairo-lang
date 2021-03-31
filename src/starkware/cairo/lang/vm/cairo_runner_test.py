@@ -4,7 +4,8 @@ import re
 import pytest
 
 from starkware.cairo.lang.compiler.cairo_compile import compile_cairo
-from starkware.cairo.lang.vm.cairo_runner import CairoRunner
+from starkware.cairo.lang.vm.builtin_runner import InsufficientAllocatedCells
+from starkware.cairo.lang.vm.cairo_runner import CairoRunner, get_runner_from_code
 from starkware.cairo.lang.vm.vm import VmException
 
 CAIRO_FILE = os.path.join(os.path.dirname(__file__), 'test.cairo')
@@ -36,7 +37,7 @@ def test_run_until_label():
 def test_run_past_end():
     code = """\
 func main():
-  ret
+    ret
 end
 """
     program = compile_cairo(code, PRIME)
@@ -55,23 +56,16 @@ def test_bad_stop_ptr():
 %builtins output
 
 func main(output_ptr) -> (output_ptr):
-  [ap] = 0; ap++
-  [ap - 1] = [output_ptr]
-  [ap] = output_ptr + 3; ap++  # The correct return value is output_ptr + 1
-  ret
+    [ap] = 0; ap++
+    [ap - 1] = [output_ptr]
+    [ap] = output_ptr + 3; ap++  # The correct return value is output_ptr + 1
+    ret
 end
 """
-    program = compile_cairo(code, PRIME)
-    runner = CairoRunner(program, layout='small')
-    runner.initialize_segments()
-    end = runner.initialize_main_entrypoint()
-    runner.initialize_vm({})
-    runner.run_until_pc(end)
-
     with pytest.raises(
             AssertionError,
             match='Invalid stop pointer for output. Expected: 2:1, found: 2:3'):
-        runner.read_return_values()
+        runner = get_runner_from_code(code, layout='small', prime=PRIME)
 
 
 def test_builtin_list():
@@ -98,34 +92,54 @@ def test_builtin_list():
 def test_missing_exit_scope():
     code = """\
 func main():
-  %{ vm_enter_scope() %}
-  ret
+    %{ vm_enter_scope() %}
+    ret
 end
 """
-    program = compile_cairo(code, PRIME)
-    runner = CairoRunner(program, layout='small')
-    runner.initialize_segments()
-    end = runner.initialize_main_entrypoint()
-    runner.initialize_vm({})
-    runner.run_until_pc(end)
-
     with pytest.raises(
             AssertionError,
             match=re.escape('Every enter_scope() requires a corresponding exit_scope().')):
-        runner.end_run()
+        runner = get_runner_from_code(code, layout='small', prime=PRIME)
 
 
 def test_load_data_after_init():
     code = """\
 func main():
-  ret
+    ret
 end
 """
-    program = compile_cairo(code, PRIME)
-    runner = CairoRunner(program, layout='plain')
-    runner.initialize_segments()
-    runner.initialize_main_entrypoint()
-    runner.initialize_vm({})
+    runner = get_runner_from_code(code, layout='plain', prime=PRIME)
     addr = runner.segments.add()
     runner.load_data(addr, [42])
     assert runner.vm_memory[addr] == 42
+
+
+def test_small_memory_hole():
+    code = """\
+func main():
+    [ap] = 0
+    ap += 4
+    [ap] = 0
+    ret
+end
+"""
+    runner = get_runner_from_code(code, layout='plain', prime=PRIME)
+    runner.check_memory_usage()
+
+
+def test_memory_hole_insufficient():
+    code = """\
+func main():
+    [ap] = 0
+    ap += 1000
+    [ap] = 0
+    ret
+end
+"""
+    runner = get_runner_from_code(code, layout='plain', prime=PRIME)
+
+    with pytest.raises(
+            InsufficientAllocatedCells,
+            match=re.escape(
+                'There are only 8 cells to fill the memory address holes, but 999 are required.')):
+        runner.check_memory_usage()

@@ -112,7 +112,7 @@ def test_file_format():
 ap+=[ fp ]
 [ap + -1] = [fp]  *  3
  const x=y  +  z
- member x:T.S=6
+ member x:T.S
  let x= ap-y  +  z
  let y:a.b.c= x
 
@@ -138,7 +138,7 @@ label2:
 ap += [fp]
 [ap + (-1)] = [fp] * 3
 const x = y + z
-member x : T.S = 6
+member x : T.S
 let x = ap - y + z
 let y : a.b.c = x
 
@@ -369,13 +369,15 @@ call fib
 
 def test_func_arg_splitting():
     before = """\
-func myfunc(a, b, c, foo, bar,
+func myfunc{x, y, z, w, foo_bar}(a, b, c, foo, bar,
     variable_name_which_is_way_too_long_but_has_to_be_supported, g):
   ret
 end
 """
     after = """\
-func myfunc(
+func myfunc{
+        x, y, z, w,
+        foo_bar}(
         a, b, c, foo,
         bar,
         variable_name_which_is_way_too_long_but_has_to_be_supported,
@@ -486,3 +488,16 @@ else:
 end
 """
     assert parse_file(code).format() == code
+
+
+def test_with():
+    code = """\
+with   a , b  as   c,d  :
+    [ap] = [ap]
+end
+"""
+    assert parse_file(code).format() == """\
+with a, b as c, d:
+    [ap] = [ap]
+end
+"""

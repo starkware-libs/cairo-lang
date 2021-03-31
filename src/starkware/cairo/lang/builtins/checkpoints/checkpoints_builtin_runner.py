@@ -1,10 +1,8 @@
 from typing import List
 
+from starkware.cairo.lang.builtins.checkpoints.instance_def import CELLS_PER_SAMPLE
 from starkware.cairo.lang.vm.builtin_runner import SimpleBuiltinRunner
 from starkware.python.math_utils import safe_div
-
-# Each sample consists of 2 cells (required pc and required fp).
-CELLS_PER_SAMPLE = 2
 
 
 class CheckpointsBuiltinRunner(SimpleBuiltinRunner):

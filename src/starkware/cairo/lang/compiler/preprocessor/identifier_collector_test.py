@@ -1,5 +1,5 @@
 from starkware.cairo.lang.compiler.identifier_definition import (
-    AliasDefinition, ConstDefinition, LabelDefinition, MemberDefinition, ReferenceDefinition)
+    AliasDefinition, ConstDefinition, LabelDefinition, ReferenceDefinition, StructDefinition)
 from starkware.cairo.lang.compiler.parser import parse_file
 from starkware.cairo.lang.compiler.preprocessor.identifier_collector import IdentifierCollector
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_test_utils import verify_exception
@@ -12,7 +12,7 @@ def _extract_identifiers(code):
     """
     ast = parse_file(code)
     collector = IdentifierCollector()
-    with collector.scoped(ScopedName()):
+    with collector.scoped(ScopedName(), parent=ast):
         collector.visit(ast.code_block)
     return [
         (str(name), identifier_definition.identifier_type)
@@ -25,7 +25,6 @@ tempvar a = [ap]
 const b = [ap]
 local c = [ap]
 let d = [fp] + 2
-member e = 6
 f:
 let g : H = f(1, 2, 3)
 """
@@ -34,7 +33,6 @@ let g : H = f(1, 2, 3)
         ('b', ConstDefinition),
         ('c', ReferenceDefinition),
         ('d', ReferenceDefinition),
-        ('e', MemberDefinition),
         ('f', LabelDefinition),
         ('g', ReferenceDefinition),
     }
@@ -50,13 +48,11 @@ let (e, f) = g()
     assert set(_extract_identifiers(code)) == {
         ('a', LabelDefinition),
         ('a.SIZEOF_LOCALS', ConstDefinition),
-        ('a.Args.b', MemberDefinition),
+        ('a.Args', StructDefinition),
+        ('a.ImplicitArgs', StructDefinition),
+        ('a.Return', StructDefinition),
         ('a.b', ReferenceDefinition),
-        ('a.Args.c', MemberDefinition),
         ('a.c', ReferenceDefinition),
-        ('a.Return.d', MemberDefinition),
-        ('a.Args.SIZE', ConstDefinition),
-        ('a.Return.SIZE', ConstDefinition),
         ('e', ReferenceDefinition),
         ('f', ReferenceDefinition),
     }
@@ -64,7 +60,7 @@ let (e, f) = g()
 
 def test_nested_funcs():
     code = """
-func foo(x):
+func foo{z}(x):
     local a
     func bar(y):
         tempvar b = [ap]
@@ -74,19 +70,19 @@ end
     assert set(_extract_identifiers(code)) == {
         ('foo', LabelDefinition),
         ('foo.SIZEOF_LOCALS', ConstDefinition),
-        ('foo.Args.SIZE', ConstDefinition),
-        ('foo.Return.SIZE', ConstDefinition),
-        ('foo.Args.x', MemberDefinition),
+        ('foo.Args', StructDefinition),
+        ('foo.ImplicitArgs', StructDefinition),
+        ('foo.Return', StructDefinition),
         ('foo.x', ReferenceDefinition),
+        ('foo.z', ReferenceDefinition),
         ('foo.a', ReferenceDefinition),
         ('foo.bar', LabelDefinition),
         ('foo.bar.SIZEOF_LOCALS', ConstDefinition),
-        ('foo.bar.Args.SIZE', ConstDefinition),
-        ('foo.bar.Return.SIZE', ConstDefinition),
-        ('foo.bar.Args.y', MemberDefinition),
+        ('foo.bar.Args', StructDefinition),
+        ('foo.bar.ImplicitArgs', StructDefinition),
+        ('foo.bar.Return', StructDefinition),
         ('foo.bar.y', ReferenceDefinition),
         ('foo.bar.b', ReferenceDefinition),
-        ('foo.bar.Args.SIZE', ConstDefinition),
     }
 
 
@@ -105,7 +101,7 @@ def test_redefinition_failures():
 name:
 local name = [ap]
 """, """
-file:?:?: Redefinition of 'name'.
+file:?:?: Redefinition of 'test_scope.name'.
 local name = [ap]
       ^**^
 """)
@@ -115,10 +111,11 @@ def test_imports():
     collector = IdentifierCollector()
     collector.identifiers.add_identifier(
         ScopedName.from_string('foo.bar'), ConstDefinition(value=0))
-    with collector.scoped(ScopedName()):
-        collector.visit(parse_file("""
+    ast = parse_file("""
 from foo import bar as bar0
-""").code_block)
+""")
+    with collector.scoped(ScopedName(), parent=ast):
+        collector.visit(ast.code_block)
 
     assert collector.identifiers.get_scope(ScopedName()).identifiers == {
         'bar0': AliasDefinition(destination=ScopedName.from_string('foo.bar')),

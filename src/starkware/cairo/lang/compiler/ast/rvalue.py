@@ -1,14 +1,13 @@
 import dataclasses
 from abc import abstractmethod
-from typing import List, Optional, Sequence
+from typing import Optional, Sequence
 
-from starkware.cairo.lang.compiler.ast.expr import ArgListItem, Expression, ExprIdentifier
+from starkware.cairo.lang.compiler.ast.expr import ArgList, Expression, ExprIdentifier
 from starkware.cairo.lang.compiler.ast.formatting_utils import (
     INDENTATION, LocationField, ParticleFormattingConfig, create_particle_sublist,
     particles_in_lines)
 from starkware.cairo.lang.compiler.ast.instructions import CallInstruction
 from starkware.cairo.lang.compiler.ast.node import AstNode
-from starkware.cairo.lang.compiler.ast.notes import Notes
 from starkware.cairo.lang.compiler.error_handling import Location
 
 
@@ -100,19 +99,28 @@ class RvalueFuncCall(RvalueCall):
       func_ident([ident=]expr, ...).
     """
     func_ident: ExprIdentifier
-    exprs: List[ArgListItem]
-    notes: List[Notes]
+    arguments: ArgList
+    implicit_arguments: Optional[ArgList]
     location: Optional[Location] = LocationField
 
     def assert_no_comments(self):
-        for note in self.notes:
-            note.assert_no_comments()
+        self.arguments.assert_no_comments()
+        if self.implicit_arguments is not None:
+            self.implicit_arguments.assert_no_comments()
 
     def get_particles(self):
         self.assert_no_comments()
-        expr_codes = [x.format() for x in self.exprs]
-        particles = [
-            f'{self.func_ident.format()}(', create_particle_sublist(expr_codes, ')')]
+
+        particles = [self.func_ident.format()]
+
+        if self.implicit_arguments is not None:
+            particles[-1] += '{'
+            particles.append(create_particle_sublist(
+                [x.format() for x in self.implicit_arguments.args], '}('))
+        else:
+            particles[-1] += '('
+
+        particles.append(create_particle_sublist([x.format() for x in self.arguments.args], ')'))
         return particles
 
     def format(self, allowed_line_length):
@@ -125,4 +133,4 @@ class RvalueFuncCall(RvalueCall):
                 one_per_line=True))
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
-        return [self.func_ident, *self.exprs]
+        return [self.func_ident, self.arguments, self.implicit_arguments]

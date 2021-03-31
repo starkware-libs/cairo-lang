@@ -1,13 +1,17 @@
 import dataclasses
+from abc import ABC, abstractmethod
 from typing import Any, Callable, List, Optional, Union
 
-from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt, TypePointer, TypeStruct
+from starkware.cairo.lang.compiler.ast.cairo_types import (
+    CairoType, TypeFelt, TypePointer, TypeStruct)
 from starkware.cairo.lang.compiler.ast.expr import ExprCast, ExprDeref, Expression
+from starkware.cairo.lang.compiler.constants import SIZE_CONSTANT
 from starkware.cairo.lang.compiler.identifier_definition import (
-    ConstDefinition, IdentifierDefinition, LabelDefinition, MemberDefinition, ReferenceDefinition)
+    ConstDefinition, IdentifierDefinition, LabelDefinition, ReferenceDefinition, StructDefinition)
 from starkware.cairo.lang.compiler.identifier_manager import (
     IdentifierError, IdentifierManager, IdentifierScope, IdentifierSearchResult,
     MissingIdentifierError)
+from starkware.cairo.lang.compiler.identifier_utils import get_struct_definition
 from starkware.cairo.lang.compiler.preprocessor.flow import FlowTrackingData, ReferenceManager
 from starkware.cairo.lang.compiler.references import Reference
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
@@ -26,7 +30,7 @@ class VmConstsContext:
     pc: int
 
 
-class VmConstsBase:
+class VmConstsBase(ABC):
     """
     Represents constants and scopes accessible by hints.
     An instance returns a new instance of VmConstsBase when an attribute representing a subscope
@@ -34,19 +38,8 @@ class VmConstsBase:
     When an attribute having a name of a constant is accessed, the constant value is returned.
     """
 
-    def __init__(
-            self, context: VmConstsContext, accessible_scopes: List[ScopedName],
-            path: ScopedName = ScopedName()):
-        """
-        Constructs a VmConstsBase object used to dynamically resolve constant values.
-        The 'path' parameter is the scoped name used to get from the global consts variable
-        to the current VmConstsBase.
-        The path is used only to throw errors in case of a non accessible identifier,
-        the error for non accessible identifier 'a' would indicate <path>.a is non accessible.
-        """
+    def __init__(self, context: VmConstsContext):
         object.__setattr__(self, '_context', context)
-        object.__setattr__(self, '_accessible_scopes', accessible_scopes)
-        object.__setattr__(self, '_path', path)
 
     def __getattr__(self, name: str):
         if name.startswith('__'):
@@ -58,46 +51,12 @@ class VmConstsBase:
         assert value is not None, 'Setting a value to None is not allowed.'
         self.get_or_set_value(name, value)
 
+    @abstractmethod
     def get_or_set_value(self, name: str, set_value: Optional[MaybeRelocatable]):
         """
         If set_value is None, returns the value of the given attribute. Otherwise, sets it to
         set_value (setting to None will not work).
         """
-        try:
-            # Handle attributes representing program scopes and constants.
-            result = search_identifier_or_scope(
-                identifiers=self._context.identifiers,
-                accessible_scopes=self._accessible_scopes,
-                name=ScopedName.from_string(name))
-        except MissingIdentifierError as exc:
-            raise MissingIdentifierError(self._path + exc.fullname) from None
-
-        value: Optional[IdentifierDefinition]
-        if isinstance(result, IdentifierSearchResult):
-            value = result.identifier_definition
-            handler_name = f'handle_{type(value).__name__}'
-            scope = result.canonical_name
-            identifier_type = value.TYPE
-        elif isinstance(result, IdentifierScope):
-            value = None
-            handler_name = 'handle_scope'
-            scope = result.fullname
-            identifier_type = 'scope'
-        else:
-            raise NotImplementedError(f'Unexpected type {type(result).__name__}.')
-
-        if handler_name not in dir(self):
-            self.raise_unsupported_error(name=self._path + name, identifier_type=identifier_type)
-
-        return getattr(self, handler_name)(name, value, scope, set_value)
-
-    def raise_unsupported_error(self, name: ScopedName, identifier_type: str):
-        """
-        Raises an exception which says that the identifier type is not supported.
-        This method can be overridden by subclasses.
-        """
-        raise NotImplementedError(
-            f"Unsupported identifier type '{identifier_type}' of identifier '{name}'.")
 
 
 def search_identifier_or_scope(
@@ -120,19 +79,63 @@ def search_identifier_or_scope(
 
 
 class VmConsts(VmConstsBase):
+    def __init__(
+            self, *, accessible_scopes: List[ScopedName], path: ScopedName = ScopedName(),
+            instruction_offset: Optional[int] = None, **kw):
+        """
+        Constructs a VmConsts which is used to dynamically resolve constant values.
+        The 'path' parameter is the scoped name used to get from the global consts variable
+        to the current VmConsts.
+        The path is used only to throw errors in case of a non accessible identifier,
+        the error for non accessible identifier 'a' would indicate <path>.a is non accessible.
+        instruction_offset is an optional offset relative to the start of the program. If there
+        is a label with the name 'path' then it holds the offset of said label.
+        """
+        super().__init__(**kw)
+        object.__setattr__(self, '_accessible_scopes', accessible_scopes)
+        object.__setattr__(self, '_path', path)
+        if instruction_offset is not None:
+            object.__setattr__(self, 'instruction_offset_', instruction_offset)
+
+    def get_or_set_value(self, name: str, set_value: Optional[MaybeRelocatable]):
+        """
+        If set_value is None, returns the value of the given attribute. Otherwise, sets it to
+        set_value (setting to None will not work).
+        """
+        try:
+            # Handle attributes representing program scopes and constants.
+            result = search_identifier_or_scope(
+                identifiers=self._context.identifiers,
+                accessible_scopes=self._accessible_scopes,
+                name=ScopedName.from_string(name))
+        except MissingIdentifierError as exc:
+            raise MissingIdentifierError(self._path + exc.fullname) from None
+
+        value: Optional[IdentifierDefinition]
+        if isinstance(result, IdentifierSearchResult):
+            value = result.identifier_definition
+            handler_name = f'handle_{type(value).__name__}'
+            scope = result.get_canonical_name()
+            identifier_type = value.TYPE
+        elif isinstance(result, IdentifierScope):
+            value = None
+            handler_name = 'handle_scope'
+            scope = result.fullname
+            identifier_type = 'scope'
+        else:
+            raise NotImplementedError(f'Unexpected type {type(result).__name__}.')
+
+        if handler_name not in dir(self):
+            self.raise_unsupported_error(name=self._path + name, identifier_type=identifier_type)
+
+        return getattr(self, handler_name)(name, value, scope, set_value)
+
     def handle_ConstDefinition(
             self, name: str, identifier: ConstDefinition, scope: ScopedName,
             set_value: Optional[MaybeRelocatable]):
         assert set_value is None, 'Cannot change the value of a constant.'
         # The current attribute is a const, return its value.
         return identifier.value
-
-    def handle_MemberDefinition(
-            self, name: str, identifier: MemberDefinition, scope: ScopedName,
-            set_value: Optional[MaybeRelocatable]):
-        assert set_value is None, 'Cannot change the value of a member offset.'
-        # The current attribute is a const, return its value.
-        return identifier.offset
 
     def handle_scope(
             self, name: str, identifier: Union[IdentifierScope, LabelDefinition],
@@ -142,9 +145,20 @@ class VmConsts(VmConstsBase):
         return VmConsts(
             context=self._context,
             accessible_scopes=[scope],
-            path=self._path + name)
+            path=self._path + name,
+            instruction_offset=identifier.pc if isinstance(identifier, LabelDefinition) else None)
 
     handle_LabelDefinition = handle_scope
+
+    def handle_StructDefinition(
+            self, name: str, identifier: StructDefinition, scope: ScopedName,
+            set_value: Optional[MaybeRelocatable]):
+        assert set_value is None, 'Cannot change the value of a struct definition.'
+
+        return VmConstsStruct(
+            context=self._context,
+            struct_definition=identifier,
+        )
 
     def handle_ReferenceDefinition(
             self, name: str, identifier: ReferenceDefinition, scope: ScopedName,
@@ -166,10 +180,7 @@ class VmConsts(VmConstsBase):
             val = self._context.evaluator(expr)
 
             # Check if the type is felt* or any_type**.
-            is_pointer_to_felt_or_pointer = (
-                isinstance(expr_type, TypePointer) and
-                isinstance(expr_type.pointee, (TypePointer, TypeFelt)))
-            if isinstance(expr_type, TypeFelt) or is_pointer_to_felt_or_pointer:
+            if is_simple_type(expr_type):
                 return val
             else:
                 # Typed reference, return VmConstsReference which allows accessing members.
@@ -178,7 +189,7 @@ class VmConsts(VmConstsBase):
                     'Type must be of the form T*.'
                 return VmConstsReference(
                     context=self._context,
-                    accessible_scopes=[expr_type.pointee.scope],
+                    struct_name=expr_type.pointee.scope,
                     reference_value=val,
                     add_addr_var=True)
         else:
@@ -197,27 +208,90 @@ class VmConsts(VmConstsBase):
                 self._context.flow_tracking_data.ap_tracking))
             self._context.memory[addr] = set_value
 
+    def raise_unsupported_error(self, name: ScopedName, identifier_type: str):
+        """
+        Raises an exception which says that the identifier type is not supported.
+        """
+        raise NotImplementedError(
+            f"Unsupported identifier type '{identifier_type}' of identifier '{name}'.")
+
 
 class VmConstsReference(VmConstsBase):
-    def __init__(self, *, reference_value, add_addr_var: bool, **kw):
+    def __init__(self, *, reference_value, struct_name: ScopedName, add_addr_var: bool, **kw):
         """
         Constructs a VmConstsReference which allows accessing a typed reference fields.
         If add_addr_var, the value of the reference itself can be accessed using self.address_.
         """
         super().__init__(**kw)
+
+        object.__setattr__(self, '_struct_definition', get_struct_definition(
+            struct_name=struct_name, identifier_manager=self._context.identifiers))
+
         object.__setattr__(self, '_reference_value', reference_value)
         if add_addr_var:
             object.__setattr__(self, 'address_', reference_value)
 
-    def handle_MemberDefinition(
-            self, name, identifier: MemberDefinition, scope: ScopedName,
-            set_value: Optional[MaybeRelocatable]):
-        addr = self._reference_value + identifier.offset
+    def get_or_set_value(self, name: str, set_value: Optional[MaybeRelocatable]):
+        """
+        If set_value is None, returns the value of the given attribute. Otherwise, sets it to
+        set_value (setting to None will not work).
+        """
+
+        member_def = self._struct_definition.members.get(name)
+        if member_def is None:
+            raise IdentifierError(
+                f"'{name}' is not a member of '{self._struct_definition.full_name}'.") from None
+
+        addr = self._reference_value + member_def.offset
+
         if set_value is not None:
             self._context.memory[addr] = set_value
         else:
-            return self._context.memory[addr]
+            expr_type = member_def.cairo_type
+            if is_simple_type(expr_type):
+                return self._context.memory[addr]
+            else:
+                # Typed reference, return VmConstsReference which allows accessing members.
+                assert isinstance(expr_type, TypePointer) and \
+                    isinstance(expr_type.pointee, TypeStruct), \
+                    'Type must be of the form T*.'
+                return VmConstsReference(
+                    context=self._context,
+                    struct_name=expr_type.pointee.scope,
+                    reference_value=self._context.memory[addr],
+                    add_addr_var=True)
 
-    def raise_unsupported_error(self, name: ScopedName, identifier_type: str):
-        raise NotImplementedError(
-            f"Expected a member, found '{name}' which is '{identifier_type}'.")
+
+def is_simple_type(expr_type: CairoType) -> bool:
+    """
+    Returns True if the type is felt, felt*, T**, T***, ... (in particular, returns False if the
+    type is T or T*). When you access a value whose type is one of the above (e.g., ids.x),
+    the returned value will be a int/relocatable value (unlike T and T* where the returned value
+    is VmConstsReference to allow accessing submembers).
+    """
+    is_pointer_to_felt_or_pointer = (
+        isinstance(expr_type, TypePointer) and
+        isinstance(expr_type.pointee, (TypePointer, TypeFelt)))
+    return isinstance(expr_type, TypeFelt) or is_pointer_to_felt_or_pointer
+
+
+class VmConstsStruct(VmConstsBase):
+    def __init__(self, *, struct_definition: StructDefinition, **kw):
+        """
+        Constructs a VmConstsStruct which allows accessing structs.
+        """
+        super().__init__(**kw)
+        object.__setattr__(self, '_struct_definition', struct_definition)
+
+    def get_or_set_value(self, name: str, set_value: Optional[MaybeRelocatable]):
+        assert set_value is None, 'Cannot change the value of a constant.'
+
+        if name == str(SIZE_CONSTANT):
+            return self._struct_definition.size
+
+        member_def = self._struct_definition.members.get(name)
+        if member_def is None:
+            raise IdentifierError(
+                f"'{name}' is not a member of '{self._struct_definition.full_name}'.") from None
+
+        return member_def.offset

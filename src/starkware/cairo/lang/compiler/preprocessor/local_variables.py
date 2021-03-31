@@ -1,15 +1,16 @@
 import dataclasses
 from typing import Callable, List, Optional
 
-from starkware.cairo.lang.compiler.ast.cairo_types import CairoType
+from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, CastType
 from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeBlock, CodeElement, CodeElementAllocLocals, CodeElementCompoundAssertEq, CodeElementConst,
     CodeElementIf, CodeElementInstruction, CodeElementLocalVariable, CodeElementReference,
-    CodeElementStaticAssert, CodeElementUnpackBinding, CommentedCodeElement)
-from starkware.cairo.lang.compiler.ast.expr import ExprConst, ExprIdentifier
+    CodeElementStaticAssert, CodeElementUnpackBinding, CodeElementWith, CommentedCodeElement)
+from starkware.cairo.lang.compiler.ast.expr import ExprCast, ExprConst, ExprIdentifier
 from starkware.cairo.lang.compiler.ast.instructions import AddApInstruction, InstructionAst
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.expression_transformer import ExpressionTransformer
+from starkware.cairo.lang.compiler.identifier_definition import StructDefinition
 from starkware.cairo.lang.compiler.instruction import Register
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_utils import assert_no_modifier
@@ -42,7 +43,9 @@ class LocalVariableHandler:
     def __init__(
             self,
             new_unique_id_callback: Callable[[], str],
-            get_size_callback: Callable[[CairoType], int]):
+            get_size_callback: Callable[[CairoType], int],
+            get_unpacking_struct_definition_callback: Callable[
+                [CodeElementUnpackBinding], StructDefinition]):
         # The size of the local variables in this scope.
         self.local_vars_size: int = 0
 
@@ -53,6 +56,7 @@ class LocalVariableHandler:
 
         self.new_unique_id_callback = new_unique_id_callback
         self.get_size_callback = get_size_callback
+        self.get_unpacking_struct_definition_callback = get_unpacking_struct_definition_callback
 
     def alloc_unique_id(self) -> str:
         return self.new_unique_id_callback()
@@ -127,7 +131,9 @@ class LocalVariableHandler:
         if elm.expr is not None:
             result.append(CodeElementCompoundAssertEq(
                 a=ref_expr,
-                b=elm.expr,
+                b=ExprCast(
+                    expr=elm.expr, dest_type=local_type, cast_type=CastType.ASSIGN,
+                    location=elm.expr.location),
                 location=elm.location))
 
         result.append(
@@ -144,19 +150,27 @@ class LocalVariableHandler:
         Replaces
             let (local a : T, b) = foo()
         with
-            let ({tempvar} : T , b) = foo
-            local a : T = {tempvar}
+            let (tempvar : T , b) = foo
+            local a : T = tempvar
         """
 
         result = []
 
+        struct_def = self.get_unpacking_struct_definition_callback(elm)
         unpacking_identifiers = []
-        for typed_identifier in elm.unpacking_list.identifiers:
+        for typed_identifier, member_def in zip(
+                elm.unpacking_list.identifiers, struct_def.members.values()):
             if typed_identifier.modifier is None or typed_identifier.modifier.name != 'local':
                 unpacking_identifiers.append(typed_identifier)
                 continue
 
             # typed_identifier has the "local" modifier.
+
+            # Add type if missing.
+            if typed_identifier.expr_type is None:
+                typed_identifier = dataclasses.replace(
+                    typed_identifier, expr_type=member_def.cairo_type)
+
             temp_ref = dataclasses.replace(
                 typed_identifier,
                 identifier=ExprIdentifier(name=self.alloc_unique_id()),
@@ -175,11 +189,16 @@ class LocalVariableHandler:
 
         return result
 
+    def visit_CodeElementWith(self, elm: CodeElementWith):
+        return [dataclasses.replace(elm, code_block=self.visit(elm.code_block))]
+
 
 def preprocess_local_variables(
         code_elements: List[CodeElement], scope: ScopedName,
         new_unique_id_callback: Callable[[], str],
         get_size_callback: Callable[[CairoType], int],
+        get_unpacking_struct_definition_callback: Callable[
+            [CodeElementUnpackBinding], StructDefinition],
         default_location: Optional[Location]) -> List[CodeElement]:
     """
     Preprocesses the local variables of one function.
@@ -188,7 +207,8 @@ def preprocess_local_variables(
     """
     handler = LocalVariableHandler(
         new_unique_id_callback=new_unique_id_callback,
-        get_size_callback=get_size_callback)
+        get_size_callback=get_size_callback,
+        get_unpacking_struct_definition_callback=get_unpacking_struct_definition_callback)
     result = []
     for elm in code_elements:
         result += handler.visit(elm)

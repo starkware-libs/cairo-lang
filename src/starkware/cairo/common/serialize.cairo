@@ -1,7 +1,8 @@
 # Appends a single word to the output pointer, and returns the pointer to the next output cell.
-func serialize_word(output_ptr : felt*, word) -> (output_ptr : felt*):
+func serialize_word{output_ptr : felt*}(word):
     assert [output_ptr] = word
-    return (output_ptr + 1)
+    let output_ptr = output_ptr + 1
+    return ()
 end
 
 # Array right fold: computes the following:
@@ -20,10 +21,13 @@ func array_rfold(value, array : felt*, n_elms, elm_size, callback) -> (res):
     [ap] = value; ap++
     [ap] = array; ap++
     call abs callback
-    # We use ..., since we use the result of callback as the value for the next iteration.
-    array_rfold(
-        ..., array=array + elm_size, n_elms=n_elms - 1, elm_size=elm_size, callback=callback)
-    return (...)
+    # [ap - 1] holds the return value of callback.
+    return array_rfold(
+        value=[ap - 1],
+        array=array + elm_size,
+        n_elms=n_elms - 1,
+        elm_size=elm_size,
+        callback=callback)
 end
 
 # Serializes an array of objects to output_ptr, and returns the pointer to the next output cell.
@@ -35,14 +39,13 @@ end
 # n_elms - the number of elements in the array.
 # callback - a function pointer to the serialize function of a single element.
 #   Expected signature: (felt, T*) -> felt.
-func serialize_array(output_ptr : felt*, array : felt*, n_elms, elm_size, callback) -> (
-        output_ptr : felt*):
-    let (output_ptr) = serialize_word(output_ptr, n_elms)
+func serialize_array{output_ptr : felt*}(array : felt*, n_elms, elm_size, callback):
+    serialize_word(n_elms)
     let (output_ptr : felt*) = array_rfold(
         value=cast(output_ptr, felt),
         array=array,
         n_elms=n_elms,
         elm_size=elm_size,
         callback=callback)
-    return (output_ptr)
+    return ()
 end

@@ -8,9 +8,9 @@ from starkware.cairo.lang.compiler.ast.expr import ExprConst, ExprIdentifier
 from starkware.cairo.lang.compiler.debug_info import DebugInfo
 from starkware.cairo.lang.compiler.encode import decode_instruction
 from starkware.cairo.lang.compiler.expression_evaluator import ExpressionEvaluator
-from starkware.cairo.lang.compiler.identifier_definition import (
-    ConstDefinition, OffsetReferenceDefinition, ReferenceDefinition)
+from starkware.cairo.lang.compiler.identifier_definition import ConstDefinition, ReferenceDefinition
 from starkware.cairo.lang.compiler.identifier_utils import resolve_search_result
+from starkware.cairo.lang.compiler.offset_reference import OffsetReferenceDefinition
 from starkware.cairo.lang.compiler.parser import parse_expr
 from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.compiler.references import (
@@ -20,6 +20,7 @@ from starkware.cairo.lang.compiler.substitute_identifiers import substitute_iden
 from starkware.cairo.lang.compiler.type_system_visitor import simplify_type_system
 from starkware.cairo.lang.vm.air_public_input import PublicInput
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
+from starkware.cairo.lang.vm.memory_segments import FIRST_MEMORY_ADDR as PROGRAM_BASE
 from starkware.cairo.lang.vm.trace_entry import TraceEntry
 from starkware.cairo.lang.vm.vm import RunContext
 
@@ -88,12 +89,17 @@ class InputCodeFile:
 
 class TracerData:
     def __init__(
-            self, program: Program, memory: MemoryDict, trace: List[TraceEntry],
+            self, program: Program, memory: MemoryDict, trace: List[TraceEntry], program_base: int,
             air_public_input: Optional[PublicInput] = None,
             debug_info: Optional[DebugInfo] = None):
+        """
+        Constructs a TracerData object.
+        program_base is the memory address where the program is loaded.
+        """
         self.program = program
         self.memory = memory
         self.trace = trace
+        self.program_base = program_base
         self.debug_info = debug_info if debug_info is not None else program.debug_info
 
         # Read AIR public input, if available and extract public memory addresses.
@@ -106,7 +112,7 @@ class TracerData:
 
         if self.debug_info is not None:
             # Process each instruction in the program and surround it by a <span> tag.
-            for pc, instruction_location in self.debug_info.instruction_locations.items():
+            for pc_offset, instruction_location in self.debug_info.instruction_locations.items():
                 loc = instruction_location.inst
                 filename = loc.input_file.filename
                 # If filename was not loaded yet, create a new InputCodeFile instance.
@@ -117,7 +123,7 @@ class TracerData:
                 # Surround the instruction code with a <span> tag.
                 input_file.mark_text(
                     loc.start_line, loc.start_col, loc.end_line, loc.end_col,
-                    [f'inst{pc}', 'instruction'])
+                    [f'inst{pc_offset}', 'instruction'])
 
         # Find memory accesses for each step.
         self.memory_accesses = []
@@ -133,9 +139,22 @@ class TracerData:
             op1_addr = run_context.compute_op1_addr(instruction, self.memory.get(op0_addr))
             self.memory_accesses.append({'dst': dst_addr, 'op0': op0_addr, 'op1': op1_addr})
 
+    def get_pc_offset(self, pc: int) -> int:
+        """
+        Returns the offset of the instruction pointed by pc with respect to the program section.
+        """
+        return pc - self.program_base
+
+    def get_pc_from_offset(self, offset: int) -> int:
+        """
+        Returns the pc given the offset of the instruction with respect to the program section.
+        """
+        return offset + self.program_base
+
     def get_current_identifier_values(self, entry: TraceEntry) -> Dict[str, str]:
         assert self.debug_info is not None
-        scope_name = self.debug_info.instruction_locations[entry.pc].accessible_scopes[-1]
+        pc_offset = self.get_pc_offset(entry.pc)
+        scope_name = self.debug_info.instruction_locations[pc_offset].accessible_scopes[-1]
         scope_items = self.program.identifiers.get_scope(scope_name).identifiers
 
         result = {}
@@ -159,6 +178,7 @@ class TracerData:
         field_bytes = math.ceil(program.prime.bit_length() / 8)
         memory = read_memory(memory_path, field_bytes)
         trace = read_trace(trace_path)
+        program_base = PROGRAM_BASE
 
         # Read AIR public input, if available and extract public memory addresses.
         if air_public_input is not None:
@@ -171,8 +191,8 @@ class TracerData:
 
         # Construct the instance.
         return cls(
-            program=program, memory=memory, trace=trace, air_public_input=public_input,
-            debug_info=debug_info)
+            program=program, memory=memory, trace=trace, program_base=program_base,
+            air_public_input=public_input, debug_info=debug_info)
 
 
 def read_memory(memory_path: str, field_bytes: int) -> MemoryDict:
@@ -229,7 +249,8 @@ class WatchEvaluator(ExpressionEvaluator):
 
         self.accessible_scopes = []
         if tracer_data.debug_info is not None:
-            info = tracer_data.debug_info.instruction_locations.get(self.pc)
+            pc_offset = self.tracer_data.get_pc_offset(self.pc)
+            info = tracer_data.debug_info.instruction_locations.get(pc_offset)
             if info is not None:
                 self.accessible_scopes = info.accessible_scopes
 
@@ -237,7 +258,9 @@ class WatchEvaluator(ExpressionEvaluator):
         if expr == 'null':
             return ''
         expr, expr_type = simplify_type_system(
-            substitute_identifiers(parse_expr(expr), self.get_variable))
+            substitute_identifiers(
+                expr=parse_expr(expr),
+                get_identifier_callback=self.get_variable))
         if isinstance(expr_type, TypeStruct):
             raise NotImplementedError('Structs are not supported.')
         res = self.visit(expr)
@@ -269,8 +292,9 @@ class WatchEvaluator(ExpressionEvaluator):
             f'Unexpected identifier {var.name} of type {identifier_definition.TYPE}.')
 
     def eval_reference(self, identifier_definition, var_name: str):
+        pc_offset = self.tracer_data.get_pc_offset(self.pc)
         current_flow_tracking_data = \
-            self.tracer_data.program.debug_info.instruction_locations[self.pc].flow_tracking_data
+            self.tracer_data.program.debug_info.instruction_locations[pc_offset].flow_tracking_data
         try:
             substitute_transformer = SubstituteRegisterTransformer(
                 ap=lambda location: ExprConst(val=self.ap, location=location),

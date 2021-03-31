@@ -1,5 +1,8 @@
 import dataclasses
 
+# Each signature consists of 2 cells (a public key and a message).
+CELLS_PER_SIGNATURE = 2
+
 
 @dataclasses.dataclass
 class EcdsaInstanceDef:

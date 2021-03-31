@@ -1,5 +1,5 @@
 from dataclasses import field
-from typing import Callable, ClassVar, Optional, Type
+from typing import Callable, ClassVar, List, Optional, Type
 
 import marshmallow
 import marshmallow_dataclass
@@ -16,7 +16,9 @@ from starkware.cairo.lang.compiler.preprocessor.reg_tracking import (
 
 
 class FlowTrackingError(Exception):
-    pass
+    def __init__(self, message):
+        super().__init__(message)
+        self.notes: List[str] = []
 
 
 def create_simple_ref_expr(
@@ -55,6 +57,12 @@ class Reference:
     # The value of flow_tracking when this reference was defined.
     ap_tracking_data: RegTrackingData
 
+    # A list of definition sites for the reference.
+    # The list may hold more then once location if the reference is defined from the
+    # convergence of multiple reference definitions.
+    locations: List[Location] = field(default_factory=list, compare=False, metadata=dict(
+        marshmallow_field=marshmallow.fields.Field(load_only=True, dump_only=True)))
+
     Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
 
     def eval(self, ap_tracking_data: RegTrackingData):
@@ -62,7 +70,14 @@ class Reference:
         Evaluates this reference with respect to the given RegTrackingData instance.
         """
         ap_diff = ap_tracking_data - self.ap_tracking_data
-        return translate_ap(self.value, ap_diff)
+        try:
+            return translate_ap(self.value, ap_diff)
+        except FlowTrackingError as exc:
+            if len(self.locations) > 0:
+                exc.notes.append('Reference was defined here:')
+                for location in self.locations:
+                    exc.notes.append(location.topmost_location().to_string_with_content(''))
+            raise
 
 
 def translate_ap(expr, ap_diff: RegChangeLike):

@@ -1,15 +1,16 @@
 from typing import Optional
 
+from starkware.cairo.lang.compiler.ast.arguments import IdentifierList
 from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeBlock, CodeElement, CodeElementConst, CodeElementFunction, CodeElementIf, CodeElementImport,
-    CodeElementLabel, CodeElementLocalVariable, CodeElementMember, CodeElementReference,
-    CodeElementReturnValueReference, CodeElementTemporaryVariable, CodeElementUnpackBinding)
+    CodeElementLabel, CodeElementLocalVariable, CodeElementReference,
+    CodeElementReturnValueReference, CodeElementTemporaryVariable, CodeElementUnpackBinding,
+    CodeElementWith)
 from starkware.cairo.lang.compiler.ast.visitor import Visitor
-from starkware.cairo.lang.compiler.constants import SIZE_CONSTANT
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.identifier_definition import (
     AliasDefinition, ConstDefinition, FutureIdentifierDefinition, IdentifierDefinition,
-    LabelDefinition, MemberDefinition, ReferenceDefinition)
+    LabelDefinition, ReferenceDefinition, StructDefinition)
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.preprocessor.local_variables import N_LOCALS_CONSTANT
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
@@ -29,26 +30,6 @@ def _get_identifier(obj):
         f"Object of type '{type(obj).__name__}' has no 'identifier' or 'typed_identifier'.")
 
 
-class AnonymousLabelGenerator:
-    """
-    Generates anonymous labels.
-    """
-
-    def __init__(self):
-        # Stores a counter for naming anonymous labels.
-        self.anon_label_counter = 0
-
-    def get(self):
-        label_name = f'_anon_label{self.anon_label_counter}'
-        self.anon_label_counter += 1
-        return label_name
-
-    def __eq__(self, other):
-        if not isinstance(other, AnonymousLabelGenerator):
-            return False
-        return self.anon_label_counter == other.anon_label_counter
-
-
 class IdentifierCollector(Visitor):
     """
     Collects all the identifiers in a code element.
@@ -58,7 +39,6 @@ class IdentifierCollector(Visitor):
     IDENTIFIER_DEFINERS = {
         CodeElementConst: ConstDefinition,
         CodeElementLabel: LabelDefinition,
-        CodeElementMember: MemberDefinition,
         CodeElementReference: ReferenceDefinition,
         CodeElementLocalVariable: ReferenceDefinition,
         CodeElementTemporaryVariable: ReferenceDefinition,
@@ -67,7 +47,6 @@ class IdentifierCollector(Visitor):
 
     def __init__(self):
         super().__init__()
-        self.anon_label_gen = AnonymousLabelGenerator()
         self.identifiers = IdentifierManager()
 
     def add_identifier(
@@ -120,29 +99,61 @@ class IdentifierCollector(Visitor):
         visits the code block contained in the function.
         """
         function_scope = self.current_scope + elm.name
+        if elm.element_type == 'struct':
+            self.add_future_identifier(
+                function_scope, StructDefinition, elm.identifier.location)
+            return
+
         args_scope = function_scope + CodeElementFunction.ARGUMENT_SCOPE
+        implicit_args_scope = function_scope + CodeElementFunction.IMPLICIT_ARGUMENT_SCOPE
         rets_scope = function_scope + CodeElementFunction.RETURN_SCOPE
 
-        self.add_future_identifier(function_scope, LabelDefinition, elm.identifier.location)
-        self.add_future_identifier(
-            args_scope + SIZE_CONSTANT, ConstDefinition, elm.identifier.location)
-        self.add_future_identifier(
-            rets_scope + SIZE_CONSTANT, ConstDefinition, elm.identifier.location)
+        def handle_struct_def(identifier_list: Optional[IdentifierList], struct_name: ScopedName):
+            location = elm.identifier.location
+            if identifier_list is not None:
+                location = identifier_list.location
 
-        for arg_id in elm.arguments.identifiers:
-            if arg_id.name == N_LOCALS_CONSTANT:
-                raise PreprocessorError(
-                    f"The name '{N_LOCALS_CONSTANT}' is reserved and cannot be used as an "
-                    'argument name.',
-                    location=arg_id.location)
-            self.add_future_identifier(args_scope + arg_id.name, MemberDefinition, arg_id.location)
-            # Within a function, arguments are also accessible directly.
             self.add_future_identifier(
-                function_scope + arg_id.name, ReferenceDefinition, arg_id.location)
-        if elm.returns is not None:
-            for ret_id in elm.returns.identifiers:
+                name=struct_name, identifier_type=StructDefinition, location=location)
+
+        def handle_function_arguments(
+                identifier_list: Optional[IdentifierList], struct_name: ScopedName):
+            handle_struct_def(identifier_list=identifier_list, struct_name=struct_name)
+            if identifier_list is None:
+                return
+
+            for arg_id in identifier_list.identifiers:
+                if arg_id.name == N_LOCALS_CONSTANT:
+                    raise PreprocessorError(
+                        f"The name '{N_LOCALS_CONSTANT}' is reserved and cannot be used as an "
+                        'argument name.',
+                        location=arg_id.location)
+                # Within a function, arguments are also accessible directly.
                 self.add_future_identifier(
-                    rets_scope + ret_id.name, MemberDefinition, ret_id.location)
+                    function_scope + arg_id.name, ReferenceDefinition, arg_id.location)
+
+        handle_function_arguments(identifier_list=elm.arguments, struct_name=args_scope)
+        handle_function_arguments(
+            identifier_list=elm.implicit_arguments, struct_name=implicit_args_scope)
+
+        handle_struct_def(identifier_list=elm.returns, struct_name=rets_scope)
+
+        # Make sure there is no name collision.
+        if elm.implicit_arguments is not None:
+            implicit_arg_names = {arg_id.name for arg_id in elm.implicit_arguments.identifiers}
+            arg_and_return_identifiers = list(elm.arguments.identifiers)
+            if elm.returns is not None:
+                arg_and_return_identifiers += elm.returns.identifiers
+
+            for arg_id in arg_and_return_identifiers:
+                if arg_id.name in implicit_arg_names:
+                    raise PreprocessorError(
+                        'Arguments and return values cannot have the same name of an implicit '
+                        'argument.',
+                        location=arg_id.location)
+
+        self.add_future_identifier(
+            function_scope, LabelDefinition, elm.identifier.location)
 
         # Add SIZEOF_LOCALS for current block at identifier definition location if available.
         self.add_future_identifier(
@@ -154,6 +165,8 @@ class IdentifierCollector(Visitor):
         Registers all the unpacked identifiers.
         """
         for identifier in elm.unpacking_list.identifiers:
+            if identifier.name == '_':
+                continue
             self.add_future_identifier(
                 self.current_scope +
                 identifier.name,
@@ -161,13 +174,13 @@ class IdentifierCollector(Visitor):
                 identifier.location)
 
     def visit_CodeElementIf(self, obj: CodeElementIf):
-        label_neq_name = self.anon_label_gen.get()
-        label_end_name = self.anon_label_gen.get()
+        assert obj.label_neq is not None
+        assert obj.label_end is not None
         self.add_future_identifier(
-            name=self.current_scope + label_neq_name, identifier_type=LabelDefinition,
+            name=self.current_scope + obj.label_neq, identifier_type=LabelDefinition,
             location=obj.location)
         self.add_future_identifier(
-            name=self.current_scope + label_end_name, identifier_type=LabelDefinition,
+            name=self.current_scope + obj.label_end, identifier_type=LabelDefinition,
             location=obj.location)
         self.visit(obj.main_code_block)
         if obj.else_code_block is not None:
@@ -197,3 +210,12 @@ class IdentifierCollector(Visitor):
                 name=self.current_scope + local_identifier.name,
                 identifier_definition=AliasDefinition(destination=alias_dst),
                 location=import_item.identifier.location)
+
+    def visit_CodeElementWith(self, elm: CodeElementWith):
+        for aliased_identifier in elm.identifiers:
+            if aliased_identifier.local_name is not None:
+                self.add_future_identifier(
+                    name=self.current_scope + aliased_identifier.local_name.name,
+                    identifier_type=ReferenceDefinition,
+                    location=aliased_identifier.local_name.location)
+        self.visit(elm.code_block)

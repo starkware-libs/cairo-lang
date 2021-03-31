@@ -2,6 +2,7 @@ import pytest
 
 from starkware.cairo.lang.vm.memory_dict import (
     InconsistentMemoryError, MemoryDict, UnknownMemoryError)
+from starkware.cairo.lang.vm.relocatable import RelocatableValue
 
 
 def test_memory_dict_serialize():
@@ -24,16 +25,22 @@ def test_memory_dict_check_element():
     md = MemoryDict()
     with pytest.raises(ValueError, match='must be an int'):
         md['not a number'] = 12
-    with pytest.raises(ValueError, match='must be positive'):
+    with pytest.raises(ValueError, match='must be nonnegative'):
         md[-12] = 13
+    with pytest.raises(ValueError, match='The offset of a relocatable value must be nonnegative'):
+        md[RelocatableValue(segment_index=10, offset=-2)] = 13
+    # A value may have a negative offset.
+    md[13] = RelocatableValue(segment_index=10, offset=-2)
 
 
 def test_memory_dict_get():
     md = MemoryDict({14: 15})
     assert md.get(14, 'default') == 15
     assert md.get(1234, 'default') == 'default'
-    with pytest.raises(ValueError, match='must be positive'):
+    with pytest.raises(ValueError, match='must be nonnegative'):
         md.get(-10, 'default')
+    # Attempting to read address with a negative offset is ok, it simply returns None.
+    assert md.get(RelocatableValue(segment_index=10, offset=-2)) is None
 
 
 def test_memory_dict_setdefault():
@@ -44,8 +51,10 @@ def test_memory_dict_setdefault():
     assert md[123] == 456
     with pytest.raises(ValueError, match='must be an int'):
         md.setdefault(10, 'default')
-    with pytest.raises(ValueError, match='must be positive'):
+    with pytest.raises(ValueError, match='must be nonnegative'):
         md.setdefault(-10, 123)
+    with pytest.raises(ValueError, match='The offset of a relocatable value must be nonnegative'):
+        md[RelocatableValue(segment_index=10, offset=-2)] = 13
 
 
 def test_memory_dict_in():

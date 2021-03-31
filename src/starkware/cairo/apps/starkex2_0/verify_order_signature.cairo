@@ -96,12 +96,11 @@ func verify_order_signature(
     signature.message = full_msg_hash_result
 
     # Call verify_order_id.
-    verify_order_id(
+    let (range_check_ptr) = verify_order_id(
         range_check_ptr=range_check_ptr, message_hash=full_msg_hash_result, order_id=order_id)
 
-    # range_check_ptr is already in [ap - 1].
     return (
-        ...,
+        range_check_ptr=range_check_ptr,
         hash_ptr=full_msg_hash + HashBuiltin.SIZE,
         ecdsa_ptr=ecdsa_ptr + SignatureBuiltin.SIZE)
 end

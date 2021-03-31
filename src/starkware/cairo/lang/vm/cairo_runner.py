@@ -7,7 +7,7 @@ from starkware.cairo.lang.builtins.hash.hash_builtin_runner import HashBuiltinRu
 from starkware.cairo.lang.builtins.range_check.range_check_builtin_runner import (
     RangeCheckBuiltinRunner)
 from starkware.cairo.lang.builtins.signature.signature_builtin_runner import SignatureBuiltinRunner
-from starkware.cairo.lang.compiler.cairo_compile import compile_cairo_files
+from starkware.cairo.lang.compiler.cairo_compile import compile_cairo, compile_cairo_files
 from starkware.cairo.lang.compiler.debug_info import DebugInfo
 from starkware.cairo.lang.compiler.expression_simplifier import to_field_element
 from starkware.cairo.lang.compiler.preprocessor.preprocessor import Preprocessor
@@ -25,7 +25,7 @@ from starkware.cairo.lang.vm.trace_entry import relocate_trace
 from starkware.cairo.lang.vm.utils import MemorySegmentAddresses
 from starkware.cairo.lang.vm.vm import RunContext, VirtualMachine, get_perm_range_check_limits
 from starkware.crypto.signature.signature import inv_mod_curve_size
-from starkware.python.math_utils import next_power_of_2
+from starkware.python.math_utils import next_power_of_2, safe_div
 from starkware.python.utils import WriteOnceDict
 
 
@@ -194,6 +194,8 @@ class CairoRunner:
             builtin_runner.add_validation_rules(self)
             builtin_runner.add_auto_deduction_rules(self)
 
+        self.vm.validate_existing_memory()
+
     def run_until_label(self, label_or_pc: Union[str, int], max_steps: Optional[int] = None):
         """
         Runs the VM until label is reached, and stops right before that instruction is executed.
@@ -265,6 +267,7 @@ class CairoRunner:
             for builtin_runner in self.builtin_runners.values():
                 builtin_runner.get_used_cells_and_allocated_size(self)
             self.check_range_check_usage()
+            self.check_memory_usage()
         except InsufficientAllocatedCells as e:
             print(f'Warning: {e} Increasing number of steps.')
             return False
@@ -322,6 +325,27 @@ class CairoRunner:
             raise InsufficientAllocatedCells(
                 f'There are only {unused_rc_units} cells to fill the range checks holes, but '
                 f'potentially {rc_usage_upper_bound} are required.')
+
+    def check_memory_usage(self):
+        """
+        Checks that there are enough trace cells to fill the entire memory range.
+        """
+        instance = LAYOUTS[self.layout]
+        builtins_memory_units = sum(
+            builtin_runner.get_allocated_memory_units(self)
+            for builtin_runner in self.builtin_runners.values())
+        # Out of the memory units available per step, a fraction is used for public memory, and
+        # four are used for the instruction.
+        total_memory_units = instance.memory_units_per_step * self.vm.current_step
+        public_memory_units = safe_div(total_memory_units, instance.public_memory_fraction)
+        instruction_memory_units = 4 * self.vm.current_step
+        unused_memory_units = total_memory_units - \
+            (public_memory_units + instruction_memory_units + builtins_memory_units)
+        memory_address_holes = self.segments.get_memory_holes()
+        if unused_memory_units < memory_address_holes:
+            raise InsufficientAllocatedCells(
+                f'There are only {unused_memory_units} cells to fill the memory address holes, but '
+                f'{memory_address_holes} are required.')
 
     # Helper functions.
 
@@ -467,12 +491,14 @@ fp = {fp}
 
     def get_execution_resources(self) -> ExecutionResources:
         n_steps = len(self.vm.trace) if self.original_steps is None else self.original_steps
+        n_memory_holes = self.segments.get_memory_holes()
         builtin_instance_counter = {
             builtin_name: builtin_runner.get_used_instances(self)
             for builtin_name, builtin_runner in self.builtin_runners.items()
         }
         return ExecutionResources(
             n_steps=n_steps,
+            n_memory_holes=n_memory_holes,
             builtin_instance_counter=builtin_instance_counter)
 
     def get_cairo_pie(self) -> CairoPie:
@@ -515,8 +541,8 @@ fp = {fp}
                 index=self.program_base.segment_index, size=len(self.program.data)),
             execution_segment=SegmentInfo(
                 index=self.execution_base.segment_index, size=execution_size),
-            ret_fp_segment=SegmentInfo(ret_fp.segment_index, 0),
-            ret_pc_segment=SegmentInfo(ret_pc.segment_index, 0),
+            ret_fp_segment=SegmentInfo(ret_fp.segment_index, size=0),
+            ret_pc_segment=SegmentInfo(ret_pc.segment_index, size=0),
             builtin_segments=builtin_segments,
             extra_segments=extra_segments,
         )
@@ -532,3 +558,21 @@ fp = {fp}
             },
             execution_resources=execution_resources,
         )
+
+
+def get_runner_from_code(
+        code: Union[str, Sequence[Tuple[str, str]]], layout: str, prime: int) -> CairoRunner:
+    """
+    Given a code with some compile and run parameters (prime, layout, etc.), runs the code using
+    Cairo runner and returns the runner.
+    """
+    program = compile_cairo(code=code, prime=prime, debug_info=True)
+    runner = CairoRunner(program, layout=layout)
+    runner.initialize_segments()
+    end = runner.initialize_main_entrypoint()
+    runner.initialize_vm(hint_locals={})
+    runner.run_until_pc(end)
+    runner.read_return_values()
+    runner.finalize_segments_by_effective_size()
+    runner.end_run()
+    return runner

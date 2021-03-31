@@ -23,7 +23,8 @@ let x =
     verify_exception("""
 foo bar
 """, """
-file:?:?: Unexpected token Token(IDENTIFIER, 'bar'). Expected one of: "(", ".", ":", "=", operator.
+file:?:?: Unexpected token Token(IDENTIFIER, 'bar'). Expected one of: "(", ".", ":", "=", "{", \
+operator.
 foo bar
     ^*^
 """)
@@ -79,9 +80,30 @@ let x : T 5
     verify_exception("""
 foo( *
 """, """
-file:?:?: Unexpected token Token(STAR, '*'). Expected one of: ")", "...", expression.
+file:?:?: Unexpected token Token(STAR, '*'). Expected one of: ")", expression.
 foo( *
      ^
+""")
+    verify_exception("""
+if x y
+""", """
+file:?:?: Unexpected token Token(IDENTIFIER, 'y'). Expected one of: "!=", ".", "==", operator.
+if x y
+     ^
+""")
+    verify_exception("""
+x = y; ap--
+""", """
+file:?:?: Unexpected token Token(MINUS, '-'). Expected: "++".
+x = y; ap--
+         ^
+""")
+    verify_exception("""
+func foo()*
+""", """
+file:?:?: Unexpected token Token(STAR, '*'). Expected one of: "->", ":".
+func foo()*
+          ^
 """)
 
 

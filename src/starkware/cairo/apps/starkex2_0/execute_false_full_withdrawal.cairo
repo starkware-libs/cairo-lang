@@ -6,7 +6,8 @@
 from starkware.cairo.apps.starkex2_0.common.dict import DictAccess
 from starkware.cairo.apps.starkex2_0.dex_constants import BALANCE_BOUND
 from starkware.cairo.apps.starkex2_0.dex_context import DexContext
-from starkware.cairo.apps.starkex2_0.execute_modification import ModificationOutput
+from starkware.cairo.apps.starkex2_0.execute_modification import (
+    ModificationConstants, ModificationOutput)
 from starkware.cairo.apps.starkex2_0.vault_update import vault_update_balances
 
 # Executes a false full withdrawal.
@@ -20,8 +21,8 @@ func execute_false_full_withdrawal(
     let dex_context : DexContext* = dex_context_ptr
     let output : ModificationOutput* = modification_ptr
 
-    const FULL_WITHDRAWAL_SHIFT = ModificationOutput.FULL_WITHDRAWAL_SHIFT
-    const BALANCE_SHIFT = ModificationOutput.BALANCE_SHIFT
+    const FULL_WITHDRAWAL_SHIFT = ModificationConstants.FULL_WITHDRAWAL_SHIFT
+    const BALANCE_SHIFT = ModificationConstants.BALANCE_SHIFT
 
     alloc_locals
     local stark_key
