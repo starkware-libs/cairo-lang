@@ -23,6 +23,7 @@ python_lib(cairo_compile_lib
     cairo.ebnf
     constants.py
     const_expr_checker.py
+    disassembler.py
     debug_info.py
     encode.py
     error_handling.py
@@ -110,6 +111,7 @@ full_python_test(cairo_compile_test
     ast_objects_test.py
     ast/formatting_utils_test.py
     cairo_compile_test.py
+    disassembler_test.py
     encode_test.py
     error_handling_test.py
     expression_evaluator_test.py
