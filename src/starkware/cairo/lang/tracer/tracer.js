@@ -65,10 +65,11 @@ function create_memory_table() {
             .attr({ id: 'mem_row' + addr })
             .addClass('mem_row')
             .append($('<td>').append($('<span>')
-                .attr({ id: 'mem_info' + addr })
+                .attr({ id: 'mem_info' + addr})
                 .addClass('mem_info')))
             .append($('<td>').text(addr))
-            .append($('<td>').text(memory[addr]))
+            .append($('<td>').text(memory[addr][0]))
+            .append($('<td>').text(memory[addr][1]))
         );
     }
     return table;
@@ -173,10 +174,10 @@ function update_stack_trace_view() {
 
     var fp = entry.fp;
     for (var i = 0; i < MAX_STACK_TRACE && fp != initial_fp; i++) {
-        const pc = memory[fp - 1];
+        const pc = memory[fp - 1][0];
         stack_trace.append(create_stack_trace_row(fp, pc));
         $('#mem_row' + fp).css('border-top', '2px black solid');
-        fp = memory[fp - 2];
+        fp = memory[fp - 2][0];
     }
 }
 
@@ -315,7 +316,7 @@ function previous_step_over() {
 
 function step_out() {
     const current_fp = trace[current_step].fp;
-    const previous_fp = memory[current_fp - 2];
+    const previous_fp = memory[current_fp - 2][0];
     for (var i = current_step + 1; i < trace.length; i++) {
         if (trace[i].fp == previous_fp) {
             goto_step(i);

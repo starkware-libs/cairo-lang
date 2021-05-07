@@ -10,6 +10,8 @@ import sys
 import urllib.parse
 
 from starkware.cairo.lang.tracer.tracer_data import TracerData, WatchEvaluator, field_element_repr
+from starkware.cairo.lang.compiler.disassembler import disassemble_instruction
+from starkware.cairo.lang.compiler.encode import decode_instruction
 
 
 def trace_runner(runner):
@@ -48,6 +50,21 @@ def run_tracer(tracer_data: TracerData):
             query = urllib.parse.parse_qs(parsed_path.query)
             if parsed_path.path == '/data.json':
                 # Create the returned json file.
+
+                maybe_disassemble = {}
+                addr = 0
+                data_len = len(tracer_data.program.data)
+                while addr < data_len:
+                    val = tracer_data.program.data[addr]
+                    if addr+1 < data_len:
+                        imm = tracer_data.program.data[addr+1]
+                        imm = field_element_repr(
+                            imm, tracer_data.program.prime)
+                    i: Instruction = decode_instruction(val, imm)
+                    maybe_disassemble[addr +
+                                      tracer_data.program_base] = disassemble_instruction(i)
+                    addr += i.size
+
                 self.write_json({
                     'code': {
                         filename: input_file.to_html()
@@ -56,7 +73,8 @@ def run_tracer(tracer_data: TracerData):
                         {'pc': entry.pc, 'ap': entry.ap, 'fp': entry.fp}
                         for entry in tracer_data.trace],
                     'memory': {
-                        addr: field_element_repr(val, tracer_data.program.prime)
+                        addr: [field_element_repr(
+                            val, tracer_data.program.prime), maybe_disassemble[addr] if addr in maybe_disassemble.keys() else '']
                         for addr, val in tracer_data.memory.items()},
                     'public_memory': tracer_data.public_memory,
                     'memory_accesses': tracer_data.memory_accesses,
