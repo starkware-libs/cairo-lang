@@ -2,7 +2,7 @@ import marshmallow.fields as mfields
 
 from starkware.cairo.lang.compiler.ast.cairo_types import CairoType
 from starkware.cairo.lang.compiler.parser import parse_expr, parse_type
-from starkware.cairo.lang.compiler.type_system_visitor import (
+from starkware.cairo.lang.compiler.type_system import (
     is_type_resolved, mark_type_resolved, mark_types_in_expr_resolved)
 
 

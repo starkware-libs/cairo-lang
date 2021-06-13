@@ -1,5 +1,6 @@
 from starkware.cairo.lang.compiler.identifier_definition import (
-    AliasDefinition, ConstDefinition, LabelDefinition, ReferenceDefinition, StructDefinition)
+    AliasDefinition, ConstDefinition, FunctionDefinition, LabelDefinition, ReferenceDefinition,
+    StructDefinition)
 from starkware.cairo.lang.compiler.parser import parse_file
 from starkware.cairo.lang.compiler.preprocessor.identifier_collector import IdentifierCollector
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_test_utils import verify_exception
@@ -46,7 +47,7 @@ end
 let (e, f) = g()
 """
     assert set(_extract_identifiers(code)) == {
-        ('a', LabelDefinition),
+        ('a', FunctionDefinition),
         ('a.SIZEOF_LOCALS', ConstDefinition),
         ('a.Args', StructDefinition),
         ('a.ImplicitArgs', StructDefinition),
@@ -68,7 +69,7 @@ func foo{z}(x):
 end
 """
     assert set(_extract_identifiers(code)) == {
-        ('foo', LabelDefinition),
+        ('foo', FunctionDefinition),
         ('foo.SIZEOF_LOCALS', ConstDefinition),
         ('foo.Args', StructDefinition),
         ('foo.ImplicitArgs', StructDefinition),
@@ -76,7 +77,7 @@ end
         ('foo.x', ReferenceDefinition),
         ('foo.z', ReferenceDefinition),
         ('foo.a', ReferenceDefinition),
-        ('foo.bar', LabelDefinition),
+        ('foo.bar', FunctionDefinition),
         ('foo.bar.SIZEOF_LOCALS', ConstDefinition),
         ('foo.bar.Args', StructDefinition),
         ('foo.bar.ImplicitArgs', StructDefinition),

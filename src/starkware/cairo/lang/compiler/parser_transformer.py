@@ -15,10 +15,11 @@ from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeElementLabel, CodeElementLocalVariable, CodeElementMember, CodeElementReference,
     CodeElementReturn, CodeElementReturnValueReference, CodeElementStaticAssert,
     CodeElementTailCall, CodeElementTemporaryVariable, CodeElementUnpackBinding, CodeElementWith,
-    CommentedCodeElement)
+    CommentedCodeElement, LangDirective)
 from starkware.cairo.lang.compiler.ast.expr import (
-    ArgList, ExprAddressOf, ExprAssignment, ExprCast, ExprConst, ExprDeref, ExprIdentifier, ExprNeg,
-    ExprOperator, ExprParentheses, ExprPyConst, ExprReg, ExprTuple)
+    ArgList, ExprAddressOf, ExprAssignment, ExprCast, ExprConst, ExprDeref, ExprDot, ExprIdentifier,
+    ExprNeg, ExprOperator, ExprParentheses, ExprPyConst, ExprReg, ExprSubscript, ExprTuple)
+from starkware.cairo.lang.compiler.ast.expr_func_call import ExprFuncCall
 from starkware.cairo.lang.compiler.ast.instructions import (
     AddApInstruction, AssertEqInstruction, CallInstruction, CallLabelInstruction, InstructionAst,
     JnzInstruction, JumpInstruction, JumpToLabelInstruction, RetInstruction)
@@ -119,6 +120,10 @@ class ParserTransformer(Transformer):
         return ExprReg(reg=value[0], location=self.meta2loc(meta))
 
     @v_args(meta=True)
+    def atom_func_call(self, value, meta):
+        return ExprFuncCall(rvalue=value[0], location=self.meta2loc(meta))
+
+    @v_args(meta=True)
     def expr_add(self, value, meta):
         return ExprOperator(
             a=value[0], op='+', b=value[2], notes=value[1], location=self.meta2loc(meta))
@@ -153,6 +158,15 @@ class ParserTransformer(Transformer):
     @v_args(meta=True)
     def atom_deref(self, value, meta):
         return ExprDeref(addr=value[1], notes=value[0], location=self.meta2loc(meta))
+
+    @v_args(meta=True)
+    def atom_subscript(self, value, meta):
+        return ExprSubscript(
+            expr=value[0], offset=value[2], notes=value[1], location=self.meta2loc(meta))
+
+    @v_args(meta=True)
+    def atom_dot(self, value, meta):
+        return ExprDot(expr=value[0], member=value[1], location=self.meta2loc(meta))
 
     @v_args(meta=True)
     def atom_cast(self, value, meta):
@@ -398,17 +412,19 @@ class ParserTransformer(Transformer):
         else:
             raise NotImplementedError(f'Unexpected argument: value={value}')
 
-    def code_element_function(self, value):
-        identifier, implicit_arguments, arguments = value[:3]
+    def decorator_list(self, value):
+        return value
 
-        if len(value) == 5:
+    def code_element_function(self, value):
+        decorators, identifier, implicit_arguments, arguments = value[:4]
+        if len(value) == 6:
             # Return values present.
-            returns = value[3]
-            code_block = value[4]
-        elif len(value) == 4:
+            returns = value[4]
+            code_block = value[5]
+        elif len(value) == 5:
             # Return values not present.
             returns = None
-            code_block = value[3]
+            code_block = value[4]
         else:
             raise NotImplementedError(f'Unexpected argument: value={value}')
 
@@ -419,6 +435,7 @@ class ParserTransformer(Transformer):
             implicit_arguments=implicit_arguments,
             returns=returns,
             code_block=code_block,
+            decorators=decorators,
         )
 
     def code_element_struct(self, value):
@@ -430,6 +447,7 @@ class ParserTransformer(Transformer):
             implicit_arguments=None,
             returns=None,
             code_block=code_block,
+            decorators=[],
         )
 
     def code_element_with(self, value):
@@ -473,6 +491,10 @@ class ParserTransformer(Transformer):
     def directive_builtins(self, value, meta):
         builtins = [ident.name for ident in value]
         return BuiltinsDirective(builtins=builtins, location=self.meta2loc(meta))
+
+    @v_args(meta=True)
+    def directive_lang(self, value, meta):
+        return LangDirective(name=value[0].name, location=self.meta2loc(meta))
 
     @v_args(meta=True)
     def aliased_identifier(self, value, meta):

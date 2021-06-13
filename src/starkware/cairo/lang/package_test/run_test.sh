@@ -28,3 +28,10 @@ res=$(cairo-run --program=main_compiled.json  --layout=small --print_output)
 # Verify the result.
 # The number below is pedersen(1, 2) (which is the expected output of main.cairo).
 [[ "$res" == *"-1025514936890165471153863463586721648332140962090141185746964417035414175707"* ]]
+
+
+# Test StarkNet compiler.
+starknet-compile ${root_dir}/src/starkware/starknet/apps/amm_sample/amm_sample.cairo > /dev/null
+
+# Test StarkNet CLI.
+starknet --help > /dev/null

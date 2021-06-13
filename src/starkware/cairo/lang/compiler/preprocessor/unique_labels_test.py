@@ -20,6 +20,10 @@ namespace B:
         end
     end
 end
+func main():
+    B.foo(1, 2)
+    ret
+end
 """, prime=PRIME)
     assert program.format() == """\
 jmp rel 10 if [fp + (-4)] != 0
@@ -32,5 +36,9 @@ jmp rel 5 if [fp + (-3)] != 0
 [ap] = 2; ap++
 ret
 [ap] = 3; ap++
+ret
+[ap] = 1; ap++
+[ap] = 2; ap++
+call rel -22
 ret
 """

@@ -1,3 +1,5 @@
-add_subdirectory(crypto)
 add_subdirectory(cairo)
+add_subdirectory(crypto)
 add_subdirectory(python)
+add_subdirectory(starknet)
+add_subdirectory(starkware_utils)

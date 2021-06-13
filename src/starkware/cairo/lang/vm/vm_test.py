@@ -9,6 +9,7 @@ from starkware.cairo.lang.vm.memory_dict import (
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 from starkware.cairo.lang.vm.vm import (
     InconsistentAutoDeductionError, RunContext, VirtualMachine, VmException)
+from starkware.python.test_utils import maybe_raises
 
 PRIME = 2**64 + 13
 
@@ -86,6 +87,23 @@ def test_jnz():
 
     assert [vm.run_context.memory[101 + i] for i in range(8 + 25)] == \
         [7, 6, 5, 4, 3, 2, 1, 0] + [4, 3, 2, 1, 0] * 5
+
+
+@pytest.mark.parametrize('offset', [0, -1])
+def test_jnz_relocatables(offset: int):
+    code = """
+    jmp body if [ap - 1] != 0
+    [ap] = 0; ap++
+    body:
+    [ap] = 1; ap++
+    """
+    relocatable_value = RelocatableValue(segment_index=5, offset=offset)
+    error_message = \
+        None if relocatable_value.offset >= 0 else \
+        f'Could not complete computation jmp != 0 of non pure value {relocatable_value}'
+    with maybe_raises(expected_exception=VmException, error_message=error_message):
+        vm = run_single(code, 2, ap=102, extra_mem={101: relocatable_value})
+        assert vm.run_context.memory[102] == 1
 
 
 def test_call_ret():

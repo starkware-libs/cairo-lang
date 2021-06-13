@@ -2,13 +2,17 @@ import dataclasses
 from dataclasses import field
 from typing import Any, Dict
 
-from starkware.cairo.lang.builtins.checkpoints.instance_def import (
-    CELLS_PER_SAMPLE, CheckpointsInstanceDef)
 from starkware.cairo.lang.builtins.hash.instance_def import CELLS_PER_HASH, PedersenInstanceDef
 from starkware.cairo.lang.builtins.range_check.instance_def import (
     CELLS_PER_RANGE_CHECK, RangeCheckInstanceDef)
 from starkware.cairo.lang.builtins.signature.instance_def import (
     CELLS_PER_SIGNATURE, EcdsaInstanceDef)
+
+
+@dataclasses.dataclass
+class CpuInstanceDef:
+    # Verifies that each 'call' instruction returns, even if the called function is malicious.
+    safe_call: bool = True
 
 
 @dataclasses.dataclass
@@ -21,13 +25,13 @@ class CairoLayout:
     # The ratio between the number of public memory cells and the total number of memory cells.
     public_memory_fraction: int = 4
     memory_units_per_step: int = 8
+    cpu_instance_def: CpuInstanceDef = field(default=CpuInstanceDef())
 
 
 CELLS_PER_BUILTIN = dict(
     pedersen=CELLS_PER_HASH,
     range_check=CELLS_PER_RANGE_CHECK,
     ecdsa=CELLS_PER_SIGNATURE,
-    checkpoints=CELLS_PER_SAMPLE,
 )
 
 plain_instance = CairoLayout(
@@ -57,9 +61,6 @@ small_instance = CairoLayout(
             height=256,
             n_hash_bits=251,
         ),
-        checkpoints=CheckpointsInstanceDef(
-            sample_ratio=16,
-        ),
     )
 )
 
@@ -85,9 +86,6 @@ dex_instance = CairoLayout(
             repetitions=1,
             height=256,
             n_hash_bits=251,
-        ),
-        checkpoints=CheckpointsInstanceDef(
-            sample_ratio=16,
         ),
     )
 )

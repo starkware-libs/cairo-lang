@@ -38,7 +38,13 @@ class Operands:
     op1: MaybeRelocatable
 
 
-class VmException(LocationError):
+class VmExceptionBase(Exception):
+    """
+    Base class for exceptions thrown by the Cairo VM.
+    """
+
+
+class VmException(LocationError, VmExceptionBase):
     def __init__(
             self, pc, inst_location: Optional[InstructionLocation], inner_exc,
             traceback: Optional[str] = None, notes: Optional[List[str]] = None, hint: bool = False):
@@ -56,7 +62,7 @@ class VmException(LocationError):
             self.notes += notes
 
 
-class InconsistentAutoDeductionError(Exception):
+class InconsistentAutoDeductionError(VmExceptionBase):
     def __init__(self, addr, current_value, new_value):
         self.addr = addr
         self.current_value = current_value
@@ -65,7 +71,7 @@ class InconsistentAutoDeductionError(Exception):
             f'Inconsistent auto deduction rule at address {addr}. {current_value} != {new_value}.')
 
 
-class PureValueError(Exception):
+class PureValueError(VmExceptionBase):
     def __init__(self, oper, *values):
         self.oper = oper
         self.values = values
@@ -74,7 +80,7 @@ class PureValueError(Exception):
             f'Could not complete computation {oper} of non pure {values_str}.')
 
 
-class HintException(Exception):
+class HintException(VmExceptionBase):
     def __init__(self, vm, exc_type, exc_value, exc_tb):
         tb_exception = traceback.TracebackException(exc_type, exc_value, exc_tb)
         # First item in the traceback is the call to exec, remove it.
@@ -156,10 +162,10 @@ class RunContext:
         elif instruction.op1_addr is Instruction.Op1Addr.AP:
             base_addr = self.ap
         elif instruction.op1_addr is Instruction.Op1Addr.IMM:
-            assert instruction.off2 == 1, 'In immediate mode, off2 should be 1'
+            assert instruction.off2 == 1, 'In immediate mode, off2 should be 1.'
             base_addr = self.pc
         elif instruction.op1_addr is Instruction.Op1Addr.OP0:
-            assert op0 is not None, 'op0 must be known in double dereference'
+            assert op0 is not None, 'op0 must be known in double dereference.'
             base_addr = op0
         else:
             raise NotImplementedError('Invalid op1_register value')
@@ -173,6 +179,9 @@ class RunContext:
         entries = []
         fp = self.fp
         for _ in range(MAX_TRACEBACK_ENTRIES):
+            if self.memory.get(fp - 2) == fp:
+                break
+
             # Get the previous fp and the return pc.
             fp, ret_pc = self.memory.get(fp - 2), self.memory.get(fp - 1)
 
@@ -210,7 +219,7 @@ class CompiledHint:
 class VirtualMachine:
     def __init__(
             self, program: ProgramBase, run_context: RunContext,
-            hint_locals: dict, static_locals: dict = {},
+            hint_locals: Dict[str, Any], static_locals: Optional[Dict[str, Any]] = None,
             builtin_runners: Dict[str, BuiltinRunner] = {}, program_base: Optional[int] = None):
         """
         hints - a dictionary from memory addresses to an executable object.
@@ -259,7 +268,7 @@ class VirtualMachine:
         self.skip_instruction_execution = False
 
         from starkware.python import math_utils
-        self.static_locals = static_locals.copy()
+        self.static_locals = static_locals.copy() if static_locals is not None else {}
         self.static_locals.update({
             'PRIME': self.prime,
             'fadd': lambda a, b, p=self.prime: (a + b) % p,
@@ -288,7 +297,8 @@ class VirtualMachine:
                 consts=lambda pc, ap, fp, memory, hint=hint: VmConsts(
                     context=VmConstsContext(
                         identifiers=program.identifiers,
-                        evaluator=ExpressionEvaluator(self.prime, ap, fp, memory).eval,
+                        evaluator=ExpressionEvaluator(
+                            self.prime, ap, fp, memory, program.identifiers).eval,
                         reference_manager=program.reference_manager,
                         flow_tracking_data=hint.flow_tracking_data,
                         memory=memory,
@@ -327,6 +337,7 @@ class VirtualMachine:
         self.exec_scopes.append({**new_scope_locals, **self.builtin_runners})
 
     def exit_scope(self):
+        assert len(self.exec_scopes) > 1, 'Cannot exit main scope.'
         self.exec_scopes.pop()
 
     def update_registers(self, instruction: Instruction, operands: Operands):
@@ -517,6 +528,8 @@ class VirtualMachine:
         This function can be overridden by subclasses.
         """
         if not isinstance(value, int):
+            if isinstance(value, RelocatableValue) and value.offset >= 0:
+                return False
             raise PureValueError('jmp != 0', value)
         return value == 0
 
@@ -751,8 +764,8 @@ class VirtualMachine:
 
     def end_run(self):
         self.verify_auto_deductions()
-        assert len(self.exec_scopes) == 1, \
-            'Every enter_scope() requires a corresponding exit_scope().'
+        if len(self.exec_scopes) != 1:
+            raise VmExceptionBase('Every enter_scope() requires a corresponding exit_scope().')
 
 
 def get_perm_range_check_limits(

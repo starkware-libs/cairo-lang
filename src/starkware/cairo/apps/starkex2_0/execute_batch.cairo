@@ -113,7 +113,8 @@ func execute_batch(
     # Call execute_batch recursively.
     # Make a copy of the first argument to avoid a compiler optimization that was added after the
     # code was deployed.
-    tempvar modification_ptr = modification_ptr
+    [ap] = modification_ptr; ap++
+    let modification_ptr = cast([ap - 1], ModificationOutput*)
     return execute_batch(
         modification_ptr=modification_ptr,
         conditional_transfer_ptr=conditional_transfer_ptr,

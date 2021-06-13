@@ -59,7 +59,7 @@ def test_pages(runner_and_output_runner):
     segment_offsets = {0: 0, 1: 10, 2: 100}
     assert runner.segments.get_public_memory_addresses(segment_offsets=segment_offsets) == (
         [(i, 0) for i in range(len(runner.program.data))] +  # Program segment.
-        [(10, 0)] +  # Execution segment.
+        [(10, 0), (11, 0), (12, 0)] +  # Execution segment.
         [(100 + offset, page_id) for offset, page_id in offset_page_pairs])  # Output segment.
 
 

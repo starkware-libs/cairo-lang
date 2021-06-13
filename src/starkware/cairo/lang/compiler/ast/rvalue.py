@@ -132,5 +132,19 @@ class RvalueFuncCall(RvalueCall):
                 line_indent=INDENTATION,
                 one_per_line=True))
 
+    def format_for_expr(self) -> str:
+        """
+        Formats the rvalue without automatic line breaking.
+        Should be used when the rvalue is part of an expression (where the line breaking mechanism
+        is not supported yet).
+        """
+        res = self.func_ident.format()
+
+        if self.implicit_arguments is not None:
+            res += '{' + self.implicit_arguments.format() + '}'
+
+        res += '(' + self.arguments.format() + ')'
+        return res
+
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.func_ident, self.arguments, self.implicit_arguments]

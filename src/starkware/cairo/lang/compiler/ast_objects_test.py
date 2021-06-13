@@ -1,24 +1,9 @@
 import pytest
 
-from starkware.cairo.lang.compiler.ast.expr import (
-    ExprAddressOf, ExprConst, ExprNeg, ExprOperator, ExprParentheses)
+from starkware.cairo.lang.compiler.ast.ast_objects_test_utils import remove_parentheses
+from starkware.cairo.lang.compiler.ast.expr import ExprConst, ExprNeg, ExprOperator
 from starkware.cairo.lang.compiler.ast.formatting_utils import FormattingError
 from starkware.cairo.lang.compiler.parser import parse_code_element, parse_expr, parse_file
-
-
-def remove_parentheses(expr):
-    """
-    Removes the parentheses (ExprParentheses) from an arithmetic expression.
-    """
-    if isinstance(expr, ExprParentheses):
-        return expr.val
-    if isinstance(expr, ExprOperator):
-        return ExprOperator(a=remove_parentheses(expr.a), op=expr.op, b=remove_parentheses(expr.b))
-    if isinstance(expr, ExprAddressOf):
-        return ExprAddressOf(expr=remove_parentheses(expr.expr))
-    if isinstance(expr, ExprNeg):
-        return ExprNeg(val=remove_parentheses(expr.val))
-    return expr
 
 
 def test_format_parentheses():
@@ -34,16 +19,37 @@ def test_format_parentheses():
         'x - (a + b) - (c - d) - e * f'
     assert remove_parentheses(parse_expr('(a + b) + (c - d) + (e * f)')).format() == \
         'a + b + c - d + e * f'
-    assert remove_parentheses(parse_expr('-(a + b + c)')).format() == \
-        '-(a + b + c)'
-    assert remove_parentheses(parse_expr('a + -b + c')).format() == \
-        'a + (-b) + c'
-    assert remove_parentheses(parse_expr('&(a + b)')).format() == \
-        '&(a + b)'
+    assert remove_parentheses(parse_expr('-(a + b + c)')).format() == '-(a + b + c)'
+    assert remove_parentheses(parse_expr('a + -b + c')).format() == 'a + (-b) + c'
+    assert remove_parentheses(parse_expr('&(a + b)')).format() == '&(a + b)'
+
+    # Test that parentheses are added to non-atomized Dot and Subscript expressions.
+    assert remove_parentheses(parse_expr('(x * y).z')).format() == '(x * y).z'
+    assert remove_parentheses(parse_expr('(-x).y')).format() == '(-x).y'
+    assert remove_parentheses(parse_expr('(&x).y')).format() == '(&x).y'
+    assert remove_parentheses(parse_expr('(x * y)[z]')).format() == '(x * y)[z]'
+    assert remove_parentheses(parse_expr('(-x)[y]')).format() == '(-x)[y]'
+    assert remove_parentheses(parse_expr('(&x)[y]')).format() == '(&x)[y]'
+
+    assert remove_parentheses(parse_expr('&(x.y)')).format() == '&x.y'
+    assert remove_parentheses(parse_expr('-(x.y)')).format() == '-x.y'
+    assert remove_parentheses(parse_expr('(x.y)*z')).format() == 'x.y * z'
+    assert remove_parentheses(parse_expr('x-(y.z)')).format() == 'x - y.z'
+
+    assert remove_parentheses(parse_expr('([x].y).z')).format() == '[x].y.z'
+    assert remove_parentheses(parse_expr('&(x[y])')).format() == '&x[y]'
+    assert remove_parentheses(parse_expr('-(x[y])')).format() == '-x[y]'
+    assert remove_parentheses(parse_expr('(x[y])*z')).format() == 'x[y] * z'
+    assert remove_parentheses(parse_expr('x-(y[z])')).format() == 'x - y[z]'
+    assert remove_parentheses(parse_expr('(([x][y])[z])')).format() == '[x][y][z]'
+    assert remove_parentheses(parse_expr('x[(y+z)]')).format() == 'x[y + z]'
+
+    assert remove_parentheses(parse_expr('[((x+y) + z)]')).format() == '[x + y + z]'
 
     # Test that parentheses are not added if they were already present.
     assert parse_expr('(a * (b + c))').format() == '(a * (b + c))'
     assert parse_expr('((a * ((b + c))))').format() == '((a * ((b + c))))'
+    assert parse_expr('(x + y)[z]').format() == '(x + y)[z]'
 
 
 def test_format_parentheses_notes():
@@ -110,8 +116,11 @@ def test_file_format():
     before = """
 
 ap+=[ fp ]
+%lang starknet
 [ap + -1] = [fp]  *  3
- const x=y  +  z
+ const x=y  +  f(a=g(
+                      z) ,# test
+                      b=0)
  member x:T.S
  let x= ap-y  +  z
  let y:a.b.c= x
@@ -136,8 +145,11 @@ label2:
 [fp] = [fp] * [fp]"""
     after = """\
 ap += [fp]
+%lang starknet
 [ap + (-1)] = [fp] * 3
-const x = y + z
+const x = y + f(a=g(
+        z),  # test
+    b=0)
 member x : T.S
 let x = ap - y + z
 let y : a.b.c = x

@@ -13,7 +13,7 @@ from starkware.cairo.lang.compiler.identifier_manager import (
     MissingIdentifierError)
 from starkware.cairo.lang.compiler.identifier_utils import get_struct_definition
 from starkware.cairo.lang.compiler.preprocessor.flow import FlowTrackingData, ReferenceManager
-from starkware.cairo.lang.compiler.references import Reference
+from starkware.cairo.lang.compiler.references import FlowTrackingError, Reference
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.compiler.type_system_visitor import simplify_type_system
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
@@ -45,11 +45,17 @@ class VmConstsBase(ABC):
         if name.startswith('__'):
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute '{name}'")
-        return self.get_or_set_value(name, None)
+        try:
+            return self.get_or_set_value(name, None)
+        except FlowTrackingError:
+            raise FlowTrackingError(f"Reference '{name}' is revoked.") from None
 
     def __setattr__(self, name: str, value):
         assert value is not None, 'Setting a value to None is not allowed.'
-        self.get_or_set_value(name, value)
+        try:
+            self.get_or_set_value(name, value)
+        except FlowTrackingError:
+            raise FlowTrackingError(f"Reference '{name}' is revoked.") from None
 
     @abstractmethod
     def get_or_set_value(self, name: str, set_value: Optional[MaybeRelocatable]):
@@ -149,6 +155,7 @@ class VmConsts(VmConstsBase):
             instruction_offset=identifier.pc if isinstance(identifier, LabelDefinition) else None)
 
     handle_LabelDefinition = handle_scope
+    handle_FunctionDefinition = handle_scope
 
     def handle_StructDefinition(
             self, name: str, identifier: StructDefinition, scope: ScopedName,
@@ -170,7 +177,9 @@ class VmConsts(VmConstsBase):
         if set_value is None:
             expr = reference.eval(
                 self._context.flow_tracking_data.ap_tracking)
-            expr, expr_type = simplify_type_system(expr)
+            expr, expr_type = simplify_type_system(
+                expr,
+                identifiers=self._context.identifiers)
             if isinstance(expr_type, TypeStruct):
                 # If the reference is of type T, take its address and treat it as T*.
                 assert isinstance(expr, ExprDeref), \
@@ -190,11 +199,12 @@ class VmConsts(VmConstsBase):
                 return VmConstsReference(
                     context=self._context,
                     struct_name=expr_type.pointee.scope,
-                    reference_value=val,
-                    add_addr_var=True)
+                    reference_value=val)
         else:
             assert str(scope[-1:]) == name, 'Expecting scope to end with name.'
-            value, value_type = simplify_type_system(reference.value)
+            value, value_type = simplify_type_system(
+                reference.value,
+                identifiers=self._context.identifiers)
             assert isinstance(value, ExprDeref), f"""\
 {scope} (= {value.format()}) does not reference memory and cannot be assigned."""
 
@@ -217,10 +227,9 @@ class VmConsts(VmConstsBase):
 
 
 class VmConstsReference(VmConstsBase):
-    def __init__(self, *, reference_value, struct_name: ScopedName, add_addr_var: bool, **kw):
+    def __init__(self, *, reference_value, struct_name: ScopedName, **kw):
         """
         Constructs a VmConstsReference which allows accessing a typed reference fields.
-        If add_addr_var, the value of the reference itself can be accessed using self.address_.
         """
         super().__init__(**kw)
 
@@ -228,8 +237,14 @@ class VmConstsReference(VmConstsBase):
             struct_name=struct_name, identifier_manager=self._context.identifiers))
 
         object.__setattr__(self, '_reference_value', reference_value)
-        if add_addr_var:
-            object.__setattr__(self, 'address_', reference_value)
+        object.__setattr__(self, 'address_', reference_value)
+
+    @property
+    def type_(self):
+        return VmConstsStruct(
+            context=self._context,
+            struct_definition=self._struct_definition,
+        )
 
     def get_or_set_value(self, name: str, set_value: Optional[MaybeRelocatable]):
         """
@@ -258,8 +273,7 @@ class VmConstsReference(VmConstsBase):
                 return VmConstsReference(
                     context=self._context,
                     struct_name=expr_type.pointee.scope,
-                    reference_value=self._context.memory[addr],
-                    add_addr_var=True)
+                    reference_value=self._context.memory[addr])
 
 
 def is_simple_type(expr_type: CairoType) -> bool:
@@ -282,6 +296,12 @@ class VmConstsStruct(VmConstsBase):
         """
         super().__init__(**kw)
         object.__setattr__(self, '_struct_definition', struct_definition)
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return False
+        return self._struct_definition == other._struct_definition and \
+            self._context is other._context
 
     def get_or_set_value(self, name: str, set_value: Optional[MaybeRelocatable]):
         assert set_value is None, 'Cannot change the value of a constant.'

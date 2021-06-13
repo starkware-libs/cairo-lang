@@ -1,6 +1,6 @@
 # WARNING: This library is used by the Cairo playground hint server. Please don't add files
 # unless they should be there.
-python_lib(cairo_relocatable
+python_lib(cairo_relocatable_lib
     PREFIX starkware/cairo/lang/vm
 
     FILES
@@ -41,7 +41,7 @@ python_lib(cairo_vm_lib
 
     LIBS
     cairo_compile_lib
-    cairo_relocatable
+    cairo_relocatable_lib
     cairo_vm_crypto_lib
     starkware_python_utils_lib
 )
@@ -93,6 +93,7 @@ full_python_test(cairo_vm_test
     cairo_run_lib
     cairo_vm_lib
     starkware_python_utils_lib
+    starkware_python_test_utils_lib
     pip_marshmallow
     pip_marshmallow_dataclass
     pip_pytest

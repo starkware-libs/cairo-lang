@@ -1,5 +1,4 @@
 import itertools
-import re
 from typing import Optional
 
 import pytest
@@ -11,7 +10,7 @@ from starkware.cairo.lang.compiler.preprocessor.compound_expressions import (
     CompoundExpressionContext, CompoundExpressionVisitor, SimplicityLevel,
     process_compound_expressions)
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_test_utils import (
-    PRIME, preprocess_str, verify_exception)
+    PRIME, preprocess_str, strip_comments_and_linebreaks, verify_exception)
 
 
 class CompoundExpressionTestContext(CompoundExpressionContext):
@@ -240,7 +239,7 @@ assert x + y * z + x / (-x - (y - z)) = x * x
 [ap] = [ap + (-2)] * [ap + (-1)]; ap++     # Compute x * x.
 [ap + (-10)] + [ap + (-4)] = [ap + (-1)]   # Assert x + y * z + x / (-x - (y - z)) = x * x.
 """
-    assert program.format() == re.sub(r'\s*#.*\n', '\n', expected_result)
+    assert program.format() == strip_comments_and_linebreaks(expected_result)
 
 
 def test_compound_expressions_tempvars():
@@ -280,7 +279,7 @@ ap += 3
 
 ret
 """
-    assert program.format() == re.sub(r'\s*#.*\n', '\n', expected_result).replace('\n\n', '\n')
+    assert program.format() == strip_comments_and_linebreaks(expected_result)
 
 
 def test_compound_expressions_args():
@@ -311,7 +310,7 @@ ret
 [ap] = [ap + (-5)] + [ap + (-4)]; ap++     # Push 3 * x + x * x.
 call rel -15
 """
-    assert program.format() == re.sub(r'\s*#.*\n', '\n', expected_result).replace('\n\n', '\n')
+    assert program.format() == strip_comments_and_linebreaks(expected_result)
 
 
 def test_compound_expressions_failures():
@@ -342,16 +341,6 @@ assert [ap] = [ap + 32768]  # Offset is out of bounds.
 file:?:?: ap may only be used in an expression of the form [ap + <const>].
 assert [ap] = [ap + 32768]  # Offset is out of bounds.
                ^^
-""")
-    verify_exception("""\
-struct T:
-    member a : felt
-end
-assert cast([ap], T) = cast([ap], T)
-""", """
-file:?:?: Expected a 'felt' or a pointer type. Got: 'test_scope.T'.
-assert cast([ap], T) = cast([ap], T)
-       ^***********^
 """)
     verify_exception("""\
 struct T:

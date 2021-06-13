@@ -3,7 +3,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeBlock, CodeElement, CodeElementFunction, CodeElementImport)
 from starkware.cairo.lang.compiler.ast.module import CairoFile
-from starkware.cairo.lang.compiler.ast.visitor import Visitor
+from starkware.cairo.lang.compiler.ast.visitor import Visitor, get_lang_from_file
 from starkware.cairo.lang.compiler.error_handling import Location, LocationError
 from starkware.cairo.lang.compiler.module_reader import ModuleNotFoundException
 from starkware.cairo.lang.compiler.parser import parse_file
@@ -52,6 +52,7 @@ class ImportsCollector:
     def __init__(self, read_file: Callable[[str], Tuple[str, str]]):
         self.curr_ancestors: List[str] = []
         self.collected_data: Dict[str, CairoFile] = {}
+        self.lang: Dict[str, Optional[str]] = {}
         self.read_file = read_file
 
     def collect(self, curr_pkg_name: str, location: Optional[Location] = None):
@@ -74,6 +75,8 @@ class ImportsCollector:
 
         parsed_file: CairoFile = parse_file(code, filename=filename)
 
+        lang = get_lang_from_file(parsed_file)
+
         # Get current file dependencies.
         collector = DirectDependenciesCollector()
         collector.get_using_pkgs_in_block(parsed_file.code_block)
@@ -84,10 +87,16 @@ class ImportsCollector:
         # Collect ASTs recursively.
         for pkg_name, location in collector.packages:
             self.collect(pkg_name, location=location)
+            if not (self.lang[pkg_name] is None or self.lang[pkg_name] == lang):
+                raise ImportLoaderError(
+                    f"Importing modules with %lang directive '{self.lang[pkg_name]}' must "
+                    'be from a module with the same directive.',
+                    location=location)
 
         # Pop current package from ancestors list after scanning its dependencies.
         self.curr_ancestors.pop()
         self.collected_data[curr_pkg_name] = parsed_file
+        self.lang[curr_pkg_name] = lang
 
 
 class DirectDependenciesCollector(Visitor):

@@ -90,6 +90,7 @@ function(python_lib LIB)
   endforeach()
 
   get_lib_info_file(INFO_FILE ${LIB})
+  file(RELATIVE_PATH CMAKE_DIR ${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
   add_custom_command(
     OUTPUT ${INFO_FILE}
     COMMAND ${GEN_PY_LIB_EXECUTABLE}
@@ -99,6 +100,8 @@ function(python_lib LIB)
       --lib_deps ${ARGS_LIBS}
       --output ${INFO_FILE}
       --py_exe_deps ${ARGS_PY_EXE_DEPENDENCIES}
+      --cmake_dir ${CMAKE_DIR}
+      --prefix ${ARGS_PREFIX}
     DEPENDS ${GEN_PY_LIB_EXECUTABLE} ${DEP_INFO} ${UNITED_LIBS}
       ${ARGS_PY_EXE_DEPENDENCIES} ${ALL_FILE_DEPS} ${LIB}_copy_files
   )

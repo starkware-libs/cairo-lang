@@ -105,6 +105,14 @@ class LabelDefinition(IdentifierDefinition):
 
 
 @marshmallow_dataclass.dataclass
+class FunctionDefinition(LabelDefinition):
+    TYPE: ClassVar[str] = 'function'
+    Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
+
+    decorators: List[str]
+
+
+@marshmallow_dataclass.dataclass
 class ReferenceDefinition(IdentifierDefinition):
     TYPE: ClassVar[str] = 'reference'
     Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
@@ -144,6 +152,7 @@ class IdentifierDefinitionSchema(OneOfSchema):
         ConstDefinition.TYPE: ConstDefinition.Schema,
         MemberDefinition.TYPE: MemberDefinition.Schema,
         LabelDefinition.TYPE: LabelDefinition.Schema,
+        FunctionDefinition.TYPE: FunctionDefinition.Schema,
         ReferenceDefinition.TYPE: ReferenceDefinition.Schema,
         ScopeDefinition.TYPE: ScopeDefinition.Schema,
         StructDefinition.TYPE: StructDefinition.Schema,

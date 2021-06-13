@@ -1,11 +1,11 @@
 from starkware.cairo.lang.compiler.ast.expr import (
-    ExprAddressOf, ExprCast, ExprConst, ExprDeref, ExprFutureLabel, ExprNeg, ExprOperator,
-    ExprParentheses, ExprPyConst, ExprReg)
+    ExprConst, ExprDeref, ExprFutureLabel, ExprNeg, ExprOperator, ExprPyConst, ExprReg)
 
 
 class ConstExprChecker:
     """
     A visitor class to check whether an expression contains only numeric and symbolic constants.
+    This visitor needs to visit only expressions returned by the type system visitor.
     """
 
     def visit(self, obj):
@@ -29,17 +29,8 @@ class ConstExprChecker:
     def visit_ExprNeg(self, expr: ExprNeg):
         return self.visit(expr.val)
 
-    def visit_ExprParentheses(self, expr: ExprParentheses):
-        return self.visit(expr.val)
-
     def visit_ExprDeref(self, expr: ExprDeref):
         return False
-
-    def visit_ExprAddressOf(self, expr: ExprAddressOf):
-        return False
-
-    def visit_ExprCast(self, expr: ExprCast):
-        return self.visit(expr)
 
 
 def is_const_expr(expr):

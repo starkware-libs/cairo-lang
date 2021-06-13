@@ -15,7 +15,7 @@ from starkware.cairo.lang.compiler.preprocessor.flow import FlowTrackingDataActu
 from starkware.cairo.lang.compiler.preprocessor.reg_tracking import RegTrackingData
 from starkware.cairo.lang.compiler.references import FlowTrackingError, Reference
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
-from starkware.cairo.lang.compiler.type_system_visitor import mark_types_in_expr_resolved
+from starkware.cairo.lang.compiler.type_system import mark_types_in_expr_resolved
 from starkware.cairo.lang.vm.vm_consts import VmConsts, VmConstsContext
 
 scope = ScopedName.from_string
@@ -142,6 +142,7 @@ def test_references():
             size=11,
         ),
     }
+    identifiers = IdentifierManager.from_dict(identifier_values)
     prime = 2**64 + 13
     ap = 100
     fp = 200
@@ -157,8 +158,8 @@ def test_references():
         reference_ids=references,
     )
     context = VmConstsContext(
-        identifiers=IdentifierManager.from_dict(identifier_values),
-        evaluator=ExpressionEvaluator(prime, ap, fp, memory).eval,
+        identifiers=identifiers,
+        evaluator=ExpressionEvaluator(prime, ap, fp, memory, identifiers).eval,
         reference_manager=reference_manager,
         flow_tracking_data=flow_tracking_data,
         memory=memory,
@@ -238,9 +239,10 @@ def get_vm_consts(identifier_values, reference_manager, flow_tracking_data, memo
     """
     Creates a simple VmConsts object.
     """
+    identifiers = IdentifierManager.from_dict(identifier_values)
     context = VmConstsContext(
-        identifiers=IdentifierManager.from_dict(identifier_values),
-        evaluator=ExpressionEvaluator(2**64 + 13, 0, 0, memory).eval,
+        identifiers=identifiers,
+        evaluator=ExpressionEvaluator(2**64 + 13, 0, 0, memory, identifiers).eval,
         reference_manager=reference_manager,
         flow_tracking_data=flow_tracking_data, memory=memory, pc=9)
     return VmConsts(context=context, accessible_scopes=[ScopedName()])
@@ -256,7 +258,7 @@ def test_reference_rebinding():
     reference_manager = ReferenceManager()
     flow_tracking_data = FlowTrackingDataActual(ap_tracking=RegTrackingData())
     consts = get_vm_consts(identifier_values, reference_manager, flow_tracking_data)
-    with pytest.raises(FlowTrackingError, match='Reference ref revoked'):
+    with pytest.raises(FlowTrackingError, match="Reference 'ref' is revoked."):
         consts.ref
 
     flow_tracking_data = flow_tracking_data.add_reference(
@@ -294,7 +296,7 @@ def test_reference_to_structs():
         name=scope('ref'),
         ref=Reference(
             pc=0,
-            value=mark_types_in_expr_resolved(parse_expr('cast([100], T)')),
+            value=mark_types_in_expr_resolved(parse_expr('[cast(100, T*)]')),
             ap_tracking_data=RegTrackingData(group=0, offset=2),
         ),
     )
@@ -308,6 +310,8 @@ def test_reference_to_structs():
     consts.ref.x.x = 300
     assert memory[203] == 300
     assert consts.ref.x.x.address_ == 300
+
+    assert consts.ref.type_ == consts.T
 
 
 def test_missing_attributes():
@@ -413,6 +417,7 @@ def test_revoked_reference():
             full_name=scope('x'), cairo_type=TypeFelt(), references=[]
         ),
     }
+    identifiers = IdentifierManager.from_dict(identifier_values)
     prime = 2**64 + 13
     ap = 100
     fp = 200
@@ -423,13 +428,16 @@ def test_revoked_reference():
         reference_ids={scope('x'): ref_id},
     )
     context = VmConstsContext(
-        identifiers=IdentifierManager.from_dict(identifier_values),
-        evaluator=ExpressionEvaluator(prime, ap, fp, memory).eval,
+        identifiers=identifiers,
+        evaluator=ExpressionEvaluator(prime, ap, fp, memory, identifiers).eval,
         reference_manager=reference_manager,
         flow_tracking_data=flow_tracking_data,
         memory=memory,
         pc=0)
     consts = VmConsts(context=context, accessible_scopes=[ScopedName()])
 
-    with pytest.raises(FlowTrackingError, match='Failed to deduce ap.'):
-        assert consts.x
+    with pytest.raises(FlowTrackingError, match="Reference 'x' is revoked."):
+        consts.x
+
+    with pytest.raises(FlowTrackingError, match="Reference 'x' is revoked."):
+        consts.x = 85

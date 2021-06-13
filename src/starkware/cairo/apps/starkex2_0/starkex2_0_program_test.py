@@ -29,6 +29,7 @@ def test_program_hash():
             PROGRAM_MAIN_FILE,
             f'--output={compiled_program.name}',
             f'--cairo_path={CAIRO_PATH}',
+            '--no_opt_unused_functions',
         ])
         program_hash = subprocess.check_output([
             f'{CAIRO_HASH_PROGRAM_EXE}',

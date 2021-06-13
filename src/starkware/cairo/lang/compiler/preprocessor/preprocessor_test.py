@@ -8,13 +8,15 @@ from starkware.cairo.lang.compiler.identifier_definition import (
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierError
 from starkware.cairo.lang.compiler.instruction_builder import InstructionBuilderError
 from starkware.cairo.lang.compiler.parser import parse_type
-from starkware.cairo.lang.compiler.preprocessor.preprocessor import preprocess_codes
+from starkware.cairo.lang.compiler.preprocessor.default_pass_manager import default_pass_manager
+from starkware.cairo.lang.compiler.preprocessor.preprocess_codes import preprocess_codes
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_test_utils import (
-    PRIME, TEST_SCOPE, preprocess_str, verify_exception)
+    PRIME, TEST_SCOPE, preprocess_str, strip_comments_and_linebreaks, verify_exception)
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.compiler.test_utils import read_file_from_dict
-from starkware.cairo.lang.compiler.type_system_visitor import (
-    mark_type_resolved, simplify_type_system)
+from starkware.cairo.lang.compiler.type_casts import CairoTypeError
+from starkware.cairo.lang.compiler.type_system import mark_type_resolved
+from starkware.cairo.lang.compiler.type_system_visitor import simplify_type_system
 
 
 def test_compiler():
@@ -122,6 +124,10 @@ ap += 3
 tempvar y : T* = cast(x, T*)
 ap += 4
 [fp] = y.t
+ap += 5
+tempvar z : (felt, felt) = (1, 2)
+# Check the expression pushing optimization.
+tempvar z : (felt, felt) = ([ap - 1], 3)
 """
     program = preprocess_str(code=code, prime=PRIME)
     assert program.format() == """\
@@ -130,19 +136,20 @@ ap += 3
 [ap] = [ap + (-4)]; ap++
 ap += 4
 [fp] = [[ap + (-5)] + 1]
+ap += 5
+[ap] = 1; ap++
+[ap] = 2; ap++
+[ap] = 3; ap++
 """
 
 
 def test_temporary_variable_failures():
     verify_exception("""
-struct T:
-    member t : felt
-end
-tempvar x : T = 0
+tempvar x : felt = cast([ap], felt*)
 """, """
-file:?:?: tempvar type annotation must be 'felt' or a pointer.
-tempvar x : T = 0
-            ^
+file:?:?: Cannot assign an expression of type 'felt*' to a temporary variable of type 'felt'.
+tempvar x : felt = cast([ap], felt*)
+            ^**^
 """)
     verify_exception("""
 tempvar _ = 0
@@ -412,7 +419,7 @@ end
 """, """
 file:?:?: Unknown identifier 'g'.
     return g()
-           ^*^
+           ^
 """)
 
     verify_exception("""
@@ -480,13 +487,13 @@ end
     program = preprocess_str(code=code, prime=PRIME, main_scope=scope)
     reference_x = program.instructions[-1].flow_tracking_data.resolve_reference(
         reference_manager=program.reference_manager, name=scope + 'f.x')
-    assert reference_x.value.format() == 'cast([fp + (-6)], felt)'
+    assert reference_x.value.format() == '[cast(fp + (-6), felt*)]'
     reference_y = program.instructions[-1].flow_tracking_data.resolve_reference(
         reference_manager=program.reference_manager, name=scope + 'f.y')
-    assert reference_y.value.format() == f'cast([fp + (-5)], {scope}.T)'
+    assert reference_y.value.format() == f'[cast(fp + (-5), {scope}.T*)]'
     reference_z = program.instructions[-1].flow_tracking_data.resolve_reference(
         reference_manager=program.reference_manager, name=scope + 'f.z')
-    assert reference_z.value.format() == f'cast([fp + (-3)], {scope}.T*)'
+    assert reference_z.value.format() == f'[cast(fp + (-3), {scope}.T**)]'
     assert program.format() == """\
 [fp + (-6)] = 1; ap++
 [fp + (-5)] = 2; ap++
@@ -601,7 +608,7 @@ end
 
 func f{x: T}() -> ():
     # Rebind x.
-    let x = cast([fp - 1234], T)
+    let x = [cast(fp - 1234, T*)]
     return ()
 end
 
@@ -620,7 +627,7 @@ end
 
 func h():
     let y = 10
-    let x: T = cast([fp - 100], T)
+    let x: T = [cast(fp - 100, T*)]
     with x, y:
         let (res2) = g(0, 0)
     end
@@ -909,12 +916,17 @@ static_assert f_args + f.Args.SIZE == ap
 
 def test_function_call_by_value_args():
     code = """\
+struct S:
+    member a : felt
+    member b : felt
+end
+
 struct T:
     member s : felt
-    member t : felt
+    member t : S
 end
 func f(x, y : T, z : T):
-    let t : T = cast([ap], T)
+    let t : T = [cast(ap, T*)]
     let res = f(x=2, y=z, z=t)
     return()
 end
@@ -922,11 +934,13 @@ end
     program = preprocess_str(code=code, prime=PRIME)
     assert program.format() == """\
 [ap] = 2; ap++
+[ap] = [fp + (-5)]; ap++
 [ap] = [fp + (-4)]; ap++
 [ap] = [fp + (-3)]; ap++
-[ap] = [ap + (-3)]; ap++
-[ap] = [ap + (-3)]; ap++
-call rel -6
+[ap] = [ap + (-4)]; ap++
+[ap] = [ap + (-4)]; ap++
+[ap] = [ap + (-4)]; ap++
+call rel -8
 ret
 """
 
@@ -959,27 +973,6 @@ file:?:?: Expected expression of type '{expected_type}', got '{actual_type}'.
 """, main_scope=ScopedName())
 
 
-def test_func_by_value_nested_struct_failures():
-    verify_exception("""
-struct S:
-    member a : felt
-end
-
-struct T:
-    member s : felt
-    member t : S
-end
-func f(x, y : T):
-    f(1, y=y)
-    ret
-end
-""", """
-file:?:?: Nested structs are not supported.
-    f(1, y=y)
-           ^
-""")
-
-
 def test_func_by_value_return():
     code = """\
 struct T:
@@ -987,7 +980,7 @@ struct T:
     member t : felt
 end
 func f(s : T) -> (x : T, y : T):
-    let t : T = cast([ap - 100], T)
+    let t : T = [cast(ap - 100, T*)]
     return(x=s, y=t)
 end
 """
@@ -1082,7 +1075,8 @@ end
 """
     }
     program = preprocess_codes(
-        codes=[(files['.'], '.')], prime=PRIME, read_module=read_file_from_dict(files))
+        codes=[(files['.'], '.')],
+        pass_manager=default_pass_manager(prime=PRIME, read_module=read_file_from_dict(files)))
 
     assert program.format() == """\
 jmp rel 0
@@ -1123,7 +1117,8 @@ const xi = 42
 
     # Preprocess program.
     program = preprocess_codes(
-        codes=[(files['.'], '.')], prime=PRIME, read_module=read_file_from_dict(files),
+        codes=[(files['.'], '.')],
+        pass_manager=default_pass_manager(prime=PRIME, read_module=read_file_from_dict(files)),
         main_scope=scope('__main__'))
 
     # Verify identifiers are resolved correctly.
@@ -1186,7 +1181,7 @@ from foo import bar as lambda
 """, files={'foo': 'const bar=0'})
 
     verify_exception('from foo import bar', """ \
-file:?:?: Scope 'foo' does not include identifier 'bar'.
+file:?:?: Cannot import 'bar' from 'foo'.
 from foo import bar
                 ^*^
 """, files={'foo': ''})
@@ -1377,8 +1372,8 @@ func f(name, x, name):
 """)
     verify_exception("""
 func f() -> (name, x, name):
-    [ap + name] = 1
-    [ap + x] = 2
+    [ap] = 1
+    [ap] = 2
 end
 """, """
 file:?:?: Redefinition of 'test_scope.f.Return.name'.
@@ -1412,6 +1407,13 @@ def test_directives_failures():
 file:?:?: Directives must appear at the top of the file.
 %builtins ab cd ef
 ^****************^
+""")
+    verify_exception("""
+%lang abc
+""", """
+file:?:?: Unsupported %lang directive. Are you using the correct compiler?
+%lang abc
+^*******^
 """)
 
 
@@ -1631,6 +1633,16 @@ def test_builtins_failures():
 file:?:?: Redefinition of builtins directive.
 %builtins b
 ^*********^
+""")
+
+
+def test_builtin_directive_duplicate_entry():
+    verify_exception("""
+%builtins pedersen ecdsa pedersen
+""", """
+file:?:?: The builtin 'pedersen' appears twice in builtins directive.
+%builtins pedersen ecdsa pedersen
+^*******************************^
 """)
 
 
@@ -1883,7 +1895,7 @@ file:?:?
 
 
 def test_references_failures():
-    verify_exception(f"""
+    verify_exception("""
 let ref = [fp]
 let ref2 = ref
 [ref2] = [[fp]]
@@ -2019,7 +2031,7 @@ end
     reference = get_reference('main.y')
     assert simplify_type_system(reference.value)[1] == expected_type_y
 
-    assert reference.value.format() == f'cast([ap + 10], {scope}.main.Struct)'
+    assert reference.value.format() == f'[cast(ap + 10, {scope}.main.Struct*)]'
     assert program.format() == """\
 [fp] = [ap + 12]
 [fp] = [[ap + 12] + 3]
@@ -2035,10 +2047,10 @@ def test_typed_references_failures():
 let x = fp
 x.a = x.a
 """, """
-file:?:?: Member access requires a type of the form Struct*.
+file:?:?: Cannot apply dot-operator to non-struct type 'felt'.
 x.a = x.a
 ^*^
-""")
+""", exc_type=CairoTypeError)
     verify_exception(f"""
 struct T:
     member z : felt
@@ -2056,10 +2068,10 @@ struct T:
     member z : felt
 end
 
-let x : T* = cast([ap], T)
+let x : T* = [cast(ap, T*)]
 """, """
 file:?:?: Cannot assign an expression of type 'test_scope.T' to a reference of type 'test_scope.T*'.
-let x : T* = cast([ap], T)
+let x : T* = [cast(ap, T*)]
         ^^
 """)
 
@@ -2127,10 +2139,10 @@ end
 let x = call foo
 [x.a] = 0
 """, """
-file:?:?: 'a' is not a member of 'test_scope.foo.Return'.
+file:?:?: Member 'a' does not appear in definition of struct 'test_scope.foo.Return'.
 [x.a] = 0
  ^*^
-""")
+""", exc_type=CairoTypeError)
     verify_exception(f"""
 func foo():
     ret
@@ -2148,10 +2160,10 @@ end
 let x : T* = cast(ap, T*)
 [ap] = x.a
 """, """
-file:?:?: 'a' is not a member of 'test_scope.T'.
+file:?:?: Member 'a' does not appear in definition of struct 'test_scope.T'.
 [ap] = x.a
        ^*^
-""")
+""", exc_type=CairoTypeError)
 
 
 def test_unpacking():
@@ -2255,18 +2267,23 @@ struct T:
     member a : felt
     member b : felt
 end
+struct S:
+    member a : felt
+    member b : felt
+end
 func foo() -> (a, b : T):
     ret
 end
 func test():
     alloc_locals
-    let (a, local b : T) = foo()
+    let (a, local b : S) = foo()
     ret
 end
 """, """
-file:?:?: Expected a 'felt' or a pointer type. Got: 'test_scope.T'.
-    let (a, local b : T) = foo()
-                  ^
+file:?:?: Expected expression of type 'test_scope.T', got 'test_scope.S'.
+    let (a, local b : S) = foo()
+            ^*********^
+
 """)
 
     verify_exception(f"""
@@ -2368,7 +2385,7 @@ func foo():
     ret
 end
 """, """
-file:?:?: Expected 'test_scope.foo' to be a struct. Found: 'label'.
+file:?:?: Expected 'test_scope.foo' to be a struct. Found: 'function'.
     local a : foo
               ^*^
 """)
@@ -2382,7 +2399,7 @@ func foo():
     ret
 end
 """, """
-file:?:?: Expected 'foo' to be a struct. Found: 'label'.
+file:?:?: Expected 'foo' to be a struct. Found: 'function'.
         member a : foo*
                    ^*^
 """)
@@ -2402,13 +2419,29 @@ file:?:?: Unknown identifier 'test_scope.foo.abc'.
 """)
 
 
+def test_cast_failure():
+    verify_exception("""
+struct A:
+end
+
+func foo(a : A*):
+    let a = cast(5, A)
+    return ()
+end
+""", """
+file:?:?: Cannot cast 'felt' to 'test_scope.A'.
+    let a = cast(5, A)
+            ^********^
+""", exc_type=CairoTypeError)
+
+
 def test_nested_function_failure():
     verify_exception("""
 func foo():
     func bar():
         return()
     end
-    return()
+    return ()
 end
 """, """
 file:?:?: Nested functions are not supported.
@@ -2425,7 +2458,7 @@ def test_namespace_inside_function_failure():
 func foo():
     namespace MyNamespace:
     end
-    return()
+    return ()
 end
 
 
@@ -2439,22 +2472,525 @@ func foo():
 """)
 
 
-def test_tuple_failures():
-    verify_exception("""
-func foo(x : (felt, felt)):
+def test_struct_assignments():
+    struct_def = """\
+struct B:
+    member a : felt
+    member b : felt
 end
+
+struct T:
+    member a : B
+    member b : felt
+end
+"""
+
+    code = f"""\
+{struct_def}
+func f(t : T*):
+    alloc_locals
+    local a : T = [t]
+    return ()
+end
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert program.format() == """\
+ap += 3
+[fp] = [[fp + (-3)]]
+[fp + 1] = [[fp + (-3)] + 1]
+[fp + 2] = [[fp + (-3)] + 2]
+ret
+"""
+
+    code = f"""\
+{struct_def}
+func copy(src : T**, dest: T**):
+    assert [[dest]] = [[src]]
+    return ()
+end
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert program.format() == """\
+[ap] = [[fp + (-3)]]; ap++
+[ap] = [[fp + (-4)]]; ap++
+[ap] = [[ap + (-1)]]; ap++
+[[ap + (-3)]] = [ap + (-1)]
+[ap] = [[fp + (-3)]]; ap++
+[ap] = [[fp + (-4)]]; ap++
+[ap] = [[ap + (-1)] + 1]; ap++
+[[ap + (-3)] + 1] = [ap + (-1)]
+[ap] = [[fp + (-3)]]; ap++
+[ap] = [[fp + (-4)]]; ap++
+[ap] = [[ap + (-1)] + 2]; ap++
+[[ap + (-3)] + 2] = [ap + (-1)]
+ret
+"""
+
+
+def test_subscript_operator():
+    code = """\
+struct T:
+    member x: felt
+    member y: felt
+end
+
+struct S:
+    member a : T
+    member b : T
+    member c : T
+end
+
+func f(s_arr : S*, table : felt**, perm : felt*):
+    assert s_arr[0].b.x = s_arr[1].a.y
+    assert (&s_arr[0].a)[2].x = (&s_arr[1].b.y)[-2]
+
+    assert table[1][2] = 11
+
+    assert perm[0] = 1
+    assert perm[1] = 0
+    assert perm[perm[0]] = 0
+
+    tempvar i = 2
+    tempvar j = 5
+    tempvar k = -13
+    assert (&(&s_arr[i].b)[j].x)[k] = s_arr[1].c.y
+    assert table[i][j] = 17
+
+    return()
+end
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    expected_result = """\
+[ap] = [[fp + (-5)] + 7]; ap++                  # push s_arr[1].a.y
+[[fp + (-5)] + 2] = [ap + (-1)]                 # assert s_arr[0].b.x = s_arr[1].a.y
+
+[ap] = [[fp + (-5)] + 7]; ap++                  # push (&s_arr[1].b.y)[-2]
+[[fp + (-5)] + 4] = [ap + (-1)]                 # assert (&s_arr[0].a)[2].x = (&s_arr[1].b.y)[-2]
+
+
+[ap] = [[fp + (-4)] + 1]; ap++                  # push table[1]
+[ap] = 11; ap++                                 # push 11
+[[ap + (-2)] + 2] = [ap + (-1)]                 # assert table[1][2] = 11
+
+
+[ap] = 1; ap++                                  # push 1
+[[fp + (-3)]] = [ap + (-1)]                     # assert perm[0] = 1
+
+[ap] = 0; ap++                                  # push 0
+[[fp + (-3)] + 1] = [ap + (-1)]                 # assert perm[1] = 0
+
+[ap] = [[fp + (-3)]]; ap++                      # push perm[0]
+[ap] = [fp + (-3)] + [ap + (-1)]; ap++          # push perm + perm[0]
+[ap] = 0; ap++                                  # push 0
+[[ap + (-2)]] = [ap + (-1)]                     # assert perm[perm[0]] = 0
+
+
+[ap] = 2; ap++                                  # tempvar i = 2
+[ap] = 5; ap++                                  # tempvar j = 5
+[ap] = -13; ap++                                # tempvar k = -13
+
+[ap] = [ap + (-3)] * 6; ap++                    # push i * 6
+[ap] = [ap + (-1)] + 2; ap++                    # push i * 6 + 2
+[ap] = [fp + (-5)] + [ap + (-1)]; ap++          # push &s_arr[i].b ( = s_arr + i * 6 + 2)
+[ap] = [ap + (-5)] * 2; ap++                    # push j * 2
+[ap] = [ap + (-2)] + [ap + (-1)]; ap++          # push &(&s_arr[i].b)[j].x
+[ap] = [ap + (-1)] + [ap + (-6)]; ap++          # push &(&s_arr[i].b)[j].x + k
+[ap] = [[fp + (-5)] + 11]; ap++                 # push s_arr[1].b.y
+[[ap + (-2)]] = [ap + (-1)]                     # assert (&(&s_arr[i].a)[j].x)[k] = s_arr[1].b.y
+
+[ap] = [fp + (-4)] + [ap + (-10)]; ap++         # push table + i
+[ap] = [[ap + (-1)]]; ap++                      # push table[i]
+[ap] = [ap + (-1)] + [ap + (-11)]; ap++         # push table[i] + j
+[ap] = 17; ap++                                 # push 17
+[[ap + (-2)]] = [ap + (-1)]                     # assert table[i][j] = 17
+ret
+"""
+    assert program.format() == strip_comments_and_linebreaks(expected_result)
+
+
+def test_dot_operator():
+    code = """\
+struct R:
+    member x: felt
+    member r : R*
+end
+
+struct S:
+    member x : felt
+    member y : felt
+end
+
+struct T:
+    member x : felt
+    member s : S
+    member sp : S*
+end
+
+func f():
+    alloc_locals
+    let __fp__ = [fp - 100]
+
+    local s : S
+    local s2 : S
+    local t : T
+    local r1 : R
+
+    s.x = 14
+    (s).y = 2
+    (&t).x = 7
+    assert t.s = s
+
+    ((t).s).x = t.x * 2
+    assert t.s = (t).s
+    assert (t.s).x = t.s.x
+    assert (&(t.s)).y = ((t).s).y
+
+    assert t.sp = &s
+    assert t.sp.x = 14
+    assert [t.sp].y = 2
+    assert [t.sp] = s
+    assert [t.sp] = (&t).s
+    assert &((t).s) = t.sp + 5
+
+    assert t.sp + 2 = &s2
+    assert [t.sp + 2].x = s.x
+    assert (t.sp + 2).y = s.y
+
+    assert [r1.r.r].r.r.r.r = &r1
+
+    return()
+end
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    expected_result = """\
+ap += 10                             # alloc_locals
+[fp] = 14                            # s.x = 14
+[fp + 1] = 2                         # (s).y = 2
+[fp + 4] = 7                         # (&t).x = 7
+[fp + 5] = [fp]                      # assert t.s = s (x member)
+[fp + 6] = [fp + 1]                  # assert t.s = s (y member)
+
+[fp + 5] = [fp + 4] * 2              # ((t).s).x = t.x * 2
+[fp + 5] = [fp + 5]                  # assert t.s = (t).s  (x member)
+[fp + 6] = [fp + 6]                  # assert t.s = (t).s  (y member)
+[fp + 5] = [fp + 5]                  # assert (t.s).x = t.s.x
+[fp + 6] = [fp + 6]                  # assert (&(t.s)).y = ((t).s).y
+
+[fp + 7] = [fp + (-100)]             # assert t.sp = &s
+[ap] = 14; ap++                      #   push 14
+[[fp + 7]] = [ap + (-1)]             # assert t.sp.x = 14
+[ap] = 2; ap++                       #   push 2
+[[fp + 7] + 1] = [ap + (-1)]         # assert [t.sp].y = 2
+[[fp + 7]] = [fp]                    # assert [t.sp] = s (x member)
+[[fp + 7] + 1] = [fp + 1]            # assert [t.sp] = s (y member)
+[[fp + 7]] = [fp + 5]                # assert [t.sp] = (&t).s (x member)
+[[fp + 7] + 1] = [fp + 6]            # assert [t.sp] = (&t).s (y member)
+[ap] = [fp + 7] + 5; ap++            #    push t.sp + 5
+[fp + (-100)] + 5 = [ap + (-1)]      # assert &(t.s) = t.sp + 5
+
+[ap] = [fp + (-100)] + 2; ap++       #   push &s2
+[fp + 7] + 2 = [ap + (-1)]           # assert t.sp + 2 = &s2
+[[fp + 7] + 2] = [fp]                # assert [t.sp + 2].x = s.x
+[[fp + 7] + 3] = [fp + 1]            # assert (t.sp + 2).y = s.y
+
+                                     # assert [r1.r.r].r.r.r.r = &r1 :
+[ap] = [[fp + 9] + 1]; ap++          #   push (r1.r).r ([fp + 9] = r1.r)
+[ap] = [[ap + (-1)] + 1]; ap++       #   push (r1.r.r).r
+[ap] = [[ap + (-1)] + 1]; ap++       #   push (r1.r.r.r).r
+[ap] = [[ap + (-1)] + 1]; ap++       #   push (r1.r.r.r.r).r
+[ap] = [fp + (-100)] + 8; ap++       #   push &r1
+[[ap + (-2)] + 1] = [ap + (-1)]      #   assert (r1.r.r.r.r.r).r = &r1
+ret
+"""
+    assert program.format() == strip_comments_and_linebreaks(expected_result)
+
+
+def test_tuple_assertions():
+    code = f"""\
+func f():
+    alloc_locals
+    local var : (felt, felt) = [cast(ap, (felt, felt)*)]
+    return ()
+end
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert program.format() == """\
+ap += 2
+[fp] = [ap]
+[fp + 1] = [ap + 1]
+ret
+"""
+
+
+def test_tuple_expression():
+    code = """\
+struct A:
+    member x : felt
+    member y : felt*
+end
+struct B:
+    member x : felt
+    member y : A
+    member z : A*
+end
+func foo(a : A*):
+    alloc_locals
+    let a : A* = cast([fp], A*)
+    local b : B = cast((1, [a], a), B)
+
+    assert (b.x, b.z, a) = (5, a, a)
+    return ()
+end
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert program.format() == """\
+ap += 4
+[fp] = 1
+[fp + 1] = [[fp]]
+[fp + 2] = [[fp] + 1]
+[fp + 3] = [fp]
+[fp] = 5
+[fp + 3] = [fp]
+[fp] = [fp]
+ret
+"""
+
+
+def test_tuple_expression_failures():
+    verify_exception("""
+struct A:
+    member x : felt
+end
+struct B:
+end
+let a = cast(fp, A*)
+let b = cast((1, a), B)
 """, """
-file:?:?: Tuples are not supported yet.
-func foo(x : (felt, felt)):
-             ^**********^
+file:?:?: Cannot cast an expression of type '(felt, test_scope.A*)' to 'test_scope.B'.
+The former has 2 members while the latter has 0 members.
+let b = cast((1, a), B)
+             ^****^
+""", exc_type=CairoTypeError)
+
+    verify_exception("""
+struct A:
+    member x : felt
+end
+struct B:
+    member a : felt
+    member b : felt
+end
+let a = cast(fp, A*)
+let b = cast((a, 1), B)
+""", """
+file:?:?: Cannot cast 'test_scope.A*' to 'felt'.
+let b = cast((a, 1), B)
+              ^
+""", exc_type=CairoTypeError)
+
+    verify_exception("""
+struct B:
+    member a : felt
+    member b : felt
+end
+let b = cast([cast(ap, (felt, felt*)*)], B)
+""", """
+file:?:?: Cannot cast 'felt*' to 'felt'.
+let b = cast([cast(ap, (felt, felt*)*)], B)
+             ^************************^
+""", exc_type=CairoTypeError)
+
+    verify_exception("""
+struct B:
+end
+let b = cast([cast(ap, (felt, felt*)*)], B)
+""", """
+file:?:?: Cannot cast an expression of type '(felt, felt*)' to 'test_scope.B'.
+The former has 2 members while the latter has 0 members.
+let b = cast([cast(ap, (felt, felt*)*)], B)
+             ^************************^
+""", exc_type=CairoTypeError)
+    verify_exception("""
+(1, 1) = 1
+""", """
+file:?:?: Expected a 'felt' or a pointer type. Got: '(felt, felt)'.
+(1, 1) = 1
+^****^
 """)
+
+    verify_exception("""
+assert (1, 1) = 1
+""", """
+file:?:?: Cannot compare '(felt, felt)' and 'felt'.
+assert (1, 1) = 1
+^***************^
+""")
+
+
+def test_struct_constructor():
+    code = """\
+struct A:
+    member x : felt
+    member y : felt
+end
+struct B:
+    member x : felt
+    member y : A
+    member z : A
+    member w : A*
+end
+func foo(a_ptr : A*):
+    alloc_locals
+    local b1 : B = B(x=0, y=A(1, 2), z=[a_ptr], w=a_ptr)
+    let a = A(x=a_ptr.x, y=0)
+    assert a = A(x=1, y=2)
+
+    tempvar y: felt* = cast(1, felt*)
+    tempvar x: A* = cast(0, A*)
+    assert [x] = A(x=[y], y=[y])
+    return ()
+end
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    expected_result = """\
+ap += 6
+# Populate b1.
+[fp] = 0
+[fp + 1] = 1
+[fp + 2] = 2
+[fp + 3] = [[fp + (-3)]]
+[fp + 4] = [[fp + (-3)] + 1]
+[fp + 5] = [fp + (-3)]
+
+# assert a = A(x=1, y=2) (x component).
+[ap] = 1; ap++
+[[fp + (-3)]] = [ap + (-1)]
+
+# assert a = A(x=1, y=2) (y component).
+[ap] = 2; ap++
+0 = [ap + (-1)]
+
+# tempvar y: felt* = cast(1, felt*).
+[ap] = 1; ap++
+# tempvar x: A* = cast(0, A*).
+[ap] = 0; ap++
+# assert [x] = A(x=[y], y=[y]).
+[ap] = [[ap + (-2)]]; ap++
+[[ap + (-2)]] = [ap + (-1)]
+[ap] = [[ap + (-3)]]; ap++
+[[ap + (-3)] + 1] = [ap + (-1)]
+ret
+"""
+    assert program.format() == strip_comments_and_linebreaks(expected_result)
+
+
+def test_struct_constructor_failures():
     verify_exception("""
 func foo():
+    ret
+end
+
+foo(3) = foo(4)
+""", """
+file:?:?: Expected 'foo' to be a struct. Found: 'function'.
+foo(3) = foo(4)
+^****^
+""")
+
+    def verify_exception_for_expr(expr_str: str, expected_error: str):
+        verify_exception(f"""
+struct T:
+    member x : felt
+    member y : felt
+end
+
+func foo(a):
     alloc_locals
-    local x : (felt, felt)
+    local a : T = {expr_str}
+end
+""", expected_error, exc_type=CairoTypeError)
+
+    verify_exception_for_expr('T(5, 6, 7)', """
+file:?:?: Cannot cast an expression of type '(felt, felt, felt)' to 'test_scope.T'.
+The former has 3 members while the latter has 2 members.
+    local a : T = T(5, 6, 7)
+                  ^********^
+""")
+
+    verify_exception_for_expr('&T(5, 6)', """
+file:?:?: Expression has no address.
+    local a : T = &T(5, 6)
+                   ^*****^
+""")
+
+    verify_exception_for_expr('T(5, 6).x', """
+file:?:?: Accessing struct members for r-value structs is not supported yet.
+    local a : T = T(5, 6).x
+                  ^*******^
+""")
+
+    verify_exception_for_expr('T{a}(5, 6)', """
+file:?:?: Implicit arguments cannot be used with struct constructors.
+    local a : T = T{a}(5, 6)
+                    ^
+""")
+
+
+def test_unsupported_decorator():
+    verify_exception("""
+@external
+func foo():
+    return()
 end
 """, """
-file:?:?: Tuples are not supported yet.
-    local x : (felt, felt)
-              ^**********^
+file:?:?: Unsupported decorator: 'external'.
+@external
+^*******^
 """)
+
+
+def test_skipped_functions():
+    files = {'module': """
+func func0():
+    tempvar x = 0
+    return ()
+end
+func func1():
+    tempvar x = 1
+    return ()
+end
+func func2():
+    tempvar x = 2
+    return func1()
+end
+""", '.': """
+from module import func2
+func2()
+"""}
+    program = preprocess_codes(
+        codes=[(files['.'], '.')],
+        pass_manager=default_pass_manager(prime=PRIME, read_module=read_file_from_dict(files)))
+    assert program.format() == """\
+[ap] = 1; ap++
+ret
+[ap] = 2; ap++
+call rel -5
+ret
+call rel -5
+"""
+    program = preprocess_codes(
+        codes=[(files['.'], '.')],
+        pass_manager=default_pass_manager(
+            prime=PRIME,
+            read_module=read_file_from_dict(files),
+            opt_unused_functions=False))
+    assert program.format() == """\
+[ap] = 0; ap++
+ret
+[ap] = 1; ap++
+ret
+[ap] = 2; ap++
+call rel -5
+ret
+call rel -5
+"""

@@ -1,8 +1,8 @@
 import dataclasses
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Set, Union
 
 from starkware.cairo.lang.compiler.identifier_definition import (
-    AliasDefinition, IdentifierDefinition)
+    AliasDefinition, FutureIdentifierDefinition, IdentifierDefinition)
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 
 
@@ -233,6 +233,34 @@ class IdentifierManager:
             for name, value in self.as_dict().items()
             if name not in other_as_dict
         })
+
+    def prune(self, prefixes_to_prune: Set[ScopedName]):
+        """
+        Removes identifiers that have one of the given prefixes.
+        """
+        # Prune dict.
+        new_dict = {}
+        for name, value in self.dict.items():
+            parent = name
+            while len(parent.path) > 0:
+                if parent in prefixes_to_prune:
+                    break
+                parent = parent[:-1]
+            if parent in prefixes_to_prune:
+                assert isinstance(value, (IdentifierDefinition, FutureIdentifierDefinition)), \
+                    f"Attempted to prune identifier '{value}'" \
+                    f" of unprunable type '{type(value).__name__}'."
+                continue
+            new_dict[name] = value
+        self.dict = new_dict
+
+        # Remove scopes.
+        for prefix in prefixes_to_prune:
+            assert len(prefix.path) > 0
+            current = self.root
+            for element in prefix[:-1].path:
+                current = current.subscopes[element]
+            del current.subscopes[prefix.path[-1]]
 
 
 class IdentifierScope:

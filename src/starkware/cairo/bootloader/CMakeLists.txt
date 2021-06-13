@@ -54,7 +54,7 @@ python_lib(cairo_bootloader_generate_fact_lib
     LIBS
     cairo_bootloader_fact_topology_lib
     cairo_hash_program_lib
-    cairo_relocatable
+    cairo_relocatable_lib
     cairo_vm_lib
     pip_eth_hash
     pip_pycryptodome

@@ -1,15 +1,15 @@
 import functools
-from typing import Dict, List, Optional, Sequence, Tuple, Type, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Type, Union
 
-from starkware.cairo.lang.builtins.checkpoints.checkpoints_builtin_runner import (
-    CheckpointsBuiltinRunner)
 from starkware.cairo.lang.builtins.hash.hash_builtin_runner import HashBuiltinRunner
 from starkware.cairo.lang.builtins.range_check.range_check_builtin_runner import (
     RangeCheckBuiltinRunner)
 from starkware.cairo.lang.builtins.signature.signature_builtin_runner import SignatureBuiltinRunner
-from starkware.cairo.lang.compiler.cairo_compile import compile_cairo, compile_cairo_files
+from starkware.cairo.lang.compiler.cairo_compile import (
+    compile_cairo, compile_cairo_files, get_module_reader)
 from starkware.cairo.lang.compiler.debug_info import DebugInfo
 from starkware.cairo.lang.compiler.expression_simplifier import to_field_element
+from starkware.cairo.lang.compiler.preprocessor.default_pass_manager import default_pass_manager
 from starkware.cairo.lang.compiler.preprocessor.preprocessor import Preprocessor
 from starkware.cairo.lang.compiler.program import Program, ProgramBase
 from starkware.cairo.lang.instances import LAYOUTS
@@ -66,7 +66,7 @@ class CairoRunner:
         assert len(non_existing_builtins) == 0, \
             f'Builtins {non_existing_builtins} are not present in layout "{self.layout}"'
 
-        if self.layout in ['small', 'dex', 'test']:
+        if self.layout != 'plain':
             builtin_factories = {
                 'output': lambda name, included: OutputBuiltinRunner(included=included),
                 'pedersen': functools.partial(
@@ -79,7 +79,6 @@ class CairoRunner:
                 'ecdsa': functools.partial(
                     SignatureBuiltinRunner, ratio=instance.builtins['ecdsa'].ratio,
                     process_signature=process_ecdsa, verify_signature=verify_ecdsa_sig),
-                'checkpoints': functools.partial(CheckpointsBuiltinRunner, sample_ratio=16),
             }
 
             for name, factory in builtin_factories.items():
@@ -105,8 +104,14 @@ class CairoRunner:
             remove_hints: bool = False, remove_builtins: bool = False, memory: MemoryDict = None,
             preprocessor_cls: Type[Preprocessor] = Preprocessor,
             proof_mode: Optional[bool] = None) -> 'CairoRunner':
+        module_reader = get_module_reader(cairo_path=[])
         program = compile_cairo_files(
-            files=[filename], prime=prime, debug_info=True, preprocessor_cls=preprocessor_cls)
+            files=[filename],
+            debug_info=True,
+            pass_manager=default_pass_manager(
+                prime=prime,
+                read_module=module_reader.read,
+                preprocessor_cls=preprocessor_cls))
         if remove_hints:
             program.hints = {}
         if remove_builtins:
@@ -134,22 +139,22 @@ class CairoRunner:
 
         Returns the value of the program counter after returning from main.
         """
-        self.execution_public_memory: List[Tuple[int, int]] = []
+        self.execution_public_memory: List[int] = []
 
         stack: List[MaybeRelocatable] = []
         for builtin_runner in self.builtin_runners.values():
             stack += builtin_runner.initial_stack()
 
-        self.execution_public_memory = [(i, 0) for i in range(len(stack))]
-
         if self.proof_mode:
-            if len(stack) == 0:
-                # Make sure [fp - 1] is always initialized.
-                stack = [0]
+            # Add the dummy last fp and pc to the public memory, so that the verifier can enforce
+            # [fp - 2] = fp.
+            stack = [self.execution_base + 2, 0] + stack
+            self.execution_public_memory = list(range(len(stack)))
 
             assert isinstance(self.program, Program), \
                 '--proof_mode cannot be used with a StrippedProgram.'
             self.initialize_state(self.program.start, stack)
+            self.initial_fp = self.initial_ap = self.execution_base + 2
             return self.program_base + self.program.get_label('__end__')
         else:
             return_fp = self.segments.add()
@@ -163,7 +168,9 @@ class CairoRunner:
             self, entrypoint: Union[str, int], args: Sequence[MaybeRelocatable],
             return_fp: MaybeRelocatable = 0):
         end = self.segments.add()
-        self.initialize_state(entrypoint, list(args) + [return_fp, end])
+        stack = list(args) + [return_fp, end]
+        self.initialize_state(entrypoint, stack)
+        self.initial_fp = self.initial_ap = self.execution_base + len(stack)
         self.final_pc = end
         return end
 
@@ -172,9 +179,11 @@ class CairoRunner:
         # Load program.
         self.load_data(self.program_base, self.program.data)
         # Load stack.
-        self.initial_fp = self.initial_ap = self.load_data(self.execution_base, stack)
+        self.load_data(self.execution_base, stack)
 
-    def initialize_vm(self, hint_locals, vm_class=VirtualMachine):
+    def initialize_vm(
+            self, hint_locals, static_locals: Optional[Dict[str, Any]] = None,
+            vm_class=VirtualMachine):
         context = RunContext(
             pc=self.initial_pc,
             ap=self.initial_ap,
@@ -183,9 +192,12 @@ class CairoRunner:
             prime=self.program.prime,
         )
 
+        if static_locals is None:
+            static_locals = {}
+
         self.vm = vm_class(
             self.program, context, hint_locals=hint_locals,
-            static_locals=dict(segments=self.segments),
+            static_locals=dict(segments=self.segments, **static_locals),
             builtin_runners=self.builtin_runners,
             program_base=self.program_base,
         )
@@ -245,6 +257,7 @@ class CairoRunner:
         self.run_until_steps(next_power_of_2(self.vm.current_step))
 
     def end_run(self):
+        self.vm_memory.relocate_memory()
         self.vm.end_run()
 
     def read_return_values(self):
@@ -255,8 +268,8 @@ class CairoRunner:
         for builtin_runner in list(self.builtin_runners.values())[::-1]:
             pointer = builtin_runner.final_stack(self, pointer)
         # Add return values to public memory.
-        self.execution_public_memory += [(i, 0) for i in range(
-            pointer - self.execution_base, self.vm.run_context.ap - self.execution_base)]
+        self.execution_public_memory += list(range(
+            pointer - self.execution_base, self.vm.run_context.ap - self.execution_base))
 
     def check_used_cells(self):
         """
@@ -280,7 +293,8 @@ class CairoRunner:
         self.segments.finalize(
             self.execution_base.segment_index,
             size=get_segment_used_size(self.execution_base.segment_index, self.vm_memory),
-            public_memory=self.execution_public_memory)
+            public_memory=[
+                (x + self.execution_base.offset, 0) for x in self.execution_public_memory])
 
         for builtin_runner in self.builtin_runners.values():
             builtin_runner.finalize_segments(self)
@@ -444,13 +458,16 @@ class CairoRunner:
         print()
 
     def print_info(self, relocated: bool):
+        print(self.get_info(relocated=relocated))
+
+    def get_info(self, relocated: bool) -> str:
         pc, ap, fp = self.vm.run_context.pc, self.vm.run_context.ap, self.vm.run_context.fp
         if relocated:
             pc = self.relocate_value(pc)
             ap = self.relocate_value(ap)
             fp = self.relocate_value(fp)
 
-        print(f"""\
+        info = f"""\
 Number of steps: {len(self.vm.trace)} {
     '' if self.original_steps is None else f'(originally, {self.original_steps})'}
 Used memory cells: {len(self.vm_memory)}
@@ -458,20 +475,28 @@ Register values after execution:
 pc = {pc}
 ap = {ap}
 fp = {fp}
-    """)
+    """
         if self.segment_offsets is not None:
-            print('Segment relocation table:')
+            info += 'Segment relocation table:\n'
             for segment_index in range(self.segments.n_segments):
-                print(f'{segment_index:<5} {self.segment_offsets[segment_index]}')
+                info += f'{segment_index:<5} {self.segment_offsets[segment_index]}\n'
+
+        return info
+
+    def get_builtin_usage(self) -> str:
+        if len(self.builtin_runners) == 0:
+            return ''
+
+        builtin_usage_str = '\nBuiltin usage:\n'
+        for name, builtin_runner in self.builtin_runners.items():
+            used, size = builtin_runner.get_used_cells_and_allocated_size(self)
+            percentage = f'{used / size * 100:.2f}%' if size > 0 else '100%'
+            builtin_usage_str += f'{name:<30s} {percentage:>7s} (used {used} cells)\n'
+
+        return builtin_usage_str
 
     def print_builtin_usage(self):
-        if self.builtin_runners:
-            print()
-            print('Builtin usage:')
-            for name, builtin_runner in self.builtin_runners.items():
-                used, size = builtin_runner.get_used_cells_and_allocated_size(self)
-                percentage = f'{used / size * 100:.2f}%' if size > 0 else '100%'
-                print(f'{name:<30s} {percentage:>7s} (used {used} cells)')
+        print(self.get_builtin_usage())
 
     def get_builtin_segments_info(self):
         builtin_segments: Dict[str, SegmentInfo] = {}
@@ -567,10 +592,17 @@ def get_runner_from_code(
     Cairo runner and returns the runner.
     """
     program = compile_cairo(code=code, prime=prime, debug_info=True)
+    return get_main_runner(program=program, hint_locals={}, layout=layout)
+
+
+def get_main_runner(program: Program, hint_locals: Dict[str, Any], layout: str):
+    """
+    Runs a main-entrypoint program using Cairo runner and returns the runner.
+    """
     runner = CairoRunner(program, layout=layout)
     runner.initialize_segments()
     end = runner.initialize_main_entrypoint()
-    runner.initialize_vm(hint_locals={})
+    runner.initialize_vm(hint_locals=hint_locals)
     runner.run_until_pc(end)
     runner.read_return_values()
     runner.finalize_segments_by_effective_size()

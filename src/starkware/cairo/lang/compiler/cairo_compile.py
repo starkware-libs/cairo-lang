@@ -3,7 +3,7 @@ import json
 import os
 import sys
 import time
-from typing import List, Sequence, Set, Tuple, Type, Union
+from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.cairo.lang.compiler.assembler import assemble
@@ -12,16 +12,16 @@ from starkware.cairo.lang.compiler.error_handling import LocationError
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierError
 from starkware.cairo.lang.compiler.identifier_utils import get_struct_definition
 from starkware.cairo.lang.compiler.module_reader import ModuleReader
-from starkware.cairo.lang.compiler.preprocessor.preprocessor import Preprocessor, preprocess_codes
+from starkware.cairo.lang.compiler.preprocessor.default_pass_manager import default_pass_manager
+from starkware.cairo.lang.compiler.preprocessor.pass_manager import PassManager
+from starkware.cairo.lang.compiler.preprocessor.preprocess_codes import preprocess_codes
+from starkware.cairo.lang.compiler.preprocessor.preprocessor import PreprocessedProgram
 from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.version import __version__
 
 
-def main():
-    start_time = time.time()
-
-    parser = argparse.ArgumentParser(description='A tool to compile Cairo code.')
+def cairo_compile_add_common_args(parser: argparse.ArgumentParser):
     parser.add_argument('-v', '--version', action='version', version=f'%(prog)s {__version__}')
     parser.add_argument('files', metavar='file', type=str, nargs='+', help='File names')
     parser.add_argument(
@@ -45,51 +45,70 @@ def main():
         '--debug_info_with_source', action='store_true',
         help='Include debug information with a copy of the source code.')
     parser.add_argument(
-        '--simple', action='store_true',
-        help='Compile the program without adding additional code. '
-        'In particular, program starts at the __start__ label, instead of the main() function.')
-    parser.add_argument(
         '--cairo_dependencies', type=str,
         help='Output a list of the Cairo source files used during the compilation as a CMake file.')
+    parser.add_argument(
+        '--no_opt_unused_functions', dest='opt_unused_functions', action='store_false',
+        default=True, help='Disables unused function optimization.')
 
-    args = parser.parse_args()
+
+def cairo_compile_common(
+        args: argparse.Namespace,
+        pass_manager_factory: Callable[[argparse.Namespace, ModuleReader], PassManager],
+        assemble_func: Callable) -> PreprocessedProgram:
+    """
+    Common code for CLI Cairo compilation.
+
+    Arguments:
+    args - Parsed arguments.
+    pass_manager_factory - A pass manager factory.
+    assemble_func - a function that converts a preprocessed program to the final output,
+        the return value should be a Marshmallow dataclass.
+    """
+
+    start_time = time.time()
     debug_info = args.debug_info or args.debug_info_with_source
 
-    source_files = set()
-    erred: bool = False
     try:
         codes = get_codes(args.files)
-        if not args.simple:
+        file_contents_for_debug_info = {}
+        if getattr(args, 'proof_mode', False):
             codes = add_start_code(codes)
+            file_contents_for_debug_info[START_FILE_NAME] = codes[0][0]
         out = args.output if args.output is not None else sys.stdout
 
-        cairo_path = list(filter(
+        cairo_path: List[str] = list(filter(
             None, args.cairo_path.split(':') + os.getenv(LIBS_DIR_ENVVAR, '').split(':')))
+        module_reader = get_module_reader(cairo_path=cairo_path)
+
+        pass_manager = pass_manager_factory(args, module_reader)
+
+        preprocessed = preprocess_codes(
+            codes=codes,
+            pass_manager=pass_manager,
+            main_scope=MAIN_SCOPE)
 
         if args.preprocess:
-            module_reader = get_module_reader(cairo_path)
-            preprocessed = preprocess_codes(codes, args.prime, module_reader.read, MAIN_SCOPE)
-            source_files = module_reader.source_files
             print(preprocessed.format(with_locations=debug_info), end='', file=out)
         else:
-            program, source_files = compile_cairo_extended(
-                codes, args.prime, cairo_path, debug_info, simple=args.simple)
             if args.debug_info_with_source:
-                for source_file in source_files | set(args.files):
-                    program.debug_info.file_contents[source_file] = open(source_file).read()
-            json.dump(Program.Schema().dump(program), out, indent=4, sort_keys=True)
+                for source_file in module_reader.source_files | set(args.files):
+                    file_contents_for_debug_info[source_file] = open(source_file).read()
+
+            assembled_program = assemble_func(
+                preprocessed, main_scope=MAIN_SCOPE, add_debug_info=debug_info,
+                file_contents_for_debug_info=file_contents_for_debug_info)
+
+            json.dump(
+                assembled_program.Schema().dump(assembled_program), out, indent=4, sort_keys=True)
             # Print a new line at the end.
             print(file=out)
 
-    except LocationError as err:
-        print(err, file=sys.stderr)
-        erred = True
-
-    if args.cairo_dependencies:
-        generate_cairo_dependencies_file(
-            args.cairo_dependencies, source_files | set(args.files), start_time)
-
-    return 1 if erred else 0
+        return preprocessed
+    finally:
+        if args.cairo_dependencies:
+            generate_cairo_dependencies_file(
+                args.cairo_dependencies, module_reader.source_files | set(args.files), start_time)
 
 
 def get_module_reader(cairo_path: List[str]) -> ModuleReader:
@@ -117,39 +136,28 @@ def add_start_code(codes_with_filenames: List[Tuple[str, str]]) -> List[Tuple[st
 
 
 def compile_cairo_files(
-        files: List[str], prime: int,
+        files: List[str], prime: Optional[int] = None,
         cairo_path: List[str] = [], debug_info: bool = False,
-        preprocessor_cls: Type[Preprocessor] = Preprocessor) -> Program:
+        pass_manager: Optional[PassManager] = None,
+        main_scope: Optional[ScopedName] = None) -> Program:
     """
     Compiles a list of files (provided by their names).
     Note that cairo_path is ignored when reading the input files,
     it is only used when importing modules.
     """
-    return compile_cairo(get_codes(files), prime, cairo_path, debug_info, preprocessor_cls)
+    return compile_cairo(
+        code=get_codes(files), prime=prime, cairo_path=cairo_path, debug_info=debug_info,
+        pass_manager=pass_manager, main_scope=main_scope)
 
 
-def compile_cairo(
-        code: Union[str, Sequence[Tuple[str, str]]], prime: int,
+def compile_cairo_ex(
+        code: Union[str, Sequence[Tuple[str, str]]], prime: Optional[int] = None,
         cairo_path: List[str] = [], debug_info: bool = False,
-        preprocessor_cls: Type[Preprocessor] = Preprocessor,
-        add_start: bool = False) -> Program:
+        pass_manager: Optional[PassManager] = None,
+        add_start: bool = False, main_scope: Optional[ScopedName] = None) -> \
+        Tuple[Program, PreprocessedProgram]:
     """
-    Compiles a single code represented by a string, or a list codes.
-    The codes in the list are joined with file names, used for indicative
-    compilation errors.
-    """
-    return compile_cairo_extended(
-        code=code, prime=prime, cairo_path=cairo_path, debug_info=debug_info,
-        preprocessor_cls=preprocessor_cls, add_start=add_start)[0]
-
-
-def compile_cairo_extended(
-        code: Union[str, Sequence[Tuple[str, str]]], prime: int,
-        cairo_path: List[str] = [], debug_info: bool = False,
-        preprocessor_cls: Type[Preprocessor] = Preprocessor,
-        add_start: bool = False, simple: bool = False) -> Tuple[Program, Set[str]]:
-    """
-    Same as compile_cairo(), except that imported Cairo modules are returned.
+    Same as compile_cairo, but returns the preprocessed program as well.
     """
     file_contents_for_debug_info = {}
 
@@ -165,18 +173,42 @@ def compile_cairo_extended(
     if START_FILE_NAME == codes_with_filenames[0][1]:
         file_contents_for_debug_info[START_FILE_NAME] = codes_with_filenames[0][0]
 
-    module_reader = get_module_reader(cairo_path)
-    preprocessed_program = preprocess_codes(
-        codes_with_filenames, prime, module_reader.read, MAIN_SCOPE, preprocessor_cls)
+    if pass_manager is None:
+        assert prime is not None, 'Exactly one of prime and pass_manager must be given.'
+        module_reader = get_module_reader(cairo_path)
+        pass_manager = default_pass_manager(prime=prime, read_module=module_reader.read)
+    else:
+        assert prime is None, 'Exactly one of prime and pass_manager must be given.'
+        assert len(cairo_path) == 0, 'cairo_path cannot be specified where pass_manager is used.'
 
-    program = assemble(
-        preprocessed_program, main_scope=MAIN_SCOPE, add_debug_info=debug_info,
+    if main_scope is None:
+        main_scope = MAIN_SCOPE
+    preprocessed_program = preprocess_codes(
+        codes=codes_with_filenames,
+        pass_manager=pass_manager,
+        main_scope=main_scope)
+    program = cairo_assemble_program(
+        preprocessed_program, main_scope=main_scope, add_debug_info=debug_info,
         file_contents_for_debug_info=file_contents_for_debug_info)
 
-    if not simple:
-        check_main_args(program)
+    return program, preprocessed_program
 
-    return program, module_reader.source_files
+
+def compile_cairo(
+        code: Union[str, Sequence[Tuple[str, str]]], prime: Optional[int] = None,
+        cairo_path: List[str] = [], debug_info: bool = False,
+        pass_manager: Optional[PassManager] = None,
+        add_start: bool = False, main_scope: Optional[ScopedName] = None) -> Program:
+    """
+    Compiles a single code represented by a string, or a list codes.
+    The codes in the list are joined with file names, used for indicative
+    compilation errors.
+    Returns the program.
+    """
+    program, _ = compile_cairo_ex(
+        code=code, prime=prime, cairo_path=cairo_path, debug_info=debug_info,
+        pass_manager=pass_manager, add_start=add_start, main_scope=main_scope)
+    return program
 
 
 def check_main_args(program: Program):
@@ -223,6 +255,7 @@ def get_start_code():
     """
     return """\
 __start__:
+ap += main.Args.SIZE + main.ImplicitArgs.SIZE
 call main
 
 __end__:
@@ -251,6 +284,44 @@ def generate_cairo_dependencies_file(dependencies_path: str, files: Set[str], st
     # Change the modification time of the file to make sure it is older than the generated
     # files.
     os.utime(dependencies_path, (start_time, start_time))
+
+
+def cairo_assemble_program(
+        preprocessed_program: PreprocessedProgram, main_scope: ScopedName,
+        add_debug_info: bool, file_contents_for_debug_info: Dict[str, str]) -> Program:
+    program = assemble(
+        preprocessed_program, main_scope=MAIN_SCOPE, add_debug_info=add_debug_info,
+        file_contents_for_debug_info=file_contents_for_debug_info)
+    check_main_args(program)
+    return program
+
+
+def main():
+    parser = argparse.ArgumentParser(description='A tool to compile Cairo code.')
+    parser.add_argument(
+        '--proof_mode', action='store_true', default=False,
+        help='Add instructions to call main() at the beginning of the program. This should be used '
+        'if the program is proven directly (without the bootloader).')
+    parser.add_argument(
+        '--no_proof_mode', dest='proof_mode', action='store_false',
+        help='Disable proof mode (see --proof_mode).')
+
+    def pass_manager_factory(args: argparse.Namespace, module_reader: ModuleReader) -> PassManager:
+        return default_pass_manager(
+            prime=args.prime,
+            read_module=module_reader.read,
+            opt_unused_functions=args.opt_unused_functions)
+
+    try:
+        cairo_compile_add_common_args(parser)
+        args = parser.parse_args()
+        cairo_compile_common(
+            args=args, pass_manager_factory=pass_manager_factory,
+            assemble_func=cairo_assemble_program)
+    except LocationError as err:
+        print(err, file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == '__main__':

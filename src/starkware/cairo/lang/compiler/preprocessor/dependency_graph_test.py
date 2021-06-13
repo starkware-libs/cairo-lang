@@ -1,16 +1,19 @@
-from typing import Dict, Set
+from typing import Dict
 
 from starkware.cairo.lang.compiler.ast.module import CairoModule
 from starkware.cairo.lang.compiler.parser import parse_file
-from starkware.cairo.lang.compiler.preprocessor.dependency_graph import DependencyGraphVisitor
+from starkware.cairo.lang.compiler.preprocessor.dependency_graph import (
+    DependencyGraphVisitor, get_main_functions_to_compile)
 from starkware.cairo.lang.compiler.preprocessor.identifier_collector import IdentifierCollector
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 
+scope = ScopedName.from_string
 
-def _extract_dependency_graph(codes: Dict[str, str]) -> Dict[str, Set[str]]:
+
+def _extract_dependency_graph(codes: Dict[str, str]) -> DependencyGraphVisitor:
     """
     Extracts the dependencies from the given codes (given as a map from a file name to its content).
-    Returns the dependencies as a map from scope name to a set of the identifiers it uses.
+    Returns the DependencyGraphVisitor instance.
     """
     modules = [
         CairoModule(
@@ -23,15 +26,14 @@ def _extract_dependency_graph(codes: Dict[str, str]) -> Dict[str, Set[str]]:
     dependency_graph_visitor = DependencyGraphVisitor(identifiers=identifier_collector.identifiers)
     for module in modules:
         dependency_graph_visitor.visit(module)
-    return {
-        str(scope): set(map(str, deps))
-        for scope, deps in dependency_graph_visitor.visited_identifiers.items()}
+    return dependency_graph_visitor
 
 
 def test_dependency_graph():
-    modules = {'module': """
-func func0():
-    return ()
+    modules = {
+        'module': """
+func func0() -> (res):
+    return (res=0)
 end
 func func1():
     return ()
@@ -39,7 +41,11 @@ end
 func func2():
     return ()
 end
-""", '__main__': """
+func func3():
+    return ()
+end
+""",
+        '__main__': """
 from module import func1 as func1_alias
 
 func foo():
@@ -61,12 +67,16 @@ func foo():
     let _reference = [fp] + 2
 
     _label:
-    let _typed_reference : W = myfunc(1, 2, 3)
+    let _typed_reference : W = ns.myfunc(1, 2, 3)
 end
 
-func myfunc():
-    myfunc()
-    func1_alias()
+namespace ns:
+    func myfunc():
+        myfunc()
+        func1_alias()
+    end
+
+    call bar  # This line will be ignored since it's outside of any function.
 end
 
 struct W:
@@ -85,12 +95,18 @@ func main():
     jmp foo._label
     call bar
 end
+
+call bar  # This line will be ignored since it's outside of any function.
+""",
+        '': """
+from module import func2
 """}
 
-    assert _extract_dependency_graph(modules) == {
-        '__main__': {
-            'module.func1',
-        },
+    dependency_graph_visitor = _extract_dependency_graph(modules)
+    dependencies = {
+        str(scope): set(map(str, deps))
+        for scope, deps in dependency_graph_visitor.visited_identifiers.items()}
+    assert dependencies == {
         '__main__.foo': {
             '__main__.foo._tempvar',
             '__main__.foo._const',
@@ -98,12 +114,12 @@ end
             '__main__.foo._reference',
             '__main__.foo._label',
             '__main__.foo._typed_reference',
-            '__main__.myfunc',
+            '__main__.ns.myfunc',
             'module.func0',
             'module.func2',
         },
-        '__main__.myfunc': {
-            '__main__.myfunc',
+        '__main__.ns.myfunc': {
+            '__main__.ns.myfunc',
             'module.func1',
         },
         '__main__.bar': {
@@ -118,4 +134,62 @@ end
             '__main__.bar',
             '__main__.foo._label',
         },
+        'module.func0': set(),
+        'module.func1': set(),
+        'module.func2': set(),
+        'module.func3': set(),
+    }
+
+    assert dependency_graph_visitor.find_function_dependencies(
+        {scope('__main__.main')}) == {
+        ScopedName(path=('__main__', 'bar')),
+        ScopedName(path=('__main__', 'foo')),
+        ScopedName(path=('__main__', 'main')),
+        ScopedName(path=('__main__', 'ns', 'myfunc')),
+        ScopedName(path=('module', 'func0')),
+        ScopedName(path=('module', 'func1')),
+        ScopedName(path=('module', 'func2')),
+    }
+    assert dependency_graph_visitor.find_function_dependencies(
+        {scope('__main__.ns.myfunc')}) == {
+            ScopedName(path=('__main__', 'ns', 'myfunc')),
+            ScopedName(path=('module', 'func1')),
+    }
+    assert dependency_graph_visitor.find_function_dependencies(
+        {scope('__main__.ns.myfunc'), scope('__main__.bar')}) == {
+            ScopedName(path=('__main__', 'bar')),
+            ScopedName(path=('__main__', 'foo')),
+            ScopedName(path=('__main__', 'ns', 'myfunc')),
+            ScopedName(path=('module', 'func0')),
+            ScopedName(path=('module', 'func1')),
+            ScopedName(path=('module', 'func2')),
+    }
+    assert dependency_graph_visitor.find_function_dependencies(
+        {scope('foo')}) == set()
+
+    # Test get_main_functions_to_compile().
+
+    assert get_main_functions_to_compile(
+        identifiers=dependency_graph_visitor.identifiers,
+        main_scope=scope('module')) == {
+            scope('module.func0'),
+            scope('module.func1'),
+            scope('module.func2'),
+            scope('module.func3'),
+    }
+    assert get_main_functions_to_compile(
+        identifiers=dependency_graph_visitor.identifiers,
+        main_scope=scope('__main__')) == {
+            scope('module.func1'),
+            scope('__main__.foo'),
+            scope('__main__.ns'),
+            scope('__main__.bar'),
+            scope('__main__.main'),
+    }
+    assert get_main_functions_to_compile(
+        identifiers=dependency_graph_visitor.identifiers,
+        main_scope=scope('')) == {
+            scope('module.func2'),
+            scope('module'),
+            scope('__main__'),
     }

@@ -79,10 +79,9 @@ end
     assert tracer_data.get_current_identifier_values(trace[1]) == {'output_ptr': '21', 'x': '2000'}
     assert tracer_data.get_current_identifier_values(trace[2]) == {
         'output_ptr': '21', 'x': '5000', 'y': '3000'}
-    # '__temp1' identifier is already available in this step, but should not be returned as its
-    # value is still unknown.
-    assert tracer_data.get_current_identifier_values(trace[3]) == \
-        tracer_data.get_current_identifier_values(trace[4]) == {
-            'output_ptr': '21', 'x': '5000', 'y': '3000', '__temp0': '1234'}
+    assert tracer_data.get_current_identifier_values(trace[3]) == {
+        'output_ptr': '21', 'x': '5000', 'y': '3000'}
+    assert tracer_data.get_current_identifier_values(trace[4]) == {
+        'output_ptr': '21', 'x': '5000', 'y': '3000', '__temp0': '1234'}
     assert tracer_data.get_current_identifier_values(trace[5]) == {
-        'output_ptr': '21', 'x': '5000', 'y': '3000', '__temp0': '1234', '__temp1': '4321'}
+        'output_ptr': '21', 'x': '5000', 'y': '3000', '__temp0': '1234'}

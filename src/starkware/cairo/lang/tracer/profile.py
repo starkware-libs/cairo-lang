@@ -107,6 +107,7 @@ class ProfileBuilder:
             func = self._profile.function.add()
             func.id = func_id
             func.system_name = func.name = self.string_id(name)
+            assert inst_location.inst.input_file.filename is not None
             func.filename = self.string_id(inst_location.inst.input_file.filename)
             func.start_line = inst_location.inst.start_line
         return func_id
@@ -126,6 +127,7 @@ class ProfileBuilder:
             line = location.line.add()
             line.function_id = self._func_name_to_id[str(inst_location.accessible_scopes[-1])]
             line.line = sublocation.start_line
+            assert sublocation.input_file.filename is not None
             location.mapping_id = self.update_mapping_pc_range(sublocation.input_file.filename, pc)
         return self._pc_to_location_id[pc]
 
@@ -166,6 +168,7 @@ def profile_from_tracer_data(tracer_data: TracerData):
 
     # Functions.
     identifiers_dict = tracer_data.program.identifiers.as_dict()
+    assert tracer_data.program.debug_info is not None
     for name, ident in identifiers_dict.items():
         if not isinstance(ident, LabelDefinition):
             continue

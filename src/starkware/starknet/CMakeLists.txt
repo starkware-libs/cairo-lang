@@ -1,0 +1,8 @@
+add_subdirectory(cli)
+add_subdirectory(compiler)
+add_subdirectory(core)
+add_subdirectory(definitions)
+add_subdirectory(public)
+add_subdirectory(scripts)
+add_subdirectory(security)
+add_subdirectory(services)

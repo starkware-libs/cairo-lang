@@ -1,8 +1,16 @@
+def assert_integer(val):
+    """
+    Asserts that the input is an integer (and not relocatable value).
+    """
+    assert isinstance(val, int), f'Expected integer, found: {val}.'
+
+
 def as_int(val, prime):
     """
     Returns the lift of the given field element, val, as an integer in the range
     (-prime/2, prime/2).
     """
+    assert_integer(val)
     return val if val < prime // 2 else val - prime
 
 

@@ -1,11 +1,11 @@
 import dataclasses
 from abc import abstractmethod
-from typing import List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 from starkware.cairo.lang.compiler.ast.aliased_identifier import AliasedIdentifier
 from starkware.cairo.lang.compiler.ast.arguments import IdentifierList
 from starkware.cairo.lang.compiler.ast.bool_expr import BoolExpr
-from starkware.cairo.lang.compiler.ast.expr import ArgListItem, Expression, ExprIdentifier
+from starkware.cairo.lang.compiler.ast.expr import ExprAssignment, Expression, ExprIdentifier
 from starkware.cairo.lang.compiler.ast.formatting_utils import (
     INDENTATION, LocationField, ParticleFormattingConfig, create_particle_sublist,
     particles_in_lines)
@@ -150,7 +150,7 @@ class CodeElementReturn(CodeElement):
     Represents a statement of the form:
       return ([ident=]expr, ...).
     """
-    exprs: List[ArgListItem]
+    exprs: List[ExprAssignment]
     location: Optional[Location] = LocationField
 
     def format(self, allowed_line_length):
@@ -391,6 +391,8 @@ class CodeElementFunction(CodeElement):
     implicit_arguments: Optional[IdentifierList]
     returns: Optional[IdentifierList]
     code_block: CodeBlock
+    decorators: List[ExprIdentifier]
+    additional_attributes: Dict[str, Any] = dataclasses.field(default_factory=dict)
 
     ARGUMENT_SCOPE = ScopedName.from_string('Args')
     IMPLICIT_ARGUMENT_SCOPE = ScopedName.from_string('ImplicitArgs')
@@ -426,12 +428,13 @@ class CodeElementFunction(CodeElement):
                     *implicit_args_particles,
                     create_particle_sublist(self.arguments.get_particles(), '):')]
 
+        decorators = ''.join(f'@{decorator.format()}\n' for decorator in self.decorators)
         header = particles_in_lines(
             particles=particles,
             config=ParticleFormattingConfig(
                 allowed_line_length=allowed_line_length,
                 line_indent=INDENTATION * 2))
-        return f'{header}\n{code}end'
+        return f'{decorators}{header}\n{code}end'
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [
@@ -500,6 +503,18 @@ class BuiltinsDirective(Directive):
 
     def format(self):
         return f'%builtins {" ".join(self.builtins)}'
+
+    def get_children(self) -> Sequence[Optional[AstNode]]:
+        return []
+
+
+@dataclasses.dataclass
+class LangDirective(Directive):
+    name: str
+    location: Optional[Location] = LocationField
+
+    def format(self):
+        return f'%lang {self.name}'
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return []

@@ -2,7 +2,7 @@ import re
 
 import pytest
 
-from starkware.python.utils import WriteOnceDict, indent, unique
+from starkware.python.utils import WriteOnceDict, indent, safe_zip, unique
 
 
 def test_indent():
@@ -24,3 +24,19 @@ def test_write_once_dict():
     with pytest.raises(AssertionError, match=re.escape(
             f"Trying to set key=5 to 'b' but key=5 is already set to 'None'.")):
         d[key] = 'b'
+
+
+def test_safe_zip():
+    # Test empty case.
+    assert list(safe_zip()) == list(zip())
+
+    # Test equal-length iterables (including a generator).
+    assert (
+        list(safe_zip((i for i in range(3)), range(3, 6), [1, 2, 3])) ==
+        list(zip((i for i in range(3)), range(3, 6), [1, 2, 3])))
+
+    # Test unequal-length iterables.
+    test_cases = [[range(4), range(3)], [[], range(3)]]
+    for iterables in test_cases:
+        with pytest.raises(AssertionError, match='Iterables to safe_zip are not equal in length.'):
+            list(safe_zip(*iterables))  # Consume generator to get to the error.

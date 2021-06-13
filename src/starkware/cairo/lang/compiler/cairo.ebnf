@@ -9,6 +9,7 @@ _DBL_PLUS: "++"
 _DBL_EQ: "=="
 _NEQ: "!="
 _ARROW: "->"
+_AT: "@"
 
 // Types.
 type: "felt"                           -> type_felt
@@ -20,6 +21,9 @@ type: "felt"                           -> type_felt
 expr_assignment: expr | identifier_def "=" expr
 ?arg_list_item: expr_assignment
 arg_list: ((notes arg_list_item notes ",")* notes arg_list_item (notes ",")?)? notes
+
+?decorator: _AT identifier_def
+decorator_list: (decorator _NEWLINE*)*
 
 ?expr: sum
 ?sum: product
@@ -36,9 +40,12 @@ identifier_def: IDENTIFIER
 ?atom: INT                                    -> atom_number
      | PYCONST                                -> atom_pyconst
      | reg                                    -> atom_reg
+     | function_call                          -> atom_func_call
      | identifier
      | "(" notes expr ")"                     -> atom_parentheses
      | "[" notes expr "]"                     -> atom_deref
+     | atom "[" notes expr "]"                -> atom_subscript
+     | atom "." identifier_def                -> atom_dot
      | "cast" "(" notes expr "," type ")"     -> atom_cast
      | "(" arg_list ")"                       -> atom_tuple
 !reg: "ap" -> reg_ap
@@ -76,12 +83,13 @@ instruction: instruction_body                    -> instruction_noap
 function_call: identifier ("{" arg_list "}")? "(" arg_list ")"
 
 // Reference expressions.
-?rvalue: expr                                    -> rvalue_expr
-      | call_instruction                         -> rvalue_call_instruction
-      | function_call
+?rvalue: call_instruction                        -> rvalue_call_instruction
+       | function_call
+       | expr                                    -> rvalue_expr
 
 // Directives.
 directive: "%builtins" identifier+  -> directive_builtins
+         | "%lang" identifier       -> directive_lang
 
 // Import statement.
 aliased_identifier: identifier_def ("as" identifier_def)?
@@ -96,7 +104,7 @@ _returns:  _ARROW _NEWLINE* "(" identifier_list ")"
 _arguments: "(" identifier_list ")"
 implicit_arguments: ("{" identifier_list "}")?
 _funcdecl: "func" identifier_def implicit_arguments _arguments _NEWLINE* _returns? ":"
-_func: _funcdecl _NEWLINE code_block "end"
+_func: decorator_list _funcdecl _NEWLINE code_block "end"
 _if: "if" bool_expr ":" _NEWLINE code_block ("else" ":" _NEWLINE code_block)? "end"
 
 !_some_namespace: "struct" | "namespace"

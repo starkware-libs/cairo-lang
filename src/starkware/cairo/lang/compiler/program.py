@@ -2,9 +2,8 @@ import dataclasses
 import string
 from abc import ABC, abstractmethod
 from dataclasses import field
-from typing import ClassVar, Dict, List, Optional, Type, Union
+from typing import Dict, List, Optional, Type, Union
 
-import marshmallow
 import marshmallow.fields as mfields
 import marshmallow_dataclass
 
@@ -17,6 +16,7 @@ from starkware.cairo.lang.compiler.identifier_manager_field import IdentifierMan
 from starkware.cairo.lang.compiler.preprocessor.flow import FlowTrackingDataActual, ReferenceManager
 from starkware.cairo.lang.compiler.references import Reference
 from starkware.cairo.lang.compiler.scoped_name import ScopedName, ScopedNameAsStr
+from starkware.starkware_utils.validated_dataclass import SerializableMarshmallowDataclass
 
 
 @dataclasses.dataclass
@@ -67,8 +67,8 @@ class StrippedProgram(ProgramBase):
             'Invalid main() address.'
 
 
-@marshmallow_dataclass.dataclass
-class Program(ProgramBase):
+@marshmallow_dataclass.dataclass(repr=False)
+class Program(ProgramBase, SerializableMarshmallowDataclass):
     prime: int
     data: List[int]
     hints: Dict[int, CairoHint]
@@ -79,7 +79,6 @@ class Program(ProgramBase):
     # Holds all the allocated references in the program.
     reference_manager: ReferenceManager
     debug_info: Optional[DebugInfo] = None
-    Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
 
     def stripped(self) -> StrippedProgram:
         assert self.main is not None
@@ -91,11 +90,15 @@ class Program(ProgramBase):
         )
 
     def get_identifier(
-            self, name: Union[str, ScopedName], expected_type: Type[IdentifierDefinition]):
+            self, name: Union[str, ScopedName], expected_type: Type[IdentifierDefinition],
+            full_name_lookup: Optional[bool] = None):
         scoped_name = name if isinstance(name, ScopedName) else ScopedName.from_string(name)
-        result = self.identifiers.search(
-            accessible_scopes=[self.main_scope],
-            name=scoped_name)
+        if full_name_lookup is True:
+            result = self.identifiers.root.get(scoped_name)
+        else:
+            result = self.identifiers.search(
+                accessible_scopes=[self.main_scope],
+                name=scoped_name)
         result.assert_fully_parsed()
         identifier_definition = result.identifier_definition
         assert isinstance(identifier_definition, expected_type), (
@@ -103,11 +106,13 @@ class Program(ProgramBase):
             f'found {identifier_definition.TYPE}.')  # type: ignore
         return identifier_definition
 
-    def get_label(self, name: Union[str, ScopedName]):
-        return self.get_identifier(name, LabelDefinition).pc
+    def get_label(self, name: Union[str, ScopedName], full_name_lookup: Optional[bool] = None):
+        return self.get_identifier(
+            name=name, expected_type=LabelDefinition, full_name_lookup=full_name_lookup).pc
 
-    def get_const(self, name: Union[str, ScopedName]):
-        return self.get_identifier(name, ConstDefinition).value
+    def get_const(self, name: Union[str, ScopedName], full_name_lookup: Optional[bool] = None):
+        return self.get_identifier(
+            name=name, expected_type=ConstDefinition, full_name_lookup=full_name_lookup).value
 
     def get_reference_binds(self, name: Union[str, ScopedName]) -> List[Reference]:
         """

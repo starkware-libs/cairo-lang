@@ -1,9 +1,10 @@
-from typing import Dict, Optional
+from typing import MutableMapping, Optional
 
 from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt, TypePointer
 from starkware.cairo.lang.compiler.ast.expr import ExprConst, ExprDeref, Expression, ExprReg
 from starkware.cairo.lang.compiler.error_handling import LocationError
 from starkware.cairo.lang.compiler.expression_simplifier import ExpressionSimplifier
+from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.instruction import Register
 from starkware.cairo.lang.compiler.type_system_visitor import simplify_type_system
 
@@ -15,15 +16,18 @@ class ExpressionEvaluatorError(LocationError):
 class ExpressionEvaluator(ExpressionSimplifier):
     prime: int
 
-    def __init__(self, prime: int, ap: Optional[int], fp: int, memory: Dict[int, int]):
+    def __init__(
+            self, prime: int, ap: Optional[int], fp: int, memory: MutableMapping[int, int],
+            identifiers: Optional[IdentifierManager] = None):
         super().__init__(prime=prime)
         assert self.prime is not None
         self.ap = ap
         self.fp = fp
         self.memory = memory
+        self.identifiers = identifiers
 
     def eval(self, expr: Expression) -> int:
-        expr, expr_type = simplify_type_system(expr)
+        expr, expr_type = simplify_type_system(expr, identifiers=self.identifiers)
         assert isinstance(expr_type, (TypeFelt, TypePointer)), \
             f"Unable to evaluate expression of type '{expr_type.format()}'."
         res = self.visit(expr)

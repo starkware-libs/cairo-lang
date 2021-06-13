@@ -9,9 +9,9 @@ from starkware.cairo.lang.compiler.ast.code_elements import (
 from starkware.cairo.lang.compiler.ast.visitor import Visitor
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.identifier_definition import (
-    AliasDefinition, ConstDefinition, FutureIdentifierDefinition, IdentifierDefinition,
-    LabelDefinition, ReferenceDefinition, StructDefinition)
-from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
+    AliasDefinition, ConstDefinition, FunctionDefinition, FutureIdentifierDefinition,
+    IdentifierDefinition, LabelDefinition, ReferenceDefinition, StructDefinition)
+from starkware.cairo.lang.compiler.identifier_manager import IdentifierError, IdentifierManager
 from starkware.cairo.lang.compiler.preprocessor.local_variables import N_LOCALS_CONSTANT
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
@@ -45,9 +45,9 @@ class IdentifierCollector(Visitor):
         CodeElementReturnValueReference: ReferenceDefinition,
     }
 
-    def __init__(self):
+    def __init__(self, identifiers: Optional[IdentifierManager] = None):
         super().__init__()
-        self.identifiers = IdentifierManager()
+        self.identifiers = IdentifierManager() if identifiers is None else identifiers
 
     def add_identifier(
             self, name: ScopedName, identifier_definition: IdentifierDefinition,
@@ -152,8 +152,9 @@ class IdentifierCollector(Visitor):
                         'argument.',
                         location=arg_id.location)
 
+        ident_type = FunctionDefinition if elm.element_type == 'func' else LabelDefinition
         self.add_future_identifier(
-            function_scope, LabelDefinition, elm.identifier.location)
+            function_scope, ident_type, elm.identifier.location)
 
         # Add SIZEOF_LOCALS for current block at identifier definition location if available.
         self.add_future_identifier(
@@ -200,10 +201,13 @@ class IdentifierCollector(Visitor):
 
             # Ensure destination is a valid identifier.
             if self.identifiers.get_by_full_name(alias_dst) is None:
-                raise PreprocessorError(
-                    f"Scope '{elm.path.name}' does not include identifier "
-                    f"'{import_item.orig_identifier.name}'.",
-                    location=import_item.orig_identifier.location)
+                try:
+                    self.identifiers.get_scope(alias_dst)
+                except IdentifierError:
+                    raise PreprocessorError(
+                        f"Cannot import '{import_item.orig_identifier.name}' "
+                        f"from '{elm.path.name}'.",
+                        location=import_item.orig_identifier.location)
 
             # Add alias to identifiers.
             self.add_identifier(

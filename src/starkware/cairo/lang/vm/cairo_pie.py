@@ -2,6 +2,7 @@
 A CairoPie represents a position independent execution of a Cairo program.
 """
 
+import copy
 import dataclasses
 import io
 import json
@@ -17,7 +18,7 @@ import marshmallow_dataclass
 from starkware.cairo.lang.compiler.program import StrippedProgram, is_valid_builtin_name
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
-from starkware.python.utils import add_counters
+from starkware.python.utils import add_counters, sub_counters
 
 
 @dataclasses.dataclass
@@ -130,18 +131,32 @@ class ExecutionResources:
             for name, size in self.builtin_instance_counter.items()), \
             'Invalid builtin_instance_counter.'
 
-    def __add__(self, other):
-        total_n_steps = self.n_steps + other.n_steps
+    def __add__(self, other: 'ExecutionResources') -> 'ExecutionResources':
         total_builtin_instance_counter = add_counters(
             self.builtin_instance_counter, other.builtin_instance_counter)
-        total_n_memory_holes = self.n_memory_holes + other.n_memory_holes
+
         return ExecutionResources(
-            n_steps=total_n_steps, builtin_instance_counter=total_builtin_instance_counter,
-            n_memory_holes=total_n_memory_holes)
+            n_steps=self.n_steps + other.n_steps,
+            builtin_instance_counter=total_builtin_instance_counter,
+            n_memory_holes=self.n_memory_holes + other.n_memory_holes)
+
+    def __sub__(self, other: 'ExecutionResources') -> 'ExecutionResources':
+        diff_builtin_instance_counter = sub_counters(
+            self.builtin_instance_counter, other.builtin_instance_counter)
+        diff_execution_resources = ExecutionResources(
+            n_steps=self.n_steps - other.n_steps,
+            builtin_instance_counter=diff_builtin_instance_counter,
+            n_memory_holes=self.n_memory_holes - other.n_memory_holes)
+        diff_execution_resources.run_validity_checks()
+
+        return diff_execution_resources
 
     @classmethod
     def empty(cls):
         return cls(n_steps=0, builtin_instance_counter={}, n_memory_holes=0)
+
+    def copy(self) -> 'ExecutionResources':
+        return copy.deepcopy(self)
 
 
 @dataclasses.dataclass
@@ -293,6 +308,10 @@ class CairoPie:
             f'Invalid file size for {cls.ADDITIONAL_DATA_FILENAME}.'
         assert inner_files[cls.EXECUTION_RESOURCES_FILENAME].file_size < 10000, \
             f'Invalid file size for {cls.EXECUTION_RESOURCES_FILENAME}.'
+
+    def get_segment(self, segment_info: SegmentInfo):
+        return self.memory.get_range(
+            RelocatableValue(segment_index=segment_info.index, offset=0), size=segment_info.size)
 
 
 def verify_zip_file_prefix(fileobj):

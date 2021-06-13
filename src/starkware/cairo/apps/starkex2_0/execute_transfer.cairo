@@ -78,7 +78,8 @@ func execute_transfer(
     # Call vault_update for the receiver.
     # Make a copy of the first argument to avoid a compiler optimization that was added after the
     # code was deployed.
-    tempvar range_check_ptr = sender_vault_update_ret.range_check_ptr
+    [ap] = sender_vault_update_ret.range_check_ptr; ap++
+    let range_check_ptr = [ap - 1]
     let receiver_vault_update_ret = vault_update_diff(
         range_check_ptr=range_check_ptr,
         diff=amount,

@@ -10,15 +10,9 @@ end
 func get_ap() -> (ap_val):
     # Once get_ap() is invoked, fp points to ap + 2 (since the call instruction placed the old fp
     # and pc in memory, advancing ap accordingly).
-    # Calling dummy_func places fp and pc at [fp], [fp + 1] (respectively), and advances ap by 2.
-    # Hence, going two cells above we get [fp] = ap + 2, and by subtracting 2 we get the desired ap
-    # value.
-    call dummy_func
-    return (ap_val=[ap - 2] - 2)
-end
-
-func dummy_func():
-    return ()
+    # Hence, the desired ap value is fp - 2.
+    let (fp_val, pc_val) = get_fp_and_pc()
+    return (ap_val=fp_val - 2)
 end
 
 # Takes the value of a label (relative to program base) and returns the actual runtime address of

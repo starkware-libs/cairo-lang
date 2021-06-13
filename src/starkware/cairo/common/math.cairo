@@ -2,7 +2,11 @@
 
 # Verifies that value != 0. The proof will fail otherwise.
 func assert_not_zero(value):
-    %{ assert ids.value % PRIME != 0, f'assert_not_zero failed: {ids.value} = 0.' %}
+    %{
+        from starkware.cairo.common.math_utils import assert_integer
+        assert_integer(ids.value)
+        assert ids.value % PRIME != 0, f'assert_not_zero failed: {ids.value} = 0.'
+    %}
     if value == 0:
         # If value == 0, add an unsatisfiable requirement.
         value = 1
@@ -13,7 +17,16 @@ end
 
 # Verifies that a != b. The proof will fail otherwise.
 func assert_not_equal(a, b):
-    %{ assert (ids.a - ids.b) % PRIME != 0, f'assert_not_equal failed: {ids.a} = {ids.b}.' %}
+    %{
+        from starkware.cairo.lang.vm.relocatable import RelocatableValue
+        both_ints = isinstance(ids.a, int) and isinstance(ids.b, int)
+        both_relocatable = (
+            isinstance(ids.a, RelocatableValue) and isinstance(ids.b, RelocatableValue) and
+            ids.a.segment_index == ids.b.segment_index)
+        assert both_ints or both_relocatable, \
+            f'assert_not_equal failed: non-comparable values: {ids.a}, {ids.b}.'
+        assert (ids.a - ids.b) % PRIME != 0, f'assert_not_equal failed: {ids.a} = {ids.b}.'
+    %}
     if a == b:
         # If a == b, add an unsatisfiable requirement.
         [fp - 1] = [fp - 1] + 1
@@ -24,7 +37,11 @@ end
 
 # Verifies that a >= 0 (or more precisely 0 <= a < RANGE_CHECK_BOUND).
 func assert_nn{range_check_ptr}(a):
-    %{ assert 0 <= ids.a % PRIME < range_check_builtin.bound, f'a = {ids.a} is out of range.' %}
+    %{
+        from starkware.cairo.common.math_utils import assert_integer
+        assert_integer(ids.a)
+        assert 0 <= ids.a % PRIME < range_check_builtin.bound, f'a = {ids.a} is out of range.'
+    %}
     a = [range_check_ptr]
     let range_check_ptr = range_check_ptr + 1
     return ()
@@ -58,10 +75,9 @@ func assert_in_range{range_check_ptr}(value, lower, upper):
     return ()
 end
 
-# Asserts that a <= b.
+# Asserts that a <= b. More specifically, asserts that b - a is in the range [0, 2**250).
 #
-# Assumptions:
-#    a and b are in the range [0, 2**250).
+# Prover assumptions:
 #    PRIME - 2**250 > 2**(250 - 128) + 1 * RC_BOUND.
 func assert_le_250_bit{range_check_ptr}(a, b):
     let low = [range_check_ptr]
@@ -69,20 +85,23 @@ func assert_le_250_bit{range_check_ptr}(a, b):
     let range_check_ptr = range_check_ptr + 2
     const UPPER_BOUND = %[2**(250)%]
     const HIGH_PART_SHIFT = %[2**250 // 2**128 %]
+    tempvar diff = b - a
     %{
+        from starkware.cairo.common.math_utils import as_int
+
         # Soundness checks.
         assert range_check_builtin.bound == 2**128
         assert ids.UPPER_BOUND == ids.HIGH_PART_SHIFT * range_check_builtin.bound
-        assert ids.a < ids.UPPER_BOUND, f'a={ids.a} is outside of the valid range.'
-        assert ids.b < ids.UPPER_BOUND, f'b={ids.b} is outside of the valid range.'
-        assert PRIME - ids.UPPER_BOUND > (ids.HIGH_PART_SHIFT + 1) * range_check_builtin.bound
 
         # Correctness check.
-        assert ids.a <= ids.b, f'a={ids.a} > b={ids.b}.'
-    %}
+        diff = as_int(ids.diff, PRIME)
+        values_msg = f'(a={as_int(ids.a, PRIME)}, b={as_int(ids.b, PRIME)}).'
+        assert diff < ids.UPPER_BOUND, f'(b - a)={diff} is outside of the valid range. {values_msg}'
+        assert PRIME - ids.UPPER_BOUND > (ids.HIGH_PART_SHIFT + 1) * range_check_builtin.bound
 
-    tempvar diff = b - a
-    %{
+        assert diff >= 0, f'(b - a)={diff} < 0. {values_msg}'
+
+        # Calculation for the assertion.
         ids.high = ids.diff // ids.HIGH_PART_SHIFT
         ids.low = ids.diff % ids.HIGH_PART_SHIFT
     %}
@@ -110,7 +129,9 @@ func split_felt{range_check_ptr}(value) -> (high, low):
     let range_check_ptr = range_check_ptr + 2
 
     %{
+        from starkware.cairo.common.math_utils import assert_integer
         assert PRIME < 2**256
+        assert_integer(ids.value)
         ids.low = ids.value & ((1 << 128) - 1)
         ids.high = ids.value >> 128
     %}
@@ -128,6 +149,9 @@ end
 # See split_felt() for more details.
 func assert_le_felt{range_check_ptr}(a, b):
     %{
+        from starkware.cairo.common.math_utils import assert_integer
+        assert_integer(ids.a)
+        assert_integer(ids.b)
         assert (ids.a % PRIME) <= (ids.b % PRIME), \
             f'a = {ids.a % PRIME} is not less than or equal to b = {ids.b % PRIME}.'
     %}
@@ -147,6 +171,9 @@ end
 # that of b.
 func assert_lt_felt{range_check_ptr}(a, b):
     %{
+        from starkware.cairo.common.math_utils import assert_integer
+        assert_integer(ids.a)
+        assert_integer(ids.b)
         assert (ids.a % PRIME) < (ids.b % PRIME), \
             f'a = {ids.a % PRIME} is not less than b = {ids.b % PRIME}.'
     %}
@@ -219,6 +246,8 @@ func unsigned_div_rem{range_check_ptr}(value, div) -> (q, r):
     let q = [range_check_ptr + 1]
     let range_check_ptr = range_check_ptr + 2
     %{
+        from starkware.cairo.common.math_utils import assert_integer
+        assert_integer(ids.div)
         assert 0 < ids.div <= PRIME // range_check_builtin.bound, \
             f'div={hex(ids.div)} is out of the valid range.'
         ids.q, ids.r = divmod(ids.value, ids.div)
@@ -245,16 +274,17 @@ func signed_div_rem{range_check_ptr}(value, div, bound) -> (q, r):
     let biased_q = [range_check_ptr + 1]  # == q + bound.
     let range_check_ptr = range_check_ptr + 2
     %{
-        def as_int(val):
-            return val if val < PRIME // 2 else val - PRIME
+        from starkware.cairo.common.math_utils import as_int, assert_integer
 
+        assert_integer(ids.div)
         assert 0 < ids.div <= PRIME // range_check_builtin.bound, \
             f'div={hex(ids.div)} is out of the valid range.'
 
+        assert_integer(ids.bound)
         assert ids.bound <= range_check_builtin.bound // 2, \
             f'bound={hex(ids.bound)} is out of the valid range.'
 
-        int_value = as_int(ids.value)
+        int_value = as_int(ids.value, PRIME)
         q, ids.r = divmod(int_value, ids.div)
 
         assert -ids.bound <= q < ids.bound, \

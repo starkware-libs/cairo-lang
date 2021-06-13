@@ -76,20 +76,8 @@ class ExprIdentifier(Expression):
         return []
 
 
-class ArgListItem(AstNode):
-    """
-    Represents an item in function call or return statement.
-    """
-
-    location: Optional[Location]
-
-    @abstractmethod
-    def format(self):
-        pass
-
-
 @dataclasses.dataclass
-class ExprAssignment(ArgListItem):
+class ExprAssignment(AstNode):
     """
     A code element of the form [ident=]expr. The identifier is optional.
     """
@@ -112,7 +100,7 @@ class ArgList(AstNode):
     Represents a list of arguments (e.g., to a function call or a return statement).
     For example: 'a=1, b=2'.
     """
-    args: List[ArgListItem]
+    args: List[ExprAssignment]
     notes: List[Notes]
     has_trailing_comma: bool
     location: Optional[Location] = LocationField
@@ -229,7 +217,7 @@ class ExprParentheses(Expression):
 @dataclasses.dataclass
 class ExprDeref(Expression):
     """
-    Represents an expression of the form "[expr]".
+    Represents an expression of the form "[addr]".
     """
     addr: Expression
     notes: Notes = NotesField
@@ -242,6 +230,45 @@ class ExprDeref(Expression):
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.addr]
+
+
+@dataclasses.dataclass
+class ExprSubscript(Expression):
+    """
+    Represents an expression of the form "expr[offset]".
+    """
+    expr: Expression
+    offset: Expression
+    notes: Notes = NotesField
+    location: Optional[Location] = LocationField
+
+    def to_expr_str(self):
+        self.notes.assert_no_comments()
+        notes = '' if self.notes.empty else '\n'
+        # If expr is not an atom, add parentheses.
+        return ExpressionString.highest(
+            f'{self.expr.to_expr_str():HIGHEST}[{notes}{str(self.offset.to_expr_str())}]')
+
+    def get_children(self) -> Sequence[Optional[AstNode]]:
+        return [self.expr, self.offset]
+
+
+@dataclasses.dataclass
+class ExprDot(Expression):
+    """
+    Represents an expression of the form "expr.member".
+    """
+    expr: Expression
+    member: ExprIdentifier
+    location: Optional[Location] = LocationField
+
+    def to_expr_str(self):
+        # If expr is not an atom, add parentheses.
+        return ExpressionString.highest(
+            f'{self.expr.to_expr_str():HIGHEST}.{str(self.member.to_expr_str())}')
+
+    def get_children(self) -> Sequence[Optional[AstNode]]:
+        return [self.expr, self.member]
 
 
 @dataclasses.dataclass

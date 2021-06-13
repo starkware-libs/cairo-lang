@@ -51,6 +51,7 @@ def wrap_lark_error(err: LarkError, input_file: InputFile) -> Exception:
             expected.remove('_NEWLINE')
         TOKENS = {
             '_ARROW': '"->"',
+            '_AT': '"@"',
             '_DBL_EQ': '"=="',
             '_DBL_PLUS': '"++"',
             '_NEQ': '"!="',
@@ -60,6 +61,7 @@ def wrap_lark_error(err: LarkError, input_file: InputFile) -> Exception:
             'COLON': '":"',
             'DOT': '"."',
             'EQUAL': '"="',
+            'FUNC': 'func',
             'IDENTIFIER': 'identifier',
             'INT': 'integer',
             'LBRACE': '"{"',

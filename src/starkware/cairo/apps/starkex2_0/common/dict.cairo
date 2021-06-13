@@ -95,7 +95,7 @@ func squash_dict_inner(
     locals.first_value = first_access.prev_value
     locals.first_value = dict_diff.prev_value
 
-    # Skip loop non-deterministically if necessary.
+    # Skip loop nondeterministically if necessary.
     %{ memory[fp + ids.Locals.should_skip_loop] = 0 if current_access_indices else 1 %}
     jmp skip_loop if [fp + Locals.should_skip_loop] != 0
 

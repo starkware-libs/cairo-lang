@@ -9,13 +9,11 @@ func memcpy(dst : felt*, src : felt*, len):
         return ()
     end
 
-    let frame = cast(ap, LoopFrame*)
     %{ vm_enter_scope({'n': ids.len}) %}
-    frame.dst = dst; ap++
-    frame.src = src; ap++
+    tempvar frame = LoopFrame(dst=dst, src=src)
 
     loop:
-    let frame = cast(ap - LoopFrame.SIZE, LoopFrame*)
+    let frame = [cast(ap - LoopFrame.SIZE, LoopFrame*)]
     assert [frame.dst] = [frame.src]
 
     let continue_copying = [ap]

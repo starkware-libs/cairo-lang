@@ -9,6 +9,7 @@ full_python_test(starkex2_0_program_test
     TESTED_MODULES starkware/cairo/apps/starkex2_0
 
     FILES
+    __start__.cairo
     common/cairo_builtins.cairo
     common/dict.cairo
     common/merkle_multi_update.cairo

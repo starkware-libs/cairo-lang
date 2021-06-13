@@ -9,12 +9,12 @@ from starkware.cairo.lang.compiler.debug_info import DebugInfo
 from starkware.cairo.lang.compiler.encode import decode_instruction
 from starkware.cairo.lang.compiler.expression_evaluator import ExpressionEvaluator
 from starkware.cairo.lang.compiler.identifier_definition import ConstDefinition, ReferenceDefinition
-from starkware.cairo.lang.compiler.identifier_utils import resolve_search_result
 from starkware.cairo.lang.compiler.offset_reference import OffsetReferenceDefinition
 from starkware.cairo.lang.compiler.parser import parse_expr
 from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.compiler.references import (
     FlowTrackingError, SubstituteRegisterTransformer)
+from starkware.cairo.lang.compiler.resolve_search_result import resolve_search_result
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.compiler.substitute_identifiers import substitute_identifiers
 from starkware.cairo.lang.compiler.type_system_visitor import simplify_type_system
@@ -115,6 +115,7 @@ class TracerData:
             for pc_offset, instruction_location in self.debug_info.instruction_locations.items():
                 loc = instruction_location.inst
                 filename = loc.input_file.filename
+                assert filename is not None
                 # If filename was not loaded yet, create a new InputCodeFile instance.
                 if filename not in self.input_files:
                     self.input_files[filename] = InputCodeFile(loc.input_file.get_content())
@@ -238,7 +239,7 @@ def field_element_repr(val: int, prime: int) -> str:
 
 
 class WatchEvaluator(ExpressionEvaluator):
-    def __init__(self, tracer_data: TracerData, entry: TraceEntry):
+    def __init__(self, tracer_data: TracerData, entry: TraceEntry[int]):
         super().__init__(
             prime=tracer_data.program.prime, ap=entry.ap,
             fp=entry.fp, memory=tracer_data.memory)
@@ -260,7 +261,8 @@ class WatchEvaluator(ExpressionEvaluator):
         expr, expr_type = simplify_type_system(
             substitute_identifiers(
                 expr=parse_expr(expr),
-                get_identifier_callback=self.get_variable))
+                get_identifier_callback=self.get_variable),
+            identifiers=self.tracer_data.program.identifiers)
         if isinstance(expr_type, TypeStruct):
             raise NotImplementedError('Structs are not supported.')
         res = self.visit(expr)
@@ -293,6 +295,7 @@ class WatchEvaluator(ExpressionEvaluator):
 
     def eval_reference(self, identifier_definition, var_name: str):
         pc_offset = self.tracer_data.get_pc_offset(self.pc)
+        assert self.tracer_data.program.debug_info is not None
         current_flow_tracking_data = \
             self.tracer_data.program.debug_info.instruction_locations[pc_offset].flow_tracking_data
         try:

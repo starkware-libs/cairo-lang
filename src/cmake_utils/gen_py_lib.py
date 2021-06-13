@@ -33,10 +33,11 @@ from typing import List
 
 def extract_licenses(filename: str) -> List[str]:
     prefix = 'License: '
-    with open(filename, encoding='utf8') as fp:
-        for line in fp.readlines():
-            if line.startswith(prefix):
-                return line.strip()[len(prefix):].split(',')
+    if os.path.isfile(filename):
+        with open(filename, encoding='utf8') as fp:
+            for line in fp.readlines():
+                if line.startswith(prefix):
+                    return line.strip()[len(prefix):].split(',')
     return []
 
 
@@ -58,6 +59,10 @@ def main():
     parser.add_argument('--output', type=str, help='Output info file', required=True)
     parser.add_argument(
         '--py_exe_deps', type=str, nargs='*', required=True, help='List of executable dependencies')
+    parser.add_argument(
+        '--cmake_dir', type=str, nargs='?', help='Directory of this CMake target', required=False)
+    parser.add_argument(
+        '--prefix', type=str, nargs='?', help='Prefix of this CMake target', required=False)
     args = parser.parse_args()
 
     # Try to extract license if possible.
@@ -82,6 +87,8 @@ def main():
                 lib_deps=args.lib_deps,
                 py_exe_deps=args.py_exe_deps,
                 licenses=licenses,
+                cmake_dir=args.cmake_dir,
+                prefix=args.prefix,
             ),
             fp,
             sort_keys=True,

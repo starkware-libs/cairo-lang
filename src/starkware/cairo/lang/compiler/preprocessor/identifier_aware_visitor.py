@@ -9,8 +9,7 @@ from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.identifier_definition import (
     DefinitionError, FutureIdentifierDefinition, IdentifierDefinition, StructDefinition)
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierError, IdentifierManager
-from starkware.cairo.lang.compiler.identifier_utils import (
-    get_struct_definition, resolve_search_result)
+from starkware.cairo.lang.compiler.identifier_utils import get_struct_definition
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 
@@ -33,7 +32,8 @@ class IdentifierAwareVisitor(Visitor):
             location=location)
 
     def add_name_definition(
-            self, name: ScopedName, identifier_definition: IdentifierDefinition, location):
+            self, name: ScopedName, identifier_definition: IdentifierDefinition, location,
+            require_future_definition=True):
         """
         Adds a definition of an identifier named 'name' at 'location'.
         The identifier must already be found as a FutureIdentifierDefinition in 'self.identifiers'
@@ -42,7 +42,8 @@ class IdentifierAwareVisitor(Visitor):
 
         future_definition = self.identifiers.get_by_full_name(name)
         if future_definition is None:
-            self.handle_missing_future_definition(name=name, location=location)
+            if require_future_definition:
+                self.handle_missing_future_definition(name=name, location=location)
         else:
             if not isinstance(future_definition, FutureIdentifierDefinition):
                 raise PreprocessorError(f"Redefinition of '{name}'.", location=location)
@@ -66,10 +67,10 @@ class IdentifierAwareVisitor(Visitor):
         try:
             res = self.identifiers.search(
                 accessible_scopes=self.accessible_scopes, name=name)
+            res.assert_fully_parsed()
         except IdentifierError as exc:
             raise PreprocessorError(str(exc), location=location)
 
-        res.assert_fully_parsed()
         struct_def = res.identifier_definition
         if not isinstance(struct_def, StructDefinition):
             raise PreprocessorError(
@@ -79,17 +80,14 @@ Expected '{res.canonical_name}' to be a {StructDefinition.TYPE}. Found: '{struct
 
         return struct_def
 
-    def search_identifier(
-            self, name: str, location: Optional[Location]) -> Optional[IdentifierDefinition]:
+    def try_get_struct_definition(self, name: ScopedName) -> Optional[StructDefinition]:
         """
-        Searches for the given identifier in self.identifiers and returns the corresponding
-        IdentifierDefinition.
+        Same as get_struct_definition() except that None is returned in case of a failure.
         """
         try:
-            result = self.identifiers.search(self.accessible_scopes, ScopedName.from_string(name))
-            return resolve_search_result(result, identifiers=self.identifiers)
-        except IdentifierError as exc:
-            raise PreprocessorError(str(exc), location=location)
+            return self.get_struct_definition(name, None)
+        except PreprocessorError:
+            return None
 
     def get_canonical_struct_name(self, scoped_name: ScopedName, location: Optional[Location]):
         """
@@ -142,8 +140,9 @@ Expected '{scoped_name}' to be a {StructDefinition.TYPE}. Found: '{identifier_ty
             except IdentifierError as exc:
                 raise PreprocessorError(str(exc), location=cairo_type.location)
         elif isinstance(cairo_type, TypeTuple):
-            raise PreprocessorError(
-                'Tuples are not supported yet.', location=cairo_type.location)
+            return dataclasses.replace(
+                cairo_type,
+                members=[self.resolve_type(subtype) for subtype in cairo_type.members])
         else:
             raise NotImplementedError(f'Type {type(cairo_type).__name__} is not supported.')
 
@@ -167,8 +166,7 @@ Expected '{scoped_name}' to be a {StructDefinition.TYPE}. Found: '{identifier_ty
                 return self.get_struct_size(
                     struct_name=cairo_type.scope, location=cairo_type.location)
         elif isinstance(cairo_type, TypeTuple):
-            raise PreprocessorError(
-                'Tuples are not supported yet.', location=cairo_type.location)
+            return sum(self.get_size(member_type) for member_type in cairo_type.members)
         else:
             raise NotImplementedError(f'Type {type(cairo_type).__name__} is not supported.')
 

@@ -4,7 +4,7 @@ from typing import Callable, ClassVar, List, Optional, Type
 import marshmallow
 import marshmallow_dataclass
 
-from starkware.cairo.lang.compiler.ast.cairo_types import CairoType
+from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypePointer
 from starkware.cairo.lang.compiler.ast.expr import (
     ExprCast, ExprConst, ExprDeref, Expression, ExprOperator, ExprReg)
 from starkware.cairo.lang.compiler.error_handling import Location
@@ -23,19 +23,19 @@ class FlowTrackingError(Exception):
 
 def create_simple_ref_expr(
         reg: Register, offset: int, cairo_type: CairoType,
-        location: Optional[Location]) -> ExprCast:
+        location: Optional[Location]) -> Expression:
     """
-    Creates an expression of the form 'cast([reg + offset], cairo_type)'.
+    Creates an expression of the form '[cast(reg + offset, cairo_type*)]'.
     """
-    return ExprCast(
-        ExprDeref(
-            addr=ExprOperator(
+    return ExprDeref(
+        addr=ExprCast(
+            expr=ExprOperator(
                 a=ExprReg(reg=reg, location=location),
                 op='+',
                 b=ExprConst(val=offset, location=location),
                 location=location),
+            dest_type=TypePointer(pointee=cairo_type, location=location),
             location=location),
-        dest_type=cairo_type,
         location=location)
 
 

@@ -38,12 +38,19 @@ func squash_dict{range_check_ptr}(
     ap += 2
     tempvar n_accesses = ptr_diff / DictAccess.SIZE
     %{
-        assert ids.ptr_diff % ids.DictAccess.SIZE == 0, \
+        dict_access_size = ids.DictAccess.SIZE
+        address = ids.dict_accesses.address_
+        assert ids.ptr_diff % dict_access_size == 0, \
             'Accesses array size must be divisible by DictAccess.SIZE'
+        n_accesses = ids.n_accesses
+        if '__squash_dict_max_size' in globals():
+            assert n_accesses <= __squash_dict_max_size, \
+                f'squash_dict() can only be used with n_accesses<={__squash_dict_max_size}. ' \
+                f'Got: n_accesses={n_accesses}.'
         # A map from key to the list of indices accessing it.
         access_indices = {}
-        for i in range(ids.n_accesses):
-            key = memory[ids.dict_accesses.address_ + ids.DictAccess.SIZE * i]
+        for i in range(n_accesses):
+            key = memory[address + dict_access_size * i]
             access_indices.setdefault(key, []).append(i)
         # Descending list of keys.
         keys = sorted(access_indices.keys(), reverse=True)
@@ -139,7 +146,7 @@ func squash_dict_inner(
     local first_value = first_access.prev_value
     assert first_value = dict_diff.prev_value
 
-    # Skip loop non-deterministically if necessary.
+    # Skip loop nondeterministically if necessary.
     local should_skip_loop
     %{ ids.should_skip_loop = 0 if current_access_indices else 1 %}
     jmp skip_loop if should_skip_loop != 0

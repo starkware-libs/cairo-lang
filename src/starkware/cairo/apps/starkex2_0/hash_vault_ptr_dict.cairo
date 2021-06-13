@@ -46,7 +46,8 @@ func hash_vault_ptr_dict(
 
     # Make a copy of the first argument to avoid a compiler optimization that was added after the
     # code was deployed.
-    tempvar hash_ptr = prev_hash_res.hash_ptr
+    [ap] = prev_hash_res.hash_ptr; ap++
+    let hash_ptr = cast([ap - 1], HashBuiltin*)
     let new_hash_res = hash_vault_state_ptr(
         hash_ptr=hash_ptr, vault_state_ptr=cast(vault_access.new_value, VaultState*))
     hashed_vault_access.new_value = new_hash_res.vault_hash
@@ -54,7 +55,8 @@ func hash_vault_ptr_dict(
     # Tail call.
     # Make a copy of the first argument to avoid a compiler optimization that was added after the
     # code was deployed.
-    tempvar hash_ptr = new_hash_res.hash_ptr
+    [ap] = new_hash_res.hash_ptr; ap++
+    let hash_ptr = cast([ap - 1], HashBuiltin*)
     return hash_vault_ptr_dict(
         hash_ptr=hash_ptr,
         vault_ptr_dict=vault_ptr_dict + DictAccess.SIZE,

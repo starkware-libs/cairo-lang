@@ -21,18 +21,22 @@ setuptools.setup(
     setup_requires=['wheel'],
     url='https://cairo-lang.org/',
     package_data={
-        'starkware.cairo.lang': ['VERSION'],
+        'starkware.cairo.common': ['*.cairo'],
         'starkware.cairo.lang.compiler': ['cairo.ebnf'],
         'starkware.cairo.lang.tracer': ['*.html', '*.css', '*.js', '*.png'],
-        'starkware.cairo.common': ['*.cairo'],
-        'starkware.crypto.signature': ['pedersen_params.json'],
+        'starkware.cairo.lang': ['VERSION'],
         'starkware.cairo.sharp': ['config.json'],
+        'starkware.crypto.signature': ['pedersen_params.json'],
+        'starkware.starknet': ['core/storage/*.cairo'],
+        'starkware.starknet.security': ['whitelists/latest.json'],
     },
     scripts=[
-        'starkware/cairo/lang/scripts/cairo-format',
         'starkware/cairo/lang/scripts/cairo-compile',
-        'starkware/cairo/lang/scripts/cairo-run',
+        'starkware/cairo/lang/scripts/cairo-format',
         'starkware/cairo/lang/scripts/cairo-hash-program',
+        'starkware/cairo/lang/scripts/cairo-run',
         'starkware/cairo/lang/scripts/cairo-sharp',
+        'starkware/starknet/scripts/starknet-compile',
+        'starkware/starknet/scripts/starknet',
     ]
 )

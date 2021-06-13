@@ -20,7 +20,7 @@ def test_main_scope():
         identifiers=identifiers, reference_manager=reference_manager)
 
     # Check accessible identifiers.
-    assert program.get_identifier('b', ConstDefinition)
+    assert program.get_identifier('b', ConstDefinition).value == 1
 
     # Ensure inaccessible identifiers.
     with pytest.raises(MissingIdentifierError, match="Unknown identifier 'a'."):
@@ -31,6 +31,10 @@ def test_main_scope():
 
     with pytest.raises(MissingIdentifierError, match="Unknown identifier 'y'."):
         program.get_identifier('y', ConstDefinition)
+
+    # Full name lookup.
+    assert program.get_identifier('a.b', ConstDefinition, full_name_lookup=True).value == 1
+    assert program.get_identifier('x.y.z', ConstDefinition, full_name_lookup=True).value == 2
 
 
 def test_program_start_property():

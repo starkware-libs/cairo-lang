@@ -1,21 +1,23 @@
 import dataclasses
 from contextlib import contextmanager
 from enum import Enum, auto
-from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple, Type, cast
+from typing import Dict, List, Optional, Set, Tuple, cast
 
 from starkware.cairo.lang.compiler.ast.arguments import IdentifierList
 from starkware.cairo.lang.compiler.ast.cairo_types import (
-    CairoType, CastType, TypeFelt, TypePointer, TypeStruct)
+    CairoType, CastType, TypeFelt, TypePointer, TypeStruct, TypeTuple)
 from starkware.cairo.lang.compiler.ast.code_elements import (
     BuiltinsDirective, CodeBlock, CodeElement, CodeElementAllocLocals, CodeElementCompoundAssertEq,
     CodeElementConst, CodeElementDirective, CodeElementEmptyLine, CodeElementFuncCall,
     CodeElementFunction, CodeElementHint, CodeElementIf, CodeElementImport, CodeElementInstruction,
     CodeElementLabel, CodeElementLocalVariable, CodeElementMember, CodeElementReference,
     CodeElementReturn, CodeElementReturnValueReference, CodeElementStaticAssert,
-    CodeElementTailCall, CodeElementTemporaryVariable, CodeElementUnpackBinding, CodeElementWith)
+    CodeElementTailCall, CodeElementTemporaryVariable, CodeElementUnpackBinding, CodeElementWith,
+    LangDirective)
 from starkware.cairo.lang.compiler.ast.expr import (
     ExprAssignment, ExprCast, ExprConst, ExprDeref, Expression, ExprFutureLabel, ExprIdentifier,
-    ExprOperator, ExprReg)
+    ExprOperator, ExprReg, ExprTuple)
+from starkware.cairo.lang.compiler.ast.expr_func_call import ExprFuncCall
 from starkware.cairo.lang.compiler.ast.formatting_utils import get_max_line_length
 from starkware.cairo.lang.compiler.ast.instructions import (
     AddApInstruction, AssertEqInstruction, CallInstruction, CallLabelInstruction, InstructionAst,
@@ -26,11 +28,10 @@ from starkware.cairo.lang.compiler.constants import SIZE_CONSTANT
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.expression_simplifier import ExpressionSimplifier
 from starkware.cairo.lang.compiler.identifier_definition import (
-    ConstDefinition, DefinitionError, FutureIdentifierDefinition, LabelDefinition, MemberDefinition,
-    ReferenceDefinition)
+    ConstDefinition, DefinitionError, FunctionDefinition, FutureIdentifierDefinition,
+    IdentifierDefinition, LabelDefinition, MemberDefinition, ReferenceDefinition)
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierError, IdentifierManager
 from starkware.cairo.lang.compiler.identifier_utils import get_struct_definition
-from starkware.cairo.lang.compiler.import_loader import collect_imports
 from starkware.cairo.lang.compiler.instruction import Register
 from starkware.cairo.lang.compiler.instruction_builder import (
     InstructionBuilderError, get_instruction_size)
@@ -44,20 +45,19 @@ from starkware.cairo.lang.compiler.preprocessor.flow import (
     ReferenceManager)
 from starkware.cairo.lang.compiler.preprocessor.identifier_aware_visitor import (
     IdentifierAwareVisitor)
-from starkware.cairo.lang.compiler.preprocessor.identifier_collector import IdentifierCollector
 from starkware.cairo.lang.compiler.preprocessor.local_variables import (
     create_simple_ref_expr, preprocess_local_variables)
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_utils import assert_no_modifier
 from starkware.cairo.lang.compiler.preprocessor.reg_tracking import (
     RegChange, RegChangeKnown, RegChangeUnconstrained, RegChangeUnknown, RegTrackingData)
-from starkware.cairo.lang.compiler.preprocessor.struct_collector import StructCollector
-from starkware.cairo.lang.compiler.preprocessor.unique_labels import UniqueLabelCreator
 from starkware.cairo.lang.compiler.references import FlowTrackingError, Reference, translate_ap
+from starkware.cairo.lang.compiler.resolve_search_result import resolve_search_result
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.compiler.substitute_identifiers import substitute_identifiers
 from starkware.cairo.lang.compiler.type_casts import check_cast
 from starkware.cairo.lang.compiler.type_system_visitor import get_expr_addr, simplify_type_system
+from starkware.python.utils import safe_zip
 
 
 @dataclasses.dataclass
@@ -135,10 +135,19 @@ class Preprocessor(IdentifierAwareVisitor):
     * Labels.
     * Constant values.
     * Functions.
+
+    Arguments:
+    prime: The prime we are compiling for.
+    identifiers: An optional initial IdentifierManager.
+    supported_decorators: A set of decorators that may appear before a function decleration.
+    functions_to_compile: A set of functions to compile. None means compile everything.
     """
 
-    def __init__(self, prime: int, identifiers: Optional[IdentifierManager] = None):
-        super().__init__(identifiers=identifiers)
+    def __init__(
+            self, prime: int, identifiers: Optional[IdentifierManager] = None,
+            supported_decorators: Optional[Set[str]] = None,
+            functions_to_compile: Optional[Set[ScopedName]] = None):
+        super().__init__(identifiers=identifiers,)
         self.prime: int = prime
         self.instructions: List[PreprocessedInstruction] = []
         # Stores the program counter of the next instruction (where the first instruction is at 0).
@@ -169,6 +178,27 @@ class Preprocessor(IdentifierAwareVisitor):
         # A set of temporary identifiers that are not expected to be collected by the
         # identifier collector
         self.scoped_temp_ids: Set[ScopedName] = set()
+
+        if supported_decorators is None:
+            supported_decorators = set()
+        self.supported_decorators = supported_decorators
+
+        self.functions_to_compile = functions_to_compile
+        # A set of all scoped prefixes that were not traversed and need to be pruned form the
+        # identifier manager.
+        self.removed_prefixes: Set[ScopedName] = set()
+
+    def search_identifier(
+            self, name: str, location: Optional[Location]) -> Optional[IdentifierDefinition]:
+        """
+        Searches for the given identifier in self.identifiers and returns the corresponding
+        IdentifierDefinition.
+        """
+        try:
+            result = self.identifiers.search(self.accessible_scopes, ScopedName.from_string(name))
+            return resolve_search_result(result, identifiers=self.identifiers)
+        except IdentifierError as exc:
+            raise PreprocessorError(str(exc), location=location)
 
     def handle_missing_future_definition(self, name: ScopedName, location):
         if name not in self.scoped_temp_ids:
@@ -245,6 +275,8 @@ class Preprocessor(IdentifierAwareVisitor):
         self.function_metadata = old_function_metadata
 
     def get_program(self):
+        # Prune identifiers.
+        self.identifiers.prune(self.removed_prefixes)
         return PreprocessedProgram(
             prime=self.prime,
             reference_manager=self.flow_tracking.reference_manager,
@@ -288,8 +320,7 @@ class Preprocessor(IdentifierAwareVisitor):
         and location.
         """
         args = identifier_list.identifiers if identifier_list is not None else []
-        assert len(args) == len(members)
-        for arg, member_def in zip(args, members.values()):
+        for arg, member_def in safe_zip(args, members.values()):
             # Add a reference for the argument.
             assert_no_modifier(arg)
             self.add_simple_reference(
@@ -302,8 +333,15 @@ class Preprocessor(IdentifierAwareVisitor):
         if elm.element_type == 'struct':
             return
 
-        self.add_label(elm.identifier)
+        for decorator in elm.decorators:
+            if decorator.name not in self.supported_decorators:
+                raise PreprocessorError(
+                    f"Unsupported decorator: '{decorator.name}'.",
+                    location=decorator.location)
+
         self.flow_tracking.revoke()
+
+        new_scope = self.current_scope + elm.name
 
         if self.current_scope in self.function_metadata:
             outer_function_location = self.identifier_locations.get(self.current_scope)
@@ -319,10 +357,17 @@ class Preprocessor(IdentifierAwareVisitor):
                 notes=notes,
             )
 
-        new_scope = self.current_scope + elm.name
         if elm.element_type == 'func':
-            self.function_metadata[new_scope] = FunctionMetadata(
-                initial_ap_data=self.flow_tracking.get_ap_tracking())
+            # Check if this function should be skipped.
+            if self.functions_to_compile is not None and new_scope not in self.functions_to_compile:
+                self.removed_prefixes.add(new_scope)
+                return
+
+            self.add_function(elm)
+        else:
+            assert elm.element_type == 'namespace', f"""\
+Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
+            self.add_label(identifier=elm.identifier)
 
         # Add function arguments and return values and process body.
         args_scope = new_scope + CodeElementFunction.ARGUMENT_SCOPE
@@ -538,15 +583,36 @@ class Preprocessor(IdentifierAwareVisitor):
         else:
             # Copy the type from the value.
             dst_type = val_type
-        if not check_cast(src_type=val_type, dest_type=dst_type, cast_type=CastType.ASSIGN):
+        if not check_cast(
+                src_type=val_type,
+                dest_type=dst_type,
+                identifier_manager=self.identifiers,
+                cast_type=CastType.ASSIGN):
             raise PreprocessorError(
                 f"Cannot assign an expression of type '{val_type.format()}' "
                 f"to a reference of type '{dst_type.format()}'.",
                 location=dst_type.location)
 
+        location = val.location
+
+        # At this point 'val' is a simplified typeless expression and we need 'ref_expr'
+        # to include a cast to the correct type.
+        # We insert the cast at the correct location according to the outermost expression in 'val'.
+        if isinstance(val, ExprDeref):
+            # Add the cast inside the ExprDeref. For example, "[cast(ap, T*)]".
+            addr = get_expr_addr(val)
+            ref_expr: Expression = ExprDeref(
+                addr=ExprCast(
+                    expr=addr,
+                    dest_type=TypePointer(pointee=dst_type, location=location),
+                    location=addr.location),
+                location=location)
+        else:
+            ref_expr = ExprCast(expr=val, dest_type=dst_type, location=location)
+
         self.add_reference(
             name=name,
-            value=ExprCast(expr=val, dest_type=dst_type),
+            value=ref_expr,
             cairo_type=dst_type,
             location=elm.typed_identifier.location,
         )
@@ -558,54 +624,32 @@ class Preprocessor(IdentifierAwareVisitor):
     def visit_CodeElementTemporaryVariable(self, elm: CodeElementTemporaryVariable):
         assert_no_modifier(elm.typed_identifier)
 
-        # Build the instruction: [ap] = elm.expr; ap++.
-        compound_expressions_code_elements, (expr,), _ = process_compound_expressions(
-            [self.simplify_expr_as_felt(elm.expr)], [SimplicityLevel.OPERATION],
-            context=self._compound_expression_context)
-        for code_element in compound_expressions_code_elements:
-            self.visit(code_element)
+        expr, src_type = self.simplify_expr(elm.expr)
+        src_size = self.get_size(src_type)
 
-        # Store the hint to avoid the check_no_hints() when invoking the reference element.
-        hint, self.next_instruction_hint = self.next_instruction_hint, None
-
-        if elm.typed_identifier.expr_type is not None:
-            expr_type = elm.typed_identifier.expr_type
+        if elm.typed_identifier.expr_type is None:
+            dest_type = src_type
         else:
-            # Copy the type from the original expression.
-            _, expr_type = self.simplify_expr(elm.expr)
-        if isinstance(expr_type, TypeStruct):
-            raise PreprocessorError(
-                "tempvar type annotation must be 'felt' or a pointer.",
-                location=expr_type.location)
+            dest_type = self.resolve_type(elm.typed_identifier.expr_type)
+            if not check_cast(
+                    src_type=src_type, dest_type=dest_type, identifier_manager=self.identifiers,
+                    cast_type=CastType.ASSIGN):
+                raise PreprocessorError(
+                    f"Cannot assign an expression of type '{src_type.format()}' "
+                    f"to a temporary variable of type '{dest_type.format()}'.",
+                    location=dest_type.location)
 
-        # Build an expression for [ap].
-        deref_ap = ExprCast(
-            expr=ExprDeref(
-                addr=ExprReg(reg=Register.AP, location=elm.typed_identifier.identifier.location),
-                location=elm.typed_identifier.identifier.location),
-            dest_type=expr_type,
+            dest_size = self.get_size(dest_type)
+            assert src_size == dest_size, 'Expecting src and dest types to have the same size.'
+
+        src_exprs = self.simplified_expr_to_felt_expr_list(expr=expr, expr_type=src_type)
+        self.push_compound_expressions(compound_expressions=src_exprs, location=elm.location)
+        self.add_simple_reference(
+            name=self.current_scope + elm.typed_identifier.name,
+            reg=Register.AP,
+            cairo_type=dest_type,
+            offset=-src_size,
             location=elm.typed_identifier.identifier.location)
-
-        # Convert CodeElementTemporaryVariable to two code elements.
-        # Build the code element: let <elm.identifier> = [ap].
-        self.visit(CodeElementReference(
-            typed_identifier=elm.typed_identifier,
-            expr=deref_ap,
-        ))
-
-        # Restore the hint.
-        assert self.next_instruction_hint is None
-        self.next_instruction_hint = hint
-
-        self.visit(CodeElementInstruction(
-            instruction=InstructionAst(
-                body=AssertEqInstruction(
-                    a=deref_ap,
-                    b=expr,
-                    location=elm.location,
-                ),
-                inc_ap=True,
-                location=elm.location)))
 
     def visit_CodeElementCompoundAssertEq(self, instruction: CodeElementCompoundAssertEq):
         expr_a, expr_type_a = self.simplify_expr(instruction.a)
@@ -615,27 +659,30 @@ class Preprocessor(IdentifierAwareVisitor):
                 f"Cannot compare '{expr_type_a.format()}' and '{expr_type_b.format()}'.",
                 location=instruction.location)
 
-        if not isinstance(expr_type_a, (TypeFelt, TypePointer)):
-            raise PreprocessorError(
-                f"Expected a 'felt' or a pointer type. Got: '{expr_type_a.format()}'.",
-                location=instruction.a.location)
+        src_exprs = self.simplified_expr_to_felt_expr_list(expr=expr_a, expr_type=expr_type_a)
+        dst_exprs = self.simplified_expr_to_felt_expr_list(expr=expr_b, expr_type=expr_type_b)
+        original_ap_tracking = self.flow_tracking.get_ap_tracking()
 
-        compound_expressions_code_elements, (expr_a, expr_b) = process_compound_assert(
-            self.simplify_expr_as_felt(instruction.a),
-            self.simplify_expr_as_felt(instruction.b),
-            self._compound_expression_context)
-        assert_eq = CodeElementInstruction(
-            instruction=InstructionAst(
-                body=AssertEqInstruction(
-                    a=expr_a,
-                    b=expr_b,
-                    location=instruction.location),
-                inc_ap=False,
-                location=instruction.location))
+        for src, dst in safe_zip(src_exprs, dst_exprs):
+            ap_diff = self.flow_tracking.get_ap_tracking() - original_ap_tracking
+            src = self.simplifier.visit(translate_ap(src, ap_diff))
+            dst = self.simplifier.visit(translate_ap(dst, ap_diff))
+            compound_expressions_code_elements, (expr_a, expr_b) = process_compound_assert(
+                src,
+                dst,
+                self._compound_expression_context)
+            assert_eq = CodeElementInstruction(
+                instruction=InstructionAst(
+                    body=AssertEqInstruction(
+                        a=expr_a,
+                        b=expr_b,
+                        location=instruction.location),
+                    inc_ap=False,
+                    location=instruction.location))
 
-        for code_element in compound_expressions_code_elements:
-            self.visit(code_element)
-        self.visit(assert_eq)
+            for code_element in compound_expressions_code_elements:
+                self.visit(code_element)
+            self.visit(assert_eq)
 
     def visit_CodeElementStaticAssert(self, elm: CodeElementStaticAssert):
         a = self.simplify_expr_as_felt(elm.a)
@@ -651,7 +698,7 @@ class Preprocessor(IdentifierAwareVisitor):
 
         Example:
         If we need to push [ap - 2], [ap - 1], [fp] + 3, there is no need to push the first 2
-        expressions, since they are already at the top of te stack.
+        expressions, since they are already at the top of the stack.
         """
 
         if len(exprs) == 0:
@@ -801,8 +848,7 @@ class Preprocessor(IdentifierAwareVisitor):
             implicit_args = [None] * len(implicit_args_struct.members)
 
         compound_expressions = []
-        assert len(implicit_args_struct.members) == len(implicit_args)
-        for (member_name, member_def), implicit_arg in zip(
+        for (member_name, member_def), implicit_arg in safe_zip(
                 implicit_args_struct.members.items(), implicit_args):
             expr: Expression
             if implicit_arg is not None:
@@ -916,7 +962,9 @@ class Preprocessor(IdentifierAwareVisitor):
         """
         Checks if src_type can be converted to dest_type in the context of a tail call.
         """
-        if check_cast(src_type=src_type, dest_type=dest_type, cast_type=CastType.ASSIGN):
+        if check_cast(
+                src_type=src_type, dest_type=dest_type, identifier_manager=self.identifiers,
+                cast_type=CastType.ASSIGN):
             return True
 
         if not isinstance(src_type, TypeStruct) or not isinstance(dest_type, TypeStruct):
@@ -934,6 +982,7 @@ class Preprocessor(IdentifierAwareVisitor):
             if not check_cast(
                     src_type=src_member.cairo_type,
                     dest_type=dest_member.cairo_type,
+                    identifier_manager=self.identifiers,
                     cast_type=CastType.ASSIGN):
                 return False
 
@@ -1028,7 +1077,24 @@ Cannot convert the implicit arguments of {func_name} to the implicit arguments o
                     location=implicit_arg_location)
 
     def visit_CodeElementFuncCall(self, elm: CodeElementFuncCall):
+        # Make sure the identifier for the called function refers to a function.
         called_function = ScopedName.from_string(elm.func_call.func_ident.name)
+        try:
+            res = self.identifiers.search(
+                accessible_scopes=self.accessible_scopes, name=called_function)
+            res.assert_fully_parsed()
+        except IdentifierError as exc:
+            raise PreprocessorError(str(exc), location=elm.func_call.func_ident.location)
+        called_function_def = res.identifier_definition
+        called_function_def_type = called_function_def.identifier_type \
+            if isinstance(called_function_def, FutureIdentifierDefinition) \
+            else type(called_function_def)
+        if called_function_def_type is not FunctionDefinition:
+            raise PreprocessorError(
+                f'Expected {called_function} to be a function name. '
+                f'Found: {called_function_def.TYPE}.',
+                location=elm.func_call.func_ident.location)
+
         implicit_args_struct_name = called_function + CodeElementFunction.IMPLICIT_ARGUMENT_SCOPE
         implicit_args = (
             cast(List[ExprAssignment], elm.func_call.implicit_arguments.args)
@@ -1094,6 +1160,15 @@ Cannot convert the implicit arguments of {func_name} to the implicit arguments o
             if isinstance(elm.func_call.call_inst, CallLabelInstruction):
                 func_ident = elm.func_call.call_inst.label
         elif isinstance(elm.func_call, RvalueFuncCall):
+            # If the function name is the name of a struct, replace the
+            # CodeElementReturnValueReference with a regular reference.
+            if self.try_get_struct_definition(
+                    ScopedName.from_string(elm.func_call.func_ident.name)) is not None:
+                return self.visit(CodeElementReference(
+                    typed_identifier=elm.typed_identifier,
+                    expr=ExprFuncCall(
+                        rvalue=elm.func_call,
+                        location=elm.func_call.location)))
             call_elm = CodeElementFuncCall(func_call=elm.func_call)
             func_ident = elm.func_call.func_ident
         else:
@@ -1171,6 +1246,7 @@ Expected {expected_len} unpacking identifier{suffix}, found {len(unpacking_ident
 
             if not check_cast(
                     src_type=member_def.cairo_type, dest_type=cairo_type,
+                    identifier_manager=self.identifiers,
                     cast_type=CastType.UNPACKING):
                 raise PreprocessorError(
                     f"""\
@@ -1193,7 +1269,7 @@ Expected expression of type '{member_def.cairo_type.format()}', got '{cairo_type
 
     def add_reference(
             self, name: ScopedName, value: Expression, cairo_type: CairoType,
-            location: Optional[Location]):
+            location: Optional[Location], require_future_definition=True):
         if name.path[-1] == '_':
             raise PreprocessorError("Reference name cannot be '_'.", location=location)
 
@@ -1219,7 +1295,20 @@ Expected expression of type '{member_def.cairo_type.format()}', got '{cairo_type
             self.add_name_definition(
                 name,
                 ReferenceDefinition(full_name=name, cairo_type=cairo_type, references=[reference]),
-                location=location)
+                location=location, require_future_definition=require_future_definition)
+
+    def add_function(self, elm: CodeElementFunction):
+        name = self.current_scope + elm.name
+        self.add_name_definition(
+            name,
+            FunctionDefinition(  # type: ignore
+                pc=self.current_pc,
+                decorators=[identifier.name for identifier in elm.decorators],
+            ),
+            location=elm.identifier.location)
+
+        self.function_metadata[name] = FunctionMetadata(
+            initial_ap_data=self.flow_tracking.get_ap_tracking())
 
     def visit_CodeElementLabel(self, elm: CodeElementLabel):
         self.check_no_hints('Hints before labels are not allowed.')
@@ -1367,7 +1456,24 @@ Expected expression of type '{member_def.cairo_type.format()}', got '{cairo_type
                 'Redefinition of builtins directive.',
                 location=directive.location,
             )
+
+        seen_builtins = set()
+        for builtin in directive.builtins:
+            if builtin in seen_builtins:
+                raise PreprocessorError(
+                    f"The builtin '{builtin}' appears twice in builtins directive.",
+                    location=directive.location,
+                )
+
+            seen_builtins.add(builtin)
+
         self.builtins = directive.builtins
+
+    def visit_LangDirective(self, directive: LangDirective):
+        raise PreprocessorError(
+            f'Unsupported %lang directive. Are you using the correct compiler?',
+            location=directive.location,
+        )
 
     def simplify_expr(self, expr) -> Tuple[Expression, CairoType]:
         """
@@ -1379,7 +1485,7 @@ Expected expression of type '{member_def.cairo_type.format()}', got '{cairo_type
             expr=expr,
             get_identifier_callback=self.get_variable,
             resolve_type_callback=self.resolve_type)
-        expr, expr_type = simplify_type_system(expr)
+        expr, expr_type = simplify_type_system(expr, identifiers=self.identifiers)
         return self.simplifier.visit(expr), self.resolve_type(expr_type)
 
     def simplify_expr_as_felt(self, expr) -> Expression:
@@ -1406,47 +1512,69 @@ Expected expression of type '{member_def.cairo_type.format()}', got '{cairo_type
         location = expr.location
         expr, expr_type = self.simplify_expr(expr)
 
-        if not check_cast(src_type=expr_type, dest_type=expected_type, cast_type=CastType.ASSIGN):
+        if not check_cast(
+                src_type=expr_type, dest_type=expected_type, identifier_manager=self.identifiers,
+                cast_type=CastType.ASSIGN):
             raise PreprocessorError(
                 f"""\
 Expected expression of type '{expected_type.format()}', got '{expr_type.format()}'.""",
                 location=location
             )
 
+        return self.simplified_expr_to_felt_expr_list(expr=expr, expr_type=expr_type)
+
+    def simplified_expr_to_felt_expr_list(
+            self, expr: Expression, expr_type: CairoType) -> List[Expression]:
+        """
+        Takes a simplified expression and its type and splits it into a list of typeless expressions
+        that can be passed to process_compound_expressions.
+        """
+
         if isinstance(expr_type, (TypeFelt, TypePointer)):
             return [expr]
 
-        assert isinstance(expr_type, TypeStruct), f'Unexpected type {expr_type}.'
+        # Get the list of member types.
+        if isinstance(expr_type, TypeTuple):
+            member_types = expr_type.members
+        elif isinstance(expr_type, TypeStruct):
+            struct_definition = get_struct_definition(
+                expr_type.scope, identifier_manager=self.identifiers)
+            member_types = [
+                member_def.cairo_type for member_def in struct_definition.members.values()]
+        else:
+            raise PreprocessorError(f'Unexpected type {expr_type}.', location=expr_type.location)
 
-        struct_members = get_struct_definition(
-            expr_type.scope, identifier_manager=self.identifiers).members
-        addr = get_expr_addr(expr)
-        exprs: List[Expression] = []
-        for offset, member_def in enumerate(struct_members.values()):
-            if not isinstance(member_def.cairo_type, (TypeFelt, TypePointer)):
-                raise PreprocessorError(
-                    'Nested structs are not supported.',
-                    location=location)
+        # Get the list of member expressions.
+        if isinstance(expr, ExprTuple):
+            member_exprs = [assign_expr.expr for assign_expr in expr.members.args]
+        else:
+            addr = get_expr_addr(expr)
 
-            if offset != member_def.offset:
-                raise PreprocessorError(
-                    'Discontinuous structs are not supported.',
-                    location=location)
-
-            # Call simplifier to convert (fp + offset_1) + offset_2 to fp + (offset_1 + offset_2).
-            exprs.append(
-                self.simplifier.visit(
-                    ExprDeref(
-                        ExprOperator(
-                            a=addr,
-                            op='+',
-                            b=ExprConst(member_def.offset, location=location),
+            offset = 0
+            member_exprs = []
+            location = expr.location
+            for member_type in member_types:
+                # Call simplifier to convert (fp + offset_1) + offset_2 to
+                # fp + (offset_1 + offset_2).
+                member_exprs.append(
+                    self.simplifier.visit(
+                        ExprDeref(
+                            ExprOperator(
+                                a=addr,
+                                op='+',
+                                b=ExprConst(offset, location=location),
+                                location=location,
+                            ),
                             location=location,
-                        ),
-                        location=location,
-                    )))
+                        )))
 
-        return exprs
+                offset += self.get_size(member_type)
+
+        expr_list = []
+        for member_expr, member_type in zip(member_exprs, member_types):
+            expr_list.extend(self.simplified_expr_to_felt_expr_list(
+                expr=member_expr, expr_type=member_type))
+        return expr_list
 
     def get_label(self, label_name: str, location: Optional[Location]) -> \
             Tuple[Optional[int], Optional[ScopedName]]:
@@ -1557,53 +1685,6 @@ Expected expression of type '{expected_type.format()}', got '{expr_type.format()
         self.next_temp_id += 1
         self.scoped_temp_ids.add(self.current_scope + name)
         return name
-
-
-def preprocess_codes(
-        codes: Sequence[Tuple[str, str]], prime: int,
-        read_module: Callable[[str], Tuple[str, str]],
-        main_scope: ScopedName = ScopedName(),
-        preprocessor_cls: Optional[Type[Preprocessor]] = None) -> PreprocessedProgram:
-    """
-    Preprocesses a list of Cairo file and returns a PreprocessedProgram instance.
-    codes is a list of pairs (code_string, file_name).
-    read_module is a callback that gets a module name ('a.b.c') and returns a pair
-    (file content, file name)
-    """
-    modules = []
-    for code, filename in codes:
-        # Function used to read files given module names.
-        # The root module (filename) is handled separately, for this module code is returned.
-        def read_file_fixed(name):
-            return (code, filename) if name == filename else read_module(name)
-
-        files = collect_imports(filename, read_file=read_file_fixed)
-        for module_name, ast in files.items():
-            # Preprocess files explicitly provided in the root scope.
-            scope = main_scope if module_name == filename else ScopedName.from_string(module_name)
-            modules.append(CairoModule(cairo_file=ast, module_name=scope))
-
-    unique_label_creator = UniqueLabelCreator()
-    modules = list(map(unique_label_creator.visit, modules))
-
-    identifier_collector = IdentifierCollector()
-    for module in modules:
-        identifier_collector.visit(module)
-
-    struct_collector = StructCollector(identifiers=identifier_collector.identifiers)
-    for module in modules:
-        struct_collector.visit(module)
-
-    if preprocessor_cls is None:
-        preprocessor_cls = Preprocessor
-
-    preprocessor = preprocessor_cls(prime=prime, identifiers=struct_collector.identifiers)
-    preprocessor.identifier_locations = struct_collector.identifier_locations
-    for module in modules:
-        preprocessor.visit(module)
-
-    preprocessor.resolve_labels()
-    return preprocessor.get_program()
 
 
 class PreprocessorCompoundExpressionContext(CompoundExpressionContext):

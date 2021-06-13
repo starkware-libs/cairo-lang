@@ -5,6 +5,7 @@ python_lib(starkware_python_utils_lib
     math_utils.py
     utils.py
     python_dependencies.py
+    async_subprocess.py
 
     LIBS
     pip_sympy
@@ -25,8 +26,10 @@ python_lib(starkware_merkle_tree_lib
 python_lib(starkware_python_test_utils_lib
     PREFIX starkware/python
     FILES
+    random_test.py
     test_utils.py
     LIBS
+    pip_mypy_extensions
     pip_pytest
 )
 

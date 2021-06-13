@@ -136,7 +136,7 @@ def test_identifier_manager_search():
         ([''], 'x', 'x'),
         (['a', 'e', 'a.b.c'], 'b.z', 'a.b.z'),
     ]:
-        result = manager.search(list(map(scope, accessible_scopes)), name)
+        result = manager.search(list(map(scope, accessible_scopes)), scope(name))
         assert result.canonical_name == scope(canonical_name)
         assert result.identifier_definition == identifier_dict[scope(canonical_name)]
 

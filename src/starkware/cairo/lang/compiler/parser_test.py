@@ -2,9 +2,11 @@ import pytest
 
 from starkware.cairo.lang.compiler.ast.aliased_identifier import AliasedIdentifier
 from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt, TypeTuple
-from starkware.cairo.lang.compiler.ast.code_elements import CodeElementImport
+from starkware.cairo.lang.compiler.ast.code_elements import (
+    CodeElementImport, CodeElementReference, CodeElementReturnValueReference)
 from starkware.cairo.lang.compiler.ast.expr import (
-    ExprConst, ExprDeref, ExprIdentifier, ExprOperator, ExprPyConst, ExprReg)
+    ExprConst, ExprDeref, ExprDot, ExprIdentifier, ExprOperator, ExprParentheses, ExprPyConst,
+    ExprReg, ExprSubscript)
 from starkware.cairo.lang.compiler.ast.formatting_utils import FormattingError
 from starkware.cairo.lang.compiler.ast.instructions import (
     AddApInstruction, AssertEqInstruction, CallInstruction, CallLabelInstruction, InstructionAst,
@@ -15,7 +17,9 @@ from starkware.cairo.lang.compiler.expression_simplifier import ExpressionSimpli
 from starkware.cairo.lang.compiler.instruction import Register
 from starkware.cairo.lang.compiler.parser import (
     parse, parse_code_element, parse_expr, parse_instruction, parse_type)
+from starkware.cairo.lang.compiler.parser_test_utils import verify_exception
 from starkware.cairo.lang.compiler.parser_transformer import ParserError
+from starkware.python.utils import safe_zip
 
 
 def test_types():
@@ -30,12 +34,30 @@ def test_type_tuple():
     assert parse_type('( felt, felt* , (felt, T.S,)* )').format() == '(felt, felt*, (felt, T.S)*)'
 
 
-def test_identifier():
+def test_identifier_and_dot():
     assert parse_expr('x.y . z + x ').format() == 'x.y.z + x'
+    assert parse_expr(' [x]. y .  z').format() == '[x].y.z'
+    assert parse_expr('(x-y).z').format() == '(x - y).z'
+    assert parse_expr('x-y.z').format() == 'x - y.z'
+    assert parse_expr('[ap+1].x.y').format() == '[ap + 1].x.y'
+    assert parse_expr('((a.b + c).d * e.f + g.h).i.j').format() == '((a.b + c).d * e.f + g.h).i.j'
+
+    assert parse_expr('(x).y.z') == \
+        ExprDot(
+            expr=ExprDot(
+                expr=ExprParentheses(val=ExprIdentifier(name='x')),
+                member=ExprIdentifier(name='y')),
+            member=ExprIdentifier(name='z'))
+    assert parse_expr('x.y.z') == ExprIdentifier(name='x.y.z')
+
     with pytest.raises(ParserError):
         parse_expr('.x')
     with pytest.raises(ParserError):
         parse_expr('x.')
+    with pytest.raises(ParserError):
+        parse_expr('x.(y+z)')
+    with pytest.raises(ParserError):
+        parse_expr('x.[a]')
 
 
 def test_typed_identifier():
@@ -84,6 +106,29 @@ def test_deref_expr():
                 op='+',
                 b=ExprConst(val=3)))
     assert expr.format() == '[[fp - 7] + 3]'
+
+
+def test_subscript_expr():
+    assert parse_expr('x[y]').format() == 'x[y]'
+    assert parse_expr('[x][y][z][w]').format() == '[x][y][z][w]'
+    assert parse_expr('  x  [ [ y[z[w]] ] ]').format() == 'x[[y[z[w]]]]'
+    assert parse_expr(' (x+y)[z+w] ').format() == '(x + y)[z + w]'
+    assert parse_expr('(&x)[3][(a-b)*2][&c]').format() == '(&x)[3][(a - b) * 2][&c]'
+    assert parse_expr('x[i+n*j]').format() == 'x[i + n * j]'
+    assert parse_expr('x+[y][z]').format() == 'x + [y][z]'
+
+    assert parse_expr('[x][y][[z]]') == \
+        ExprSubscript(
+            expr=ExprSubscript(
+                expr=ExprDeref(addr=ExprIdentifier(name='x')),
+                offset=ExprIdentifier(name='y')
+            ),
+            offset=ExprDeref(addr=ExprIdentifier(name='z')))
+
+    with pytest.raises(ParserError):
+        parse_expr('x[)]')
+    with pytest.raises(ParserError):
+        parse_expr('x[]')
 
 
 def test_operator_precedence():
@@ -496,6 +541,48 @@ end"""
         test_format('(x #comment\n,y,z)->()')
 
 
+def test_decoractor():
+    code = """\
+@hello @world
+
+
+@external func myfunc():
+     return ()
+end"""
+
+    assert parse_code_element(code=code).format(allowed_line_length=100) == """\
+@hello
+@world
+@external
+func myfunc():
+    return ()
+end"""
+
+
+def test_decoractor_errors():
+    verify_exception("""
+@hello world
+func myfunc():
+    return()
+end
+""", """
+file:?:?: Unexpected token Token(IDENTIFIER, \'world\'). Expected one of: "@", func.
+@hello world
+       ^***^
+""")
+
+    verify_exception("""
+@hello-world
+func myfunc():
+    return()
+end
+""", """
+file:?:?: Unexpected token Token(MINUS, \'-\'). Expected one of: "@", func.
+@hello-world
+      ^
+""")
+
+
 def test_reference_type_annotation():
     res = parse_code_element('let s : T *   = ap')
     assert res.format(allowed_line_length=100) == 'let s : T* = ap'
@@ -507,6 +594,16 @@ def test_reference_type_annotation():
 def test_addressof():
     res = parse_code_element('static_assert &     s.SIZE ==  ap   ')
     assert res.format(allowed_line_length=100) == 'static_assert &s.SIZE == ap'
+
+
+def test_func_expr():
+    res = parse_code_element('let x = f()')
+    assert isinstance(res, CodeElementReturnValueReference)
+    assert res.format(allowed_line_length=100) == 'let x = f()'
+
+    res = parse_code_element('let x = (f())')
+    assert isinstance(res, CodeElementReference)
+    assert res.format(allowed_line_length=100) == 'let x = (f())'
 
 
 def test_locations():
@@ -535,6 +632,5 @@ def test_locations():
         expr.body.b.addr.a,
         expr.body.b.addr.b,
     ]
-    assert len(exprs) == len(marks)
-    for expr, mark in zip(exprs, marks):
+    for expr, mark in safe_zip(exprs, marks):
         assert get_location_marks(code, expr.location) == code + '\n' + mark

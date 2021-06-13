@@ -5,6 +5,7 @@
 
 %builtins output pedersen range_check ecdsa
 
+from starkware.cairo.apps.starkex2_0.__start__ import __start__
 from starkware.cairo.apps.starkex2_0.common.cairo_builtins import HashBuiltin, SignatureBuiltin
 from starkware.cairo.apps.starkex2_0.common.dict import DictAccess, squash_dict
 from starkware.cairo.apps.starkex2_0.common.merkle_multi_update import merkle_multi_update
@@ -112,7 +113,8 @@ func main(
     # Verify hashed_vault_dict consistency with the vault merkle root.
     # Make a copy of the first argument to avoid a compiler optimization that was added after the
     # code was deployed.
-    tempvar hash_ptr = hash_vault_dict_ptr
+    [ap] = hash_vault_dict_ptr; ap++
+    let hash_ptr = cast([ap - 1], HashBuiltin*)
     with hash_ptr:
         merkle_multi_update(
             update_ptr=hashed_vault_dict,
@@ -124,7 +126,8 @@ func main(
         # Verify squashed_order_dict consistency with the order merkle root.
         # Make a copy of the first argument to avoid a compiler optimization that was added after
         # the code was deployed.
-        tempvar hash_ptr = hash_ptr
+        [ap] = hash_ptr; ap++
+        let hash_ptr = cast([ap - 1], HashBuiltin*)
         merkle_multi_update(
             update_ptr=squashed_order_dict,
             n_updates=squashed_order_dict_segment_size / DictAccess.SIZE,

@@ -1,8 +1,7 @@
-import re
-
 import pytest
 
 from starkware.cairo.lang.compiler.parser import ParserError, parse_file
+from starkware.cairo.lang.compiler.parser_test_utils import verify_exception
 
 
 def test_unexpected_token():
@@ -23,15 +22,16 @@ let x =
     verify_exception("""
 foo bar
 """, """
-file:?:?: Unexpected token Token(IDENTIFIER, 'bar'). Expected one of: "(", ".", ":", "=", "{", \
-operator.
+file:?:?: Unexpected token Token(IDENTIFIER, 'bar'). Expected one of: "(", ".", ":", "=", "[", \
+"{", operator.
 foo bar
     ^*^
 """)
     verify_exception("""
 foo = bar test
 """, """
-file:?:?: Unexpected token Token(IDENTIFIER, 'test'). Expected one of: ".", ";", operator.
+file:?:?: Unexpected token Token(IDENTIFIER, 'test'). Expected one of: "(", ".", ";", "[", "{", \
+operator.
 foo = bar test
           ^**^
 """)
@@ -45,21 +45,22 @@ const func
     verify_exception("""
 %[ 5 %] %[ 7 %]
 """, """
-file:?:?: Unexpected token Token(PYCONST, '%[ 7 %]'). Expected one of: "=", operator.
+file:?:?: Unexpected token Token(PYCONST, '%[ 7 %]'). Expected one of: ".", "=", "[", operator.
 %[ 5 %] %[ 7 %]
         ^*****^
 """)
     verify_exception("""
 static_assert ap
 """, r"""
-file:?:?: Unexpected token Token(_NEWLINE, '\n'). Expected one of: "==", operator.
+file:?:?: Unexpected token Token(_NEWLINE, '\n'). Expected one of: ".", "==", "[", operator.
 static_assert ap
                 ^
 """)
     verify_exception("""
 [ap] = x& + y
 """, """
-file:?:?: Unexpected token Token(AMPERSAND, '&'). Expected one of: ".", ";", operator.
+file:?:?: Unexpected token Token(AMPERSAND, '&'). Expected one of: "(", ".", ";", "[", "{", \
+operator.
 [ap] = x& + y
         ^
 """)
@@ -87,7 +88,8 @@ foo( *
     verify_exception("""
 if x y
 """, """
-file:?:?: Unexpected token Token(IDENTIFIER, 'y'). Expected one of: "!=", ".", "==", operator.
+file:?:?: Unexpected token Token(IDENTIFIER, 'y'). Expected one of: "!=", "(", ".", "==", "[", \
+"{", operator.
 if x y
      ^
 """)
@@ -109,10 +111,10 @@ func foo()*
 
 def test_unexpected_character():
     verify_exception("""
-x@y
+x~y
 """, """
-file:?:?: Unexpected character "@".
-x@y
+file:?:?: Unexpected character "~".
+x~y
  ^
 """)
 
@@ -127,13 +129,3 @@ const a = 5
     assert str(e.value).endswith("""
 const a = 5
           ^""")
-
-
-def verify_exception(code: str, error: str):
-    """
-    Verifies that parsing the code results in the given error.
-    """
-    with pytest.raises(ParserError) as e:
-        parse_file(code, '')
-    # Remove line and column information from the error using a regular expression.
-    assert re.sub(':[0-9]+:[0-9]+: ', 'file:?:?: ', str(e.value)) == error.strip()

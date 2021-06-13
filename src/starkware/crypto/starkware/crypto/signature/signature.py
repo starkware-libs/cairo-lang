@@ -18,7 +18,7 @@ import hashlib
 import json
 import math
 import os
-import random
+import secrets
 from typing import Optional, Tuple, Union
 
 from ecdsa.rfc6979 import generate_k
@@ -87,8 +87,8 @@ def get_y_coordinate(stark_key_x_coordinate: int) -> int:
 
 
 def get_random_private_key() -> int:
-    # NOTE: It is IMPORTANT to use a strong random function here.
-    return random.randint(1, EC_ORDER - 1)
+    # Returns a private key in the range [1, EC_ORDER).
+    return secrets.randbelow(EC_ORDER - 1) + 1
 
 
 def private_key_to_ec_point_on_stark_curve(priv_key: int) -> ECPoint:

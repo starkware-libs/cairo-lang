@@ -1,9 +1,10 @@
+import re
 from random import sample
 from typing import Dict
 
 import pytest
 
-from starkware.cairo.lang.compiler.error_handling import get_location_marks
+from starkware.cairo.lang.compiler.error_handling import LocationError, get_location_marks
 from starkware.cairo.lang.compiler.import_loader import (
     DirectDependenciesCollector, ImportLoaderError, UsingCycleError, collect_imports)
 from starkware.cairo.lang.compiler.parser import ParserError, parse_file
@@ -178,3 +179,61 @@ a6 imports
 a7 imports
 a8 imports
 a0"""
+
+
+def test_lang_directive():
+    files = {
+        'a': """
+from c import x
+""",
+        'b': """
+%lang other_lang
+from c import x
+""",
+        'c': """
+%lang lang
+from d_lang import x
+from d_no_lang import x
+""",
+        'd_lang': """
+%lang lang
+const x = 0
+""",
+        'd_no_lang': """
+const x = 0
+""",
+        'e': """
+%lang lang  # First line.
+%lang lang  # Second line.
+"""}
+
+    # Make sure that starting from 'c' does not raise an exception.
+    collect_imports('c', read_file_from_dict(files))
+
+    verify_exception(files, 'a', """
+a:?:?: Importing modules with %lang directive 'lang' must be from a module with the same directive.
+from c import x
+     ^
+""")
+
+    verify_exception(files, 'b', """
+b:?:?: Importing modules with %lang directive 'lang' must be from a module with the same directive.
+from c import x
+     ^
+""")
+
+    verify_exception(files, 'e', """
+e:?:?: Found two %lang directives
+%lang lang  # Second line.
+^********^
+""")
+
+
+def verify_exception(files: Dict[str, str], main_file: str, error: str):
+    """
+    Verifies that parsing the code results in the given error.
+    """
+    with pytest.raises(LocationError) as e:
+        collect_imports(main_file, read_file_from_dict(files))
+    # Remove line and column information from the error using a regular expression.
+    assert re.sub(':[0-9]+:[0-9]+: ', ':?:?: ', str(e.value)) == error.strip()

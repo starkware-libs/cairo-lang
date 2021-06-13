@@ -6,7 +6,7 @@ import pytest
 from starkware.cairo.lang.compiler.cairo_compile import compile_cairo
 from starkware.cairo.lang.vm.builtin_runner import InsufficientAllocatedCells
 from starkware.cairo.lang.vm.cairo_runner import CairoRunner, get_runner_from_code
-from starkware.cairo.lang.vm.vm import VmException
+from starkware.cairo.lang.vm.vm import VmException, VmExceptionBase
 
 CAIRO_FILE = os.path.join(os.path.dirname(__file__), 'test.cairo')
 PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
@@ -97,7 +97,7 @@ func main():
 end
 """
     with pytest.raises(
-            AssertionError,
+            VmExceptionBase,
             match=re.escape('Every enter_scope() requires a corresponding exit_scope().')):
         runner = get_runner_from_code(code, layout='small', prime=PRIME)
 
