@@ -113,6 +113,20 @@ future_label2:
 """
 
 
+def test_assign_future_function_label():
+    code = """\
+[ap] = a; ap++
+func a() -> ():
+  ret
+end
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert program.format() == """\
+[ap] = 2; ap++
+ret
+"""
+
+
 def test_temporary_variable():
     code = """\
 struct T:
