@@ -6,7 +6,7 @@ from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt
 from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeElement, CodeElementTemporaryVariable)
 from starkware.cairo.lang.compiler.ast.expr import (
-    ExprConst, ExprDeref, Expression, ExprIdentifier, ExprNeg, ExprOperator, ExprReg)
+    ExprConst, ExprDeref, Expression, ExprFutureLabel, ExprIdentifier, ExprNeg, ExprOperator, ExprReg)
 from starkware.cairo.lang.compiler.ast.types import TypedIdentifier
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.instruction import Register
@@ -135,6 +135,9 @@ class CompoundExpressionVisitor:
         expr = ExprDeref(
             addr=self.rewrite(expr.addr, SimplicityLevel.DEREF_OFFSET), location=expr.location)
         return expr if sim is SimplicityLevel.OPERATION else self.wrap(expr)
+
+    def rewrite_ExprFutureLabel(self, expr: ExprFutureLabel, sim: SimplicityLevel):
+        return expr
 
     def wrap(self, expr: Expression) -> ExprIdentifier:
         identifier = ExprIdentifier(name=self.context.new_tempvar_name(), location=expr.location)
