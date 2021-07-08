@@ -1,6 +1,7 @@
 aiohttp
 ecdsa
 eth-hash[pycryptodome]==0.2.0
+cython
 fastecdsa
 frozendict==1.2
 lark-parser==0.8.5

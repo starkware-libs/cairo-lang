@@ -591,10 +591,27 @@
             "package_name": "netaddr"
         }
     },
+
     {
         "dependencies": [],
         "package": {
-            "installed_version": "1.20.3",
+            "installed_version": "0.29.23",
+            "key": "cython",
+            "package_name": "cython"
+        }
+    },
+
+    {
+        "dependencies": [
+            {
+                "installed_version": "0.29.23",
+                "key": "cython",
+                "package_name": "cython",
+                "required_version": ">=0.29"
+            }
+        ],
+        "package": {
+            "installed_version": "1.21.0",
             "key": "numpy",
             "package_name": "numpy"
         }
