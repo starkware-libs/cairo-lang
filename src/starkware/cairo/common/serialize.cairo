@@ -13,6 +13,9 @@ end
 # elm_size - the size of an element in the array.
 # n_elms - the number of elements in the array.
 # callback - a function pointer to the callback. Expected signature: (felt, T*) -> felt.
+#
+# Use starkware.cairo.common.registers.get_label_location() to convert a function label to
+# a callback value.
 func array_rfold(value, array : felt*, n_elms, elm_size, callback) -> (res):
     if n_elms == 0:
         return (value)
@@ -39,6 +42,8 @@ end
 # n_elms - the number of elements in the array.
 # callback - a function pointer to the serialize function of a single element.
 #   Expected signature: (felt, T*) -> felt.
+# Use starkware.cairo.common.registers.get_label_location() to convert a function label to
+# a callback value.
 func serialize_array{output_ptr : felt*}(array : felt*, n_elms, elm_size, callback):
     serialize_word(n_elms)
     let (output_ptr : felt*) = array_rfold(

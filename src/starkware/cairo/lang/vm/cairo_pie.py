@@ -101,8 +101,9 @@ class CairoPieMetadata:
 
         assert self.program_segment.size == len(self.program.data), \
             'Program length does not match the program segment size.'
-        assert self.program.builtins == list(self.builtin_segments.keys()), \
-            'Builtin list mismatch in builtin_segments.'
+        assert self.program.builtins == list(self.builtin_segments.keys()), (
+            f'Builtin list mismatch in builtin_segments. Builtins: {self.program.builtins}, '
+            f'segment keys: {list(self.builtin_segments.keys())}.')
         assert self.ret_fp_segment.size == 0, 'Invalid segment size for ret_fp. Must be 0.'
         assert self.ret_pc_segment.size == 0, 'Invalid segment size for ret_pc. Must be 0.'
 
@@ -122,14 +123,14 @@ class ExecutionResources:
     Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
 
     def run_validity_checks(self):
-        assert isinstance(self.n_steps, int) and 1 <= self.n_steps < 2 ** 30, \
-            f'Invalid n_steps: {self.n_steps}.'
-        assert isinstance(self.n_memory_holes, int) and 0 <= self.n_memory_holes < 2 ** 30, \
-            f'Invalid n_memory_holes: {self.n_memory_holes}.'
+        assert isinstance(self.n_steps, int) and 1 <= self.n_steps < 2 ** 30, (
+            f'Invalid n_steps: {self.n_steps}.')
+        assert isinstance(self.n_memory_holes, int) and 0 <= self.n_memory_holes < 2 ** 30, (
+            f'Invalid n_memory_holes: {self.n_memory_holes}.')
         assert isinstance(self.builtin_instance_counter, dict) and all(
             is_valid_builtin_name(name) and isinstance(size, int) and 0 <= size < 2 ** 30
-            for name, size in self.builtin_instance_counter.items()), \
-            'Invalid builtin_instance_counter.'
+            for name, size in self.builtin_instance_counter.items()), (
+            'Invalid builtin_instance_counter.')
 
     def __add__(self, other: 'ExecutionResources') -> 'ExecutionResources':
         total_builtin_instance_counter = add_counters(
@@ -250,12 +251,12 @@ class CairoPie:
         self.run_memory_validity_checks()
 
         assert sorted(f'{name}_builtin' for name in self.metadata.program.builtins) == sorted(
-            self.execution_resources.builtin_instance_counter.keys()), \
-            'Builtin list mismatch in execution_resources.'
+            self.execution_resources.builtin_instance_counter.keys()), (
+            'Builtin list mismatch in execution_resources.')
 
         assert isinstance(self.additional_data, dict) and all(
-            isinstance(name, str) and len(name) < 1000 for name in self.additional_data), \
-            'Invalid additional_data.'
+            isinstance(name, str) and len(name) < 1000 for name in self.additional_data), (
+            'Invalid additional_data.')
 
     def run_memory_validity_checks(self):
         segment_sizes = self.metadata.segment_sizes()
@@ -271,7 +272,7 @@ class CairoPie:
                 isinstance(addr.offset, int) and \
                 addr.segment_index in segment_sizes and \
                 0 <= addr.offset < segment_sizes[addr.segment_index] + (
-                    1 if allow_end_of_segment else 0)
+                1 if allow_end_of_segment else 0)
 
         def is_valid_memory_value(value):
             return isinstance(value, int) or is_valid_memory_addr(value, allow_end_of_segment=True)

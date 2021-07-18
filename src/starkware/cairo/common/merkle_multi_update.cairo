@@ -38,14 +38,20 @@ func merkle_multi_update{hash_ptr : HashBuiltin*}(
         # Build modifications list.
         modifications = []
         for i in range(ids.n_updates):
-          curr_update_ptr = ids.update_ptr.address_ + i * ids.DictAccess.SIZE
-          modifications.append((
-            memory[curr_update_ptr + ids.DictAccess.key],
-            memory[curr_update_ptr + ids.DictAccess.new_value]))
+            curr_update_ptr = ids.update_ptr.address_ + i * ids.DictAccess.SIZE
+            modifications.append((
+                memory[curr_update_ptr + ids.DictAccess.key],
+                memory[curr_update_ptr + ids.DictAccess.new_value]))
 
         node = build_update_tree(ids.height, modifications)
         del modifications
-        vm_enter_scope(dict(node=node, preimage=preimage))
+        __merkle_multi_update_skip_validation_runner = globals().get(
+            '__merkle_multi_update_skip_validation_runner', None)
+        vm_enter_scope(dict(
+            node=node, preimage=preimage,
+            __merkle_multi_update_skip_validation_runner=
+                __merkle_multi_update_skip_validation_runner)
+        )
     %}
     let orig_update_ptr = update_ptr
     with update_ptr:
@@ -63,27 +69,29 @@ func merkle_multi_update_inner{hash_ptr : HashBuiltin*, update_ptr : DictAccess*
     let hash1 : HashBuiltin* = hash_ptr + HashBuiltin.SIZE
     %{
         if ids.height == 0:
-          assert node == ids.new_root, f'Expected node {ids.new_root}. Got {node}.'
-          case = 'leaf'
+            assert node == ids.new_root, f'Expected node {ids.new_root}. Got {node}.'
+            case = 'leaf'
         else:
-          prev_left, prev_right = preimage[ids.prev_root]
-          new_left, new_right = preimage[ids.new_root]
+            prev_left, prev_right = preimage[ids.prev_root]
+            new_left, new_right = preimage[ids.new_root]
 
-          left_child, right_child = node
-          if left_child is None:
-            assert right_child is not None, 'No updates in tree'
-            case = 'right'
-          elif right_child is None:
-            case = 'left'
-          else:
-            case = 'both'
+            from starkware.python.merkle_tree import decode_node
+            left_child, right_child, case = decode_node(node)
 
-          # Fill non deterministic hashes.
-          hash_ptr = ids.hash_ptr.address_
-          memory[hash_ptr + 0 * ids.HashBuiltin.SIZE + ids.HashBuiltin.x] = prev_left
-          memory[hash_ptr + 0 * ids.HashBuiltin.SIZE + ids.HashBuiltin.y] = prev_right
-          memory[hash_ptr + 1 * ids.HashBuiltin.SIZE + ids.HashBuiltin.x] = new_left
-          memory[hash_ptr + 1 * ids.HashBuiltin.SIZE + ids.HashBuiltin.y] = new_right
+            # Fill non deterministic hashes.
+            hash_ptr = ids.hash_ptr.address_
+            memory[hash_ptr + 0 * ids.HashBuiltin.SIZE + ids.HashBuiltin.x] = prev_left
+            memory[hash_ptr + 0 * ids.HashBuiltin.SIZE + ids.HashBuiltin.y] = prev_right
+            memory[hash_ptr + 1 * ids.HashBuiltin.SIZE + ids.HashBuiltin.x] = new_left
+            memory[hash_ptr + 1 * ids.HashBuiltin.SIZE + ids.HashBuiltin.y] = new_right
+
+            if __merkle_multi_update_skip_validation_runner is not None:
+                # Skip validation of the preimage dict to speed up the VM. Note that mistakes in the
+                # preimage dict will be discovered only in the prover.
+                __merkle_multi_update_skip_validation_runner.verified_addresses.add(
+                    hash_ptr + 0 * ids.HashBuiltin.SIZE + ids.HashBuiltin.result)
+                __merkle_multi_update_skip_validation_runner.verified_addresses.add(
+                    hash_ptr + 1 * ids.HashBuiltin.SIZE + ids.HashBuiltin.result)
 
         memory[ap] = int(case != 'right')
     %}
@@ -91,14 +99,20 @@ func merkle_multi_update_inner{hash_ptr : HashBuiltin*, update_ptr : DictAccess*
 
     update_right:
     let hash_ptr = hash_ptr + 2 * HashBuiltin.SIZE
-    prev_root = hash0.result
-    new_root = hash1.result
+    assert hash0.result = prev_root
+    assert hash1.result = new_root
 
     # Make sure the same authentication path is used.
     assert hash0.x = hash1.x
 
     # Call merkle_multi_update_inner recursively.
-    %{ vm_enter_scope(dict(node=right_child, preimage=preimage)) %}
+    %{
+        vm_enter_scope(dict(
+            node=right_child, preimage=preimage,
+            __merkle_multi_update_skip_validation_runner=
+                __merkle_multi_update_skip_validation_runner)
+        )
+    %}
 
     merkle_multi_update_inner(
         height=height - 1, prev_root=hash0.y, new_root=hash1.y, index=index * 2 + 1)
@@ -111,14 +125,20 @@ func merkle_multi_update_inner{hash_ptr : HashBuiltin*, update_ptr : DictAccess*
 
     update_left:
     let hash_ptr = hash_ptr + 2 * HashBuiltin.SIZE
-    prev_root = hash0.result
-    new_root = hash1.result
+    assert hash0.result = prev_root
+    assert hash1.result = new_root
 
     # Make sure the same authentication path is used.
     assert hash0.y = hash1.y
 
     # Call merkle_multi_update_inner recursively.
-    %{ vm_enter_scope(dict(node=left_child, preimage=preimage)) %}
+    %{
+        vm_enter_scope(dict(
+            node=left_child, preimage=preimage,
+            __merkle_multi_update_skip_validation_runner=
+                __merkle_multi_update_skip_validation_runner)
+        )
+    %}
     merkle_multi_update_inner(
         height=height - 1, prev_root=hash0.x, new_root=hash1.x, index=index * 2)
     %{ vm_exit_scope() %}
@@ -134,8 +154,8 @@ func merkle_multi_update_inner{hash_ptr : HashBuiltin*, update_ptr : DictAccess*
     # Write the update.
     %{ assert case == 'leaf' %}
     index = update_ptr.key
-    prev_root = update_ptr.prev_value
-    new_root = update_ptr.new_value
+    assert update_ptr.prev_value = prev_root
+    assert update_ptr.new_value = new_root
     let update_ptr = update_ptr + DictAccess.SIZE
 
     # Return values.
@@ -148,11 +168,17 @@ func merkle_multi_update_inner{hash_ptr : HashBuiltin*, update_ptr : DictAccess*
     local_left_index = index * 2; ap++
 
     let hash_ptr = hash_ptr + 2 * HashBuiltin.SIZE
-    prev_root = hash0.result
-    new_root = hash1.result
+    assert hash0.result = prev_root
+    assert hash1.result = new_root
 
     # Update left.
-    %{ vm_enter_scope(dict(node=left_child, preimage=preimage)) %}
+    %{
+        vm_enter_scope(dict(
+            node=left_child, preimage=preimage,
+            __merkle_multi_update_skip_validation_runner=
+                __merkle_multi_update_skip_validation_runner)
+        )
+    %}
     merkle_multi_update_inner(
         height=height - 1, prev_root=hash0.x, new_root=hash1.x, index=index * 2)
     %{ vm_exit_scope() %}
@@ -160,7 +186,13 @@ func merkle_multi_update_inner{hash_ptr : HashBuiltin*, update_ptr : DictAccess*
     # Update right.
     # Push height to workaround one hint per line limitation.
     tempvar height_minus_1 = height - 1
-    %{ vm_enter_scope(dict(node=right_child, preimage=preimage)) %}
+    %{
+        vm_enter_scope(dict(
+            node=right_child, preimage=preimage,
+            __merkle_multi_update_skip_validation_runner=
+                __merkle_multi_update_skip_validation_runner)
+        )
+    %}
     merkle_multi_update_inner(
         height=height_minus_1, prev_root=hash0.y, new_root=hash1.y, index=local_left_index + 1)
     %{ vm_exit_scope() %}

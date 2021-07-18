@@ -3,6 +3,8 @@
 %import common.NEWLINE
 %ignore WS_INLINE
 
+HEXINT: /0x[0-9a-fA-F]+/
+HINT: /%\{(.*?)%\}/s
 IDENTIFIER: /[a-zA-Z_][a-zA-Z_0-9]*/
 PYCONST: /%\[.*?%\]/s
 _DBL_PLUS: "++"
@@ -25,6 +27,8 @@ arg_list: ((notes arg_list_item notes ",")* notes arg_list_item (notes ",")?)? n
 ?decorator: _AT identifier_def
 decorator_list: (decorator _NEWLINE*)*
 
+two_stars: "*" "*"
+
 ?expr: sum
 ?sum: product
     | sum "+" notes product   -> expr_add
@@ -32,13 +36,17 @@ decorator_list: (decorator _NEWLINE*)*
 ?product: unary
         | product "*" notes unary  -> expr_mul
         | product "/" notes unary  -> expr_div
-?unary: atom
+?unary: pow
       | "&" unary                             -> unary_addressof
       | "-" unary                             -> unary_neg
+?pow: atom
+    | atom two_stars notes pow -> expr_pow
 identifier: IDENTIFIER ("." IDENTIFIER)*
 identifier_def: IDENTIFIER
 ?atom: INT                                    -> atom_number
+     | HEXINT                                 -> atom_hex_number
      | PYCONST                                -> atom_pyconst
+     | "nondet" HINT                          -> atom_hint
      | reg                                    -> atom_reg
      | function_call                          -> atom_func_call
      | identifier
@@ -115,13 +123,12 @@ _with_statement: "with" (aliased_identifier ",")* aliased_identifier ":" _NEWLIN
 // Cairo file.
 _NEWLINE: "\n"
 COMMENT: /#.*/
-HINT: /%\{(.*?)%\}/s
 code_element: instruction                                       -> code_element_instruction
             | "const" identifier_def "=" expr                   -> code_element_const
             | "member" typed_identifier                         -> code_element_member
             | "let" _ref_binding "=" rvalue                     -> code_element_reference
             | "local" typed_identifier ("=" expr)?              -> code_element_local_var
-            | "tempvar" typed_identifier "=" expr               -> code_element_temp_var
+            | "tempvar" typed_identifier ("=" expr)?            -> code_element_temp_var
             | "assert" expr "=" expr                            -> code_element_compound_assert_eq
             | "static_assert" expr _DBL_EQ expr                 -> code_element_static_assert
             | "return" "(" arg_list ")"                         -> code_element_return

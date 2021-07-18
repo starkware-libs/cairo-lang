@@ -41,8 +41,7 @@ class HashBuiltinRunner(SimpleBuiltinRunner):
             if not isinstance(addr, RelocatableValue) or \
                     addr.segment_index != self.base.segment_index:
                 continue
-            idx = addr.offset // CELLS_PER_HASH
-            typ = addr.offset % CELLS_PER_HASH
+            idx, typ = divmod(addr.offset, CELLS_PER_HASH)
             if typ == 2:
                 continue
 

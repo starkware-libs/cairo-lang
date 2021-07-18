@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from starkware.cairo.lang.vm.memory_segments import get_segment_used_size
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 from starkware.cairo.lang.vm.utils import MemorySegmentAddresses
 from starkware.python.math_utils import safe_div
@@ -117,6 +116,12 @@ class BuiltinRunner(ABC):
         """
         return 0
 
+    def get_used_diluted_check_units(self) -> int:
+        """
+        Returns the number of diluted check units used by the builtin.
+        """
+        return 0
+
     def get_additional_data(self) -> Any:
         """
         Returns additional data that was created in the builtin runner. This data can be loaded
@@ -170,7 +175,7 @@ class SimpleBuiltinRunner(BuiltinRunner):
     def final_stack(self, runner, pointer):
         if self.included:
             self.stop_ptr = runner.vm_memory[pointer - 1]
-            used = get_segment_used_size(self.base.segment_index, runner.vm_memory)
+            used = self.get_used_cells(runner=runner)
             assert self.stop_ptr == self.base + used, \
                 f'Invalid stop pointer for {self.name}. ' + \
                 f'Expected: {self.base + used}, found: {self.stop_ptr}'
@@ -180,7 +185,7 @@ class SimpleBuiltinRunner(BuiltinRunner):
             return pointer
 
     def get_used_cells(self, runner):
-        used = get_segment_used_size(self.base.segment_index, runner.vm_memory)
+        used = runner.segments.get_segment_used_size(self.base.segment_index)
         return used
 
     def get_used_instances(self, runner):
@@ -201,9 +206,9 @@ class SimpleBuiltinRunner(BuiltinRunner):
         return used, size
 
     def finalize_segments(self, runner):
-        used, size = self.get_used_cells_and_allocated_size(runner)
+        _, size = self.get_used_cells_and_allocated_size(runner)
 
-        runner.segments.finalize(self.base.segment_index, size=size)
+        runner.segments.finalize(segment_index=self.base.segment_index, size=size)
 
     def get_memory_segment_addresses(self, runner):
         return {self.name: MemorySegmentAddresses(

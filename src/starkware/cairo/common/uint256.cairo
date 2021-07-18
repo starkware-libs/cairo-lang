@@ -9,8 +9,8 @@ struct Uint256:
     member high : felt
 end
 
-const SHIFT = %[2 ** 128%]
-const HALF_SHIFT = %[2 ** 64%]
+const SHIFT = 2 ** 128
+const HALF_SHIFT = 2 ** 64
 
 # Verifies that the given integer is valid.
 func uint256_check{range_check_ptr}(a : Uint256):

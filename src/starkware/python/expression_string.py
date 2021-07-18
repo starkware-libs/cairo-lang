@@ -98,6 +98,14 @@ class ExpressionString:
         # For the two expressions (a ** b) ** c and a ** (b ** c), parentheses will always be added.
         return ExpressionString(f'{self:HIGHEST}^{other:HIGHEST}', OperatorPrecedence.POW)
 
+    def double_star_pow(self, other):
+        """
+        Same as self ** other, except that the text is using " ** " instead of "^".
+        """
+        other = to_expr_string(other)
+        # For the two expressions (a ** b) ** c and a ** (b ** c), parentheses will always be added.
+        return ExpressionString(f'{self:HIGHEST} ** {other:HIGHEST}', OperatorPrecedence.POW)
+
     def __neg__(self):
         return ExpressionString(f'-{self:ADDROF}', OperatorPrecedence.LOWEST)
 

@@ -110,6 +110,7 @@ end
 """
     runner = get_runner_from_code(code, layout='plain', prime=PRIME)
     addr = runner.segments.add()
+    runner.vm_memory.unfreeze_for_testing()
     runner.load_data(addr, [42])
     assert runner.vm_memory[addr] == 42
 

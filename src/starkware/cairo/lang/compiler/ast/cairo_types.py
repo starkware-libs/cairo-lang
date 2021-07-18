@@ -87,8 +87,10 @@ class TypeTuple(CairoType):
 
 
 class CastType(Enum):
+    # When the compiler creates a cast expression for references.
+    FORCED = 0
     # When an explicit cast occurs using 'cast(*, *)'.
-    EXPLICIT = 0
+    EXPLICIT = auto()
     # When unpacking occurs (e.g., 'let (x : T) = foo()').
     UNPACKING = auto()
     # When a variable is initialized (e.g., 'tempvar x : T = 5').

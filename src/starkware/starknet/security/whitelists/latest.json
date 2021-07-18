@@ -30,7 +30,7 @@
             "allowed_expressions": [
                 {
                     "expr": "[cast(ap + (-1), starkware.cairo.common.dict_access.DictAccess**)]",
-                    "name": "starkware.cairo.common.dict.dict_squash.__temp28"
+                    "name": "starkware.cairo.common.dict.dict_squash.__temp31"
                 },
                 {
                     "expr": "[cast(fp + (-3), starkware.cairo.common.dict_access.DictAccess**)]",
@@ -88,6 +88,30 @@
                 "# Update value.",
                 "dict_tracker.data[ids.key] = ids.new_value",
                 "dict_tracker.current_ptr += ids.DictAccess.SIZE"
+            ]
+        },
+        {
+            "allowed_expressions": [
+                {
+                    "expr": "[cast(fp + (-3), felt*)]",
+                    "name": "starkware.starknet.common.storage.normalize_address.addr"
+                },
+                {
+                    "expr": "[cast(ap + (-1), felt*)]",
+                    "name": "starkware.starknet.common.storage.normalize_address.is_small"
+                },
+                {
+                    "expr": "[cast(fp + (-4), felt*)]",
+                    "name": "starkware.starknet.common.storage.normalize_address.range_check_ptr"
+                }
+            ],
+            "hint_lines": [
+                "# Verify the assumptions on the relationship between 2**250, ADDR_BOUND and PRIME.",
+                "ADDR_BOUND = ids.ADDR_BOUND % PRIME",
+                "assert (2**250 < ADDR_BOUND <= 2**251) and (2 * 2**250 < PRIME) and (",
+                "        ADDR_BOUND * 2 > PRIME), \\",
+                "    'normalize_address() cannot be used with the current constants.'",
+                "ids.is_small = 1 if ids.addr < ADDR_BOUND else 0"
             ]
         },
         {
@@ -590,48 +614,31 @@
         {
             "allowed_expressions": [
                 {
+                    "expr": "[cast([fp + (-4)] + 1, felt*)]",
+                    "name": "starkware.cairo.common.math.assert_250_bit.high"
+                },
+                {
+                    "expr": "[cast([fp + (-4)], felt*)]",
+                    "name": "starkware.cairo.common.math.assert_250_bit.low"
+                },
+                {
                     "expr": "[cast(fp + (-4), felt*)]",
-                    "name": "starkware.cairo.common.math.assert_le_250_bit.a"
+                    "name": "starkware.cairo.common.math.assert_250_bit.range_check_ptr"
                 },
                 {
                     "expr": "[cast(fp + (-3), felt*)]",
-                    "name": "starkware.cairo.common.math.assert_le_250_bit.b"
-                },
-                {
-                    "expr": "[cast(ap + (-1), felt*)]",
-                    "name": "starkware.cairo.common.math.assert_le_250_bit.diff"
-                },
-                {
-                    "expr": "[cast([fp + (-5)] + 1, felt*)]",
-                    "name": "starkware.cairo.common.math.assert_le_250_bit.high"
-                },
-                {
-                    "expr": "[cast([fp + (-5)], felt*)]",
-                    "name": "starkware.cairo.common.math.assert_le_250_bit.low"
-                },
-                {
-                    "expr": "cast([fp + (-5)] + 2, felt)",
-                    "name": "starkware.cairo.common.math.assert_le_250_bit.range_check_ptr"
+                    "name": "starkware.cairo.common.math.assert_250_bit.value"
                 }
             ],
             "hint_lines": [
                 "from starkware.cairo.common.math_utils import as_int",
                 "",
-                "# Soundness checks.",
-                "assert range_check_builtin.bound == 2**128",
-                "assert ids.UPPER_BOUND == ids.HIGH_PART_SHIFT * range_check_builtin.bound",
-                "",
                 "# Correctness check.",
-                "diff = as_int(ids.diff, PRIME)",
-                "values_msg = f'(a={as_int(ids.a, PRIME)}, b={as_int(ids.b, PRIME)}).'",
-                "assert diff < ids.UPPER_BOUND, f'(b - a)={diff} is outside of the valid range. {values_msg}'",
-                "assert PRIME - ids.UPPER_BOUND > (ids.HIGH_PART_SHIFT + 1) * range_check_builtin.bound",
-                "",
-                "assert diff >= 0, f'(b - a)={diff} < 0. {values_msg}'",
+                "value = as_int(ids.value, PRIME) % PRIME",
+                "assert value < ids.UPPER_BOUND, f'{value} is outside of the range [0, 2**250).'",
                 "",
                 "# Calculation for the assertion.",
-                "ids.high = ids.diff // ids.HIGH_PART_SHIFT",
-                "ids.low = ids.diff % ids.HIGH_PART_SHIFT"
+                "ids.high, ids.low = divmod(ids.value, ids.SHIFT)"
             ]
         },
         {
@@ -647,10 +654,6 @@
                 {
                     "expr": "[cast(fp + (-4), felt*)]",
                     "name": "starkware.cairo.common.math.signed_div_rem.div"
-                },
-                {
-                    "expr": "cast([[fp + (-6)] + 1] - [fp + (-3)], felt)",
-                    "name": "starkware.cairo.common.math.signed_div_rem.q"
                 },
                 {
                     "expr": "[cast([fp + (-6)], felt*)]",
@@ -822,12 +825,20 @@
         {
             "allowed_expressions": [
                 {
+                    "expr": "[cast(ap + (-1), felt*)]",
+                    "name": "starkware.cairo.common.math.abs_value.is_positive"
+                },
+                {
                     "expr": "[cast(fp + (-4), felt*)]",
                     "name": "starkware.cairo.common.math.abs_value.range_check_ptr"
                 },
                 {
                     "expr": "[cast(fp + (-3), felt*)]",
                     "name": "starkware.cairo.common.math.abs_value.value"
+                },
+                {
+                    "expr": "[cast(ap + (-1), felt*)]",
+                    "name": "starkware.cairo.common.math.sign.is_positive"
                 },
                 {
                     "expr": "[cast(fp + (-4), felt*)]",
@@ -840,7 +851,7 @@
             ],
             "hint_lines": [
                 "from starkware.cairo.common.math_utils import is_positive",
-                "memory[ap] = 1 if is_positive(",
+                "ids.is_positive = 1 if is_positive(",
                 "    value=ids.value, prime=PRIME, rc_bound=range_check_builtin.bound) else 0"
             ]
         },
@@ -870,15 +881,15 @@
             "allowed_expressions": [
                 {
                     "expr": "[cast(fp + (-3), felt*)]",
-                    "name": "starkware.starknet.core.storage.storage.storage_read.address"
+                    "name": "starkware.starknet.common.storage.storage_read.address"
                 },
                 {
                     "expr": "[cast(fp + (-4), starkware.cairo.common.dict_access.DictAccess**)]",
-                    "name": "starkware.starknet.core.storage.storage.storage_read.dict_ptr"
+                    "name": "starkware.starknet.common.storage.storage_read.dict_ptr"
                 },
                 {
-                    "expr": "[cast(ap + (-1), starkware.starknet.core.storage.storage.Storage**)]",
-                    "name": "starkware.starknet.core.storage.storage.storage_read.storage_ptr"
+                    "expr": "[cast(ap + (-1), starkware.starknet.common.storage.Storage**)]",
+                    "name": "starkware.starknet.common.storage.storage_read.storage_ptr"
                 }
             ],
             "hint_lines": [
@@ -889,24 +900,47 @@
             "allowed_expressions": [
                 {
                     "expr": "[cast(fp + (-4), felt*)]",
-                    "name": "starkware.starknet.core.storage.storage.storage_write.address"
+                    "name": "starkware.starknet.common.storage.storage_write.address"
                 },
                 {
                     "expr": "[cast(fp + (-5), starkware.cairo.common.dict_access.DictAccess**)]",
-                    "name": "starkware.starknet.core.storage.storage.storage_write.dict_ptr"
+                    "name": "starkware.starknet.common.storage.storage_write.dict_ptr"
                 },
                 {
-                    "expr": "cast([fp + (-5)] + 3, starkware.starknet.core.storage.storage.Storage*)",
-                    "name": "starkware.starknet.core.storage.storage.storage_write.storage_ptr"
+                    "expr": "[cast(fp + (-5), starkware.starknet.common.storage.Storage**)]",
+                    "name": "starkware.starknet.common.storage.storage_write.storage_ptr"
                 },
                 {
                     "expr": "[cast(fp + (-3), felt*)]",
-                    "name": "starkware.starknet.core.storage.storage.storage_write.value"
+                    "name": "starkware.starknet.common.storage.storage_write.value"
                 }
             ],
             "hint_lines": [
                 "ids.dict_ptr.prev_value = __storage.read(address=ids.dict_ptr.key)",
                 "__storage.write(address=ids.dict_ptr.key, value=ids.dict_ptr.new_value)"
+            ]
+        },
+        {
+            "allowed_expressions": [
+                {
+                    "expr": "[cast(fp + (-3), felt*)]",
+                    "name": "starkware.starknet.common.storage.normalize_address.addr"
+                },
+                {
+                    "expr": "[cast(ap + (-1), felt*)]",
+                    "name": "starkware.starknet.common.storage.normalize_address.is_250"
+                },
+                {
+                    "expr": "[cast(ap + (-1), felt*)]",
+                    "name": "starkware.starknet.common.storage.normalize_address.is_small"
+                },
+                {
+                    "expr": "[cast(fp + (-4), felt*)]",
+                    "name": "starkware.starknet.common.storage.normalize_address.range_check_ptr"
+                }
+            ],
+            "hint_lines": [
+                "ids.is_250 = 1 if ids.addr < 2**250 else 0"
             ]
         },
         {
@@ -1136,7 +1170,7 @@
             "allowed_expressions": [
                 {
                     "expr": "[cast(ap + (-1), felt*)]",
-                    "name": "starkware.cairo.common.memcpy.memcpy.__temp43"
+                    "name": "starkware.cairo.common.memcpy.memcpy.__temp46"
                 },
                 {
                     "expr": "[cast(ap, felt*)]",
@@ -1295,7 +1329,7 @@
             "allowed_expressions": [
                 {
                     "expr": "[cast(ap + (-1), starkware.cairo.common.dict_access.DictAccess**)]",
-                    "name": "starkware.cairo.common.dict.dict_squash.__temp28"
+                    "name": "starkware.cairo.common.dict.dict_squash.__temp31"
                 },
                 {
                     "expr": "[cast(fp + (-3), starkware.cairo.common.dict_access.DictAccess**)]",
@@ -1315,7 +1349,7 @@
                 },
                 {
                     "expr": "[cast(ap + (-1), felt*)]",
-                    "name": "starkware.cairo.common.memcpy.memcpy.__temp43"
+                    "name": "starkware.cairo.common.memcpy.memcpy.__temp46"
                 },
                 {
                     "expr": "[cast(ap, felt*)]",

@@ -15,8 +15,8 @@ from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeElementTailCall, CodeElementTemporaryVariable, CodeElementUnpackBinding, CodeElementWith,
     LangDirective)
 from starkware.cairo.lang.compiler.ast.expr import (
-    ExprAssignment, ExprCast, ExprConst, ExprDeref, Expression, ExprFutureLabel, ExprIdentifier,
-    ExprOperator, ExprReg, ExprTuple)
+    ExprAssignment, ExprCast, ExprConst, ExprDeref, Expression, ExprFutureLabel, ExprHint,
+    ExprIdentifier, ExprOperator, ExprReg, ExprTuple)
 from starkware.cairo.lang.compiler.ast.expr_func_call import ExprFuncCall
 from starkware.cairo.lang.compiler.ast.formatting_utils import get_max_line_length
 from starkware.cairo.lang.compiler.ast.instructions import (
@@ -59,13 +59,17 @@ from starkware.cairo.lang.compiler.type_casts import check_cast
 from starkware.cairo.lang.compiler.type_system_visitor import get_expr_addr, simplify_type_system
 from starkware.python.utils import safe_zip
 
+# Indicates that the compiler should be able to deduce the change in the ap register for this
+# function.
+KNOWN_AP_CHANGE_DECORATOR = 'known_ap_change'
+
 
 @dataclasses.dataclass
 class PreprocessedInstruction:
     instruction: InstructionAst
     # List of fully qualified scope names accessible by the hint function of this instruction.
     accessible_scopes: List[ScopedName]
-    hint: Optional[CodeElementHint]
+    hints: List[Tuple[CodeElementHint, FlowTrackingDataActual]]
     flow_tracking_data: FlowTrackingDataActual
 
     def format(self, with_locations: bool = False) -> str:
@@ -73,7 +77,7 @@ class PreprocessedInstruction:
             f'  # {self.instruction.location.topmost_location()}.'
             if with_locations and self.instruction.location is not None
             else '')
-        return (self.hint.format(get_max_line_length()) + '\n' if self.hint is not None else '') + \
+        return ''.join(hint.format(get_max_line_length()) + '\n' for hint, _ in self.hints) + \
             self.instruction.format() + location_str
 
 
@@ -156,8 +160,8 @@ class Preprocessor(IdentifierAwareVisitor):
 
         self.simplifier = ExpressionSimplifier(prime)
 
-        # A list of hints for the next instruction.
-        self.next_instruction_hint: Optional[CodeElementHint] = None
+        # The hint for the next instruction.
+        self.next_instruction_hints: List[Tuple[CodeElementHint, FlowTrackingDataActual]] = []
 
         # List of builtins.
         self.builtins: Optional[List[str]] = None
@@ -266,7 +270,7 @@ class Preprocessor(IdentifierAwareVisitor):
             self.instructions.append(PreprocessedInstruction(
                 instruction=new_instruction,
                 accessible_scopes=preprocessed_instruction.accessible_scopes,
-                hint=preprocessed_instruction.hint,
+                hints=preprocessed_instruction.hints,
                 flow_tracking_data=preprocessed_instruction.flow_tracking_data))
 
         self.accessible_scopes = []
@@ -333,7 +337,12 @@ class Preprocessor(IdentifierAwareVisitor):
         if elm.element_type == 'struct':
             return
 
+        # Check decorator.
+        known_ap_change_decorator: Optional[ExprIdentifier] = None
         for decorator in elm.decorators:
+            if decorator.name == KNOWN_AP_CHANGE_DECORATOR and elm.element_type == 'func':
+                known_ap_change_decorator = decorator
+                continue
             if decorator.name not in self.supported_decorators:
                 raise PreprocessorError(
                     f"Unsupported decorator: '{decorator.name}'.",
@@ -410,6 +419,13 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
                     location=elm.identifier.location)
 
             self.function_metadata[new_scope].completed = True
+            if known_ap_change_decorator is not None:
+                if not isinstance(
+                        self.function_metadata[new_scope].total_ap_change, RegChangeKnown):
+                    raise PreprocessorError(
+                        'The compiler was unable to deduce the change of the ap register, as '
+                        'required by this decorator.',
+                        location=known_ap_change_decorator.location)
             if self.function_metadata[new_scope].total_ap_change == RegChangeUnconstrained():
                 # No returns occured.
                 self.function_metadata[new_scope].total_ap_change = RegChangeUnknown()
@@ -460,7 +476,7 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
         # Prepare branch compound expression.
         cond_expr = self.simplify_expr_as_felt(ExprOperator(
             a=elm.condition.a, op='-', b=elm.condition.b, location=elm.condition.location))
-        compound_expressions_code_elements, (res_cond_expr,), _ = process_compound_expressions(
+        compound_expressions_code_elements, (res_cond_expr,) = process_compound_expressions(
             [cond_expr], [SimplicityLevel.DEREF],
             context=self._compound_expression_context)
         for code_element in compound_expressions_code_elements:
@@ -538,16 +554,14 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
         preprocessed_instruction = PreprocessedInstruction(
             instruction=self.visit(elm.instruction),
             accessible_scopes=self.accessible_scopes.copy(),
-            hint=self.next_instruction_hint,
+            hints=self.next_instruction_hints,
             flow_tracking_data=current_flow_tracking_data)
-        self.next_instruction_hint = None
+        self._clear_next_hints()
         self.current_pc += self.get_instruction_size(
             preprocessed_instruction.instruction, allow_auto_deduction=True)
         self.instructions.append(preprocessed_instruction)
 
     def visit_CodeElementConst(self, elm: CodeElementConst):
-        self.check_no_hints('Hints before constant definitions are not allowed.')
-
         if self.inside_a_struct():
             # Was already handled by the struct collector.
             return
@@ -608,7 +622,8 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
                     location=addr.location),
                 location=location)
         else:
-            ref_expr = ExprCast(expr=val, dest_type=dst_type, location=location)
+            ref_expr = ExprCast(
+                expr=val, dest_type=dst_type, cast_type=CastType.FORCED, location=location)
 
         self.add_reference(
             name=name,
@@ -624,26 +639,61 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
     def visit_CodeElementTemporaryVariable(self, elm: CodeElementTemporaryVariable):
         assert_no_modifier(elm.typed_identifier)
 
-        expr, src_type = self.simplify_expr(elm.expr)
-        src_size = self.get_size(src_type)
+        if elm.expr is None or isinstance(elm.expr, ExprHint):
+            # If this is an uninitialized tempvar, only increment ap.
+            dest_type = self.resolve_type(elm.typed_identifier.get_type())
+            src_size = self.get_size(dest_type)
 
-        if elm.typed_identifier.expr_type is None:
-            dest_type = src_type
+            if isinstance(elm.expr, ExprHint):
+                if not isinstance(dest_type, TypeFelt):
+                    raise PreprocessorError(
+                        'Hint tempvars must be of type felt.',
+                        location=elm.expr.location)
+                self.visit(
+                    CodeElementHint(
+                        hint=ExprHint(
+                            hint_code=f'memory[ap] = int({elm.expr.hint_code})',
+                            n_prefix_newlines=0,
+                            location=elm.location,
+                        ),
+                        location=elm.location,
+                    )
+                )
+
+            self.visit(
+                CodeElementInstruction(
+                    instruction=InstructionAst(
+                        body=AddApInstruction(
+                            expr=ExprConst(val=src_size, location=elm.location),
+                            location=elm.location,
+                        ),
+                        inc_ap=False,
+                        location=elm.location,
+                    ),
+                ),
+            )
         else:
-            dest_type = self.resolve_type(elm.typed_identifier.expr_type)
-            if not check_cast(
-                    src_type=src_type, dest_type=dest_type, identifier_manager=self.identifiers,
-                    cast_type=CastType.ASSIGN):
-                raise PreprocessorError(
-                    f"Cannot assign an expression of type '{src_type.format()}' "
-                    f"to a temporary variable of type '{dest_type.format()}'.",
-                    location=dest_type.location)
+            expr, src_type = self.simplify_expr(elm.expr)
+            src_size = self.get_size(src_type)
 
-            dest_size = self.get_size(dest_type)
-            assert src_size == dest_size, 'Expecting src and dest types to have the same size.'
+            if elm.typed_identifier.expr_type is None:
+                dest_type = src_type
+            else:
+                dest_type = self.resolve_type(elm.typed_identifier.expr_type)
+                if not check_cast(
+                        src_type=src_type, dest_type=dest_type, identifier_manager=self.identifiers,
+                        cast_type=CastType.ASSIGN):
+                    raise PreprocessorError(
+                        f"Cannot assign an expression of type '{src_type.format()}' "
+                        f"to a temporary variable of type '{dest_type.format()}'.",
+                        location=dest_type.location)
 
-        src_exprs = self.simplified_expr_to_felt_expr_list(expr=expr, expr_type=src_type)
-        self.push_compound_expressions(compound_expressions=src_exprs, location=elm.location)
+                dest_size = self.get_size(dest_type)
+                assert src_size == dest_size, 'Expecting src and dest types to have the same size.'
+
+            src_exprs = self.simplified_expr_to_felt_expr_list(expr=expr, expr_type=src_type)
+            self.push_compound_expressions(compound_expressions=src_exprs, location=elm.location)
+
         self.add_simple_reference(
             name=self.current_scope + elm.typed_identifier.name,
             reg=Register.AP,
@@ -877,11 +927,10 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
         location - location to attach to errors if no finer location is relevant.
         """
         # Generate instructions.
-        compound_expressions_code_elements, simple_exprs, first_compound_expr = \
-            process_compound_expressions(
-                compound_expressions,
-                SimplicityLevel.OPERATION,
-                context=self._compound_expression_context)
+        compound_expressions_code_elements, simple_exprs = process_compound_expressions(
+            compound_expressions,
+            SimplicityLevel.OPERATION,
+            context=self._compound_expression_context)
 
         for code_element in compound_expressions_code_elements:
             self.visit(code_element)
@@ -1315,8 +1364,7 @@ Expected expression of type '{member_def.cairo_type.format()}', got '{cairo_type
         self.add_label(elm.identifier)
 
     def visit_CodeElementHint(self, elm: CodeElementHint):
-        self.check_no_hints('Only one hint is allowed per instruction.')
-        self.next_instruction_hint = elm
+        self._add_next_hint(hint=elm)
 
     def visit_CodeElementEmptyLine(self, elm: CodeElementEmptyLine):
         # Ignore empty lines.
@@ -1674,8 +1722,8 @@ Expected expression of type '{expected_type.format()}', got '{expr_type.format()
         Makes sure that there are no unprocessed hints, and throws an exception with the given
         message otherwise.
         """
-        if self.next_instruction_hint is not None:
-            raise PreprocessorError(msg, location=self.next_instruction_hint.location)
+        if len(self.next_instruction_hints) != 0:
+            raise PreprocessorError(msg, location=self.next_instruction_hints[0][0].location)
 
     def new_unique_id(self) -> str:
         """
@@ -1685,6 +1733,12 @@ Expected expression of type '{expected_type.format()}', got '{expr_type.format()
         self.next_temp_id += 1
         self.scoped_temp_ids.add(self.current_scope + name)
         return name
+
+    def _add_next_hint(self, hint: CodeElementHint):
+        self.next_instruction_hints.append((hint, self.flow_tracking.get()))
+
+    def _clear_next_hints(self):
+        self.next_instruction_hints = []
 
 
 class PreprocessorCompoundExpressionContext(CompoundExpressionContext):

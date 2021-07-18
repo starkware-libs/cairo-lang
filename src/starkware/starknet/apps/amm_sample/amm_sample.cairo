@@ -4,16 +4,16 @@
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.hash import hash2
 from starkware.cairo.common.math import assert_le, assert_nn_le, unsigned_div_rem
-from starkware.starknet.core.storage.storage import Storage, storage_read, storage_write
+from starkware.starknet.common.storage import Storage, storage_read, storage_write
 
 # The maximum amount of each token that belongs to the AMM.
-const BALANCE_UPPER_BOUND = %[ 2**64 %]
+const BALANCE_UPPER_BOUND = 2 ** 64
 
 const TOKEN_TYPE_A = 1
 const TOKEN_TYPE_B = 2
 
 # Ensure the user's balances are much smaller than the pool's balance.
-const POOL_UPPER_BOUND = %[ 2**30 %]
+const POOL_UPPER_BOUND = 2 ** 30
 const ACCOUNT_BALANCE_BOUND = %[ 2**30 // 1000 %]
 
 # A map from account and token type to the corresponding balance of that account.
@@ -40,7 +40,8 @@ end
 
 # Returns the account's balance for the given token.
 @view
-func get_account_token_balance{storage_ptr : Storage*, pedersen_ptr : HashBuiltin*}(
+func get_account_token_balance{
+        storage_ptr : Storage*, range_check_ptr, pedersen_ptr : HashBuiltin*}(
         account_id : felt, token_type : felt) -> (balance : felt):
     return account_balance.read(account_id, token_type)
 end
@@ -56,7 +57,7 @@ end
 
 # Returns the pool's balance.
 @view
-func get_pool_token_balance{storage_ptr : Storage*, pedersen_ptr : HashBuiltin*}(
+func get_pool_token_balance{storage_ptr : Storage*, range_check_ptr, pedersen_ptr : HashBuiltin*}(
         token_type : felt) -> (balance : felt):
     return pool_balance.read(token_type)
 end

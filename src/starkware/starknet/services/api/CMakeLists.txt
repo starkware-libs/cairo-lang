@@ -11,6 +11,5 @@ python_lib(starknet_contract_definition_lib
     cairo_compile_lib
     starknet_definitions_lib
     starkware_utils_lib
-    pip_marshmallow
     pip_marshmallow_dataclass
 )

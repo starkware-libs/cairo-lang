@@ -2,8 +2,8 @@ from typing import Optional
 
 from starkware.cairo.lang.compiler.ast.expr import (
     ArgList, ExprAddressOf, ExprAssignment, ExprCast, ExprConst, ExprDeref, ExprDot, Expression,
-    ExprFutureLabel, ExprIdentifier, ExprNeg, ExprOperator, ExprParentheses, ExprPyConst, ExprReg,
-    ExprSubscript, ExprTuple)
+    ExprFutureLabel, ExprHint, ExprIdentifier, ExprNeg, ExprOperator, ExprParentheses, ExprPow,
+    ExprPyConst, ExprReg, ExprSubscript, ExprTuple)
 from starkware.cairo.lang.compiler.ast.expr_func_call import ExprFuncCall
 from starkware.cairo.lang.compiler.ast.rvalue import RvalueFuncCall
 from starkware.cairo.lang.compiler.error_handling import Location, LocationError
@@ -31,11 +31,20 @@ class ExpressionTransformer:
         return getattr(self, funcname)(expr)
 
     def visit_ExprConst(self, expr: ExprConst):
-        return ExprConst(val=expr.val, location=self.location_modifier(expr.location))
+        return ExprConst(
+            val=expr.val,
+            format_str=expr.format_str,
+            location=self.location_modifier(expr.location))
 
     def visit_ExprPyConst(self, expr: ExprPyConst):
         return ExprPyConst(
             code=expr.code,
+            location=self.location_modifier(expr.location))
+
+    def visit_ExprHint(self, expr: ExprHint):
+        return ExprHint(
+            hint_code=expr.hint_code,
+            n_prefix_newlines=expr.n_prefix_newlines,
             location=self.location_modifier(expr.location))
 
     def visit_ExprIdentifier(self, expr: ExprIdentifier):
@@ -50,6 +59,11 @@ class ExpressionTransformer:
     def visit_ExprOperator(self, expr: ExprOperator):
         return ExprOperator(
             a=self.visit(expr.a), op=expr.op, b=self.visit(expr.b),
+            location=self.location_modifier(expr.location))
+
+    def visit_ExprPow(self, expr: ExprPow):
+        return ExprPow(
+            a=self.visit(expr.a), b=self.visit(expr.b),
             location=self.location_modifier(expr.location))
 
     def visit_ExprNeg(self, expr: ExprNeg):

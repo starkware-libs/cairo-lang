@@ -24,7 +24,7 @@ def test_compiler():
 
 const x = 5
 const y = 2 * x
-[ap] = [[fp + 2 * 3] + ((7 - 1 + y))]; ap++
+[ap] = [[fp + 2 * 0x3] + ((7 - 1 + y))]; ap++
 ap += 4 + %[ 2**10 %]
 
 # An empty line with a comment.
@@ -69,6 +69,27 @@ ret
 [ap + 3] = 5; ap++
 [ap + 4] = 1234; ap++
 """
+
+
+def test_pow_failure():
+    verify_exception("""\
+func foo(x : felt):
+    tempvar y = x ** 2
+end
+""", """
+file:?:?: Operator '**' is only supported for constant values.
+    tempvar y = x ** 2
+                ^****^
+""")
+    verify_exception("""\
+const X = 2
+const Y = 2 ** (2 * 3)
+const Z = 2 ** (X * 3)
+""", """
+file:?:?: Identifier 'X' is not allowed in this context.
+const Z = 2 ** (X * 3)
+                ^
+""", exc_type=CairoTypeError)
 
 
 def test_referenced_before_definition_failure():
@@ -128,6 +149,10 @@ ap += 5
 tempvar z : (felt, felt) = (1, 2)
 # Check the expression pushing optimization.
 tempvar z : (felt, felt) = ([ap - 1], 3)
+tempvar q : T
+assert q.t = 0
+tempvar w
+tempvar h = nondet %{ 5**i %}
 """
     program = preprocess_str(code=code, prime=PRIME)
     assert program.format() == """\
@@ -140,6 +165,11 @@ ap += 5
 [ap] = 1; ap++
 [ap] = 2; ap++
 [ap] = 3; ap++
+ap += 2
+[ap + (-1)] = 0
+ap += 1
+%{ memory[ap] = int(5**i) %}
+ap += 1
 """
 
 
@@ -157,6 +187,17 @@ tempvar _ = 0
 file:?:?: Reference name cannot be '_'.
 tempvar _ = 0
         ^
+""")
+    verify_exception("""
+struct T:
+    member x : felt
+    member y : felt
+end
+tempvar a : T = nondet %{ 1 %}
+""", """
+file:?:?: Hint tempvars must be of type felt.
+tempvar a : T = nondet %{ 1 %}
+                ^************^
 """)
 
 
@@ -1518,7 +1559,7 @@ ret
 """
 
 
-def test_hints():
+def test_hints_good():
     code = """\
 %{ hint0 %}
 [fp] = [fp]
@@ -1588,18 +1629,6 @@ file:?:?: Found a hint at the end of a code block. Hints must be followed by an 
 ^^
 """)
     verify_exception("""
-%{
-hint1
-%}
-%{
-hint2
-%}
-""", """
-file:?:?: Only one hint is allowed per instruction.
-%{
-^^
-""")
-    verify_exception("""
 [fp] = [fp]
 %{
 hint
@@ -1608,18 +1637,6 @@ label:
 [fp] = [fp]
 """, """
 file:?:?: Hints before labels are not allowed.
-%{
-^^
-""")
-    verify_exception("""
-[fp] = [fp]
-%{
-hint
-%}
-const x = 5
-[fp] = [fp]
-""", """
-file:?:?: Hints before constant definitions are not allowed.
 %{
 ^^
 """)
@@ -2775,27 +2792,35 @@ let b = cast((1, a), B)
     verify_exception("""
 struct A:
     member x : felt
+    member y : felt
 end
 struct B:
     member a : felt
     member b : felt
 end
-let a = cast(fp, A*)
+let a = [cast(fp, A*)]
 let b = cast((a, 1), B)
 """, """
-file:?:?: Cannot cast 'test_scope.A*' to 'felt'.
+file:?:?: While expanding the reference 'a' in:
 let b = cast((a, 1), B)
               ^
+file:?:?: Cannot cast 'test_scope.A' to 'felt'.
+let a = [cast(fp, A*)]
+        ^************^
 """, exc_type=CairoTypeError)
 
     verify_exception("""
+struct A:
+    member x : felt
+    member y : felt
+end
 struct B:
     member a : felt
-    member b : felt
+    member b : A
 end
 let b = cast([cast(ap, (felt, felt*)*)], B)
 """, """
-file:?:?: Cannot cast 'felt*' to 'felt'.
+file:?:?: Cannot cast 'felt*' to 'test_scope.A'.
 let b = cast([cast(ap, (felt, felt*)*)], B)
              ^************************^
 """, exc_type=CairoTypeError)
@@ -2829,8 +2854,10 @@ assert (1, 1) = 1
 
 def test_struct_constructor():
     code = """\
+struct M:
+end
 struct A:
-    member x : felt
+    member x : M*
     member y : felt
 end
 struct B:
@@ -2839,15 +2866,18 @@ struct B:
     member z : A
     member w : A*
 end
-func foo(a_ptr : A*):
+func foo(m_ptr: M*, a_ptr : A*):
     alloc_locals
-    local b1 : B = B(x=0, y=A(1, 2), z=[a_ptr], w=a_ptr)
+    local b1 : B = B(x=0, y=A(m_ptr, 2), z=[a_ptr], w=a_ptr)
     let a = A(x=a_ptr.x, y=0)
-    assert a = A(x=1, y=2)
+    assert a = A(x=m_ptr, y=2)
+
+    let b2 : B = B(x=0, y=A(m_ptr, 2), z=[a_ptr], w=a_ptr)
+    assert b2 = b2
 
     tempvar y: felt* = cast(1, felt*)
     tempvar x: A* = cast(0, A*)
-    assert [x] = A(x=[y], y=[y])
+    assert [x] = A(x=m_ptr, y=[y])
     return ()
 end
 """
@@ -2856,29 +2886,39 @@ end
 ap += 6
 # Populate b1.
 [fp] = 0
-[fp + 1] = 1
+[fp + 1] = [fp + (-4)]
 [fp + 2] = 2
 [fp + 3] = [[fp + (-3)]]
 [fp + 4] = [[fp + (-3)] + 1]
 [fp + 5] = [fp + (-3)]
 
-# assert a = A(x=1, y=2) (x component).
-[ap] = 1; ap++
-[[fp + (-3)]] = [ap + (-1)]
+# assert a = A(x=m_ptr, y=2) (x component).
+[[fp + (-3)]] = [fp + (-4)]
 
-# assert a = A(x=1, y=2) (y component).
+# assert a = A(x=m_ptr, y=2) (y component).
 [ap] = 2; ap++
 0 = [ap + (-1)]
+
+# assert b2 = b2.
+[ap] = 0; ap++
+0 = [ap + (-1)]
+[fp + (-4)] = [fp + (-4)]
+[ap] = 2; ap++
+2 = [ap + (-1)]
+[ap] = [[fp + (-3)]]; ap++
+[[fp + (-3)]] = [ap + (-1)]
+[ap] = [[fp + (-3)] + 1]; ap++
+[[fp + (-3)] + 1] = [ap + (-1)]
+[fp + (-3)] = [fp + (-3)]
 
 # tempvar y: felt* = cast(1, felt*).
 [ap] = 1; ap++
 # tempvar x: A* = cast(0, A*).
 [ap] = 0; ap++
-# assert [x] = A(x=[y], y=[y]).
+# assert [x] = A(x=m_ptr, y=[y]).
+[[ap + (-1)]] = [fp + (-4)]
 [ap] = [[ap + (-2)]]; ap++
-[[ap + (-2)]] = [ap + (-1)]
-[ap] = [[ap + (-3)]]; ap++
-[[ap + (-3)] + 1] = [ap + (-1)]
+[[ap + (-2)] + 1] = [ap + (-1)]
 ret
 """
     assert program.format() == strip_comments_and_linebreaks(expected_result)
@@ -2896,6 +2936,17 @@ file:?:?: Expected 'foo' to be a struct. Found: 'function'.
 foo(3) = foo(4)
 ^****^
 """)
+    verify_exception("""
+struct A:
+    member next: A*
+end
+
+assert A(next=0) = A(next=0)
+""", """
+file:?:?: Cannot cast 'felt' to 'test_scope.A*'.
+assert A(next=0) = A(next=0)
+              ^
+""", exc_type=CairoTypeError)
 
     def verify_exception_for_expr(expr_str: str, expected_error: str):
         verify_exception(f"""
@@ -2994,3 +3045,37 @@ call rel -5
 ret
 call rel -5
 """
+
+
+def test_known_ap_change_decorator():
+    # Positive case.
+    code = """\
+func bar():
+    return ()
+end
+
+@known_ap_change
+func foo(arg : felt):
+    alloc_locals
+    local local_var
+    tempvar tmp = 0
+    bar()
+    return ()
+end
+
+"""
+    preprocess_str(code=code, prime=PRIME)
+
+    # Negative case.
+    verify_exception("""
+@known_ap_change
+func foo():
+    foo()
+    return ()
+end
+""", """
+file:?:?: The compiler was unable to deduce the change of the ap register, as required by this \
+decorator.
+@known_ap_change
+^**************^
+""")

@@ -116,8 +116,10 @@ def test_references():
             ap_tracking_data=RegTrackingData(group=0, offset=3),
         )),
     }
-    my_struct_star = TypePointer(pointee=TypeStruct(
-        scope=scope('MyStruct'), is_fully_resolved=True))
+
+    my_struct = TypeStruct(
+        scope=scope('MyStruct'), is_fully_resolved=True)
+    my_struct_star = TypePointer(pointee=my_struct)
     identifier_values = {
         scope('x.ref'): ReferenceDefinition(
             full_name=scope('x.ref'), cairo_type=TypeFelt(), references=[]
@@ -138,6 +140,7 @@ def test_references():
             full_name=scope('MyStruct'),
             members={
                 'member': MemberDefinition(offset=10, cairo_type=TypeFelt()),
+                'struct': MemberDefinition(offset=11, cairo_type=my_struct),
             },
             size=11,
         ),
@@ -219,6 +222,13 @@ def test_references():
     assert memory == {
         (ap - 1) + 1: 4321,
         4321 + 10: 1,
+    }
+
+    consts.x.typeref2.struct.member = 2
+    assert memory == {
+        (ap - 1) + 1: 4321,
+        4321 + 10: 1,
+        4321 + 11 + 10: 2,
     }
 
     with pytest.raises(AssertionError, match='Cannot change the value of a scope definition'):

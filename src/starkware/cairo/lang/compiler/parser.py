@@ -12,7 +12,8 @@ from starkware.cairo.lang.compiler.ast.expr import Expression
 from starkware.cairo.lang.compiler.ast.instructions import InstructionAst
 from starkware.cairo.lang.compiler.ast.module import CairoFile
 from starkware.cairo.lang.compiler.error_handling import InputFile, Location, LocationError
-from starkware.cairo.lang.compiler.parser_transformer import ParserError, ParserTransformer
+from starkware.cairo.lang.compiler.parser_transformer import (
+    ParserContext, ParserError, ParserTransformer)
 
 grammar_file = os.path.join(os.path.dirname(__file__), 'cairo.ebnf')
 gram_parser = lark.Lark(
@@ -40,7 +41,8 @@ def wrap_lark_error(err: LarkError, input_file: InputFile) -> Exception:
             expected.remove('MINUS')
         if {'CAST', 'LPAR', 'LSQB', 'IDENTIFIER', 'INT', 'AMPERSAND', 'register'} <= expected:
             expected -= {
-                'CAST', 'LPAR', 'LSQB', 'IDENTIFIER', 'INT', 'PYCONST', 'AMPERSAND', 'register'}
+                'CAST', 'LPAR', 'LSQB', 'IDENTIFIER', 'INT', 'HEXINT', 'PYCONST', 'NONDET',
+                'AMPERSAND', 'register'}
             expected.add('expression')
         if {'PLUS', 'MINUS', 'STAR', 'SLASH'} <= expected:
             expected -= {'PLUS', 'MINUS', 'STAR', 'SLASH'}
@@ -64,6 +66,7 @@ def wrap_lark_error(err: LarkError, input_file: InputFile) -> Exception:
             'FUNC': 'func',
             'IDENTIFIER': 'identifier',
             'INT': 'integer',
+            'HEXINT': 'integer',
             'LBRACE': '"{"',
             'LPAR': '"("',
             'LSQB': '"["',
@@ -103,13 +106,15 @@ def wrap_lark_error(err: LarkError, input_file: InputFile) -> Exception:
     return ParserError(err_str, location)
 
 
-def parse(filename: Optional[str], code: str, code_type: str, expected_type):
+def parse(
+        filename: Optional[str], code: str, code_type: str, expected_type,
+        parser_context: Optional[ParserContext] = None):
     """
     Parses the given string and returns an AST tree based on the classes in ast/*.py.
     code_type is the ebnf rule to start from (e.g., 'expr' or 'cairo_file').
     """
     input_file = InputFile(filename=filename, content=code)
-    parser_transformer = ParserTransformer(input_file)
+    parser_transformer = ParserTransformer(input_file, parser_context=parser_context)
 
     try:
         tree = gram_parser.parse(code, start=code_type)
@@ -136,14 +141,16 @@ def lex(code: str) -> List[lark.lexer.Token]:
     return gram_parser.lex(code)
 
 
-def parse_file(code: str, filename: str = '<string>') -> CairoFile:
+def parse_file(
+        code: str, filename: str = '<string>',
+        parser_context: Optional[ParserContext] = None) -> CairoFile:
     """
     Parses the given string and returns a CairoFile instance.
     """
     # If code does not end with '\n', add it.
     if not code.endswith('\n'):
         code += '\n'
-    return parse(filename, code, 'cairo_file', CairoFile)
+    return parse(filename, code, 'cairo_file', CairoFile, parser_context=parser_context)
 
 
 def parse_instruction(code: str) -> InstructionAst:
@@ -168,8 +175,8 @@ def parse_type(code: str) -> CairoType:
     return parse(None, code, 'type', CairoType)
 
 
-def parse_code_element(code: str) -> CodeElement:
+def parse_code_element(code: str, parser_context: Optional[ParserContext] = None) -> CodeElement:
     """
     Parses the given string and returns a CodeElement instance.
     """
-    return parse(None, code, 'code_element', CodeElement)
+    return parse(None, code, 'code_element', CodeElement, parser_context=parser_context)

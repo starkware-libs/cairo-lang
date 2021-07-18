@@ -39,6 +39,11 @@ def validate_dns(*, allow_none: bool) -> ValidatorType:
         field_name='dns', regex=DNS_REGEX, allow_none=allow_none, regex_description='DNS label')
 
 
+HEX_REGEX = r'^0x[a-fA-F0-9]+$'
+validate_optional_hex_str = validate_regex_match(
+    field_name='fact', regex=HEX_REGEX, allow_none=True, regex_description='hex string')
+
+
 def validate_url(
         *, url_name: str, schemes: marshmallow.types.StrSequenceOrSet,
         require_full_url: bool) -> ValidatorType:

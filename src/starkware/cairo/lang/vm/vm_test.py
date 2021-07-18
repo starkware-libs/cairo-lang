@@ -221,9 +221,22 @@ end
     assert [vm.run_context.memory[202 + i] for i in range(3)] == [2000, 1000, 1234]
 
 
+def test_hint_between_references():
+    code = """
+let x = 1
+%{ assert ids.x == 1 %}
+let x = 2
+%{ assert ids.x == 2 %}
+ap += 0
+"""
+    run_single(code=code, steps=1)
+
+
 def test_hint_exception():
     code = """
 # Some comment.
+
+%{ x = 0 %}
 
 %{
 def f():
@@ -231,6 +244,7 @@ def f():
 %}
 [ap] = 0; ap++
 
+%{ y = 0 %}
 %{
 
 
@@ -266,14 +280,14 @@ f()
     with pytest.raises(VmException) as excinfo:
         vm.step()
     assert str(excinfo.value) == f"""\
-{cairo_file.name}:10:1: Error at pc=12:
+{cairo_file.name}:13:1: Error at pc=12:
 Got an exception while executing a hint.
 %{{
 ^^
 Traceback (most recent call last):
-  File "{cairo_file.name}", line 13, in <module>
+  File "{cairo_file.name}", line 16, in <module>
     f()
-  File "{cairo_file.name}", line 6, in f
+  File "{cairo_file.name}", line 8, in f
     0 / 0  # Raises exception.
 ZeroDivisionError: division by zero\
 """

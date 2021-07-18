@@ -52,6 +52,7 @@ main:
 ret
 """)
     # Access a pure address manually, because runner disallows it as well.
+    runner.vm_memory.unfreeze_for_testing()
     runner.vm_memory[1234] = 1
 
     with pytest.raises(SecurityError, match='Accessed address 1234 is not relocatable.'):
@@ -81,6 +82,7 @@ ret
 """, layout='small')
     # Access out of bounds manually, because runner disallows it as well.
     pedersen_base = runner.builtin_runners['pedersen_builtin'].base
+    runner.vm_memory.unfreeze_for_testing()
     runner.vm_memory[pedersen_base + 7] = 1
     with pytest.raises(SecurityError, match='Out of bounds access to builtin segment pedersen'):
         verify_secure_runner(runner)

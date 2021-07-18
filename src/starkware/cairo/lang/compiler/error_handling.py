@@ -21,6 +21,9 @@ class InputFile:
         return self.content
 
 
+ParentLocation = Tuple['Location', str]
+
+
 @dataclasses.dataclass(frozen=True)
 class Location:
     start_line: int
@@ -31,7 +34,7 @@ class Location:
     # When the current location points to a reference definition due to reference expansion,
     # parent_location contains the location of the reference usage, and a message indicating the
     # expansion type, such as "While expanding the reference 'x'...".
-    parent_location: Optional[Tuple['Location', str]] = None
+    parent_location: Optional[ParentLocation] = None
 
     def with_parent_location(self, new_parent_location: 'Location', message: str):
         if self.parent_location is None:

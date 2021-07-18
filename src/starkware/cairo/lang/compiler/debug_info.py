@@ -21,14 +21,15 @@ class HintLocation:
 @dataclasses.dataclass
 class InstructionLocation:
     inst: Location
-    hint: Optional[HintLocation]
+    hints: List[Optional[HintLocation]]
     accessible_scopes: List[ScopedName] = field(
         metadata=dict(marshmallow_field=mfields.List(ScopedNameAsStr)))
 
     flow_tracking_data: FlowTrackingDataActual
 
     def get_all_locations(self) -> List[Location]:
-        return [self.inst] + ([self.hint.location] if self.hint is not None else [])
+        return [self.inst] + [
+            hint_location.location for hint_location in self.hints if hint_location is not None]
 
 
 @marshmallow_dataclass.dataclass
@@ -47,3 +48,23 @@ class DebugInfo:
                 input_file = loc.input_file
                 if input_file.filename in self.file_contents and input_file.content is None:
                     input_file.content = self.file_contents[input_file.filename]
+
+    def add_autogen_file_contents(self):
+        """
+        Updates file_contents with the contents of the auto-generated files.
+        """
+        for instruction_location in self.instruction_locations.values():
+            for loc in instruction_location.get_all_locations():
+                input_file = loc.input_file
+                is_autogen = (
+                    input_file.filename is not None and
+                    input_file.filename.startswith('autogen/') and
+                    input_file.content is not None)
+                if not is_autogen:
+                    continue
+                if input_file.filename in self.file_contents:
+                    assert self.file_contents[input_file.filename] == input_file.content, \
+                        f'Found two versions of auto-generated file "{input_file.filename}":\n' \
+                        f'{input_file.content}\n\n\n{self.file_contents[input_file.filename]}'
+                else:
+                    self.file_contents[input_file.filename] = input_file.content

@@ -7,6 +7,8 @@ import subprocess
 from collections import UserDict
 from typing import Any, Iterable, List, Optional
 
+HASH_BYTES = 32
+
 
 def get_package_path():
     """
@@ -201,3 +203,59 @@ def safe_zip(*iterables: Iterable[Any]) -> Iterable:
     for combo in itertools.zip_longest(*iterables, fillvalue=sentinel):
         assert sentinel not in combo, 'Iterables to safe_zip are not equal in length.'
         yield combo
+
+
+def composite(*funcs):
+    """
+    Returns the composition of all the given functions, which is a function that runs the last
+    function with the input args, and then runs the function before that with the return value of
+    the last function and so on. Finally, the composition function will return the return value of
+    the first function.
+
+    Every function beside the last function should receive one argument.
+
+    For example:
+      f = composite(lambda x: x * 5, lambda x, y: x + y)
+      assert f(2, 3) == (2 + 3) * 5
+    """
+    assert len(funcs) > 0
+
+    def composition_function(*args, **kwargs):
+        return_value: Any = funcs[-1](*args, **kwargs)
+        for func in reversed(funcs[:-1]):
+            return_value = func(return_value)
+        return return_value
+    return composition_function
+
+
+def to_bytes(value: int, length: Optional[int] = None, byte_order: Optional[str] = None) -> bytes:
+    """
+    Converts the given integer to a bytes object of given length and byte order.
+    The default values are 32B width (which is the hash result width) and 'big', respectively.
+    """
+    if length is None:
+        length = HASH_BYTES
+
+    if byte_order is None:
+        byte_order = 'big'
+
+    return int.to_bytes(value, length=length, byteorder=byte_order)
+
+
+def from_bytes(value: bytes, byte_order: Optional[str] = None) -> int:
+    """
+    Converts the given bytes object (parsed according to the given byte order) to an integer.
+    Default byte order is 'big'.
+    """
+    if byte_order is None:
+        byte_order = 'big'
+
+    return int.from_bytes(value, byteorder=byte_order)
+
+
+def blockify(data, chunk_size: int) -> Iterable:
+    """
+    Returns the given data partitioned to chunks of chunks_size (last chunk might be smaller).
+    """
+    assert chunk_size > 0, f'chunk_size must be greater than 0. Got: {chunk_size}.'
+    return (data[i:i + chunk_size] for i in range(0, len(data), chunk_size))

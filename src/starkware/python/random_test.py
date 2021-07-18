@@ -10,11 +10,15 @@ from mypy_extensions import NamedArg
 
 
 def _get_seeds(n_nightly_runs: int, seed: Optional[int]) -> List[int]:
+    """
+    Gets a list of seeds based on environment variables and the seed function argument.
+    If RANDOM_TEST_N_RUNS is specified, returns a list of RANDOM_TEST_N_RUNS random seeds.
+    """
     n_iters_env_var = os.environ.get('RANDOM_TEST_N_RUNS')
     if n_iters_env_var is None:
         n_iters = n_nightly_runs if (os.environ.get('NIGHTLY_TEST') == '1') else 1
     else:
-        n_iters = int(n_iters_env_var)
+        return [random.randrange(sys.maxsize) for _ in range(int(n_iters_env_var))]
 
     seed_env_var = os.environ.get('RANDOM_TEST_SEED')
     if seed_env_var == 'random':
@@ -23,7 +27,11 @@ def _get_seeds(n_nightly_runs: int, seed: Optional[int]) -> List[int]:
         return [int(seed_env_var)]
     elif seed is not None:
         return [seed]
-    return [random.randrange(sys.maxsize) for _ in range(n_iters)]
+
+    # If we got here, then the seed wasn't set with an environment variable or a function argument.
+    if os.environ.get('NIGHTLY_TEST') == '1':
+        return [random.randrange(sys.maxsize) for _ in range(n_iters)]
+    return [0]
 
 
 def _print_seed(seed: int, decorator_name: str):

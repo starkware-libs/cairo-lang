@@ -5,6 +5,7 @@ async-timeout==3.0.1
 attrs==21.2.0
 base58==2.1.0
 bitarray==1.2.2
+cachetools==4.2.2
 certifi==2020.12.5
 chardet==4.0.0
 cytoolz==0.11.0
@@ -41,12 +42,14 @@ packaging==20.9
 parsimonious==0.8.1
 pipdeptree==2.0.0
 pluggy==0.13.1
+prometheus-client==0.11.0
 protobuf==3.17.1
 py==1.10.0
 pycryptodome==3.10.1
 pyparsing==2.4.7
 pyrsistent==0.17.3
 pytest==6.2.4
+pytest-asyncio==0.15.1
 requests==2.25.1
 rlp==2.0.1
 six==1.16.0

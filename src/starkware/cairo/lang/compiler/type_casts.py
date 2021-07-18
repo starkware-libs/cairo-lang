@@ -1,9 +1,9 @@
 import itertools
-from typing import Iterable, Optional, cast
+from typing import Optional
 
 from starkware.cairo.lang.compiler.ast.cairo_types import (
     CairoType, CastType, TypeFelt, TypePointer, TypeStruct, TypeTuple)
-from starkware.cairo.lang.compiler.ast.expr import Expression, ExprTuple
+from starkware.cairo.lang.compiler.ast.expr import ExprDeref, Expression, ExprTuple
 from starkware.cairo.lang.compiler.error_handling import LocationError
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.identifier_utils import get_struct_definition
@@ -23,7 +23,7 @@ def check_cast(
     according to the given 'cast_type'.
     In some cases of cast failure, an exception with more specific details is raised.
 
-    'expr' must be specified (not None) when CastType.EXPLICIT is used.
+    'expr' must be specified (not None) when CastType.EXPLICIT (or above) is used.
     """
 
     # CastType.ASSIGN checks:
@@ -64,9 +64,10 @@ Cannot cast an expression of type '{src_type.format()}' to '{dest_type.format()}
 The former has {n_src_members} members while the latter has {n_dest_members} members.""",
                 location=expr.location)
 
-        src_exprs = cast(
-            Iterable, expr.members.args if isinstance(expr, ExprTuple) else
-            itertools.repeat(expr))
+        src_exprs = (
+            [arg.expr for arg in expr.members.args]
+            if isinstance(expr, ExprTuple)
+            else itertools.repeat(expr))
 
         for (src_expr, src_member_type, dest_member) in zip(
                 src_exprs, src_type.members, struct_def.members.values()):
@@ -74,7 +75,7 @@ The former has {n_src_members} members while the latter has {n_dest_members} mem
             if not check_cast(
                     src_type=src_member_type, dest_type=dest_member_type,
                     identifier_manager=identifier_manager, expr=src_expr,
-                    cast_type=CastType.ASSIGN):
+                    cast_type=CastType.FORCED if cast_type is CastType.FORCED else CastType.ASSIGN):
 
                 raise CairoTypeError(
                     f"Cannot cast '{src_member_type.format()}' to '{dest_member_type.format()}'.",
@@ -82,5 +83,13 @@ The former has {n_src_members} members while the latter has {n_dest_members} mem
 
         return True
 
-    assert cast_type is CastType.EXPLICIT, f'Unsupported cast type: {cast_type}.'
+    if cast_type is CastType.EXPLICIT:
+        return False
+
+    # CastType.FORCED checks:
+    if isinstance(src_type, TypeFelt) and isinstance(dest_type, TypeStruct) and isinstance(
+            expr, ExprDeref):
+        return True
+
+    assert cast_type is CastType.FORCED, f'Unsupported cast type: {cast_type}.'
     return False

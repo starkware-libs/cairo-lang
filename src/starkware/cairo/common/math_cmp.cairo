@@ -1,6 +1,6 @@
 from starkware.cairo.common.math import assert_le_felt, assert_lt_felt
 
-const RC_BOUND = %[ 2**128 %]
+const RC_BOUND = 2 ** 128
 
 # Returns 1 if value != 0. Returns 0 otherwise.
 func is_not_zero(value) -> (res):

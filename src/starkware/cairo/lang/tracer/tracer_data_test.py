@@ -44,7 +44,6 @@ end
     runner.initialize_vm(hint_locals={})
     runner.run_until_steps(steps=6)
     runner.end_run()
-    runner.finalize_segments_by_effective_size()
     runner.relocate()
     memory = runner.relocated_memory
     trace = runner.relocated_trace

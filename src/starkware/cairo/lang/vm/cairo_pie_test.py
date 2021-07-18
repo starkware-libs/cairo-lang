@@ -112,6 +112,7 @@ def test_cairo_pie_memory_negative_address(cairo_pie: CairoPie):
 
 def test_cairo_pie_memory_invalid_address(cairo_pie: CairoPie):
     # Write to an invalid address.
+    cairo_pie.memory.unfreeze_for_testing()
     cairo_pie.memory[RelocatableValue(
         segment_index=cairo_pie.metadata.ret_pc_segment.index, offset=0)] = 0
     with pytest.raises(
@@ -124,6 +125,7 @@ def test_cairo_pie_memory_invalid_value(cairo_pie: CairoPie):
     output_end = RelocatableValue(
         segment_index=cairo_pie.metadata.execution_segment.index,
         offset=cairo_pie.metadata.execution_segment.size)
+    cairo_pie.memory.unfreeze_for_testing()
     cairo_pie.memory[output_end] = output_end + 2
     # It should fail because the address is outside the segment expected size.
     with pytest.raises(

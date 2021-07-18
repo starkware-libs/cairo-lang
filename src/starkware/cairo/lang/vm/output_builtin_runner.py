@@ -3,7 +3,6 @@ from types import SimpleNamespace
 from typing import Dict, List, Optional, Tuple
 
 from starkware.cairo.lang.vm.builtin_runner import BuiltinRunner, BuiltinVerifier
-from starkware.cairo.lang.vm.memory_segments import get_segment_used_size
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 from starkware.cairo.lang.vm.utils import MemorySegmentAddresses
 
@@ -34,7 +33,7 @@ class OutputBuiltinRunner(BuiltinRunner):
     def final_stack(self, runner, pointer):
         if self.included:
             self.stop_ptr = runner.vm_memory[pointer - 1]
-            used = get_segment_used_size(self.base.segment_index, runner.vm_memory)
+            used = self.get_used_cells(runner=runner)
             assert self.stop_ptr == self.base + used, \
                 'Invalid stop pointer for output. ' + \
                 f'Expected: {self.base + used}, found: {self.stop_ptr}'
@@ -44,7 +43,7 @@ class OutputBuiltinRunner(BuiltinRunner):
             return pointer
 
     def get_used_cells(self, runner):
-        size = get_segment_used_size(self.base.segment_index, runner.vm_memory)
+        size = runner.segments.get_segment_used_size(self.base.segment_index)
         return size
 
     def get_used_instances(self, runner):

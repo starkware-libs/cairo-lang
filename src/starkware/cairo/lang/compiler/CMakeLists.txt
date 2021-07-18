@@ -119,6 +119,7 @@ full_python_test(cairo_compile_test
     ast/formatting_utils_test.py
     cairo_compile_test.py
     conftest.py
+    debug_info_test.py
     encode_test.py
     error_handling_test.py
     expression_evaluator_test.py

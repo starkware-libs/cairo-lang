@@ -1,4 +1,5 @@
 aiohttp
+cachetools
 ecdsa
 eth-hash[pycryptodome]==0.2.0
 fastecdsa
@@ -11,7 +12,9 @@ marshmallow>=3.2.1
 mpmath
 numpy
 pipdeptree
+prometheus-client
 pytest
+pytest-asyncio
 sympy
 typeguard
 Web3

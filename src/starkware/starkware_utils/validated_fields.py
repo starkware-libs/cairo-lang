@@ -1,3 +1,4 @@
+import copy
 import dataclasses
 import random
 from abc import ABC, abstractmethod
@@ -33,7 +34,7 @@ class Field(ABC, Generic[T]):
         """
 
     @abstractmethod
-    def format(self, value) -> str:
+    def format(self, value: T) -> str:
         """
         The formatted value that appears in messages.
         """
@@ -95,6 +96,64 @@ class Field(ABC, Generic[T]):
             marshmallow_field=self.get_marshmallow_field(),
             validated_field=self,
             name_in_messages=self.name if field_name is None else field_name)
+
+
+class OptionalField(Field[Optional[T]]):
+    """
+    A wrapper class for a field, allowing it to be None.
+    Loading a class with an optional field, where the serialized data for that class doesn't contain
+    a value for this field, will load the class with a None value in this field.
+    """
+
+    def __init__(self, field: Field[T], none_probability: float):
+        """
+        Wraps the given field as an optional field. The probability to get None in
+        get_random_value is going to be none_probability. Otherwise, it returns a random value from
+        the wrapped field.
+        """
+        self.field = field
+        self.none_probability = max(0, min(1, none_probability))
+
+        self.mfield: mfields.Field = copy.copy(self.field.get_marshmallow_field())  # type: ignore
+        self.mfield.allow_none = True
+        self.mfield.missing = None
+        self.mfield.required = False
+
+    @property
+    def name(self) -> str:
+        return self.field.name
+
+    def format(self, value: Optional[T]) -> str:
+        if value is None:
+            return 'None'
+        return self.field.format(value=value)
+
+    # Randomization.
+    def get_random_value(self, random_object: Optional[random.Random] = None) -> Optional[T]:
+        r = initialize_random(random_object=random_object)
+        if r.random() < self.none_probability:
+            return None
+        return self.field.get_random_value(random_object=r)
+
+    # Validation.
+    def is_valid(self, value: Optional[T]) -> bool:
+        return value is None or self.field.is_valid(value=value)
+
+    @property
+    def error_code(self) -> ErrorCode:
+        return self.field.error_code
+
+    def get_invalid_values(self) -> List[Optional[T]]:
+        return [value for value in self.field.get_invalid_values() if value is not None]
+
+    def format_invalid_value_error_message(
+            self, value: Optional[T], name: Optional[str] = None) -> str:
+        if value is None:
+            return f'{name} is valid (None).'
+        return self.field.format_invalid_value_error_message(value=value, name=name)
+
+    def get_marshmallow_field(self) -> mfields.Field:
+        return self.mfield
 
 
 @dataclasses.dataclass(frozen=True)

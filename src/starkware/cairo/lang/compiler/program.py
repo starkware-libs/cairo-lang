@@ -71,7 +71,7 @@ class StrippedProgram(ProgramBase):
 class Program(ProgramBase, SerializableMarshmallowDataclass):
     prime: int
     data: List[int]
-    hints: Dict[int, CairoHint]
+    hints: Dict[int, List[CairoHint]]
     builtins: List[str]
     main_scope: ScopedName = field(metadata=dict(marshmallow_field=ScopedNameAsStr()))
     identifiers: IdentifierManager = field(

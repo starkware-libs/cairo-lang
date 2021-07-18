@@ -4,6 +4,15 @@ from starkware.cairo.lang.vm.crypto import pedersen_hash
 
 MASK_250 = 2 ** 250 - 1
 
+# MAX_STORAGE_ITEM_SIZE and ADDR_BOUND must be consistent with the corresponding constant in
+# starkware/starknet/core/storage/storage.cairo.
+MAX_STORAGE_ITEM_SIZE = 256
+ADDR_BOUND = 2**251 - MAX_STORAGE_ITEM_SIZE
+
+# OS context offset.
+SYSCALL_PTR_OFFSET = 0
+STORAGE_PTR_OFFSET = 1
+
 
 def starknet_keccak(data: bytes) -> int:
     """
@@ -23,4 +32,4 @@ def get_storage_var_address(var_name: str, *args) -> int:
         assert isinstance(arg, int), f'Expected arguments to be integers. Found: {arg}.'
         res = pedersen_hash(res, arg)
 
-    return res
+    return res % ADDR_BOUND

@@ -9,8 +9,8 @@ from starkware.cairo.apps.starkex2_0.dex_context import DexContext
 from starkware.cairo.apps.starkex2_0.vault_update import vault_update_balances
 
 namespace ModificationConstants:
-    const BALANCE_SHIFT = %[ 2**64 %]
-    const VAULT_SHIFT = %[ 2**31 %]
+    const BALANCE_SHIFT = 2 ** 64
+    const VAULT_SHIFT = 2 ** 31
     const FULL_WITHDRAWAL_SHIFT = BALANCE_SHIFT * VAULT_SHIFT
 end
 

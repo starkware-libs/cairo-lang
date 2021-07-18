@@ -1,4 +1,5 @@
 add_subdirectory(cli)
+add_subdirectory(common)
 add_subdirectory(compiler)
 add_subdirectory(core)
 add_subdirectory(definitions)

@@ -6,7 +6,7 @@ from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt
 from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeElement, CodeElementTemporaryVariable)
 from starkware.cairo.lang.compiler.ast.expr import (
-    ExprConst, ExprDeref, Expression, ExprIdentifier, ExprNeg, ExprOperator, ExprReg)
+    ExprConst, ExprDeref, Expression, ExprHint, ExprIdentifier, ExprNeg, ExprOperator, ExprReg)
 from starkware.cairo.lang.compiler.ast.types import TypedIdentifier
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.instruction import Register
@@ -119,6 +119,11 @@ class CompoundExpressionVisitor:
 
         return self.wrap(expr)
 
+    def rewrite_ExprPow(self, expr: ExprReg, sim: SimplicityLevel):
+        raise PreprocessorError(
+            "Operator '**' is only supported for constant values.",
+            location=expr.location)
+
     def rewrite_ExprNeg(self, expr: ExprNeg, sim: SimplicityLevel):
         # Treat "-val" as "val * (-1)".
         return self.rewrite(ExprOperator(
@@ -135,6 +140,9 @@ class CompoundExpressionVisitor:
         expr = ExprDeref(
             addr=self.rewrite(expr.addr, SimplicityLevel.DEREF_OFFSET), location=expr.location)
         return expr if sim is SimplicityLevel.OPERATION else self.wrap(expr)
+
+    def rewrite_ExprHint(self, expr: ExprHint, sim: SimplicityLevel):
+        return self.wrap(expr)
 
     def wrap(self, expr: Expression) -> ExprIdentifier:
         identifier = ExprIdentifier(name=self.context.new_tempvar_name(), location=expr.location)
@@ -155,8 +163,7 @@ class CompoundExpressionVisitor:
 
 def process_compound_expressions(
         exprs: List[Expression], simplicity: Union[SimplicityLevel, List[SimplicityLevel]],
-        context: CompoundExpressionContext) \
-        -> Tuple[List[CodeElement], List[Expression], Optional[Expression]]:
+        context: CompoundExpressionContext) -> Tuple[List[CodeElement], List[Expression]]:
     """
     Rewrites the given list of expressions, by adding temporary variables, in the required
     simiplicity levels.
@@ -166,9 +173,8 @@ def process_compound_expressions(
 
     'simplicity' may be one SimplicityLevel for all the expressions or a list of SimplicityLevel
     for each expression separately.
-    Returns a list of code elements with the temporary variables, the list of simplified expression,
-    and the first expression from exprs which required simplification (or None if all the
-    expressions were already at the required simplicity level).
+    Returns a list of code elements with the temporary variables and the list of simplified
+    expressions.
     """
     if isinstance(simplicity, SimplicityLevel):
         simplicity = [simplicity] * len(exprs)
@@ -177,16 +183,12 @@ def process_compound_expressions(
     visitor = CompoundExpressionVisitor(context=context)
     # First, visit all of the expressions.
     simplified_exprs = []
-    first_compound_expr = None
     for expr, sim in zip(exprs, simplicity):
         simplified_exprs.append(visitor.rewrite(expr, sim))
-        # Check if this is the first compound expression.
-        if len(visitor.code_elements) > 0 and first_compound_expr is None:
-            first_compound_expr = expr
 
     # Second, translate ap according to the total number of instructions.
     simplified_exprs = [visitor.translate_ap(expr) for expr in simplified_exprs]
-    return visitor.code_elements, simplified_exprs, first_compound_expr
+    return visitor.code_elements, simplified_exprs
 
 
 def process_compound_assert(
@@ -210,6 +212,6 @@ def process_compound_assert(
         # Left-hand side is already too complicated for DEREF.
         simplicity = [SimplicityLevel.OPERATION, SimplicityLevel.DEREF]
 
-    code_elements, exprs, _ = process_compound_expressions(
+    code_elements, exprs = process_compound_expressions(
         exprs=[expr_a, expr_b], simplicity=simplicity, context=context)
     return code_elements, exprs

@@ -5,26 +5,55 @@ from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt, TypeTuple
 from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeElementImport, CodeElementReference, CodeElementReturnValueReference)
 from starkware.cairo.lang.compiler.ast.expr import (
-    ExprConst, ExprDeref, ExprDot, ExprIdentifier, ExprOperator, ExprParentheses, ExprPyConst,
-    ExprReg, ExprSubscript)
+    ExprConst, ExprDeref, ExprDot, ExprIdentifier, ExprNeg, ExprOperator, ExprParentheses,
+    ExprPyConst, ExprReg, ExprSubscript)
 from starkware.cairo.lang.compiler.ast.formatting_utils import FormattingError
 from starkware.cairo.lang.compiler.ast.instructions import (
     AddApInstruction, AssertEqInstruction, CallInstruction, CallLabelInstruction, InstructionAst,
     JnzInstruction, JumpInstruction, JumpToLabelInstruction, RetInstruction)
 from starkware.cairo.lang.compiler.ast.types import TypedIdentifier
-from starkware.cairo.lang.compiler.error_handling import get_location_marks
+from starkware.cairo.lang.compiler.error_handling import LocationError, get_location_marks
 from starkware.cairo.lang.compiler.expression_simplifier import ExpressionSimplifier
 from starkware.cairo.lang.compiler.instruction import Register
 from starkware.cairo.lang.compiler.parser import (
     parse, parse_code_element, parse_expr, parse_instruction, parse_type)
 from starkware.cairo.lang.compiler.parser_test_utils import verify_exception
-from starkware.cairo.lang.compiler.parser_transformer import ParserError
+from starkware.cairo.lang.compiler.parser_transformer import ParserContext, ParserError
 from starkware.python.utils import safe_zip
+
+
+def test_int():
+    expr = parse_expr(' 01234 ')
+    assert expr == ExprConst(val=1234)
+    assert expr.format_str == '01234'
+    assert expr.format() == '01234'
+
+    expr = parse_expr('-01234')
+    assert expr == ExprNeg(val=ExprConst(val=1234))
+    assert expr.val.format_str == '01234'
+    assert expr.format() == '-01234'
+
+    assert parse_expr('-1234') == parse_expr('- 1234')
+
+
+def test_hex_int():
+    expr = parse_expr(' 0x1234 ')
+    assert expr == ExprConst(val=0x1234)
+    assert expr.format_str == '0x1234'
+    assert expr.format() == '0x1234'
+
+    expr = parse_expr('-0x01234')
+    assert expr == ExprNeg(val=ExprConst(val=0x1234))
+    assert expr.val.format_str == '0x01234'
+    assert expr.format() == '-0x01234'
+
+    assert parse_expr('-0x1234') == parse_expr('- 0x1234')
 
 
 def test_types():
     assert isinstance(parse_type('felt'), TypeFelt)
     assert parse_type('my_namespace.MyStruct  *  *').format() == 'my_namespace.MyStruct**'
+    assert parse_type('my_namespace.MyStruct*****').format() == 'my_namespace.MyStruct*****'
 
 
 def test_type_tuple():
@@ -132,7 +161,7 @@ def test_subscript_expr():
 
 
 def test_operator_precedence():
-    code = '(5 + 2) - (3 - 9) * (7 + (-8)) - 10 * (-2) * 5 + (((7)))'
+    code = '(5 + 2) - (3 - 9) * (7 + (-(8 ** 2))) - 10 * (-2) * 5 ** 3 + (((7)))'
     expr = parse_expr(code)
     # Test formatting.
     assert expr.format() == code
@@ -195,6 +224,20 @@ def test_tuple_expr_with_notes():
 (1,  # b.
     # a.
     )"""
+
+
+def test_hint_expr():
+    expr = parse_expr('a*nondet   %{6 %}+   7')
+    assert expr.format() == 'a * nondet %{ 6 %} + 7'
+
+
+def test_pow_expr():
+    assert parse_expr('2 ** 3').format() == '2 ** 3'
+    verify_exception('let x = 2 * * 3', """
+file:?:?: Unexpected operator. Did you mean "**"?
+let x = 2 * * 3
+          ^*^
+""")
 
 
 def test_offsets():
@@ -604,6 +647,23 @@ def test_func_expr():
     res = parse_code_element('let x = (f())')
     assert isinstance(res, CodeElementReference)
     assert res.format(allowed_line_length=100) == 'let x = (f())'
+
+
+def test_parent_location():
+    parent_location = (
+        parse_expr('1 + 2').location, 'An error ocurred while processing:')
+
+    location = parse_code_element('let x = 3 + 4', parser_context=ParserContext(
+        parent_location=parent_location)).expr.location
+    location_err = LocationError(message='Error', location=location)
+    assert str(location_err) == """\
+:1:1: An error ocurred while processing:
+1 + 2
+^***^
+:1:9: Error
+let x = 3 + 4
+        ^***^\
+"""
 
 
 def test_locations():

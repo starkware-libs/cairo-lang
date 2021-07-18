@@ -40,6 +40,7 @@ def test_pages(runner_and_output_runner):
         output_builtin_runner.add_page(
             page_id=4, page_start=RelocatableValue(999, 999), page_size=3)
 
+    runner.end_run()
     runner.finalize_segments()
 
     # A list of output cells and their page id.
@@ -70,6 +71,7 @@ def test_pages_collision(runner_and_output_runner):
         runner.vm_memory[base + i] = i
     output_builtin_runner.add_page(page_id=1, page_start=base + 10, page_size=4)
     output_builtin_runner.add_page(page_id=2, page_start=base + 12, page_size=4)
+    runner.end_run()
     with pytest.raises(AssertionError, match='Offset 12 was already assigned a page.'):
         output_builtin_runner.finalize_segments(runner=runner)
 
@@ -82,5 +84,6 @@ def test_pages_out_of_bounds(runner_and_output_runner):
     output_builtin_runner.add_page(page_id=1, page_start=base + 3, page_size=5)
     output_builtin_runner.add_page(page_id=2, page_start=base + 7, page_size=4)
     output_builtin_runner.add_page(page_id=3, page_start=base + 11, page_size=2)
+    runner.end_run()
     with pytest.raises(AssertionError, match='Page 2 is out of bounds.'):
         output_builtin_runner.finalize_segments(runner=runner)

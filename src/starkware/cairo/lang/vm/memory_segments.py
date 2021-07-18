@@ -18,7 +18,8 @@ class MemorySegmentManager:
         # Number of segments.
         self.n_segments = 0
         # A map from segment index to its size.
-        self.segment_sizes: Dict[int, int] = {}
+        self._segment_sizes: Dict[int, int] = {}
+        self._segment_used_sizes: Optional[Dict[int, int]] = None
         # A map from segment index to a list of pairs (offset, page_id) that constitute the
         # public memory. Note that the offset is absolute (not based on the page_id).
         self.public_memory_offsets: Dict[int, List[Tuple[int, int]]] = {}
@@ -28,20 +29,21 @@ class MemorySegmentManager:
     def add(self, size: Optional[int] = None) -> RelocatableValue:
         """
         Adds a new segment and returns its starting location as a RelocatableValue.
-
         If size is not None the segment is finalized with the given size.
         """
         segment_index = self.n_segments
         self.n_segments += 1
         if size is not None:
-            self.finalize(segment_index, size)
+            self.finalize(segment_index=segment_index, size=size)
+
         return RelocatableValue(segment_index=segment_index, offset=0)
 
     def add_temp_segment(self) -> RelocatableValue:
         """
         Adds a new temporary segment and returns its starting location as a RelocatableValue.
 
-        A temporary segment is a segment that is relocated before the cairo pie is produced.
+        A temporary segment is a segment that is relocated using memory.add_relocation_rule()
+        before the Cairo PIE is produced.
         """
 
         self.n_temp_segments += 1
@@ -51,38 +53,51 @@ class MemorySegmentManager:
         return RelocatableValue(segment_index=segment_index, offset=0)
 
     def finalize(
-            self, segment_index: int, size: int, public_memory: Sequence[Tuple[int, int]] = []):
+            self, segment_index: int, size: Optional[int] = None,
+            public_memory: Sequence[Tuple[int, int]] = []):
         """
         Writes the following information for the given segment:
         * size - The size of the segment (to be used in relocate_segments).
         * public_memory - A list of offsets for memory cells that will be considered as public
         memory.
         """
-        self.segment_sizes[segment_index] = size
+        if size is not None:
+            self._segment_sizes[segment_index] = size
+
         self.public_memory_offsets[segment_index] = list(public_memory)
 
-    def finalize_all_by_effective_size(self):
+    def compute_effective_sizes(self, include_tmp_segments: bool = False):
         """
-        Finalizes all segments that were not finalized yet, by computing their current used size.
+        Computes the current used size of the segments, and caches it.
+        include_tmp_segments should be used for tests only.
         """
-        segment_index_to_max_offset = get_segment_index_to_max_offset(memory=self.memory)
-        for segment_index in range(self.n_segments):
-            if segment_index in self.segment_sizes:
-                # Segment was already finalized.
-                continue
+        if self._segment_used_sizes is not None:
+            # segment_sizes is already cached.
+            return
 
-            assert segment_index not in self.public_memory_offsets
-            self.segment_sizes[segment_index] = segment_index_to_max_offset[segment_index] + 1
-            self.public_memory_offsets[segment_index] = []
+        assert self.memory.is_frozen(), 'Memory has to be frozen before calculating effective size.'
+
+        first_segment_index = -self.n_temp_segments if include_tmp_segments else 0
+        self._segment_used_sizes = {
+            index: 0 for index in range(first_segment_index, self.n_segments)}
+        for addr in self.memory:
+            assert isinstance(addr, RelocatableValue), \
+                f'Expected memory address to be relocatable value. Found: {addr}.'
+            previous_max_size = self._segment_used_sizes[addr.segment_index]
+            self._segment_used_sizes[addr.segment_index] = max(previous_max_size, addr.offset + 1)
 
     def relocate_segments(self) -> Dict[int, int]:
         current_addr = FIRST_MEMORY_ADDR
         res = {}
-        for segment_index in range(self.n_segments):
+
+        assert self._segment_used_sizes is not None, \
+            'compute_effective_sizes must be called before relocate_segments.'
+
+        for segment_index, used_size in self._segment_used_sizes.items():
             res[segment_index] = current_addr
-            assert segment_index in self.segment_sizes, \
-                f'Segment {segment_index} must be finalized.'
-            current_addr += self.segment_sizes[segment_index]
+            size = self.get_segment_size(segment_index=segment_index)
+            assert size >= used_size, f'Segment {segment_index} exceeded its allocated size.'
+            current_addr += size
         return res
 
     def get_public_memory_addresses(self, segment_offsets: Dict[int, int]) -> List[Tuple[int, int]]:
@@ -92,7 +107,7 @@ class MemorySegmentManager:
         """
         res = []
         for segment_index in range(self.n_segments):
-            offsets = self.public_memory_offsets[segment_index]
+            offsets = self.public_memory_offsets.get(segment_index, [])
             segment_start = segment_offsets[segment_index]
             for offset, page_id in offsets:
                 res.append((segment_start + offset, page_id))
@@ -152,31 +167,16 @@ class MemorySegmentManager:
             max(used_offsets) + 1 - len(used_offsets)
             for used_offsets in used_offsets_sets.values())
 
+    def get_segment_used_size(self, segment_index: int) -> int:
+        assert self._segment_used_sizes is not None, \
+            'compute_effective_sizes must be called before get_segment_used_size.'
 
-def get_segment_used_size(segment_index: int, memory: MemoryDict) -> int:
-    """
-    Returns the used size of the given memory segment by finding which is the maximal offset that
-    was accessed.
-    """
-    max_offset = -1
-    for addr in memory:
-        assert isinstance(addr, RelocatableValue), \
-            f'Expected memory address to be relocatable value. Found: {addr}.'
-        if addr.segment_index != segment_index:
-            continue
-        max_offset = max(max_offset, addr.offset)
-    return max_offset + 1
+        return self._segment_used_sizes[segment_index]
 
-
-def get_segment_index_to_max_offset(memory: MemoryDict) -> Dict[int, int]:
-    """
-    Returns a mapping between the segment indices and the maximal offset that
-    was accessed in each segment.
-    """
-    segment_index_to_max_offset: Dict[int, int] = defaultdict(lambda: -1)
-    for addr in memory:
-        assert isinstance(addr, RelocatableValue), \
-            f'Expected memory address to be relocatable value. Found: {addr}.'
-        previous_max_offset = segment_index_to_max_offset[addr.segment_index]
-        segment_index_to_max_offset[addr.segment_index] = max(previous_max_offset, addr.offset)
-    return segment_index_to_max_offset
+    def get_segment_size(self, segment_index: int) -> int:
+        """
+        Returns the finalized size of the given segment. If the segment has not been finalized,
+        returns its used size.
+        """
+        return self._segment_sizes[segment_index] if segment_index in self._segment_sizes \
+            else self.get_segment_used_size(segment_index=segment_index)

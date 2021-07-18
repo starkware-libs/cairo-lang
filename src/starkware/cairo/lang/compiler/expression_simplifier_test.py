@@ -29,6 +29,19 @@ def test_simplifier(prime):
     assert simplify(parse_expr('1 * fp')).format() == 'fp'
 
 
+@pytest.mark.parametrize('prime', [None, 3 * 2**30 + 1])
+def test_pow(prime):
+    simplifier = ExpressionSimplifier(prime)
+    assert simplifier.visit(parse_expr('4 ** 3 ** 2')).format() == '262144'
+    if prime is not None:
+        # Make sure the exponent is not computed modulo prime (if it were,
+        # the result would have been 1).
+        assert simplifier.visit(parse_expr('(3 * 2**30 + 4) ** (3 * 2**30 + 1)')).format() == '3'
+
+    with pytest.raises(SimplifierError, match='Power is not supported with a negative exponent'):
+        simplifier.visit(parse_expr('2 ** (-1)'))
+
+
 def test_modulo():
     PRIME = 19
     simplifier = ExpressionSimplifier(PRIME)

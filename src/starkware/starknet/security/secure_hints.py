@@ -89,8 +89,9 @@ class HintsWhitelist:
         Creates a whitelist from all the hints in an existing program.
         """
         whitelist = cls(allowed_reference_expressions_for_hint={})
-        for hint in program.hints.values():
-            whitelist.add_hint_to_whitelist(hint, program.reference_manager)
+        for hints in program.hints.values():
+            for hint in hints:
+                whitelist.add_hint_to_whitelist(hint, program.reference_manager)
         return whitelist
 
     def add_hint_to_whitelist(self, hint: CairoHint, reference_manager: ReferenceManager):
@@ -103,9 +104,10 @@ class HintsWhitelist:
         Determines whether a Cairo program is hint-secure. This happens when all the
         hints and their associated reference expressions exist within a given whitelist.
         """
-        for hint in program.hints.values():
-            self.verify_hint_secure(
-                hint=hint, reference_manager=program.reference_manager)
+        for hints in program.hints.values():
+            for hint in hints:
+                self.verify_hint_secure(
+                    hint=hint, reference_manager=program.reference_manager)
 
     def verify_hint_secure(self, hint: CairoHint, reference_manager: ReferenceManager):
         allowed_expressions = self.allowed_reference_expressions_for_hint.get(hint.code)

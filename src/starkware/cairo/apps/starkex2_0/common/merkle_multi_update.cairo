@@ -41,8 +41,8 @@ func merkle_multi_update_inner{hash_ptr : HashBuiltin*, update_ptr : DictAccess*
 
     update_right:
     let hash_ptr = hash_ptr + 2 * HashBuiltin.SIZE
-    prev_root = hash0.result
-    new_root = hash1.result
+    assert hash0.result = prev_root
+    assert hash1.result = new_root
 
     # Make sure the same authentication path is used.
     assert hash0.x = hash1.x
@@ -60,8 +60,8 @@ func merkle_multi_update_inner{hash_ptr : HashBuiltin*, update_ptr : DictAccess*
 
     update_left:
     let hash_ptr = hash_ptr + 2 * HashBuiltin.SIZE
-    prev_root = hash0.result
-    new_root = hash1.result
+    assert hash0.result = prev_root
+    assert hash1.result = new_root
 
     # Make sure the same authentication path is used.
     assert hash0.y = hash1.y
@@ -83,8 +83,8 @@ func merkle_multi_update_inner{hash_ptr : HashBuiltin*, update_ptr : DictAccess*
     # Write the update.
     %{ assert case == 'leaf' %}
     index = update_ptr.key
-    prev_root = update_ptr.prev_value
-    new_root = update_ptr.new_value
+    assert update_ptr.prev_value = prev_root
+    assert update_ptr.new_value = new_root
     let update_ptr = update_ptr + DictAccess.SIZE
     return ()
 
@@ -95,8 +95,8 @@ func merkle_multi_update_inner{hash_ptr : HashBuiltin*, update_ptr : DictAccess*
     local_left_index = index * 2; ap++
 
     let hash_ptr = hash_ptr + 2 * HashBuiltin.SIZE
-    prev_root = hash0.result
-    new_root = hash1.result
+    assert hash0.result = prev_root
+    assert hash1.result = new_root
 
     # Update left.
     %{ vm_enter_scope(dict(node=left_child, preimage=preimage)) %}

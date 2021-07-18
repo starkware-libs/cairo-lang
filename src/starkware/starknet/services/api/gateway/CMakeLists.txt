@@ -7,9 +7,10 @@ python_lib(starknet_transaction_lib
     LIBS
     everest_definitions_lib
     everest_transaction_lib
-    pip_marshmallow
     starknet_contract_definition_lib
     starknet_definitions_lib
+    starkware_utils_lib
+    pip_marshmallow
     pip_marshmallow_dataclass
     pip_marshmallow_enum
     pip_marshmallow_oneofschema

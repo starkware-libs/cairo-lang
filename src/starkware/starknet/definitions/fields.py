@@ -1,3 +1,6 @@
+import dataclasses
+from typing import Any, Dict
+
 import marshmallow.fields as mfields
 
 from starkware.starknet.definitions import constants
@@ -16,14 +19,22 @@ previous_block_id_metadata = sequential_id_metadata(
 
 sequence_number_metadata = sequential_id_metadata(field_name='sequence_number')
 
-CallDataElementField = RangeValidatedField(
-    lower_bound=constants.CALL_DATA_ELEMENT_LOWER_BOUND,
-    upper_bound=constants.CALL_DATA_ELEMENT_UPPER_BOUND,
-    name_in_error_message='Call data element',
-    out_of_range_error_code=StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_SELECTOR)
+FeltField = RangeValidatedField(
+    lower_bound=constants.FELT_LOWER_BOUND,
+    upper_bound=constants.FELT_UPPER_BOUND,
+    name_in_error_message='Field element',
+    out_of_range_error_code=StarknetErrorCode.INVALID_FIELD_ELEMENT)
 
-call_data_metadata = dict(
-    marshmallow_field=mfields.List(IntAsStr(validate=CallDataElementField.validate)))
+
+def felt_metadata(name_in_error_message: str) -> Dict[str, Any]:
+    return int_as_hex_metadata(
+        validated_field=dataclasses.replace(FeltField, name_in_error_message=name_in_error_message))
+
+
+felt_list_metadata = dict(
+    marshmallow_field=mfields.List(IntAsStr(validate=FeltField.validate)))
+
+call_data_metadata = felt_list_metadata
 
 ContractAddressField = RangeValidatedField(
     lower_bound=constants.CONTRACT_ADDRESS_LOWER_BOUND,

@@ -13,8 +13,9 @@ from starkware.cairo.lang.tracer.tracer_data import TracerData, WatchEvaluator, 
 
 
 def trace_runner(runner):
-    if len(runner.segments.segment_sizes) != runner.segments.n_segments:
-        runner.finalize_segments_by_effective_size()
+    runner.vm_memory.relocate_memory()
+    runner.vm_memory.freeze()
+    runner.segments.compute_effective_sizes(include_tmp_segments=True)
     if not hasattr(runner, 'relocated_trace'):
         runner.relocate()
 

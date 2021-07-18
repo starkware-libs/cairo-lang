@@ -63,6 +63,17 @@ python_lib(cairo_run_lib
     starkware_python_utils_lib
 )
 
+python_lib(cairo_vm_utils_lib
+    PREFIX starkware/cairo/lang/vm
+
+    FILES
+    reconstruct_traceback.py
+
+    LIBS
+    cairo_compile_lib
+    cairo_version_lib
+)
+
 python_exe(cairo_run_exe
     VENV cairo_lang_venv
     MODULE starkware.cairo.lang.vm.cairo_run
@@ -79,6 +90,7 @@ full_python_test(cairo_vm_test
     memory_dict_test.py
     memory_segments_test.py
     output_builtin_runner_test.py
+    reconstruct_traceback_test.py
     relocatable_fields_test.py
     relocatable_test.py
     security_test.py
@@ -92,6 +104,7 @@ full_python_test(cairo_vm_test
     cairo_constants_lib
     cairo_run_lib
     cairo_vm_lib
+    cairo_vm_utils_lib
     starkware_python_utils_lib
     starkware_python_test_utils_lib
     pip_marshmallow

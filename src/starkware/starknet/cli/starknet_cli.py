@@ -8,7 +8,9 @@ import os
 import sys
 
 from services.external_api.base_client import RetryConfig
+from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.version import __version__
+from starkware.cairo.lang.vm.reconstruct_traceback import reconstruct_traceback
 from starkware.starknet.compiler.compile import get_selector_from_name
 from starkware.starknet.definitions import fields
 from starkware.starknet.services.api.contract_definition import ContractDefinition
@@ -72,10 +74,11 @@ async def deploy(args, command_args):
     gateway_response = await gateway_client.add_transaction(tx=tx)
     assert gateway_response['code'] == StarkErrorCode.TRANSACTION_RECEIVED.name, \
         f'Failed to send transaction. Response: {gateway_response}.'
+    # Don't end sentences with '.', to allow easy double-click copy-pasting of the values.
     print(f"""\
 Deploy transaction was sent.
-Contract address: 0x{address:064x}.
-Transaction ID: {gateway_response['tx_id']}.""")
+Contract address: 0x{address:064x}
+Transaction ID: {gateway_response['tx_id']}""")
 
 
 async def invoke_or_call(args, command_args, call: bool):
@@ -111,10 +114,7 @@ async def invoke_or_call(args, command_args, call: bool):
         f'Wrong number of arguments. Expected {len(abi_entry["inputs"])}, got {len(args.inputs)}.'
     calldata = args.inputs
 
-    tx = InvokeFunction(
-        contract_address=address,
-        entry_point_selector=selector,
-        calldata=calldata)
+    tx = InvokeFunction(contract_address=address, entry_point_selector=selector, calldata=calldata)
 
     gateway_response: dict
     if call:
@@ -126,23 +126,60 @@ async def invoke_or_call(args, command_args, call: bool):
         gateway_response = await gateway_client.add_transaction(tx=tx)
         assert gateway_response['code'] == StarkErrorCode.TRANSACTION_RECEIVED.name, \
             f'Failed to send transaction. Response: {gateway_response}.'
+        # Don't end sentences with '.', to allow easy double-click copy-pasting of the values.
         print(f"""\
 Invoke transaction was sent.
-Contract address: 0x{address:064x}.
-Transaction ID: {gateway_response['tx_id']}.""")
+Contract address: 0x{address:064x}
+Transaction ID: {gateway_response['tx_id']}""")
 
 
 async def tx_status(args, command_args):
     parser = argparse.ArgumentParser(
         description='Queries the status of a transaction given its ID.')
     parser.add_argument(
-        '--id', type=int, help='The ID of the transaction to query.', required=True)
+        '--id', type=int, required=True, help='The ID of the transaction to query.')
+    parser.add_argument(
+        '--contract', type=argparse.FileType('r'), required=False,
+        help='An optional path to the compiled contract with debug information. '
+        'If given, the contract will be used to add location information to errors.')
+    parser.add_argument(
+        '--error_message', action='store_true', help='Only print the error message.')
     parser.parse_args(command_args, namespace=args)
 
     feeder_gateway_client = get_feeder_gateway_client(args)
 
     tx_status_response = await feeder_gateway_client.get_transaction_status(tx_id=args.id)
-    print(json.dumps(tx_status_response, indent=4, sort_keys=True))
+
+    # Print the error message with reconstructed location information in traceback, if necessary.
+    has_error_message = (
+        'tx_failure_reason' in tx_status_response and
+        'error_message' in tx_status_response['tx_failure_reason'])
+    error_message = ''
+    if has_error_message:
+        error_message = tx_status_response['tx_failure_reason']['error_message']
+        if args.contract is not None:
+            program_json = json.load(args.contract)['program']
+            error_message = reconstruct_traceback(
+                program=Program.load(program_json), traceback_txt=error_message)
+            tx_status_response['tx_failure_reason']['error_message'] = error_message
+
+    if args.error_message:
+        print(error_message)
+    else:
+        print(json.dumps(tx_status_response, indent=4, sort_keys=True))
+
+
+async def get_transaction(args, command_args):
+    parser = argparse.ArgumentParser(
+        description='Outputs the transaction information given its ID.')
+    parser.add_argument(
+        '--id', type=int, required=True, help='The ID of the transaction to query.')
+    parser.parse_args(command_args, namespace=args)
+
+    feeder_gateway_client = get_feeder_gateway_client(args)
+
+    tx_as_dict = await feeder_gateway_client.get_transaction(tx_id=args.id)
+    print(json.dumps(tx_as_dict, indent=4, sort_keys=True))
 
 
 def handle_network_param(args):
@@ -155,7 +192,7 @@ def handle_network_param(args):
             print(f"Unknown network '{network}'.")
             return 1
 
-        dns = 'alpha.starknet.io'
+        dns = 'alpha1.starknet.io'
         if args.gateway_url is None:
             args.gateway_url = f'https://{dns}/gateway'
 
@@ -200,6 +237,14 @@ async def get_code(args, command_args):
     print(json.dumps(code, indent=4, sort_keys=True))
 
 
+async def get_contract_addresses(args, command_args):
+    argparse.ArgumentParser(description='Outputs the addresses of the StarkNet system contracts.')
+
+    feeder_gateway_client = get_feeder_gateway_client(args)
+    contract_addresses = await feeder_gateway_client.get_contract_addresses()
+    print(json.dumps(contract_addresses, indent=4, sort_keys=True))
+
+
 async def get_storage_at(args, command_args):
     parser = argparse.ArgumentParser(
         description='Outputs the storage value of a contract in a specific key with respect to '
@@ -228,9 +273,11 @@ async def main():
         'invoke': functools.partial(invoke_or_call, call=False),
         'call': functools.partial(invoke_or_call, call=True),
         'tx_status': tx_status,
+        'get_transaction': get_transaction,
         'get_block': get_block,
         'get_code': get_code,
         'get_storage_at': get_storage_at,
+        'get_contract_addresses': get_contract_addresses,
     }
     parser = argparse.ArgumentParser(description='A tool to communicate with StarkNet.')
     parser.add_argument('-v', '--version', action='version', version=f'%(prog)s {__version__}')

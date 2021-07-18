@@ -265,6 +265,11 @@ class VmConstsReference(VmConstsBase):
             expr_type = member_def.cairo_type
             if is_simple_type(expr_type):
                 return self._context.memory[addr]
+            elif isinstance(expr_type, TypeStruct):
+                return VmConstsReference(
+                    context=self._context,
+                    struct_name=expr_type.scope,
+                    reference_value=addr)
             else:
                 # Typed reference, return VmConstsReference which allows accessing members.
                 assert isinstance(expr_type, TypePointer) and \

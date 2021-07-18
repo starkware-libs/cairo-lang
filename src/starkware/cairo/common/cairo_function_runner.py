@@ -2,6 +2,8 @@ from collections.abc import Iterable
 from typing import Any, Dict, Optional, Union, cast
 
 from starkware.cairo.common.structs import CairoStructFactory
+from starkware.cairo.lang.builtins.bitwise.bitwise_builtin_runner import BitwiseBuiltinRunner
+from starkware.cairo.lang.builtins.bitwise.instance_def import BitwiseInstanceDef
 from starkware.cairo.lang.builtins.hash.hash_builtin_runner import HashBuiltinRunner
 from starkware.cairo.lang.builtins.range_check.range_check_builtin_runner import (
     RangeCheckBuiltinRunner)
@@ -19,8 +21,8 @@ from starkware.cairo.lang.vm.vm import VmException
 
 
 class CairoFunctionRunner(CairoRunner):
-    def __init__(self, program, layout='plain'):
-        super().__init__(program=program, layout=layout)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
         pedersen_builtin = HashBuiltinRunner(
             name='pedersen', included=True, ratio=32, hash_func=pedersen_hash)
@@ -34,6 +36,9 @@ class CairoFunctionRunner(CairoRunner):
             name='ecdsa', included=True, ratio=None, process_signature=process_ecdsa,
             verify_signature=verify_ecdsa_sig)
         self.builtin_runners['ecdsa_builtin'] = signature_builtin
+        bitwise_builtin = BitwiseBuiltinRunner(included=True, bitwise_builtin=BitwiseInstanceDef(
+            ratio=None, diluted_spacing=None, diluted_n_bits=None, total_n_bits=251))
+        self.builtin_runners['bitwise_builtin'] = bitwise_builtin
 
         self.initialize_segments()
 
@@ -52,6 +57,10 @@ class CairoFunctionRunner(CairoRunner):
     @property
     def ecdsa_builtin(self) -> SignatureBuiltinRunner:
         return cast(SignatureBuiltinRunner, self.builtin_runners['ecdsa_builtin'])
+
+    @property
+    def bitwise_builtin(self) -> BitwiseBuiltinRunner:
+        return cast(BitwiseBuiltinRunner, self.builtin_runners['bitwise_builtin'])
 
     def assert_eq(self, arg: MaybeRelocatable, expected_value, apply_modulo: bool = True):
         """

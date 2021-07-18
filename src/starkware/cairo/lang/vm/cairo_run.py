@@ -232,14 +232,12 @@ def cairo_run(args):
         if args.min_steps:
             runner.run_until_steps(args.min_steps)
 
+        disable_trace_padding = False
         if steps_input is not None:
             runner.run_until_steps(steps_input)
-        elif args.proof_mode:
-            runner.run_until_next_power_of_2()
-            while not runner.check_used_cells():
-                runner.run_for_steps(1)
-                runner.run_until_next_power_of_2()
-        runner.end_run()
+            disable_trace_padding = True
+
+        runner.end_run(disable_trace_padding=disable_trace_padding)
     except (VmException, AssertionError) as exc:
         if args.debug_error:
             print(f'Got an error:\n{exc}')
@@ -250,13 +248,9 @@ def cairo_run(args):
     if not args.no_end:
         runner.read_return_values()
 
-    if args.no_end or not args.proof_mode:
-        runner.finalize_segments_by_effective_size()
-    else:
+    if not args.no_end and args.proof_mode:
         # Finalize important segments by correct size.
         runner.finalize_segments()
-        # Finalize all user segments by effective size.
-        runner.finalize_segments_by_effective_size()
 
     if args.secure_run:
         verify_secure_runner(runner)

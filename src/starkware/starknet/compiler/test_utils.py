@@ -8,7 +8,7 @@ from starkware.starknet.compiler.starknet_pass_manager import starknet_pass_mana
 from starkware.starknet.compiler.starknet_preprocessor import StarknetPreprocessedProgram
 
 TEST_MODULES = {
-    'starkware.starknet.core.storage.storage': """
+    'starkware.starknet.common.storage': """
 struct Storage:
 end
 
@@ -17,6 +17,10 @@ func storage_read{storage_ptr : Storage*}(address : felt) -> (value : felt):
 end
 
 func storage_write{storage_ptr : Storage*}(address : felt, value : felt):
+    ret
+end
+
+func normalize_address{range_check_ptr}(addr : felt) -> (res : felt):
     ret
 end
 """,

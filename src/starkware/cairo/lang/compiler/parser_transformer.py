@@ -1,4 +1,4 @@
-import re
+import dataclasses
 from typing import Optional
 
 from lark import Transformer, v_args
@@ -17,8 +17,9 @@ from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeElementTailCall, CodeElementTemporaryVariable, CodeElementUnpackBinding, CodeElementWith,
     CommentedCodeElement, LangDirective)
 from starkware.cairo.lang.compiler.ast.expr import (
-    ArgList, ExprAddressOf, ExprAssignment, ExprCast, ExprConst, ExprDeref, ExprDot, ExprIdentifier,
-    ExprNeg, ExprOperator, ExprParentheses, ExprPyConst, ExprReg, ExprSubscript, ExprTuple)
+    ArgList, ExprAddressOf, ExprAssignment, ExprCast, ExprConst, ExprDeref, ExprDot, ExprHint,
+    ExprIdentifier, ExprNeg, ExprOperator, ExprParentheses, ExprPow, ExprPyConst, ExprReg,
+    ExprSubscript, ExprTuple)
 from starkware.cairo.lang.compiler.ast.expr_func_call import ExprFuncCall
 from starkware.cairo.lang.compiler.ast.instructions import (
     AddApInstruction, AssertEqInstruction, CallInstruction, CallLabelInstruction, InstructionAst,
@@ -28,9 +29,18 @@ from starkware.cairo.lang.compiler.ast.notes import Notes
 from starkware.cairo.lang.compiler.ast.rvalue import (
     RvalueCall, RvalueCallInst, RvalueExpr, RvalueFuncCall)
 from starkware.cairo.lang.compiler.ast.types import Modifier, TypedIdentifier
-from starkware.cairo.lang.compiler.error_handling import InputFile, Location, LocationError
+from starkware.cairo.lang.compiler.error_handling import (
+    InputFile, Location, LocationError, ParentLocation)
 from starkware.cairo.lang.compiler.instruction import Register
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
+
+
+@dataclasses.dataclass
+class ParserContext:
+    """
+    Represents information that affects the parsing process.
+    """
+    parent_location: Optional[ParentLocation] = None
 
 
 class ParserError(LocationError):
@@ -42,8 +52,9 @@ class ParserTransformer(Transformer):
     Transforms the lark tree into an AST based on the classes defined in ast/*.py.
     """
 
-    def __init__(self, input_file: InputFile):
+    def __init__(self, input_file: InputFile, parser_context: Optional[ParserContext]):
         self.input_file = input_file
+        self.parser_context = ParserContext() if parser_context is None else parser_context
 
     def __default__(self, data: str, children, meta):
         raise TypeError(f'Unable to parse tree node of type {data}')
@@ -109,11 +120,20 @@ class ParserTransformer(Transformer):
 
     @v_args(meta=True)
     def atom_number(self, value, meta):
-        return ExprConst(val=int(value[0]), location=self.meta2loc(meta))
+        return ExprConst(val=int(value[0]), format_str=value[0].value, location=self.meta2loc(meta))
+
+    @v_args(meta=True)
+    def atom_hex_number(self, value, meta):
+        return ExprConst(
+            val=int(value[0], 16), format_str=value[0].value, location=self.meta2loc(meta))
 
     @v_args(meta=True)
     def atom_pyconst(self, value, meta):
         return ExprPyConst.from_str(src=value[0], location=self.meta2loc(meta))
+
+    @v_args(meta=True)
+    def atom_hint(self, value, meta):
+        return ExprHint.from_str(val=value[0], location=self.meta2loc(meta))
 
     @v_args(meta=True)
     def atom_reg(self, value, meta):
@@ -150,6 +170,18 @@ class ParserTransformer(Transformer):
     @v_args(meta=True)
     def unary_neg(self, value, meta):
         return ExprNeg(val=value[0], location=self.meta2loc(meta))
+
+    @v_args(meta=True)
+    def two_stars(self, value, meta):
+        is_two_chars = meta.end_pos == meta.start_pos + 2
+        if not is_two_chars:
+            raise ParserError(
+                'Unexpected operator. Did you mean "**"?', location=self.meta2loc(meta))
+
+    @v_args(meta=True)
+    def expr_pow(self, value, meta):
+        return ExprPow(
+            a=value[0], b=value[3], notes=value[2], location=self.meta2loc(meta))
 
     @v_args(meta=True)
     def atom_parentheses(self, value, meta):
@@ -345,8 +377,14 @@ class ParserTransformer(Transformer):
 
     @v_args(meta=True)
     def code_element_temp_var(self, value, meta):
+        typed_identifier, *maybe_expr = value
+        expr, = maybe_expr if len(maybe_expr) > 0 else [None]
+
         return CodeElementTemporaryVariable(
-            typed_identifier=value[0], expr=value[1], location=self.meta2loc(meta))
+            typed_identifier=typed_identifier,
+            expr=expr,
+            location=self.meta2loc(meta),
+        )
 
     @v_args(meta=True)
     def code_element_static_assert(self, value, meta):
@@ -369,23 +407,10 @@ class ParserTransformer(Transformer):
 
     @v_args(meta=True)
     def code_element_hint(self, value, meta):
-        HINT_PATTERN = r'%\{(?P<prefix_whitespace>([ \t]*\n)*)(?P<code>.*?)%\}'
-        m = re.match(HINT_PATTERN, value[0], re.DOTALL)
-        assert m is not None
-        code = m.group('code').rstrip()
-        if code is None:
-            code = ''
-
-        # Remove common indentation.
-        lines = code.split('\n')
-        common_indent = min(
-            (len(line) - len(line.lstrip(' ')) for line in lines if line),
-            default=0)
-        code = '\n'.join(line[common_indent:] for line in lines)
         return CodeElementHint(
-            hint_code=code,
-            n_prefix_newlines=m.group('prefix_whitespace').count('\n'),
-            location=self.meta2loc(meta))
+            hint=ExprHint.from_str(val=value[0], location=self.meta2loc(meta)),
+            location=self.meta2loc(meta),
+        )
 
     def code_element_empty_line(self, value):
         return CodeElementEmptyLine()
@@ -577,4 +602,5 @@ class ParserTransformer(Transformer):
             end_line=meta.end_line,
             end_col=meta.end_column,
             input_file=self.input_file,
+            parent_location=self.parser_context.parent_location,
         )

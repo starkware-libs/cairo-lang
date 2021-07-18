@@ -64,7 +64,7 @@
         },
         {
             "name": "keyword.other.meta",
-            "match": "\\b(const|let|local|tempvar|felt|as|from|import|static_assert|return|assert|member|cast|alloc_locals|with)\\b"
+            "match": "\\b(const|let|local|tempvar|felt|as|from|import|static_assert|return|assert|member|cast|alloc_locals|with|nondet)\\b"
         },
         {
             "name": "markup.italic",

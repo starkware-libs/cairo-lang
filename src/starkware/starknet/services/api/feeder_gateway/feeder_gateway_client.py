@@ -10,6 +10,11 @@ class FeederGatewayClient(EverestFeederGatewayClient):
     A client class for the StarkNet FeederGateway.
     """
 
+    async def get_contract_addresses(self) -> Dict[str, str]:
+        raw_response = await self._send_request(
+            send_method='GET', uri=f'/get_contract_addresses')
+        return json.loads(raw_response)
+
     async def call_contract(
             self, invoke_tx: InvokeFunction,
             block_id: Optional[int] = None) -> Dict[str, List[int]]:
@@ -36,7 +41,12 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         raw_response = await self._send_request(send_method='GET', uri=uri)
         return json.loads(raw_response)
 
-    async def get_transaction_status(self, tx_id: int) -> str:
+    async def get_transaction_status(self, tx_id: int) -> Dict[str, Any]:
         raw_response = await self._send_request(
             send_method='GET', uri=f'/get_transaction_status?transactionId={tx_id}')
+        return json.loads(raw_response)
+
+    async def get_transaction(self, tx_id: int) -> str:
+        raw_response = await self._send_request(
+            send_method='GET', uri=f'/get_transaction?transactionId={tx_id}')
         return json.loads(raw_response)

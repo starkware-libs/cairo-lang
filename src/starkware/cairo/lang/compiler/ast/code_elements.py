@@ -5,7 +5,8 @@ from typing import Any, Dict, List, Optional, Sequence
 from starkware.cairo.lang.compiler.ast.aliased_identifier import AliasedIdentifier
 from starkware.cairo.lang.compiler.ast.arguments import IdentifierList
 from starkware.cairo.lang.compiler.ast.bool_expr import BoolExpr
-from starkware.cairo.lang.compiler.ast.expr import ExprAssignment, Expression, ExprIdentifier
+from starkware.cairo.lang.compiler.ast.expr import (
+    ExprAssignment, Expression, ExprHint, ExprIdentifier)
 from starkware.cairo.lang.compiler.ast.formatting_utils import (
     INDENTATION, LocationField, ParticleFormattingConfig, create_particle_sublist,
     particles_in_lines)
@@ -103,11 +104,12 @@ class CodeElementTemporaryVariable(CodeElement):
       tempvar x = expr.
     """
     typed_identifier: TypedIdentifier
-    expr: Expression
+    expr: Optional[Expression]
     location: Optional[Location] = LocationField
 
     def format(self, allowed_line_length):
-        return f'tempvar {self.typed_identifier.format()} = {self.expr.format()}'
+        assignment = '' if self.expr is None else f' = {self.expr.format()}'
+        return f'tempvar {self.typed_identifier.format()}{assignment}'
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.typed_identifier, self.expr]
@@ -284,22 +286,18 @@ class CodeElementLabel(CodeElement):
 
 @dataclasses.dataclass
 class CodeElementHint(CodeElement):
-    hint_code: str
-    # The number of new lines following the "%{" symbol.
-    n_prefix_newlines: int
+    hint: ExprHint
     location: Optional[Location] = LocationField
 
+    @property
+    def hint_code(self):
+        return self.hint.hint_code
+
     def format(self, allowed_line_length):
-        if self.hint_code == '':
-            return '%{\n%}'
-        if '\n' not in self.hint_code:
-            # One liner.
-            return f'%{{ {self.hint_code} %}}'
-        code = indent(self.hint_code, INDENTATION)
-        return f'%{{\n{code}\n%}}'
+        return self.hint.to_str()
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
-        return []
+        return [self.hint]
 
 
 @dataclasses.dataclass

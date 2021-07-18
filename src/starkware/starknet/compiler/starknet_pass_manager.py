@@ -24,15 +24,19 @@ def starknet_pass_manager(
         additional_modules=[
             'starkware.cairo.common.cairo_builtins',
             'starkware.cairo.common.hash',
-            'starkware.starknet.core.storage.storage',
+            'starkware.starknet.common.storage',
         ]))
 
     manager.add_before(
         existing_stage='identifier_collector',
         new_stage_name='storage_var_signature',
-        new_stage=VisitorStage(StorageVarDeclVisitor, modify_ast=True))
+        new_stage=VisitorStage(
+            lambda context: StorageVarDeclVisitor(identifiers=context.identifiers),
+            modify_ast=True))
     manager.add_after(
         existing_stage='struct_collector',
         new_stage_name='storage_var_implementation',
-        new_stage=VisitorStage(StorageVarImplentationVisitor, modify_ast=True))
+        new_stage=VisitorStage(
+            lambda context: StorageVarImplentationVisitor(identifiers=context.identifiers),
+            modify_ast=True))
     return manager

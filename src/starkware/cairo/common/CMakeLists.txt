@@ -2,6 +2,7 @@ python_lib(cairo_common_lib
     PREFIX starkware/cairo/common
     FILES
     alloc.cairo
+    bitwise.cairo
     cairo_builtins.cairo
     default_dict.cairo
     dict.cairo
@@ -20,6 +21,7 @@ python_lib(cairo_common_lib
     merkle_multi_update.cairo
     merkle_update.cairo
     registers.cairo
+    segments.cairo
     serialize.cairo
     set.cairo
     signature.cairo

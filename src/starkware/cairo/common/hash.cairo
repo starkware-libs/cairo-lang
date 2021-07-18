@@ -5,11 +5,11 @@ from starkware.cairo.common.cairo_builtins import HashBuiltin
 # For example, pass the pedersen builtin pointer to compute Pedersen hash.
 #
 # Arguments:
-# hash_ptr - the hash builtin pointer.
-# x, y - the two field elements to be hashed, in this order.
+#   hash_ptr - the hash builtin pointer.
+#   x, y - the two field elements to be hashed, in this order.
 #
 # Returns:
-# result - the field element result of the hash.
+#   result - the field element result of the hash.
 func hash2{hash_ptr : HashBuiltin*}(x, y) -> (result):
     hash_ptr.x = x
     hash_ptr.y = y

@@ -29,7 +29,7 @@ func assert_not_equal(a, b):
     %}
     if a == b:
         # If a == b, add an unsatisfiable requirement.
-        [fp - 1] = [fp - 1] + 1
+        a = a + 1
     end
 
     return ()
@@ -75,43 +75,35 @@ func assert_in_range{range_check_ptr}(value, lower, upper):
     return ()
 end
 
-# Asserts that a <= b. More specifically, asserts that b - a is in the range [0, 2**250).
-#
-# Prover assumptions:
-#    PRIME - 2**250 > 2**(250 - 128) + 1 * RC_BOUND.
-func assert_le_250_bit{range_check_ptr}(a, b):
+# Asserts that 'value' is in the range [0, 2**250).
+@known_ap_change
+func assert_250_bit{range_check_ptr}(value):
+    const UPPER_BOUND = 2 ** 250
+    const SHIFT = 2 ** 128
+    const HIGH_BOUND = UPPER_BOUND / SHIFT
+
     let low = [range_check_ptr]
     let high = [range_check_ptr + 1]
-    let range_check_ptr = range_check_ptr + 2
-    const UPPER_BOUND = %[2**(250)%]
-    const HIGH_PART_SHIFT = %[2**250 // 2**128 %]
-    tempvar diff = b - a
+
     %{
         from starkware.cairo.common.math_utils import as_int
 
-        # Soundness checks.
-        assert range_check_builtin.bound == 2**128
-        assert ids.UPPER_BOUND == ids.HIGH_PART_SHIFT * range_check_builtin.bound
-
         # Correctness check.
-        diff = as_int(ids.diff, PRIME)
-        values_msg = f'(a={as_int(ids.a, PRIME)}, b={as_int(ids.b, PRIME)}).'
-        assert diff < ids.UPPER_BOUND, f'(b - a)={diff} is outside of the valid range. {values_msg}'
-        assert PRIME - ids.UPPER_BOUND > (ids.HIGH_PART_SHIFT + 1) * range_check_builtin.bound
-
-        assert diff >= 0, f'(b - a)={diff} < 0. {values_msg}'
+        value = as_int(ids.value, PRIME) % PRIME
+        assert value < ids.UPPER_BOUND, f'{value} is outside of the range [0, 2**250).'
 
         # Calculation for the assertion.
-        ids.high = ids.diff // ids.HIGH_PART_SHIFT
-        ids.low = ids.diff % ids.HIGH_PART_SHIFT
+        ids.high, ids.low = divmod(ids.value, ids.SHIFT)
     %}
 
-    # Assuming the assert below, we have
-    # diff = high * HIGH_PART_SHIFT + low < (HIGH_PART_SHIFT + 1) * RC_BOUND < PRIME - UPPER_BOUND.
-    # If 0 <= b < a < UPPER_BOUND then diff < 0 => diff % P = PRIME - diff > PRIME - UPPER_BOUND.
-    # So given the soundness assumptions listed above it must be the case that a <= b.
-    assert diff = high * HIGH_PART_SHIFT + low
+    assert [range_check_ptr + 2] = HIGH_BOUND - 1 - high
 
+    # The assert below guarantees that
+    #   value = high * SHIFT + low <= (HIGH_BOUND - 1) * SHIFT + 2**128 - 1 =
+    #   HIGH_BOUND * SHIFT - SHIFT + SHIFT - 1 = 2**250 - 1.
+    assert value = high * SHIFT + low
+
+    let range_check_ptr = range_check_ptr + 3
     return ()
 end
 
@@ -135,7 +127,7 @@ func split_felt{range_check_ptr}(value) -> (high, low):
         ids.low = ids.value & ((1 << 128) - 1)
         ids.high = ids.value >> 128
     %}
-    assert value = high * %[2**128%] + low
+    assert value = high * (2 ** 128) + low
     if high == MAX_HIGH:
         assert_le(low, MAX_LOW)
     else:
@@ -192,22 +184,23 @@ end
 # Returns the absolute value of value.
 # Prover asumption: -rc_bound < value < rc_bound.
 func abs_value{range_check_ptr}(value) -> (abs_value):
+    tempvar is_positive : felt
     %{
         from starkware.cairo.common.math_utils import is_positive
-        memory[ap] = 1 if is_positive(
+        ids.is_positive = 1 if is_positive(
             value=ids.value, prime=PRIME, rc_bound=range_check_builtin.bound) else 0
     %}
-    jmp is_positive if [ap] != 0; ap++
-    tempvar new_range_check_ptr = range_check_ptr + 1
-    tempvar abs_value = value * (-1)
-    [range_check_ptr] = abs_value
-    let range_check_ptr = new_range_check_ptr
-    return (abs_value=abs_value)
-
-    is_positive:
-    [range_check_ptr] = value
-    let range_check_ptr = range_check_ptr + 1
-    return (abs_value=value)
+    if is_positive == 0:
+        tempvar new_range_check_ptr = range_check_ptr + 1
+        tempvar abs_value = value * (-1)
+        [range_check_ptr] = abs_value
+        let range_check_ptr = new_range_check_ptr
+        return (abs_value=abs_value)
+    else:
+        [range_check_ptr] = value
+        let range_check_ptr = range_check_ptr + 1
+        return (abs_value=value)
+    end
 end
 
 # Returns the sign of value: -1, 0 or 1.
@@ -217,20 +210,21 @@ func sign{range_check_ptr}(value) -> (sign):
         return (sign=0)
     end
 
+    tempvar is_positive : felt
     %{
         from starkware.cairo.common.math_utils import is_positive
-        memory[ap] = 1 if is_positive(
+        ids.is_positive = 1 if is_positive(
             value=ids.value, prime=PRIME, rc_bound=range_check_builtin.bound) else 0
     %}
-    jmp is_positive if [ap] != 0; ap++
-    assert [range_check_ptr] = value * (-1)
-    let range_check_ptr = range_check_ptr + 1
-    return (sign=-1)
-
-    is_positive:
-    [range_check_ptr] = value
-    let range_check_ptr = range_check_ptr + 1
-    return (sign=1)
+    if is_positive == 0:
+        assert [range_check_ptr] = value * (-1)
+        let range_check_ptr = range_check_ptr + 1
+        return (sign=-1)
+    else:
+        [range_check_ptr] = value
+        let range_check_ptr = range_check_ptr + 1
+        return (sign=1)
+    end
 end
 
 # Returns q and r such that:

@@ -1,7 +1,8 @@
 import dataclasses
 from dataclasses import field
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
+from starkware.cairo.lang.builtins.bitwise.instance_def import CELLS_PER_BITWISE, BitwiseInstanceDef
 from starkware.cairo.lang.builtins.hash.instance_def import CELLS_PER_HASH, PedersenInstanceDef
 from starkware.cairo.lang.builtins.range_check.instance_def import (
     CELLS_PER_RANGE_CHECK, RangeCheckInstanceDef)
@@ -25,6 +26,7 @@ class CairoLayout:
     # The ratio between the number of public memory cells and the total number of memory cells.
     public_memory_fraction: int = 4
     memory_units_per_step: int = 8
+    diluted_units_per_step: Optional[int] = None
     cpu_instance_def: CpuInstanceDef = field(default=CpuInstanceDef())
 
 
@@ -32,6 +34,7 @@ CELLS_PER_BUILTIN = dict(
     pedersen=CELLS_PER_HASH,
     range_check=CELLS_PER_RANGE_CHECK,
     ecdsa=CELLS_PER_SIGNATURE,
+    bitwise=CELLS_PER_BITWISE,
 )
 
 plain_instance = CairoLayout(
@@ -90,8 +93,43 @@ dex_instance = CairoLayout(
     )
 )
 
+all_instance = CairoLayout(
+    layout_name='all',
+    rc_units=8,
+    public_memory_fraction=8,
+    diluted_units_per_step=16,
+    builtins=dict(
+        output=True,
+        pedersen=PedersenInstanceDef(
+            ratio=8,
+            repetitions=4,
+            element_height=256,
+            element_bits=252,
+            n_inputs=2,
+            hash_limit=2**251 + 17 * 2**192 + 1,
+        ),
+        range_check=RangeCheckInstanceDef(
+            ratio=8,
+            n_parts=8,
+        ),
+        ecdsa=EcdsaInstanceDef(
+            ratio=512,
+            repetitions=1,
+            height=256,
+            n_hash_bits=251,
+        ),
+        bitwise=BitwiseInstanceDef(
+            ratio=256,
+            diluted_spacing=4,
+            diluted_n_bits=16,
+            total_n_bits=251,
+        ),
+    )
+)
+
 LAYOUTS: Dict[str, CairoLayout] = {
     'plain': plain_instance,
     'small': small_instance,
     'dex': dex_instance,
+    'all': all_instance,
 }

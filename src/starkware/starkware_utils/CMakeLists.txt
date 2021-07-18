@@ -1,3 +1,5 @@
+add_subdirectory(time)
+
 python_lib(starkware_serializability_utils_lib
     PREFIX starkware/starkware_utils
 
@@ -13,6 +15,7 @@ python_lib(starkware_utils_lib
     error_handling.py
     field_validators.py
     marshmallow_dataclass_fields.py
+    subsequence.py
     validated_dataclass.py
     validated_fields.py
     ${STARKWARE_UTILS_LIBS_ADDITIONAL_FILES}

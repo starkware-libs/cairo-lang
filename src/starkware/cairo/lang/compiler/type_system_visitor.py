@@ -4,7 +4,7 @@ from typing import Optional, Tuple
 from starkware.cairo.lang.compiler.ast.cairo_types import (
     CairoType, TypeFelt, TypePointer, TypeStruct, TypeTuple)
 from starkware.cairo.lang.compiler.ast.expr import (
-    ExprAddressOf, ExprCast, ExprConst, ExprDeref, ExprDot, Expression, ExprFutureLabel,
+    ExprAddressOf, ExprCast, ExprConst, ExprDeref, ExprDot, Expression, ExprFutureLabel, ExprHint,
     ExprIdentifier, ExprNeg, ExprOperator, ExprParentheses, ExprPyConst, ExprReg, ExprSubscript,
     ExprTuple)
 from starkware.cairo.lang.compiler.error_handling import Location
@@ -37,12 +37,16 @@ class TypeSystemVisitor(IdentifierAwareVisitor):
     def visit_ExprPyConst(self, expr: ExprPyConst) -> Tuple[ExprPyConst, TypeFelt]:
         return expr, TypeFelt(location=expr.location)
 
+    def visit_ExprHint(self, expr: ExprHint) -> Tuple[ExprHint, TypeFelt]:
+        return expr, TypeFelt(location=expr.location)
+
     def visit_ExprFutureLabel(self, expr: ExprFutureLabel) -> Tuple[ExprFutureLabel, TypeFelt]:
         return expr, TypeFelt(location=expr.identifier.location)
 
     def visit_ExprIdentifier(self, expr: ExprIdentifier) -> Tuple[Expression, CairoType]:
         raise CairoTypeError(
-            f'Unexpected unresolved identifier {expr.format()}.', location=expr.location)
+            f"Identifier '{expr.format()}' is not allowed in this context.",
+            location=expr.location)
 
     def visit_ExprReg(self, expr: ExprReg) -> Tuple[ExprReg, TypeFelt]:
         return expr, TypeFelt(location=expr.location)
@@ -67,6 +71,17 @@ class TypeSystemVisitor(IdentifierAwareVisitor):
                 f"'{a_type.format()}' and '{b_type.format()}'.",
                 location=expr.location)
         return dataclasses.replace(expr, a=a_expr, b=b_expr), result_type
+
+    def visit_ExprPow(self, expr: ExprOperator) -> Tuple[ExprOperator, CairoType]:
+        a_expr, a_type = self.visit(expr.a)
+        b_expr, b_type = self.visit(expr.b)
+
+        if not isinstance(a_type, TypeFelt) and isinstance(b_type, TypeFelt):
+            raise CairoTypeError(
+                f"Operator '**' is not implemented for types "
+                f"'{a_type.format()}' and '{b_type.format()}'.",
+                location=expr.location)
+        return dataclasses.replace(expr, a=a_expr, b=b_expr), TypeFelt(location=expr.location)
 
     def visit_ExprAddressOf(self, expr: ExprAddressOf) -> Tuple[Expression, TypePointer]:
         inner_expr, inner_type = self.visit(expr.expr)

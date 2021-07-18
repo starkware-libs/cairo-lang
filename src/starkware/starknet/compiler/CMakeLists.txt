@@ -16,11 +16,25 @@ python_lib(starknet_compile_lib
     cairo_compile_lib
     cairo_constants_lib
     starknet_abi_lib
-    starknet_cairo_storage_lib
+    starknet_common_lib
     starknet_contract_definition_lib
     starknet_definitions_lib
     starknet_hints_whitelist_lib
     starknet_security_lib
+    starkware_utils_lib
+)
+
+python_lib(starknet_compile_test_utils_lib
+    PREFIX starkware/starknet/compiler
+
+    FILES
+    test_utils.py
+
+    LIBS
+    cairo_compile_lib
+    cairo_compile_test_utils_lib
+    cairo_constants_lib
+    starknet_compile_lib
 )
 
 full_python_test(starknet_compile_test
@@ -32,10 +46,10 @@ full_python_test(starknet_compile_test
     calldata_parser_test.py
     starknet_preprocessor_test.py
     storage_var_test.py
-    test_utils.py
 
     LIBS
     cairo_compile_test_utils_lib
+    starknet_compile_test_utils_lib
     starknet_compile_lib
     pip_pytest
 )

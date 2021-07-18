@@ -2,7 +2,7 @@ import operator
 from typing import Optional
 
 from starkware.cairo.lang.compiler.ast.expr import (
-    ExprConst, ExprDeref, ExprNeg, ExprOperator, ExprParentheses, ExprPyConst)
+    ExprConst, ExprDeref, ExprNeg, ExprOperator, ExprParentheses, ExprPow, ExprPyConst)
 from starkware.cairo.lang.compiler.error_handling import LocationError
 from starkware.cairo.lang.compiler.expression_transformer import ExpressionTransformer
 from starkware.python.math_utils import div_mod
@@ -104,6 +104,25 @@ class ExpressionSimplifier(ExpressionTransformer):
                 location=expr.location))
 
         return ExprOperator(a=a, op=op, b=b, location=expr.location)
+
+    def visit_ExprPow(self, expr: ExprPow):
+        a = self.visit(expr.a)
+        # The exponent must not be computed modulo prime (as b = c (mod prime) does not imply
+        # a**b = a**c (mod prime)).
+        no_prime_simplifier = type(self)(prime=None)
+        b = no_prime_simplifier.visit(expr.b)
+
+        if isinstance(a, ExprConst) and isinstance(b, ExprConst):
+            if b.val < 0:
+                raise SimplifierError(
+                    'Power is not supported with a negative exponent.', location=expr.location)
+            if self.prime is not None:
+                val = pow(a.val, b.val, self.prime)
+            else:
+                val = a.val ** b.val
+            return ExprConst(val=val, location=expr.location)
+
+        return ExprPow(a=a, b=b, location=expr.location)
 
     def visit_ExprNeg(self, expr: ExprNeg):
         val = self.visit(expr.val)

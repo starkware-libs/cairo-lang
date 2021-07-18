@@ -137,7 +137,7 @@ tempvar x5 : felt = x3 + x4
 
 
 def test_process_compound_expressions():
-    code_elements, res, _ = process_compound_expressions(list(map(parse_expr, [
+    code_elements, res = process_compound_expressions(list(map(parse_expr, [
         '[ap - 1] + 5',
         '[ap - 1] * [ap - 1]',
         '[ap - 1] * [ap - 1]',
@@ -246,6 +246,7 @@ def test_compound_expressions_tempvars():
     code = """\
 tempvar x = [ap - 1] * [ap - 1] + [ap - 1] * [ap - 2]
 tempvar y = x + x
+tempvar z = 5 + nondet %{ val %} * 15 + nondet %{ 1 %}
 """
     program = preprocess_str(code=code, prime=PRIME)
     assert program.format() == """\
@@ -254,6 +255,14 @@ tempvar y = x + x
 [ap] = [ap + (-2)] + [ap + (-1)]; ap++
 
 [ap] = [ap + (-1)] + [ap + (-1)]; ap++
+
+%{ memory[ap] = int(val) %}
+ap += 1
+[ap] = [ap + (-1)] * 15; ap++
+[ap] = [ap + (-1)] + 5; ap++
+%{ memory[ap] = int(1) %}
+ap += 1
+[ap] = [ap + (-2)] + [ap + (-1)]; ap++
 """.replace('\n\n', '\n')
 
 

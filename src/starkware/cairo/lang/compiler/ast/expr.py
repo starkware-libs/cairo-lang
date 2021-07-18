@@ -1,7 +1,10 @@
 import dataclasses
 import re
 from abc import abstractmethod
+from dataclasses import field
 from typing import List, Optional, Sequence
+
+import marshmallow
 
 from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, CastType
 from starkware.cairo.lang.compiler.ast.formatting_utils import INDENTATION, LocationField
@@ -10,6 +13,7 @@ from starkware.cairo.lang.compiler.ast.notes import Notes, NotesField
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.instruction import Register
 from starkware.python.expression_string import ExpressionString
+from starkware.python.utils import indent
 
 
 class Expression(AstNode):
@@ -34,12 +38,18 @@ class Expression(AstNode):
 @dataclasses.dataclass
 class ExprConst(Expression):
     val: int
+    # Indicates the way the absolute value of the expression should be formatted in the code.
+    # For example, it may contain the hexadecimal representation.
+    format_str: Optional[str] = field(
+        default=None, hash=False, compare=False, metadata=dict(
+            marshmallow_field=marshmallow.fields.Field(load_only=True, dump_only=True)))
     location: Optional[Location] = LocationField
 
     def to_expr_str(self):
+        abs_format = str(abs(self.val)) if self.format_str is None else self.format_str
         if self.val >= 0:
-            return ExpressionString.highest(str(self.val))
-        return -ExpressionString.highest(str(-self.val))
+            return ExpressionString.highest(abs_format)
+        return -ExpressionString.highest(abs_format)
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return []
@@ -59,6 +69,50 @@ class ExprPyConst(Expression):
 
     def to_expr_str(self):
         return ExpressionString.highest(f'%[{self.code}%]')
+
+    def get_children(self) -> Sequence[Optional[AstNode]]:
+        return []
+
+
+@dataclasses.dataclass
+class ExprHint(Expression):
+    hint_code: str
+    # The number of new lines following the "%{" symbol.
+    n_prefix_newlines: int
+    location: Optional[Location] = LocationField
+
+    @classmethod
+    def from_str(cls, val, location):
+        HINT_PATTERN = r'%\{(?P<prefix_whitespace>([ \t]*\n)*)(?P<code>.*?)%\}'
+        m = re.match(HINT_PATTERN, val, re.DOTALL)
+        assert m is not None
+        code = m.group('code').rstrip()
+        if code is None:
+            code = ''
+
+        # Remove common indentation.
+        lines = code.split('\n')
+        common_indent = min(
+            (len(line) - len(line.lstrip(' ')) for line in lines if line),
+            default=0)
+        code = '\n'.join(line[common_indent:] for line in lines)
+
+        return cls(
+            hint_code=code,
+            n_prefix_newlines=m.group('prefix_whitespace').count('\n'),
+            location=location)
+
+    def to_str(self):
+        if self.hint_code == '':
+            return '%{\n%}'
+        if '\n' not in self.hint_code:
+            # One liner.
+            return f'%{{ {self.hint_code} %}}'
+        code = indent(self.hint_code, INDENTATION)
+        return f'%{{\n{code}\n%}}'
+
+    def to_expr_str(self):
+        return ExpressionString.highest(f'nondet {self.to_str()}')
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return []
@@ -169,6 +223,25 @@ class ExprOperator(Expression):
             return a / b
         else:
             raise NotImplementedError(f"Unexpected operator '{self.op}'")
+
+    def get_children(self) -> Sequence[Optional[AstNode]]:
+        return [self.a, self.b]
+
+
+@dataclasses.dataclass
+class ExprPow(Expression):
+    a: Expression
+    b: Expression
+    notes: Notes = NotesField
+    location: Optional[Location] = LocationField
+
+    def to_expr_str(self):
+        self.notes.assert_no_comments()
+        a = self.a.to_expr_str()
+        b = self.b.to_expr_str()
+        if not self.notes.empty:
+            b = b.prepend('\n')
+        return a.double_star_pow(b)
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.a, self.b]

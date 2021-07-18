@@ -1,6 +1,8 @@
+import contextlib
+import logging
 import operator
 from enum import Enum, auto
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Type
 
 symbol_to_function = {'!=': operator.ne, '==': operator.eq, '>': operator.gt, '>=': operator.ge}
 
@@ -84,6 +86,8 @@ class StarkErrorCode(ErrorCode):
     OUT_OF_RANGE_BALANCE = auto()
     #: Batch ID value is out of range.
     OUT_OF_RANGE_BATCH_ID = auto()
+    #: Ethereum address value is out of range.
+    OUT_OF_RANGE_ETH_ADDRESS = auto()
     #: Expiration timestamp value is out of range.
     OUT_OF_RANGE_EXPIRATION_TIMESTAMP = auto()
     #: Nonce value is out of range.
@@ -106,6 +110,8 @@ class StarkErrorCode(ErrorCode):
     REQUEST_FAILED = auto()
     #: Object schema validation failed.
     SCHEMA_VALIDATION_ERROR = auto()
+    #: Transaction is manually cancelled.
+    TRANSACTION_CANCELLED = auto()
     #: Transaction received successfully by the gateway.
     TRANSACTION_PENDING = auto()
     TRANSACTION_RECEIVED = auto()
@@ -206,4 +212,25 @@ def _stark_assert_not_symbol(
     if symbol_to_function[symbol](exp_val, actual_val):
         eq_log = f'{format_val(exp_val)} {symbol} {format_val(actual_val)}'
         message = f'{message}\n{eq_log}' if message else eq_log
+        raise StarkException(code=code, message=message)
+
+
+@contextlib.contextmanager
+def wrap_with_stark_exception(
+        code: ErrorCode, message: Optional[str] = None, logger: Optional[logging.Logger] = None,
+        exception_types: Optional[List[Type[Exception]]] = None):
+    """
+    Wraps exceptions of types exception_types thrown in the context with StarkException.
+    If exception_types are not provided, only AssertionError is wrapped.
+    """
+    if exception_types is None:
+        exception_types = [AssertionError]
+
+    try:
+        yield
+    except tuple(exception_types) as exception:
+        message = str(exception) if message is None else message
+        if logger is not None:
+            logger.error(message, exc_info=True)
+
         raise StarkException(code=code, message=message)

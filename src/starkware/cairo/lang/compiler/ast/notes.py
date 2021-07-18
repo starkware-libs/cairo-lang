@@ -1,8 +1,9 @@
 import dataclasses
 from dataclasses import field
-from typing import List, Optional
+from typing import List, Optional, Sequence
 
 from starkware.cairo.lang.compiler.ast.formatting_utils import FormattingError, LocationField
+from starkware.cairo.lang.compiler.ast.node import AstNode
 from starkware.cairo.lang.compiler.error_handling import Location
 
 NotesField = field(default_factory=lambda: Notes(), hash=False, compare=False)
@@ -10,7 +11,7 @@ NoteListField = field(default_factory=list, hash=False, compare=False)
 
 
 @dataclasses.dataclass
-class Notes:
+class Notes(AstNode):
     """
     Represents new-lines and comments that appear inside an expression or other code element.
     For example, in the following code the first comment is represented by a note and the
@@ -59,3 +60,6 @@ class Notes:
                 comment_body = ' ' + comment_body
             code += f'#{comment_body}\n'
         return code
+
+    def get_children(self) -> Sequence[Optional[AstNode]]:
+        return []

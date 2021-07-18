@@ -32,6 +32,8 @@ class MemoryDict(UserDict):
     """
 
     def __init__(self, *args, **kwargs):
+        # The order is important: self._frozen definition must precede super().__init__().
+        self._frozen: bool = False
         super().__init__(*args, **kwargs)
 
         # A dict of segment relocation rules mapping a segment index to a RelocatableValue.
@@ -71,6 +73,21 @@ class MemoryDict(UserDict):
 
         self.relocation_rules[segment_index] = dest_ptr
 
+    def freeze(self):
+        """
+        Freezes the memory - no changes can be made from now on.
+        """
+        self._frozen = True
+
+    def unfreeze_for_testing(self):
+        """
+        This function should only be used in tests.
+        """
+        self._frozen = False
+
+    def is_frozen(self) -> bool:
+        return self._frozen
+
     def relocate_value(self, value):
         """
         Relocates a value according to the relocation rules.
@@ -94,6 +111,8 @@ class MemoryDict(UserDict):
         """
         Relocates the memory according to the relocation rules and clears self.relocation_rules.
         """
+        assert not self._frozen, 'Memory is frozen and cannot be changed.'
+
         if len(self.relocation_rules) == 0:
             return
 
@@ -113,6 +132,7 @@ class MemoryDict(UserDict):
         return self.relocate_value(value)
 
     def __setitem__(self, addr: MaybeRelocatable, value: MaybeRelocatable):
+        assert not self._frozen, 'Memory is frozen and cannot be changed.'
         self._check_element(addr, 'Memory address', KeyError)
         self._check_element(value, 'Memory value', ValueError)
 

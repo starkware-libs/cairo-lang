@@ -112,7 +112,10 @@ class BaseClient(HasUriPrefix):
                         exception.status_code not in self.retry_config.retry_codes):
                     raise
 
-                logger.error(f'BadRequest with code {exception.status_code}, retrying...')
+                logger.error(
+                    f'Got BadRequest while trying to access {url}. '
+                    f'status_code: {exception.status_code}. text: {exception.text}, '
+                    'retrying...')
 
             await asyncio.sleep(1)
 

@@ -2,7 +2,7 @@ from typing import Callable, Optional, Union
 
 from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypeStruct
 from starkware.cairo.lang.compiler.ast.expr import (
-    ExprCast, ExprConst, Expression, ExprFutureLabel, ExprIdentifier, ExprTuple)
+    ExprCast, ExprConst, Expression, ExprFutureLabel, ExprIdentifier, ExprPow, ExprTuple)
 from starkware.cairo.lang.compiler.ast.expr_func_call import ExprFuncCall
 from starkware.cairo.lang.compiler.ast.rvalue import RvalueFuncCall
 from starkware.cairo.lang.compiler.expression_transformer import ExpressionTransformer
@@ -38,8 +38,16 @@ class SubstituteIdentifiers(ExpressionTransformer):
             notes=expr.notes,
             location=expr.location)
 
+    def visit_ExprPow(self, expr: ExprPow):
+        # Same as super().visit_ExprPow, except that we don't visit expr.b.
+        # The reason is that the exponent shouldn't be taken modulo PRIME, so we don't allow
+        # using identifiers in the exponent.
+        return ExprPow(
+            a=self.visit(expr.a), b=expr.b,
+            location=self.location_modifier(expr.location))
+
     def visit_RvalueFuncCall(self, rvalue: RvalueFuncCall):
-        # Same as super().RvalueFuncCall, except that we don't visit rvalue.func_ident.
+        # Same as super().visit_RvalueFuncCall, except that we don't visit rvalue.func_ident.
         # The reason is that function names do not constitute as expressions in Cairo,
         # and visiting them in this visitor results in an error.
         return RvalueFuncCall(

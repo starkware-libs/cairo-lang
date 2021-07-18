@@ -1,7 +1,6 @@
 import dataclasses
 import inspect
 import random
-import re
 from typing import Any, ClassVar, Dict, Optional, Sequence, Tuple, Type, TypeVar
 
 import marshmallow
@@ -9,20 +8,13 @@ import marshmallow.fields as mfields
 import marshmallow_dataclass
 import typeguard
 
+from starkware.python.utils import camel_to_snake_case
 from starkware.starkware_utils.serializable import StringSerializable
 from starkware.starkware_utils.validated_fields import Field
 
 TValidatedDataclass = TypeVar('TValidatedDataclass', bound='ValidatedDataclass')
 TSerializableDataclass = TypeVar('TSerializableDataclass', bound='SerializableMarshmallowDataclass')
 T = TypeVar('T')
-
-
-def camel_to_snake_case(camel_case_name: str) -> str:
-    """
-    Converts a name with Capital first letters to lower case with '_' as separators.
-    For example, CamelToSnakeCase -> camel_to_snake_case.
-    """
-    return (camel_case_name[0] + re.sub(r'([A-Z])', r'_\1', camel_case_name[1:])).lower()
 
 
 class SerializableMarshmallowDataclass(StringSerializable):
@@ -314,6 +306,10 @@ def validate_field(field: mfields.Field, value: Any):
             validate_list(mfields.List(field.key_field), value.keys())
         if field.value_field is not None:
             validate_list(mfields.List(field.value_field), value.values())
+    # Validate inner fields recursively, if field is nested (contains fields).
+    elif isinstance(field, mfields.Nested):
+        if value is not None:
+            ValidatedDataclass.validate_values(value)
 
 
 def validate_list(list_field: mfields.List, list_value: Sequence):
