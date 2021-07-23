@@ -3,6 +3,8 @@ FROM ubuntu:18.04
 RUN apt update
 RUN apt install -y cmake python3.7 libgmp3-dev g++ python3-pip python3.7-dev python3.7-venv npm
 
+RUN python3.7 -m pip install --no-cache-dir --upgrade cython
+
 COPY . /app/
 
 # Build.
