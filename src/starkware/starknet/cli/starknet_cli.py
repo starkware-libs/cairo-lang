@@ -106,24 +106,22 @@ async def invoke_or_call(args, command_args, call: bool):
         raise ValueError('Invalid address format.')
     for abi_entry in abi:
         if abi_entry['type'] == 'function' and abi_entry['name'] == args.function:
-            previous_input = None
+            previous_felt_input = None
             current_inputs_ptr = 0
             for input_desc in abi_entry['inputs']:
-                assert current_inputs_ptr < len(args.inputs), \
-                        f'Expected at least {current_inputs_ptr + 1}, got {len(args.inputs)}'
-                current_input_val = args.inputs[current_inputs_ptr]
                 if input_desc['type'] == 'felt':
+                    assert current_inputs_ptr < len(args.inputs), \
+                        f'Expected at least {current_inputs_ptr + 1} inputs, got {len(args.inputs)}'
+                    previous_felt_input = args.inputs[current_inputs_ptr]
                     current_inputs_ptr += 1
                 elif input_desc['type'] == 'felt*':
-                    assert current_inputs_ptr > 0, 'First input type cannot be felt*.'
-                    assert previous_input['desc']['type'] == 'felt', \
-                        'Current input is felt*, and previous input should have been ' \
-                        f'felt, but it was {previous_input["desc"]["type"]}'
+                    assert previous_felt_input is not None, \
+                        f'The array argument {input_desc["name"]} of type felt* must be preceded ' \
+                        'by a length argument of type felt.'
 
-                    current_inputs_ptr += previous_input['val']
+                    current_inputs_ptr += previous_felt_input
                 else:
                     raise Exception(f'Unsupported type {input_desc["type"]}')
-                previous_input = { 'desc': input_desc, 'val': current_input_val }
             break
     else:
         raise Exception(f'Function {args.function} not found.')
