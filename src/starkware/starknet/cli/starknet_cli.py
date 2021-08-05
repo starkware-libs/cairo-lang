@@ -120,6 +120,7 @@ async def invoke_or_call(args, command_args, call: bool):
                         'by a length argument of type felt.'
 
                     current_inputs_ptr += previous_felt_input
+                    previous_felt_input = None
                 else:
                     raise Exception(f'Unsupported type {input_desc["type"]}')
             break
