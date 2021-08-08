@@ -106,12 +106,29 @@ async def invoke_or_call(args, command_args, call: bool):
         raise ValueError('Invalid address format.')
     for abi_entry in abi:
         if abi_entry['type'] == 'function' and abi_entry['name'] == args.function:
+            previous_felt_input = None
+            current_inputs_ptr = 0
+            for input_desc in abi_entry['inputs']:
+                if input_desc['type'] == 'felt':
+                    assert current_inputs_ptr < len(args.inputs), \
+                        f'Expected at least {current_inputs_ptr + 1} inputs, got {len(args.inputs)}'
+                    previous_felt_input = args.inputs[current_inputs_ptr]
+                    current_inputs_ptr += 1
+                elif input_desc['type'] == 'felt*':
+                    assert previous_felt_input is not None, \
+                        f'The array argument {input_desc["name"]} of type felt* must be preceded ' \
+                        'by a length argument of type felt.'
+
+                    current_inputs_ptr += previous_felt_input
+                    previous_felt_input = None
+                else:
+                    raise Exception(f'Unsupported type {input_desc["type"]}')
             break
     else:
         raise Exception(f'Function {args.function} not found.')
     selector = get_selector_from_name(args.function)
-    assert len(args.inputs) == len(abi_entry['inputs']), \
-        f'Wrong number of arguments. Expected {len(abi_entry["inputs"])}, got {len(args.inputs)}.'
+    assert len(args.inputs) == current_inputs_ptr, \
+        f'Wrong number of arguments. Expected {current_inputs_ptr}, got {len(args.inputs)}.'
     calldata = args.inputs
 
     tx = InvokeFunction(contract_address=address, entry_point_selector=selector, calldata=calldata)
