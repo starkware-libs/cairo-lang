@@ -1,5 +1,5 @@
 import functools
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Type, Union
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type, Union
 
 from starkware.cairo.lang.builtins.bitwise.bitwise_builtin_runner import BitwiseBuiltinRunner
 from starkware.cairo.lang.builtins.hash.hash_builtin_runner import HashBuiltinRunner
@@ -106,6 +106,9 @@ class CairoRunner:
         # Flags used to ensure a safe use.
         self._run_ended: bool = False
         self._segments_finalized: bool = False
+        # A set of memory addresses accessed by the VM, after relocation of temporary segments into
+        # real ones.
+        self.accessed_addresses: Optional[Set[RelocatableValue]] = None
 
     @classmethod
     def from_file(
@@ -268,6 +271,8 @@ class CairoRunner:
     def end_run(self, disable_trace_padding: bool = True, disable_finalize_all: bool = False):
         assert not self._run_ended, 'end_run called twice.'
 
+        self.accessed_addresses = {
+            self.vm_memory.relocate_value(addr) for addr in self.vm.accessed_addresses}
         self.vm_memory.relocate_memory()
         self.vm.end_run()
 
@@ -380,6 +385,10 @@ class CairoRunner:
                 f'There are only {unused_rc_units} cells to fill the range checks holes, but '
                 f'potentially {rc_usage_upper_bound} are required.')
 
+    def get_memory_holes(self):
+        assert self.accessed_addresses is not None
+        return self.segments.get_memory_holes(accessed_addresses=self.accessed_addresses)
+
     def check_memory_usage(self):
         """
         Checks that there are enough trace cells to fill the entire memory range.
@@ -395,7 +404,7 @@ class CairoRunner:
         instruction_memory_units = 4 * self.vm.current_step
         unused_memory_units = total_memory_units - \
             (public_memory_units + instruction_memory_units + builtins_memory_units)
-        memory_address_holes = self.segments.get_memory_holes()
+        memory_address_holes = self.get_memory_holes()
         if unused_memory_units < memory_address_holes:
             raise InsufficientAllocatedCells(
                 f'There are only {unused_memory_units} cells to fill the memory address holes, but '
@@ -577,7 +586,7 @@ fp = {fp}
 
     def get_execution_resources(self) -> ExecutionResources:
         n_steps = len(self.vm.trace) if self.original_steps is None else self.original_steps
-        n_memory_holes = self.segments.get_memory_holes()
+        n_memory_holes = self.get_memory_holes()
         builtin_instance_counter = {
             builtin_name: builtin_runner.get_used_instances(self)
             for builtin_name, builtin_runner in self.builtin_runners.items()

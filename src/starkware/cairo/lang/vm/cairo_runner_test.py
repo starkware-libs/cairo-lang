@@ -144,3 +144,58 @@ end
             match=re.escape(
                 'There are only 8 cells to fill the memory address holes, but 999 are required.')):
         runner.check_memory_usage()
+
+
+def test_hint_memory_holes():
+    code_base_format = """\
+func main():
+    [ap] = 0
+    %{{
+        memory[fp + 1] = segments.add_temp_segment()
+    %}}
+    [[fp + 1]] = [ap]
+    ap += 7
+    {}
+    ap += 1
+    [ap] = 0
+    %{{
+        memory.add_relocation_rule(memory[fp + 1], fp + 3)
+    %}}
+    ret
+end
+"""
+    code_no_hint, code_untouched_hint, code_touched_hint = [
+        code_base_format.format(extra_code)
+        for extra_code in ['', '%{ memory[ap] = 7 %}', '%{ memory[ap] = 7 %}\n [ap]=[ap]']]
+
+    runner_no_hint, runner_untouched_hint, runner_touched_hint = [
+        get_runner_from_code(code, layout='plain', prime=PRIME)
+        for code in (code_no_hint, code_untouched_hint, code_touched_hint)]
+
+    def filter_program_segment(addr_lst):
+        return {addr for addr in addr_lst if addr.segment_index != 0}
+
+    initial_ap = runner_no_hint.initial_ap
+    accessed_addresses = {
+        # Return fp and pc.
+        initial_ap - 2,
+        initial_ap - 1,
+        # Values set in the function.
+        initial_ap,
+        initial_ap + 1,
+        initial_ap + 3,
+        initial_ap + 8,
+    }
+    assert filter_program_segment(runner_no_hint.vm_memory.keys()) == accessed_addresses
+    assert filter_program_segment(runner_no_hint.accessed_addresses) == accessed_addresses
+    assert filter_program_segment(runner_untouched_hint.vm_memory.keys()) == \
+        accessed_addresses | {initial_ap + 7}
+    assert filter_program_segment(runner_untouched_hint.accessed_addresses) == accessed_addresses
+    assert filter_program_segment(runner_touched_hint.vm_memory.keys()) == \
+        accessed_addresses | {initial_ap + 7}
+    assert filter_program_segment(runner_touched_hint.accessed_addresses) == \
+        accessed_addresses | {initial_ap + 7}
+
+    assert runner_no_hint.get_memory_holes() == \
+        runner_untouched_hint.get_memory_holes() == \
+        runner_touched_hint.get_memory_holes() + 1 == 5

@@ -78,3 +78,20 @@ def test_gen_args():
     assert memory[ptr] == 1
     memory.get_range(memory[ptr + 1], len(test_array)) == test_array
     memory.get_range(memory[ptr + 2], 2) == [4, PRIME - 1]
+
+
+def test_get_memory_holes():
+    segments = MemorySegmentManager(memory=MemoryDict({}), prime=PRIME)
+    seg0 = segments.add(size=10)
+    seg1 = segments.add()
+
+    accessed_addresses = {seg0, seg1, seg0 + 1, seg1 + 5}
+    # Since segment 1 has no specified size, we must set a memory entry directly.
+    segments.memory[seg1 + 5] = 0
+
+    segments.memory.relocate_memory()
+    segments.memory.freeze()
+    segments.compute_effective_sizes()
+    seg0_holes = 10 - 2
+    seg1_holes = 6 - 2
+    assert segments.get_memory_holes(accessed_addresses) == seg0_holes + seg1_holes

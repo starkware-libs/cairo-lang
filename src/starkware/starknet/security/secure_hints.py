@@ -1,3 +1,4 @@
+import re
 from dataclasses import field
 from typing import ClassVar, Dict, List, Set, Type
 
@@ -125,6 +126,8 @@ class HintsWhitelist:
             Set[NamedExpression]:
         ref_exprs: Set[NamedExpression] = set()
         for ref_name, ref_id in hint.flow_tracking_data.reference_ids.items():
+            if re.match('^__temp[0-9]+$', ref_name.path[-1]):
+                continue
             ref = reference_manager.get_ref(ref_id)
             ref_exprs.add(NamedExpression(name=str(ref_name), expr=ref.value.format()))
         return ref_exprs

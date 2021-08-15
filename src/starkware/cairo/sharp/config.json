@@ -1,5 +1,5 @@
 {
     "prover_url": "https://ropsten-v1.provingservice.io",
-    "verifier_address": "0x2886D2A190f00aA324Ac5BF5a5b90217121D5756",
+    "verifier_address": "0xAB43bA48c9edF4C2C4bB01237348D1D7B28ef168",
     "steps_limit": 1000000
 }

@@ -80,7 +80,7 @@ def test_process_calldata_failure():
             'arg_b': MemberDefinition(offset=1, cairo_type=TypeFelt(), location=location),
         })
     with pytest.raises(
-            PreprocessorError, match='Array argument "arg_a" must be preceeded by a length '
+            PreprocessorError, match='Array argument "arg_a" must be preceded by a length '
             'argument named "arg_a_len" of type felt.'):
         process_test_calldata(members={
             'arg_a': MemberDefinition(offset=0, cairo_type=FELT_STAR, location=location),

@@ -110,25 +110,27 @@ async def invoke_or_call(args, command_args, call: bool):
             current_inputs_ptr = 0
             for input_desc in abi_entry['inputs']:
                 if input_desc['type'] == 'felt':
-                    assert current_inputs_ptr < len(args.inputs), \
-                        f'Expected at least {current_inputs_ptr + 1} inputs, got {len(args.inputs)}'
+                    assert current_inputs_ptr < len(args.inputs), (
+                        f'Expected at least {current_inputs_ptr + 1} inputs, '
+                        f'got {len(args.inputs)}.')
+
                     previous_felt_input = args.inputs[current_inputs_ptr]
                     current_inputs_ptr += 1
                 elif input_desc['type'] == 'felt*':
-                    assert previous_felt_input is not None, \
-                        f'The array argument {input_desc["name"]} of type felt* must be preceded ' \
-                        'by a length argument of type felt.'
+                    assert previous_felt_input is not None, (
+                        f'The array argument {input_desc["name"]} of type felt* must be preceded '
+                        'by a length argument of type felt.')
 
                     current_inputs_ptr += previous_felt_input
                     previous_felt_input = None
                 else:
-                    raise Exception(f'Unsupported type {input_desc["type"]}')
+                    raise Exception(f'Type {input_desc["type"]} is not supported.')
             break
     else:
         raise Exception(f'Function {args.function} not found.')
     selector = get_selector_from_name(args.function)
-    assert len(args.inputs) == current_inputs_ptr, \
-        f'Wrong number of arguments. Expected {current_inputs_ptr}, got {len(args.inputs)}.'
+    assert len(args.inputs) == current_inputs_ptr, (
+        f'Wrong number of arguments. Expected {current_inputs_ptr}, got {len(args.inputs)}.')
     calldata = args.inputs
 
     tx = InvokeFunction(contract_address=address, entry_point_selector=selector, calldata=calldata)

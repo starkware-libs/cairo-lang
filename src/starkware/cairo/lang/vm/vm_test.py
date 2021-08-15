@@ -68,6 +68,8 @@ def test_simple():
     vm = run_single(code, 9, pc=10, ap=102, extra_mem={101: 1})
 
     assert [vm.run_context.memory[101 + i] for i in range(7)] == [1, 3, 9, 10, 16, 48, 10]
+    assert vm.accessed_addresses == \
+        set(vm.run_context.memory.keys()) == {*range(10, 28), 99, *range(101, 108)}
 
 
 def test_jnz():
@@ -219,6 +221,8 @@ end
         vm.step()
 
     assert [vm.run_context.memory[202 + i] for i in range(3)] == [2000, 1000, 1234]
+    # Check that address fp + 2, whose value was only set in a hint, is not counted as accessed.
+    assert [202 + i in vm.accessed_addresses for i in range(3)] == [True, True, False]
 
 
 def test_hint_between_references():

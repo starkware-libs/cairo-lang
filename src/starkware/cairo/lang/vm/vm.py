@@ -4,7 +4,7 @@ import re
 import sys
 import traceback
 from functools import lru_cache
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from starkware.cairo.lang.compiler.debug_info import DebugInfo, InstructionLocation
 from starkware.cairo.lang.compiler.encode import decode_instruction, is_call_instruction
@@ -251,6 +251,10 @@ class VirtualMachine:
         self.program = program
         self.program_base = program_base if program_base is not None else self.run_context.pc
         self.validated_memory = ValidatedMemoryDict(memory=self.run_context.memory)
+        # A set to track the memory addresses accessed by actual Cairo instructions (as opposed to
+        # hints), necessary for accurate counting of memory holes.
+        self.accessed_addresses: Set[MaybeRelocatable] = {
+            self.program_base + i for i in range(len(self.program.data))}
 
         # If program is a StrippedProgram, there are no hints or debug information to load.
         if isinstance(program, Program):
@@ -661,6 +665,9 @@ class VirtualMachine:
             ap=self.run_context.ap,
             fp=self.run_context.fp,
         ))
+
+        self.accessed_addresses.update(operands_mem_addresses)
+        self.accessed_addresses.add(self.run_context.pc)
 
         try:
             # Update registers.

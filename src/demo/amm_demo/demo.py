@@ -81,7 +81,7 @@ def deploy_contract(batch_prover: BatchProver, w3: Web3, operator: eth.Account) 
     input(
         f'AMM demo smart contract successfully deployed to address {contract_address}. '
         'You can track the contract state through this link '
-        f'https://ropsten.etherscan.io/address/{contract_address} .'
+        f'https://goerli.etherscan.io/address/{contract_address} .'
         'Press enter to continue.')
 
     return w3.eth.contract(abi=abi, address=contract_address)
@@ -102,7 +102,7 @@ def main():
 
     # Connect to an Ethereum node.
     node_rpc_url = input(
-        'Please provide an RPC URL to communicate with an Ethereum node on Ropsten: ')
+        'Please provide an RPC URL to communicate with an Ethereum node on Goerli: ')
     w3 = Web3(HTTPProvider(node_rpc_url))
     if not w3.isConnected():
         print('Error: could not connect to the Ethereum node.')
@@ -123,7 +123,7 @@ def main():
     # Ask for funds to be transferred to the operator account id its balance is too low.
     if w3.eth.getBalance(operator.address) < MIN_OPERATOR_BALANCE:
         input(
-            f'Please send funds (at least {MIN_OPERATOR_BALANCE * 10**-18} Ropsten ETH) '
+            f'Please send funds (at least {MIN_OPERATOR_BALANCE * 10**-18} Goerli ETH) '
             f'to {operator.address} and press enter.')
         while w3.eth.getBalance(operator.address) < MIN_OPERATOR_BALANCE:
             print('Funds not received yet...')

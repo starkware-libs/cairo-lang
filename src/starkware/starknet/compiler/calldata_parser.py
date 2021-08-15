@@ -48,7 +48,7 @@ def process_calldata(
                 isinstance(prev_member[1].cairo_type, TypeFelt)
             if not has_len:
                 raise PreprocessorError(
-                    f'Array argument "{member_name}" must be preceeded by a length argument '
+                    f'Array argument "{member_name}" must be preceded by a length argument '
                     f'named "{member_name}_len" of type felt.',
                     location=member_location)
             if not has_range_check_builtin:

@@ -221,7 +221,7 @@ def is_verified(args, command_args):
         description='Verify a fact is registered on the SHARP fact-registry.')
     parser.add_argument('fact', type=str, help='The fact to verify if registered.')
     parser.add_argument(
-        '--node_url', required=True, type=str, help='URL for a Ropsten Ethereum node RPC API.')
+        '--node_url', required=True, type=str, help='URL for a Goerli Ethereum node RPC API.')
 
     parser.parse_args(command_args, namespace=args)
 

@@ -152,20 +152,27 @@ class MemorySegmentManager:
         data = [self.gen_arg(arg=x, apply_modulo_to_args=apply_modulo_to_args) for x in arg]
         return self.load_data(ptr, data)
 
-    def get_memory_holes(self) -> int:
+    def get_memory_holes(self, accessed_addresses: Set[MaybeRelocatable]) -> int:
         """
         Returns the total number of memory holes in all segments.
         """
-        used_offsets_sets: Dict[int, Set] = defaultdict(set)
-        for addr in self.memory.keys():
+        # A map from segment index to the set of accessed offsets.
+        accessed_offsets_sets: Dict[int, Set] = defaultdict(set)
+        for addr in accessed_addresses:
             assert isinstance(addr, RelocatableValue), \
                 f'Expected memory address to be relocatable value. Found: {addr}.'
-            assert addr.offset >= 0, \
-                f'Address offsets must be non-negative. Found: {addr.offset}.'
-            used_offsets_sets[addr.segment_index].add(addr.offset)
+            index, offset = addr.segment_index, addr.offset
+            assert offset >= 0, f'Address offsets must be non-negative. Found: {offset}.'
+            assert offset <= self.get_segment_size(segment_index=index), \
+                f'Accessed address {addr} has higher offset than the maximal offset ' \
+                f'{self.get_segment_size(segment_index=index)} encountered in the memory segment.'
+            accessed_offsets_sets[index].add(offset)
+
+        assert self._segment_used_sizes is not None, \
+            'compute_effective_sizes must be called before get_memory_holes.'
         return sum(
-            max(used_offsets) + 1 - len(used_offsets)
-            for used_offsets in used_offsets_sets.values())
+            self.get_segment_size(segment_index=index) - len(accessed_offsets_sets[index])
+            for index in self._segment_sizes.keys() | self._segment_used_sizes.keys())
 
     def get_segment_used_size(self, segment_index: int) -> int:
         assert self._segment_used_sizes is not None, \
