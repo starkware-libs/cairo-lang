@@ -76,14 +76,13 @@ class LocalVariableHandler:
         return [obj]
 
     def visit_CodeBlock(self, obj: CodeBlock):
-        res = []
+        new_commented_code_elements = []
         for code_element in obj.code_elements:
-            res += self.visit(code_element.code_elm)
-        return dataclasses.replace(
-            obj,
-            code_elements=[CommentedCodeElement(
-                code_elm=code_elm, comment=None
-            ) for code_elm in res])
+            for new_elm in self.visit(code_element.code_elm):
+                new_commented_code_elements.append(CommentedCodeElement(
+                    code_elm=new_elm, comment=None, location=code_element.location))
+
+        return dataclasses.replace(obj, code_elements=new_commented_code_elements)
 
     def visit_CodeElementStaticAssert(self, elm: CodeElementStaticAssert) -> List[CodeElement]:
         self.n_locals_used_visitor.visit(elm.a)

@@ -1,1 +1,0 @@
-add_subdirectory(starkex2_0)

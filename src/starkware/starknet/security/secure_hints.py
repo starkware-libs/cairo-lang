@@ -1,6 +1,7 @@
+import os
 import re
 from dataclasses import field
-from typing import ClassVar, Dict, List, Set, Type
+from typing import ClassVar, Dict, Iterable, List, Set, Type
 
 import marshmallow
 import marshmallow.fields as mfields
@@ -15,7 +16,7 @@ class SetField(mfields.List):
         if value is None:
             return None
         res = super()._serialize(value, attr, obj, **kwargs)
-        return sorted(res, key=lambda x: (x['name'], x['expr']))
+        return sorted(res, key=lambda x: (x["name"], x["expr"]))
 
     def _deserialize(self, *args, **kwargs):
         return set(super()._deserialize(*args, **kwargs))
@@ -42,7 +43,8 @@ class NamedExpression:
 class HintsWhitelistEntry:
     hint_lines: List[str]
     allowed_expressions: Set[NamedExpression] = field(
-        metadata=dict(marshmallow_field=SetField(mfields.Nested(NamedExpression.Schema))))
+        metadata=dict(marshmallow_field=SetField(mfields.Nested(NamedExpression.Schema)))
+    )
 
     Schema: ClassVar[Type[marshmallow.Schema]]
 
@@ -59,12 +61,14 @@ class HintsWhitelistDict(mfields.Field):
     def _serialize(self, value, attr, obj, **kwargs):
         return [
             HintsWhitelistEntry(
-                hint_lines.split('\n'), allowed_expressions=allowed_expressions).serialize()
-            for hint_lines, allowed_expressions in sorted(value.items())]
+                hint_lines.split("\n"), allowed_expressions=allowed_expressions
+            ).serialize()
+            for hint_lines, allowed_expressions in sorted(value.items())
+        ]
 
     def _deserialize(self, value, attr, data, **kwargs) -> Dict[str, Set[NamedExpression]]:
         entries = [HintsWhitelistEntry.Schema().load(entry) for entry in value]
-        return {'\n'.join(entry.hint_lines): entry.allowed_expressions for entry in entries}
+        return {"\n".join(entry.hint_lines): entry.allowed_expressions for entry in entries}
 
 
 @marshmallow_dataclass.dataclass
@@ -75,21 +79,42 @@ class HintsWhitelist:
 
     # Maps a hint string to the set of allowed expressions in its references.
     allowed_reference_expressions_for_hint: Dict[str, Set[NamedExpression]] = field(
-        metadata=dict(marshmallow_field=HintsWhitelistDict()))
+        metadata=dict(marshmallow_field=HintsWhitelistDict())
+    )
     Schema: ClassVar[Type[marshmallow.Schema]]
+
+    @classmethod
+    def empty(cls):
+        """
+        Returns an empty whitelist.
+        """
+        return cls(allowed_reference_expressions_for_hint={})
 
     # Serialization operations.
     @classmethod
-    def from_file(cls, filename: str) -> 'HintsWhitelist':
-        with open(filename, 'r') as fp:
+    def from_file(cls, filename: str) -> "HintsWhitelist":
+        with open(filename, "r") as fp:
             return cls.Schema().loads(fp.read())
 
     @classmethod
-    def from_program(cls, program: Program) -> 'HintsWhitelist':
+    def from_dir(cls, dirname: str) -> "HintsWhitelist":
+        """
+        Returns a whitelist from all the file in the given
+        """
+        whitelists = [
+            cls.from_file(filename=os.path.join(dirname, x))
+            for x in os.listdir(dirname)
+            if x.endswith(".json")
+        ]
+
+        return cls.union(whitelists)
+
+    @classmethod
+    def from_program(cls, program: Program) -> "HintsWhitelist":
         """
         Creates a whitelist from all the hints in an existing program.
         """
-        whitelist = cls(allowed_reference_expressions_for_hint={})
+        whitelist = cls.empty()
         for hints in program.hints.values():
             for hint in hints:
                 whitelist.add_hint_to_whitelist(hint, program.reference_manager)
@@ -97,7 +122,19 @@ class HintsWhitelist:
 
     def add_hint_to_whitelist(self, hint: CairoHint, reference_manager: ReferenceManager):
         self.allowed_reference_expressions_for_hint.setdefault(hint.code, set()).update(
-            self._get_hint_reference_expressions(hint, reference_manager))
+            self._get_hint_reference_expressions(hint, reference_manager)
+        )
+
+    @classmethod
+    def union(cls, whitelists: Iterable["HintsWhitelist"]) -> "HintsWhitelist":
+        """
+        Returns the union of the given list of whitelists.
+        """
+        res: Dict[str, Set[NamedExpression]] = {}
+        for whitelist in whitelists:
+            for code, refs in whitelist.allowed_reference_expressions_for_hint.items():
+                res.setdefault(code, set()).update(refs)
+        return cls(allowed_reference_expressions_for_hint=res)
 
     # Reading operations.
     def verify_program_hint_secure(self, program: Program):
@@ -107,26 +144,26 @@ class HintsWhitelist:
         """
         for hints in program.hints.values():
             for hint in hints:
-                self.verify_hint_secure(
-                    hint=hint, reference_manager=program.reference_manager)
+                self.verify_hint_secure(hint=hint, reference_manager=program.reference_manager)
 
     def verify_hint_secure(self, hint: CairoHint, reference_manager: ReferenceManager):
         allowed_expressions = self.allowed_reference_expressions_for_hint.get(hint.code)
         if allowed_expressions is None:
-            raise InsecureHintError(f'Hint is not whitelisted:\n{hint.code}')
+            raise InsecureHintError(f"Hint is not whitelisted:\n{hint.code}")
 
         expressions = self._get_hint_reference_expressions(hint, reference_manager)
         invalid_expressions = expressions - allowed_expressions
         if invalid_expressions:
             raise InsecureHintError(
-                f'Forbidden expressions in hint "{hint.code}":\n{sorted(invalid_expressions)}')
+                f'Forbidden expressions in hint "{hint.code}":\n{sorted(invalid_expressions)}'
+            )
 
     def _get_hint_reference_expressions(
-            self, hint: CairoHint, reference_manager: ReferenceManager) -> \
-            Set[NamedExpression]:
+        self, hint: CairoHint, reference_manager: ReferenceManager
+    ) -> Set[NamedExpression]:
         ref_exprs: Set[NamedExpression] = set()
         for ref_name, ref_id in hint.flow_tracking_data.reference_ids.items():
-            if re.match('^__temp[0-9]+$', ref_name.path[-1]):
+            if re.match("^__temp[0-9]+$", ref_name.path[-1]):
                 continue
             ref = reference_manager.get_ref(ref_id)
             ref_exprs.add(NamedExpression(name=str(ref_name), expr=ref.value.format()))

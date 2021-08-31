@@ -609,7 +609,8 @@ func myfunc():
     return()
 end
 """, """
-file:?:?: Unexpected token Token(IDENTIFIER, \'world\'). Expected one of: "@", func.
+file:?:?: Unexpected token Token(IDENTIFIER, \'world\'). Expected one of: "@", "func", \
+"namespace", "struct".
 @hello world
        ^***^
 """)
@@ -620,7 +621,7 @@ func myfunc():
     return()
 end
 """, """
-file:?:?: Unexpected token Token(MINUS, \'-\'). Expected one of: "@", func.
+file:?:?: Unexpected token Token(MINUS, \'-\'). Expected one of: "@", "func", "namespace", "struct".
 @hello-world
       ^
 """)

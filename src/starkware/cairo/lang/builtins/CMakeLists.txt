@@ -4,8 +4,11 @@ python_lib(cairo_run_builtins_lib
     FILES
     bitwise/bitwise_builtin_runner.py
     bitwise/instance_def.py
+    ec/ec_op_builtin_runner.py
+    ec/instance_def.py
     hash/hash_builtin_runner.py
     hash/instance_def.py
+    keccak/instance_def.py
     range_check/instance_def.py
     range_check/range_check_builtin_runner.py
     signature/instance_def.py

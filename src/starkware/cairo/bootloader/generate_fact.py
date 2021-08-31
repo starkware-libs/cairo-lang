@@ -57,8 +57,10 @@ def get_page_sizes_from_page_dict(output_size: int, pages: dict) -> List[int]:
     # otherwise.
     page0_size = output_size
 
-    for page_id_str, (page_start, page_size) in sorted(pages.items()):
-        page_id = int(page_id_str)
+    pages_list = [
+        (int(page_id_str), page_start, page_size)
+        for page_id_str, (page_start, page_size) in pages.items()]
+    for page_id, page_start, page_size in sorted(pages_list):
         assert page_id == expected_page_id, f'Expected page id {expected_page_id}, found {page_id}.'
         if page_id == 1:
             assert isinstance(page_start, int) and 0 < page_start <= output_size, \

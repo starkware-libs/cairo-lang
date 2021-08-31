@@ -63,8 +63,9 @@ def fill_init_files(site_dir):
         if dirpath in py_dirs or any(filename.endswith('.py') for filename in filenames):
             py_dirs.add(os.path.dirname(dirpath))
             if '__init__.py' not in filenames:
-                with open(os.path.join(dirpath, '__init__.py'), 'w'):
-                    pass
+                with open(os.path.join(dirpath, '__init__.py'), 'w') as f:
+                    # Create namespace packages, to allow the import of starkware pip libraries.
+                    f.write('__path__ = __import__(\'pkgutil\').extend_path(__path__, __name__)')
 
 
 def get_pth_dir(python: str, venv_dir: str):

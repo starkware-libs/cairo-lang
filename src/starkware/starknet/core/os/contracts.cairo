@@ -132,7 +132,7 @@ func load_contract_definition_facts_inner{pedersen_ptr : HashBuiltin*}(
 
     # Fetch contract data form hints.
     %{
-        from starkware.starknet.core.os.os_utils import get_contract_definition_struct
+        from starkware.starknet.core.os.contract_hash import get_contract_definition_struct
 
         contract_hash, contract_definition = next(contract_definitions_facts)
 

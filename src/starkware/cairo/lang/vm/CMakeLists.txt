@@ -60,6 +60,7 @@ python_lib(cairo_run_lib
     cairo_tracer_lib
     cairo_version_lib
     cairo_vm_lib
+    starkware_utils_lib
     starkware_python_utils_lib
 )
 

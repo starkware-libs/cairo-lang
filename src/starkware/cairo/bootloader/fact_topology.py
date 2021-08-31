@@ -11,6 +11,7 @@ GPS_FACT_TOPOLOGY = 'gps_fact_topology'
 @dataclasses.dataclass(frozen=True)
 class FactTopology:
     tree_structure: List[int]
+    # List of page sizes, in words.
     page_sizes: List[int]
 
 

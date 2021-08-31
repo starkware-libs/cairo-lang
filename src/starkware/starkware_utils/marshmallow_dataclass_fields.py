@@ -16,6 +16,7 @@ class IntAsStr(mfields.Field):
     serialized to strings in the JSONs, so that JavaSscript can handle them (JavaScript cannot
     handle uint64 numbers).
     """
+    default_error_messages = {'invalid': 'Expected int string, got: "{input}".'}
 
     def _serialize(self, value, attr, obj, **kwargs):
         if value is None:
@@ -23,6 +24,9 @@ class IntAsStr(mfields.Field):
         return str(value)
 
     def _deserialize(self, value, attr, data, **kwargs):
+        if re.match('^-?[0-9]+$', value) is None:
+            self.fail('invalid', input=value)
+
         return int(value)
 
 

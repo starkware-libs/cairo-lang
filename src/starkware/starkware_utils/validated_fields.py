@@ -6,8 +6,8 @@ from typing import Any, Callable, ClassVar, Dict, Generic, List, Optional, Type,
 
 import marshmallow.fields as mfields
 
-from starkware.python.utils import initialize_random
-from starkware.starkware_utils.error_handling import ErrorCode, stark_assert
+from starkware.python.utils import get_random_bytes, initialize_random
+from starkware.starkware_utils.error_handling import ErrorCode, StarkErrorCode, stark_assert
 from starkware.starkware_utils.field_validators import validate_in_range
 from starkware.starkware_utils.marshmallow_dataclass_fields import (
     BytesAsBase64Str, BytesAsHex, IntAsHex, IntAsStr)
@@ -210,6 +210,49 @@ class RangeValidatedField(Field[int]):
         raise NotImplementedError(
             f'{self.name}: The given formatter {self.formatter.__name__} '
             'does not have a suitable metadata.')
+
+
+class BytesLengthField(Field[bytes]):
+    """
+    Represents a field with value of type bytes, of a given length.
+    """
+
+    def __init__(self, name: str, error_code: StarkErrorCode, length: int):
+        self._name = name
+        self._error_code = error_code
+        assert length > 0, 'Bytes length must be at least 1.'
+        self.length = length
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    # Randomization.
+    def get_random_value(self, random_object: Optional[random.Random] = None) -> bytes:
+        return get_random_bytes(random_object, n=self.length)
+
+    # Validation.
+    def is_valid(self, value: bytes) -> bool:
+        return len(value) == self.length
+
+    def get_invalid_values(self) -> List[bytes]:
+        return [b'\x00' * (self.length - 1), b'\x00' * (self.length + 1)]
+
+    @property
+    def error_code(self) -> ErrorCode:
+        return self._error_code
+
+    def format_invalid_value_error_message(self, value: bytes, name: Optional[str] = None) -> str:
+        name = self.name if name is None else name
+        value_repr = self.format(value=value)
+        return f'{name} {value_repr} length is not {self.length} bytes, instead it is {len(value)}'
+
+    # Serialization.
+    def get_marshmallow_field(self) -> mfields.Field:
+        return BytesAsHex(required=True)
+
+    def format(self, value: bytes) -> str:
+        return value.hex()
 
 
 # Field metadata utilities.

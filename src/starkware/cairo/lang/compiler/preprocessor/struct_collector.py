@@ -121,6 +121,11 @@ class StructCollector(IdentifierAwareVisitor):
     def visit_CodeElementFunction(self, elm: CodeElementFunction):
         new_scope = self.current_scope + elm.name
         if elm.element_type == 'struct':
+            if len(elm.decorators) != 0:
+                raise PreprocessorError(
+                    'Decorators for structs are not supported.',
+                    location=elm.decorators[0].location
+                )
             self.handle_struct_definition(
                 struct_name=new_scope, code_block=elm.code_block, location=elm.identifier.location)
             return

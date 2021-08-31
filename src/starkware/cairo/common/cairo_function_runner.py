@@ -4,6 +4,8 @@ from typing import Any, Dict, Optional, Union, cast
 from starkware.cairo.common.structs import CairoStructFactory
 from starkware.cairo.lang.builtins.bitwise.bitwise_builtin_runner import BitwiseBuiltinRunner
 from starkware.cairo.lang.builtins.bitwise.instance_def import BitwiseInstanceDef
+from starkware.cairo.lang.builtins.ec.ec_op_builtin_runner import EcOpBuiltinRunner
+from starkware.cairo.lang.builtins.ec.instance_def import EcOpInstanceDef
 from starkware.cairo.lang.builtins.hash.hash_builtin_runner import HashBuiltinRunner
 from starkware.cairo.lang.builtins.range_check.range_check_builtin_runner import (
     RangeCheckBuiltinRunner)
@@ -17,6 +19,7 @@ from starkware.cairo.lang.vm.crypto import pedersen_hash
 from starkware.cairo.lang.vm.output_builtin_runner import OutputBuiltinRunner
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 from starkware.cairo.lang.vm.security import SecurityError, verify_secure_runner
+from starkware.cairo.lang.vm.utils import RunResources
 from starkware.cairo.lang.vm.vm import VmException
 
 
@@ -37,8 +40,18 @@ class CairoFunctionRunner(CairoRunner):
             verify_signature=verify_ecdsa_sig)
         self.builtin_runners['ecdsa_builtin'] = signature_builtin
         bitwise_builtin = BitwiseBuiltinRunner(included=True, bitwise_builtin=BitwiseInstanceDef(
-            ratio=None, diluted_spacing=None, diluted_n_bits=None, total_n_bits=251))
+            ratio=None, total_n_bits=251))
         self.builtin_runners['bitwise_builtin'] = bitwise_builtin
+        ec_op_builtin = EcOpBuiltinRunner(
+            included=True,
+            ec_op_builtin=EcOpInstanceDef(
+                ratio=None,
+                scalar_height=256,
+                scalar_bits=252,
+                scalar_limit=None,
+            ),
+        )
+        self.builtin_runners['ec_op_builtin'] = ec_op_builtin
 
         self.initialize_segments()
 
@@ -61,6 +74,10 @@ class CairoFunctionRunner(CairoRunner):
     @property
     def bitwise_builtin(self) -> BitwiseBuiltinRunner:
         return cast(BitwiseBuiltinRunner, self.builtin_runners['bitwise_builtin'])
+
+    @property
+    def ec_op_builtin(self) -> EcOpBuiltinRunner:
+        return cast(EcOpBuiltinRunner, self.builtin_runners['ec_op_builtin'])
 
     def assert_eq(self, arg: MaybeRelocatable, expected_value, apply_modulo: bool = True):
         """
@@ -127,8 +144,9 @@ Got {type(ex).__name__} exception during the execution of {func_name}:
 
     def run_from_entrypoint(
             self, entrypoint: Union[str, int], *args, hint_locals: Optional[Dict[str, Any]] = None,
-            static_locals: Optional[Dict[str, Any]] = None, max_steps: Optional[int] = None,
-            verify_secure: Optional[bool] = None, apply_modulo_to_args: Optional[bool] = None):
+            static_locals: Optional[Dict[str, Any]] = None,
+            run_resources: Optional[RunResources] = None, verify_secure: Optional[bool] = None,
+            apply_modulo_to_args: Optional[bool] = None):
         """
         Runs the program from the given entrypoint.
 
@@ -149,7 +167,7 @@ Got {type(ex).__name__} exception during the execution of {func_name}:
         end = self.initialize_function_entrypoint(entrypoint=entrypoint, args=real_args)
         self.initialize_vm(hint_locals=hint_locals, static_locals=static_locals)
 
-        self.run_until_pc(addr=end, max_steps=max_steps)
+        self.run_until_pc(addr=end, run_resources=run_resources)
         self.end_run()
 
         if verify_secure:

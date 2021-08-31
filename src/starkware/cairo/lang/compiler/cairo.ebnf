@@ -116,7 +116,7 @@ _func: decorator_list _funcdecl _NEWLINE code_block "end"
 _if: "if" bool_expr ":" _NEWLINE code_block ("else" ":" _NEWLINE code_block)? "end"
 
 !_some_namespace: "struct" | "namespace"
-_struct: _some_namespace identifier_def ":"_NEWLINE code_block "end"
+_struct: decorator_list _some_namespace identifier_def ":"_NEWLINE code_block "end"
 
 _with_statement: "with" (aliased_identifier ",")* aliased_identifier ":" _NEWLINE code_block "end"
 

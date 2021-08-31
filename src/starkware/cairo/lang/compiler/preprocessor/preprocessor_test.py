@@ -435,22 +435,28 @@ end
 """, """
 file:?:?: Cannot convert the return type of g to the return type of f.
     return g()
-           ^*^
+    ^********^
 """)
 
     verify_exception("""
-func g{x}() -> (a):
+func g{x, y}() -> (a):
     return (a=0)
 end
-func f(x, y) -> (a):
-    with x:
-        return g()
-    end
+func f{y, x}() -> (a):
+    return g()
 end
 """, """
 file:?:?: Cannot convert the implicit arguments of g to the implicit arguments of f.
-        return g()
-               ^*^
+    return g()
+    ^********^
+The implicit arguments of 'g' were defined here:
+file:?:?
+func g{x, y}() -> (a):
+       ^**^
+The implicit arguments of 'f' were defined here:
+file:?:?
+func f{y, x}() -> (a):
+       ^**^
 """)
 
     verify_exception("""
@@ -473,7 +479,7 @@ end
 """, """
 file:?:?: Cannot convert the return type of g to the return type of f.
     return g(x, y)
-           ^*****^
+    ^************^
 """)
 
 
@@ -2540,6 +2546,44 @@ end
 [ap] = [[fp + (-4)]]; ap++
 [ap] = [[ap + (-1)] + 2]; ap++
 [[ap + (-3)] + 2] = [ap + (-1)]
+ret
+"""
+
+
+def test_continuous_structs():
+    code = f"""\
+struct A:
+    member a: felt
+    member b: felt
+end
+struct B:
+    member a: A
+    member b: felt
+end
+struct C:
+    member a: A
+    member b: B
+    member c: felt
+end
+
+func foo(x: C):
+    x.a.a = 1
+    x.a.b = 2
+    x.b.a.a = 3
+    x.b.a.b = 4
+    x.b.b = 5
+    x.c = 6
+    return ()
+end
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert program.format() == """\
+[fp + (-8)] = 1
+[fp + (-7)] = 2
+[fp + (-6)] = 3
+[fp + (-5)] = 4
+[fp + (-4)] = 5
+[fp + (-3)] = 6
 ret
 """
 

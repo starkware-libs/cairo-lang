@@ -3,11 +3,13 @@ python_lib(cairo_common_lib
     FILES
     alloc.cairo
     bitwise.cairo
+    cairo_keccak/keccak_utils.py
     cairo_builtins.cairo
     default_dict.cairo
-    dict.cairo
     dict_access.cairo
+    dict.cairo
     dict.py
+    ec_point.cairo
     find_element.cairo
     hash_chain.cairo
     hash_chain.py
@@ -21,6 +23,8 @@ python_lib(cairo_common_lib
     memcpy.cairo
     merkle_multi_update.cairo
     merkle_update.cairo
+    patricia_utils.py
+    patricia.cairo
     pow.cairo
     registers.cairo
     segments.cairo
@@ -36,6 +40,7 @@ python_lib(cairo_common_lib
 
     LIBS
     cairo_vm_crypto_lib
+    starkware_python_utils_lib
     starkware_merkle_tree_lib
     ${CAIRO_COMMON_LIB_ADDITIONAL_LIBS}
 )

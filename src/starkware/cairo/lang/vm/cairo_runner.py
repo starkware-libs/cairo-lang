@@ -1,4 +1,3 @@
-import functools
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type, Union
 
 from starkware.cairo.lang.builtins.bitwise.bitwise_builtin_runner import BitwiseBuiltinRunner
@@ -23,11 +22,12 @@ from starkware.cairo.lang.vm.memory_segments import MemorySegmentManager
 from starkware.cairo.lang.vm.output_builtin_runner import OutputBuiltinRunner
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue, relocate_value
 from starkware.cairo.lang.vm.trace_entry import relocate_trace
-from starkware.cairo.lang.vm.utils import MemorySegmentAddresses
+from starkware.cairo.lang.vm.utils import MemorySegmentAddresses, ResourcesError, RunResources
 from starkware.cairo.lang.vm.vm import RunContext, VirtualMachine, get_perm_range_check_limits
 from starkware.crypto.signature.signature import inv_mod_curve_size
 from starkware.python.math_utils import next_power_of_2, safe_div
 from starkware.python.utils import WriteOnceDict
+from starkware.starkware_utils.subsequence import is_subsequence
 
 
 def verify_ecdsa_sig(public_key, msg, signature) -> bool:
@@ -51,58 +51,57 @@ def process_ecdsa(public_key, msg, signature):
 class CairoRunner:
     def __init__(
             self, program: ProgramBase, layout: str = 'plain', memory: MemoryDict = None,
-            proof_mode: Optional[bool] = None):
+            proof_mode: Optional[bool] = None, allow_missing_builtins: Optional[bool] = None):
         self.program = program
         self.layout = layout
         self.builtin_runners: Dict[str, BuiltinRunner] = {}
         self.original_steps = None
         self.proof_mode = False if proof_mode is None else proof_mode
-
-        # Reconstruct the builtin list to make sure there's no unexpected builtin and that builtins
-        # appears in order.
-        expected_builtin_list = []
+        self.allow_missing_builtins = (
+            False if allow_missing_builtins is None else allow_missing_builtins)
 
         instance = LAYOUTS[self.layout]
-        non_existing_builtins = set(self.program.builtins) - set(instance.builtins.keys())
-        assert len(non_existing_builtins) == 0, \
-            f'Builtins {non_existing_builtins} are not present in layout "{self.layout}"'
 
-        builtin_factories = {}
-        if 'output' in instance.builtins:
-            builtin_factories['output'] = lambda name, included: OutputBuiltinRunner(
-                included=included)
-        if 'pedersen' in instance.builtins:
-            builtin_factories['pedersen'] = functools.partial(
-                HashBuiltinRunner, ratio=instance.builtins['pedersen'].ratio,
-                hash_func=pedersen_hash)
-        if 'range_check' in instance.builtins:
-            builtin_factories['range_check'] = lambda name, included: RangeCheckBuiltinRunner(
+        if not allow_missing_builtins:
+            non_existing_builtins = set(self.program.builtins) - set(instance.builtins.keys())
+            assert len(non_existing_builtins) == 0, \
+                f'Builtins {non_existing_builtins} are not present in layout "{self.layout}"'
+
+        builtin_factories = dict(
+            output=lambda name, included: OutputBuiltinRunner(
+                included=included),
+            pedersen=lambda name, included: HashBuiltinRunner(
+                name=name, included=included,
+                ratio=instance.builtins['pedersen'].ratio, hash_func=pedersen_hash),
+            range_check=lambda name, included: RangeCheckBuiltinRunner(
                 included=included, ratio=instance.builtins['range_check'].ratio,
-                inner_rc_bound=2 ** 16, n_parts=instance.builtins['range_check'].n_parts)
-        if 'ecdsa' in instance.builtins:
-            builtin_factories['ecdsa'] = functools.partial(
-                SignatureBuiltinRunner, ratio=instance.builtins['ecdsa'].ratio,
-                process_signature=process_ecdsa, verify_signature=verify_ecdsa_sig)
-        if 'bitwise' in instance.builtins:
-            builtin_factories['bitwise'] = lambda name, included: BitwiseBuiltinRunner(
-                included=included, bitwise_builtin=instance.builtins['bitwise'])
+                inner_rc_bound=2 ** 16, n_parts=instance.builtins['range_check'].n_parts),
+            ecdsa=lambda name, included: SignatureBuiltinRunner(
+                name=name, included=included,
+                ratio=instance.builtins['ecdsa'].ratio,
+                process_signature=process_ecdsa, verify_signature=verify_ecdsa_sig),
+            bitwise=lambda name, included: BitwiseBuiltinRunner(
+                included=included, bitwise_builtin=instance.builtins['bitwise']),
+        )
 
-        for name, factory in builtin_factories.items():
+        for name in instance.builtins:
+            factory = builtin_factories.get(name)
+            assert factory is not None, f'The {name} builtin is not supported.'
             included = name in self.program.builtins
             # In proof mode all the builtin_runners are required.
             if included or self.proof_mode:
                 self.builtin_runners[f'{name}_builtin'] = factory(  # type: ignore
                     name=name, included=included)
-            if included:
-                expected_builtin_list.append(name)
 
-        assert expected_builtin_list == self.program.builtins, \
-            f'Expected builtin list {expected_builtin_list} does not match {self.program.builtins}.'
+        supported_builtin_list = list(builtin_factories.keys())
+        assert is_subsequence(self.program.builtins, supported_builtin_list), \
+            f'{self.program.builtins} is not a subsequence of {supported_builtin_list}.'
 
         self.memory = memory if memory is not None else MemoryDict()
         self.segments = MemorySegmentManager(memory=self.memory, prime=self.program.prime)
         self.segment_offsets = None
         self.final_pc: Optional[RelocatableValue] = None
+
         # Flags used to ensure a safe use.
         self._run_ended: bool = False
         self._segments_finalized: bool = False
@@ -154,8 +153,13 @@ class CairoRunner:
         self.execution_public_memory: List[int] = []
 
         stack: List[MaybeRelocatable] = []
-        for builtin_runner in self.builtin_runners.values():
-            stack += builtin_runner.initial_stack()
+        for builtin_name in self.program.builtins:
+            builtin_runner = self.builtin_runners.get(f'{builtin_name}_builtin')
+            if builtin_runner is None:
+                assert self.allow_missing_builtins, 'Missing builtin.'
+                stack += [0]
+            else:
+                stack += builtin_runner.initial_stack()
 
         if self.proof_mode:
             # Add the dummy last fp and pc to the public memory, so that the verifier can enforce
@@ -220,25 +224,31 @@ class CairoRunner:
 
         self.vm.validate_existing_memory()
 
-    def run_until_label(self, label_or_pc: Union[str, int], max_steps: Optional[int] = None):
+    def run_until_label(
+            self, label_or_pc: Union[str, int],
+            run_resources: Optional[RunResources] = None):
         """
         Runs the VM until label is reached, and stops right before that instruction is executed.
         'label_or_pc' should be either a label string or an integer offset from the program_base.
         """
         label = self._to_pc(label_or_pc)
-        self.run_until_pc(self.program_base + label, max_steps=max_steps)
+        self.run_until_pc(self.program_base + label, run_resources=run_resources)
 
-    def run_until_pc(self, addr: MaybeRelocatable, max_steps: Optional[int] = None):
+    def run_until_pc(
+            self, addr: MaybeRelocatable, run_resources: Optional[RunResources] = None):
         """
         Runs the VM until pc reaches 'addr', and stop right before that instruction is executed.
         """
-        i = 0
-        while self.vm.run_context.pc != addr and (max_steps is None or i < max_steps):
+        if run_resources is None:
+            run_resources = RunResources(steps=None)
+
+        while self.vm.run_context.pc != addr and not run_resources.consumed:
             self.vm_step()
-            i += 1
+            run_resources.consume_step()
+
         if self.vm.run_context.pc != addr:
             raise self.vm.as_vm_exception(
-                Exception('Error: End of program was not reached'),
+                ResourcesError('Error: End of program was not reached'),
                 self.vm.run_context.pc)
 
     def vm_step(self):
@@ -301,8 +311,15 @@ class CairoRunner:
         assert self._run_ended, 'Run must be ended before calling read_return_values.'
 
         pointer = self.vm.run_context.ap
-        for builtin_runner in list(self.builtin_runners.values())[::-1]:
-            pointer = builtin_runner.final_stack(self, pointer)
+        for builtin_name in self.program.builtins[::-1]:
+            builtin_runner = self.builtin_runners.get(f'{builtin_name}_builtin')
+            if builtin_runner is None:
+                assert self.allow_missing_builtins, 'Missing builtin.'
+                pointer -= 1
+                assert self.vm_memory[pointer] == 0, \
+                    f'The stop pointer of the missing builtin "{builtin_name}" must be 0.'
+            else:
+                pointer = builtin_runner.final_stack(self, pointer)
 
         assert not self._segments_finalized, \
             'Cannot add the return values to the public memory after segment finalization.'
@@ -351,6 +368,10 @@ class CairoRunner:
 
         self._segments_finalized = True
 
+    def finalize_segments_by_cairo_pie(self, cairo_pie: CairoPie):
+        for segment_info in cairo_pie.metadata.all_segments():
+            self.segments.finalize(segment_info.index, segment_info.size)
+
     def get_air_private_input(self):
         return {
             name: value
@@ -387,7 +408,15 @@ class CairoRunner:
 
     def get_memory_holes(self):
         assert self.accessed_addresses is not None
-        return self.segments.get_memory_holes(accessed_addresses=self.accessed_addresses)
+        # Collect memory addresses that are accessed by the builtin (and therefore are not counted
+        # as memory holes).
+        builtin_accessed_addresses = {
+            addr
+            for builtin_runner in self.builtin_runners.values()
+            for addr in builtin_runner.get_memory_accesses(self)
+        }
+        return self.segments.get_memory_holes(
+            accessed_addresses=self.accessed_addresses | builtin_accessed_addresses)
 
     def check_memory_usage(self):
         """
@@ -415,17 +444,22 @@ class CairoRunner:
         Checks that there are enough trace cells to fill the entire diluted checks.
         """
         instance = LAYOUTS[self.layout]
-        if 'bitwise' not in instance.builtins:
+        if instance.diluted_pool_instance_def is None:
             return
 
         diluted_units_used_by_builtins = sum(
-            builtin_runner.get_used_diluted_check_units()
+            builtin_runner.get_used_diluted_check_units(
+                diluted_spacing=instance.diluted_pool_instance_def.spacing,
+                diluted_n_bits=instance.diluted_pool_instance_def.n_bits,
+            ) * safe_div(
+                self.vm.current_step,
+                builtin_runner.ratio if hasattr(builtin_runner, 'ratio') else 1,
+            )
             for builtin_runner in self.builtin_runners.values())
-        ratio = instance.builtins['bitwise'].ratio
 
-        unused_diluted_units = instance.diluted_units_per_step * self.vm.current_step - \
-            diluted_units_used_by_builtins * safe_div(self.vm.current_step, ratio)
-        diluted_usage_upper_bound = 2 ** instance.builtins['bitwise'].diluted_n_bits
+        diluted_units = instance.diluted_pool_instance_def.units_per_step * self.vm.current_step
+        unused_diluted_units = diluted_units - diluted_units_used_by_builtins
+        diluted_usage_upper_bound = 2 ** instance.diluted_pool_instance_def.n_bits
         if unused_diluted_units < diluted_usage_upper_bound:
             raise InsufficientAllocatedCells(
                 f'There are only {unused_diluted_units} cells to fill the diluted check holes, but '
@@ -488,12 +522,18 @@ class CairoRunner:
         )
 
     def get_memory_segment_addresses(self) -> Dict[str, MemorySegmentAddresses]:
-        return {
-            name: MemorySegmentAddresses(
+        def get_segment_addresses(
+                name: str, segment_addresses: MemorySegmentAddresses) -> MemorySegmentAddresses:
+            stop_ptr = segment_addresses.stop_ptr if name in self.program.builtins else \
+                segment_addresses.begin_addr
+
+            assert stop_ptr is not None, f'The {name} builtin stop pointer was not set.'
+            return MemorySegmentAddresses(
                 begin_addr=self.relocate_value(segment_addresses.begin_addr),
-                stop_ptr=(
-                    self.relocate_value(segment_addresses.stop_ptr)
-                    if segment_addresses.stop_ptr is not None else None))
+                stop_ptr=self.relocate_value(stop_ptr))
+
+        return {
+            name: get_segment_addresses(name, segment_addresses)
             for builtin_runner in self.builtin_runners.values()
             for name, segment_addresses in builtin_runner.get_memory_segment_addresses(self).items()
         }
@@ -545,13 +585,14 @@ Register values after execution:
 pc = {pc}
 ap = {ap}
 fp = {fp}
-    """
-        if self.segment_offsets is not None:
-            info += 'Segment relocation table:\n'
-            for segment_index in range(self.segments.n_segments):
-                info += f'{segment_index:<5} {self.segment_offsets[segment_index]}\n'
-
+"""
         return info
+
+    def print_segment_relocation_table(self):
+        if self.segment_offsets is not None:
+            print('Segment relocation table:')
+            for segment_index in range(self.segments.n_segments):
+                print(f'{segment_index:<5} {self.segment_offsets[segment_index]}')
 
     def get_builtin_usage(self) -> str:
         if len(self.builtin_runners) == 0:

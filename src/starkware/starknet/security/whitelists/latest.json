@@ -1493,6 +1493,79 @@
         {
             "allowed_expressions": [
                 {
+                    "expr": "[cast(fp + (-3), felt**)]",
+                    "name": "starkware.starknet.common.syscalls.call_contract.calldata"
+                },
+                {
+                    "expr": "[cast(fp + (-4), felt*)]",
+                    "name": "starkware.starknet.common.syscalls.call_contract.calldata_size"
+                },
+                {
+                    "expr": "[cast(fp + (-6), felt*)]",
+                    "name": "starkware.starknet.common.syscalls.call_contract.contract_address"
+                },
+                {
+                    "expr": "[cast(fp + (-5), felt*)]",
+                    "name": "starkware.starknet.common.syscalls.call_contract.function_selector"
+                },
+                {
+                    "expr": "[cast(fp + (-7), starkware.starknet.common.storage.Storage**)]",
+                    "name": "starkware.starknet.common.syscalls.call_contract.storage_ptr"
+                },
+                {
+                    "expr": "[cast([fp + (-8)], starkware.starknet.common.syscalls.CallContract*)]",
+                    "name": "starkware.starknet.common.syscalls.call_contract.syscall"
+                },
+                {
+                    "expr": "[cast(fp + (-8), felt**)]",
+                    "name": "starkware.starknet.common.syscalls.call_contract.syscall_ptr"
+                }
+            ],
+            "hint_lines": [
+                "syscall_handler.call_contract(segments=segments, syscall_ptr=ids.syscall_ptr)"
+            ]
+        },
+        {
+            "allowed_expressions": [
+                {
+                    "expr": "[cast([fp + (-3)], starkware.starknet.common.syscalls.GetCallerAddress*)]",
+                    "name": "starkware.starknet.common.syscalls.get_caller_address.syscall"
+                },
+                {
+                    "expr": "[cast(fp + (-3), felt**)]",
+                    "name": "starkware.starknet.common.syscalls.get_caller_address.syscall_ptr"
+                }
+            ],
+            "hint_lines": [
+                "syscall_handler.get_caller_address(segments=segments, syscall_ptr=ids.syscall_ptr)"
+            ]
+        },
+        {
+            "allowed_expressions": [
+                {
+                    "expr": "[cast(fp + (-3), felt**)]",
+                    "name": "starkware.starknet.common.messages.send_message_to_l1.payload"
+                },
+                {
+                    "expr": "[cast(fp + (-4), felt*)]",
+                    "name": "starkware.starknet.common.messages.send_message_to_l1.payload_size"
+                },
+                {
+                    "expr": "[cast(fp + (-6), felt**)]",
+                    "name": "starkware.starknet.common.messages.send_message_to_l1.syscall_ptr"
+                },
+                {
+                    "expr": "[cast(fp + (-5), felt*)]",
+                    "name": "starkware.starknet.common.messages.send_message_to_l1.to_address"
+                }
+            ],
+            "hint_lines": [
+                "syscall_handler.send_message_to_l1(segments=segments, syscall_ptr=ids.syscall_ptr)"
+            ]
+        },
+        {
+            "allowed_expressions": [
+                {
                     "expr": "[cast(fp + (-5), starkware.cairo.common.dict_access.DictAccess**)]",
                     "name": "starkware.cairo.common.squash_dict.squash_dict.dict_accesses"
                 },

@@ -2,6 +2,7 @@ from collections import namedtuple
 from typing import List, MutableMapping, Optional
 
 from starkware.cairo.lang.compiler.ast.code_elements import CodeElementFunction
+from starkware.cairo.lang.compiler.identifier_definition import StructDefinition
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.identifier_utils import get_struct_definition
 from starkware.cairo.lang.compiler.program import Program
@@ -44,20 +45,19 @@ class CairoStructFactory:
             accessible_scopes=[ScopedName.from_string('__main__'), ScopedName()],
             name=name).get_canonical_name()
 
+    def get_struct_definition(self, name: ScopedName) -> StructDefinition:
+        """
+        Returns the struct definition of the given struct.
+        """
+        full_name = self._get_full_name(name)
+        return get_struct_definition(full_name, self.identifiers)
+
     def build_struct(self, name: ScopedName):
         """
         Builds and returns namedtuple from a Cairo struct.
         """
-        full_name = self._get_full_name(name)
-        members = get_struct_definition(full_name, self.identifiers).members
-        return namedtuple(full_name.path[-1], list(members.keys()))
-
-    def get_struct_size(self, name: ScopedName) -> int:
-        """
-        Returns the size of the given struct.
-        """
-        full_name = self._get_full_name(name)
-        return get_struct_definition(full_name, self.identifiers).size
+        sturct_def = self.get_struct_definition(name=name)
+        return namedtuple(sturct_def.full_name.path[-1], list(sturct_def.members.keys()))
 
     def build_func_args(self, func: ScopedName):
         """
@@ -100,10 +100,14 @@ class CairoStructProxy:
         return self.build()(*args, **kwargs)
 
     @property
-    def size(self):
-        return self.factory.get_struct_size(self.path)
+    def struct_definition_(self):
+        return self.factory.get_struct_definition(self.path)
 
-    def from_ptr(self, runner, addr):
+    @property
+    def size(self):
+        return self.struct_definition_.size
+
+    def from_ptr(self, memory, addr):
         """
         Interprets addr as a pointer to a struct of type path and creates the corresponding
         namedtuple instance.
@@ -111,5 +115,5 @@ class CairoStructProxy:
         named_tuple = self.build()
 
         return named_tuple(**{
-            name: runner.vm_memory[addr + index]
+            name: memory[addr + index]
             for index, name in enumerate(named_tuple._fields)})

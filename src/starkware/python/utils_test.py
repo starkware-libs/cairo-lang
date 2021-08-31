@@ -2,7 +2,8 @@ import re
 
 import pytest
 
-from starkware.python.utils import WriteOnceDict, blockify, composite, indent, safe_zip, unique
+from starkware.python.utils import (
+    WriteOnceDict, all_subclasses, blockify, composite, indent, safe_zip, unique)
 
 
 def test_indent():
@@ -59,3 +60,34 @@ def test_blockify():
 
     assert list(blockify(data=data, chunk_size=4)) == [[1, 2, 3, 4], [5, 6, 7]]
     assert list(blockify(data=data, chunk_size=2)) == [[1, 2], [3, 4], [5, 6], [7]]
+
+
+def test_all_subclasses():
+    # Inheritance graph, the lower rows inherit from the upper rows.
+    #   A   B
+    #  / \ /
+    # C   D
+    #  \ /|
+    #   E F
+    class A:
+        pass
+
+    class B:
+        pass
+
+    class C(A):
+        pass
+
+    class D(B, A):
+        pass
+
+    class E(C, D):
+        pass
+
+    class F(D):
+        pass
+
+    all_subclass_objects = all_subclasses(A)
+    all_subclasses_set = set(all_subclass_objects)
+    assert len(all_subclass_objects) == len(all_subclasses_set)
+    assert all_subclasses_set == {A, C, D, E, F}

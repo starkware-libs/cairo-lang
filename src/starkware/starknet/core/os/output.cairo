@@ -1,6 +1,6 @@
 from starkware.cairo.common.segments import relocate_segment
 from starkware.cairo.common.serialize import serialize_word
-from starkware.starknet.core.os.state import MerkleUpdateOutput
+from starkware.starknet.core.os.state import CommitmentTreeUpdateOutput
 
 # Holds all the information that StarkNet's OS needs to output.
 # A cross layer message header, the message payload is concatenated to the end of the header.
@@ -20,14 +20,14 @@ end
 
 struct OsOutput:
     # The previous and new root of the contract's storage.
-    member merkle_update_output : MerkleUpdateOutput*
+    member commitment_tree_update_output : CommitmentTreeUpdateOutput*
     member initial_outputs : OsCarriedOutputs
     member final_outputs : OsCarriedOutputs
 end
 
 func os_output_serialize{output_ptr : felt*}(os_output : OsOutput*):
-    serialize_word(os_output.merkle_update_output.initial_storage_root)
-    serialize_word(os_output.merkle_update_output.final_storage_root)
+    serialize_word(os_output.commitment_tree_update_output.initial_storage_root)
+    serialize_word(os_output.commitment_tree_update_output.final_storage_root)
 
     let messages_to_l1_segment_size = (
         os_output.final_outputs.messages_to_l1 -

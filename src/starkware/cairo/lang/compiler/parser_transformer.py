@@ -415,9 +415,11 @@ class ParserTransformer(Transformer):
     def code_element_empty_line(self, value):
         return CodeElementEmptyLine()
 
-    def commented_code_element(self, value):
+    @v_args(meta=True)
+    def commented_code_element(self, value, meta):
         comment = value[1][1:] if len(value) == 2 else None
-        return CommentedCodeElement(code_elm=value[0], comment=comment)
+        return CommentedCodeElement(
+            code_elm=value[0], comment=comment, location=self.meta2loc(meta))
 
     def code_block(self, value):
         return CodeBlock(code_elements=value)
@@ -464,7 +466,7 @@ class ParserTransformer(Transformer):
         )
 
     def code_element_struct(self, value):
-        element_type, identifier, code_block = value
+        decorators, element_type, identifier, code_block = value
         return CodeElementFunction(
             element_type=element_type.value,
             identifier=identifier,
@@ -472,7 +474,7 @@ class ParserTransformer(Transformer):
             implicit_arguments=None,
             returns=None,
             code_block=code_block,
-            decorators=[],
+            decorators=decorators,
         )
 
     def code_element_with(self, value):

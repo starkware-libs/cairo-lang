@@ -6,8 +6,9 @@ python_lib(starknet_compile_lib
     PREFIX starkware/starknet/compiler
 
     FILES
-    calldata_parser.py
+    data_encoder.py
     compile.py
+    contract_interface.py
     starknet_pass_manager.py
     starknet_preprocessor.py
     storage_var.py
@@ -43,7 +44,8 @@ full_python_test(starknet_compile_test
     PREFIX starkware/starknet/compiler
 
     FILES
-    calldata_parser_test.py
+    data_encoder_test.py
+    contract_interface_test.py
     starknet_preprocessor_test.py
     storage_var_test.py
 

@@ -35,3 +35,31 @@ class MemorySegmentAddresses:
     # the end of the segment. For example, for the program segment, it will point to the last
     # instruction executed, rather than the end of the program segment.
     stop_ptr: Optional[int]
+
+
+class ResourcesError(Exception):
+    """
+    Base class for exceptions thrown due to lack of Cairo run resources.
+    """
+
+
+@dataclasses.dataclass
+class RunResources:
+    """
+    Maintains the resources of a Cairo run. Can be used across multiple runners.
+    """
+    steps: Optional[int]
+
+    @property
+    def consumed(self) -> bool:
+        """
+        Returns True if the resources were consumed.
+        """
+        return self.steps is not None and self.steps <= 0
+
+    def consume_step(self):
+        """
+        Consumes one Cairo step.
+        """
+        if self.steps is not None:
+            self.steps -= 1

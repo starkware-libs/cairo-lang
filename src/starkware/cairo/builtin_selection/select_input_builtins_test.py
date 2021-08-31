@@ -7,9 +7,10 @@ from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.cairo.lang.vm.cairo_runner import CairoRunner
 
 
-@ pytest.mark.parametrize(
+@pytest.mark.parametrize(
     'builtin_selection_indicators', [
-        [True, True, True, True], [False, False, False, False], [True, False, False, True]],
+        [True, True, True, True, True], [False, False, False, False, False],
+        [True, False, False, True, False]],
     ids=['select_all_builtins', 'do_not_select_any_builtin', 'select_output_and_ecdsa_builtins'])
 def test_select_input_builtins(builtin_selection_indicators):
     """
@@ -25,12 +26,13 @@ def test_select_input_builtins(builtin_selection_indicators):
     hash_base = runner.segments.add()
     range_check_base = runner.segments.add()
     signature_base = runner.segments.add()
+    bitwise_base = runner.segments.add()
 
     # Setup function.
     builtins_encoding = {
         builtin: int.from_bytes(builtin.encode('ascii'), 'big')
-        for builtin in ['output', 'pedersen', 'range_check', 'ecdsa']}
-    all_builtins = [output_base, hash_base, range_check_base, signature_base]
+        for builtin in ['output', 'pedersen', 'range_check', 'ecdsa', 'bitwise']}
+    all_builtins = [output_base, hash_base, range_check_base, signature_base, bitwise_base]
 
     selected_builtin_encodings = [
         builtin_encoding for builtin_encoding, is_builtin_selected in zip(

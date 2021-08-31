@@ -29,7 +29,8 @@ end
 ]
 
 BAD_CODES = [
-    ("""
+    (
+        """
 func f(c: felt, a: felt, b: felt):
     %{
         This is a hint.
@@ -37,9 +38,12 @@ func f(c: felt, a: felt, b: felt):
     ap += 5
     ret
 end
-""", """Forbidden expressions in hint "This is a hint.":
-[NamedExpression(name='__main__.f.c', expr='[cast(fp + (-5), felt*)]')]"""),
-    ("""
+""",
+        """Forbidden expressions in hint "This is a hint.":
+[NamedExpression(name='__main__.f.c', expr='[cast(fp + (-5), felt*)]')]""",
+    ),
+    (
+        """
 func f(a: felt, b: felt):
     %{
         This is a bad hint.
@@ -47,8 +51,11 @@ func f(a: felt, b: felt):
     ap += 5
     ret
 end
-""", 'is not whitelisted'),
-    ("""
+""",
+        "is not whitelisted",
+    ),
+    (
+        """
 func f(b: felt, a: felt):
     %{
         This is a hint.
@@ -59,8 +66,8 @@ end
 """,
         """Forbidden expressions in hint "This is a hint.":
 [NamedExpression(name='__main__.f.a', expr='[cast(fp + (-3), felt*)]'), \
-NamedExpression(name='__main__.f.b', expr='[cast(fp + (-4), felt*)]')]"""
-     ),
+NamedExpression(name='__main__.f.b', expr='[cast(fp + (-4), felt*)]')]""",
+    ),
 ]
 
 

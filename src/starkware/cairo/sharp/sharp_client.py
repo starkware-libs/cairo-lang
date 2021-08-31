@@ -6,7 +6,7 @@ import os
 import subprocess
 import sys
 import tempfile
-from typing import Optional
+from typing import List, Optional
 
 from starkware.cairo.bootloader.generate_fact import get_cairo_pie_fact_info
 from starkware.cairo.bootloader.hash_program import compute_program_hash_chain
@@ -37,18 +37,19 @@ class SharpClient:
         self.cairo_compiler_path = cairo_compiler_path
         self.cairo_run_path = cairo_run_path
 
-    def compile_cairo(self, source_code_path: str) -> Program:
+    def compile_cairo(self, source_code_path: str, flags: Optional[List[str]] = None) -> Program:
         """
         Compiles the cairo source code at the provided path,
         and returns the compiled program.
         """
+        used_flags = [] if flags is None else flags
         with tempfile.NamedTemporaryFile('w') as compiled_program_file:
             # Compile the program.
             subprocess.check_call([
                 self.cairo_compiler_path,
                 source_code_path,
                 f'--output={compiled_program_file.name}',
-            ])
+            ] + used_flags)
             program = Program.Schema().load(json.load(open(compiled_program_file.name, 'r')))
         return program
 
@@ -64,7 +65,7 @@ class SharpClient:
             program_file.flush()
             cairo_run_cmd = list(filter(None, [
                 self.cairo_run_path,
-                '--layout=dex',
+                '--layout=all',
                 f'--program={program_file.name}',
                 f'--program_input={program_input_path}' if program_input_path is not None else None,
                 f'--cairo_pie_output={cairo_pie_file.name}',

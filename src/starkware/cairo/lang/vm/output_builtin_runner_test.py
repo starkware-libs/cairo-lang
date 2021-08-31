@@ -10,12 +10,15 @@ from starkware.cairo.lang.vm.relocatable import RelocatableValue
 def runner_and_output_runner():
     PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
     code = """
-func main():
+%builtins output
+
+func main{output_ptr}():
   ret
 end
 """
     program = compile_cairo(code=[(code, '')], prime=PRIME, add_start=True)
-    runner = CairoRunner(program=program, layout='plain', proof_mode=True)
+    runner = CairoRunner(
+        program=program, layout='plain', proof_mode=True, allow_missing_builtins=True)
     runner.initialize_segments()
     output_builtin_runner = runner.builtin_runners['output'] = OutputBuiltinRunner(included=True)
     output_builtin_runner.initialize_segments(runner=runner)

@@ -64,6 +64,8 @@ class StarkErrorCode(ErrorCode):
     INVALID_SETTLEMENT_TOKENS = auto()
     #: Invalid order signature.
     INVALID_SIGNATURE = auto()
+    #: Invalid token type.
+    INVALID_TOKEN_TYPE = auto()
     #: Invalid transaction.
     INVALID_TRANSACTION = auto()
     #: Invalid transaction ID.

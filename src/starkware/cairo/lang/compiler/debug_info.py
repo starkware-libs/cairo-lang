@@ -28,8 +28,15 @@ class InstructionLocation:
     flow_tracking_data: FlowTrackingDataActual
 
     def get_all_locations(self) -> List[Location]:
-        return [self.inst] + [
-            hint_location.location for hint_location in self.hints if hint_location is not None]
+        all_locations = [self.inst] + self.inst.get_parent_locations()
+        for hint_location in self.hints:
+            if hint_location is None:
+                continue
+
+            all_locations.append(hint_location.location)
+            all_locations.extend(hint_location.location.get_parent_locations())
+
+        return all_locations
 
 
 @marshmallow_dataclass.dataclass

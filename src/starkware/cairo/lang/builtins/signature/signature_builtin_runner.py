@@ -1,6 +1,7 @@
 from typing import Any, Dict
 
-from starkware.cairo.lang.builtins.signature.instance_def import CELLS_PER_SIGNATURE
+from starkware.cairo.lang.builtins.signature.instance_def import (
+    CELLS_PER_SIGNATURE, INPUT_CELLS_PER_SIGNATURE)
 from starkware.cairo.lang.vm.builtin_runner import BuiltinVerifier, SimpleBuiltinRunner
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
 from starkware.python.math_utils import safe_div
@@ -14,7 +15,12 @@ class SignatureBuiltinRunner(SimpleBuiltinRunner):
         the runner.
         It may also assert that the signature is valid.
         """
-        super().__init__(name, included, ratio, CELLS_PER_SIGNATURE)
+        super().__init__(
+            name=name,
+            included=included,
+            ratio=ratio,
+            cells_per_instance=CELLS_PER_SIGNATURE,
+            n_input_cells=INPUT_CELLS_PER_SIGNATURE)
         self.process_signature = process_signature
         self.verify_signature = verify_signature
 

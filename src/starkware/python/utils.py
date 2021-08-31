@@ -259,3 +259,15 @@ def blockify(data, chunk_size: int) -> Iterable:
     """
     assert chunk_size > 0, f'chunk_size must be greater than 0. Got: {chunk_size}.'
     return (data[i:i + chunk_size] for i in range(0, len(data), chunk_size))
+
+
+def all_subclasses(cls: type) -> List[type]:
+    """
+    Recursively finds all subclasses of a given class.
+    """
+    return list(set(_all_subclasses(cls)))
+
+
+def _all_subclasses(cls: type) -> List[type]:
+    return [cls] + list(
+        itertools.chain(*[_all_subclasses(subclass) for subclass in cls.__subclasses__()]))

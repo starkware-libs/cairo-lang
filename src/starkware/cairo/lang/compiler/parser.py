@@ -63,7 +63,7 @@ def wrap_lark_error(err: LarkError, input_file: InputFile) -> Exception:
             'COLON': '":"',
             'DOT': '"."',
             'EQUAL': '"="',
-            'FUNC': 'func',
+            'FUNC': '"func"',
             'IDENTIFIER': 'identifier',
             'INT': 'integer',
             'HEXINT': 'integer',
@@ -71,6 +71,7 @@ def wrap_lark_error(err: LarkError, input_file: InputFile) -> Exception:
             'LPAR': '"("',
             'LSQB': '"["',
             'MINUS': '"-"',
+            'NAMESPACE': '"namespace"',
             'PLUS': '"+"',
             'RBRACE': '"}"',
             'RPAR': '")"',
@@ -78,6 +79,7 @@ def wrap_lark_error(err: LarkError, input_file: InputFile) -> Exception:
             'SEMICOLON': '";"',
             'SLASH': '"/"',
             'STAR': '"*"',
+            'STRUCT': '"struct"',
         }
         expected_lst = sorted(TOKENS.get(x, x) for x in expected)
         if len(expected_lst) > 1:

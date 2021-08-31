@@ -41,7 +41,7 @@ end
 # Returns the account's balance for the given token.
 @view
 func get_account_token_balance{
-        storage_ptr : Storage*, range_check_ptr, pedersen_ptr : HashBuiltin*}(
+        storage_ptr : Storage*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
         account_id : felt, token_type : felt) -> (balance : felt):
     return account_balance.read(account_id, token_type)
 end
@@ -57,7 +57,7 @@ end
 
 # Returns the pool's balance.
 @view
-func get_pool_token_balance{storage_ptr : Storage*, range_check_ptr, pedersen_ptr : HashBuiltin*}(
+func get_pool_token_balance{storage_ptr : Storage*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
         token_type : felt) -> (balance : felt):
     return pool_balance.read(token_type)
 end

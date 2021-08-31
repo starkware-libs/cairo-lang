@@ -11,10 +11,12 @@ from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starkware_utils.error_handling import stark_assert
 from starkware.starkware_utils.subsequence import is_subsequence
 from starkware.starkware_utils.validated_dataclass import (
-    ValidatedDataclass, ValidatedMarshmallowDataclass)
+    ValidatedDataclass,
+    ValidatedMarshmallowDataclass,
+)
 
 # An ordered list of the supported builtins.
-SUPPORTED_BUILTINS = ['pedersen', 'range_check', 'ecdsa']
+SUPPORTED_BUILTINS = ["pedersen", "range_check", "ecdsa", "bitwise"]
 
 
 class EntryPointType(Enum):
@@ -35,6 +37,7 @@ class ContractDefinition(ValidatedMarshmallowDataclass):
     """
     Represents a contract in the StarkNet network.
     """
+
     program: Program
     entry_points_by_type: Dict[EntryPointType, List[ContractEntryPoint]]
     abi: Optional[List[Any]] = None
@@ -46,10 +49,12 @@ class ContractDefinition(ValidatedMarshmallowDataclass):
             stark_assert(
                 len(entry_points) == len(set([ep.selector for ep in entry_points])),
                 code=StarknetErrorCode.MULTIPLE_ENTRY_POINTS_MATCH_SELECTOR,
-                message='Entry points must be unique.')
+                message="Entry points must be unique.",
+            )
 
     def validate(self):
         stark_assert(
             is_subsequence(self.program.builtins, SUPPORTED_BUILTINS),
             code=StarknetErrorCode.INVALID_CONTRACT_DEFINITION,
-            message=f'{self.program.builtins} is not a subsequence of {SUPPORTED_BUILTINS}.')
+            message=f"{self.program.builtins} is not a subsequence of {SUPPORTED_BUILTINS}.",
+        )

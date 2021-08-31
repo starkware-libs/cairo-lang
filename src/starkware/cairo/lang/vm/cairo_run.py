@@ -20,7 +20,7 @@ from starkware.cairo.lang.vm.crypto import get_crypto_lib_context_manager
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
 from starkware.cairo.lang.vm.security import verify_secure_runner
 from starkware.cairo.lang.vm.trace_entry import TraceEntry
-from starkware.cairo.lang.vm.utils import MemorySegmentAddresses
+from starkware.cairo.lang.vm.utils import MemorySegmentAddresses, RunResources
 from starkware.cairo.lang.vm.vm import VmException
 
 
@@ -70,6 +70,9 @@ def main():
     parser.add_argument(
         '--print_info', action='store_true',
         help='Print information on the execution of the program.')
+    parser.add_argument(
+        '--print_segments', action='store_true',
+        help='Print the segment relocation table.')
     parser.add_argument(
         '--print_output', action='store_true',
         help='Prints the program output (if the output builtin is used).')
@@ -196,7 +199,8 @@ def cairo_run(args):
         steps_input = cairo_pie_input.execution_resources.n_steps
 
     runner = CairoRunner(
-        program=program, layout=args.layout, memory=initial_memory, proof_mode=args.proof_mode)
+        program=program, layout=args.layout, memory=initial_memory, proof_mode=args.proof_mode,
+        allow_missing_builtins=args.proof_mode)
 
     runner.initialize_segments()
     end = runner.initialize_main_entrypoint()
@@ -212,6 +216,8 @@ def cairo_run(args):
                     data=cairo_pie_input.additional_data[name],
                     relocate_callback=lambda x: x,
                     data_is_trusted=not args.secure_run)
+        # Force segments sizes to match the CairoPie.
+        runner.finalize_segments_by_cairo_pie(cairo_pie=cairo_pie_input)
 
     program_input = json.load(args.program_input) if args.program_input else {}
     runner.initialize_vm(hint_locals={'program_input': program_input})
@@ -222,7 +228,7 @@ def cairo_run(args):
         else:
             additional_steps = 1 if args.proof_mode else 0
             max_steps = steps_input - additional_steps if steps_input is not None else None
-            runner.run_until_pc(end, max_steps=max_steps)
+            runner.run_until_pc(end, run_resources=RunResources(steps=max_steps))
             if args.proof_mode:
                 # Run one more step to make sure the last pc that was executed (rather than the pc
                 # after it) is __end__.
@@ -278,6 +284,9 @@ def cairo_run(args):
         # from opening the tracer.
         if args.proof_mode and not args.no_end:
             runner.print_builtin_usage()
+
+    if args.print_segments:
+        runner.print_segment_relocation_table()
 
     if trace_file is not None:
         field_bytes = math.ceil(program.prime.bit_length() / 8)

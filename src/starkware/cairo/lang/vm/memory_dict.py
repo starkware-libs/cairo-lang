@@ -1,5 +1,5 @@
 from collections import UserDict
-from typing import Callable, Dict, List, Type
+from typing import Callable, Dict, List, Type, cast
 
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 
@@ -170,6 +170,15 @@ class MemoryDict(UserDict):
 
     def get_range(self, addr, size) -> List[MaybeRelocatable]:
         return [self[addr + i] for i in range(size)]
+
+    def get_range_as_ints(self, addr, size) -> List[int]:
+        """
+        Similar to get_range but asserts that all the values in the range are ints.
+        """
+        mem_range = self.get_range(addr=addr, size=size)
+        assert all(isinstance(arg, int) for arg in mem_range)
+
+        return cast(List[int], mem_range)
 
     @classmethod
     def deserialize(cls, data, field_bytes):

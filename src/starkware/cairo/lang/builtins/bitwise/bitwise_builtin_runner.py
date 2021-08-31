@@ -1,6 +1,7 @@
 from typing import Any, Dict, Optional
 
-from starkware.cairo.lang.builtins.bitwise.instance_def import CELLS_PER_BITWISE, BitwiseInstanceDef
+from starkware.cairo.lang.builtins.bitwise.instance_def import (
+    CELLS_PER_BITWISE, INPUT_CELLS_PER_BITWISE, BitwiseInstanceDef)
 from starkware.cairo.lang.vm.builtin_runner import SimpleBuiltinRunner
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
 
@@ -8,8 +9,11 @@ from starkware.cairo.lang.vm.relocatable import RelocatableValue
 class BitwiseBuiltinRunner(SimpleBuiltinRunner):
     def __init__(self, included: bool, bitwise_builtin: BitwiseInstanceDef):
         super().__init__(
-            'bitwise', included, None if bitwise_builtin is None else bitwise_builtin.ratio,
-            CELLS_PER_BITWISE)
+            name='bitwise',
+            included=included,
+            ratio=None if bitwise_builtin is None else bitwise_builtin.ratio,
+            cells_per_instance=CELLS_PER_BITWISE,
+            n_input_cells=INPUT_CELLS_PER_BITWISE)
         self.stop_ptr: Optional[RelocatableValue] = None
         self.bitwise_builtin: BitwiseInstanceDef = bitwise_builtin
 
@@ -65,9 +69,7 @@ class BitwiseBuiltinRunner(SimpleBuiltinRunner):
 
         return {'bitwise': sorted(res.values(), key=lambda item: item['index'])}
 
-    def get_used_diluted_check_units(self) -> int:
-        diluted_spacing = self.bitwise_builtin.diluted_spacing
-        diluted_n_bits = self.bitwise_builtin.diluted_n_bits
+    def get_used_diluted_check_units(self, diluted_spacing: int, diluted_n_bits: int) -> int:
         total_n_bits = self.bitwise_builtin.total_n_bits
 
         partition = [

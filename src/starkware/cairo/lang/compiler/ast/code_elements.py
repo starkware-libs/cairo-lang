@@ -313,6 +313,7 @@ class CodeElementEmptyLine(CodeElement):
 class CommentedCodeElement(AstNode):
     code_elm: CodeElement
     comment: Optional[str]
+    location: Optional[Location] = LocationField
 
     def format(self, allowed_line_length):
         elm_str = self.code_elm.format(allowed_line_length=allowed_line_length)
@@ -320,7 +321,7 @@ class CommentedCodeElement(AstNode):
         separator = '  ' if elm_str != '' and comment_str != '' else ''
         return elm_str + separator + comment_str.rstrip()
 
-    def fix_comment_spaces(self, allow_additional_comment_spaces: bool):
+    def fix_comment_spaces(self, allow_additional_comment_spaces: bool) -> 'CommentedCodeElement':
         """
         Comments should start with exactly one space after '#' except for some cases (in which
         allow_additional_comment_spaces=True).
@@ -331,12 +332,16 @@ class CommentedCodeElement(AstNode):
         if comment is None:
             return self
 
+        if set(comment) == {'#'}:
+            # Allow a line of '#'.
+            return self
+
         if not allow_additional_comment_spaces:
             comment = comment.strip()
         if not comment.startswith(' '):
             comment = ' ' + comment
 
-        return CommentedCodeElement(code_elm=self.code_elm, comment=comment)
+        return CommentedCodeElement(code_elm=self.code_elm, comment=comment, location=self.location)
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.code_elm]
@@ -627,7 +632,8 @@ def add_empty_lines_before_labels(
             elif not is_comment_line(code_elm):
                 new_code_elements_reversed.append(CommentedCodeElement(
                     code_elm=CodeElementEmptyLine(),
-                    comment=None))
+                    comment=None,
+                    location=None))
                 add_empty_line = False
 
         if isinstance(code_elm.code_elm, CodeElementLabel):

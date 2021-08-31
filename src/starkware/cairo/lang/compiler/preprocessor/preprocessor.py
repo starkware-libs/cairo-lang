@@ -29,7 +29,7 @@ from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.expression_simplifier import ExpressionSimplifier
 from starkware.cairo.lang.compiler.identifier_definition import (
     ConstDefinition, DefinitionError, FunctionDefinition, FutureIdentifierDefinition,
-    IdentifierDefinition, LabelDefinition, MemberDefinition, ReferenceDefinition)
+    IdentifierDefinition, LabelDefinition, MemberDefinition, ReferenceDefinition, StructDefinition)
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierError, IdentifierManager
 from starkware.cairo.lang.compiler.identifier_utils import get_struct_definition
 from starkware.cairo.lang.compiler.instruction import Register
@@ -1007,22 +1007,13 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
                 location=elm.location))
         self.visit(code_elm_ret)
 
-    def check_tail_call_cast(self, src_type: CairoType, dest_type: CairoType) -> bool:
+    def check_tail_call_cast(
+            self, src_struct: StructDefinition, dest_struct: StructDefinition) -> bool:
         """
-        Checks if src_type can be converted to dest_type in the context of a tail call.
+        Checks if src_struct can be converted to dest_struct in the context of a tail call.
         """
-        if check_cast(
-                src_type=src_type, dest_type=dest_type, identifier_manager=self.identifiers,
-                cast_type=CastType.ASSIGN):
-            return True
-
-        if not isinstance(src_type, TypeStruct) or not isinstance(dest_type, TypeStruct):
-            return False
-
-        src_members = get_struct_definition(
-            src_type.scope, identifier_manager=self.identifiers).members
-        dest_members = get_struct_definition(
-            dest_type.scope, identifier_manager=self.identifiers).members
+        src_members = src_struct.members
+        dest_members = dest_struct.members
 
         if len(src_members) != len(dest_members):
             return False
@@ -1047,34 +1038,43 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
 
         func_name = elm.func_call.func_ident.name
 
-        src_type = self.resolve_type(TypeStruct(
-            scope=ScopedName.from_string(func_name) + CodeElementFunction.RETURN_SCOPE,
-            is_fully_resolved=False, location=elm.location))
+        src_struct = self.get_struct_definition(
+            name=ScopedName.from_string(func_name) + CodeElementFunction.RETURN_SCOPE,
+            location=elm.location)
 
-        dest_type = self.resolve_type(TypeStruct(
-            scope=self.current_scope + CodeElementFunction.RETURN_SCOPE,
-            is_fully_resolved=True, location=elm.location))
+        dest_struct = get_struct_definition(
+            struct_name=self.current_scope + CodeElementFunction.RETURN_SCOPE,
+            identifier_manager=self.identifiers)
 
-        if not self.check_tail_call_cast(src_type=src_type, dest_type=dest_type):
+        if not self.check_tail_call_cast(src_struct=src_struct, dest_struct=dest_struct):
             raise PreprocessorError(
                 f"""\
 Cannot convert the return type of {func_name} to the return type of {self.current_scope[-1:]}.""",
-                location=elm.func_call.location)
+                location=elm.location)
 
-        src_type = self.resolve_type(TypeStruct(
-            scope=ScopedName.from_string(func_name) + CodeElementFunction.IMPLICIT_ARGUMENT_SCOPE,
-            is_fully_resolved=False, location=elm.location))
+        src_struct = self.get_struct_definition(
+            name=ScopedName.from_string(func_name) + CodeElementFunction.IMPLICIT_ARGUMENT_SCOPE,
+            location=elm.location)
 
-        dest_type = self.resolve_type(TypeStruct(
-            scope=self.current_scope + CodeElementFunction.IMPLICIT_ARGUMENT_SCOPE,
-            is_fully_resolved=True, location=elm.location))
+        dest_struct = get_struct_definition(
+            struct_name=self.current_scope + CodeElementFunction.IMPLICIT_ARGUMENT_SCOPE,
+            identifier_manager=self.identifiers)
 
-        if not self.check_tail_call_cast(src_type=src_type, dest_type=dest_type):
+        if list(src_struct.members.items()) != list(dest_struct.members.items()):
+            notes = [] if src_struct.location is None or dest_struct.location is None else [
+                f"The implicit arguments of '{func_name}' were defined here:\n" +
+                src_struct.location.to_string_with_content(),
+                f"The implicit arguments of '{self.current_scope[-1:]}' were defined here:\n" +
+                dest_struct.location.to_string_with_content(),
+            ]
+
             raise PreprocessorError(
                 f"""\
 Cannot convert the implicit arguments of {func_name} to the implicit arguments of \
 {self.current_scope[-1:]}.""",
-                location=elm.func_call.location)
+                location=elm.location,
+                notes=notes,
+            )
 
         self.visit(CodeElementInstruction(
             instruction=InstructionAst(

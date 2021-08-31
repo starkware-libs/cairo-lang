@@ -5,7 +5,7 @@ import marshmallow
 import marshmallow.validate
 from web3 import Web3
 
-DNS_REGEX = r'^((?!-)[${}a-z0-9-]{1,63}(?<!-)\.)+([a-z]{2,6}[\.]{0,1})$'
+DNS_REGEX = r'^((\*)|(\*\.))?([a-z0-9-]){1,62}(\.[a-z0-9-]{1,62})*\.?$'
 
 T = TypeVar('T')
 TypeKey = TypeVar('TypeKey')
@@ -84,6 +84,12 @@ def validate_equal(field_name: str, *, allowed_value: T) -> ValidatorType:
     error_message = 'Invalid {field_name}: {{input}}; must be: {{other}}'.format(
         field_name=field_name)
     return marshmallow.validate.Equal(comparable=allowed_value, error=error_message)
+
+
+def validate_length(field_name: str, *, length: int) -> ValidatorType:
+    error_message = 'Invalid {field_name}: {{input}}; must be of length: {length}'.format(
+        field_name=field_name, length=length)
+    return marshmallow.validate.Length(equal=length, error=error_message)
 
 
 def validate_in_range(

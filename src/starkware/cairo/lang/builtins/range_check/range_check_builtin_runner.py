@@ -7,7 +7,12 @@ from starkware.python.math_utils import safe_div
 
 class RangeCheckBuiltinRunner(SimpleBuiltinRunner):
     def __init__(self, included: bool, ratio, inner_rc_bound, n_parts):
-        super().__init__('range_check', included, ratio)
+        super().__init__(
+            name='range_check',
+            included=included,
+            ratio=ratio,
+            cells_per_instance=1,
+            n_input_cells=1)
         self.inner_rc_bound = inner_rc_bound
         self.bound = inner_rc_bound ** n_parts
         self.n_parts = n_parts

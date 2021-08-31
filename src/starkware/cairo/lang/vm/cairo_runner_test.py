@@ -6,6 +6,7 @@ import pytest
 from starkware.cairo.lang.compiler.cairo_compile import compile_cairo
 from starkware.cairo.lang.vm.builtin_runner import InsufficientAllocatedCells
 from starkware.cairo.lang.vm.cairo_runner import CairoRunner, get_runner_from_code
+from starkware.cairo.lang.vm.utils import RunResources
 from starkware.cairo.lang.vm.vm import VmException, VmExceptionBase
 
 CAIRO_FILE = os.path.join(os.path.dirname(__file__), 'test.cairo')
@@ -27,7 +28,7 @@ def test_run_until_label():
     assert runner.vm.run_context.pc - runner.program_base == 6
     assert runner.vm.current_step == 6
     with pytest.raises(VmException, match='End of program was not reached'):
-        runner.run_until_label('label0', max_steps=100)
+        runner.run_until_label('label0', run_resources=RunResources(steps=100))
     assert runner.vm.run_context.pc - runner.program_base == 8
     assert runner.vm.current_step == 106
     runner.run_until_next_power_of_2()
@@ -65,7 +66,7 @@ end
     with pytest.raises(
             AssertionError,
             match='Invalid stop pointer for output. Expected: 2:1, found: 2:3'):
-        runner = get_runner_from_code(code, layout='small', prime=PRIME)
+        get_runner_from_code(code, layout='small', prime=PRIME)
 
 
 def test_builtin_list():
@@ -78,8 +79,8 @@ def test_builtin_list():
     program = compile_cairo(code=[('%builtins pedersen output\n', '')], prime=PRIME)
     with pytest.raises(
             AssertionError,
-            match=r"Expected builtin list \['output', 'pedersen'\] does not match "
-            r"\['pedersen', 'output'\]."):
+            match=r"\['pedersen', 'output'\] is not a subsequence of "
+            r"\['output', 'pedersen', 'range_check', 'ecdsa', 'bitwise']."):
         CairoRunner(program, layout='small')
 
     program = compile_cairo(code=[('%builtins pedersen foo\n', '')], prime=PRIME)

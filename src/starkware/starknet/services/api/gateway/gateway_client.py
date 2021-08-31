@@ -9,7 +9,9 @@ class GatewayClient(EverestGatewayClient):
     """
     A client class for the StarkNet Gateway.
     """
+
     async def add_transaction(self, tx: Transaction) -> Dict[str, int]:
         raw_response = await self._send_request(
-            send_method='POST', uri='/add_transaction', data=Transaction.Schema().dumps(obj=tx))
+            send_method="POST", uri="/add_transaction", data=Transaction.Schema().dumps(obj=tx)
+        )
         return json.loads(raw_response)

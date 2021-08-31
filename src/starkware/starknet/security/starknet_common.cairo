@@ -1,4 +1,5 @@
 from starkware.cairo.common.alloc import alloc
+from starkware.cairo.common.bitwise import bitwise_and, bitwise_operations, bitwise_or, bitwise_xor
 from starkware.cairo.common.default_dict import default_dict_finalize, default_dict_new
 from starkware.cairo.common.dict import dict_read, dict_squash, dict_update, dict_write
 from starkware.cairo.common.find_element import find_element, search_sorted, search_sorted_lower
@@ -16,4 +17,6 @@ from starkware.cairo.common.uint256 import (
     uint256_add, uint256_and, uint256_cond_neg, uint256_eq, uint256_lt, uint256_mul, uint256_neg,
     uint256_not, uint256_or, uint256_shl, uint256_shr, uint256_signed_div_rem, uint256_signed_lt,
     uint256_sub, uint256_unsigned_div_rem, uint256_xor)
+from starkware.starknet.common.messages import send_message_to_l1
 from starkware.starknet.common.storage import normalize_address, storage_read, storage_write
+from starkware.starknet.common.syscalls import call_contract, get_caller_address

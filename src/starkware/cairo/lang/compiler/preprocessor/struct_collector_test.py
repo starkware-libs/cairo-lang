@@ -9,6 +9,7 @@ from starkware.cairo.lang.compiler.identifier_definition import (
 from starkware.cairo.lang.compiler.parser import parse_file
 from starkware.cairo.lang.compiler.preprocessor.identifier_collector import IdentifierCollector
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
+from starkware.cairo.lang.compiler.preprocessor.preprocessor_test_utils import verify_exception
 from starkware.cairo.lang.compiler.preprocessor.struct_collector import StructCollector
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 
@@ -123,3 +124,13 @@ end
 """}
     with pytest.raises(PreprocessorError, match='Unexpected statement inside a struct definition.'):
         _collect_struct_definitions(modules)
+
+    verify_exception("""
+@decorator
+struct Struct:
+end
+""", """
+file:?:?: Decorators for structs are not supported.
+@decorator
+^********^
+""")

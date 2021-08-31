@@ -64,8 +64,11 @@ class Visitor:
 
     def visit_CodeBlock(self, elm: CodeBlock):
         return CodeBlock(code_elements=[
-            CommentedCodeElement(code_elm=self.visit(code_elm.code_elm), comment=code_elm.comment)
-            for code_elm in elm.code_elements
+            CommentedCodeElement(
+                code_elm=self.visit(commented_code_elm.code_elm),
+                comment=commented_code_elm.comment,
+                location=commented_code_elm.location)
+            for commented_code_elm in elm.code_elements
         ])
 
     def visit_CodeElementWith(self, elm: CodeElementWith):

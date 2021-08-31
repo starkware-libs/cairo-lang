@@ -1,7 +1,7 @@
 import dataclasses
 
 # Each signature consists of 2 cells (a public key and a message).
-CELLS_PER_SIGNATURE = 2
+CELLS_PER_SIGNATURE = INPUT_CELLS_PER_SIGNATURE = 2
 
 
 @dataclasses.dataclass
@@ -16,3 +16,7 @@ class EcdsaInstanceDef:
     # Size of hash.
     height: int
     n_hash_bits: int
+
+    @property
+    def cells_per_builtin(self):
+        return CELLS_PER_SIGNATURE

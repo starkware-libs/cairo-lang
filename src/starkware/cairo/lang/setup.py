@@ -28,7 +28,8 @@ setuptools.setup(
         'starkware.cairo.sharp': ['config.json'],
         'starkware.crypto.signature': ['pedersen_params.json'],
         'starkware.starknet': ['common/*.cairo'],
-        'starkware.starknet.security': ['whitelists/latest.json'],
+        'starkware.starknet.core.os': ['*.cairo', '*.json'],
+        'starkware.starknet.security': ['whitelists/*.json'],
     },
     scripts=[
         'starkware/cairo/lang/scripts/cairo-compile',

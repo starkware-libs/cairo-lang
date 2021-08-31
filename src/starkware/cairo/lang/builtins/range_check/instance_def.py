@@ -11,3 +11,7 @@ class RangeCheckInstanceDef:
     # Number of 16-bit range checks that will be used for each instance of the builtin.
     # For example, n_parts=8 defines the range [0, 2^128).
     n_parts: int
+
+    @property
+    def cells_per_builtin(self):
+        return CELLS_PER_RANGE_CHECK

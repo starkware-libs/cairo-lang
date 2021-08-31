@@ -1,7 +1,35 @@
 import pytest
 
 from starkware.python.math_utils import (
-    div_ceil, div_mod, is_power_of_2, is_quad_residue, next_power_of_2, safe_div, safe_log2, sqrt)
+    div_ceil, div_mod, ec_add, ec_double, ec_mult, is_power_of_2, is_quad_residue, next_power_of_2,
+    safe_div, safe_log2, sqrt)
+
+
+def test_ec_add():
+    # Checked using sage.
+    # E = EllipticCurve(GF(331),[0,0,0,-1,1])
+    # print E(279, 293) + E(66, 192)
+    assert ec_add((279, 293), (66, 192), 331) == (224, 33)
+    with pytest.raises(AssertionError):
+        # x coordinates are equal - should throw an AssertionError.
+        ec_add((279, 293), (279, 38), 331)
+
+
+def test_ec_double():
+    # Checked using sage.
+    # E = EllipticCurve(GF(3331),[0,0,0,-1,1])
+    # print 2 * E(2817, 1099)
+    assert ec_double((2817, 1099), -1, 3331) == (1166, 3163)
+    with pytest.raises(AssertionError):
+        # Should throw an AssertionError since y == 0.
+        ec_double((1, 0), -1, 3331)
+
+
+def test_ec_mult():
+    # Checked using sage.
+    # E = EllipticCurve(GF(33331),[0,0,0,2,1])
+    # print 123 * E(25078, 18096)
+    assert ec_mult(123, (25078, 18096), 2, 33331) == (12009, 15845)
 
 
 def test_safe_div():

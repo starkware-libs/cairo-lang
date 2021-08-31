@@ -3,7 +3,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 from starkware.cairo.lang.vm.utils import MemorySegmentAddresses
-from starkware.python.math_utils import safe_div
+from starkware.python.math_utils import div_ceil, safe_div
 
 
 class InsufficientAllocatedCells(Exception):
@@ -116,7 +116,7 @@ class BuiltinRunner(ABC):
         """
         return 0
 
-    def get_used_diluted_check_units(self) -> int:
+    def get_used_diluted_check_units(self, diluted_spacing: int, diluted_n_bits: int) -> int:
         """
         Returns the number of diluted check units used by the builtin.
         """
@@ -141,6 +141,13 @@ class BuiltinRunner(ABC):
         """
         return
 
+    def get_memory_accesses(self, runner):
+        """
+        Returns memory addresses that are used by the builtin itself and therefore should not count
+        as memory holes.
+        """
+        return {}
+
 
 class BuiltinVerifier(ABC):
     @abstractmethod
@@ -157,13 +164,22 @@ class SimpleBuiltinRunner(BuiltinRunner):
     A base class for simple builtins that use a single segment.
     """
 
-    def __init__(self, name: str, included: bool, ratio: int, cells_per_instance: int = 1):
+    def __init__(
+            self, name: str, included: bool, ratio: int, cells_per_instance: int,
+            n_input_cells: int):
+        """
+        Constructs a SimpleBuiltinRunner.
+        cells_per_instance is the number of memory cells per invocation.
+        n_input_cells is the number of the first memory cells in each invocation that form the
+        input. The rest of the cells are considered output.
+        """
         self.name = name
         self.included = included
         self.ratio = ratio
         self.base: Optional[RelocatableValue] = None
         self.stop_ptr: Optional[RelocatableValue] = None
         self.cells_per_instance = cells_per_instance
+        self.n_input_cells = n_input_cells
 
     def initialize_segments(self, runner):
         self.base = runner.segments.add()
@@ -175,7 +191,7 @@ class SimpleBuiltinRunner(BuiltinRunner):
     def final_stack(self, runner, pointer):
         if self.included:
             self.stop_ptr = runner.vm_memory[pointer - 1]
-            used = self.get_used_cells(runner=runner)
+            used = self.get_used_instances(runner=runner) * self.cells_per_instance
             assert self.stop_ptr == self.base + used, \
                 f'Invalid stop pointer for {self.name}. ' + \
                 f'Expected: {self.base + used}, found: {self.stop_ptr}'
@@ -189,7 +205,7 @@ class SimpleBuiltinRunner(BuiltinRunner):
         return used
 
     def get_used_instances(self, runner):
-        return safe_div(self.get_used_cells(runner), self.cells_per_instance)
+        return div_ceil(self.get_used_cells(runner), self.cells_per_instance)
 
     def get_allocated_memory_units(self, runner):
         return self.cells_per_instance * safe_div(runner.vm.current_step, self.ratio)
@@ -222,11 +238,24 @@ class SimpleBuiltinRunner(BuiltinRunner):
             for addr in runner.vm_memory.keys()
             if isinstance(addr, RelocatableValue) and addr.segment_index == self.base.segment_index
         }
-        expected_size = max(offsets) + 1 if len(offsets) > 0 else 0
+        n = (max(offsets) // self.cells_per_instance + 1) if len(offsets) > 0 else 0
 
-        # Check that the offsets form a contiguous range of addresses. The length is verified
-        # before constructing the expected range to avoid possibility of creating a huge set.
-        assert len(offsets) == expected_size and offsets == set(range(expected_size)), \
-            f'Missing memory cells for {self.name}.'
-        assert expected_size % self.cells_per_instance == 0, \
-            f'Unexpected number of memory cells for {self.name}: {expected_size}.'
+        # Verify that n is not too large to make sure the expected_offsets set that is constructed
+        # below is not too large.
+        assert n <= len(offsets) // self.n_input_cells, f'Missing memory cells for {self.name}.'
+
+        # Check that the two inputs (x and y) of each instance are set.
+        expected_offsets = {
+            self.cells_per_instance * i + j
+            for i in range(n)
+            for j in range(self.n_input_cells)}
+        if not expected_offsets <= offsets:
+            missing_offsets = list(expected_offsets - offsets)
+            dots = '...' if len(missing_offsets) > 20 else '.'
+            missing_offsets_str = ', '.join(map(str, missing_offsets[:20])) + dots
+            raise AssertionError(
+                f'Missing memory cells for {self.name}: {missing_offsets_str}')
+
+    def get_memory_accesses(self, runner):
+        segment_size = runner.segments.get_segment_size(self.base.segment_index)
+        return {self.base + x for x in range(segment_size)}

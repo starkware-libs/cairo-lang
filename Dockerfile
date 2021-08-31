@@ -1,7 +1,7 @@
-FROM ubuntu:18.04
+FROM ciimage/python:3.7
 
 RUN apt update
-RUN apt install -y cmake python3.7 libgmp3-dev g++ python3-pip python3.7-dev python3.7-venv npm
+RUN apt install -y cmake libgmp3-dev g++ python3-pip python3.7-dev python3.7-venv npm
 
 COPY . /app/
 

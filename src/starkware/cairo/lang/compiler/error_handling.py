@@ -85,6 +85,15 @@ class Location:
     def __repr__(self):
         return self.to_string()
 
+    def get_parent_locations(self):
+        parent_locations = []
+        parent_location = self.parent_location
+        while parent_location is not None:
+            parent_locations.append(parent_location[0])
+            parent_location = parent_location[0].parent_location
+
+        return parent_locations
+
 
 def get_location_marks(content: str, location: Location):
     lines = content.splitlines()

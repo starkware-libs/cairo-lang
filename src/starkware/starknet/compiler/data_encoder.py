@@ -1,0 +1,301 @@
+import dataclasses
+from enum import Enum, auto
+from typing import List, Optional, Sequence, Tuple
+
+from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypeFelt, TypePointer
+from starkware.cairo.lang.compiler.ast.code_elements import CommentedCodeElement
+from starkware.cairo.lang.compiler.ast.expr import ArgList, ExprAssignment, ExprIdentifier
+from starkware.cairo.lang.compiler.ast.notes import Notes
+from starkware.cairo.lang.compiler.error_handling import Location, ParentLocation
+from starkware.cairo.lang.compiler.identifier_definition import StructDefinition
+from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
+from starkware.cairo.lang.compiler.preprocessor.preprocessor_utils import autogen_parse_code_block
+
+
+class EncodingType(Enum):
+    """
+    The required encoding type.
+    Controls the temporary variable names and the error messages.
+    """
+
+    CALLDATA = 0
+    RETURN = auto()
+
+
+@dataclasses.dataclass
+class ArgumentInfo:
+    name: str
+    cairo_type: CairoType
+    location: Location
+
+
+def struct_to_argument_info_list(struct_def: StructDefinition) -> List[ArgumentInfo]:
+    """
+    Returns a list of ArgumentInfo entries that correspond to the struct members.
+    """
+    res = []
+    for name, member_def in struct_def.members.items():
+        assert member_def.location is not None
+        res.append(
+            ArgumentInfo(name=name, cairo_type=member_def.cairo_type, location=member_def.location)
+        )
+    return res
+
+
+class DataEncodingProcessor:
+    """
+    An helper class for encoding and decoding list of typed arguments to a list of felts.
+    """
+
+    # See var_name().
+    VARIABLE_NAME = {
+        EncodingType.CALLDATA: "calldata",
+        EncodingType.RETURN: "return_value",
+    }
+
+    # See all_args_text().
+    ALL_ARGS_TEXT = {
+        EncodingType.CALLDATA: "calldata",
+        EncodingType.RETURN: "return values",
+    }
+
+    # See arg_text().
+    ARGUMENT_TEXT = {
+        EncodingType.CALLDATA: "calldata argument",
+        EncodingType.RETURN: "return value",
+    }
+
+    def __init__(self, encoding_type: EncodingType, has_range_check_builtin: bool):
+        self.encoding_type = encoding_type
+        self.has_range_check_builtin = has_range_check_builtin
+        self.code_elements: List[CommentedCodeElement] = []
+        self.args: List[ExprAssignment] = []
+
+    @property
+    def var_name(self):
+        """
+        The base variable name. For example 'calldata'.
+        """
+        return DataEncodingProcessor.VARIABLE_NAME[self.encoding_type]
+
+    @property
+    def all_args_text(self):
+        """
+        A text for error messages that refers to the entire input.
+        """
+        return DataEncodingProcessor.ALL_ARGS_TEXT[self.encoding_type]
+
+    @property
+    def arg_text(self):
+        """
+        A text for error messages that refers to a single argument.
+        """
+        return DataEncodingProcessor.ARGUMENT_TEXT[self.encoding_type]
+
+    def add_code(self, code: str, parent_location: ParentLocation):
+        code_block = autogen_parse_code_block(
+            path="autogen/starknet/arg_processor",
+            code=code,
+            parent_location=parent_location,
+        )
+        self.code_elements += code_block.code_elements
+
+    def run(self, arguments: Sequence[ArgumentInfo]):
+        self.pre_process()
+        prev_arg: Optional[ArgumentInfo] = None
+        for arg_info in arguments:
+            member_parent_location = (
+                arg_info.location,
+                f"While handling {self.arg_text} '{arg_info.name}'",
+            )
+            cairo_type = arg_info.cairo_type
+            if isinstance(cairo_type, TypePointer) and isinstance(cairo_type.pointee, TypeFelt):
+                has_len = (
+                    prev_arg is not None
+                    and prev_arg.name == f"{arg_info.name}_len"
+                    and isinstance(prev_arg.cairo_type, TypeFelt)
+                )
+                if not has_len:
+                    raise PreprocessorError(
+                        f'Array argument "{arg_info.name}" must be preceded by a length argument '
+                        f'named "{arg_info.name}_len" of type felt.',
+                        location=arg_info.location,
+                    )
+                if not self.has_range_check_builtin:
+                    raise PreprocessorError(
+                        "The 'range_check' builtin must be declared in the '%builtins' directive "
+                        "when using array arguments in external functions.",
+                        location=arg_info.location,
+                    )
+
+                code_block_str = self.process_felt_ptr(arg_info=arg_info)
+            elif isinstance(cairo_type, TypeFelt):
+                code_block_str = self.process_felt(arg_info=arg_info)
+            else:
+                raise PreprocessorError(
+                    f"Unsupported argument type {cairo_type.format()}.",
+                    location=cairo_type.location,
+                )
+
+            self.add_code(code_block_str, parent_location=member_parent_location)
+
+            self.args.append(
+                ExprAssignment(
+                    identifier=ExprIdentifier(name=arg_info.name, location=arg_info.location),
+                    expr=ExprIdentifier(
+                        name=f"__{self.var_name}_arg_{arg_info.name}", location=arg_info.location
+                    ),
+                    location=arg_info.location,
+                )
+            )
+
+            prev_arg = arg_info
+        self.post_process()
+
+    def pre_process(self):
+        """
+        Called before processing the arguments.
+        """
+
+    def post_process(self):
+        """
+        Called after processing the arguments.
+        """
+
+    def process_felt(self, arg_info: ArgumentInfo):
+        raise PreprocessorError(
+            "felt arguments are not supported in this context", location=arg_info.location
+        )
+
+    def process_felt_ptr(self, arg_info: ArgumentInfo):
+        raise PreprocessorError(
+            "Array arguments are not supported in this context", location=arg_info.location
+        )
+
+
+class DataDecoder(DataEncodingProcessor):
+    def __init__(
+        self,
+        data_ptr: str,
+        data_size: str,
+        has_range_check_builtin: bool,
+        encoding_type: EncodingType,
+        location: Location,
+    ):
+        super().__init__(
+            encoding_type=encoding_type, has_range_check_builtin=has_range_check_builtin
+        )
+        self.data_ptr = data_ptr
+        self.data_size = data_size
+        self.struct_parent_location = (location, f"While handling {self.all_args_text} of")
+
+    def pre_process(self):
+        self.add_code(
+            f"""\
+let __{self.var_name}_ptr : felt* = cast({self.data_ptr}, felt*)
+""",
+            parent_location=self.struct_parent_location,
+        )
+
+    def post_process(self):
+        self.add_code(
+            f"""\
+let __{self.var_name}_actual_size =  __{self.var_name}_ptr - cast({self.data_ptr}, felt*)
+""",
+            parent_location=self.struct_parent_location,
+        )
+        self.add_code(
+            f"""\
+assert {self.data_size} = __{self.var_name}_actual_size
+""",
+            parent_location=self.struct_parent_location,
+        )
+
+    def process_felt(self, arg_info: ArgumentInfo):
+        return f"""\
+let __{self.var_name}_arg_{arg_info.name} = [__{self.var_name}_ptr]
+let __{self.var_name}_ptr = __{self.var_name}_ptr + 1
+"""
+
+    def process_felt_ptr(self, arg_info: ArgumentInfo):
+        return f"""\
+# Check that the length is non-negative.
+assert [range_check_ptr] = __{self.var_name}_arg_{arg_info.name}_len
+let range_check_ptr = range_check_ptr + 1
+# Create the reference.
+let __{self.var_name}_arg_{arg_info.name} : felt* = __{self.var_name}_ptr
+# Use 'tempvar' instead of 'let' to avoid repeating this computation for the
+# following arguments.
+tempvar __{self.var_name}_ptr = __{self.var_name}_ptr + __{self.var_name}_arg_{arg_info.name}_len
+"""
+
+
+def decode_data(
+    data_ptr: str,
+    data_size: str,
+    arguments: Sequence[ArgumentInfo],
+    encoding_type: EncodingType,
+    has_range_check_builtin: bool,
+    location: Location,
+) -> Tuple[List[CommentedCodeElement], ArgList]:
+    """
+    Processes the calldata of a function.
+
+    Returns code elements that create the required references and an ArgList that corresponds to
+    'struct_def'.
+
+    Currently only the cases:
+        (1) felt
+        (2) array of felts
+    are supported.
+    """
+
+    parser = DataDecoder(
+        data_ptr=data_ptr,
+        data_size=data_size,
+        encoding_type=encoding_type,
+        has_range_check_builtin=has_range_check_builtin,
+        location=location,
+    )
+    parser.run(arguments)
+    args = parser.args
+    return parser.code_elements, ArgList(
+        args=args, notes=[Notes()] * (len(args) + 1), has_trailing_comma=True, location=location
+    )
+
+
+class DataEncoder(DataEncodingProcessor):
+    def process_felt(self, arg_info: ArgumentInfo):
+        return f"""\
+assert [__{self.var_name}_ptr] = {arg_info.name}
+let __{self.var_name}_ptr = __{self.var_name}_ptr + 1
+"""
+
+    def process_felt_ptr(self, arg_info: ArgumentInfo):
+        return f"""\
+# Check that the length is non-negative.
+assert [range_check_ptr] = {arg_info.name}_len
+# Store the updated range_check_ptr as a local variable to keep it available after
+# the memcpy.
+local range_check_ptr = range_check_ptr + 1
+# Keep a reference to __{self.var_name}_ptr.
+let __{self.var_name}_ptr_copy = __{self.var_name}_ptr
+# Store the updated __{self.var_name}_ptr as a local variable to keep it available after
+# the memcpy.
+local __{self.var_name}_ptr : felt* = __{self.var_name}_ptr + {arg_info.name}_len
+memcpy(dst=__{self.var_name}_ptr_copy, src={arg_info.name}, len={arg_info.name}_len)
+"""
+
+
+def encode_data(
+    arguments: Sequence[ArgumentInfo],
+    encoding_type: EncodingType,
+    has_range_check_builtin: bool,
+) -> List[CommentedCodeElement]:
+
+    parser = DataEncoder(
+        encoding_type=encoding_type,
+        has_range_check_builtin=has_range_check_builtin,
+    )
+    parser.run(arguments)
+    return parser.code_elements

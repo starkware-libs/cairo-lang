@@ -1,6 +1,6 @@
 from typing import Any, Dict, Optional, Set
 
-from starkware.cairo.lang.builtins.hash.instance_def import CELLS_PER_HASH
+from starkware.cairo.lang.builtins.hash.instance_def import CELLS_PER_HASH, INPUT_CELLS_PER_HASH
 from starkware.cairo.lang.vm.builtin_runner import BuiltinVerifier, SimpleBuiltinRunner
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 from starkware.python.math_utils import safe_div
@@ -8,7 +8,12 @@ from starkware.python.math_utils import safe_div
 
 class HashBuiltinRunner(SimpleBuiltinRunner):
     def __init__(self, name: str, included: bool, ratio: int, hash_func):
-        super().__init__(name, included, ratio, CELLS_PER_HASH)
+        super().__init__(
+            name=name,
+            included=included,
+            ratio=ratio,
+            cells_per_instance=CELLS_PER_HASH,
+            n_input_cells=INPUT_CELLS_PER_HASH)
         self.hash_func = hash_func
         self.stop_ptr: Optional[RelocatableValue] = None
         self.verified_addresses: Set[MaybeRelocatable] = set()

@@ -4,9 +4,7 @@ contract IFactRegistry {
     /*
       Returns true if the given fact was previously registered in the contract.
     */
-    function isValid(bytes32 fact)
-        external view
-        returns(bool);
+    function isValid(bytes32 fact) external view returns (bool);
 }
 
 /*
@@ -35,9 +33,8 @@ contract AmmDemo {
         uint256 amountTokenA,
         uint256 amountTokenB,
         uint256 cairoProgramHash,
-        address cairoVerifier)
-        public
-    {
+        address cairoVerifier
+    ) public {
         accountTreeRoot_ = accountTreeRoot;
         amountTokenA_ = amountTokenA;
         amountTokenB_ = amountTokenB;
@@ -45,9 +42,7 @@ contract AmmDemo {
         cairoVerifier_ = IFactRegistry(cairoVerifier);
     }
 
-    function updateState(uint256[] memory programOutput)
-        public
-    {
+    function updateState(uint256[] memory programOutput) public {
         // Ensure that a corresponding proof was verified.
         bytes32 outputHash = keccak256(abi.encodePacked(programOutput));
         bytes32 fact = keccak256(abi.encodePacked(cairoProgramHash_, outputHash));

@@ -1,4 +1,4 @@
-%builtins output pedersen range_check ecdsa
+%builtins output pedersen range_check ecdsa bitwise
 
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.cairo_builtins import HashBuiltin
@@ -12,7 +12,8 @@ from starkware.starknet.core.os.state import state_update
 from starkware.starknet.core.os.transactions import MessageHeader, execute_transactions
 
 # Executes transactions on StarkNet.
-func main{output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecdsa_ptr}():
+func main{output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecdsa_ptr, bitwise_ptr}(
+        ):
     alloc_locals
 
     # Reserve the initial range check for self validation.
@@ -36,6 +37,7 @@ func main{output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecds
     end
     assert os_output.final_outputs = outputs
     local ecdsa_ptr = ecdsa_ptr
+    local bitwise_ptr = bitwise_ptr
 
     local initial_da_output_ptr : felt*
     %{
@@ -47,11 +49,11 @@ func main{output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecds
     %}
     let da_output_ptr = initial_da_output_ptr
     with da_output_ptr:
-        let (merkle_update_output) = state_update{hash_ptr=pedersen_ptr}(
+        let (commitment_tree_update_output) = state_update{hash_ptr=pedersen_ptr}(
             state_changes_dict=state_changes.changes_start,
             state_changes_dict_end=state_changes.changes_end)
     end
-    assert os_output.merkle_update_output = merkle_update_output
+    assert os_output.commitment_tree_update_output = commitment_tree_update_output
 
     %{ vm_exit_scope() %}
 

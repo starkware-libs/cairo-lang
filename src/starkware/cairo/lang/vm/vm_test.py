@@ -297,6 +297,104 @@ ZeroDivisionError: division by zero\
 """
 
 
+def test_hint_indentation_error():
+    code = """
+# Some comment.
+
+%{
+def f():
+    b = 1
+        a = 1 # Wrong indentation.
+%}
+[ap] = 0; ap++
+"""
+
+    # In this test we actually do write the code to a file, to allow the linecache module to fetch
+    # the line raising the exception.
+    cairo_file = tempfile.NamedTemporaryFile('w')
+    print(code, file=cairo_file)
+    cairo_file.flush()
+    program = compile_cairo(
+        code=[(code, cairo_file.name)], prime=PRIME, debug_info=True)
+    program_base = 10
+    memory = {program_base + i: v for i, v in enumerate(program.data)}
+
+    # Set memory[fp - 1] to an arbitrary value, since [fp - 1] is assumed to be set.
+    memory[99] = 1234
+
+    context = RunContext(
+        pc=program_base,
+        ap=200,
+        fp=100,
+        memory=MemoryDict(memory),
+        prime=PRIME,
+    )
+
+    with pytest.raises(VmException) as excinfo:
+        VirtualMachine(program, context, {})
+    expected_error = f"""\
+{cairo_file.name}:4:1: Error at pc=10:
+Got an exception while executing a hint.
+%{{
+^^
+Traceback (most recent call last):
+  File "{cairo_file.name}", line 7
+    a = 1 # Wrong indentation.
+    ^
+IndentationError: unexpected indent\
+"""
+    assert expected_error == str(excinfo.value)
+
+
+def test_hint_syntax_error():
+    code = """
+# Some comment.
+
+%{
+def f():
+    b = # Wrong syntax.
+    a = 1
+%}
+[ap] = 0; ap++
+"""
+
+    # In this test we actually do write the code to a file, to allow the linecache module to fetch
+    # the line raising the exception.
+    cairo_file = tempfile.NamedTemporaryFile('w')
+    print(code, file=cairo_file)
+    cairo_file.flush()
+    program = compile_cairo(
+        code=[(code, cairo_file.name)], prime=PRIME, debug_info=True)
+    program_base = 10
+    memory = {program_base + i: v for i, v in enumerate(program.data)}
+
+    # Set memory[fp - 1] to an arbitrary value, since [fp - 1] is assumed to be set.
+    memory[99] = 1234
+
+    context = RunContext(
+        pc=program_base,
+        ap=200,
+        fp=100,
+        memory=MemoryDict(memory),
+        prime=PRIME,
+    )
+
+    with pytest.raises(VmException) as excinfo:
+        VirtualMachine(program, context, {})
+    expected_error = f"""\
+{cairo_file.name}:4:1: Error at pc=10:
+Got an exception while executing a hint.
+%{{
+^^
+Traceback (most recent call last):
+  File "{cairo_file.name}", line 6
+    b = # Wrong syntax.
+                      ^
+SyntaxError: invalid syntax\
+"""
+    assert expected_error == str(excinfo.value)
+
+
 def test_hint_scopes():
     code = """
 %{

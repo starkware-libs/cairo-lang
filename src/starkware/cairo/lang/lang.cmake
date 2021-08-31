@@ -34,6 +34,7 @@ python_venv(cairo_lang_package_venv
     sharp_client_config_lib
     sharp_client_lib
     starknet_script_lib
+    starknet_testing_lib
 )
 
 python_lib(cairo_instances_lib

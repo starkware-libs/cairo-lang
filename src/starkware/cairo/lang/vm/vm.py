@@ -4,7 +4,7 @@ import re
 import sys
 import traceback
 from functools import lru_cache
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 from starkware.cairo.lang.compiler.debug_info import DebugInfo, InstructionLocation
 from starkware.cairo.lang.compiler.encode import decode_instruction, is_call_instruction
@@ -85,6 +85,13 @@ class PureValueError(VmExceptionBase):
 
 class HintException(VmExceptionBase):
     def __init__(self, vm, exc_type, exc_value, exc_tb):
+        if isinstance(exc_value, (IndentationError, SyntaxError)):
+            fix = self.fix_name_and_line(vm, exc_value)
+            if fix is not None:
+                filename, line_num = fix
+                exc_value = IndentationError(exc_value.msg, (
+                    filename, line_num, exc_value.offset, exc_value.text))
+
         tb_exception = traceback.TracebackException(exc_type, exc_value, exc_tb)
         # First item in the traceback is the call to exec, remove it.
         assert tb_exception.stack[0].filename.endswith('vm.py')
@@ -93,19 +100,12 @@ class HintException(VmExceptionBase):
         # If we have location information, replace '<hint*>' entries with the correct filename
         # and line.
         def replace_stack_item(item: traceback.FrameSummary) -> traceback.FrameSummary:
-            m = re.match('^<hint(?P<index>[0-9]+)>$', item.filename)
-            if not m:
+            fix = self.fix_name_and_line(vm, item)
+            if fix is None:
                 return item
-            pc, index = vm.hint_pc_and_index[int(m.group('index'))]
-            location = vm.get_location(pc)
-            if location is None or location.hints[index] is None:
-                return item
-            hint_location = location.hints[index]
-            line_num = (
-                item.lineno + hint_location.location.start_line +
-                hint_location.n_prefix_newlines - 1)
+            filename, line_num = fix
             return traceback.FrameSummary(
-                filename=hint_location.location.input_file.filename,
+                filename=filename,
                 lineno=line_num,
                 name=item.name)
         tb_exception.stack = traceback.StackSummary.from_list(
@@ -113,6 +113,24 @@ class HintException(VmExceptionBase):
         super().__init__(f'Got an exception while executing a hint.')
         self.exception_str = ''.join(tb_exception.format())
         self.inner_exc = exc_value
+
+    ExcType = Union[IndentationError, SyntaxError, traceback.FrameSummary]
+
+    def fix_name_and_line(
+            self, vm, exc_value: ExcType) -> Optional[Tuple[str, int]]:
+        m = re.match('^<hint(?P<index>[0-9]+)>$', str(exc_value.filename))
+        if m is None:
+            return None
+        pc, index = vm.hint_pc_and_index[int(m.group('index'))]
+        location = vm.get_location(pc)
+        if (location is None) or (location.hints[index] is None):
+            return None
+        hint_location = location.hints[index]
+        start_line = hint_location.location.start_line
+        prefix_lines = hint_location.n_prefix_newlines
+        line_num = (exc_value.lineno + start_line + prefix_lines - 1)
+        filename = hint_location.location.input_file.filename
+        return filename, line_num
 
 
 @dataclasses.dataclass
@@ -244,7 +262,8 @@ class VirtualMachine:
         self.enter_scope(dict(hint_locals))
         self.run_context = copy.copy(run_context)  # Shallow copy.
         self.hints: Dict[MaybeRelocatable, List[CompiledHint]] = {}
-        # A map from hint id to pc and index.
+        # A map from hint id to pc and index (index is required when there is more than one hint
+        # for a single pc).
         self.hint_pc_and_index: Dict[int, Tuple[MaybeRelocatable, int]] = {}
         self.instruction_debug_info: Dict[MaybeRelocatable, InstructionLocation] = {}
         self.debug_file_contents: Dict[str, str] = {}
@@ -300,10 +319,12 @@ class VirtualMachine:
     def load_hints(self, program: Program, program_base: MaybeRelocatable):
         for pc, hints in program.hints.items():
             compiled_hints = []
-            for i, hint in enumerate(hints):
+            for hint_index, hint in enumerate(hints):
                 hint_id = len(self.hint_pc_and_index)
+                self.hint_pc_and_index[hint_id] = (pc + program_base, hint_index)
                 compiled_hints.append(CompiledHint(
-                    compiled=self.compile_hint(hint.code, f'<hint{hint_id}>'),
+                    compiled=self.compile_hint(
+                        hint.code, f'<hint{hint_id}>', hint_index=hint_index),
                     # Use hint=hint in the lambda's arguments to capture this value (otherwise, it
                     # will use the same hint object for all iterations).
                     consts=lambda pc, ap, fp, memory, hint=hint: VmConsts(
@@ -316,7 +337,6 @@ class VirtualMachine:
                             memory=memory,
                             pc=pc),
                         accessible_scopes=hint.accessible_scopes)))
-                self.hint_pc_and_index[hint_id] = (pc + program_base, i)
             self.hints[pc + program_base] = compiled_hints
 
     def load_debug_info(self, debug_info: Optional[DebugInfo], program_base: MaybeRelocatable):
@@ -332,8 +352,8 @@ class VirtualMachine:
         assert self.prime == program.prime, \
             f'Unexpected prime for loaded program: {program.prime} != {self.prime}.'
 
-        self.load_hints(program, program_base)
         self.load_debug_info(program.debug_info, program_base)
+        self.load_hints(program, program_base)
 
     def enter_scope(self, new_scope_locals: Optional[dict] = None):
         """
@@ -625,12 +645,18 @@ class VirtualMachine:
 
         self.run_instruction(instruction, instruction_encoding)
 
-    def compile_hint(self, source, filename):
+    def compile_hint(self, source, filename, hint_index: int):
         """
         Compiles the given python source code.
         This function can be overridden by subclasses.
         """
-        return compile(source, filename, mode='exec')
+        try:
+            return compile(source, filename, mode='exec')
+        except (IndentationError, SyntaxError):
+            hint_exception = HintException(self, *sys.exc_info())
+            raise self.as_vm_exception(
+                hint_exception, notes=[hint_exception.exception_str],
+                hint_index=hint_index) from None
 
     def exec_hint(self, code, globals_, hint_index):
         """

@@ -88,12 +88,15 @@ ret
         verify_secure_runner(runner)
 
     # Invalid segment size (only first input is written).
-    with pytest.raises(SecurityError, match='Unexpected number of memory cells for pedersen: 1'):
+    with pytest.raises(SecurityError, match=r'Missing memory cells for pedersen: 1, 4\.'):
         verify_secure_runner(run_code_in_runner("""
 %builtins pedersen
 func main{pedersen_ptr}():
     assert [pedersen_ptr] = 0
-    let pedersen_ptr = pedersen_ptr + 1
+    assert [pedersen_ptr + 2] = 0
+    assert [pedersen_ptr + 3] = 0
+    assert [pedersen_ptr + 5] = 0
+    let pedersen_ptr = pedersen_ptr + 6
     return ()
 end
 """, layout='small'))

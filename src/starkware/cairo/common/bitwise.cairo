@@ -37,10 +37,6 @@ func bitwise_and{bitwise_ptr : BitwiseBuiltin*}(x : felt, y : felt) -> (x_and_y 
     let x_and_y = bitwise_ptr.x_and_y
     let x_xor_y = bitwise_ptr.x_xor_y
     let x_or_y = bitwise_ptr.x_or_y
-    %{
-        ids.x_xor_y = ids.x ^ ids.y
-        ids.x_or_y = ids.x | ids.y
-    %}
     let bitwise_ptr = bitwise_ptr + BitwiseBuiltin.SIZE
     return (x_and_y=x_and_y)
 end
@@ -60,10 +56,6 @@ func bitwise_xor{bitwise_ptr : BitwiseBuiltin*}(x : felt, y : felt) -> (x_xor_y 
     let x_and_y = bitwise_ptr.x_and_y
     let x_xor_y = bitwise_ptr.x_xor_y
     let x_or_y = bitwise_ptr.x_or_y
-    %{
-        ids.x_and_y = ids.x & ids.y
-        ids.x_or_y = ids.x | ids.y
-    %}
     let bitwise_ptr = bitwise_ptr + BitwiseBuiltin.SIZE
     return (x_xor_y=x_xor_y)
 end
@@ -83,10 +75,6 @@ func bitwise_or{bitwise_ptr : BitwiseBuiltin*}(x : felt, y : felt) -> (x_or_y : 
     let x_and_y = bitwise_ptr.x_and_y
     let x_xor_y = bitwise_ptr.x_xor_y
     let x_or_y = bitwise_ptr.x_or_y
-    %{
-        ids.x_and_y = ids.x & ids.y
-        ids.x_xor_y = ids.x ^ ids.y
-    %}
     let bitwise_ptr = bitwise_ptr + BitwiseBuiltin.SIZE
     return (x_or_y=x_or_y)
 end
