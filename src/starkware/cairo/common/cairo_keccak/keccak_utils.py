@@ -1,12 +1,16 @@
 from typing import List
 
-OFFSETS = list(zip(*[
-    [0, 1, 62, 28, 27],
-    [36, 44, 6, 55, 20],
-    [3, 10, 43, 25, 39],
-    [41, 45, 15, 21, 8],
-    [18, 2, 61, 56, 14]
-]))
+OFFSETS = list(
+    zip(
+        *[
+            [0, 1, 62, 28, 27],
+            [36, 44, 6, 55, 20],
+            [3, 10, 43, 25, 39],
+            [41, 45, 15, 21, 8],
+            [18, 2, 61, 56, 14],
+        ]
+    )
+)
 
 ROUND_CONSTANTS = [
     0x0000000000000001,
@@ -40,7 +44,7 @@ def rot_left(x, n):
     """
     Rotates a 64-bit number n bits to the left.
     """
-    return ((x << n) & (2**64 - 1)) | (x >> (64 - n))
+    return ((x << n) & (2 ** 64 - 1)) | (x >> (64 - n))
 
 
 def keccak_round(a: List[List[int]], rc: int) -> List[List[int]]:
@@ -56,9 +60,7 @@ def keccak_round(a: List[List[int]], rc: int) -> List[List[int]]:
         for y in range(5):
             b[y][(2 * x + 3 * y) % 5] = rot_left(a[x][y], OFFSETS[x][y])
 
-    a = [
-        [b[x][y] ^ ((~b[(x + 1) % 5][y]) & b[(x + 2) % 5][y]) for y in range(5)]
-        for x in range(5)]
+    a = [[b[x][y] ^ ((~b[(x + 1) % 5][y]) & b[(x + 2) % 5][y]) for y in range(5)] for x in range(5)]
 
     a[0][0] ^= rc
     return a

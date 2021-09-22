@@ -1,132 +1,50 @@
-import copy
-from collections import defaultdict
 from typing import List, Optional, Union
 
-from starkware.cairo.lang.vm.crypto import async_pedersen_hash_func
-from starkware.starknet.business_logic.internal_transaction import (
-    InternalDeploy,
-    InternalInvokeFunction,
-)
-from starkware.starknet.business_logic.internal_transaction_interface import (
-    TransactionExecutionInfo,
-)
-from starkware.starknet.business_logic.state import CarriedState, SharedState
-from starkware.starknet.business_logic.state_objects import ContractCarriedState, ContractState
-from starkware.starknet.definitions import fields
+from starkware.starknet.compiler.compile import compile_starknet_files
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
-from starkware.starknet.public.abi import get_selector_from_name
-from starkware.starknet.services.api.contract_definition import ContractDefinition, EntryPointType
-from starkware.storage.dict_storage import DictStorage
-from starkware.storage.storage import FactFetchingContext
+from starkware.starknet.services.api.contract_definition import ContractDefinition
+from starkware.starknet.testing.contract import StarknetContract
+from starkware.starknet.testing.state import StarknetState
 
 
 class Starknet:
     """
-    StarkNet testing object. Represents a state of a StarkNet network.
-
-    Can be deepcopied.
-
-    Example usage:
+    A high level interface to a StarkNet state object.
+    Example:
       starknet = await Starknet.empty()
-      contract_definition = compile_starknet_files([CONTRACT_FILE], debug_info=True)
-      contract_address = await starknet.deploy(contract_definition=contract_definition)
-      res = await starknet.invoke_raw(
-          contract_address=contract_address, selector="func", calldata=[1, 2])
+      contract = await starknet.deploy('contract.cairo')
+      await contract.foo(a=1, b=[2, 3]).invoke()
     """
 
-    def __init__(self, state: CarriedState, general_config: StarknetGeneralConfig):
-        """
-        Constructor. Should not be used directly. Use empty() instead.
-        """
+    def __init__(self, state: StarknetState):
         self.state = state
-        self.general_config = general_config
-
-    def copy(self) -> "Starknet":
-        """
-        Creates a new Starknet instance with the same state. And modifications to one instance
-        would not affect the other.
-        """
-        return copy.deepcopy(self)
 
     @classmethod
-    async def empty(self, general_config: Optional[StarknetGeneralConfig] = None) -> "Starknet":
-        """
-        Creates a new Starknet instance.
-        """
-        if general_config is None:
-            general_config = StarknetGeneralConfig()
-        ffc = FactFetchingContext(storage=DictStorage(), hash_func=async_pedersen_hash_func)
-        empty_contract_state = await ContractState.empty(
-            storage_commitment_tree_height=general_config.contract_storage_commitment_tree_height,
-            ffc=ffc,
-        )
-        empty_contract_carried_state = ContractCarriedState(
-            state=empty_contract_state, storage_updates={}
-        )
-        shared_state = await SharedState.empty(ffc=ffc, general_config=general_config)
-        state = CarriedState.empty(shared_state=shared_state, ffc=ffc)
-        state.contract_states = defaultdict(lambda: copy.deepcopy(empty_contract_carried_state))
-        return Starknet(state=state, general_config=general_config)
+    async def empty(cls, general_config: Optional[StarknetGeneralConfig] = None) -> "Starknet":
+        return Starknet(state=await StarknetState.empty(general_config=general_config))
 
     async def deploy(
         self,
-        contract_definition: ContractDefinition,
+        source: Optional[str] = None,
+        contract_def: Optional[ContractDefinition] = None,
         contract_address: Optional[Union[int, str]] = None,
-    ) -> int:
-        """
-        Deploys a contract. Returns the contract address.
-
-        Args:
-        contract_definition - a compiled StarkNet contract returned by compile_starknet_files().
-        contract_address - If supplied, a hexadecimal string or an integer representing the contract
-          address to use for deploying. Otherwise, the contract address is randomized.
-        """
-        if contract_address is None:
-            contract_address = fields.ContractAddressField.get_random_value()
-        if isinstance(contract_address, str):
-            contract_address = int(contract_address, 16)
-        assert isinstance(contract_address, int)
-
-        tx = InternalDeploy(
-            contract_address=contract_address, contract_definition=contract_definition
-        )
-
-        with self.state.copy_and_apply() as state_copy:
-            await tx.apply_state_updates(state=state_copy, general_config=self.general_config)
-        return contract_address
-
-    async def invoke_raw(
-        self,
-        contract_address: Union[int, str],
-        selector: Union[int, str],
-        calldata: List[int],
-        entry_point_type: EntryPointType = EntryPointType.EXTERNAL,
-    ) -> TransactionExecutionInfo:
-        """
-        Invokes a contract function. Returns the execution info.
-
-        Args:
-        contract_address - a hexadecimal string or an integer representing the contract address.
-        selector - either a function name or an integer selector for the entrypoint to invoke.
-        calldata - a list of integers to pass as calldata to the invoked function.
-        """
-
-        if isinstance(contract_address, str):
-            contract_address = int(contract_address, 16)
-        assert isinstance(contract_address, int)
-
-        if isinstance(selector, str):
-            selector = get_selector_from_name(selector)
-        assert isinstance(selector, int)
-
-        tx = InternalInvokeFunction(
-            contract_address=contract_address,
-            entry_point_selector=selector,
-            entry_point_type=entry_point_type,
-            calldata=calldata,
-        )
-
-        with self.state.copy_and_apply() as state_copy:
-            return await tx.apply_state_updates(
-                state=state_copy, general_config=self.general_config
+        cairo_path: Optional[List[str]] = None,
+    ) -> StarknetContract:
+        assert (0 if source is None else 1) + (
+            0 if contract_def is None else 1
+        ) == 1, "Exactly one of source, contract_def should be supplied."
+        if contract_def is None:
+            contract_def = compile_starknet_files(
+                files=[source], debug_info=True, cairo_path=cairo_path
             )
+            source = None
+            cairo_path = None
+        assert (
+            cairo_path is None
+        ), "The cairo_path argument can only be used with the source argument."
+        assert contract_def is not None
+        address = await self.state.deploy(
+            contract_definition=contract_def, contract_address=contract_address
+        )
+        assert contract_def.abi is not None, "Missing ABI."
+        return StarknetContract(state=self.state, abi=contract_def.abi, contract_address=address)

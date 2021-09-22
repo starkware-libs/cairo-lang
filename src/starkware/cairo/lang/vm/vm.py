@@ -11,7 +11,10 @@ from starkware.cairo.lang.compiler.encode import decode_instruction, is_call_ins
 from starkware.cairo.lang.compiler.error_handling import LocationError
 from starkware.cairo.lang.compiler.expression_evaluator import ExpressionEvaluator
 from starkware.cairo.lang.compiler.instruction import (
-    Instruction, Register, decode_instruction_values)
+    Instruction,
+    Register,
+    decode_instruction_values,
+)
 from starkware.cairo.lang.compiler.program import Program, ProgramBase
 from starkware.cairo.lang.vm.builtin_runner import BuiltinRunner
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
@@ -21,7 +24,7 @@ from starkware.cairo.lang.vm.validated_memory_dict import ValidatedMemoryDict, V
 from starkware.cairo.lang.vm.vm_consts import VmConsts, VmConstsContext
 from starkware.python.math_utils import div_mod
 
-Rule = Callable[['VirtualMachine', RelocatableValue], Optional[int]]
+Rule = Callable[["VirtualMachine", RelocatableValue], Optional[int]]
 
 MAX_TRACEBACK_ENTRIES = 20
 
@@ -46,9 +49,14 @@ class VmExceptionBase(Exception):
 
 class VmException(LocationError, VmExceptionBase):
     def __init__(
-            self, pc, inst_location: Optional[InstructionLocation], inner_exc,
-            traceback: Optional[str] = None, notes: Optional[List[str]] = None,
-            hint_index: Optional[int] = None):
+        self,
+        pc,
+        inst_location: Optional[InstructionLocation],
+        inner_exc,
+        traceback: Optional[str] = None,
+        notes: Optional[List[str]] = None,
+        hint_index: Optional[int] = None,
+    ):
         self.pc = pc
         self.inner_exc = inner_exc
         location = None
@@ -60,7 +68,8 @@ class VmException(LocationError, VmExceptionBase):
                 if hint_location is not None:
                     location = hint_location.location
         super().__init__(
-            f'Error at pc={self.pc}:\n{inner_exc}', location=location, traceback=traceback)
+            f"Error at pc={self.pc}:\n{inner_exc}", location=location, traceback=traceback
+        )
         if notes is not None:
             self.notes += notes
 
@@ -71,16 +80,16 @@ class InconsistentAutoDeductionError(VmExceptionBase):
         self.current_value = current_value
         self.new_value = new_value
         super().__init__(
-            f'Inconsistent auto deduction rule at address {addr}. {current_value} != {new_value}.')
+            f"Inconsistent auto deduction rule at address {addr}. {current_value} != {new_value}."
+        )
 
 
 class PureValueError(VmExceptionBase):
     def __init__(self, oper, *values):
         self.oper = oper
         self.values = values
-        values_str = f'values {values}' if len(values) > 1 else f'value {values[0]}'
-        super().__init__(
-            f'Could not complete computation {oper} of non pure {values_str}.')
+        values_str = f"values {values}" if len(values) > 1 else f"value {values[0]}"
+        super().__init__(f"Could not complete computation {oper} of non pure {values_str}.")
 
 
 class HintException(VmExceptionBase):
@@ -89,12 +98,13 @@ class HintException(VmExceptionBase):
             fix = self.fix_name_and_line(vm, exc_value)
             if fix is not None:
                 filename, line_num = fix
-                exc_value = IndentationError(exc_value.msg, (
-                    filename, line_num, exc_value.offset, exc_value.text))
+                exc_value = IndentationError(
+                    exc_value.msg, (filename, line_num, exc_value.offset, exc_value.text)
+                )
 
         tb_exception = traceback.TracebackException(exc_type, exc_value, exc_tb)
         # First item in the traceback is the call to exec, remove it.
-        assert tb_exception.stack[0].filename.endswith('vm.py')
+        assert tb_exception.stack[0].filename.endswith("vm.py")
         del tb_exception.stack[0]
 
         # If we have location information, replace '<hint*>' entries with the correct filename
@@ -104,31 +114,29 @@ class HintException(VmExceptionBase):
             if fix is None:
                 return item
             filename, line_num = fix
-            return traceback.FrameSummary(
-                filename=filename,
-                lineno=line_num,
-                name=item.name)
+            return traceback.FrameSummary(filename=filename, lineno=line_num, name=item.name)
+
         tb_exception.stack = traceback.StackSummary.from_list(
-            map(replace_stack_item, tb_exception.stack))
-        super().__init__(f'Got an exception while executing a hint.')
-        self.exception_str = ''.join(tb_exception.format())
+            map(replace_stack_item, tb_exception.stack)
+        )
+        super().__init__(f"Got an exception while executing a hint.")
+        self.exception_str = "".join(tb_exception.format())
         self.inner_exc = exc_value
 
     ExcType = Union[IndentationError, SyntaxError, traceback.FrameSummary]
 
-    def fix_name_and_line(
-            self, vm, exc_value: ExcType) -> Optional[Tuple[str, int]]:
-        m = re.match('^<hint(?P<index>[0-9]+)>$', str(exc_value.filename))
+    def fix_name_and_line(self, vm, exc_value: ExcType) -> Optional[Tuple[str, int]]:
+        m = re.match("^<hint(?P<index>[0-9]+)>$", str(exc_value.filename))
         if m is None:
             return None
-        pc, index = vm.hint_pc_and_index[int(m.group('index'))]
+        pc, index = vm.hint_pc_and_index[int(m.group("index"))]
         location = vm.get_location(pc)
         if (location is None) or (location.hints[index] is None):
             return None
         hint_location = location.hints[index]
         start_line = hint_location.location.start_line
         prefix_lines = hint_location.n_prefix_newlines
-        line_num = (exc_value.lineno + start_line + prefix_lines - 1)
+        line_num = exc_value.lineno + start_line + prefix_lines - 1
         filename = hint_location.location.input_file.filename
         return filename, line_num
 
@@ -152,8 +160,9 @@ class RunContext:
         """
         instruction_encoding = self.memory[self.pc]
 
-        assert isinstance(instruction_encoding, int), \
-            f'Instruction should be an int. Found: {instruction_encoding}'
+        assert isinstance(
+            instruction_encoding, int
+        ), f"Instruction should be an int. Found: {instruction_encoding}"
 
         imm_addr = (self.pc + 1) % self.prime
         return instruction_encoding, self.memory.get(imm_addr)
@@ -165,7 +174,7 @@ class RunContext:
         elif instruction.dst_register is Register.FP:
             base_addr = self.fp
         else:
-            raise NotImplementedError('Invalid dst_register value')
+            raise NotImplementedError("Invalid dst_register value")
         return (base_addr + instruction.off0) % self.prime
 
     def compute_op0_addr(self, instruction: Instruction):
@@ -175,7 +184,7 @@ class RunContext:
         elif instruction.op0_register is Register.FP:
             base_addr = self.fp
         else:
-            raise NotImplementedError('Invalid op0_register value')
+            raise NotImplementedError("Invalid op0_register value")
         return (base_addr + instruction.off1) % self.prime
 
     def compute_op1_addr(self, instruction: Instruction, op0: Optional[MaybeRelocatable]):
@@ -185,13 +194,13 @@ class RunContext:
         elif instruction.op1_addr is Instruction.Op1Addr.AP:
             base_addr = self.ap
         elif instruction.op1_addr is Instruction.Op1Addr.IMM:
-            assert instruction.off2 == 1, 'In immediate mode, off2 should be 1.'
+            assert instruction.off2 == 1, "In immediate mode, off2 should be 1."
             base_addr = self.pc
         elif instruction.op1_addr is Instruction.Op1Addr.OP0:
-            assert op0 is not None, 'op0 must be known in double dereference.'
+            assert op0 is not None, "op0 must be known in double dereference."
             base_addr = op0
         else:
-            raise NotImplementedError('Invalid op1_register value')
+            raise NotImplementedError("Invalid op1_register value")
         return (base_addr + instruction.off2) % self.prime
 
     def get_traceback_entries(self):
@@ -219,10 +228,14 @@ class RunContext:
             # instruction1 (with no immediate).
             # In rare cases this may be ambiguous.
             if instruction1 is not None and is_call_instruction(
-                    encoded_instruction=instruction1, imm=None):
+                encoded_instruction=instruction1, imm=None
+            ):
                 call_pc = ret_pc - 1
-            elif instruction0 is not None and instruction1 is not None and is_call_instruction(
-                    encoded_instruction=instruction0, imm=instruction1):
+            elif (
+                instruction0 is not None
+                and instruction1 is not None
+                and is_call_instruction(encoded_instruction=instruction0, imm=instruction1)
+            ):
                 call_pc = ret_pc - 2
             else:
                 # If none of them seems like the calling instruction, abort.
@@ -241,9 +254,14 @@ class CompiledHint:
 
 class VirtualMachine:
     def __init__(
-            self, program: ProgramBase, run_context: RunContext,
-            hint_locals: Dict[str, Any], static_locals: Optional[Dict[str, Any]] = None,
-            builtin_runners: Dict[str, BuiltinRunner] = {}, program_base: Optional[int] = None):
+        self,
+        program: ProgramBase,
+        run_context: RunContext,
+        hint_locals: Dict[str, Any],
+        static_locals: Optional[Dict[str, Any]] = None,
+        builtin_runners: Dict[str, BuiltinRunner] = {},
+        program_base: Optional[int] = None,
+    ):
         """
         hints - a dictionary from memory addresses to an executable object.
           When the pc points to the memory address, before the execution of the instruction,
@@ -273,7 +291,8 @@ class VirtualMachine:
         # A set to track the memory addresses accessed by actual Cairo instructions (as opposed to
         # hints), necessary for accurate counting of memory holes.
         self.accessed_addresses: Set[MaybeRelocatable] = {
-            self.program_base + i for i in range(len(self.program.data))}
+            self.program_base + i for i in range(len(self.program.data))
+        }
 
         # If program is a StrippedProgram, there are no hints or debug information to load.
         if isinstance(program, Program):
@@ -296,18 +315,21 @@ class VirtualMachine:
         self.skip_instruction_execution = False
 
         from starkware.python import math_utils
+
         self.static_locals = static_locals.copy() if static_locals is not None else {}
-        self.static_locals.update({
-            'PRIME': self.prime,
-            'fadd': lambda a, b, p=self.prime: (a + b) % p,
-            'fsub': lambda a, b, p=self.prime: (a - b) % p,
-            'fmul': lambda a, b, p=self.prime: (a * b) % p,
-            'fdiv': lambda a, b, p=self.prime: math_utils.div_mod(a, b, p),
-            'fpow': lambda a, b, p=self.prime: pow(a, b, p),
-            'fis_quad_residue': lambda a, p=self.prime: math_utils.is_quad_residue(a, p),
-            'fsqrt': lambda a, p=self.prime: math_utils.sqrt(a, p),
-            'safe_div': math_utils.safe_div,
-        })
+        self.static_locals.update(
+            {
+                "PRIME": self.prime,
+                "fadd": lambda a, b, p=self.prime: (a + b) % p,
+                "fsub": lambda a, b, p=self.prime: (a - b) % p,
+                "fmul": lambda a, b, p=self.prime: (a * b) % p,
+                "fdiv": lambda a, b, p=self.prime: math_utils.div_mod(a, b, p),
+                "fpow": lambda a, b, p=self.prime: pow(a, b, p),
+                "fis_quad_residue": lambda a, p=self.prime: math_utils.is_quad_residue(a, p),
+                "fsqrt": lambda a, p=self.prime: math_utils.sqrt(a, p),
+                "safe_div": math_utils.safe_div,
+            }
+        )
 
     def validate_existing_memory(self):
         """
@@ -322,21 +344,28 @@ class VirtualMachine:
             for hint_index, hint in enumerate(hints):
                 hint_id = len(self.hint_pc_and_index)
                 self.hint_pc_and_index[hint_id] = (pc + program_base, hint_index)
-                compiled_hints.append(CompiledHint(
-                    compiled=self.compile_hint(
-                        hint.code, f'<hint{hint_id}>', hint_index=hint_index),
-                    # Use hint=hint in the lambda's arguments to capture this value (otherwise, it
-                    # will use the same hint object for all iterations).
-                    consts=lambda pc, ap, fp, memory, hint=hint: VmConsts(
-                        context=VmConstsContext(
-                            identifiers=program.identifiers,
-                            evaluator=ExpressionEvaluator(
-                                self.prime, ap, fp, memory, program.identifiers).eval,
-                            reference_manager=program.reference_manager,
-                            flow_tracking_data=hint.flow_tracking_data,
-                            memory=memory,
-                            pc=pc),
-                        accessible_scopes=hint.accessible_scopes)))
+                compiled_hints.append(
+                    CompiledHint(
+                        compiled=self.compile_hint(
+                            hint.code, f"<hint{hint_id}>", hint_index=hint_index
+                        ),
+                        # Use hint=hint in the lambda's arguments to capture this value (otherwise, it
+                        # will use the same hint object for all iterations).
+                        consts=lambda pc, ap, fp, memory, hint=hint: VmConsts(
+                            context=VmConstsContext(
+                                identifiers=program.identifiers,
+                                evaluator=ExpressionEvaluator(
+                                    self.prime, ap, fp, memory, program.identifiers
+                                ).eval,
+                                reference_manager=program.reference_manager,
+                                flow_tracking_data=hint.flow_tracking_data,
+                                memory=memory,
+                                pc=pc,
+                            ),
+                            accessible_scopes=hint.accessible_scopes,
+                        ),
+                    )
+                )
             self.hints[pc + program_base] = compiled_hints
 
     def load_debug_info(self, debug_info: Optional[DebugInfo], program_base: MaybeRelocatable):
@@ -349,8 +378,9 @@ class VirtualMachine:
             self.instruction_debug_info[program_base + offset] = location_info
 
     def load_program(self, program: Program, program_base: MaybeRelocatable):
-        assert self.prime == program.prime, \
-            f'Unexpected prime for loaded program: {program.prime} != {self.prime}.'
+        assert (
+            self.prime == program.prime
+        ), f"Unexpected prime for loaded program: {program.prime} != {self.prime}."
 
         self.load_debug_info(program.debug_info, program_base)
         self.load_hints(program, program_base)
@@ -370,7 +400,7 @@ class VirtualMachine:
         self.exec_scopes.append({**new_scope_locals, **self.builtin_runners})
 
     def exit_scope(self):
-        assert len(self.exec_scopes) > 1, 'Cannot exit main scope.'
+        assert len(self.exec_scopes) > 1, "Cannot exit main scope."
         self.exec_scopes.pop()
 
     def update_registers(self, instruction: Instruction, operands: Operands):
@@ -380,19 +410,19 @@ class VirtualMachine:
         elif instruction.fp_update is Instruction.FpUpdate.DST:
             self.run_context.fp = operands.dst
         elif instruction.fp_update is not Instruction.FpUpdate.REGULAR:
-            raise NotImplementedError('Invalid fp_update value')
+            raise NotImplementedError("Invalid fp_update value")
 
         # Update ap.
         if instruction.ap_update is Instruction.ApUpdate.ADD:
             if operands.res is None:
-                raise NotImplementedError('Res.UNCONSTRAINED cannot be used with ApUpdate.ADD')
+                raise NotImplementedError("Res.UNCONSTRAINED cannot be used with ApUpdate.ADD")
             self.run_context.ap += operands.res % self.prime
         elif instruction.ap_update is Instruction.ApUpdate.ADD1:
             self.run_context.ap += 1
         elif instruction.ap_update is Instruction.ApUpdate.ADD2:
             self.run_context.ap += 2
         elif instruction.ap_update is not Instruction.ApUpdate.REGULAR:
-            raise NotImplementedError('Invalid ap_update value')
+            raise NotImplementedError("Invalid ap_update value")
         self.run_context.ap = self.run_context.ap % self.prime
 
         # Update pc.
@@ -402,13 +432,13 @@ class VirtualMachine:
             self.run_context.pc += instruction.size
         elif instruction.pc_update is Instruction.PcUpdate.JUMP:
             if operands.res is None:
-                raise NotImplementedError('Res.UNCONSTRAINED cannot be used with PcUpdate.JUMP')
+                raise NotImplementedError("Res.UNCONSTRAINED cannot be used with PcUpdate.JUMP")
             self.run_context.pc = operands.res
         elif instruction.pc_update is Instruction.PcUpdate.JUMP_REL:
             if operands.res is None:
-                raise NotImplementedError('Res.UNCONSTRAINED cannot be used with PcUpdate.JUMP_REL')
+                raise NotImplementedError("Res.UNCONSTRAINED cannot be used with PcUpdate.JUMP_REL")
             if not isinstance(operands.res, int):
-                raise PureValueError('jmp rel', operands.res)
+                raise PureValueError("jmp rel", operands.res)
             self.run_context.pc += operands.res
         elif instruction.pc_update is Instruction.PcUpdate.JNZ:
             if self.is_zero(operands.dst):
@@ -416,59 +446,76 @@ class VirtualMachine:
             else:
                 self.run_context.pc += operands.op1
         else:
-            raise NotImplementedError('Invalid pc_update value')
+            raise NotImplementedError("Invalid pc_update value")
         self.run_context.pc = self.run_context.pc % self.prime
 
     def deduce_op0(
-            self, instruction: Instruction, dst: Optional[MaybeRelocatable],
-            op1: Optional[MaybeRelocatable]) -> \
-            Tuple[Optional[MaybeRelocatable], Optional[MaybeRelocatable]]:
+        self,
+        instruction: Instruction,
+        dst: Optional[MaybeRelocatable],
+        op1: Optional[MaybeRelocatable],
+    ) -> Tuple[Optional[MaybeRelocatable], Optional[MaybeRelocatable]]:
         if instruction.opcode is Instruction.Opcode.CALL:
             return self.run_context.pc + instruction.size, None
         elif instruction.opcode is Instruction.Opcode.ASSERT_EQ:
-            if (instruction.res is Instruction.Res.ADD) and (dst is not None) and \
-                    (op1 is not None):
+            if (instruction.res is Instruction.Res.ADD) and (dst is not None) and (op1 is not None):
                 return (dst - op1) % self.prime, dst  # type: ignore
-            elif (instruction.res is Instruction.Res.MUL) and isinstance(dst, int) and \
-                    isinstance(op1, int) and op1 != 0:
+            elif (
+                (instruction.res is Instruction.Res.MUL)
+                and isinstance(dst, int)
+                and isinstance(op1, int)
+                and op1 != 0
+            ):
                 return div_mod(dst, op1, self.prime), dst
         return None, None
 
     def deduce_op1(
-            self, instruction: Instruction, dst: Optional[MaybeRelocatable],
-            op0: Optional[MaybeRelocatable]) -> \
-            Tuple[Optional[MaybeRelocatable], Optional[MaybeRelocatable]]:
+        self,
+        instruction: Instruction,
+        dst: Optional[MaybeRelocatable],
+        op0: Optional[MaybeRelocatable],
+    ) -> Tuple[Optional[MaybeRelocatable], Optional[MaybeRelocatable]]:
         if instruction.opcode is Instruction.Opcode.ASSERT_EQ:
             if (instruction.res is Instruction.Res.OP1) and (dst is not None):
                 return dst, dst
-            elif (instruction.res is Instruction.Res.ADD) and (dst is not None) and \
-                    (op0 is not None):
+            elif (
+                (instruction.res is Instruction.Res.ADD) and (dst is not None) and (op0 is not None)
+            ):
                 return (dst - op0) % self.prime, dst  # type: ignore
-            elif (instruction.res is Instruction.Res.MUL) and isinstance(dst, int) and \
-                    isinstance(op0, int) and op0 != 0:
+            elif (
+                (instruction.res is Instruction.Res.MUL)
+                and isinstance(dst, int)
+                and isinstance(op0, int)
+                and op0 != 0
+            ):
                 return div_mod(dst, op0, self.prime), dst
         return None, None
 
     def compute_res(
-            self, instruction: Instruction, op0: MaybeRelocatable, op1: MaybeRelocatable,
-            op0_addr: MaybeRelocatable) -> Optional[MaybeRelocatable]:
+        self,
+        instruction: Instruction,
+        op0: MaybeRelocatable,
+        op1: MaybeRelocatable,
+        op0_addr: MaybeRelocatable,
+    ) -> Optional[MaybeRelocatable]:
         if instruction.res is Instruction.Res.OP1:
             return op1
         elif instruction.res is Instruction.Res.ADD:
             return (op0 + op1) % self.prime
         elif instruction.res is Instruction.Res.MUL:
             if isinstance(op0, RelocatableValue) or isinstance(op1, RelocatableValue):
-                raise PureValueError('*', op0, op1)
+                raise PureValueError("*", op0, op1)
             return (op0 * op1) % self.prime
         elif instruction.res is Instruction.Res.UNCONSTRAINED:
             # In this case res should be the inverse of dst.
             # For efficiency, we do not compute it here.
             return None
         else:
-            raise NotImplementedError('Invalid res value')
+            raise NotImplementedError("Invalid res value")
 
-    def compute_operands(self, instruction: Instruction) -> \
-            Tuple[Operands, List[int], List[MaybeRelocatable]]:
+    def compute_operands(
+        self, instruction: Instruction
+    ) -> Tuple[Operands, List[int], List[MaybeRelocatable]]:
         """
         Computes the values of the operands. Deduces dst if needed.
         Returns:
@@ -549,11 +596,11 @@ class VirtualMachine:
         if should_update_op1:
             self.validated_memory[op1_addr] = op1
 
-        return Operands(
-            dst=dst,
-            op0=op0,
-            op1=op1,
-            res=res), [dst_addr, op0_addr, op1_addr], [dst, op0, op1]
+        return (
+            Operands(dst=dst, op0=op0, op1=op1, res=res),
+            [dst_addr, op0_addr, op1_addr],
+            [dst, op0, op1],
+        )
 
     def is_zero(self, value):
         """
@@ -563,7 +610,7 @@ class VirtualMachine:
         if not isinstance(value, int):
             if isinstance(value, RelocatableValue) and value.offset >= 0:
                 return False
-            raise PureValueError('jmp != 0', value)
+            raise PureValueError("jmp != 0", value)
         return value == 0
 
     def is_integer_value(self, value):
@@ -591,51 +638,53 @@ class VirtualMachine:
     def opcode_assertions(self, instruction: Instruction, operands: Operands):
         if instruction.opcode is Instruction.Opcode.ASSERT_EQ:
             if operands.res is None:
-                raise NotImplementedError(
-                    'Res.UNCONSTRAINED cannot be used with Opcode.ASSERT_EQ')
+                raise NotImplementedError("Res.UNCONSTRAINED cannot be used with Opcode.ASSERT_EQ")
             if operands.dst != operands.res and not self.check_eq(operands.dst, operands.res):
                 raise Exception(
-                    f'An ASSERT_EQ instruction failed: {operands.dst} != {operands.res}')
+                    f"An ASSERT_EQ instruction failed: {operands.dst} != {operands.res}"
+                )
         elif instruction.opcode is Instruction.Opcode.CALL:
             next_pc = self.run_context.pc + instruction.size
             if operands.op0 != next_pc and not self.check_eq(operands.op0, next_pc):
                 raise Exception(
-                    'Call failed to write return-pc (inconsistent op0): ' +
-                    f'{operands.op0} != {next_pc}. Did you forget to increment ap?')
+                    "Call failed to write return-pc (inconsistent op0): "
+                    + f"{operands.op0} != {next_pc}. Did you forget to increment ap?"
+                )
             fp = self.run_context.fp
             if operands.dst != fp and not self.check_eq(operands.dst, fp):
                 raise Exception(
-                    'Call failed to write return-fp (inconsistent dst): ' +
-                    f'{operands.dst} != {fp}. Did you forget to increment ap?')
+                    "Call failed to write return-fp (inconsistent dst): "
+                    + f"{operands.dst} != {fp}. Did you forget to increment ap?"
+                )
         elif instruction.opcode in [Instruction.Opcode.RET, Instruction.Opcode.NOP]:
             # Nothing to check.
             pass
         else:
-            raise NotImplementedError(f'Unsupported opcode {instruction.opcode}')
+            raise NotImplementedError(f"Unsupported opcode {instruction.opcode}")
 
     def step(self):
         self.skip_instruction_execution = False
         # Execute hints.
         for hint_index, hint in enumerate(self.hints.get(self.run_context.pc, [])):
             exec_locals = self.exec_scopes[-1]
-            exec_locals['memory'] = memory = self.validated_memory
-            exec_locals['ap'] = ap = self.run_context.ap
-            exec_locals['fp'] = fp = self.run_context.fp
-            exec_locals['pc'] = pc = self.run_context.pc
-            exec_locals['current_step'] = self.current_step
-            exec_locals['ids'] = hint.consts(pc, ap, fp, memory)
+            exec_locals["memory"] = memory = self.validated_memory
+            exec_locals["ap"] = ap = self.run_context.ap
+            exec_locals["fp"] = fp = self.run_context.fp
+            exec_locals["pc"] = pc = self.run_context.pc
+            exec_locals["current_step"] = self.current_step
+            exec_locals["ids"] = hint.consts(pc, ap, fp, memory)
 
-            exec_locals['vm_load_program'] = self.load_program
-            exec_locals['vm_enter_scope'] = self.enter_scope
-            exec_locals['vm_exit_scope'] = self.exit_scope
+            exec_locals["vm_load_program"] = self.load_program
+            exec_locals["vm_enter_scope"] = self.enter_scope
+            exec_locals["vm_exit_scope"] = self.exit_scope
             exec_locals.update(self.static_locals)
 
             self.exec_hint(hint.compiled, exec_locals, hint_index=hint_index)
 
             # Clear ids (which will be rewritten by the next hint anyway) to make the VM instance
             # smaller and faster to copy.
-            del exec_locals['ids']
-            del exec_locals['memory']
+            del exec_locals["ids"]
+            del exec_locals["memory"]
 
             if self.skip_instruction_execution:
                 return
@@ -651,12 +700,12 @@ class VirtualMachine:
         This function can be overridden by subclasses.
         """
         try:
-            return compile(source, filename, mode='exec')
+            return compile(source, filename, mode="exec")
         except (IndentationError, SyntaxError):
             hint_exception = HintException(self, *sys.exc_info())
             raise self.as_vm_exception(
-                hint_exception, notes=[hint_exception.exception_str],
-                hint_index=hint_index) from None
+                hint_exception, notes=[hint_exception.exception_str], hint_index=hint_index
+            ) from None
 
     def exec_hint(self, code, globals_, hint_index):
         """
@@ -668,14 +717,15 @@ class VirtualMachine:
         except Exception:
             hint_exception = HintException(self, *sys.exc_info())
             raise self.as_vm_exception(
-                hint_exception, notes=[hint_exception.exception_str],
-                hint_index=hint_index) from None
+                hint_exception, notes=[hint_exception.exception_str], hint_index=hint_index
+            ) from None
 
     def run_instruction(self, instruction, instruction_encoding):
         try:
             # Compute operands.
             operands, operands_mem_addresses, operands_mem_values = self.compute_operands(
-                instruction)
+                instruction
+            )
         except Exception as exc:
             raise self.as_vm_exception(exc) from None
 
@@ -686,11 +736,13 @@ class VirtualMachine:
             raise self.as_vm_exception(exc) from None
 
         # Write to trace.
-        self.trace.append(TraceEntry(
-            pc=self.run_context.pc,
-            ap=self.run_context.ap,
-            fp=self.run_context.fp,
-        ))
+        self.trace.append(
+            TraceEntry(
+                pc=self.run_context.pc,
+                ap=self.run_context.ap,
+                fp=self.run_context.fp,
+            )
+        )
 
         self.accessed_addresses.update(operands_mem_addresses)
         self.accessed_addresses.add(self.run_context.pc)
@@ -720,8 +772,8 @@ class VirtualMachine:
         return self.trace[-1].pc
 
     def as_vm_exception(
-            self, exc, pc=None, notes: Optional[List[str]] = None,
-            hint_index: Optional[int] = None):
+        self, exc, pc=None, notes: Optional[List[str]] = None, hint_index: Optional[int] = None
+    ):
         """
         Wraps the exception with a VmException, adding to it location information. If pc is not
         given the current pc is used.
@@ -747,16 +799,16 @@ class VirtualMachine:
         """
         Returns the traceback at the current pc.
         """
-        traceback = ''
+        traceback = ""
         for traceback_pc in self.run_context.get_traceback_entries():
             location = self.get_location(pc=traceback_pc)
             if location is None:
-                traceback += f'Unknown location (pc={traceback_pc})\n'
+                traceback += f"Unknown location (pc={traceback_pc})\n"
                 continue
-            traceback += location.inst.to_string_with_content(message=f'(pc={traceback_pc})') + '\n'
+            traceback += location.inst.to_string_with_content(message=f"(pc={traceback_pc})") + "\n"
         if len(traceback) == 0:
             return None
-        return 'Cairo traceback (most recent call last):\n' + traceback
+        return "Cairo traceback (most recent call last):\n" + traceback
 
     def add_validation_rule(self, segment_index, rule: ValidationRule, *args):
         self.validated_memory.add_validation_rule(segment_index, rule, *args)
@@ -808,12 +860,12 @@ class VirtualMachine:
     def end_run(self):
         self.verify_auto_deductions()
         if len(self.exec_scopes) != 1:
-            raise VmExceptionBase('Every enter_scope() requires a corresponding exit_scope().')
+            raise VmExceptionBase("Every enter_scope() requires a corresponding exit_scope().")
 
 
 def get_perm_range_check_limits(
-        trace: List[TraceEntry[int]],
-        memory: MemoryDict) -> Tuple[int, int]:
+    trace: List[TraceEntry[int]], memory: MemoryDict
+) -> Tuple[int, int]:
     """
     Returns the minimum value and maximum value in the perm_range_check component.
     """

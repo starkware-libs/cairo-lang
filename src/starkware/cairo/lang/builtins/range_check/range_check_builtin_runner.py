@@ -8,11 +8,12 @@ from starkware.python.math_utils import safe_div
 class RangeCheckBuiltinRunner(SimpleBuiltinRunner):
     def __init__(self, included: bool, ratio, inner_rc_bound, n_parts):
         super().__init__(
-            name='range_check',
+            name="range_check",
             included=included,
             ratio=ratio,
             cells_per_instance=1,
-            n_input_cells=1)
+            n_input_cells=1,
+        )
         self.inner_rc_bound = inner_rc_bound
         self.bound = inner_rc_bound ** n_parts
         self.n_parts = n_parts
@@ -20,40 +21,46 @@ class RangeCheckBuiltinRunner(SimpleBuiltinRunner):
     def add_validation_rules(self, runner):
         def rule(memory, addr):
             value = memory[addr]
-            assert isinstance(value, int), \
-                f'Range-check builtin: Expected value at address {addr} to be an integer. ' \
-                f'Got: {value}.'
+            assert isinstance(value, int), (
+                f"Range-check builtin: Expected value at address {addr} to be an integer. "
+                f"Got: {value}."
+            )
             # The range check builtin asserts that 0 <= value < BOUND.
             # For example, if the layout uses 8 16-bit range-checks per instance,
             # bound will be 2**(16 * 8) = 2**128.
-            assert 0 <= value < self.bound, \
-                f'Value {value}, in range check builtin {addr - self.base}, is out of range ' \
-                f'[0, {self.bound}).'
+            assert 0 <= value < self.bound, (
+                f"Value {value}, in range check builtin {addr - self.base}, is out of range "
+                f"[0, {self.bound})."
+            )
             return {addr}
 
         runner.vm.add_validation_rule(self.base.segment_index, rule)
 
     def air_private_input(self, runner) -> Dict[str, Any]:
-        assert self.base is not None, 'Uninitialized self.base.'
+        assert self.base is not None, "Uninitialized self.base."
         res: Dict[int, Any] = {}
         for addr, val in runner.vm_memory.items():
-            if not isinstance(addr, RelocatableValue) or \
-                    addr.segment_index != self.base.segment_index:
+            if (
+                not isinstance(addr, RelocatableValue)
+                or addr.segment_index != self.base.segment_index
+            ):
                 continue
             idx = addr.offset
 
             assert isinstance(val, int)
-            res[idx] = {'index': idx, 'value': hex(val)}
+            res[idx] = {"index": idx, "value": hex(val)}
 
-        return {'range_check': sorted(res.values(), key=lambda item: item['index'])}
+        return {"range_check": sorted(res.values(), key=lambda item: item["index"])}
 
     def get_range_check_usage(self, runner) -> Optional[Tuple[int, int]]:
-        assert self.base is not None, 'Uninitialized self.base.'
+        assert self.base is not None, "Uninitialized self.base."
         rc_min = None
         rc_max = None
         for addr, val in runner.vm_memory.items():
-            if not isinstance(addr, RelocatableValue) or \
-                    addr.segment_index != self.base.segment_index:
+            if (
+                not isinstance(addr, RelocatableValue)
+                or addr.segment_index != self.base.segment_index
+            ):
                 continue
 
             # Split val into n_parts parts.
@@ -85,8 +92,13 @@ class RangeCheckBuiltinVerifier(BuiltinVerifier):
         if not self.included:
             return [], []
 
-        addresses = public_input.memory_segments['range_check']
+        addresses = public_input.memory_segments["range_check"]
         max_size = safe_div(public_input.n_steps, self.ratio)
-        assert 0 <= addresses.begin_addr <= addresses.stop_ptr <= \
-            addresses.begin_addr + max_size < 2**64
+        assert (
+            0
+            <= addresses.begin_addr
+            <= addresses.stop_ptr
+            <= addresses.begin_addr + max_size
+            < 2 ** 64
+        )
         return [addresses.begin_addr], [addresses.stop_ptr]

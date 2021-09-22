@@ -1,15 +1,52 @@
 import pytest
 
 from starkware.cairo.lang.vm.memory_dict import (
-    InconsistentMemoryError, MemoryDict, UnknownMemoryError)
+    InconsistentMemoryError,
+    MemoryDict,
+    UnknownMemoryError,
+)
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
 
 
 def test_memory_dict_serialize():
     memory = MemoryDict({1: 2, 3: 4, 5: 6})
-    expected_serialized = bytes([
-        1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0,
-        6, 0, 0])
+    expected_serialized = bytes(
+        [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            4,
+            0,
+            0,
+            5,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            6,
+            0,
+            0,
+        ]
+    )
     serialized = memory.serialize(3)
     assert expected_serialized == serialized
     assert MemoryDict.deserialize(serialized, 3) == memory
@@ -23,11 +60,11 @@ def test_memory_dict_getitem():
 
 def test_memory_dict_check_element():
     memory = MemoryDict()
-    with pytest.raises(KeyError, match='must be an int'):
-        memory['not a number'] = 12
-    with pytest.raises(KeyError, match='must be nonnegative'):
+    with pytest.raises(KeyError, match="must be an int"):
+        memory["not a number"] = 12
+    with pytest.raises(KeyError, match="must be nonnegative"):
         memory[-12] = 13
-    with pytest.raises(ValueError, match='The offset of a relocatable value must be nonnegative'):
+    with pytest.raises(ValueError, match="The offset of a relocatable value must be nonnegative"):
         memory[RelocatableValue(segment_index=10, offset=-2)] = 13
     # A value may have a negative offset.
     memory[13] = RelocatableValue(segment_index=10, offset=-2)
@@ -35,9 +72,9 @@ def test_memory_dict_check_element():
 
 def test_memory_dict_get():
     memory = MemoryDict({14: 15})
-    assert memory.get(14, 'default') == 15
-    assert memory.get(1234, 'default') == 'default'
-    assert memory.get(-10, 'default') == 'default'
+    assert memory.get(14, "default") == 15
+    assert memory.get(1234, "default") == "default"
+    assert memory.get(-10, "default") == "default"
     # Attempting to read address with a negative offset is ok, it simply returns None.
     assert memory.get(RelocatableValue(segment_index=10, offset=-2)) is None
 
@@ -48,11 +85,11 @@ def test_memory_dict_setdefault():
     assert memory[14] == 15
     memory.setdefault(123, 456)
     assert memory[123] == 456
-    with pytest.raises(ValueError, match='must be an int'):
-        memory.setdefault(10, 'default')
-    with pytest.raises(KeyError, match='must be nonnegative'):
+    with pytest.raises(ValueError, match="must be an int"):
+        memory.setdefault(10, "default")
+    with pytest.raises(KeyError, match="must be nonnegative"):
         memory.setdefault(-10, 123)
-    with pytest.raises(ValueError, match='The offset of a relocatable value must be nonnegative'):
+    with pytest.raises(ValueError, match="The offset of a relocatable value must be nonnegative"):
         memory[RelocatableValue(segment_index=10, offset=-2)] = 13
 
 
@@ -94,18 +131,23 @@ def test_segment_relocation_failures():
     memory = MemoryDict()
 
     relocation_target = RelocatableValue(segment_index=4, offset=25)
-    with pytest.raises(AssertionError, match='src_ptr.segment_index must be < 0, src_ptr=1:2.'):
-        memory.add_relocation_rule(src_ptr=RelocatableValue(
-            segment_index=1, offset=2), dest_ptr=relocation_target)
+    with pytest.raises(AssertionError, match="src_ptr.segment_index must be < 0, src_ptr=1:2."):
+        memory.add_relocation_rule(
+            src_ptr=RelocatableValue(segment_index=1, offset=2), dest_ptr=relocation_target
+        )
 
-    with pytest.raises(AssertionError, match='src_ptr.offset must be 0, src_ptr=-3:2.'):
-        memory.add_relocation_rule(src_ptr=RelocatableValue(
-            segment_index=-3, offset=2), dest_ptr=relocation_target)
+    with pytest.raises(AssertionError, match="src_ptr.offset must be 0, src_ptr=-3:2."):
+        memory.add_relocation_rule(
+            src_ptr=RelocatableValue(segment_index=-3, offset=2), dest_ptr=relocation_target
+        )
 
-    memory.add_relocation_rule(src_ptr=RelocatableValue(
-        segment_index=-3, offset=0), dest_ptr=relocation_target)
+    memory.add_relocation_rule(
+        src_ptr=RelocatableValue(segment_index=-3, offset=0), dest_ptr=relocation_target
+    )
 
     with pytest.raises(
-            AssertionError, match='The segment with index -3 already has a relocation rule.'):
-        memory.add_relocation_rule(src_ptr=RelocatableValue(
-            segment_index=-3, offset=0), dest_ptr=relocation_target)
+        AssertionError, match="The segment with index -3 already has a relocation rule."
+    ):
+        memory.add_relocation_rule(
+            src_ptr=RelocatableValue(segment_index=-3, offset=0), dest_ptr=relocation_target
+        )

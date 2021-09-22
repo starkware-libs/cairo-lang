@@ -32,8 +32,8 @@ class TypedIdentifier(AstNode):
     modifier: Optional[Modifier] = None
 
     def format(self):
-        modifier_str = '' if self.modifier is None else self.modifier.format() + ' '
-        type_str = '' if self.expr_type is None else f' : {self.expr_type.format()}'
+        modifier_str = "" if self.modifier is None else self.modifier.format() + " "
+        type_str = "" if self.expr_type is None else f" : {self.expr_type.format()}"
         return modifier_str + self.identifier.format() + type_str
 
     def override_type(self, expr_type):

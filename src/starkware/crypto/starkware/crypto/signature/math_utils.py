@@ -30,7 +30,7 @@ def pi_as_string(digits: int) -> str:
     Returns pi as a string of decimal digits without the decimal point ("314...").
     """
     mpmath.mp.dps = digits  # Set number of digits.
-    return '3' + str(mpmath.mp.pi)[2:]
+    return "3" + str(mpmath.mp.pi)[2:]
 
 
 def is_quad_residue(n: int, p: int) -> bool:

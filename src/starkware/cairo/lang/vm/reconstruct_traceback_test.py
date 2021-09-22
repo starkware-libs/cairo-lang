@@ -24,27 +24,32 @@ def test_reconstruct_traceback():
         return ()
     end
     """
-    codes = [(code, 'filename')]
+    codes = [(code, "filename")]
     program_with_debug_info = compile_cairo(code=codes, prime=DEFAULT_PRIME, debug_info=True)
     program_without_debug_info = compile_cairo(code=codes, prime=DEFAULT_PRIME, debug_info=False)
 
     with pytest.raises(VmException) as exc:
-        get_main_runner(program=program_without_debug_info, hint_locals={}, layout='plain')
+        get_main_runner(program=program_without_debug_info, hint_locals={}, layout="plain")
 
     exception_str = str(exc.value)
 
     # The exception before calling reconstruct_traceback().
-    assert exception_str == """\
+    assert (
+        exception_str
+        == """\
 Error at pc=0:2:
 An ASSERT_EQ instruction failed: 1 != 0
 Cairo traceback (most recent call last):
 Unknown location (pc=0:8)
 Unknown location (pc=0:5)\
 """
+    )
 
     res = reconstruct_traceback(program=program_with_debug_info, traceback_txt=exception_str)
     # The exception after calling reconstruct_traceback().
-    assert res == """\
+    assert (
+        res
+        == """\
 filename:3:9: Error at pc=0:2:
         assert 0 = 1
         ^**********^
@@ -57,3 +62,4 @@ filename:8:9
         bar()
         ^***^\
 """
+    )

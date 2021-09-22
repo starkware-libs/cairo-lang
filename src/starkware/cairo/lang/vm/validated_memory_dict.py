@@ -3,7 +3,7 @@ from typing import Callable, Dict, List, Set, Tuple
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 
-ValidationRule = Callable[['MemoryDict', RelocatableValue], Set[RelocatableValue]]
+ValidationRule = Callable[["MemoryDict", RelocatableValue], Set[RelocatableValue]]
 
 
 class ValidatedMemoryDict:
@@ -29,8 +29,8 @@ class ValidatedMemoryDict:
         self._validate_memory_cell(addr, value)
 
     def __getattr__(self, name: str):
-        if name in ['__deepcopy__', '__getstate__', '__setstate__']:
-            raise AttributeError(f'ValidatedMemoryDict has no attribute named {name}.')
+        if name in ["__deepcopy__", "__getstate__", "__setstate__"]:
+            raise AttributeError(f"ValidatedMemoryDict has no attribute named {name}.")
         return getattr(self.__memory, name)
 
     def __iter__(self):

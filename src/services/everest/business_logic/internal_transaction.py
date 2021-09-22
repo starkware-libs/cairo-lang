@@ -28,8 +28,9 @@ class SchemaTracker:
 
             def get_obj_type(self, obj):
                 name = type(obj).__name__
-                assert name in classes.keys() and classes[name] == type(obj), \
-                    f'Trying to serialized the object {obj} that was not registered first.'
+                assert name in classes.keys() and classes[name] == type(
+                    obj
+                ), f"Trying to serialized the object {obj} that was not registered first."
                 # We register the Schema object here, since it might not exists when the object
                 # itself is registered.
                 if name not in self.type_schemas.keys():
@@ -41,8 +42,9 @@ class SchemaTracker:
     def add_class(self, cls: type):
         cls_name = cls.__name__
         if cls_name in self.classes:
-            assert self.classes[cls_name] == cls, \
-                f'Trying to register two classes with the same name {cls_name}'
+            assert (
+                self.classes[cls_name] == cls
+            ), f"Trying to register two classes with the same name {cls_name}"
         else:
             self.classes[cls_name] = cls
 
@@ -106,8 +108,8 @@ class EverestInternalTransaction(ValidatedMarshmallowDataclass):
     @classmethod
     @abstractmethod
     def from_external(
-            cls, external_tx: EverestTransaction,
-            general_config: Config) -> 'EverestInternalTransaction':
+        cls, external_tx: EverestTransaction, general_config: Config
+    ) -> "EverestInternalTransaction":
         """
         Returns an internal transaction genearated based on an external one.
         """
@@ -129,8 +131,8 @@ class EverestInternalTransaction(ValidatedMarshmallowDataclass):
 
     @abstractmethod
     async def apply_state_updates(
-            self, state: CarriedStateBase,
-            general_config: Config) -> Optional[EverestTransactionExecutionInfo]:
+        self, state: CarriedStateBase, general_config: Config
+    ) -> Optional[EverestTransactionExecutionInfo]:
         """
         Applies the transaction on the Merkle state in an atomic manner.
         Returns an object containing information about the execution of the transaction, or None -
@@ -148,8 +150,8 @@ class EverestInternalTransaction(ValidatedMarshmallowDataclass):
     @staticmethod
     @abstractmethod
     def get_state_selector_of_many(
-            txs: Iterable['EverestInternalTransaction'],
-            general_config: Config) -> StateSelectorBase:
+        txs: Iterable["EverestInternalTransaction"], general_config: Config
+    ) -> StateSelectorBase:
         """
         Returns the state selector of a collection of transactions (i.e., union of selectors).
         The implementation of this method must be to downcast the return type.
@@ -157,9 +159,12 @@ class EverestInternalTransaction(ValidatedMarshmallowDataclass):
 
     @staticmethod
     def _get_state_selector_of_many(
-            txs: Iterable['EverestInternalTransaction'],
-            general_config: Config,
-            state_selector_cls: Type[StateSelectorBase]) -> StateSelectorBase:
+        txs: Iterable["EverestInternalTransaction"],
+        general_config: Config,
+        state_selector_cls: Type[StateSelectorBase],
+    ) -> StateSelectorBase:
         return functools.reduce(
-            operator.__or__, (tx.get_state_selector(general_config=general_config) for tx in txs),
-            state_selector_cls.empty())
+            operator.__or__,
+            (tx.get_state_selector(general_config=general_config) for tx in txs),
+            state_selector_cls.empty(),
+        )

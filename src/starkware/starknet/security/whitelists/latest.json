@@ -310,6 +310,37 @@
         {
             "allowed_expressions": [
                 {
+                    "expr": "[cast(fp + (-5), felt*)]",
+                    "name": "starkware.cairo.common.math.split_int.base"
+                },
+                {
+                    "expr": "[cast(fp + (-4), felt*)]",
+                    "name": "starkware.cairo.common.math.split_int.bound"
+                },
+                {
+                    "expr": "[cast(fp + (-6), felt*)]",
+                    "name": "starkware.cairo.common.math.split_int.n"
+                },
+                {
+                    "expr": "[cast(fp + (-3), felt**)]",
+                    "name": "starkware.cairo.common.math.split_int.output"
+                },
+                {
+                    "expr": "[cast(fp + (-8), felt*)]",
+                    "name": "starkware.cairo.common.math.split_int.range_check_ptr"
+                },
+                {
+                    "expr": "[cast(fp + (-7), felt*)]",
+                    "name": "starkware.cairo.common.math.split_int.value"
+                }
+            ],
+            "hint_lines": [
+                "assert ids.value == 0, 'split_int(): value is out of range.'"
+            ]
+        },
+        {
+            "allowed_expressions": [
+                {
                     "expr": "[cast(fp + (-3), felt*)]",
                     "name": "starkware.cairo.common.squash_dict.squash_dict_inner.big_keys"
                 },
@@ -1350,6 +1381,38 @@
         {
             "allowed_expressions": [
                 {
+                    "expr": "[cast(fp + (-5), felt*)]",
+                    "name": "starkware.cairo.common.math.split_int.base"
+                },
+                {
+                    "expr": "[cast(fp + (-4), felt*)]",
+                    "name": "starkware.cairo.common.math.split_int.bound"
+                },
+                {
+                    "expr": "[cast(fp + (-6), felt*)]",
+                    "name": "starkware.cairo.common.math.split_int.n"
+                },
+                {
+                    "expr": "[cast(fp + (-3), felt**)]",
+                    "name": "starkware.cairo.common.math.split_int.output"
+                },
+                {
+                    "expr": "[cast(fp + (-8), felt*)]",
+                    "name": "starkware.cairo.common.math.split_int.range_check_ptr"
+                },
+                {
+                    "expr": "[cast(fp + (-7), felt*)]",
+                    "name": "starkware.cairo.common.math.split_int.value"
+                }
+            ],
+            "hint_lines": [
+                "memory[ids.output] = res = (int(ids.value) % PRIME) % ids.base",
+                "assert res < ids.bound, f'split_int(): Limb {res} is out of range.'"
+            ]
+        },
+        {
+            "allowed_expressions": [
+                {
                     "expr": "[cast(ap, felt*)]",
                     "name": "starkware.cairo.common.memcpy.memcpy.continue_copying"
                 },
@@ -1377,6 +1440,38 @@
             "hint_lines": [
                 "n -= 1",
                 "ids.continue_copying = 1 if n > 0 else 0"
+            ]
+        },
+        {
+            "allowed_expressions": [
+                {
+                    "expr": "[cast(ap, felt*)]",
+                    "name": "starkware.cairo.common.memset.memset.continue_loop"
+                },
+                {
+                    "expr": "[cast(fp + (-5), felt**)]",
+                    "name": "starkware.cairo.common.memset.memset.dst"
+                },
+                {
+                    "expr": "[cast(ap + (-1), starkware.cairo.common.memset.memset.LoopFrame*)]",
+                    "name": "starkware.cairo.common.memset.memset.frame"
+                },
+                {
+                    "expr": "[cast(fp + (-3), felt*)]",
+                    "name": "starkware.cairo.common.memset.memset.n"
+                },
+                {
+                    "expr": "cast(ap + 1, starkware.cairo.common.memset.memset.LoopFrame*)",
+                    "name": "starkware.cairo.common.memset.memset.next_frame"
+                },
+                {
+                    "expr": "[cast(fp + (-4), felt*)]",
+                    "name": "starkware.cairo.common.memset.memset.value"
+                }
+            ],
+            "hint_lines": [
+                "n -= 1",
+                "ids.continue_loop = 1 if n > 0 else 0"
             ]
         },
         {
@@ -1612,6 +1707,25 @@
         {
             "allowed_expressions": [
                 {
+                    "expr": "[cast(fp + (-5), felt**)]",
+                    "name": "starkware.cairo.common.memset.memset.dst"
+                },
+                {
+                    "expr": "[cast(fp + (-3), felt*)]",
+                    "name": "starkware.cairo.common.memset.memset.n"
+                },
+                {
+                    "expr": "[cast(fp + (-4), felt*)]",
+                    "name": "starkware.cairo.common.memset.memset.value"
+                }
+            ],
+            "hint_lines": [
+                "vm_enter_scope({'n': ids.n})"
+            ]
+        },
+        {
+            "allowed_expressions": [
+                {
                     "expr": "[cast(fp + (-3), starkware.cairo.common.dict_access.DictAccess**)]",
                     "name": "starkware.cairo.common.dict.dict_squash.dict_accesses_end"
                 },
@@ -1650,6 +1764,30 @@
                 {
                     "expr": "[cast(fp + (-4), felt**)]",
                     "name": "starkware.cairo.common.memcpy.memcpy.src"
+                },
+                {
+                    "expr": "[cast(ap, felt*)]",
+                    "name": "starkware.cairo.common.memset.memset.continue_loop"
+                },
+                {
+                    "expr": "[cast(fp + (-5), felt**)]",
+                    "name": "starkware.cairo.common.memset.memset.dst"
+                },
+                {
+                    "expr": "[cast(ap + (-1), starkware.cairo.common.memset.memset.LoopFrame*)]",
+                    "name": "starkware.cairo.common.memset.memset.frame"
+                },
+                {
+                    "expr": "[cast(fp + (-3), felt*)]",
+                    "name": "starkware.cairo.common.memset.memset.n"
+                },
+                {
+                    "expr": "cast(ap + 1, starkware.cairo.common.memset.memset.LoopFrame*)",
+                    "name": "starkware.cairo.common.memset.memset.next_frame"
+                },
+                {
+                    "expr": "[cast(fp + (-4), felt*)]",
+                    "name": "starkware.cairo.common.memset.memset.value"
                 },
                 {
                     "expr": "[cast(fp + 2, felt*)]",

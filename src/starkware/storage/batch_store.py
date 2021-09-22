@@ -14,10 +14,8 @@ class BatchStore(Storage):
         self.store = storage
         self.set_queue: Queue[Tuple[bytes, bytes, asyncio.Future]] = Queue()
         self.get_queue: Queue[Tuple[bytes, asyncio.Future]] = Queue()
-        self.tasks = [
-            asyncio.create_task(self.set_value_thread()) for _ in range(n_workers_set)]
-        self.tasks += [
-            asyncio.create_task(self.get_value_thread()) for _ in range(n_workers_get)]
+        self.tasks = [asyncio.create_task(self.set_value_thread()) for _ in range(n_workers_set)]
+        self.tasks += [asyncio.create_task(self.get_value_thread()) for _ in range(n_workers_get)]
 
     async def close(self):
         for task in self.tasks:
@@ -26,8 +24,8 @@ class BatchStore(Storage):
                 await task
             except Exception as ex:
                 if not isinstance(ex, asyncio.CancelledError):
-                    logger.error(f'Excpetion occurred! Exception: {ex}')
-                    logger.debug('Exception details', exc_info=True)
+                    logger.error(f"Excpetion occurred! Exception: {ex}")
+                    logger.debug("Exception details", exc_info=True)
 
     async def set_value(self, key: bytes, value: bytes):
         # Put value in the set_queue.

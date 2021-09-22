@@ -21,8 +21,9 @@ def test_validated_memory_dict():
         return set()
 
     def rule_constant_value(mem, addr, constant):
-        assert mem[addr] == constant, \
-            f'Expected value in address {addr} to be {constant}, got {mem[addr]}.'
+        assert (
+            mem[addr] == constant
+        ), f"Expected value in address {addr} to be {constant}, got {mem[addr]}."
         return {addr}
 
     memory_validator.add_validation_rule(1, lambda memory, addr: set())
@@ -52,11 +53,9 @@ def test_validated_memory_dict():
     memory_validator.validate_existing_memory()
 
     # Invalidate existing memory and test negative case.
-    with pytest.raises(
-            AssertionError, match='Expected value in address 4:0 to be 0, got 1.'):
+    with pytest.raises(AssertionError, match="Expected value in address 4:0 to be 0, got 1."):
         memory_validator[addr4] = 1
 
     # Test validation of existing invalid memory.
-    with pytest.raises(
-            AssertionError, match='Expected value in address 4:0 to be 0, got 1.'):
+    with pytest.raises(AssertionError, match="Expected value in address 4:0 to be 0, got 1."):
         memory_validator.validate_existing_memory()

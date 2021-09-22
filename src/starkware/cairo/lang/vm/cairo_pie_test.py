@@ -6,7 +6,11 @@ import pytest
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.cairo.lang.compiler.cairo_compile import compile_cairo
 from starkware.cairo.lang.vm.cairo_pie import (
-    CairoPie, CairoPieMetadata, ExecutionResources, SegmentInfo)
+    CairoPie,
+    CairoPieMetadata,
+    ExecutionResources,
+    SegmentInfo,
+)
 from starkware.cairo.lang.vm.cairo_runner import get_runner_from_code
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
@@ -15,8 +19,9 @@ from starkware.python.utils import add_counters
 
 def test_cairo_pie_serialize_deserialize():
     program = compile_cairo(
-        code=[('%builtins output pedersen range_check ecdsa\nmain:\n[ap] = [ap]\n', '')],
-        prime=DEFAULT_PRIME)
+        code=[("%builtins output pedersen range_check ecdsa\nmain:\n[ap] = [ap]\n", "")],
+        prime=DEFAULT_PRIME,
+    )
     metadata = CairoPieMetadata(
         program=program.stripped(),
         program_segment=SegmentInfo(0, 10),
@@ -24,28 +29,30 @@ def test_cairo_pie_serialize_deserialize():
         ret_fp_segment=SegmentInfo(6, 12),
         ret_pc_segment=SegmentInfo(7, 21),
         builtin_segments={
-            'a': SegmentInfo(4, 15),
+            "a": SegmentInfo(4, 15),
         },
         extra_segments=[],
     )
-    memory = MemoryDict({
-        1: 2,
-        RelocatableValue(3, 4): RelocatableValue(6, 7),
-    })
-    additional_data = {'c': ['d', 3]}
+    memory = MemoryDict(
+        {
+            1: 2,
+            RelocatableValue(3, 4): RelocatableValue(6, 7),
+        }
+    )
+    additional_data = {"c": ["d", 3]}
     execution_resources = ExecutionResources(
         n_steps=10,
         n_memory_holes=7,
         builtin_instance_counter={
-            'output': 6,
-            'pedersen': 3,
-        }
+            "output": 6,
+            "pedersen": 3,
+        },
     )
     cairo_pie = CairoPie(
         metadata=metadata,
         memory=memory,
         additional_data=additional_data,
-        execution_resources=execution_resources
+        execution_resources=execution_resources,
     )
 
     fileobj = io.BytesIO()
@@ -64,7 +71,7 @@ func main(output_ptr, pedersen_ptr) -> (output_ptr, pedersen_ptr):
     return (output_ptr=output_ptr, pedersen_ptr=pedersen_ptr)
 end
 """
-    runner = get_runner_from_code(code=[(code, '')], layout='small', prime=DEFAULT_PRIME)
+    runner = get_runner_from_code(code=[(code, "")], layout="small", prime=DEFAULT_PRIME)
     return runner.get_cairo_pie()
 
 
@@ -75,48 +82,47 @@ def test_cairo_pie_validity(cairo_pie):
 def test_cairo_pie_validity_invalid_program_size(cairo_pie: CairoPie):
     cairo_pie.metadata.program_segment.size += 1
     with pytest.raises(
-            AssertionError, match='Program length does not match the program segment size.'):
+        AssertionError, match="Program length does not match the program segment size."
+    ):
         cairo_pie.run_validity_checks()
 
 
 def test_cairo_pie_validity_invalid_builtin_list(cairo_pie: CairoPie):
-    cairo_pie.program.builtins.append('output')
-    with pytest.raises(
-            AssertionError, match='Invalid builtin list.'):
+    cairo_pie.program.builtins.append("output")
+    with pytest.raises(AssertionError, match="Invalid builtin list."):
         cairo_pie.run_validity_checks()
 
 
 def test_cairo_pie_validity_invalid_builtin_segments(cairo_pie: CairoPie):
-    cairo_pie.metadata.builtin_segments['tmp'] = cairo_pie.metadata.builtin_segments['output']
-    with pytest.raises(
-            AssertionError, match='Builtin list mismatch in builtin_segments.'):
+    cairo_pie.metadata.builtin_segments["tmp"] = cairo_pie.metadata.builtin_segments["output"]
+    with pytest.raises(AssertionError, match="Builtin list mismatch in builtin_segments."):
         cairo_pie.run_validity_checks()
 
 
 def test_cairo_pie_validity_invalid_builtin_list_execution_resources(cairo_pie: CairoPie):
-    cairo_pie.execution_resources.builtin_instance_counter['tmp_builtin'] = \
-        cairo_pie.execution_resources.builtin_instance_counter['output_builtin']
-    with pytest.raises(
-            AssertionError, match='Builtin list mismatch in execution_resources.'):
+    cairo_pie.execution_resources.builtin_instance_counter[
+        "tmp_builtin"
+    ] = cairo_pie.execution_resources.builtin_instance_counter["output_builtin"]
+    with pytest.raises(AssertionError, match="Builtin list mismatch in execution_resources."):
         cairo_pie.run_validity_checks()
 
 
 def test_cairo_pie_memory_negative_address(cairo_pie: CairoPie):
     # Write to a negative address.
-    cairo_pie.memory.set_without_checks(RelocatableValue(
-        segment_index=cairo_pie.metadata.program_segment.index, offset=-5), 0)
-    with pytest.raises(
-            AssertionError, match='Invalid memory cell address.'):
+    cairo_pie.memory.set_without_checks(
+        RelocatableValue(segment_index=cairo_pie.metadata.program_segment.index, offset=-5), 0
+    )
+    with pytest.raises(AssertionError, match="Invalid memory cell address."):
         cairo_pie.run_validity_checks()
 
 
 def test_cairo_pie_memory_invalid_address(cairo_pie: CairoPie):
     # Write to an invalid address.
     cairo_pie.memory.unfreeze_for_testing()
-    cairo_pie.memory[RelocatableValue(
-        segment_index=cairo_pie.metadata.ret_pc_segment.index, offset=0)] = 0
-    with pytest.raises(
-            AssertionError, match='Invalid memory cell address.'):
+    cairo_pie.memory[
+        RelocatableValue(segment_index=cairo_pie.metadata.ret_pc_segment.index, offset=0)
+    ] = 0
+    with pytest.raises(AssertionError, match="Invalid memory cell address."):
         cairo_pie.run_validity_checks()
 
 
@@ -124,17 +130,17 @@ def test_cairo_pie_memory_invalid_value(cairo_pie: CairoPie):
     # Write a value after the execution segment.
     output_end = RelocatableValue(
         segment_index=cairo_pie.metadata.execution_segment.index,
-        offset=cairo_pie.metadata.execution_segment.size)
+        offset=cairo_pie.metadata.execution_segment.size,
+    )
     cairo_pie.memory.unfreeze_for_testing()
     cairo_pie.memory[output_end] = output_end + 2
     # It should fail because the address is outside the segment expected size.
-    with pytest.raises(
-            AssertionError, match='Invalid memory cell address.'):
+    with pytest.raises(AssertionError, match="Invalid memory cell address."):
         cairo_pie.run_validity_checks()
     # Increase the size.
     cairo_pie.metadata.execution_segment.size += 1
     # Now it should fail because of the value.
-    with pytest.raises(AssertionError, match='Invalid memory cell value.'):
+    with pytest.raises(AssertionError, match="Invalid memory cell value."):
         cairo_pie.run_validity_checks()
 
 
@@ -142,7 +148,7 @@ def test_add_execution_resources():
     """
     Tests ExecutionResources __add__ calculation.
     """
-    dummy_builtins = ['builtin1', 'builtin2', 'builtin3', 'builtin4']
+    dummy_builtins = ["builtin1", "builtin2", "builtin3", "builtin4"]
 
     total_execution_resources = ExecutionResources.empty()
     total_builtin_instance_counter = {}
@@ -162,13 +168,16 @@ def test_add_execution_resources():
             random_builtin_instance_counter[random_builtin_type] = random_builtin_counter
         random_steps = random.randint(0, 1000)
         execution_resources = ExecutionResources(
-            n_steps=random_steps, builtin_instance_counter=random_builtin_instance_counter,
-            n_memory_holes=0)
+            n_steps=random_steps,
+            builtin_instance_counter=random_builtin_instance_counter,
+            n_memory_holes=0,
+        )
 
         # Update totals.
         total_steps += random_steps
         total_builtin_instance_counter = add_counters(
-            total_builtin_instance_counter, random_builtin_instance_counter)
+            total_builtin_instance_counter, random_builtin_instance_counter
+        )
 
         # Calculate total_execution_resources using __add__() function.
         total_execution_resources += execution_resources

@@ -1,8 +1,9 @@
-from collections import namedtuple
+import sys
 import types
-from typing import Dict, List, Optional, Tuple, Type, Union
+from collections import namedtuple
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
-from starkware.starknet.testing.starknet import Starknet
+from starkware.starknet.testing.state import StarknetState
 
 
 class StarknetContract:
@@ -10,16 +11,16 @@ class StarknetContract:
     A high level interface to a StarkNet contract used for testing. Allows invoking functions.
     Example:
       contract_definition = compile_starknet_files(...)
-      starknet = await Starknet.empty()
-      contract_address = await starknet.deploy(contract_definition=contract_definition)
+      state = await StarknetState.empty()
+      contract_address = await state.deploy(contract_definition=contract_definition)
       contract = StarknetContract(
-          starknet=starknet, abi=contract_definition.abi, contract_address=contract_address)
+          state=state, abi=contract_definition.abi, contract_address=contract_address)
 
       await contract.foo(a=1, b=[2, 3]).invoke()
     """
 
-    def __init__(self, starknet: Starknet, abi: dict, contract_address: Union[int, str]):
-        self.starknet = starknet
+    def __init__(self, state: StarknetState, abi: List[Any], contract_address: Union[int, str]):
+        self.state = state
 
         self._abi_function_mapping = {
             abi_entry["name"]: abi_entry for abi_entry in abi if abi_entry["type"] == "function"
@@ -55,8 +56,12 @@ class StarknetContract:
             )
 
         # Create a function like template(), but with extra arguments.
-        func_code = types.CodeType(
+        if sys.version_info.major != 3:
+            raise Exception("Must be using Python3.")
+        posonlyargcount = (0,) if sys.version_info.minor >= 8 else ()
+        func_code = types.CodeType(  # type: ignore
             len(arg_names),  # Arg: argcount.
+            *posonlyargcount,  # type: ignore
             0,  # Arg: kwonlyargcount.
             len(arg_names),  # Arg: nlocals.
             template.__code__.co_stacksize + len(arg_names),  # Arg: stacksize.
@@ -171,7 +176,7 @@ class StarknetContract:
                 raise NotImplementedError
 
         return StarknetContractFunctionInvocation(
-            starknet=self.starknet,
+            state=self.state,
             contract_address=self.contract_address,
             function_abi=function_abi,
             calldata=calldata,
@@ -186,13 +191,13 @@ class StarknetContractFunctionInvocation:
 
     def __init__(
         self,
-        starknet: Starknet,
+        state: StarknetState,
         contract_address: Union[int, str],
         function_abi: dict,
         calldata: List[int],
         ret_tuple: Type,
     ):
-        self.starknet = starknet
+        self.state = state
         self.contract_address = contract_address
         self.function_abi = function_abi
         self.calldata = calldata
@@ -202,7 +207,7 @@ class StarknetContractFunctionInvocation:
         """
         Executes the function call, without changing the state.
         """
-        execution_info = await self.starknet.copy().invoke_raw(
+        execution_info = await self.state.copy().invoke_raw(
             contract_address=self.contract_address,
             selector=self.function_abi["name"],
             calldata=self.calldata,
@@ -213,7 +218,7 @@ class StarknetContractFunctionInvocation:
         """
         Executes the function call, and apply changes on the state.
         """
-        execution_info = await self.starknet.invoke_raw(
+        execution_info = await self.state.invoke_raw(
             contract_address=self.contract_address,
             selector=self.function_abi["name"],
             calldata=self.calldata,

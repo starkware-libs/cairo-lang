@@ -3,8 +3,9 @@ python_lib(cairo_common_lib
     FILES
     alloc.cairo
     bitwise.cairo
-    cairo_keccak/keccak_utils.py
     cairo_builtins.cairo
+    cairo_keccak/keccak_utils.py
+    cairo_sha256/sha256_utils.py
     default_dict.cairo
     dict_access.cairo
     dict.cairo
@@ -21,6 +22,7 @@ python_lib(cairo_common_lib
     math_utils.py
     math.cairo
     memcpy.cairo
+    memset.cairo
     merkle_multi_update.cairo
     merkle_update.cairo
     patricia_utils.py

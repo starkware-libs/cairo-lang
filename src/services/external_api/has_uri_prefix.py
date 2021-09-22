@@ -6,6 +6,7 @@ class HasUriPrefix(ABC):
     """
     A base class of HTTP Gateway services.
     """
+
     @property
     @classmethod
     @abstractmethod
@@ -21,4 +22,4 @@ class HasUriPrefix(ABC):
         Concatenates cls.prefix with given URI.
         """
         prefix = cast(str, cls.prefix)  # Mypy sees the property as a callable.
-        return name if len(prefix) == 0 else f'{cls.prefix}{name}'
+        return name if len(prefix) == 0 else f"{cls.prefix}{name}"

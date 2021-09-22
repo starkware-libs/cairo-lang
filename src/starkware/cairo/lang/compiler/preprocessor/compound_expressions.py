@@ -4,14 +4,27 @@ from typing import List, Optional, Tuple, Union
 
 from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt
 from starkware.cairo.lang.compiler.ast.code_elements import (
-    CodeElement, CodeElementTemporaryVariable)
+    CodeElement,
+    CodeElementTemporaryVariable,
+)
 from starkware.cairo.lang.compiler.ast.expr import (
-    ExprConst, ExprDeref, Expression, ExprHint, ExprIdentifier, ExprNeg, ExprOperator, ExprReg)
+    ExprConst,
+    ExprDeref,
+    Expression,
+    ExprHint,
+    ExprIdentifier,
+    ExprNeg,
+    ExprOperator,
+    ExprReg,
+)
 from starkware.cairo.lang.compiler.ast.types import TypedIdentifier
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.instruction import Register
 from starkware.cairo.lang.compiler.instruction_builder import (
-    InstructionBuilderError, _parse_offset, _parse_register_offset)
+    InstructionBuilderError,
+    _parse_offset,
+    _parse_register_offset,
+)
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
 from starkware.cairo.lang.compiler.references import translate_ap
 
@@ -79,7 +92,7 @@ class CompoundExpressionVisitor:
         will be replaced by a variable for DEREF. The expression "[ap] + 6" will be left unchanged
         for OPERATION but will be replaced by a variable for DEREF and DEREF_CONST.
         """
-        funcname = f'rewrite_{type(expr).__name__}'
+        funcname = f"rewrite_{type(expr).__name__}"
         return getattr(self, funcname)(expr, sim)
 
     def rewrite_ExprConst(self, expr: ExprConst, sim: SimplicityLevel):
@@ -90,19 +103,21 @@ class CompoundExpressionVisitor:
     def rewrite_ExprReg(self, expr: ExprReg, sim: SimplicityLevel):
         if expr.reg is Register.AP:
             raise PreprocessorError(
-                'ap may only be used in an expression of the form [ap + <const>].',
-                location=expr.location)
+                "ap may only be used in an expression of the form [ap + <const>].",
+                location=expr.location,
+            )
         elif expr.reg is Register.FP:
             return self.rewrite(expr=self.context.get_fp_val(expr.location), sim=sim)
         else:
-            raise NotImplementedError(f'Unknown register {expr.reg}.')
+            raise NotImplementedError(f"Unknown register {expr.reg}.")
 
     def rewrite_ExprOperator(self, expr: ExprOperator, sim: SimplicityLevel):
         expr = ExprOperator(
             a=self.rewrite(expr.a, SimplicityLevel.DEREF),
             op=expr.op,
             b=self.rewrite(expr.b, SimplicityLevel.DEREF_CONST),
-            location=expr.location)
+            location=expr.location,
+        )
 
         if sim is SimplicityLevel.OPERATION:
             return expr
@@ -121,16 +136,20 @@ class CompoundExpressionVisitor:
 
     def rewrite_ExprPow(self, expr: ExprReg, sim: SimplicityLevel):
         raise PreprocessorError(
-            "Operator '**' is only supported for constant values.",
-            location=expr.location)
+            "Operator '**' is only supported for constant values.", location=expr.location
+        )
 
     def rewrite_ExprNeg(self, expr: ExprNeg, sim: SimplicityLevel):
         # Treat "-val" as "val * (-1)".
-        return self.rewrite(ExprOperator(
-            a=expr.val,
-            op='*',
-            b=ExprConst(val=-1, location=expr.location),
-            location=expr.location), sim)
+        return self.rewrite(
+            ExprOperator(
+                a=expr.val,
+                op="*",
+                b=ExprConst(val=-1, location=expr.location),
+                location=expr.location,
+            ),
+            sim,
+        )
 
     def rewrite_ExprDeref(self, expr: ExprDeref, sim: SimplicityLevel):
         if is_simple_deref(expr):
@@ -138,7 +157,8 @@ class CompoundExpressionVisitor:
             return expr
 
         expr = ExprDeref(
-            addr=self.rewrite(expr.addr, SimplicityLevel.DEREF_OFFSET), location=expr.location)
+            addr=self.rewrite(expr.addr, SimplicityLevel.DEREF_OFFSET), location=expr.location
+        )
         return expr if sim is SimplicityLevel.OPERATION else self.wrap(expr)
 
     def rewrite_ExprHint(self, expr: ExprHint, sim: SimplicityLevel):
@@ -150,11 +170,15 @@ class CompoundExpressionVisitor:
         expr = self.translate_ap(expr)
         self.n_vars += 1
 
-        self.code_elements.append(CodeElementTemporaryVariable(
-            typed_identifier=TypedIdentifier(
-                identifier=identifier, expr_type=TypeFelt(location=expr.location)),
-            expr=expr,
-            location=expr.location))
+        self.code_elements.append(
+            CodeElementTemporaryVariable(
+                typed_identifier=TypedIdentifier(
+                    identifier=identifier, expr_type=TypeFelt(location=expr.location)
+                ),
+                expr=expr,
+                location=expr.location,
+            )
+        )
         return identifier
 
     def translate_ap(self, expr):
@@ -162,8 +186,10 @@ class CompoundExpressionVisitor:
 
 
 def process_compound_expressions(
-        exprs: List[Expression], simplicity: Union[SimplicityLevel, List[SimplicityLevel]],
-        context: CompoundExpressionContext) -> Tuple[List[CodeElement], List[Expression]]:
+    exprs: List[Expression],
+    simplicity: Union[SimplicityLevel, List[SimplicityLevel]],
+    context: CompoundExpressionContext,
+) -> Tuple[List[CodeElement], List[Expression]]:
     """
     Rewrites the given list of expressions, by adding temporary variables, in the required
     simiplicity levels.
@@ -192,7 +218,8 @@ def process_compound_expressions(
 
 
 def process_compound_assert(
-        expr_a: Expression, expr_b: Expression, context: CompoundExpressionContext):
+    expr_a: Expression, expr_b: Expression, context: CompoundExpressionContext
+):
     """
     A version of process_compound_expressions() for assert instructions. Takes two expressions
     and returns them simplified to levels [DEREF, OPERATION] or [OPERATION, DEREF],
@@ -213,5 +240,6 @@ def process_compound_assert(
         simplicity = [SimplicityLevel.OPERATION, SimplicityLevel.DEREF]
 
     code_elements, exprs = process_compound_expressions(
-        exprs=[expr_a, expr_b], simplicity=simplicity, context=context)
+        exprs=[expr_a, expr_b], simplicity=simplicity, context=context
+    )
     return code_elements, exprs

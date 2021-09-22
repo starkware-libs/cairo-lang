@@ -5,7 +5,11 @@ from starkware.cairo.lang.compiler.import_loader import collect_imports
 from starkware.cairo.lang.compiler.preprocessor.dependency_graph import DependencyGraphStage
 from starkware.cairo.lang.compiler.preprocessor.identifier_collector import IdentifierCollector
 from starkware.cairo.lang.compiler.preprocessor.pass_manager import (
-    PassManager, PassManagerContext, Stage, VisitorStage)
+    PassManager,
+    PassManagerContext,
+    Stage,
+    VisitorStage,
+)
 from starkware.cairo.lang.compiler.preprocessor.preprocessor import Preprocessor
 from starkware.cairo.lang.compiler.preprocessor.struct_collector import StructCollector
 from starkware.cairo.lang.compiler.preprocessor.unique_labels import UniqueLabelCreator
@@ -13,30 +17,40 @@ from starkware.cairo.lang.compiler.scoped_name import ScopedName
 
 
 def default_pass_manager(
-        prime: int,
-        read_module: Callable[[str], Tuple[str, str]],
-        preprocessor_cls: Optional[Type[Preprocessor]] = None,
-        opt_unused_functions: bool = True,
-        preprocessor_kwargs: Optional[Dict] = None) -> PassManager:
+    prime: int,
+    read_module: Callable[[str], Tuple[str, str]],
+    preprocessor_cls: Optional[Type[Preprocessor]] = None,
+    opt_unused_functions: bool = True,
+    preprocessor_kwargs: Optional[Dict] = None,
+) -> PassManager:
     manager = PassManager()
-    manager.add_stage('module_collector', ModuleCollector(read_module=read_module))
-    manager.add_stage('unique_label_creator', VisitorStage(
-        lambda context: UniqueLabelCreator(), modify_ast=True))
-    manager.add_stage('identifier_collector', VisitorStage(
-        lambda context: IdentifierCollector(identifiers=context.identifiers)))
+    manager.add_stage("module_collector", ModuleCollector(read_module=read_module))
+    manager.add_stage(
+        "unique_label_creator", VisitorStage(lambda context: UniqueLabelCreator(), modify_ast=True)
+    )
+    manager.add_stage(
+        "identifier_collector",
+        VisitorStage(lambda context: IdentifierCollector(identifiers=context.identifiers)),
+    )
     if opt_unused_functions:
-        manager.add_stage('dependency_graph', DependencyGraphStage())
-    manager.add_stage('struct_collector', VisitorStage(
-        lambda context: StructCollector(identifiers=context.identifiers)))
-    manager.add_stage('preprocessor', PreprocessorStage(
-        prime, preprocessor_cls, preprocessor_kwargs))
+        manager.add_stage("dependency_graph", DependencyGraphStage())
+    manager.add_stage(
+        "struct_collector",
+        VisitorStage(lambda context: StructCollector(identifiers=context.identifiers)),
+    )
+    manager.add_stage(
+        "preprocessor", PreprocessorStage(prime, preprocessor_cls, preprocessor_kwargs)
+    )
     return manager
 
 
 class PreprocessorStage(Stage):
     def __init__(
-            self, prime: int, preprocessor_cls: Optional[Type[Preprocessor]] = None,
-            preprocessor_kwargs: Optional[Dict] = None):
+        self,
+        prime: int,
+        preprocessor_cls: Optional[Type[Preprocessor]] = None,
+        preprocessor_kwargs: Optional[Dict] = None,
+    ):
         self.prime = prime
         if preprocessor_cls is None:
             self.preprocessor_cls = Preprocessor
@@ -46,8 +60,11 @@ class PreprocessorStage(Stage):
 
     def run(self, context: PassManagerContext):
         preprocessor = self.preprocessor_cls(
-            prime=self.prime, identifiers=context.identifiers,
-            functions_to_compile=context.functions_to_compile, **self.preprocessor_kwargs)
+            prime=self.prime,
+            identifiers=context.identifiers,
+            functions_to_compile=context.functions_to_compile,
+            **self.preprocessor_kwargs,
+        )
         preprocessor.identifier_locations = context.identifier_locations
 
         for module in context.modules:
@@ -59,8 +76,10 @@ class PreprocessorStage(Stage):
 
 class ModuleCollector(Stage):
     def __init__(
-            self, read_module: Callable[[str], Tuple[str, str]],
-            additional_modules: Optional[Sequence[str]] = None):
+        self,
+        read_module: Callable[[str], Tuple[str, str]],
+        additional_modules: Optional[Sequence[str]] = None,
+    ):
         self.read_module = read_module
         self.additional_modules = [] if additional_modules is None else list(additional_modules)
 

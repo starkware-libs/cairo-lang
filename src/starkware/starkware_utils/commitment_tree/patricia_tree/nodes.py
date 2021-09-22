@@ -3,7 +3,7 @@ from abc import abstractmethod
 from typing import ClassVar, List, Tuple, Type
 
 from starkware.python.utils import blockify, from_bytes, to_bytes
-from starkware.starkware_utils.binary_fact_tree_node import InnerNodeFact
+from starkware.starkware_utils.commitment_tree.binary_fact_tree_node import InnerNodeFact
 from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 from starkware.storage.storage import HASH_BYTES, HashFunctionType
 
@@ -18,7 +18,7 @@ class PatriciaNodeFact(InnerNodeFact, ValidatedDataclass):
 
     @classmethod
     def prefix(cls) -> bytes:
-        return b'patricia_node'
+        return b"patricia_node"
 
     @property
     @classmethod
@@ -31,7 +31,7 @@ class PatriciaNodeFact(InnerNodeFact, ValidatedDataclass):
         """
 
     @classmethod
-    def deserialize(cls, data: bytes) -> 'PatriciaNodeFact':
+    def deserialize(cls, data: bytes) -> "PatriciaNodeFact":
         node_fact_cls = get_node_type(fact_preimage=data)
         return node_fact_cls.deserialize(data=data)
 
@@ -46,10 +46,10 @@ class EmptyNodeFact(PatriciaNodeFact):
     EMPTY_NODE_HASH: ClassVar[bytes] = bytes(PatriciaNodeFact.HASH_BYTES_LENGTH)
 
     def serialize(self) -> bytes:
-        return b''
+        return b""
 
     @classmethod
-    def deserialize(cls, data: bytes) -> 'EmptyNodeFact':
+    def deserialize(cls, data: bytes) -> "EmptyNodeFact":
         return cls()
 
     async def _hash(self, hash_func: HashFunctionType) -> bytes:
@@ -63,8 +63,9 @@ class EmptyNodeFact(PatriciaNodeFact):
 
 
 def verify_path_value(path: int, length: int):
-    assert 0 <= path < (1 << length), (
-        f'Edge path must be at most of length {length}; got: {bin(path)}.')
+    assert (
+        0 <= path < (1 << length)
+    ), f"Edge path must be at most of length {length}; got: {bin(path)}."
 
 
 @dataclasses.dataclass(frozen=True)
@@ -83,17 +84,21 @@ class BinaryNodeFact(PatriciaNodeFact):
         super().__post_init__()
 
         legal_binary_node = (
-            self.left_node != EmptyNodeFact.EMPTY_NODE_HASH and
-            self.right_node != EmptyNodeFact.EMPTY_NODE_HASH)
-        assert legal_binary_node, (
-            'It is not allowed for any child of a binary node to be the empty node.')
+            self.left_node != EmptyNodeFact.EMPTY_NODE_HASH
+            and self.right_node != EmptyNodeFact.EMPTY_NODE_HASH
+        )
+        assert (
+            legal_binary_node
+        ), "It is not allowed for any child of a binary node to be the empty node."
 
     def serialize(self) -> bytes:
         return self.left_node + self.right_node
 
     @classmethod
-    def deserialize(cls, data: bytes) -> 'BinaryNodeFact':
-        return cls(left_node=data[:cls.HASH_BYTES_LENGTH], right_node=data[cls.HASH_BYTES_LENGTH:])
+    def deserialize(cls, data: bytes) -> "BinaryNodeFact":
+        return cls(
+            left_node=data[: cls.HASH_BYTES_LENGTH], right_node=data[cls.HASH_BYTES_LENGTH :]
+        )
 
     async def _hash(self, hash_func: HashFunctionType) -> bytes:
         """
@@ -129,19 +134,22 @@ class EdgeNodeFact(PatriciaNodeFact):
     def __post_init__(self):
         super().__post_init__()
 
-        assert self.edge_length > 0, (
-            f'The length of an edge node must be positive; got: {self.edge_length}.')
+        assert (
+            self.edge_length > 0
+        ), f"The length of an edge node must be positive; got: {self.edge_length}."
         verify_path_value(path=self.edge_path, length=self.edge_length)
 
     def serialize(self) -> bytes:
         return self.bottom_node + to_bytes(self.edge_path) + to_bytes(self.edge_length, length=1)
 
     @classmethod
-    def deserialize(cls, data: bytes) -> 'EdgeNodeFact':
+    def deserialize(cls, data: bytes) -> "EdgeNodeFact":
         bottom_node, edge_path, edge_length = blockify(data=data, chunk_size=cls.HASH_BYTES_LENGTH)
         return cls(
-            bottom_node=bottom_node, edge_path=from_bytes(edge_path),
-            edge_length=from_bytes(edge_length))
+            bottom_node=bottom_node,
+            edge_path=from_bytes(edge_path),
+            edge_length=from_bytes(edge_length),
+        )
 
     async def _hash(self, hash_func: HashFunctionType) -> bytes:
         """
@@ -158,7 +166,7 @@ class EdgeNodeFact(PatriciaNodeFact):
         return to_bytes(self.edge_length), to_bytes(self.edge_path), self.bottom_node
 
 
-def get_node_type(fact_preimage: bytes) -> Type['PatriciaNodeFact']:
+def get_node_type(fact_preimage: bytes) -> Type["PatriciaNodeFact"]:
     """
     Returns the node fact type according to the fact preimage length.
     """
@@ -169,4 +177,4 @@ def get_node_type(fact_preimage: bytes) -> Type['PatriciaNodeFact']:
         if preimage_length == node_fact_cls.PREIMAGE_LENGTH:
             return node_fact_cls
 
-    raise NotImplementedError(f'Unsupported fact preimage length: {preimage_length}.')
+    raise NotImplementedError(f"Unsupported fact preimage length: {preimage_length}.")

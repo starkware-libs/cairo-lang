@@ -8,11 +8,17 @@ import os
 import sys
 
 from services.external_api.base_client import RetryConfig
+from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt, TypePointer
+from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
+from starkware.cairo.lang.compiler.parser import parse_type
 from starkware.cairo.lang.compiler.program import Program
+from starkware.cairo.lang.compiler.type_system import mark_type_resolved
+from starkware.cairo.lang.compiler.type_utils import check_felts_only_type
 from starkware.cairo.lang.version import __version__
 from starkware.cairo.lang.vm.reconstruct_traceback import reconstruct_traceback
 from starkware.starknet.compiler.compile import get_selector_from_name
 from starkware.starknet.definitions import fields
+from starkware.starknet.public.abi_structs import struct_definition_from_abi_entry
 from starkware.starknet.services.api.contract_definition import ContractDefinition
 from starkware.starknet.services.api.feeder_gateway.feeder_gateway_client import FeederGatewayClient
 from starkware.starknet.services.api.gateway.gateway_client import GatewayClient
@@ -125,6 +131,16 @@ async def invoke_or_call(args, command_args, call: bool):
             )
 
     abi = json.load(args.abi)
+
+    # Load types.
+    identifiers = IdentifierManager()
+    for abi_entry in abi:
+        if abi_entry["type"] == "struct":
+            struct_definition = struct_definition_from_abi_entry(abi_entry=abi_entry)
+            identifiers.add_identifier(
+                name=struct_definition.full_name, definition=struct_definition
+            )
+
     try:
         address = int(args.address, 16)
     except ValueError:
@@ -134,23 +150,25 @@ async def invoke_or_call(args, command_args, call: bool):
             previous_felt_input = None
             current_inputs_ptr = 0
             for input_desc in abi_entry["inputs"]:
-                if input_desc["type"] == "felt":
-                    assert current_inputs_ptr < len(
-                        inputs
-                    ), f"Expected at least {current_inputs_ptr + 1} inputs, got {len(inputs)}."
+                typ = mark_type_resolved(parse_type(input_desc["type"]))
+                typ_size = check_felts_only_type(cairo_type=typ, identifier_manager=identifiers)
+                if typ_size is not None:
+                    assert current_inputs_ptr + typ_size <= len(inputs), (
+                        f"Expected at least {current_inputs_ptr + typ_size} inputs, "
+                        f"got {len(inputs)}."
+                    )
 
-                    previous_felt_input = inputs[current_inputs_ptr]
-                    current_inputs_ptr += 1
-                elif input_desc["type"] == "felt*":
+                    current_inputs_ptr += typ_size
+                elif typ == TypePointer(pointee=TypeFelt()):
                     assert previous_felt_input is not None, (
                         f'The array argument {input_desc["name"]} of type felt* must be preceded '
                         "by a length argument of type felt."
                     )
 
                     current_inputs_ptr += previous_felt_input
-                    previous_felt_input = None
                 else:
                     raise Exception(f'Type {input_desc["type"]} is not supported.')
+                previous_felt_input = inputs[current_inputs_ptr - 1] if typ == TypeFelt() else None
             break
     else:
         raise Exception(f"Function {args.function} not found.")

@@ -7,8 +7,13 @@ import pytest
 from starkware.cairo.common.patricia_utils import compute_patricia_from_leaves_for_test
 from starkware.crypto.signature.fast_pedersen_hash import async_pedersen_hash_func, pedersen_hash
 from starkware.python.utils import from_bytes, to_bytes
-from starkware.starkware_utils.patricia_tree.nodes import BinaryNodeFact, EmptyNodeFact
-from starkware.starkware_utils.patricia_tree.virtual_patricia_node import VirtualPatriciaNode
+from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import (
+    BinaryNodeFact,
+    EmptyNodeFact,
+)
+from starkware.starkware_utils.commitment_tree.patricia_tree.virtual_patricia_node import (
+    VirtualPatriciaNode,
+)
 from starkware.storage.storage import Fact, FactFetchingContext, HashFunctionType
 from starkware.storage.test_utils import MockStorage
 
@@ -24,7 +29,7 @@ class LeafFact(Fact):
 
     @classmethod
     def prefix(cls) -> bytes:
-        return b'leaf'
+        return b"leaf"
 
     def serialize(self) -> bytes:
         return to_bytes(self.value)
@@ -33,20 +38,21 @@ class LeafFact(Fact):
         return self.serialize()
 
     @classmethod
-    def deserialize(cls, data: bytes) -> 'LeafFact':
+    def deserialize(cls, data: bytes) -> "LeafFact":
         return cls(from_bytes(data))
 
     @classmethod
-    def empty(cls) -> 'LeafFact':
+    def empty(cls) -> "LeafFact":
         return cls(value=0)
 
 
 async def make_virtual_edge_non_canonical(
-        ffc: FactFetchingContext, node: VirtualPatriciaNode) -> VirtualPatriciaNode:
+    ffc: FactFetchingContext, node: VirtualPatriciaNode
+) -> VirtualPatriciaNode:
     """
     Returns the non-canonical form (hash, 0, 0) of a virtual edge node.
     """
-    assert node.is_virtual_edge, 'Node should be of canonical form.'
+    assert node.is_virtual_edge, "Node should be of canonical form."
 
     node_hash = await node.commit(ffc=ffc, facts=None)
     return VirtualPatriciaNode.from_hash(hash_value=node_hash, height=node.height)
@@ -54,7 +60,8 @@ async def make_virtual_edge_non_canonical(
 
 def verify_root(leaves: Collection[int], expected_root_hash: bytes):
     root_hash, _preimage, _node_at_path = compute_patricia_from_leaves_for_test(
-        leaves=leaves, hash_func=pedersen_hash)
+        leaves=leaves, hash_func=pedersen_hash
+    )
     assert expected_root_hash == to_bytes(root_hash)
 
 
@@ -68,15 +75,19 @@ async def test_combine_and_get_children(ffc: FactFetchingContext):
     #     0     0     0     0
     #   0  12 0   0 0   0 30  0
     """
-    leaf_hash_12, leaf_hash_30, _ = await asyncio.gather(*(
-        leaf_fact.set_fact(ffc=ffc)
-        for leaf_fact in (LeafFact(value=12), LeafFact(value=30), LeafFact(value=0))))
+    leaf_hash_12, leaf_hash_30, _ = await asyncio.gather(
+        *(
+            leaf_fact.set_fact(ffc=ffc)
+            for leaf_fact in (LeafFact(value=12), LeafFact(value=30), LeafFact(value=0))
+        )
+    )
 
     # Combine two empty trees.
     empty_tree_0 = VirtualPatriciaNode.empty_node(height=0)
     empty_tree_1 = await VirtualPatriciaNode.combine(ffc=ffc, left=empty_tree_0, right=empty_tree_0)
     assert empty_tree_1 == VirtualPatriciaNode(
-        bottom_node=EmptyNodeFact.EMPTY_NODE_HASH, path=0, length=0, height=1)
+        bottom_node=EmptyNodeFact.EMPTY_NODE_HASH, path=0, length=0, height=1
+    )
     assert await empty_tree_1.get_children(ffc=ffc) == (empty_tree_0, empty_tree_0)
 
     # Build left subtree.
@@ -94,7 +105,8 @@ async def test_combine_and_get_children(ffc: FactFetchingContext):
     # Combine left edge node and right empty tree.
     left_tree_2 = await VirtualPatriciaNode.combine(ffc=ffc, left=left_tree_1, right=empty_tree_1)
     assert left_tree_2 == VirtualPatriciaNode(
-        bottom_node=leaf_hash_12, path=int('01', 2), length=2, height=2)
+        bottom_node=leaf_hash_12, path=int("01", 2), length=2, height=2
+    )
 
     # Get children on both forms.
     expected_children = (left_tree_1, empty_tree_1)
@@ -117,7 +129,8 @@ async def test_combine_and_get_children(ffc: FactFetchingContext):
     # Combine left empty tree and right edge node.
     right_tree_2 = await VirtualPatriciaNode.combine(ffc=ffc, left=empty_tree_1, right=right_tree_1)
     assert right_tree_2 == VirtualPatriciaNode(
-        bottom_node=leaf_hash_30, path=int('10', 2), length=2, height=2)
+        bottom_node=leaf_hash_30, path=int("10", 2), length=2, height=2
+    )
 
     # Get children on both forms.
     expected_children = (empty_tree_1, right_tree_1)
@@ -127,8 +140,9 @@ async def test_combine_and_get_children(ffc: FactFetchingContext):
 
     # Build whole tree.
     # Combine left edge and right edge.
-    left_node, right_node = await asyncio.gather(*(
-        node.commit(ffc=ffc, facts=None) for node in (left_tree_2, right_tree_2)))
+    left_node, right_node = await asyncio.gather(
+        *(node.commit(ffc=ffc, facts=None) for node in (left_tree_2, right_tree_2))
+    )
     binary_node_fact = BinaryNodeFact(left_node=left_node, right_node=right_node)
     root_hash = await binary_node_fact._hash(hash_func=ffc.hash_func)
 
@@ -137,14 +151,17 @@ async def test_combine_and_get_children(ffc: FactFetchingContext):
     left_edge_child, right_edge_child = await tree.get_children(ffc=ffc)
     assert (left_edge_child, right_edge_child) == (
         VirtualPatriciaNode(bottom_node=left_node, path=0, length=0, height=2),
-        VirtualPatriciaNode(bottom_node=right_node, path=0, length=0, height=2))
+        VirtualPatriciaNode(bottom_node=right_node, path=0, length=0, height=2),
+    )
 
     # Test operations on the original edge children (now non-canonical).
     # Combining with an empty node yields another edge with length longer-by-one.
     parent_edge = await VirtualPatriciaNode.combine(
-        ffc=ffc, left=left_edge_child, right=VirtualPatriciaNode.empty_node(height=2))
+        ffc=ffc, left=left_edge_child, right=VirtualPatriciaNode.empty_node(height=2)
+    )
     assert parent_edge == VirtualPatriciaNode(
-        bottom_node=left_tree_2.bottom_node, path=int('001', 2), length=3, height=3)
+        bottom_node=left_tree_2.bottom_node, path=int("001", 2), length=3, height=3
+    )
 
     # Getting their children returns another edge with length shorter-by-one.
     assert await left_edge_child.get_children(ffc=ffc) == (left_tree_1, empty_tree_1)
@@ -173,24 +190,32 @@ async def test_update_and_get_leaves(ffc: FactFetchingContext):
     # Check get_leaves().
     expected_leaves = {
         leaf_id: leaves[leaf_id] if leaf_id in leaves else LeafFact(value=0)
-        for leaf_id in leaves_range}
-    assert await tree._get_leaves(
-        ffc=ffc, indices=leaves_range, fact_cls=LeafFact) == expected_leaves
+        for leaf_id in leaves_range
+    }
+    assert (
+        await tree._get_leaves(ffc=ffc, indices=leaves_range, fact_cls=LeafFact) == expected_leaves
+    )
 
     # Compare to test util result.
     verify_root(
         leaves=[leaf.value for leaf in expected_leaves.values()],
-        expected_root_hash=tree.bottom_node)
+        expected_root_hash=tree.bottom_node,
+    )
 
     # Update leaf values again: new leaves contain addition, deletion and updating a key.
     updated_leaves = {
-        0: LeafFact(value=2), 1: LeafFact(value=20), 3: LeafFact(value=6), 6: LeafFact(value=0)}
+        0: LeafFact(value=2),
+        1: LeafFact(value=20),
+        3: LeafFact(value=6),
+        6: LeafFact(value=0),
+    }
     tree = await tree._update(ffc=ffc, modifications=updated_leaves.items())
 
     # Check get_leaves().
     updated_leaves = {**expected_leaves, **updated_leaves}
-    assert await tree._get_leaves(
-        ffc=ffc, indices=leaves_range, fact_cls=LeafFact) == updated_leaves
+    assert (
+        await tree._get_leaves(ffc=ffc, indices=leaves_range, fact_cls=LeafFact) == updated_leaves
+    )
 
     # Compare to test util result.
     sorted_by_index_leaf_values = [updated_leaves[leaf_id].value for leaf_id in leaves_range]

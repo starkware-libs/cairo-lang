@@ -9,7 +9,10 @@ import marshmallow.fields as mfields
 
 from starkware.cairo.lang.compiler.expression_simplifier import ExpressionSimplifier
 from starkware.cairo.lang.compiler.preprocessor.reg_tracking import (
-    RegChange, RegChangeLike, RegTrackingData)
+    RegChange,
+    RegChangeLike,
+    RegTrackingData,
+)
 from starkware.cairo.lang.compiler.references import FlowTrackingError, Reference
 from starkware.cairo.lang.compiler.scoped_name import ScopedName, ScopedNameAsStr
 
@@ -31,10 +34,11 @@ class FlowTrackingData(ABC):
     Tracking data representing the values of the references in a specific location in the program,
     considering all possible flows that may reach there.
     """
+
     @abstractmethod
     def converge(
-            self, reference_manager: ReferenceManager, other: 'FlowTrackingData',
-            group_alloc: Callable):
+        self, reference_manager: ReferenceManager, other: "FlowTrackingData", group_alloc: Callable
+    ):
         """
         Returns a new tracking data representing all references that are valid coming from either
         self or from other.
@@ -57,12 +61,12 @@ class FlowTrackingDataUnreachable(FlowTrackingData):
     """
 
     def converge(
-            self, reference_manager: ReferenceManager, other: 'FlowTrackingData',
-            group_alloc: Callable):
+        self, reference_manager: ReferenceManager, other: "FlowTrackingData", group_alloc: Callable
+    ):
         return other
 
     def resolve_reference(self, reference_manager: ReferenceManager, name: ScopedName) -> Reference:
-        raise FlowTrackingError(f'Reference {name} revoked.')
+        raise FlowTrackingError(f"Reference {name} revoked.")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -70,16 +74,19 @@ class FlowTrackingDataActual(FlowTrackingData):
     """
     Tracking data for a reachable location in the program.
     """
+
     # Current ap tracking.
     ap_tracking: RegTrackingData
     # Mapping from full reference name to the Reference instance.
     reference_ids: Dict[ScopedName, int] = field(
         metadata=dict(
-            marshmallow_field=mfields.Dict(keys=ScopedNameAsStr, values=mfields.Integer())),
-        default_factory=dict)
+            marshmallow_field=mfields.Dict(keys=ScopedNameAsStr, values=mfields.Integer())
+        ),
+        default_factory=dict,
+    )
 
     @classmethod
-    def new(cls, group_alloc: Callable) -> 'FlowTrackingDataActual':
+    def new(cls, group_alloc: Callable) -> "FlowTrackingDataActual":
         return cls(
             ap_tracking=RegTrackingData.new(group_alloc),
         )
@@ -87,12 +94,12 @@ class FlowTrackingDataActual(FlowTrackingData):
     def resolve_reference(self, reference_manager: ReferenceManager, name: ScopedName) -> Reference:
         ref_id = self.reference_ids.get(name)
         if ref_id is None:
-            raise FlowTrackingError(f'Reference {name} revoked.')
+            raise FlowTrackingError(f"Reference {name} revoked.")
         return reference_manager.get_ref(ref_id)
 
     def converge(
-            self, reference_manager: ReferenceManager, other: 'FlowTrackingData',
-            group_alloc: Callable):
+        self, reference_manager: ReferenceManager, other: "FlowTrackingData", group_alloc: Callable
+    ):
         if not isinstance(other, FlowTrackingDataActual):
             return other.converge(reference_manager, self, group_alloc)
 
@@ -110,8 +117,9 @@ class FlowTrackingDataActual(FlowTrackingData):
             other_ref = reference_manager.get_ref(other_ref_id)
             try:
                 ref_expr = reference.eval(self.ap_tracking)
-                if simplifier.visit(ref_expr) == \
-                        simplifier.visit(other_ref.eval(other.ap_tracking)):
+                if simplifier.visit(ref_expr) == simplifier.visit(
+                    other_ref.eval(other.ap_tracking)
+                ):
                     # Same expression.
                     # Create a new reference on the new ap tracking.
                     new_reference = Reference(
@@ -130,13 +138,13 @@ class FlowTrackingDataActual(FlowTrackingData):
             reference_ids=reference_ids,
         )
 
-    def add_ap(self, ap_change: RegChangeLike, group_alloc: Callable) -> 'FlowTrackingData':
+    def add_ap(self, ap_change: RegChangeLike, group_alloc: Callable) -> "FlowTrackingData":
         new_ap_tracking = self.ap_tracking.add(ap_change, group_alloc)
         return dataclasses.replace(self, ap_tracking=new_ap_tracking)
 
     def add_reference(
-            self, reference_manager: ReferenceManager, name: ScopedName,
-            ref: Reference) -> 'FlowTrackingData':
+        self, reference_manager: ReferenceManager, name: ScopedName, ref: Reference
+    ) -> "FlowTrackingData":
         """
         Adds or rebinds a reference.
         """
@@ -181,8 +189,9 @@ class FlowTracking:
         # Mapping from a fully qualified label name to its tracking data.
         # This begines unconstrained, and for every flow to this label, we 'converge' this data
         # with the new tracking data.
-        self.labels_data: Dict[ScopedName, FlowTrackingData] = \
-            defaultdict(FlowTrackingDataUnreachable)
+        self.labels_data: Dict[ScopedName, FlowTrackingData] = defaultdict(
+            FlowTrackingDataUnreachable
+        )
         self.groups = itertools.count(0)
         self.reference_manager = ReferenceManager()
 
@@ -208,7 +217,8 @@ class FlowTracking:
         ap_change = RegChange.from_expr(ap_change)
         new_data = self.get().add_ap(ap_change, self._group_alloc)
         self.labels_data[label_name] = self.labels_data[label_name].converge(
-            self.reference_manager, new_data, self._group_alloc)
+            self.reference_manager, new_data, self._group_alloc
+        )
 
     def converge_with_label(self, label_name: ScopedName):
         """
@@ -216,7 +226,8 @@ class FlowTracking:
         label's definition location.
         """
         self.data = self.data.converge(
-            self.reference_manager, self.labels_data[label_name], self._group_alloc)
+            self.reference_manager, self.labels_data[label_name], self._group_alloc
+        )
 
     def revoke(self):
         self.data = FlowTrackingDataUnreachable()

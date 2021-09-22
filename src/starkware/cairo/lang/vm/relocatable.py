@@ -1,8 +1,8 @@
 import dataclasses
 from typing import Dict, Tuple, TypeVar, Union
 
-MaybeRelocatable = Union[int, 'RelocatableValue']
-T = TypeVar('T', int, MaybeRelocatable)
+MaybeRelocatable = Union[int, "RelocatableValue"]
+T = TypeVar("T", int, MaybeRelocatable)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -11,28 +11,31 @@ class RelocatableValue:
     A value in the cairo vm representing an address in some memory segment. This is meant to be
     replaced by a real memory address (field element) after the VM finished.
     """
+
     segment_index: int
     offset: int
 
     SEGMENT_BITS = 16
     OFFSET_BITS = 47
 
-    def __add__(self, other: MaybeRelocatable) -> 'RelocatableValue':
+    def __add__(self, other: MaybeRelocatable) -> "RelocatableValue":
         if isinstance(other, int):
             return RelocatableValue(self.segment_index, self.offset + other)
-        assert not isinstance(other, RelocatableValue), \
-            f'Cannot add two relocatable values: {self} + {other}.'
+        assert not isinstance(
+            other, RelocatableValue
+        ), f"Cannot add two relocatable values: {self} + {other}."
         return NotImplemented
 
-    def __radd__(self, other: MaybeRelocatable) -> 'RelocatableValue':
+    def __radd__(self, other: MaybeRelocatable) -> "RelocatableValue":
         return self + other
 
     def __sub__(self, other: MaybeRelocatable) -> MaybeRelocatable:
         if isinstance(other, int):
             return RelocatableValue(self.segment_index, self.offset - other)
-        assert self.segment_index == other.segment_index, \
-            'Can only subtract two relocatable values of the same segment ' \
-            f'({self.segment_index} != {other.segment_index}).'
+        assert self.segment_index == other.segment_index, (
+            "Can only subtract two relocatable values of the same segment "
+            f"({self.segment_index} != {other.segment_index})."
+        )
         return self.offset - other.offset
 
     def __mod__(self, other: int):
@@ -47,7 +50,7 @@ class RelocatableValue:
         return (self.segment_index, self.offset) < (other.segment_index, other.offset)
 
     def __le__(self, other: MaybeRelocatable):
-        return (self < other or self == other)
+        return self < other or self == other
 
     def __ge__(self, other: MaybeRelocatable):
         return not (self < other)
@@ -59,10 +62,10 @@ class RelocatableValue:
         return hash((self.segment_index, self.offset))
 
     def __format__(self, format_spec):
-        return f'{self.segment_index}:{self.offset}'.__format__(format_spec)
+        return f"{self.segment_index}:{self.offset}".__format__(format_spec)
 
     def __str__(self):
-        return f'{self.segment_index}:{self.offset}'
+        return f"{self.segment_index}:{self.offset}"
 
     def to_bytes(self, n_bytes: int, byte_order: str) -> bytes:
         """
@@ -100,7 +103,7 @@ class RelocatableValue:
         elif isinstance(value, int):
             return (value,)
         else:
-            raise NotImplementedError(f'Expected MaybeRelocatable, got: {type(value).__name__}.')
+            raise NotImplementedError(f"Expected MaybeRelocatable, got: {type(value).__name__}.")
 
     @classmethod
     def from_tuple(cls, value: Tuple[int, ...]) -> MaybeRelocatable:
@@ -112,12 +115,15 @@ class RelocatableValue:
         elif len(value) == 1:
             return value[0]
         else:
-            raise NotImplementedError(f'Expected a tuple of size 1 or 2, got: {value}.')
+            raise NotImplementedError(f"Expected a tuple of size 1 or 2, got: {value}.")
 
 
 def relocate_value(
-        value: MaybeRelocatable, segment_offsets: Dict[int, T], prime: int,
-        allow_missing_segments: bool = False) -> T:
+    value: MaybeRelocatable,
+    segment_offsets: Dict[int, T],
+    prime: int,
+    allow_missing_segments: bool = False,
+) -> T:
     if isinstance(value, int):
         return value
     elif isinstance(value, RelocatableValue):
@@ -134,4 +140,4 @@ segment_offsets={segment_offsets}.
             assert value < prime
         return value
     else:
-        raise NotImplementedError('Not relocatable')
+        raise NotImplementedError("Not relocatable")

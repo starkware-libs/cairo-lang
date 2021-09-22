@@ -32,19 +32,20 @@ from math_utils import ec_double, is_quad_residue, pi_as_string, sqrt_mod
 # (a) large,
 # (b) has a big multiplicative subgroup of size which is a power of two,
 # (c) sparse representation for efficient modular arithmetics.
-FIELD_PRIME = 2**251 + 17 * 2**192 + 1
+FIELD_PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
 
 # Generator of the multiplicative group of the field.
 FIELD_GEN = 3
 
 # Elliptic curve parameters.
 ALPHA = 1
-EC_ORDER = 0x800000000000010ffffffffffffffffb781126dcae7b2321e66a241adc64d2f
+EC_ORDER = 0x800000000000010FFFFFFFFFFFFFFFFB781126DCAE7B2321E66A241ADC64D2F
 
 
 ############################
 # Parameters and constants #
 ############################
+
 
 def generate_constant_points(n_points):
     """
@@ -73,9 +74,9 @@ def generate_constant_points(n_points):
     i = 0
     while len(constant_points) < n_points:
         i += 1
-        x = int(pi_str[i * 76:(i + 1) * 76])
+        x = int(pi_str[i * 76 : (i + 1) * 76])
         while True:
-            y_squared = x**3 + ALPHA * x + beta
+            y_squared = x ** 3 + ALPHA * x + beta
             if is_quad_residue(y_squared, FIELD_PRIME):
                 y = sqrt_mod(y_squared, FIELD_PRIME)
                 break
@@ -98,9 +99,9 @@ N_SHIFT_POINTS = 1  # The same shift point is used in the hash and ECDSA.
 N_ECDSA_POINTS = 1
 N_HASH_POINTS = N_INPUTS * N_ELEMENT_BITS
 
-print('Generating points, this may take a while...')
+print("Generating points, this may take a while...")
 BETA, CONSTANT_POINTS = generate_constant_points(N_SHIFT_POINTS + N_ECDSA_POINTS + N_HASH_POINTS)
-assert BETA == 0x6f21413efbe40de150e596d72f7a8c5609ad26c15c915c1f4cdfcb99cee9e89
+assert BETA == 0x6F21413EFBE40DE150E596D72F7A8C5609AD26C15C915C1F4CDFCB99CEE9E89
 
 COPYRIGHT_STRING = """\
 ###############################################################################
@@ -120,19 +121,22 @@ COPYRIGHT_STRING = """\
 ###############################################################################
 """
 
-AUTO_GENERATED_STRING = \
-    'The following data was auto-generated. PLEASE DO NOT EDIT.'
+AUTO_GENERATED_STRING = "The following data was auto-generated. PLEASE DO NOT EDIT."
 
 # Write generated parameters to file.
-PEDERSEN_HASH_POINT_FILENAME = os.path.join(
-    os.path.dirname(__file__), 'pedersen_params.json')
-open(PEDERSEN_HASH_POINT_FILENAME, 'w').write(
-    json.dumps({
-        '_license': COPYRIGHT_STRING.splitlines(),
-        '_comment': AUTO_GENERATED_STRING,
-        'FIELD_PRIME': FIELD_PRIME,
-        'FIELD_GEN': FIELD_GEN,
-        'EC_ORDER': EC_ORDER,
-        'ALPHA': ALPHA,
-        'BETA': BETA,
-        'CONSTANT_POINTS': CONSTANT_POINTS}, indent=4))
+PEDERSEN_HASH_POINT_FILENAME = os.path.join(os.path.dirname(__file__), "pedersen_params.json")
+open(PEDERSEN_HASH_POINT_FILENAME, "w").write(
+    json.dumps(
+        {
+            "_license": COPYRIGHT_STRING.splitlines(),
+            "_comment": AUTO_GENERATED_STRING,
+            "FIELD_PRIME": FIELD_PRIME,
+            "FIELD_GEN": FIELD_GEN,
+            "EC_ORDER": EC_ORDER,
+            "ALPHA": ALPHA,
+            "BETA": BETA,
+            "CONSTANT_POINTS": CONSTANT_POINTS,
+        },
+        indent=4,
+    )
+)

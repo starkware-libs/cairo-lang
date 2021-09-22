@@ -12,7 +12,8 @@ from starkware.python.utils import WriteOnceDict
 
 class CairoStructFactory:
     def __init__(
-            self, identifiers: IdentifierManager, additional_imports: Optional[List[str]] = None):
+        self, identifiers: IdentifierManager, additional_imports: Optional[List[str]] = None
+    ):
         """
         Creates a CairoStructFactory that converts Cairo structs to python namedtuples.
 
@@ -27,9 +28,7 @@ class CairoStructFactory:
             for identifier_path in additional_imports:
                 scope_name = ScopedName.from_string(identifier_path)
                 # Call get_struct_definition to make sure scope_name is a struct.
-                get_struct_definition(
-                    struct_name=scope_name,
-                    identifier_manager=identifiers)
+                get_struct_definition(struct_name=scope_name, identifier_manager=identifiers)
                 self.resolved_identifiers[scope_name[-1:]] = scope_name
 
     @classmethod
@@ -42,8 +41,8 @@ class CairoStructFactory:
             return full_name
 
         return self.identifiers.search(
-            accessible_scopes=[ScopedName.from_string('__main__'), ScopedName()],
-            name=name).get_canonical_name()
+            accessible_scopes=[ScopedName.from_string("__main__"), ScopedName()], name=name
+        ).get_canonical_name()
 
     def get_struct_definition(self, name: ScopedName) -> StructDefinition:
         """
@@ -66,11 +65,12 @@ class CairoStructFactory:
         full_name = self._get_full_name(func)
 
         implict_args = get_struct_definition(
-            full_name + CodeElementFunction.IMPLICIT_ARGUMENT_SCOPE,
-            self.identifiers).members
+            full_name + CodeElementFunction.IMPLICIT_ARGUMENT_SCOPE, self.identifiers
+        ).members
         args = get_struct_definition(
-            full_name + CodeElementFunction.ARGUMENT_SCOPE, self.identifiers).members
-        return namedtuple(f'{func[-1:]}_full_args', list({**implict_args, **args}))
+            full_name + CodeElementFunction.ARGUMENT_SCOPE, self.identifiers
+        ).members
+        return namedtuple(f"{func[-1:]}_full_args", list({**implict_args, **args}))
 
     @property
     def structs(self):
@@ -90,7 +90,7 @@ class CairoStructProxy:
         self.factory = factory
         self.path = path
 
-    def __getattr__(self, name: str) -> 'CairoStructProxy':
+    def __getattr__(self, name: str) -> "CairoStructProxy":
         return CairoStructProxy(self.factory, self.path + name)
 
     def build(self):
@@ -114,6 +114,6 @@ class CairoStructProxy:
         """
         named_tuple = self.build()
 
-        return named_tuple(**{
-            name: memory[addr + index]
-            for index, name in enumerate(named_tuple._fields)})
+        return named_tuple(
+            **{name: memory[addr + index] for index, name in enumerate(named_tuple._fields)}
+        )

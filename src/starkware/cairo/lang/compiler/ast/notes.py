@@ -20,6 +20,7 @@ class Notes(AstNode):
       assert a = b +  # Hello.
           c + d  # World.
     """
+
     # The comments of the note. If empty, the value of starts_new_line is ignored.
     comments: List[str] = field(default_factory=list)
     # Whether the note starts on its own line.
@@ -34,8 +35,9 @@ class Notes(AstNode):
         if len(self.comments) == 0:
             return
         raise FormattingError(
-            'Comments inside expressions are not supported by the auto-formatter.',
-            location=self.location)
+            "Comments inside expressions are not supported by the auto-formatter.",
+            location=self.location,
+        )
 
     def __add__(self, other):
         if not isinstance(other, type(self)):
@@ -45,20 +47,21 @@ class Notes(AstNode):
         return Notes(
             comments=self.comments + other.comments,
             starts_new_line=self.starts_new_line,
-            location=self.location)
+            location=self.location,
+        )
 
     def format(self):
-        code = ''
+        code = ""
         if self.starts_new_line:
-            code += '\n'
+            code += "\n"
         elif len(self.comments) > 0:
-            code += '  '
+            code += "  "
         for comment in self.comments:
-            assert comment.startswith('#')
+            assert comment.startswith("#")
             comment_body = comment[1:].strip()
-            if comment_body != '':
-                comment_body = ' ' + comment_body
-            code += f'#{comment_body}\n'
+            if comment_body != "":
+                comment_body = " " + comment_body
+            code += f"#{comment_body}\n"
         return code
 
     def get_children(self) -> Sequence[Optional[AstNode]]:

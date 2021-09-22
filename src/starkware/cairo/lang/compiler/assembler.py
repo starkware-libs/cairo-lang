@@ -9,37 +9,52 @@ from starkware.cairo.lang.compiler.scoped_name import ScopedName
 
 
 def assemble(
-        preprocessed_program: PreprocessedProgram, main_scope: ScopedName = ScopedName(),
-        add_debug_info: bool = False, file_contents_for_debug_info: Dict[str, str] = {}) -> Program:
+    preprocessed_program: PreprocessedProgram,
+    main_scope: ScopedName = ScopedName(),
+    add_debug_info: bool = False,
+    file_contents_for_debug_info: Dict[str, str] = {},
+) -> Program:
     data: List[int] = []
     hints: Dict[int, List[CairoHint]] = {}
-    debug_info = DebugInfo(instruction_locations={}, file_contents=file_contents_for_debug_info) \
-        if add_debug_info else None
+    debug_info = (
+        DebugInfo(instruction_locations={}, file_contents=file_contents_for_debug_info)
+        if add_debug_info
+        else None
+    )
 
     for inst in preprocessed_program.instructions:
         for hint, hint_flow_tracking_data in inst.hints:
-            hints.setdefault(len(data), []).append(CairoHint(
-                code=hint.hint_code,
-                accessible_scopes=inst.accessible_scopes,
-                flow_tracking_data=hint_flow_tracking_data))
+            hints.setdefault(len(data), []).append(
+                CairoHint(
+                    code=hint.hint_code,
+                    accessible_scopes=inst.accessible_scopes,
+                    flow_tracking_data=hint_flow_tracking_data,
+                )
+            )
         if debug_info is not None and inst.instruction.location is not None:
             hint_locations: List[Optional[HintLocation]] = []
             for hint, _ in inst.hints:
                 if hint.location is None:
                     hint_locations.append(None)
                 else:
-                    hint_locations.append(HintLocation(
-                        location=hint.location,
-                        n_prefix_newlines=hint.hint.n_prefix_newlines,
-                    ))
-            debug_info.instruction_locations[len(data)] = \
-                InstructionLocation(
-                    inst=inst.instruction.location,
-                    hints=hint_locations,
-                    accessible_scopes=inst.accessible_scopes,
-                    flow_tracking_data=inst.flow_tracking_data)
-        data += [word for word in encode_instruction(
-            build_instruction(inst.instruction), prime=preprocessed_program.prime)]
+                    hint_locations.append(
+                        HintLocation(
+                            location=hint.location,
+                            n_prefix_newlines=hint.hint.n_prefix_newlines,
+                        )
+                    )
+            debug_info.instruction_locations[len(data)] = InstructionLocation(
+                inst=inst.instruction.location,
+                hints=hint_locations,
+                accessible_scopes=inst.accessible_scopes,
+                flow_tracking_data=inst.flow_tracking_data,
+            )
+        data += [
+            word
+            for word in encode_instruction(
+                build_instruction(inst.instruction), prime=preprocessed_program.prime
+            )
+        ]
 
     if debug_info is not None:
         debug_info.add_autogen_file_contents()
@@ -52,4 +67,5 @@ def assemble(
         identifiers=preprocessed_program.identifiers,
         builtins=preprocessed_program.builtins,
         reference_manager=preprocessed_program.reference_manager,
-        debug_info=debug_info)
+        debug_info=debug_info,
+    )

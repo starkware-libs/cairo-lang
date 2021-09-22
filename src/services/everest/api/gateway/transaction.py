@@ -14,6 +14,7 @@ class EverestTransaction(ValidatedMarshmallowDataclass):
     Schema: ClassVar[Type[marshmallow_oneofschema.OneOfSchema]]
 
 
+
 class EverestAddTransactionRequest(ValidatedMarshmallowDataclass):
     tx: EverestTransaction
     tx_id: int

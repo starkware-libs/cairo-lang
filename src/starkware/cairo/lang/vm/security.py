@@ -24,21 +24,22 @@ def verify_secure_runner(runner: CairoRunner, verify_builtins=True):
     for addr in runner.vm_memory:
         # Check pure addresses.
         if not isinstance(addr, RelocatableValue):
-            raise SecurityError(f'Accessed address {addr} is not relocatable.')
+            raise SecurityError(f"Accessed address {addr} is not relocatable.")
         # Check non negative offset.
         if addr.offset < 0:
-            raise SecurityError(f'Accessed address {addr} has negative offset.')
+            raise SecurityError(f"Accessed address {addr} has negative offset.")
         # Check builtin segment out of bounds.
         if addr.segment_index in builtin_segment_sizes:
             if not addr.offset < builtin_segment_sizes[addr.segment_index]:
                 raise SecurityError(
-                    'Out of bounds access to builtin segment '
-                    f'{builtin_segment_names[addr.segment_index]} at {addr}.')
+                    "Out of bounds access to builtin segment "
+                    f"{builtin_segment_names[addr.segment_index]} at {addr}."
+                )
 
         # Check out of bounds for program segment.
         if addr.segment_index == runner.program_base.segment_index:
             if not addr.offset < len(runner.program.data):
-                raise SecurityError(f'Out of bounds access to program segment at {addr}.')
+                raise SecurityError(f"Out of bounds access to program segment at {addr}.")
 
     # Builtin specific checks.
     try:

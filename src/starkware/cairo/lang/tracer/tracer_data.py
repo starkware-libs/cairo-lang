@@ -13,7 +13,9 @@ from starkware.cairo.lang.compiler.offset_reference import OffsetReferenceDefini
 from starkware.cairo.lang.compiler.parser import parse_expr
 from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.compiler.references import (
-    FlowTrackingError, SubstituteRegisterTransformer)
+    FlowTrackingError,
+    SubstituteRegisterTransformer,
+)
 from starkware.cairo.lang.compiler.resolve_search_result import resolve_search_result
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.compiler.substitute_identifiers import substitute_identifiers
@@ -58,40 +60,52 @@ class InputCodeFile:
         self.tags = []
 
     def mark_text(
-            self, line_start: int, col_start: int, line_end: int, col_end: int, classes: List[str]):
+        self, line_start: int, col_start: int, line_end: int, col_end: int, classes: List[str]
+    ):
         """
         Surrounds the given part of the input text with a <span> tag with the given classes.
         """
-        self.marks.append(TextMark(
-            line_start=line_start, col_start=col_start, line_end=line_end, col_end=col_end,
-            classes=classes))
+        self.marks.append(
+            TextMark(
+                line_start=line_start,
+                col_start=col_start,
+                line_end=line_end,
+                col_end=col_end,
+                classes=classes,
+            )
+        )
 
         # Find the offset of (line_start, col_start) inside the file, by computing the sum of the
         # lengths of the previous lines and adding col_start. Note that '\n's are not counted in
         # the sum, so we add line_start to the result. We have to subtract 2 since both
         # line_start and col_start are 1-based rather than 0-based.
-        offset_start = sum(map(len, self.lines[:line_start - 1])) + line_start + col_start - 2
+        offset_start = sum(map(len, self.lines[: line_start - 1])) + line_start + col_start - 2
         # Do the same for (line_end, col_end).
-        offset_end = sum(map(len, self.lines[:line_end - 1])) + line_end + col_end - 2
+        offset_end = sum(map(len, self.lines[: line_end - 1])) + line_end + col_end - 2
         self.tags.append((offset_start, -offset_end, f'<span class="{" ".join(classes)}">'))
-        self.tags.append((offset_end, -float('inf'), '</span>'))
+        self.tags.append((offset_end, -float("inf"), "</span>"))
 
     def to_html(self):
         """
         Returns the content of the file with the added HTML tags.
         Replaces spaces with '&nbsp;' and '\n' with '<br/>'.
         """
-        res = self.content.replace(' ', '\0')
+        res = self.content.replace(" ", "\0")
         for pos, size, tag_content in sorted(self.tags, reverse=True):
             res = res[:pos] + tag_content + res[pos:]
-        return res.replace('\0', '&nbsp;').replace('\n', '<br/>\n')
+        return res.replace("\0", "&nbsp;").replace("\n", "<br/>\n")
 
 
 class TracerData:
     def __init__(
-            self, program: Program, memory: MemoryDict, trace: List[TraceEntry], program_base: int,
-            air_public_input: Optional[PublicInput] = None,
-            debug_info: Optional[DebugInfo] = None):
+        self,
+        program: Program,
+        memory: MemoryDict,
+        trace: List[TraceEntry],
+        program_base: int,
+        air_public_input: Optional[PublicInput] = None,
+        debug_info: Optional[DebugInfo] = None,
+    ):
         """
         Constructs a TracerData object.
         program_base is the memory address where the program is loaded.
@@ -123,22 +137,30 @@ class TracerData:
 
                 # Surround the instruction code with a <span> tag.
                 input_file.mark_text(
-                    loc.start_line, loc.start_col, loc.end_line, loc.end_col,
-                    [f'inst{pc_offset}', 'instruction'])
+                    loc.start_line,
+                    loc.start_col,
+                    loc.end_line,
+                    loc.end_col,
+                    [f"inst{pc_offset}", "instruction"],
+                )
 
         # Find memory accesses for each step.
         self.memory_accesses = []
         for trace_entry in self.trace:
             run_context = RunContext(
-                pc=trace_entry.pc, ap=trace_entry.ap, fp=trace_entry.fp, memory=self.memory,
-                prime=self.program.prime)
+                pc=trace_entry.pc,
+                ap=trace_entry.ap,
+                fp=trace_entry.fp,
+                memory=self.memory,
+                prime=self.program.prime,
+            )
             instruction_encoding, imm = run_context.get_instruction_encoding()
             instruction = decode_instruction(instruction_encoding, imm)
 
             dst_addr = run_context.compute_dst_addr(instruction)
             op0_addr = run_context.compute_op0_addr(instruction)
             op1_addr = run_context.compute_op1_addr(instruction, self.memory.get(op0_addr))
-            self.memory_accesses.append({'dst': dst_addr, 'op0': op0_addr, 'op1': op1_addr})
+            self.memory_accesses.append({"dst": dst_addr, "op0": op0_addr, "op1": op1_addr})
 
     def get_pc_offset(self, pc: int) -> int:
         """
@@ -170,8 +192,13 @@ class TracerData:
 
     @classmethod
     def from_files(
-            cls, program_path: str, memory_path: str, trace_path: str,
-            air_public_input: Optional[str], debug_info_path: Optional[str] = None):
+        cls,
+        program_path: str,
+        memory_path: str,
+        trace_path: str,
+        air_public_input: Optional[str],
+        debug_info_path: Optional[str] = None,
+    ):
         """
         Factory method constructing TracerData from files.
         """
@@ -187,13 +214,21 @@ class TracerData:
         else:
             public_input = None
 
-        debug_info = DebugInfo.Schema().load(json.load(open(debug_info_path))) \
-            if debug_info_path is not None else None
+        debug_info = (
+            DebugInfo.Schema().load(json.load(open(debug_info_path)))
+            if debug_info_path is not None
+            else None
+        )
 
         # Construct the instance.
         return cls(
-            program=program, memory=memory, trace=trace, program_base=program_base,
-            air_public_input=public_input, debug_info=debug_info)
+            program=program,
+            memory=memory,
+            trace=trace,
+            program_base=program_base,
+            air_public_input=public_input,
+            debug_info=debug_info,
+        )
 
 
 def read_memory(memory_path: str, field_bytes: int) -> MemoryDict:
@@ -201,7 +236,7 @@ def read_memory(memory_path: str, field_bytes: int) -> MemoryDict:
     Returns the memory (as a MemoryDict).
     """
     # Use MemoryDict to verify that memory cells are consistent.
-    with open(memory_path, 'rb') as memory_file:
+    with open(memory_path, "rb") as memory_file:
         return MemoryDict.deserialize(memory_file.read(), field_bytes)
 
 
@@ -211,12 +246,12 @@ def read_trace(trace_path: str) -> List[TraceEntry]:
     """
     entries = []
     serialization_size = TraceEntry.serialization_size()
-    with open(trace_path, 'rb') as trace_file:
+    with open(trace_path, "rb") as trace_file:
         while True:
             entry_serialized = trace_file.read(serialization_size)
             if not entry_serialized:
                 break
-            assert len(entry_serialized) == serialization_size, 'Size of trace file is invalid.'
+            assert len(entry_serialized) == serialization_size, "Size of trace file is invalid."
             entry = TraceEntry.deserialize(entry_serialized)
             entries.append(entry)
 
@@ -230,10 +265,10 @@ def field_element_repr(val: int, prime: int) -> str:
     # Shift val to the range (-prime // 2, prime // 2).
     shifted_val = (val + prime // 2) % prime - (prime // 2)
     # If shifted_val is small, use decimal representation.
-    if abs(shifted_val) < 2**40:
+    if abs(shifted_val) < 2 ** 40:
         return str(shifted_val)
     # Otherwise, use hex representation (allowing a sign if the number is close to prime).
-    if abs(shifted_val) < 2**100:
+    if abs(shifted_val) < 2 ** 100:
         return hex(shifted_val)
     return hex(val)
 
@@ -241,8 +276,8 @@ def field_element_repr(val: int, prime: int) -> str:
 class WatchEvaluator(ExpressionEvaluator):
     def __init__(self, tracer_data: TracerData, entry: TraceEntry[int]):
         super().__init__(
-            prime=tracer_data.program.prime, ap=entry.ap,
-            fp=entry.fp, memory=tracer_data.memory)
+            prime=tracer_data.program.prime, ap=entry.ap, fp=entry.fp, memory=tracer_data.memory
+        )
         self.tracer_data = tracer_data
         self.pc = entry.pc
         self.ap = entry.ap
@@ -256,15 +291,16 @@ class WatchEvaluator(ExpressionEvaluator):
                 self.accessible_scopes = info.accessible_scopes
 
     def eval(self, expr):
-        if expr == 'null':
-            return ''
+        if expr == "null":
+            return ""
         expr, expr_type = simplify_type_system(
             substitute_identifiers(
-                expr=parse_expr(expr),
-                get_identifier_callback=self.get_variable),
-            identifiers=self.tracer_data.program.identifiers)
+                expr=parse_expr(expr), get_identifier_callback=self.get_variable
+            ),
+            identifiers=self.tracer_data.program.identifiers,
+        )
         if isinstance(expr_type, TypeStruct):
-            raise NotImplementedError('Structs are not supported.')
+            raise NotImplementedError("Structs are not supported.")
         res = self.visit(expr)
         if isinstance(res, ExprConst):
             return field_element_repr(res.val, self.tracer_data.program.prime)
@@ -274,7 +310,7 @@ class WatchEvaluator(ExpressionEvaluator):
         try:
             return self.eval(expr)
         except Exception as exc:
-            return f'{type(exc).__name__}: {exc}'
+            return f"{type(exc).__name__}: {exc}"
 
     def get_variable(self, var: ExprIdentifier):
         identifiers = self.tracer_data.program.identifiers
@@ -283,28 +319,34 @@ class WatchEvaluator(ExpressionEvaluator):
                 accessible_scopes=self.accessible_scopes,
                 name=ScopedName.from_string(var.name),
             ),
-            identifiers=identifiers)
+            identifiers=identifiers,
+        )
         if isinstance(identifier_definition, ConstDefinition):
             return identifier_definition.value
 
         if isinstance(identifier_definition, (ReferenceDefinition, OffsetReferenceDefinition)):
             return self.visit(self.eval_reference(identifier_definition, var.name))
 
-        raise Exception(
-            f'Unexpected identifier {var.name} of type {identifier_definition.TYPE}.')
+        raise Exception(f"Unexpected identifier {var.name} of type {identifier_definition.TYPE}.")
 
     def eval_reference(self, identifier_definition, var_name: str):
         pc_offset = self.tracer_data.get_pc_offset(self.pc)
         assert self.tracer_data.program.debug_info is not None
-        current_flow_tracking_data = \
-            self.tracer_data.program.debug_info.instruction_locations[pc_offset].flow_tracking_data
+        current_flow_tracking_data = self.tracer_data.program.debug_info.instruction_locations[
+            pc_offset
+        ].flow_tracking_data
         try:
             substitute_transformer = SubstituteRegisterTransformer(
                 ap=lambda location: ExprConst(val=self.ap, location=location),
-                fp=lambda location: ExprConst(val=self.fp, location=location))
-            return self.visit(substitute_transformer.visit(
-                identifier_definition.eval(
-                    reference_manager=self.tracer_data.program.reference_manager,
-                    flow_tracking_data=current_flow_tracking_data)))
+                fp=lambda location: ExprConst(val=self.fp, location=location),
+            )
+            return self.visit(
+                substitute_transformer.visit(
+                    identifier_definition.eval(
+                        reference_manager=self.tracer_data.program.reference_manager,
+                        flow_tracking_data=current_flow_tracking_data,
+                    )
+                )
+            )
         except FlowTrackingError:
             raise FlowTrackingError(f"Invalid reference '{var_name}'.")

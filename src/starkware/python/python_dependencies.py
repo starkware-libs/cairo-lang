@@ -1,9 +1,10 @@
 import os
 import sys
 
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
-assert os.path.basename(ROOT_DIR) in ['src', 'site-packages', 'dist-packages'] or \
-    os.path.basename(ROOT_DIR).endswith('-site')
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+assert os.path.basename(ROOT_DIR) in ["src", "site-packages", "dist-packages"] or os.path.basename(
+    ROOT_DIR
+).endswith("-site")
 
 
 def generate_python_dependencies(dependencies_path, start_time):
@@ -11,16 +12,18 @@ def generate_python_dependencies(dependencies_path, start_time):
     Creates a CMake file with the loaded python module.
     """
     files = [
-        x.__file__ for x in sys.modules.values()
-        if hasattr(x, '__file__') and x.__file__ is not None]
+        x.__file__
+        for x in sys.modules.values()
+        if hasattr(x, "__file__") and x.__file__ is not None
+    ]
 
-    res = 'SET (DEPENDENCIES\n'
+    res = "SET (DEPENDENCIES\n"
     for filename in sorted(files):
         if filename.startswith(ROOT_DIR):
-            res += filename + '\n'
-    res += ')\n'
+            res += filename + "\n"
+    res += ")\n"
 
-    with open(dependencies_path, 'w') as dependencies_file:
+    with open(dependencies_path, "w") as dependencies_file:
         dependencies_file.write(res)
 
     # Change the modification time of the file to make sure it is older than the generated files.
@@ -33,8 +36,10 @@ def add_argparse_argument(parser):
     Use process_args at the end of the program to generate the dependency file.
     """
     parser.add_argument(
-        '--python_dependencies', type=str,
-        help='Output the starkware python modules this file depends on as a CMake file.')
+        "--python_dependencies",
+        type=str,
+        help="Output the starkware python modules this file depends on as a CMake file.",
+    )
 
 
 def process_args(args, start_time):

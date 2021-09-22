@@ -7,8 +7,10 @@ from starkware.cairo.lang.compiler.scoped_name import ScopedName
 
 
 def preprocess_codes(
-        codes: Sequence[Tuple[str, str]], pass_manager: PassManager,
-        main_scope: ScopedName = ScopedName()) -> PreprocessedProgram:
+    codes: Sequence[Tuple[str, str]],
+    pass_manager: PassManager,
+    main_scope: ScopedName = ScopedName(),
+) -> PreprocessedProgram:
     """
     Preprocesses a list of Cairo files and returns a PreprocessedProgram instance.
     codes is a list of pairs (code_string, file_name).

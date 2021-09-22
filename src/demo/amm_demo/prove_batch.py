@@ -12,6 +12,7 @@ class Balance:
     """
     Represents the balance of each of the two tokens.
     """
+
     a: int
     b: int
 
@@ -30,8 +31,12 @@ class SwapTransaction:
 
 class BatchProver:
     def __init__(
-            self, program: Program, balance: Balance, accounts: Dict[int, Account],
-            sharp_client: SharpClient):
+        self,
+        program: Program,
+        balance: Balance,
+        accounts: Dict[int, Account],
+        sharp_client: SharpClient,
+    ):
         """
         Initializes the prover client.
         Parameters:
@@ -64,22 +69,23 @@ class BatchProver:
         Constructs the Cairo program input from the provided transactions and the system state.
         """
         program_input: Dict[str, Any] = {
-            'token_a_balance': self.balance.a,
-            'token_b_balance': self.balance.b,
-            'accounts': {},
-            'transactions': []
+            "token_a_balance": self.balance.a,
+            "token_b_balance": self.balance.b,
+            "accounts": {},
+            "transactions": [],
         }
 
         for index, account in self.accounts.items():
-            program_input['accounts'][str(index)] = {
-                'public_key': hex(account.pub_key),
-                'token_a_balance': account.balance.a,
-                'token_b_balance': account.balance.b,
+            program_input["accounts"][str(index)] = {
+                "public_key": hex(account.pub_key),
+                "token_a_balance": account.balance.a,
+                "token_b_balance": account.balance.b,
             }
 
         for tx in transactions:
-            program_input['transactions'].append(
-                {'account_id': tx.account_id, 'token_a_amount': tx.token_a_amount})
+            program_input["transactions"].append(
+                {"account_id": tx.account_id, "token_a_amount": tx.token_a_amount}
+            )
 
         return program_input
 
@@ -88,12 +94,12 @@ class BatchProver:
         Submits a SHARP job to prove the state transition implied by the provided transactions.
         Returns the job id in the SHARP service, the fact to be registered, and the program output.
         """
-        with tempfile.NamedTemporaryFile(mode='w') as program_input_file:
-            json.dump(
-                program_input, program_input_file, indent=4, sort_keys=True)
+        with tempfile.NamedTemporaryFile(mode="w") as program_input_file:
+            json.dump(program_input, program_input_file, indent=4, sort_keys=True)
             program_input_file.flush()
             cairo_pie = self.sharp_client.run_program(
-                program=self.program, program_input_path=program_input_file.name)
+                program=self.program, program_input_path=program_input_file.name
+            )
             job_key = self.sharp_client.submit_cairo_pie(cairo_pie=cairo_pie)
 
             fact = self.sharp_client.get_fact(cairo_pie)

@@ -4,6 +4,7 @@ python_lib(starknet_testing_lib
     FILES
     contract.py
     starknet.py
+    state.py
 
     LIBS
     cairo_vm_crypto_lib

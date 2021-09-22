@@ -33,7 +33,7 @@ class AssertEqInstruction(InstructionBody):
     location: Optional[Location] = LocationField
 
     def format(self):
-        return f'{self.a.format()} = {self.b.format()}'
+        return f"{self.a.format()} = {self.b.format()}"
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.a, self.b]
@@ -67,8 +67,8 @@ class JumpToLabelInstruction(InstructionBody):
     location: Optional[Location] = LocationField
 
     def format(self):
-        condition_str = '' if self.condition is None else f' if {self.condition.format()} != 0'
-        return f'jmp {self.label.format()}{condition_str}'
+        condition_str = "" if self.condition is None else f" if {self.condition.format()} != 0"
+        return f"jmp {self.label.format()}{condition_str}"
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.label, self.condition]
@@ -85,7 +85,7 @@ class JnzInstruction(InstructionBody):
     location: Optional[Location] = LocationField
 
     def format(self):
-        return f'jmp rel {self.jump_offset.format()} if {self.condition.format()} != 0'
+        return f"jmp rel {self.jump_offset.format()} if {self.condition.format()} != 0"
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.jump_offset, self.condition]
@@ -118,7 +118,7 @@ class CallLabelInstruction(InstructionBody):
     location: Optional[Location] = LocationField
 
     def format(self):
-        return f'call {self.label.format()}'
+        return f"call {self.label.format()}"
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.label]
@@ -133,7 +133,7 @@ class RetInstruction(InstructionBody):
     location: Optional[Location] = LocationField
 
     def format(self):
-        return 'ret'
+        return "ret"
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return []
@@ -149,7 +149,7 @@ class AddApInstruction(InstructionBody):
     location: Optional[Location] = LocationField
 
     def format(self):
-        return f'ap += {self.expr.format()}'
+        return f"ap += {self.expr.format()}"
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.expr]
@@ -160,12 +160,13 @@ class InstructionAst(AstNode):
     """
     Represents an instruction, including the ap++ flag (inc_ap).
     """
+
     body: InstructionBody
     inc_ap: bool
     location: Optional[Location] = LocationField
 
     def format(self):
-        return self.body.format() + ('; ap++' if self.inc_ap else '')
+        return self.body.format() + ("; ap++" if self.inc_ap else "")
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.body]

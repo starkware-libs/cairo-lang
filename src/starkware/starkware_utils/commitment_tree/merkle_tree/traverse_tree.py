@@ -1,12 +1,14 @@
 import asyncio
 from typing import AsyncIterator, Callable, Optional, TypeVar
 
-NodeType = TypeVar('NodeType')
+NodeType = TypeVar("NodeType")
 
 
 async def traverse_tree(
-        get_children_callback: Callable[[NodeType], AsyncIterator[NodeType]], root: NodeType,
-        n_workers: Optional[int] = None):
+    get_children_callback: Callable[[NodeType], AsyncIterator[NodeType]],
+    root: NodeType,
+    n_workers: Optional[int] = None,
+):
     """
     Traverses a tree as follows:
     1. Starts by calling get_children_callback(root). This function should return the children of

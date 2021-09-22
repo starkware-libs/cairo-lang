@@ -35,10 +35,10 @@ def decode_node(node):
     """
     left_child, right_child = node
     if left_child is None:
-        assert right_child is not None, 'No updates in tree'
-        case = 'right'
+        assert right_child is not None, "No updates in tree"
+        case = "right"
     elif right_child is None:
-        case = 'left'
+        case = "left"
     else:
-        case = 'both'
+        case = "both"
     return left_child, right_child, case

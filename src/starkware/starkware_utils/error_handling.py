@@ -4,7 +4,7 @@ import operator
 from enum import Enum, auto
 from typing import Any, Dict, List, Optional, Type
 
-symbol_to_function = {'!=': operator.ne, '==': operator.eq, '>': operator.gt, '>=': operator.ge}
+symbol_to_function = {"!=": operator.ne, "==": operator.eq, ">": operator.gt, ">=": operator.ge}
 
 
 class ErrorCode(Enum):
@@ -139,10 +139,10 @@ class StarkException(WebFriendlyException):
     def __init__(self, code, message: Optional[str] = None):
         self.code = code
         self.message = message
-        super().__init__(status_code=500, body={'code': code, 'message': message})
+        super().__init__(status_code=500, body={"code": code, "message": message})
 
     def __repr__(self) -> str:
-        return f'{type(self).__name__}(code={self.code}, message={self.message})'
+        return f"{type(self).__name__}(code={self.code}, message={self.message})"
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, StarkException):
@@ -165,7 +165,7 @@ def stark_assert_eq(exp_val, actual_val, code, message: Optional[str] = None):
     Verifies that the expected value is equal to the actual value, raising a StarkException with
     the appropriate code and message, where the expected and actual values are added to the message.
     """
-    _stark_assert_not_symbol(exp_val, actual_val, symbol='!=', code=code, message=message)
+    _stark_assert_not_symbol(exp_val, actual_val, symbol="!=", code=code, message=message)
 
 
 def stark_assert_ne(exp_val, actual_val, code, message: Optional[str] = None):
@@ -174,7 +174,7 @@ def stark_assert_ne(exp_val, actual_val, code, message: Optional[str] = None):
     with the appropriate code and message, where the expected and actual values are added to the
     message.
     """
-    _stark_assert_not_symbol(exp_val, actual_val, symbol='==', code=code, message=message)
+    _stark_assert_not_symbol(exp_val, actual_val, symbol="==", code=code, message=message)
 
 
 def stark_assert_le(exp_val, actual_val, code, message: Optional[str] = None):
@@ -183,7 +183,7 @@ def stark_assert_le(exp_val, actual_val, code, message: Optional[str] = None):
     StarkException with the appropriate code and message, where the expected and actual values are
     added to the message.
     """
-    _stark_assert_not_symbol(exp_val, actual_val, symbol='>', code=code, message=message)
+    _stark_assert_not_symbol(exp_val, actual_val, symbol=">", code=code, message=message)
 
 
 def stark_assert_lt(exp_val, actual_val, code, message: Optional[str] = None):
@@ -192,11 +192,10 @@ def stark_assert_lt(exp_val, actual_val, code, message: Optional[str] = None):
     StarkException with the appropriate code and message, where the expected and actual values are
     added to the message.
     """
-    _stark_assert_not_symbol(exp_val, actual_val, symbol='>=', code=code, message=message)
+    _stark_assert_not_symbol(exp_val, actual_val, symbol=">=", code=code, message=message)
 
 
-def _stark_assert_not_symbol(
-        exp_val, actual_val, symbol: str, code, message: Optional[str] = None):
+def _stark_assert_not_symbol(exp_val, actual_val, symbol: str, code, message: Optional[str] = None):
     """
     Receives a symbol as a string that compares two values (e.g '==', '>') and verifies that:
     `not exp_val symbol actual_val`.
@@ -212,15 +211,18 @@ def _stark_assert_not_symbol(
 
     format_val = lambda val: hex(val) if isinstance(val, int) and val > MIN_HEX_SIZE else val
     if symbol_to_function[symbol](exp_val, actual_val):
-        eq_log = f'{format_val(exp_val)} {symbol} {format_val(actual_val)}'
-        message = f'{message}\n{eq_log}' if message else eq_log
+        eq_log = f"{format_val(exp_val)} {symbol} {format_val(actual_val)}"
+        message = f"{message}\n{eq_log}" if message else eq_log
         raise StarkException(code=code, message=message)
 
 
 @contextlib.contextmanager
 def wrap_with_stark_exception(
-        code: ErrorCode, message: Optional[str] = None, logger: Optional[logging.Logger] = None,
-        exception_types: Optional[List[Type[Exception]]] = None):
+    code: ErrorCode,
+    message: Optional[str] = None,
+    logger: Optional[logging.Logger] = None,
+    exception_types: Optional[List[Type[Exception]]] = None,
+):
     """
     Wraps exceptions of types exception_types thrown in the context with StarkException.
     If exception_types are not provided, only AssertionError is wrapped.

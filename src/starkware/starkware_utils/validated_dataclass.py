@@ -12,9 +12,9 @@ from starkware.python.utils import camel_to_snake_case
 from starkware.starkware_utils.serializable import StringSerializable
 from starkware.starkware_utils.validated_fields import Field
 
-TValidatedDataclass = TypeVar('TValidatedDataclass', bound='ValidatedDataclass')
-TSerializableDataclass = TypeVar('TSerializableDataclass', bound='SerializableMarshmallowDataclass')
-T = TypeVar('T')
+TValidatedDataclass = TypeVar("TValidatedDataclass", bound="ValidatedDataclass")
+TSerializableDataclass = TypeVar("TSerializableDataclass", bound="SerializableMarshmallowDataclass")
+T = TypeVar("T")
 
 
 class SerializableMarshmallowDataclass(StringSerializable):
@@ -30,7 +30,7 @@ class SerializableMarshmallowDataclass(StringSerializable):
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)  # type: ignore[call-arg]
 
-        cls.class_name_prefix = camel_to_snake_case(camel_case_name=cls.__name__).encode('ascii')
+        cls.class_name_prefix = camel_to_snake_case(camel_case_name=cls.__name__).encode("ascii")
 
     def dump(self) -> dict:
         return self.Schema().dump(obj=self)
@@ -69,8 +69,8 @@ class ValidatedDataclass:
 
     @classmethod
     def get_random_element(
-            cls: Type[TValidatedDataclass],
-            random_object: Optional[random.Random] = None, **data) -> TValidatedDataclass:
+        cls: Type[TValidatedDataclass], random_object: Optional[random.Random] = None, **data
+    ) -> TValidatedDataclass:
         """
         Generates a random object of the given class restricted by the given data.
         Any field can be either passed as an argument (field_name=field_value), and if not,
@@ -104,45 +104,49 @@ class ValidatedDataclass:
             validated_field = get_validated_field(field=field)
             if validated_field is not None:
                 new_object_data[field.name] = validated_field.get_random_value(
-                    random_object=random_object)
+                    random_object=random_object
+                )
                 continue
 
             # The field is a validated class object.
-            is_validated_dataclass = (
-                inspect.isclass(field.type) and
-                issubclass(field.type, ValidatedMarshmallowDataclass))
+            is_validated_dataclass = inspect.isclass(field.type) and issubclass(
+                field.type, ValidatedMarshmallowDataclass
+            )
             if is_validated_dataclass:
                 new_object_data[field.name] = field.type.get_random_element(
-                    random_object=random_object)
+                    random_object=random_object
+                )
                 continue
 
             raise Exception(
-                f'Could not randomize the field {field.name} in an object of type {cls}.')
+                f"Could not randomize the field {field.name} in an object of type {cls}."
+            )
 
         return cls(**new_object_data)  # type: ignore
 
     def validate_values(self):
         for field in dataclasses.fields(self):
-            metadata = getattr(field, 'metadata', None)
+            metadata = getattr(field, "metadata", None)
             if metadata is None:
                 continue
 
             value = getattr(self, field.name)
             # First use the field_validated argument, and only if it does not exist,
             # use the validation inside the marshmallow field argument.
-            validated_field = metadata.get('validated_field', None)
+            validated_field = metadata.get("validated_field", None)
             if validated_field is None:
-                marshmallow_field = field.metadata.get('marshmallow_field', None)
+                marshmallow_field = field.metadata.get("marshmallow_field", None)
                 if marshmallow_field is not None:
                     validate_field(field=marshmallow_field, value=value)
             else:
-                name_in_messages = metadata.get('name_in_messages', None)
+                name_in_messages = metadata.get("name_in_messages", None)
                 validated_field.validate(value=value, name=name_in_messages)
 
     def validate_types(self):
         for field in dataclasses.fields(self):
             typeguard.check_type(
-                argname=field.name, value=getattr(self, field.name), expected_type=field.type)
+                argname=field.name, value=getattr(self, field.name), expected_type=field.type
+            )
 
 
 class ValidatedMarshmallowDataclass(ValidatedDataclass, SerializableMarshmallowDataclass):
@@ -156,8 +160,8 @@ def get_validated_field(field: dataclasses.Field) -> Optional[Field]:
     Checks if the dataclass field has a validated_field attribute in its metadata.
     If so returns it, otherwise returns None.
     """
-    if field.metadata is not None and 'validated_field' in field.metadata:
-        return field.metadata['validated_field']
+    if field.metadata is not None and "validated_field" in field.metadata:
+        return field.metadata["validated_field"]
     return None
 
 
@@ -180,6 +184,7 @@ def late_marshmallow_dataclass(cls: Optional[type] = None, **kwargs):
     derived class construction will work as expected.
     """
     if cls is None:  # Arguments passed directly to decorator.
+
         def inner(cls):
             prepare_class_annotations_and_attribute_values(cls)
             return marshmallow_dataclass.dataclass(cls, **kwargs)
@@ -200,7 +205,8 @@ def prepare_class_annotations_and_attribute_values(cls):
     """
     annotations, attr_values = process_class_annotations_and_attribute_values(cls=cls)
     set_class_annotations_and_attribute_values(
-        cls=cls, annotations=annotations, attr_values=attr_values)
+        cls=cls, annotations=annotations, attr_values=attr_values
+    )
 
 
 def process_class_annotations_and_attribute_values(cls) -> Tuple[Dict[str, Any], Dict[str, Any]]:
@@ -213,7 +219,7 @@ def process_class_annotations_and_attribute_values(cls) -> Tuple[Dict[str, Any],
     attr_values: Dict[str, Any] = {}
 
     for base_cls in inspect.getmro(cls):
-        if '__annotations__' not in base_cls.__dict__:
+        if "__annotations__" not in base_cls.__dict__:
             continue
 
         for name in base_cls.__annotations__:
@@ -225,11 +231,13 @@ def process_class_annotations_and_attribute_values(cls) -> Tuple[Dict[str, Any],
                 attr_values[name] = base_cls.__dict__[name]
                 continue
 
-            if ('__dataclass_fields__' in base_cls.__dict__ and
-                    name in base_cls.__dict__['__dataclass_fields__']):
+            if (
+                "__dataclass_fields__" in base_cls.__dict__
+                and name in base_cls.__dict__["__dataclass_fields__"]
+            ):
                 # cls is a dataclass, in which all fields appear in cls.__dataclass_fields__,
                 # rather than directly in cls.__dict__.
-                attr_values[name] = base_cls.__dict__['__dataclass_fields__'][name]
+                attr_values[name] = base_cls.__dict__["__dataclass_fields__"][name]
                 continue
 
         # Prepand annotations, so that they appear in reverse MRO order.
@@ -239,7 +247,8 @@ def process_class_annotations_and_attribute_values(cls) -> Tuple[Dict[str, Any],
 
 
 def set_class_annotations_and_attribute_values(
-        cls, annotations: Dict[str, Any], attr_values: Dict[str, Any]):
+    cls, annotations: Dict[str, Any], attr_values: Dict[str, Any]
+):
     """
     Sets given attributes to cls.__dict__ and its annotations.
     The annotations will contain the given annotations, where the attributes with default values
@@ -255,8 +264,10 @@ def set_class_annotations_and_attribute_values(
 
     # Locate members with default values in the end of the annotations dictionary.
     cls.__annotations__ = {
-        name: annotation for name, annotation in annotations.items()
-        if name not in default_value_annotations}
+        name: annotation
+        for name, annotation in annotations.items()
+        if name not in default_value_annotations
+    }
     cls.__annotations__.update(default_value_annotations)
 
 
@@ -274,16 +285,19 @@ def has_default_value(cls, attr_value: Any) -> bool:
 
     # If member does not appear in __init__'s signature, having a default value is irrelevant.
     return (
-        attr_value.init and
-        attr_value.default is not dataclasses.MISSING or
+        attr_value.init
+        and attr_value.default is not dataclasses.MISSING
+        or
         # Mypy has a problem with object members that are callables (it sees access to them as
         # passing self). This is actually originated in dataclasses' annotations in typeshed, since
         # the source code has no annotations.
         # See https://github.com/python/mypy/issues/6910 for details on this problem.
-        attr_value.default_factory is not dataclasses.MISSING)  # type: ignore
+        attr_value.default_factory is not dataclasses.MISSING  # type: ignore
+    )
 
 
 # Validators for private use in this file.
+
 
 def validate_value(*, field: mfields.Field, value: Any):
     """
@@ -321,7 +335,7 @@ def validate_list(list_field: mfields.List, list_value: Sequence):
         if list_field.allow_none:
             return
 
-        raise marshmallow.ValidationError('Field may not be None.')
+        raise marshmallow.ValidationError("Field may not be None.")
 
     for inner_element in list_value:
         validate_field(field=list_field.inner, value=inner_element)

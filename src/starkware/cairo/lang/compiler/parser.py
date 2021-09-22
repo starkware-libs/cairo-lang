@@ -4,7 +4,12 @@ from typing import List, Optional
 
 import lark
 from lark.exceptions import (
-    LarkError, UnexpectedCharacters, UnexpectedEOF, UnexpectedToken, VisitError)
+    LarkError,
+    UnexpectedCharacters,
+    UnexpectedEOF,
+    UnexpectedToken,
+    VisitError,
+)
 
 from starkware.cairo.lang.compiler.ast.cairo_types import CairoType
 from starkware.cairo.lang.compiler.ast.code_elements import CodeElement
@@ -13,78 +18,92 @@ from starkware.cairo.lang.compiler.ast.instructions import InstructionAst
 from starkware.cairo.lang.compiler.ast.module import CairoFile
 from starkware.cairo.lang.compiler.error_handling import InputFile, Location, LocationError
 from starkware.cairo.lang.compiler.parser_transformer import (
-    ParserContext, ParserError, ParserTransformer)
+    ParserContext,
+    ParserError,
+    ParserTransformer,
+)
 
-grammar_file = os.path.join(os.path.dirname(__file__), 'cairo.ebnf')
+grammar_file = os.path.join(os.path.dirname(__file__), "cairo.ebnf")
 gram_parser = lark.Lark(
-    open(grammar_file, 'r').read(),
-    start=['cairo_file', 'repl'],
-    lexer='standard',
-    propagate_positions=True)
+    open(grammar_file, "r").read(),
+    start=["cairo_file", "repl"],
+    lexer="standard",
+    propagate_positions=True,
+)
 
 
 def wrap_lark_error(err: LarkError, input_file: InputFile) -> Exception:
     if input_file.content is None:
         return err
     lines = input_file.content.splitlines()
-    assert len(lines) > 0, 'Syntax errors are unexpected in code with no lines.'
+    assert len(lines) > 0, "Syntax errors are unexpected in code with no lines."
 
     err_str = str(err)
 
     if isinstance(err, UnexpectedToken):
         expected = set(err.expected)
-        if {'FP', 'AP'} <= expected:
-            expected.remove('FP')
-            expected.remove('AP')
-            expected.add('register')
-        if {'MINUS', 'INT'} <= expected:
-            expected.remove('MINUS')
-        if {'CAST', 'LPAR', 'LSQB', 'IDENTIFIER', 'INT', 'AMPERSAND', 'register'} <= expected:
+        if {"FP", "AP"} <= expected:
+            expected.remove("FP")
+            expected.remove("AP")
+            expected.add("register")
+        if {"MINUS", "INT"} <= expected:
+            expected.remove("MINUS")
+        if {"CAST", "LPAR", "LSQB", "IDENTIFIER", "INT", "AMPERSAND", "register"} <= expected:
             expected -= {
-                'CAST', 'LPAR', 'LSQB', 'IDENTIFIER', 'INT', 'HEXINT', 'PYCONST', 'NONDET',
-                'AMPERSAND', 'register'}
-            expected.add('expression')
-        if {'PLUS', 'MINUS', 'STAR', 'SLASH'} <= expected:
-            expected -= {'PLUS', 'MINUS', 'STAR', 'SLASH'}
-            expected.add('operator')
-        if 'COMMENT' in expected:
-            expected.remove('COMMENT')
-        if '_NEWLINE' in expected:
-            expected.remove('_NEWLINE')
+                "CAST",
+                "LPAR",
+                "LSQB",
+                "IDENTIFIER",
+                "INT",
+                "HEXINT",
+                "PYCONST",
+                "NONDET",
+                "AMPERSAND",
+                "register",
+            }
+            expected.add("expression")
+        if {"PLUS", "MINUS", "STAR", "SLASH"} <= expected:
+            expected -= {"PLUS", "MINUS", "STAR", "SLASH"}
+            expected.add("operator")
+        if "COMMENT" in expected:
+            expected.remove("COMMENT")
+        if "_NEWLINE" in expected:
+            expected.remove("_NEWLINE")
         TOKENS = {
-            '_ARROW': '"->"',
-            '_AT': '"@"',
-            '_DBL_EQ': '"=="',
-            '_DBL_PLUS': '"++"',
-            '_NEQ': '"!="',
-            'AMPERSAND': '"&"',
-            'CAST': '"cast"',
-            'CALL': '"call"',
-            'COLON': '":"',
-            'DOT': '"."',
-            'EQUAL': '"="',
-            'FUNC': '"func"',
-            'IDENTIFIER': 'identifier',
-            'INT': 'integer',
-            'HEXINT': 'integer',
-            'LBRACE': '"{"',
-            'LPAR': '"("',
-            'LSQB': '"["',
-            'MINUS': '"-"',
-            'NAMESPACE': '"namespace"',
-            'PLUS': '"+"',
-            'RBRACE': '"}"',
-            'RPAR': '")"',
-            'RSQB': '"]"',
-            'SEMICOLON': '";"',
-            'SLASH': '"/"',
-            'STAR': '"*"',
-            'STRUCT': '"struct"',
+            "_ARROW": '"->"',
+            "_AT": '"@"',
+            "_DBL_EQ": '"=="',
+            "_DBL_PLUS": '"++"',
+            "_NEQ": '"!="',
+            "AMPERSAND": '"&"',
+            "CAST": '"cast"',
+            "CALL": '"call"',
+            "COLON": '":"',
+            "DOT": '"."',
+            "EQUAL": '"="',
+            "FUNC": '"func"',
+            "IDENTIFIER": "identifier",
+            "INT": "integer",
+            "HEXINT": "integer",
+            "LBRACE": '"{"',
+            "LPAR": '"("',
+            "LSQB": '"["',
+            "MINUS": '"-"',
+            "NAMESPACE": '"namespace"',
+            "PLUS": '"+"',
+            "RBRACE": '"}"',
+            "RPAR": '")"',
+            "RSQB": '"]"',
+            "SEMICOLON": '";"',
+            "SLASH": '"/"',
+            "STAR": '"*"',
+            "STRUCT": '"struct"',
         }
         expected_lst = sorted(TOKENS.get(x, x) for x in expected)
         if len(expected_lst) > 1:
-            err_str = \
+            err_str = (
                 f'Unexpected token {repr(err.token)}. Expected one of: {", ".join(expected_lst)}.'
+            )
         else:
             err_str = f'Unexpected token {repr(err.token)}. Expected: {", ".join(expected_lst)}.'
 
@@ -103,14 +122,22 @@ def wrap_lark_error(err: LarkError, input_file: InputFile) -> Exception:
         return err
 
     location = Location(
-        start_line=line, start_col=col, end_line=line,
-        end_col=min(col + width, len(lines[line - 1]) + 1), input_file=input_file)
+        start_line=line,
+        start_col=col,
+        end_line=line,
+        end_col=min(col + width, len(lines[line - 1]) + 1),
+        input_file=input_file,
+    )
     return ParserError(err_str, location)
 
 
 def parse(
-        filename: Optional[str], code: str, code_type: str, expected_type,
-        parser_context: Optional[ParserContext] = None):
+    filename: Optional[str],
+    code: str,
+    code_type: str,
+    expected_type,
+    parser_context: Optional[ParserContext] = None,
+):
     """
     Parses the given string and returns an AST tree based on the classes in ast/*.py.
     code_type is the ebnf rule to start from (e.g., 'expr' or 'cairo_file').
@@ -130,8 +157,9 @@ def parse(
             raise err.orig_exc
         else:
             raise
-    assert isinstance(parsed, expected_type), \
-        f'Expected parsing result to be {expected_type.__name__}. Found: {type(parsed).__name__}'
+    assert isinstance(
+        parsed, expected_type
+    ), f"Expected parsing result to be {expected_type.__name__}. Found: {type(parsed).__name__}"
 
     return parsed
 
@@ -144,22 +172,22 @@ def lex(code: str) -> List[lark.lexer.Token]:
 
 
 def parse_file(
-        code: str, filename: str = '<string>',
-        parser_context: Optional[ParserContext] = None) -> CairoFile:
+    code: str, filename: str = "<string>", parser_context: Optional[ParserContext] = None
+) -> CairoFile:
     """
     Parses the given string and returns a CairoFile instance.
     """
     # If code does not end with '\n', add it.
-    if not code.endswith('\n'):
-        code += '\n'
-    return parse(filename, code, 'cairo_file', CairoFile, parser_context=parser_context)
+    if not code.endswith("\n"):
+        code += "\n"
+    return parse(filename, code, "cairo_file", CairoFile, parser_context=parser_context)
 
 
 def parse_instruction(code: str) -> InstructionAst:
     """
     Parses the given string and returns an InstructionAst instance.
     """
-    return parse(None, code, 'instruction', InstructionAst)
+    return parse(None, code, "instruction", InstructionAst)
 
 
 @lru_cache(None)
@@ -167,18 +195,18 @@ def parse_expr(code: str) -> Expression:
     """
     Parses the given string and returns an Expression instance.
     """
-    return parse(None, code, 'expr', Expression)
+    return parse(None, code, "expr", Expression)
 
 
 def parse_type(code: str) -> CairoType:
     """
     Parses the given string and returns an Expression instance.
     """
-    return parse(None, code, 'type', CairoType)
+    return parse(None, code, "type", CairoType)
 
 
 def parse_code_element(code: str, parser_context: Optional[ParserContext] = None) -> CodeElement:
     """
     Parses the given string and returns a CodeElement instance.
     """
-    return parse(None, code, 'code_element', CodeElement, parser_context=parser_context)
+    return parse(None, code, "code_element", CodeElement, parser_context=parser_context)

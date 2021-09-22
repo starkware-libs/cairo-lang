@@ -1,7 +1,7 @@
 import argparse
 import json
 import sys
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.cairo.lang.compiler.assembler import assemble
@@ -86,9 +86,14 @@ def get_entry_points_by_decorators(
 
 
 def compile_starknet_files(
-    files, debug_info: bool = False, disable_hint_validation: bool = False
+    files,
+    debug_info: bool = False,
+    disable_hint_validation: bool = False,
+    cairo_path: Optional[List[str]] = None,
 ) -> ContractDefinition:
-    module_reader = get_module_reader(cairo_path=[])
+    if cairo_path is None:
+        cairo_path = []
+    module_reader = get_module_reader(cairo_path=cairo_path)
 
     pass_manager = starknet_pass_manager(
         prime=DEFAULT_PRIME,

@@ -27,16 +27,17 @@ class OutputBuiltinRunner(BuiltinRunner):
         self.stop_ptr: Optional[RelocatableValue] = None
 
     def initial_stack(self) -> List[MaybeRelocatable]:
-        assert self.base is not None, 'Uninitialized self.base.'
+        assert self.base is not None, "Uninitialized self.base."
         return [self.base] if self.included else []
 
     def final_stack(self, runner, pointer):
         if self.included:
             self.stop_ptr = runner.vm_memory[pointer - 1]
             used = self.get_used_cells(runner=runner)
-            assert self.stop_ptr == self.base + used, \
-                'Invalid stop pointer for output. ' + \
-                f'Expected: {self.base + used}, found: {self.stop_ptr}'
+            assert self.stop_ptr == self.base + used, (
+                "Invalid stop pointer for output. "
+                + f"Expected: {self.base + used}, found: {self.stop_ptr}"
+            )
             return pointer - 1
         else:
             self.stop_ptr = self.base
@@ -64,23 +65,25 @@ class OutputBuiltinRunner(BuiltinRunner):
         # A map from an offset to its page id.
         offset_to_page = {}
         for page_id, page in self.pages.items():
-            assert page.start + page.size <= size, f'Page {page_id} is out of bounds.'
+            assert page.start + page.size <= size, f"Page {page_id} is out of bounds."
             for i in range(page.start, page.start + page.size):
-                assert offset_to_page.setdefault(i, page_id) == page_id, \
-                    f'Offset {i} was already assigned a page.'
+                assert (
+                    offset_to_page.setdefault(i, page_id) == page_id
+                ), f"Offset {i} was already assigned a page."
 
         public_memory: List[Tuple[int, int]] = []
         for i in range(size):
             public_memory.append((i, offset_to_page.get(i, 0)))
 
-        runner.segments.finalize(
-            self.base.segment_index, size=size, public_memory=public_memory)
+        runner.segments.finalize(self.base.segment_index, size=size, public_memory=public_memory)
 
     def get_memory_segment_addresses(self, runner):
-        return {'output': MemorySegmentAddresses(
-            begin_addr=self.base,
-            stop_ptr=self.stop_ptr,
-        )}
+        return {
+            "output": MemorySegmentAddresses(
+                begin_addr=self.base,
+                stop_ptr=self.stop_ptr,
+            )
+        }
 
     def add_page(self, page_id: int, page_start: MaybeRelocatable, page_size: int):
         """
@@ -89,10 +92,11 @@ class OutputBuiltinRunner(BuiltinRunner):
         All public memory cells which were not assigned a page, will be in page 0.
         This function should be used in Cairo hints.
         """
-        assert page_id not in self.pages, f'Page {page_id} was already assigned.'
-        assert isinstance(page_start, RelocatableValue) and \
-            page_start.segment_index == self.base.segment_index, \
-            'page_start must be in the output segment.'
+        assert page_id not in self.pages, f"Page {page_id} was already assigned."
+        assert (
+            isinstance(page_start, RelocatableValue)
+            and page_start.segment_index == self.base.segment_index
+        ), "page_start must be in the output segment."
         start = page_start - self.base
         self.pages[page_id] = PublicMemoryPage(start=start, size=page_size)
 
@@ -106,29 +110,33 @@ class OutputBuiltinRunner(BuiltinRunner):
 
     def get_additional_data(self):
         return {
-            'pages': {
+            "pages": {
                 str(page_id): [page_info.start, page_info.size]
-                for page_id, page_info in sorted(self.pages.items())},
-            'attributes': self.attributes,
+                for page_id, page_info in sorted(self.pages.items())
+            },
+            "attributes": self.attributes,
         }
 
     def extend_additional_data(self, data, relocate_callback, data_is_trusted=True):
-        assert isinstance(data, dict) and sorted(data.keys()) == ['attributes', 'pages'], \
-            'Invalid output builtin data.'
+        assert isinstance(data, dict) and sorted(data.keys()) == [
+            "attributes",
+            "pages",
+        ], "Invalid output builtin data."
 
         # Process the 'pages' field.
-        assert isinstance(data['pages'], dict), 'Invalid output builtin pages field.'
-        for page_id_str, values in data['pages'].items():
-            assert isinstance(page_id_str, str) and \
-                isinstance(values, list) and \
-                len(values) == 2 and \
-                all(isinstance(x, int) and 0 < x < 2**30 for x in values), \
-                'Invalid output builtin pages field.'
+        assert isinstance(data["pages"], dict), "Invalid output builtin pages field."
+        for page_id_str, values in data["pages"].items():
+            assert (
+                isinstance(page_id_str, str)
+                and isinstance(values, list)
+                and len(values) == 2
+                and all(isinstance(x, int) and 0 < x < 2 ** 30 for x in values)
+            ), "Invalid output builtin pages field."
             self.pages[int(page_id_str)] = PublicMemoryPage(start=values[0], size=values[1])
 
         # Process the 'attributes' field.
-        assert isinstance(data['attributes'], dict), 'Invalid output builtin attributes field.'
-        self.attributes.update(data['attributes'])
+        assert isinstance(data["attributes"], dict), "Invalid output builtin attributes field."
+        self.attributes.update(data["attributes"])
 
     def run_security_checks(self, runner):
         return
@@ -174,6 +182,6 @@ class OutputBuiltinVerifier(BuiltinVerifier):
         if not self.included:
             return [], []
 
-        addresses = public_input.memory_segments['output']
-        assert 0 <= addresses.begin_addr <= addresses.stop_ptr < 2**64
+        addresses = public_input.memory_segments["output"]
+        assert 0 <= addresses.begin_addr <= addresses.stop_ptr < 2 ** 64
         return [addresses.begin_addr], [addresses.stop_ptr]

@@ -23,7 +23,8 @@ class InstructionLocation:
     inst: Location
     hints: List[Optional[HintLocation]]
     accessible_scopes: List[ScopedName] = field(
-        metadata=dict(marshmallow_field=mfields.List(ScopedNameAsStr)))
+        metadata=dict(marshmallow_field=mfields.List(ScopedNameAsStr))
+    )
 
     flow_tracking_data: FlowTrackingDataActual
 
@@ -64,14 +65,16 @@ class DebugInfo:
             for loc in instruction_location.get_all_locations():
                 input_file = loc.input_file
                 is_autogen = (
-                    input_file.filename is not None and
-                    input_file.filename.startswith('autogen/') and
-                    input_file.content is not None)
+                    input_file.filename is not None
+                    and input_file.filename.startswith("autogen/")
+                    and input_file.content is not None
+                )
                 if not is_autogen:
                     continue
                 if input_file.filename in self.file_contents:
-                    assert self.file_contents[input_file.filename] == input_file.content, \
-                        f'Found two versions of auto-generated file "{input_file.filename}":\n' \
-                        f'{input_file.content}\n\n\n{self.file_contents[input_file.filename]}'
+                    assert self.file_contents[input_file.filename] == input_file.content, (
+                        f'Found two versions of auto-generated file "{input_file.filename}":\n'
+                        f"{input_file.content}\n\n\n{self.file_contents[input_file.filename]}"
+                    )
                 else:
                     self.file_contents[input_file.filename] = input_file.content

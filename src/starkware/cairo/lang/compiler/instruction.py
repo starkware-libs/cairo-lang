@@ -34,6 +34,7 @@ class Instruction:
         FP = auto()
         # op1 = [op0].
         OP0 = auto()
+
     op1_addr: Op1Addr
 
     class Res(Enum):
@@ -45,6 +46,7 @@ class Instruction:
         MUL = auto()
         # res is not constrained.
         UNCONSTRAINED = auto()
+
     res: Res
 
     # Flags for register update.
@@ -58,6 +60,7 @@ class Instruction:
         # Next pc: jnz_addr (jnz), where jnz_addr is a complex expression, representing the jnz
         # logic.
         JNZ = auto()
+
     pc_update: PcUpdate
 
     class ApUpdate(Enum):
@@ -69,6 +72,7 @@ class Instruction:
         ADD1 = auto()
         # Next ap: ap + 2.
         ADD2 = auto()
+
     ap_update: ApUpdate
 
     class FpUpdate(Enum):
@@ -78,6 +82,7 @@ class Instruction:
         AP_PLUS2 = auto()
         # Next fp: operand_dst.
         DST = auto()
+
     fp_update: FpUpdate
 
     # Flags for opcodes.
@@ -86,6 +91,7 @@ class Instruction:
         ASSERT_EQ = auto()
         CALL = auto()
         RET = auto()
+
     opcode: Opcode
 
     @property
@@ -97,7 +103,7 @@ def decode_instruction_values(encoded_instruction):
     """
     Returns a tuple (flags, off0, off1, off2) according to the given encoded instruction.
     """
-    assert 0 <= encoded_instruction < 2 ** (3 * OFFSET_BITS + N_FLAGS), 'Unsupported instruction.'
+    assert 0 <= encoded_instruction < 2 ** (3 * OFFSET_BITS + N_FLAGS), "Unsupported instruction."
     off0 = encoded_instruction & (2 ** OFFSET_BITS - 1)
     off1 = (encoded_instruction >> OFFSET_BITS) & (2 ** OFFSET_BITS - 1)
     off2 = (encoded_instruction >> (2 * OFFSET_BITS)) & (2 ** OFFSET_BITS - 1)

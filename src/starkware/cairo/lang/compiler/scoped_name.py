@@ -6,16 +6,16 @@ import marshmallow.fields as mfields
 
 @dataclasses.dataclass(frozen=True)
 class ScopedName:
-    SEPARATOR: ClassVar[str] = '.'
+    SEPARATOR: ClassVar[str] = "."
     path: Tuple[str, ...] = ()
 
     def __post_init__(self):
-        assert '' not in self.path, 'Empty namespace is not supported.'
+        assert "" not in self.path, "Empty namespace is not supported."
         assert all([self.SEPARATOR not in part for part in self.path])
 
     @classmethod
     def from_string(cls, scope: str):
-        if scope == '':
+        if scope == "":
             # Handle the special case of an empty tuple.
             return cls()
         return cls(tuple(scope.split(cls.SEPARATOR)))
@@ -29,14 +29,14 @@ class ScopedName:
         """
         return len(self.path)
 
-    def startswith(self, other: Union[str, 'ScopedName']) -> bool:
+    def startswith(self, other: Union[str, "ScopedName"]) -> bool:
         if isinstance(other, str):
             return self.startswith(self.from_string(other))
 
         assert isinstance(other, ScopedName)
-        return self[:len(other)] == other
+        return self[: len(other)] == other
 
-    def __add__(self, other: Union[str, 'ScopedName']):
+    def __add__(self, other: Union[str, "ScopedName"]):
         if isinstance(other, str):
             return self + ScopedName.from_string(other)
 

@@ -24,7 +24,7 @@ class BadRequest(Exception):
         self.text = text
 
     def __repr__(self) -> str:
-        return f'HTTP error ocurred. Status: {self.status_code}. Text: {self.text}'
+        return f"HTTP error ocurred. Status: {self.status_code}. Text: {self.text}"
 
     def __str__(self) -> str:
         """
@@ -42,7 +42,10 @@ class RetryConfig:
     # Set n_retries == -1 for unlimited retries (for any error type).
     n_retries: int = 30
     retry_codes: Sequence[HTTPStatus] = (
-        HTTPStatus.BAD_GATEWAY, HTTPStatus.SERVICE_UNAVAILABLE, HTTPStatus.GATEWAY_TIMEOUT)
+        HTTPStatus.BAD_GATEWAY,
+        HTTPStatus.SERVICE_UNAVAILABLE,
+        HTTPStatus.GATEWAY_TIMEOUT,
+    )
 
 
 class BaseClient(HasUriPrefix):
@@ -51,14 +54,18 @@ class BaseClient(HasUriPrefix):
     """
 
     def __init__(
-            self, url: str, certificates_path: Optional[str] = None,
-            retry_config: Optional[RetryConfig] = None):
+        self,
+        url: str,
+        certificates_path: Optional[str] = None,
+        retry_config: Optional[RetryConfig] = None,
+    ):
         self.url = url
         self.ssl_context: Optional[ssl.SSLContext] = None
 
         self.retry_config = RetryConfig() if retry_config is None else retry_config
-        assert self.retry_config.n_retries > 0 or self.retry_config.n_retries == -1, \
-            'RetryConfig n_retries parameter value must be either a positive int or equals to -1.'
+        assert (
+            self.retry_config.n_retries > 0 or self.retry_config.n_retries == -1
+        ), "RetryConfig n_retries parameter value must be either a positive int or equals to -1."
 
         if certificates_path is not None:
             self.ssl_context = ssl.SSLContext(protocol=ssl.PROTOCOL_TLSv1_2)
@@ -66,14 +73,15 @@ class BaseClient(HasUriPrefix):
             self.ssl_context.check_hostname = True
 
             self.ssl_context.load_cert_chain(
-                certfile=os.path.join(certificates_path, 'user.crt'),
-                keyfile=os.path.join(certificates_path, 'user.key'))
+                certfile=os.path.join(certificates_path, "user.crt"),
+                keyfile=os.path.join(certificates_path, "user.key"),
+            )
 
-            self.ssl_context.load_verify_locations(os.path.join(certificates_path, 'server.crt'))
+            self.ssl_context.load_verify_locations(os.path.join(certificates_path, "server.crt"))
 
     async def _send_request(
-            self, send_method: str, uri: str,
-            data: Optional[Union[str, Dict[str, Any]]] = None) -> str:
+        self, send_method: str, uri: str, data: Optional[Union[str, Dict[str, Any]]] = None
+    ) -> str:
         """
         Sends an HTTP request to the target URI.
         Retries upon failure according to the retry configuration:
@@ -95,7 +103,8 @@ class BaseClient(HasUriPrefix):
                 async with aiohttp.TCPConnector(ssl=self.ssl_context) as connector:
                     async with aiohttp.ClientSession(connector=connector) as session:
                         async with session.request(
-                                method=send_method, url=url, data=data) as response:
+                            method=send_method, url=url, data=data
+                        ) as response:
                             text = await response.text()
                             if response.status != HTTPStatus.OK:
                                 raise BadRequest(status_code=response.status, text=text)
@@ -105,19 +114,21 @@ class BaseClient(HasUriPrefix):
                 if limited_retries and n_retries_left == 0:
                     raise
 
-                logger.error('ClientConnectorError, retrying...', exc_info=True)
+                logger.error("ClientConnectorError, retrying...", exc_info=True)
             except BadRequest as exception:
                 if limited_retries and (
-                        n_retries_left == 0 or
-                        exception.status_code not in self.retry_config.retry_codes):
+                    n_retries_left == 0
+                    or exception.status_code not in self.retry_config.retry_codes
+                ):
                     raise
 
                 logger.error(
-                    f'Got BadRequest while trying to access {url}. '
-                    f'status_code: {exception.status_code}. text: {exception.text}, '
-                    'retrying...')
+                    f"Got BadRequest while trying to access {url}. "
+                    f"status_code: {exception.status_code}. text: {exception.text}, "
+                    "retrying..."
+                )
 
             await asyncio.sleep(1)
 
     async def is_alive(self) -> str:
-        return await self._send_request(send_method='GET', uri='/is_alive')
+        return await self._send_request(send_method="GET", uri="/is_alive")

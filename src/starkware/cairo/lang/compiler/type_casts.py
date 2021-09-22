@@ -2,7 +2,13 @@ import itertools
 from typing import Optional
 
 from starkware.cairo.lang.compiler.ast.cairo_types import (
-    CairoType, CastType, TypeFelt, TypePointer, TypeStruct, TypeTuple)
+    CairoType,
+    CastType,
+    TypeFelt,
+    TypePointer,
+    TypeStruct,
+    TypeTuple,
+)
 from starkware.cairo.lang.compiler.ast.expr import ExprDeref, Expression, ExprTuple
 from starkware.cairo.lang.compiler.error_handling import LocationError
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
@@ -16,8 +22,12 @@ class CairoTypeError(LocationError):
 
 
 def check_cast(
-        src_type: CairoType, dest_type: CairoType, identifier_manager: IdentifierManager,
-        expr: Optional[Expression] = None, cast_type: CastType = CastType.EXPLICIT) -> bool:
+    src_type: CairoType,
+    dest_type: CairoType,
+    identifier_manager: IdentifierManager,
+    expr: Optional[Expression] = None,
+    cast_type: CastType = CastType.EXPLICIT,
+) -> bool:
     """
     Returns true if the given expression can be casted from src_type to dest_type
     according to the given 'cast_type'.
@@ -41,19 +51,21 @@ def check_cast(
     # CastType.UNPACKING checks:
 
     # Allow explicit cast between felts and pointers.
-    if isinstance(src_type, (TypeFelt, TypePointer)) and \
-            isinstance(dest_type, (TypeFelt, TypePointer)):
+    if isinstance(src_type, (TypeFelt, TypePointer)) and isinstance(
+        dest_type, (TypeFelt, TypePointer)
+    ):
         return True
 
     if cast_type is CastType.UNPACKING:
         return False
 
     # CastType.EXPLICIT checks:
-    assert expr is not None, f'CastType.EXPLICIT requires expr != None.'
+    assert expr is not None, f"CastType.EXPLICIT requires expr != None."
 
     if isinstance(src_type, TypeTuple) and isinstance(dest_type, TypeStruct):
         struct_def = get_struct_definition(
-            struct_name=dest_type.resolved_scope, identifier_manager=identifier_manager)
+            struct_name=dest_type.resolved_scope, identifier_manager=identifier_manager
+        )
 
         n_src_members = len(src_type.members)
         n_dest_members = len(struct_def.members)
@@ -62,24 +74,31 @@ def check_cast(
                 f"""\
 Cannot cast an expression of type '{src_type.format()}' to '{dest_type.format()}'.
 The former has {n_src_members} members while the latter has {n_dest_members} members.""",
-                location=expr.location)
+                location=expr.location,
+            )
 
         src_exprs = (
             [arg.expr for arg in expr.members.args]
             if isinstance(expr, ExprTuple)
-            else itertools.repeat(expr))
+            else itertools.repeat(expr)
+        )
 
         for (src_expr, src_member_type, dest_member) in zip(
-                src_exprs, src_type.members, struct_def.members.values()):
+            src_exprs, src_type.members, struct_def.members.values()
+        ):
             dest_member_type = dest_member.cairo_type
             if not check_cast(
-                    src_type=src_member_type, dest_type=dest_member_type,
-                    identifier_manager=identifier_manager, expr=src_expr,
-                    cast_type=CastType.FORCED if cast_type is CastType.FORCED else CastType.ASSIGN):
+                src_type=src_member_type,
+                dest_type=dest_member_type,
+                identifier_manager=identifier_manager,
+                expr=src_expr,
+                cast_type=CastType.FORCED if cast_type is CastType.FORCED else CastType.ASSIGN,
+            ):
 
                 raise CairoTypeError(
                     f"Cannot cast '{src_member_type.format()}' to '{dest_member_type.format()}'.",
-                    location=src_expr.location)
+                    location=src_expr.location,
+                )
 
         return True
 
@@ -87,9 +106,12 @@ The former has {n_src_members} members while the latter has {n_dest_members} mem
         return False
 
     # CastType.FORCED checks:
-    if isinstance(src_type, TypeFelt) and isinstance(dest_type, TypeStruct) and isinstance(
-            expr, ExprDeref):
+    if (
+        isinstance(src_type, TypeFelt)
+        and isinstance(dest_type, TypeStruct)
+        and isinstance(expr, ExprDeref)
+    ):
         return True
 
-    assert cast_type is CastType.FORCED, f'Unsupported cast type: {cast_type}.'
+    assert cast_type is CastType.FORCED, f"Unsupported cast type: {cast_type}."
     return False

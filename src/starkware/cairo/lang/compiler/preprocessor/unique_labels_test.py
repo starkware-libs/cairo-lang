@@ -2,7 +2,8 @@ from starkware.cairo.lang.compiler.preprocessor.preprocessor_test_utils import P
 
 
 def test_unique_label_creator():
-    program = preprocess_str(code="""
+    program = preprocess_str(
+        code="""
 namespace B:
     func foo(x, y) -> (res):
         if x == 0:
@@ -24,8 +25,12 @@ func main():
     B.foo(1, 2)
     ret
 end
-""", prime=PRIME)
-    assert program.format() == """\
+""",
+        prime=PRIME,
+    )
+    assert (
+        program.format()
+        == """\
 jmp rel 10 if [fp + (-4)] != 0
 jmp rel 5 if [fp + (-3)] != 0
 [ap] = 0; ap++
@@ -42,3 +47,4 @@ ret
 call rel -22
 ret
 """
+    )

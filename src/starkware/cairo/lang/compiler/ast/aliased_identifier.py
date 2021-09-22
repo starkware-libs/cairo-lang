@@ -14,8 +14,9 @@ class AliasedIdentifier(AstNode):
     location: Optional[Location] = LocationField
 
     def format(self):
-        return f'{self.orig_identifier.format()}' + \
-            (f' as {self.local_name.format()}' if self.local_name else '')
+        return f"{self.orig_identifier.format()}" + (
+            f" as {self.local_name.format()}" if self.local_name else ""
+        )
 
     @property
     def identifier(self):

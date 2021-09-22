@@ -392,11 +392,25 @@ This may indicate that this library function cannot be used in StarkNet contract
     )
 
 
-def test_abi():
+def test_abi_basic():
     program = preprocess_str(
         """
 %lang starknet
 %builtins range_check
+
+namespace MyNamespace:
+    struct ExternalStruct:
+        member y: (felt, felt)
+    end
+end
+
+struct ExternalStruct2:
+    member x: (felt, MyNamespace.ExternalStruct)
+end
+
+struct NonExternalStruct:
+end
+
 
 @external
 func f(a : felt, arr_len : felt, arr : felt*) -> (b : felt, c : felt):
@@ -409,13 +423,25 @@ func g() -> (a: felt):
 end
 
 @l1_handler
-func handler(from_address):
+func handler(from_address, a: ExternalStruct2):
     return ()
 end
 """
     )
 
     assert program.abi == [
+        {
+            "type": "struct",
+            "name": "ExternalStruct2",
+            "members": [{"name": "x", "offset": 0, "type": "(felt, ExternalStruct)"}],
+            "size": 3,
+        },
+        {
+            "type": "struct",
+            "name": "ExternalStruct",
+            "members": [{"name": "y", "offset": 0, "type": "(felt, felt)"}],
+            "size": 2,
+        },
         {
             "inputs": [
                 {"name": "a", "type": "felt"},
@@ -439,9 +465,49 @@ end
             "stateMutability": "view",
         },
         {
-            "inputs": [{"name": "from_address", "type": "felt"}],
+            "inputs": [
+                {"name": "from_address", "type": "felt"},
+                {"name": "a", "type": "ExternalStruct2"},
+            ],
             "name": "handler",
             "outputs": [],
             "type": "l1_handler",
         },
     ]
+
+
+def test_abi_failures():
+    verify_exception(
+        """
+%lang starknet
+
+namespace a:
+    struct MyStruct:
+    end
+end
+
+namespace b:
+    struct MyStruct:
+    end
+
+    struct MyStruct2:
+        member x: ((MyStruct, MyStruct), felt)
+    end
+end
+
+@external
+func f(x : (felt, a.MyStruct)):
+    return()
+end
+
+@view
+func g(y : b.MyStruct2):
+    return()
+end
+""",
+        """
+file:?:?: Found two external structs named MyStruct: test_scope.a.MyStruct, test_scope.b.MyStruct.
+    struct MyStruct:
+           ^******^
+""",
+    )

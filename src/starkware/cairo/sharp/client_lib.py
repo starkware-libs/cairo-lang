@@ -27,9 +27,10 @@ class ClientLib:
         """
 
         res = self._send(
-            'add_job', {'cairo_pie': base64.b64encode(cairo_pie.serialize()).decode('ascii')})
-        assert 'cairo_job_key' in res, f'Error when sending job to SHARP: {res}.'
-        return res['cairo_job_key']
+            "add_job", {"cairo_pie": base64.b64encode(cairo_pie.serialize()).decode("ascii")}
+        )
+        assert "cairo_job_key" in res, f"Error when sending job to SHARP: {res}."
+        return res["cairo_job_key"]
 
     def get_status(self, job_key: str) -> str:
         """
@@ -37,10 +38,9 @@ class ClientLib:
         job_key: used to query the state of the job in the system - returned by 'add_job'.
         """
 
-        res = self._send('get_status', {'cairo_job_key': job_key})
-        assert 'status' in res, \
-            f"Error when checking status of job with key '{job_key}': {res}."
-        return res['status']
+        res = self._send("get_status", {"cairo_job_key": job_key})
+        assert "status" in res, f"Error when checking status of job with key '{job_key}': {res}."
+        return res["status"]
 
     def _send(self, action: str, payload: dict) -> dict:
         """
@@ -50,10 +50,11 @@ class ClientLib:
         """
 
         data = {
-            'action': action,
-            'request': payload,
+            "action": action,
+            "request": payload,
         }
         http = urllib3.PoolManager()
         res = http.request(
-            method='POST', url=self.service_url, body=json.dumps(data).encode('utf-8'))
-        return json.loads(res.data.decode('utf-8'))
+            method="POST", url=self.service_url, body=json.dumps(data).encode("utf-8")
+        )
+        return json.loads(res.data.decode("utf-8"))

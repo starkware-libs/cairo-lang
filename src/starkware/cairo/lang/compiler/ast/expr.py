@@ -22,9 +22,9 @@ class Expression(AstNode):
     def format(self):
         res = str(self.to_expr_str())
         # Indent all lines except for the first.
-        res = res.replace('\n', '\n' + ' ' * INDENTATION)
+        res = res.replace("\n", "\n" + " " * INDENTATION)
         # Remove trailing spaces.
-        res = re.sub(r' +\n', '\n', res)
+        res = re.sub(r" +\n", "\n", res)
         return res
 
     @abstractmethod
@@ -41,8 +41,11 @@ class ExprConst(Expression):
     # Indicates the way the absolute value of the expression should be formatted in the code.
     # For example, it may contain the hexadecimal representation.
     format_str: Optional[str] = field(
-        default=None, hash=False, compare=False, metadata=dict(
-            marshmallow_field=marshmallow.fields.Field(load_only=True, dump_only=True)))
+        default=None,
+        hash=False,
+        compare=False,
+        metadata=dict(marshmallow_field=marshmallow.fields.Field(load_only=True, dump_only=True)),
+    )
     location: Optional[Location] = LocationField
 
     def to_expr_str(self):
@@ -62,13 +65,13 @@ class ExprPyConst(Expression):
 
     @classmethod
     def from_str(cls, src: str, location: Optional[Location] = None):
-        assert src.startswith('%[')
-        assert src.endswith('%]')
+        assert src.startswith("%[")
+        assert src.endswith("%]")
         code = src[2:-2]
         return cls(code, location)
 
     def to_expr_str(self):
-        return ExpressionString.highest(f'%[{self.code}%]')
+        return ExpressionString.highest(f"%[{self.code}%]")
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return []
@@ -83,36 +86,37 @@ class ExprHint(Expression):
 
     @classmethod
     def from_str(cls, val, location):
-        HINT_PATTERN = r'%\{(?P<prefix_whitespace>([ \t]*\n)*)(?P<code>.*?)%\}'
+        HINT_PATTERN = r"%\{(?P<prefix_whitespace>([ \t]*\n)*)(?P<code>.*?)%\}"
         m = re.match(HINT_PATTERN, val, re.DOTALL)
         assert m is not None
-        code = m.group('code').rstrip()
+        code = m.group("code").rstrip()
         if code is None:
-            code = ''
+            code = ""
 
         # Remove common indentation.
-        lines = code.split('\n')
+        lines = code.split("\n")
         common_indent = min(
-            (len(line) - len(line.lstrip(' ')) for line in lines if line),
-            default=0)
-        code = '\n'.join(line[common_indent:] for line in lines)
+            (len(line) - len(line.lstrip(" ")) for line in lines if line), default=0
+        )
+        code = "\n".join(line[common_indent:] for line in lines)
 
         return cls(
             hint_code=code,
-            n_prefix_newlines=m.group('prefix_whitespace').count('\n'),
-            location=location)
+            n_prefix_newlines=m.group("prefix_whitespace").count("\n"),
+            location=location,
+        )
 
     def to_str(self):
-        if self.hint_code == '':
-            return '%{\n%}'
-        if '\n' not in self.hint_code:
+        if self.hint_code == "":
+            return "%{\n%}"
+        if "\n" not in self.hint_code:
             # One liner.
-            return f'%{{ {self.hint_code} %}}'
+            return f"%{{ {self.hint_code} %}}"
         code = indent(self.hint_code, INDENTATION)
-        return f'%{{\n{code}\n%}}'
+        return f"%{{\n{code}\n%}}"
 
     def to_expr_str(self):
-        return ExpressionString.highest(f'nondet {self.to_str()}')
+        return ExpressionString.highest(f"nondet {self.to_str()}")
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return []
@@ -135,6 +139,7 @@ class ExprAssignment(AstNode):
     """
     A code element of the form [ident=]expr. The identifier is optional.
     """
+
     identifier: Optional[ExprIdentifier]
     expr: Expression
     location: Optional[Location] = LocationField
@@ -142,7 +147,7 @@ class ExprAssignment(AstNode):
     def format(self):
         if self.identifier is None:
             return self.expr.format()
-        return f'{self.identifier.format()}={self.expr.format()}'
+        return f"{self.identifier.format()}={self.expr.format()}"
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.identifier, self.expr]
@@ -154,6 +159,7 @@ class ArgList(AstNode):
     Represents a list of arguments (e.g., to a function call or a return statement).
     For example: 'a=1, b=2'.
     """
+
     args: List[ExprAssignment]
     notes: List[Notes]
     has_trailing_comma: bool
@@ -168,18 +174,18 @@ class ArgList(AstNode):
             assert len(self.notes) == 1
             return self.notes[0].format()
 
-        code = ''
+        code = ""
         assert len(self.args) + 1 == len(self.notes)
         for notes, arg in zip(self.notes[:-1], self.args):
-            if code != '':
-                code += ','
+            if code != "":
+                code += ","
                 if notes.empty:
-                    code += ' '
-            code += f'{notes.format()}{arg.format()}'
+                    code += " "
+            code += f"{notes.format()}{arg.format()}"
 
         # Add trailing comma at the end if necessary.
         if self.has_trailing_comma:
-            code += ','
+            code += ","
         code += self.notes[-1].format()
         return code
 
@@ -212,14 +218,14 @@ class ExprOperator(Expression):
         a = self.a.to_expr_str()
         b = self.b.to_expr_str()
         if not self.notes.empty:
-            b = b.prepend('\n')
-        if self.op == '+':
+            b = b.prepend("\n")
+        if self.op == "+":
             return a + b
-        elif self.op == '-':
+        elif self.op == "-":
             return a - b
-        elif self.op == '*':
+        elif self.op == "*":
             return a * b
-        elif self.op == '/':
+        elif self.op == "/":
             return a / b
         else:
             raise NotImplementedError(f"Unexpected operator '{self.op}'")
@@ -240,7 +246,7 @@ class ExprPow(Expression):
         a = self.a.to_expr_str()
         b = self.b.to_expr_str()
         if not self.notes.empty:
-            b = b.prepend('\n')
+            b = b.prepend("\n")
         return a.double_star_pow(b)
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
@@ -252,6 +258,7 @@ class ExprAddressOf(Expression):
     """
     Represents an expression of the form "&expr".
     """
+
     expr: Expression
     location: Optional[Location] = LocationField
 
@@ -281,7 +288,7 @@ class ExprParentheses(Expression):
     location: Optional[Location] = LocationField
 
     def to_expr_str(self):
-        return ExpressionString.highest(f'({self.notes.format()}{str(self.val.to_expr_str())})')
+        return ExpressionString.highest(f"({self.notes.format()}{str(self.val.to_expr_str())})")
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.val]
@@ -292,14 +299,15 @@ class ExprDeref(Expression):
     """
     Represents an expression of the form "[addr]".
     """
+
     addr: Expression
     notes: Notes = NotesField
     location: Optional[Location] = LocationField
 
     def to_expr_str(self):
         self.notes.assert_no_comments()
-        notes = '' if self.notes.empty else '\n'
-        return ExpressionString.highest(f'[{notes}{str(self.addr.to_expr_str())}]')
+        notes = "" if self.notes.empty else "\n"
+        return ExpressionString.highest(f"[{notes}{str(self.addr.to_expr_str())}]")
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.addr]
@@ -310,6 +318,7 @@ class ExprSubscript(Expression):
     """
     Represents an expression of the form "expr[offset]".
     """
+
     expr: Expression
     offset: Expression
     notes: Notes = NotesField
@@ -317,10 +326,11 @@ class ExprSubscript(Expression):
 
     def to_expr_str(self):
         self.notes.assert_no_comments()
-        notes = '' if self.notes.empty else '\n'
+        notes = "" if self.notes.empty else "\n"
         # If expr is not an atom, add parentheses.
         return ExpressionString.highest(
-            f'{self.expr.to_expr_str():HIGHEST}[{notes}{str(self.offset.to_expr_str())}]')
+            f"{self.expr.to_expr_str():HIGHEST}[{notes}{str(self.offset.to_expr_str())}]"
+        )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.expr, self.offset]
@@ -331,6 +341,7 @@ class ExprDot(Expression):
     """
     Represents an expression of the form "expr.member".
     """
+
     expr: Expression
     member: ExprIdentifier
     location: Optional[Location] = LocationField
@@ -338,7 +349,8 @@ class ExprDot(Expression):
     def to_expr_str(self):
         # If expr is not an atom, add parentheses.
         return ExpressionString.highest(
-            f'{self.expr.to_expr_str():HIGHEST}.{str(self.member.to_expr_str())}')
+            f"{self.expr.to_expr_str():HIGHEST}.{str(self.member.to_expr_str())}"
+        )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.expr, self.member]
@@ -349,6 +361,7 @@ class ExprCast(Expression):
     """
     Represents a cast expression of the form "cast(expr, T)" (which transforms expr to type T).
     """
+
     expr: Expression
     dest_type: CairoType
     # Cast expressions resulting from the Cairo code always have cast_type=CastType.EXPLICIT.
@@ -359,9 +372,10 @@ class ExprCast(Expression):
 
     def to_expr_str(self):
         self.notes.assert_no_comments()
-        notes = '' if self.notes.empty else '\n'
+        notes = "" if self.notes.empty else "\n"
         return ExpressionString.highest(
-            f'cast({notes}{str(self.expr.to_expr_str())}, {self.dest_type.format()})')
+            f"cast({notes}{str(self.expr.to_expr_str())}, {self.dest_type.format()})"
+        )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.expr, self.dest_type]
@@ -374,7 +388,7 @@ class ExprTuple(Expression):
 
     def to_expr_str(self):
         code = self.members.format()
-        return ExpressionString.highest(f'({code})')
+        return ExpressionString.highest(f"({code})")
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.members]
@@ -385,6 +399,7 @@ class ExprFutureLabel(Expression):
     """
     Represents a future label whose current pc is not known yet.
     """
+
     identifier: ExprIdentifier
 
     def to_expr_str(self):

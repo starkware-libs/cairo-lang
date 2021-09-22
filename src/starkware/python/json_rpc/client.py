@@ -18,11 +18,11 @@ class JsonRpcMethod:
         """
         Returns a JSON-RPC call.
         """
-        assert len(args) == 0, 'JSON-RPC call can only contain named arguments.'
+        assert len(args) == 0, "JSON-RPC call can only contain named arguments."
 
-        call_dict: Dict[str, Any] = {'jsonrpc': '2.0', 'method': self.name, 'id': None}
+        call_dict: Dict[str, Any] = {"jsonrpc": "2.0", "method": self.name, "id": None}
         if len(kwargs) != 0:
-            call_dict['params'] = kwargs
+            call_dict["params"] = kwargs
 
         return json.dumps(call_dict)
 

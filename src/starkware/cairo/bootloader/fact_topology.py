@@ -5,7 +5,7 @@ from typing import ClassVar, List, Type
 import marshmallow
 import marshmallow_dataclass
 
-GPS_FACT_TOPOLOGY = 'gps_fact_topology'
+GPS_FACT_TOPOLOGY = "gps_fact_topology"
 
 
 @dataclasses.dataclass(frozen=True)

@@ -1,12 +1,12 @@
-from abc import ABC, abstractmethod
 import asyncio
 import concurrent
 import dataclasses
+from abc import ABC, abstractmethod
 from typing import Dict, Iterator, List, Optional, Set, Tuple, Type, TypeVar, Union
 
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
-from starkware.starkware_utils.binary_fact_tree import BinaryFactDict
-from starkware.starkware_utils.patricia_tree.patricia_tree import PatriciaTree
+from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
+from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
 from starkware.storage.storage import HASH_BYTES, Fact, FactFetchingContext, HashFunctionType
 
 

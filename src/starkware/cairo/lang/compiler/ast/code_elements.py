@@ -6,10 +6,18 @@ from starkware.cairo.lang.compiler.ast.aliased_identifier import AliasedIdentifi
 from starkware.cairo.lang.compiler.ast.arguments import IdentifierList
 from starkware.cairo.lang.compiler.ast.bool_expr import BoolExpr
 from starkware.cairo.lang.compiler.ast.expr import (
-    ExprAssignment, Expression, ExprHint, ExprIdentifier)
+    ExprAssignment,
+    Expression,
+    ExprHint,
+    ExprIdentifier,
+)
 from starkware.cairo.lang.compiler.ast.formatting_utils import (
-    INDENTATION, LocationField, ParticleFormattingConfig, create_particle_sublist,
-    particles_in_lines)
+    INDENTATION,
+    LocationField,
+    ParticleFormattingConfig,
+    create_particle_sublist,
+    particles_in_lines,
+)
 from starkware.cairo.lang.compiler.ast.instructions import InstructionAst
 from starkware.cairo.lang.compiler.ast.node import AstNode
 from starkware.cairo.lang.compiler.ast.notes import NoteListField, Notes
@@ -48,7 +56,7 @@ class CodeElementConst(CodeElement):
     expr: Expression
 
     def format(self, allowed_line_length):
-        return f'const {self.identifier.format()} = {self.expr.format()}'
+        return f"const {self.identifier.format()} = {self.expr.format()}"
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.identifier, self.expr]
@@ -59,7 +67,7 @@ class CodeElementMember(CodeElement):
     typed_identifier: TypedIdentifier
 
     def format(self, allowed_line_length):
-        return f'member {self.typed_identifier.format()}'
+        return f"member {self.typed_identifier.format()}"
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.typed_identifier]
@@ -71,7 +79,7 @@ class CodeElementReference(CodeElement):
     expr: Expression
 
     def format(self, allowed_line_length):
-        return f'let {self.typed_identifier.format()} = {self.expr.format()}'
+        return f"let {self.typed_identifier.format()} = {self.expr.format()}"
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.typed_identifier, self.expr]
@@ -85,13 +93,14 @@ class CodeElementLocalVariable(CodeElement):
 
     Both the expr_type and the initialization expr are optional.
     """
+
     typed_identifier: TypedIdentifier
     expr: Optional[Expression]
     location: Optional[Location] = LocationField
 
     def format(self, allowed_line_length):
-        assignment = '' if self.expr is None else f' = {self.expr.format()}'
-        return f'local {self.typed_identifier.format()}{assignment}'
+        assignment = "" if self.expr is None else f" = {self.expr.format()}"
+        return f"local {self.typed_identifier.format()}{assignment}"
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.typed_identifier, self.expr]
@@ -103,13 +112,14 @@ class CodeElementTemporaryVariable(CodeElement):
     Represents a statement of the form:
       tempvar x = expr.
     """
+
     typed_identifier: TypedIdentifier
     expr: Optional[Expression]
     location: Optional[Location] = LocationField
 
     def format(self, allowed_line_length):
-        assignment = '' if self.expr is None else f' = {self.expr.format()}'
-        return f'tempvar {self.typed_identifier.format()}{assignment}'
+        assignment = "" if self.expr is None else f" = {self.expr.format()}"
+        return f"tempvar {self.typed_identifier.format()}{assignment}"
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.typed_identifier, self.expr]
@@ -122,12 +132,13 @@ class CodeElementCompoundAssertEq(CodeElement):
     Unlike AssertEqInstruction, a CodeElementCompoundAssertEq may translate to a few instructions
     to deal with expressions which contain more than one operation.
     """
+
     a: Expression
     b: Expression
     location: Optional[Location] = LocationField
 
     def format(self, allowed_line_length):
-        return f'assert {self.a.format()} = {self.b.format()}'
+        return f"assert {self.a.format()} = {self.b.format()}"
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.a, self.b]
@@ -140,7 +151,7 @@ class CodeElementStaticAssert(CodeElement):
     location: Optional[Location] = LocationField
 
     def format(self, allowed_line_length):
-        return f'static_assert {self.a.format()} == {self.b.format()}'
+        return f"static_assert {self.a.format()} == {self.b.format()}"
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.a, self.b]
@@ -152,19 +163,20 @@ class CodeElementReturn(CodeElement):
     Represents a statement of the form:
       return ([ident=]expr, ...).
     """
+
     exprs: List[ExprAssignment]
     location: Optional[Location] = LocationField
 
     def format(self, allowed_line_length):
         expr_codes = [x.format() for x in self.exprs]
-        particles = ['return (', create_particle_sublist(expr_codes, ')')]
+        particles = ["return (", create_particle_sublist(expr_codes, ")")]
 
         return particles_in_lines(
             particles=particles,
             config=ParticleFormattingConfig(
-                allowed_line_length=allowed_line_length,
-                line_indent=INDENTATION,
-                one_per_line=True))
+                allowed_line_length=allowed_line_length, line_indent=INDENTATION, one_per_line=True
+            ),
+        )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return self.exprs
@@ -176,20 +188,21 @@ class CodeElementTailCall(CodeElement):
     Represents a statement of the form:
       return func_ident([ident=]expr, ...).
     """
+
     func_call: RvalueFuncCall
     location: Optional[Location] = LocationField
 
     def get_particles(self):
         particales = self.func_call.get_particles()
-        return ['return ' + particales[0]] + particales[1:]
+        return ["return " + particales[0]] + particales[1:]
 
     def format(self, allowed_line_length):
         return particles_in_lines(
             particles=self.get_particles(),
             config=ParticleFormattingConfig(
-                allowed_line_length=allowed_line_length,
-                line_indent=INDENTATION,
-                one_per_line=True))
+                allowed_line_length=allowed_line_length, line_indent=INDENTATION, one_per_line=True
+            ),
+        )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.func_call]
@@ -201,6 +214,7 @@ class CodeElementFuncCall(CodeElement):
     Represents a statement of the form:
       func_ident([ident=]expr, ...).
     """
+
     func_call: RvalueFuncCall
 
     def get_particles(self):
@@ -224,19 +238,20 @@ class CodeElementReturnValueReference(CodeElement):
       'x [: type]' is the 'typed_identifier'
       'func(...)' is the 'func_call'.
     """
+
     typed_identifier: TypedIdentifier
     func_call: RvalueCall
 
     def format(self, allowed_line_length):
         call_particles = self.func_call.get_particles()
-        first_particle = f'let {self.typed_identifier.format()} = ' + call_particles[0]
+        first_particle = f"let {self.typed_identifier.format()} = " + call_particles[0]
 
         return particles_in_lines(
             particles=[first_particle] + call_particles[1:],
             config=ParticleFormattingConfig(
-                allowed_line_length=allowed_line_length,
-                line_indent=INDENTATION,
-                one_per_line=True))
+                allowed_line_length=allowed_line_length, line_indent=INDENTATION, one_per_line=True
+            ),
+        )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.typed_identifier, self.func_call]
@@ -251,23 +266,26 @@ class CodeElementUnpackBinding(CodeElement):
       '(a, b, c)' is the 'unpacking_list'
       'func(...)' is the 'rvalue'.
     """
+
     unpacking_list: IdentifierList
     rvalue: Rvalue
 
     def format(self, allowed_line_length):
         particles = self.rvalue.get_particles()
 
-        end_particle = ') = ' + particles[0]
-        particles = ['let ('] + \
-            create_particle_sublist(self.unpacking_list.get_particles(), end_particle) + \
-            particles[1:]
+        end_particle = ") = " + particles[0]
+        particles = (
+            ["let ("]
+            + create_particle_sublist(self.unpacking_list.get_particles(), end_particle)
+            + particles[1:]
+        )
 
         return particles_in_lines(
             particles=particles,
             config=ParticleFormattingConfig(
-                allowed_line_length=allowed_line_length,
-                line_indent=INDENTATION,
-                one_per_line=True))
+                allowed_line_length=allowed_line_length, line_indent=INDENTATION, one_per_line=True
+            ),
+        )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.unpacking_list, self.rvalue]
@@ -278,7 +296,7 @@ class CodeElementLabel(CodeElement):
     identifier: ExprIdentifier
 
     def format(self, allowed_line_length):
-        return f'{self.identifier.format()}:'
+        return f"{self.identifier.format()}:"
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.identifier]
@@ -303,7 +321,7 @@ class CodeElementHint(CodeElement):
 @dataclasses.dataclass
 class CodeElementEmptyLine(CodeElement):
     def format(self, allowed_line_length):
-        return ''
+        return ""
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return []
@@ -317,11 +335,11 @@ class CommentedCodeElement(AstNode):
 
     def format(self, allowed_line_length):
         elm_str = self.code_elm.format(allowed_line_length=allowed_line_length)
-        comment_str = f'#{self.comment}' if self.comment is not None else ''
-        separator = '  ' if elm_str != '' and comment_str != '' else ''
+        comment_str = f"#{self.comment}" if self.comment is not None else ""
+        separator = "  " if elm_str != "" and comment_str != "" else ""
         return elm_str + separator + comment_str.rstrip()
 
-    def fix_comment_spaces(self, allow_additional_comment_spaces: bool) -> 'CommentedCodeElement':
+    def fix_comment_spaces(self, allow_additional_comment_spaces: bool) -> "CommentedCodeElement":
         """
         Comments should start with exactly one space after '#' except for some cases (in which
         allow_additional_comment_spaces=True).
@@ -332,14 +350,14 @@ class CommentedCodeElement(AstNode):
         if comment is None:
             return self
 
-        if set(comment) == {'#'}:
+        if set(comment) == {"#"}:
             # Allow a line of '#'.
             return self
 
         if not allow_additional_comment_spaces:
             comment = comment.strip()
-        if not comment.startswith(' '):
-            comment = ' ' + comment
+        if not comment.startswith(" "):
+            comment = " " + comment
 
         return CommentedCodeElement(code_elm=self.code_elm, comment=comment, location=self.location)
 
@@ -356,7 +374,7 @@ class CodeBlock(AstNode):
         code_elements = add_empty_lines_before_labels(code_elements)
         code_elements = fix_comment_spaces(code_elements)
 
-        return ''.join(f'{code_elm.format(allowed_line_length)}\n' for code_elm in code_elements)
+        return "".join(f"{code_elm.format(allowed_line_length)}\n" for code_elm in code_elements)
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return self.code_elements
@@ -368,11 +386,12 @@ class CodeElementScoped(CodeElement):
     Represents a list of code elements that should be handled inside a scope.
     This class does not appear naturally in the parsed AST.
     """
+
     scope: ScopedName
     code_elements: List[CodeElement]
 
     def format(self, allowed_line_length):
-        raise NotImplementedError(f'Formatting {type(self).__name__} is not supported.')
+        raise NotImplementedError(f"Formatting {type(self).__name__} is not supported.")
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return self.code_elements
@@ -387,6 +406,7 @@ class CodeElementFunction(CodeElement):
           return (z=x, w=y)
       end
     """
+
     # The type of the code element. Either 'func', 'namespace' or 'struct'.
     element_type: str
     identifier: ExprIdentifier
@@ -397,9 +417,9 @@ class CodeElementFunction(CodeElement):
     decorators: List[ExprIdentifier]
     additional_attributes: Dict[str, Any] = dataclasses.field(default_factory=dict)
 
-    ARGUMENT_SCOPE = ScopedName.from_string('Args')
-    IMPLICIT_ARGUMENT_SCOPE = ScopedName.from_string('ImplicitArgs')
-    RETURN_SCOPE = ScopedName.from_string('Return')
+    ARGUMENT_SCOPE = ScopedName.from_string("Args")
+    IMPLICIT_ARGUMENT_SCOPE = ScopedName.from_string("ImplicitArgs")
+    RETURN_SCOPE = ScopedName.from_string("Return")
 
     @property
     def name(self):
@@ -408,40 +428,49 @@ class CodeElementFunction(CodeElement):
     def format(self, allowed_line_length):
         code = self.code_block.format(allowed_line_length=allowed_line_length - INDENTATION)
         code = indent(code, INDENTATION)
-        if self.element_type in ['struct', 'namespace']:
-            particles = [f'{self.element_type} {self.name}:']
+        if self.element_type in ["struct", "namespace"]:
+            particles = [f"{self.element_type} {self.name}:"]
         else:
             if self.implicit_arguments is not None:
-                first_particle_suffix = '{'
+                first_particle_suffix = "{"
                 implicit_args_particles = [
-                    create_particle_sublist(self.implicit_arguments.get_particles(), '}(')]
+                    create_particle_sublist(self.implicit_arguments.get_particles(), "}(")
+                ]
             else:
-                first_particle_suffix = '('
+                first_particle_suffix = "("
                 implicit_args_particles = []
 
             if self.returns is not None:
                 particles = [
-                    f'{self.element_type} {self.name}{first_particle_suffix}',
+                    f"{self.element_type} {self.name}{first_particle_suffix}",
                     *implicit_args_particles,
-                    create_particle_sublist(self.arguments.get_particles(), ') -> ('),
-                    create_particle_sublist(self.returns.get_particles(), '):')]
+                    create_particle_sublist(self.arguments.get_particles(), ") -> ("),
+                    create_particle_sublist(self.returns.get_particles(), "):"),
+                ]
             else:
                 particles = [
-                    f'{self.element_type} {self.name}{first_particle_suffix}',
+                    f"{self.element_type} {self.name}{first_particle_suffix}",
                     *implicit_args_particles,
-                    create_particle_sublist(self.arguments.get_particles(), '):')]
+                    create_particle_sublist(self.arguments.get_particles(), "):"),
+                ]
 
-        decorators = ''.join(f'@{decorator.format()}\n' for decorator in self.decorators)
+        decorators = "".join(f"@{decorator.format()}\n" for decorator in self.decorators)
         header = particles_in_lines(
             particles=particles,
             config=ParticleFormattingConfig(
-                allowed_line_length=allowed_line_length,
-                line_indent=INDENTATION * 2))
-        return f'{decorators}{header}\n{code}end'
+                allowed_line_length=allowed_line_length, line_indent=INDENTATION * 2
+            ),
+        )
+        return f"{decorators}{header}\n{code}end"
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [
-            self.identifier, self.arguments, self.implicit_arguments, self.returns, self.code_block]
+            self.identifier,
+            self.arguments,
+            self.implicit_arguments,
+            self.returns,
+            self.code_block,
+        ]
 
 
 @dataclasses.dataclass
@@ -450,10 +479,10 @@ class CodeElementWith(CodeElement):
     code_block: CodeBlock
 
     def format(self, allowed_line_length):
-        identifier_list_str = ', '.join(identifier.format() for identifier in self.identifiers)
+        identifier_list_str = ", ".join(identifier.format() for identifier in self.identifiers)
         inner_code = self.code_block.format(allowed_line_length=allowed_line_length - INDENTATION)
         inner_code = indent(inner_code, INDENTATION)
-        return f'with {identifier_list_str}:\n{inner_code}end'
+        return f"with {identifier_list_str}:\n{inner_code}end"
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [*self.identifiers, self.code_block]
@@ -469,24 +498,27 @@ class CodeElementIf(CodeElement):
     location: Optional[Location] = LocationField
 
     def format(self, allowed_line_length):
-        cond_particles = ['if ', *self.condition.get_particles()]
-        cond_particles[-1] = cond_particles[-1] + ':'
+        cond_particles = ["if ", *self.condition.get_particles()]
+        cond_particles[-1] = cond_particles[-1] + ":"
         code = particles_in_lines(
             particles=cond_particles,
             config=ParticleFormattingConfig(
-                allowed_line_length=allowed_line_length,
-                line_indent=INDENTATION))
+                allowed_line_length=allowed_line_length, line_indent=INDENTATION
+            ),
+        )
         main_code = self.main_code_block.format(
-            allowed_line_length=allowed_line_length - INDENTATION)
+            allowed_line_length=allowed_line_length - INDENTATION
+        )
         main_code = indent(main_code, INDENTATION)
-        code += f'\n{main_code}'
+        code += f"\n{main_code}"
         if self.else_code_block is not None:
-            code += f'else:'
+            code += f"else:"
             else_code = self.else_code_block.format(
-                allowed_line_length=allowed_line_length - INDENTATION)
+                allowed_line_length=allowed_line_length - INDENTATION
+            )
             else_code = indent(else_code, INDENTATION)
-            code += f'\n{else_code}'
-        code += 'end'
+            code += f"\n{else_code}"
+        code += "end"
         return code
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
@@ -517,7 +549,7 @@ class LangDirective(Directive):
     location: Optional[Location] = LocationField
 
     def format(self):
-        return f'%lang {self.name}'
+        return f"%lang {self.name}"
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return []
@@ -547,19 +579,19 @@ class CodeElementImport(CodeElement):
             note.assert_no_comments()
 
         items = [item.format() for item in self.import_items]
-        prefix = f'from {self.path.format()} import '
-        one_liner = prefix + ', '.join(items)
+        prefix = f"from {self.path.format()} import "
+        one_liner = prefix + ", ".join(items)
 
         if len(one_liner) <= allowed_line_length:
             return one_liner
 
-        particles = [f'{prefix}(', create_particle_sublist(items, ')')]
+        particles = [f"{prefix}(", create_particle_sublist(items, ")")]
         return particles_in_lines(
             particles=particles,
             config=ParticleFormattingConfig(
-                allowed_line_length=allowed_line_length,
-                line_indent=INDENTATION,
-                one_per_line=False))
+                allowed_line_length=allowed_line_length, line_indent=INDENTATION, one_per_line=False
+            ),
+        )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.path, *self.import_items]
@@ -570,10 +602,11 @@ class CodeElementAllocLocals(CodeElement):
     """
     Represents a statement of the form "alloc_locals".
     """
+
     location: Optional[Location] = LocationField
 
     def format(self, allowed_line_length):
-        return 'alloc_locals'
+        return "alloc_locals"
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return []
@@ -584,12 +617,14 @@ def is_empty_line(code_element: CommentedCodeElement):
 
 
 def is_comment_line(code_element: CommentedCodeElement):
-    return isinstance(code_element.code_elm, CodeElementEmptyLine) and \
-        code_element.comment is not None
+    return (
+        isinstance(code_element.code_elm, CodeElementEmptyLine) and code_element.comment is not None
+    )
 
 
 def remove_redundant_empty_lines(
-        code_elements: List[CommentedCodeElement]) -> List[CommentedCodeElement]:
+    code_elements: List[CommentedCodeElement],
+) -> List[CommentedCodeElement]:
     """
     Returns a new list of code elements where redundant empty lines are removed.
     Redundant empty lines are empty lines which are after:
@@ -618,7 +653,8 @@ def remove_redundant_empty_lines(
 
 
 def add_empty_lines_before_labels(
-        code_elements: List[CommentedCodeElement]) -> List[CommentedCodeElement]:
+    code_elements: List[CommentedCodeElement],
+) -> List[CommentedCodeElement]:
     """
     Makes sure there is an empty line before labels.
     The empty line is added before the comment lines preceding the label.
@@ -630,10 +666,11 @@ def add_empty_lines_before_labels(
             if is_empty_line(code_elm):
                 add_empty_line = False
             elif not is_comment_line(code_elm):
-                new_code_elements_reversed.append(CommentedCodeElement(
-                    code_elm=CodeElementEmptyLine(),
-                    comment=None,
-                    location=None))
+                new_code_elements_reversed.append(
+                    CommentedCodeElement(
+                        code_elm=CodeElementEmptyLine(), comment=None, location=None
+                    )
+                )
                 add_empty_line = False
 
         if isinstance(code_elm.code_elm, CodeElementLabel):

@@ -9,7 +9,7 @@ from starkware.cairo.lang.vm.cairo_runner import CairoRunner, get_runner_from_co
 from starkware.cairo.lang.vm.utils import RunResources
 from starkware.cairo.lang.vm.vm import VmException, VmExceptionBase
 
-CAIRO_FILE = os.path.join(os.path.dirname(__file__), 'test.cairo')
+CAIRO_FILE = os.path.join(os.path.dirname(__file__), "test.cairo")
 PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
 
 
@@ -24,11 +24,11 @@ def test_run_until_label():
     runner.run_until_label(3)
     assert runner.vm.run_context.pc - runner.program_base == 3
     assert runner.vm.current_step == 3
-    runner.run_until_label('label1')
+    runner.run_until_label("label1")
     assert runner.vm.run_context.pc - runner.program_base == 6
     assert runner.vm.current_step == 6
-    with pytest.raises(VmException, match='End of program was not reached'):
-        runner.run_until_label('label0', run_resources=RunResources(steps=100))
+    with pytest.raises(VmException, match="End of program was not reached"):
+        runner.run_until_label("label0", run_resources=RunResources(steps=100))
     assert runner.vm.run_context.pc - runner.program_base == 8
     assert runner.vm.current_step == 106
     runner.run_until_next_power_of_2()
@@ -42,13 +42,13 @@ func main():
 end
 """
     program = compile_cairo(code, PRIME)
-    runner = CairoRunner(program, layout='plain')
+    runner = CairoRunner(program, layout="plain")
     runner.initialize_segments()
     runner.initialize_main_entrypoint()
     runner.initialize_vm({})
 
     runner.run_for_steps(1)
-    with pytest.raises(VmException, match='Error: Execution reached the end of the program.'):
+    with pytest.raises(VmException, match="Error: Execution reached the end of the program."):
         runner.run_for_steps(1)
 
 
@@ -64,30 +64,32 @@ func main(output_ptr) -> (output_ptr):
 end
 """
     with pytest.raises(
-            AssertionError,
-            match='Invalid stop pointer for output. Expected: 2:1, found: 2:3'):
-        get_runner_from_code(code, layout='small', prime=PRIME)
+        AssertionError, match="Invalid stop pointer for output. Expected: 2:1, found: 2:3"
+    ):
+        get_runner_from_code(code, layout="small", prime=PRIME)
 
 
 def test_builtin_list():
     # This should work.
     program = compile_cairo(
-        code=[('%builtins output pedersen range_check ecdsa\n', '')], prime=PRIME)
-    CairoRunner(program, layout='small')
+        code=[("%builtins output pedersen range_check ecdsa\n", "")], prime=PRIME
+    )
+    CairoRunner(program, layout="small")
 
     # These should fail.
-    program = compile_cairo(code=[('%builtins pedersen output\n', '')], prime=PRIME)
+    program = compile_cairo(code=[("%builtins pedersen output\n", "")], prime=PRIME)
     with pytest.raises(
-            AssertionError,
-            match=r"\['pedersen', 'output'\] is not a subsequence of "
-            r"\['output', 'pedersen', 'range_check', 'ecdsa', 'bitwise']."):
-        CairoRunner(program, layout='small')
+        AssertionError,
+        match=r"\['pedersen', 'output'\] is not a subsequence of "
+        r"\['output', 'pedersen', 'range_check', 'ecdsa', 'bitwise'].",
+    ):
+        CairoRunner(program, layout="small")
 
-    program = compile_cairo(code=[('%builtins pedersen foo\n', '')], prime=PRIME)
+    program = compile_cairo(code=[("%builtins pedersen foo\n", "")], prime=PRIME)
     with pytest.raises(
-            AssertionError,
-            match=r'Builtins {\'foo\'} are not present in layout "small"'):
-        CairoRunner(program, layout='small')
+        AssertionError, match=r'Builtins {\'foo\'} are not present in layout "small"'
+    ):
+        CairoRunner(program, layout="small")
 
 
 def test_missing_exit_scope():
@@ -98,9 +100,10 @@ func main():
 end
 """
     with pytest.raises(
-            VmExceptionBase,
-            match=re.escape('Every enter_scope() requires a corresponding exit_scope().')):
-        runner = get_runner_from_code(code, layout='small', prime=PRIME)
+        VmExceptionBase,
+        match=re.escape("Every enter_scope() requires a corresponding exit_scope()."),
+    ):
+        runner = get_runner_from_code(code, layout="small", prime=PRIME)
 
 
 def test_load_data_after_init():
@@ -109,7 +112,7 @@ func main():
     ret
 end
 """
-    runner = get_runner_from_code(code, layout='plain', prime=PRIME)
+    runner = get_runner_from_code(code, layout="plain", prime=PRIME)
     addr = runner.segments.add()
     runner.vm_memory.unfreeze_for_testing()
     runner.load_data(addr, [42])
@@ -125,7 +128,7 @@ func main():
     ret
 end
 """
-    runner = get_runner_from_code(code, layout='plain', prime=PRIME)
+    runner = get_runner_from_code(code, layout="plain", prime=PRIME)
     runner.check_memory_usage()
 
 
@@ -138,12 +141,14 @@ func main():
     ret
 end
 """
-    runner = get_runner_from_code(code, layout='plain', prime=PRIME)
+    runner = get_runner_from_code(code, layout="plain", prime=PRIME)
 
     with pytest.raises(
-            InsufficientAllocatedCells,
-            match=re.escape(
-                'There are only 8 cells to fill the memory address holes, but 999 are required.')):
+        InsufficientAllocatedCells,
+        match=re.escape(
+            "There are only 8 cells to fill the memory address holes, but 999 are required."
+        ),
+    ):
         runner.check_memory_usage()
 
 
@@ -167,11 +172,13 @@ end
 """
     code_no_hint, code_untouched_hint, code_touched_hint = [
         code_base_format.format(extra_code)
-        for extra_code in ['', '%{ memory[ap] = 7 %}', '%{ memory[ap] = 7 %}\n [ap]=[ap]']]
+        for extra_code in ["", "%{ memory[ap] = 7 %}", "%{ memory[ap] = 7 %}\n [ap]=[ap]"]
+    ]
 
     runner_no_hint, runner_untouched_hint, runner_touched_hint = [
-        get_runner_from_code(code, layout='plain', prime=PRIME)
-        for code in (code_no_hint, code_untouched_hint, code_touched_hint)]
+        get_runner_from_code(code, layout="plain", prime=PRIME)
+        for code in (code_no_hint, code_untouched_hint, code_touched_hint)
+    ]
 
     def filter_program_segment(addr_lst):
         return {addr for addr in addr_lst if addr.segment_index != 0}
@@ -189,14 +196,20 @@ end
     }
     assert filter_program_segment(runner_no_hint.vm_memory.keys()) == accessed_addresses
     assert filter_program_segment(runner_no_hint.accessed_addresses) == accessed_addresses
-    assert filter_program_segment(runner_untouched_hint.vm_memory.keys()) == \
-        accessed_addresses | {initial_ap + 7}
+    assert filter_program_segment(runner_untouched_hint.vm_memory.keys()) == accessed_addresses | {
+        initial_ap + 7
+    }
     assert filter_program_segment(runner_untouched_hint.accessed_addresses) == accessed_addresses
-    assert filter_program_segment(runner_touched_hint.vm_memory.keys()) == \
-        accessed_addresses | {initial_ap + 7}
-    assert filter_program_segment(runner_touched_hint.accessed_addresses) == \
-        accessed_addresses | {initial_ap + 7}
+    assert filter_program_segment(runner_touched_hint.vm_memory.keys()) == accessed_addresses | {
+        initial_ap + 7
+    }
+    assert filter_program_segment(runner_touched_hint.accessed_addresses) == accessed_addresses | {
+        initial_ap + 7
+    }
 
-    assert runner_no_hint.get_memory_holes() == \
-        runner_untouched_hint.get_memory_holes() == \
-        runner_touched_hint.get_memory_holes() + 1 == 5
+    assert (
+        runner_no_hint.get_memory_holes()
+        == runner_untouched_hint.get_memory_holes()
+        == runner_touched_hint.get_memory_holes() + 1
+        == 5
+    )

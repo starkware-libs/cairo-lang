@@ -15,8 +15,8 @@ class BoolExpr(AstNode):
     location: Optional[Location] = LocationField
 
     def get_particles(self):
-        relation = '==' if self.eq else '!='
-        return [f'{self.a.format()} {relation} ', self.b.format()]
+        relation = "==" if self.eq else "!="
+        return [f"{self.a.format()} {relation} ", self.b.format()]
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.a, self.b]

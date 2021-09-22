@@ -1,8 +1,18 @@
 import pytest
 
 from starkware.python.math_utils import (
-    div_ceil, div_mod, ec_add, ec_double, ec_mult, is_power_of_2, is_quad_residue, next_power_of_2,
-    safe_div, safe_log2, sqrt)
+    div_ceil,
+    div_mod,
+    ec_add,
+    ec_double,
+    ec_mult,
+    is_power_of_2,
+    is_quad_residue,
+    next_power_of_2,
+    safe_div,
+    safe_log2,
+    sqrt,
+)
 
 
 def test_ec_add():

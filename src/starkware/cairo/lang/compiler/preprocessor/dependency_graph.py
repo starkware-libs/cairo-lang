@@ -7,7 +7,9 @@ from starkware.cairo.lang.compiler.ast.visitor import Visitor
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.identifier_definition import AliasDefinition
 from starkware.cairo.lang.compiler.identifier_manager import (
-    IdentifierManager, MissingIdentifierError)
+    IdentifierManager,
+    MissingIdentifierError,
+)
 from starkware.cairo.lang.compiler.preprocessor.pass_manager import PassManagerContext, Stage
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
@@ -33,21 +35,22 @@ class DependencyGraphVisitor(Visitor):
                 self.visit(child)
 
     def add_identifier(
-            self, name: ScopedName, location: Optional[Location], is_resolved: bool = False):
-        if name.path[-1] == '_':
+        self, name: ScopedName, location: Optional[Location], is_resolved: bool = False
+    ):
+        if name.path[-1] == "_":
             return
         if is_resolved:
             canonical_name = name
         else:
             try:
                 canonical_name = self.identifiers.search(
-                    accessible_scopes=self.accessible_scopes, name=name).canonical_name
+                    accessible_scopes=self.accessible_scopes, name=name
+                ).canonical_name
             except MissingIdentifierError as e:
                 raise PreprocessorError(str(e), location=location)
 
         if self.current_function is not None:
-            self.visited_identifiers.setdefault(self.current_function, []).append(
-                canonical_name)
+            self.visited_identifiers.setdefault(self.current_function, []).append(canonical_name)
 
     def visit_CodeElementMember(self, elm):
         pass
@@ -57,7 +60,7 @@ class DependencyGraphVisitor(Visitor):
         self.visit(expr.expr)
 
     def visit_CodeElementFunction(self, elm: CodeElementFunction):
-        if elm.element_type == 'func':
+        if elm.element_type == "func":
             # Update self.current_function.
             old_current_function = self.current_function
             try:
@@ -80,10 +83,11 @@ class DependencyGraphVisitor(Visitor):
     def visit_CodeElementImport(self, code_elm: CodeElementImport):
         for import_item in code_elm.import_items:
             self.add_identifier(
-                ScopedName.from_string(code_elm.path.name) +
-                ScopedName.from_string(import_item.orig_identifier.name),
+                ScopedName.from_string(code_elm.path.name)
+                + ScopedName.from_string(import_item.orig_identifier.name),
                 is_resolved=True,
-                location=code_elm.location)
+                location=code_elm.location,
+            )
 
     def find_function_dependencies(self, functions: Set[ScopedName]) -> Set[ScopedName]:
         """
@@ -121,7 +125,8 @@ class FunctionDependencyFinder:
 
 
 def get_main_functions_to_compile(
-        identifiers: IdentifierManager, main_scope: ScopedName) -> Set[ScopedName]:
+    identifiers: IdentifierManager, main_scope: ScopedName
+) -> Set[ScopedName]:
     """
     Retrieves the root functions to compile from a main scope.
     The definition of which functions we need to compile is somewhat arbitrary:
@@ -134,15 +139,16 @@ def get_main_functions_to_compile(
         main_functions |= {
             identifier_definition.destination
             for identifier_definition in scope.identifiers.values()
-            if isinstance(identifier_definition, AliasDefinition)}
+            if isinstance(identifier_definition, AliasDefinition)
+        }
     except MissingIdentifierError:
         return set()
     return main_functions
 
 
 def get_functions_to_compile(
-        modules: List[CairoModule], identifiers: IdentifierManager,
-        main_scope: ScopedName) -> Set[ScopedName]:
+    modules: List[CairoModule], identifiers: IdentifierManager, main_scope: ScopedName
+) -> Set[ScopedName]:
     """
     Returns a set of reachable function (starting from the functions in the main scope).
     """
@@ -150,12 +156,14 @@ def get_functions_to_compile(
     dependency_graph = DependencyGraphVisitor(identifiers)
     for module in modules:
         dependency_graph.visit(module)
-    return dependency_graph.find_function_dependencies(get_main_functions_to_compile(
-        identifiers=identifiers, main_scope=main_scope))
+    return dependency_graph.find_function_dependencies(
+        get_main_functions_to_compile(identifiers=identifiers, main_scope=main_scope)
+    )
 
 
 class DependencyGraphStage(Stage):
     def run(self, context: PassManagerContext):
         assert context.functions_to_compile is None
         context.functions_to_compile = get_functions_to_compile(
-            modules=context.modules, identifiers=context.identifiers, main_scope=context.main_scope)
+            modules=context.modules, identifiers=context.identifiers, main_scope=context.main_scope
+        )

@@ -7,10 +7,11 @@ from starkware.cairo.common.keccak import unsafe_keccak
 from starkware.cairo.common.math import (
     abs_value, assert_250_bit, assert_in_range, assert_le, assert_le_felt, assert_lt,
     assert_lt_felt, assert_nn, assert_nn_le, assert_not_equal, assert_not_zero, sign,
-    signed_div_rem, split_felt, unsigned_div_rem)
+    signed_div_rem, split_felt, split_int, unsigned_div_rem)
 from starkware.cairo.common.math_cmp import (
     is_in_range, is_le, is_le_felt, is_nn, is_nn_le, is_not_zero)
 from starkware.cairo.common.memcpy import memcpy
+from starkware.cairo.common.memset import memset
 from starkware.cairo.common.signature import verify_ecdsa_signature
 from starkware.cairo.common.squash_dict import squash_dict
 from starkware.cairo.common.uint256 import (

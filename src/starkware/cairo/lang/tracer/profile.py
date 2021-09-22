@@ -32,7 +32,7 @@ class ProfileBuilder:
         # A map from a string to its id in the string table.
         self._string_to_id = {}
         # First string in the table must be ''.
-        self.string_id('')
+        self.string_id("")
         # A map from a filename to its id in the mapping table.
         self._filename_to_mapping_id = {}
         # A map from a function name to its id in the function table.
@@ -46,16 +46,16 @@ class ProfileBuilder:
 
         # Global fields.
         sample_type = self._profile.sample_type.add()
-        sample_type.type = self.string_id('running time')
-        sample_type.unit = self.string_id('steps')
-        self._profile.time_nanos = int(time.time() * 10**9)
+        sample_type.type = self.string_id("running time")
+        sample_type.unit = self.string_id("steps")
+        self._profile.time_nanos = int(time.time() * 10 ** 9)
 
         # Main function.
-        self._func_name_to_id['__main__'] = self.string_id('__main__')
+        self._func_name_to_id["__main__"] = self.string_id("__main__")
         main_func = self._profile.function.add()
-        main_func.id = self.string_id('__main__')
-        main_func.system_name = main_func.name = self.string_id('<dummy>')
-        main_func.filename = self.string_id('<dummy_filename>')
+        main_func.id = self.string_id("__main__")
+        main_func.system_name = main_func.name = self.string_id("<dummy>")
+        main_func.filename = self.string_id("<dummy_filename>")
         main_func.start_line = 0
 
     def string_id(self, s: str) -> int:
@@ -76,8 +76,9 @@ class ProfileBuilder:
         """
         if filename not in self._filename_to_mapping_id:
             # Id 0 is reserved. Shift ids.
-            mapping_id = self._filename_to_mapping_id[filename] = len(
-                self._filename_to_mapping_id) + 1
+            mapping_id = self._filename_to_mapping_id[filename] = (
+                len(self._filename_to_mapping_id) + 1
+            )
             mapping = self._profile.mapping.add()
             mapping.id = mapping_id
             mapping.memory_start = accessed_pc
@@ -174,12 +175,14 @@ def profile_from_tracer_data(tracer_data: TracerData):
             continue
         builder.function_id(
             name=str(name),
-            inst_location=tracer_data.program.debug_info.instruction_locations[ident.pc])
+            inst_location=tracer_data.program.debug_info.instruction_locations[ident.pc],
+        )
 
     # Locations.
     for pc_offset, inst_location in tracer_data.program.debug_info.instruction_locations.items():
         builder.location_id(
-            pc=tracer_data.get_pc_from_offset(pc_offset), inst_location=inst_location)
+            pc=tracer_data.get_pc_from_offset(pc_offset), inst_location=inst_location
+        )
 
     # Samples.
     for trace_entry in tracer_data.trace:

@@ -66,6 +66,7 @@ python_lib(cairo_compile_lib
     type_casts.py
     type_system_visitor.py
     type_system.py
+    type_utils.py
 
     LIBS
     cairo_constants_lib
@@ -152,6 +153,7 @@ full_python_test(cairo_compile_test
     scoped_name_test.py
     type_casts_test.py
     type_system_visitor_test.py
+    type_utils_test.py
 
     LIBS
     cairo_compile_lib

@@ -11,7 +11,7 @@ def safe_div(x: int, y: int):
     """
     assert isinstance(x, int) and isinstance(y, int)
     assert y != 0
-    assert x % y == 0, f'{x} is not divisible by {y}.'
+    assert x % y == 0, f"{x} is not divisible by {y}."
     return x // y
 
 
@@ -35,7 +35,7 @@ def next_power_of_2(x: int):
     """
     assert isinstance(x, int) and x > 0
     res = 2 ** (x - 1).bit_length()
-    assert x <= res < 2 * x, f'{x}, {res}'
+    assert x <= res < 2 * x, f"{x}, {res}"
     return res
 
 
@@ -85,6 +85,7 @@ def ec_add(point1, point2, p):
     x = (m * m - point1[0] - point2[0]) % p
     y = (m * (point1[0] - x) - point1[1]) % p
     return x, y
+
 
 
 def ec_double(point, alpha, p):

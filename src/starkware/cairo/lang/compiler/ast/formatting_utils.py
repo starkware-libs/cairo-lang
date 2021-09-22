@@ -13,9 +13,13 @@ import marshmallow
 from starkware.cairo.lang.compiler.error_handling import LocationError
 
 INDENTATION = 4
-LocationField = field(default=None, hash=False, compare=False, metadata=dict(
-    marshmallow_field=marshmallow.fields.Field(load_only=True, dump_only=True)))
-max_line_length_ctx_var: ContextVar[int] = ContextVar('max_line_length', default=100)
+LocationField = field(
+    default=None,
+    hash=False,
+    compare=False,
+    metadata=dict(marshmallow_field=marshmallow.fields.Field(load_only=True, dump_only=True)),
+)
+max_line_length_ctx_var: ContextVar[int] = ContextVar("max_line_length", default=100)
 
 
 def get_max_line_length():
@@ -44,7 +48,7 @@ class ParticleFormattingConfig:
     # The indentation, starting from the second line.
     line_indent: int
     # The prefix of the first line.
-    first_line_prefix: str = ''
+    first_line_prefix: str = ""
     # At most one item per line.
     one_per_line: bool = False
 
@@ -69,7 +73,7 @@ class ParticleLineBuilder:
             return
         self.lines.append(self.line)
         self.line_is_new = True
-        self.line = ' ' * self.config.line_indent
+        self.line = " " * self.config.line_indent
 
     def add_to_line(self, string):
         """
@@ -86,13 +90,13 @@ class ParticleLineBuilder:
         """
         if self.line:
             self.lines.append(self.line)
-        return '\n'.join(line.rstrip() for line in self.lines)
+        return "\n".join(line.rstrip() for line in self.lines)
 
 
-def create_particle_sublist(lst, end='', separator=', '):
-    if not lst:
+def create_particle_sublist(lst: List[str], end: str = "", separator: str = ", ") -> List[str]:
+    if len(lst) == 0:
         # If the list is empty, return the single element 'end'.
-        return end
+        return [end]
     # Concatenate the 'separator' to all elements of the 'lst' and 'end' to the last one.
     return [elm + separator for elm in lst[:-1]] + [lst[-1] + end]
 
@@ -139,7 +143,7 @@ def particles_in_lines(particles, config: ParticleFormattingConfig):
         if isinstance(particle, list):
             # If the entire sublist fits in a single line, add it.
             if sum(map(len, particle), config.line_indent) < config.allowed_line_length:
-                builder.add_to_line(''.join(particle))
+                builder.add_to_line("".join(particle))
                 continue
             builder.newline()
             for member in particle:

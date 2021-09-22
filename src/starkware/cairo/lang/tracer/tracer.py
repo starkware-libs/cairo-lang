@@ -16,7 +16,7 @@ def trace_runner(runner):
     runner.vm_memory.relocate_memory()
     runner.vm_memory.freeze()
     runner.segments.compute_effective_sizes(include_tmp_segments=True)
-    if not hasattr(runner, 'relocated_trace'):
+    if not hasattr(runner, "relocated_trace"):
         runner.relocate()
 
     # Print the non-relocated registers, the relocated values are available in the tracer.
@@ -27,8 +27,12 @@ def trace_runner(runner):
 
     run_tracer(
         TracerData(
-            program=runner.program, memory=memory, trace=trace,
-            program_base=runner.relocate_value(runner.program_base)))
+            program=runner.program,
+            memory=memory,
+            trace=trace,
+            program_base=runner.relocate_value(runner.program_base),
+        )
+    )
 
 
 class SimpleTCPServer(socketserver.TCPServer):
@@ -47,25 +51,31 @@ def run_tracer(tracer_data: TracerData):
         def do_GET(self):
             parsed_path = urllib.parse.urlparse(self.path)
             query = urllib.parse.parse_qs(parsed_path.query)
-            if parsed_path.path == '/data.json':
+            if parsed_path.path == "/data.json":
                 # Create the returned json file.
-                self.write_json({
-                    'code': {
-                        filename: input_file.to_html()
-                        for filename, input_file in tracer_data.input_files.items()},
-                    'trace': [
-                        {'pc': entry.pc, 'ap': entry.ap, 'fp': entry.fp}
-                        for entry in tracer_data.trace],
-                    'memory': {
-                        addr: field_element_repr(val, tracer_data.program.prime)
-                        for addr, val in tracer_data.memory.items()},
-                    'public_memory': tracer_data.public_memory,
-                    'memory_accesses': tracer_data.memory_accesses,
-                })
-            elif parsed_path.path == '/eval.json':
+                self.write_json(
+                    {
+                        "code": {
+                            filename: input_file.to_html()
+                            for filename, input_file in tracer_data.input_files.items()
+                        },
+                        "trace": [
+                            {"pc": entry.pc, "ap": entry.ap, "fp": entry.fp}
+                            for entry in tracer_data.trace
+                        ],
+                        "memory": {
+                            addr: field_element_repr(val, tracer_data.program.prime)
+                            for addr, val in tracer_data.memory.items()
+                        },
+                        "public_memory": tracer_data.public_memory,
+                        "memory_accesses": tracer_data.memory_accesses,
+                    }
+                )
+            elif parsed_path.path == "/eval.json":
                 evaluator = WatchEvaluator(
-                    tracer_data, entry=tracer_data.trace[int(query['step'][0])])
-                self.write_json([evaluator.eval_suppress_errors(expr) for expr in query['expr']])
+                    tracer_data, entry=tracer_data.trace[int(query["step"][0])]
+                )
+                self.write_json([evaluator.eval_suppress_errors(expr) for expr in query["expr"]])
             else:
                 super().do_GET()
 
@@ -74,10 +84,10 @@ def run_tracer(tracer_data: TracerData):
 
             try:
                 self.send_response(200)
-                self.send_header('Content-type', 'text/json')
-                self.send_header('Content-Length', str(len(json_str)))
+                self.send_header("Content-type", "text/json")
+                self.send_header("Content-Length", str(len(json_str)))
                 self.end_headers()
-                self.wfile.write(json_str.encode('utf8'))
+                self.wfile.write(json_str.encode("utf8"))
             except BrokenPipeError:
                 # Request was canceled.
                 pass
@@ -86,31 +96,29 @@ def run_tracer(tracer_data: TracerData):
         port = 8100
         while True:
             try:
-                return SimpleTCPServer(('localhost', port), Handler)
+                return SimpleTCPServer(("localhost", port), Handler)
             except OSError:
                 pass
             # port was not available. Try the next one.
             port += 1
 
     httpd = start_server()
-    print('Running tracer on http://localhost:%d/' % httpd.server_address[1])
+    print("Running tracer on http://localhost:%d/" % httpd.server_address[1])
     print()
     httpd.serve_forever()
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description='A tool to view the trace of a Cairo program execution.')
+        description="A tool to view the trace of a Cairo program execution."
+    )
     parser.add_argument(
-        '--program', type=str, required=True, help='A path to the program json file.')
-    parser.add_argument(
-        '--memory', type=str, required=True, help='A path to the memory file.')
-    parser.add_argument(
-        '--trace', type=str, required=True, help='A path to the trace file.')
-    parser.add_argument(
-        '--air_public_input', type=str, help='A path to the AIR public input file.')
-    parser.add_argument(
-        '--debug_info', type=str, help='A path to the run time debug info file.')
+        "--program", type=str, required=True, help="A path to the program json file."
+    )
+    parser.add_argument("--memory", type=str, required=True, help="A path to the memory file.")
+    parser.add_argument("--trace", type=str, required=True, help="A path to the trace file.")
+    parser.add_argument("--air_public_input", type=str, help="A path to the AIR public input file.")
+    parser.add_argument("--debug_info", type=str, help="A path to the run time debug info file.")
 
     args = parser.parse_args()
 
@@ -126,5 +134,5 @@ def main():
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

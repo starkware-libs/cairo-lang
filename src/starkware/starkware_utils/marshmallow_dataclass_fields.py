@@ -16,7 +16,8 @@ class IntAsStr(mfields.Field):
     serialized to strings in the JSONs, so that JavaSscript can handle them (JavaScript cannot
     handle uint64 numbers).
     """
-    default_error_messages = {'invalid': 'Expected int string, got: "{input}".'}
+
+    default_error_messages = {"invalid": 'Expected int string, got: "{input}".'}
 
     def _serialize(self, value, attr, obj, **kwargs):
         if value is None:
@@ -24,8 +25,8 @@ class IntAsStr(mfields.Field):
         return str(value)
 
     def _deserialize(self, value, attr, data, **kwargs):
-        if re.match('^-?[0-9]+$', value) is None:
-            self.fail('invalid', input=value)
+        if re.match("^-?[0-9]+$", value) is None:
+            self.fail("invalid", input=value)
 
         return int(value)
 
@@ -48,7 +49,8 @@ class EnumField(mfields.Field):
             return None
 
         raise ValidationError(
-            message=f'Field of type {type(self).__name__} is None, but allow_none=False')
+            message=f"Field of type {type(self).__name__} is None, but allow_none=False"
+        )
 
     def _deserialize(self, value, attr, data, **kwargs):
         # No need to handle the case in which value is None, since public deserialize() method
@@ -62,7 +64,7 @@ class IntAsHex(mfields.Field):
     field elements.
     """
 
-    default_error_messages = {'invalid': 'Expected hex string, got: "{input}".'}
+    default_error_messages = {"invalid": 'Expected hex string, got: "{input}".'}
 
     def _serialize(self, value, attr, obj, **kwargs):
         if value is None:
@@ -71,8 +73,8 @@ class IntAsHex(mfields.Field):
         return hex(value)
 
     def _deserialize(self, value, attr, data, **kwargs):
-        if re.match('^0x[0-9a-f]+$', value) is None:
-            self.fail('invalid', input=value)
+        if re.match("^0x[0-9a-f]+$", value) is None:
+            self.fail("invalid", input=value)
 
         return int(value, 16)
 
@@ -82,7 +84,7 @@ class BytesAsHex(mfields.Field):
     A field that behaves like bytes, but serializes to a hex string.
     """
 
-    default_error_messages = {'invalid': 'Expected hex string, got: "{input}".'}
+    default_error_messages = {"invalid": 'Expected hex string, got: "{input}".'}
 
     def _serialize(self, value, attr, obj, **kwargs):
         if value is None:
@@ -91,8 +93,8 @@ class BytesAsHex(mfields.Field):
         return value.hex()
 
     def _deserialize(self, value, attr, data, **kwargs):
-        if re.match('^[0-9a-f]*$', value) is None:
-            self.fail('invalid', input=value)
+        if re.match("^[0-9a-f]*$", value) is None:
+            self.fail("invalid", input=value)
 
         return bytes.fromhex(value)
 
@@ -102,16 +104,16 @@ class BytesAsBase64Str(mfields.Field):
     A field that behaves like bytes, but serializes to base64.
     """
 
-    default_error_messages = {'invalid': 'Expected Base64 bytes, got: "{input}".'}
+    default_error_messages = {"invalid": 'Expected Base64 bytes, got: "{input}".'}
 
     def _serialize(self, value, attr, obj, **kwargs):
         if value is None:
             return None
         assert isinstance(value, bytes)
-        return base64.b64encode(value).decode('ascii')
+        return base64.b64encode(value).decode("ascii")
 
     def _deserialize(self, value, attr, data, **kwargs):
-        return base64.b64decode(value.encode('ascii'))
+        return base64.b64decode(value.encode("ascii"))
 
 
 class CustomField(ABC):
@@ -129,8 +131,9 @@ class CustomField(ABC):
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)  # type: ignore[call-arg]
 
-        assert issubclass(cls, FieldABC), \
-            'CustomField must be used along with inheritance from a marshmallow field.'
+        assert issubclass(
+            cls, FieldABC
+        ), "CustomField must be used along with inheritance from a marshmallow field."
 
     def _deserialize(self, *args, **kwargs):
         return self._type(super()._deserialize(*args, **kwargs))  # type: ignore
@@ -158,10 +161,13 @@ class CustomRaisingFrozenDictField(CustomField, mfields.Mapping):
 
 # Field metadata for general use in marshmallow dataclasses.
 
+
 def enum_field_metadata(
-        *, enum_class: type, require: bool = True, allow_none: bool = False) -> dict:
+    *, enum_class: type, require: bool = True, allow_none: bool = False
+) -> dict:
     return dict(
-        marshmallow_field=EnumField(enum_cls=enum_class, required=require, allow_none=allow_none))
+        marshmallow_field=EnumField(enum_cls=enum_class, required=require, allow_none=allow_none)
+    )
 
 
 boolean_field_metadata = dict(marshmallow_field=mfields.Boolean(truthy={True}, falsy={False}))

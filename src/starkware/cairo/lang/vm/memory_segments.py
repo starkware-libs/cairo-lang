@@ -53,8 +53,11 @@ class MemorySegmentManager:
         return RelocatableValue(segment_index=segment_index, offset=0)
 
     def finalize(
-            self, segment_index: int, size: Optional[int] = None,
-            public_memory: Sequence[Tuple[int, int]] = []):
+        self,
+        segment_index: int,
+        size: Optional[int] = None,
+        public_memory: Sequence[Tuple[int, int]] = [],
+    ):
         """
         Writes the following information for the given segment:
         * size - The size of the segment (to be used in relocate_segments).
@@ -75,14 +78,16 @@ class MemorySegmentManager:
             # segment_sizes is already cached.
             return
 
-        assert self.memory.is_frozen(), 'Memory has to be frozen before calculating effective size.'
+        assert self.memory.is_frozen(), "Memory has to be frozen before calculating effective size."
 
         first_segment_index = -self.n_temp_segments if include_tmp_segments else 0
         self._segment_used_sizes = {
-            index: 0 for index in range(first_segment_index, self.n_segments)}
+            index: 0 for index in range(first_segment_index, self.n_segments)
+        }
         for addr in self.memory:
-            assert isinstance(addr, RelocatableValue), \
-                f'Expected memory address to be relocatable value. Found: {addr}.'
+            assert isinstance(
+                addr, RelocatableValue
+            ), f"Expected memory address to be relocatable value. Found: {addr}."
             previous_max_size = self._segment_used_sizes[addr.segment_index]
             self._segment_used_sizes[addr.segment_index] = max(previous_max_size, addr.offset + 1)
 
@@ -90,13 +95,14 @@ class MemorySegmentManager:
         current_addr = FIRST_MEMORY_ADDR
         res = {}
 
-        assert self._segment_used_sizes is not None, \
-            'compute_effective_sizes must be called before relocate_segments.'
+        assert (
+            self._segment_used_sizes is not None
+        ), "compute_effective_sizes must be called before relocate_segments."
 
         for segment_index, used_size in self._segment_used_sizes.items():
             res[segment_index] = current_addr
             size = self.get_segment_size(segment_index=segment_index)
-            assert size >= used_size, f'Segment {segment_index} exceeded its allocated size.'
+            assert size >= used_size, f"Segment {segment_index} exceeded its allocated size."
             current_addr += size
         return res
 
@@ -113,18 +119,20 @@ class MemorySegmentManager:
                 res.append((segment_start + offset, page_id))
         return res
 
-    def initialize_segments_from(self, other: 'MemorySegmentManager'):
+    def initialize_segments_from(self, other: "MemorySegmentManager"):
         """
         Adds the segments used by the given MemorySegmentManager.
         Note that this function must be called before any segments are added, to make the segment
         indices identical.
         """
-        assert self.n_segments == 0, \
-            'initialize_segments_from() must be called before segments are added.'
+        assert (
+            self.n_segments == 0
+        ), "initialize_segments_from() must be called before segments are added."
         self.n_segments = other.n_segments
 
-    def load_data(self, ptr: MaybeRelocatable, data: Sequence[MaybeRelocatable]) -> \
-            MaybeRelocatable:
+    def load_data(
+        self, ptr: MaybeRelocatable, data: Sequence[MaybeRelocatable]
+    ) -> MaybeRelocatable:
         """
         Writes data into the memory at address ptr and returns the first address after the data.
         """
@@ -159,24 +167,29 @@ class MemorySegmentManager:
         # A map from segment index to the set of accessed offsets.
         accessed_offsets_sets: Dict[int, Set] = defaultdict(set)
         for addr in accessed_addresses:
-            assert isinstance(addr, RelocatableValue), \
-                f'Expected memory address to be relocatable value. Found: {addr}.'
+            assert isinstance(
+                addr, RelocatableValue
+            ), f"Expected memory address to be relocatable value. Found: {addr}."
             index, offset = addr.segment_index, addr.offset
-            assert offset >= 0, f'Address offsets must be non-negative. Found: {offset}.'
-            assert offset <= self.get_segment_size(segment_index=index), \
-                f'Accessed address {addr} has higher offset than the maximal offset ' \
-                f'{self.get_segment_size(segment_index=index)} encountered in the memory segment.'
+            assert offset >= 0, f"Address offsets must be non-negative. Found: {offset}."
+            assert offset <= self.get_segment_size(segment_index=index), (
+                f"Accessed address {addr} has higher offset than the maximal offset "
+                f"{self.get_segment_size(segment_index=index)} encountered in the memory segment."
+            )
             accessed_offsets_sets[index].add(offset)
 
-        assert self._segment_used_sizes is not None, \
-            'compute_effective_sizes must be called before get_memory_holes.'
+        assert (
+            self._segment_used_sizes is not None
+        ), "compute_effective_sizes must be called before get_memory_holes."
         return sum(
             self.get_segment_size(segment_index=index) - len(accessed_offsets_sets[index])
-            for index in self._segment_sizes.keys() | self._segment_used_sizes.keys())
+            for index in self._segment_sizes.keys() | self._segment_used_sizes.keys()
+        )
 
     def get_segment_used_size(self, segment_index: int) -> int:
-        assert self._segment_used_sizes is not None, \
-            'compute_effective_sizes must be called before get_segment_used_size.'
+        assert (
+            self._segment_used_sizes is not None
+        ), "compute_effective_sizes must be called before get_segment_used_size."
 
         return self._segment_used_sizes[segment_index]
 
@@ -185,5 +198,8 @@ class MemorySegmentManager:
         Returns the finalized size of the given segment. If the segment has not been finalized,
         returns its used size.
         """
-        return self._segment_sizes[segment_index] if segment_index in self._segment_sizes \
+        return (
+            self._segment_sizes[segment_index]
+            if segment_index in self._segment_sizes
             else self.get_segment_used_size(segment_index=segment_index)
+        )

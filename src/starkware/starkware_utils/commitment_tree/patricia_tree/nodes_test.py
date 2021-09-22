@@ -1,8 +1,12 @@
 import pytest
 
 from starkware.python.utils import from_bytes, to_bytes
-from starkware.starkware_utils.patricia_tree.nodes import (
-    BinaryNodeFact, EdgeNodeFact, EmptyNodeFact, get_node_type)
+from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import (
+    BinaryNodeFact,
+    EdgeNodeFact,
+    EmptyNodeFact,
+    get_node_type,
+)
 from starkware.storage.test_utils import hash_func
 
 
@@ -24,8 +28,9 @@ async def test_binary_node():
         left_node, right_node = nodes
 
         with pytest.raises(
-                AssertionError,
-                match='It is not allowed for any child of a binary node to be the empty node.'):
+            AssertionError,
+            match="It is not allowed for any child of a binary node to be the empty node.",
+        ):
             BinaryNodeFact(left_node=left_node, right_node=right_node)
 
 

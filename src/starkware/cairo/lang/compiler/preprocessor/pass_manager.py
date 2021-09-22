@@ -52,7 +52,7 @@ class PassManager:
 
     def get_stage_index(self, name: str):
         assert name in self.stage_names
-        index, = [i for i, (stage_name, _) in enumerate(self.stages) if stage_name == name]
+        (index,) = [i for i, (stage_name, _) in enumerate(self.stages) if stage_name == name]
         return index
 
     # Functions for manipulating the stages:

@@ -13,7 +13,7 @@ class AnonymousLabelGenerator:
         self.anon_label_counter = 0
 
     def get(self):
-        label_name = f'_anon_label{self.anon_label_counter}'
+        label_name = f"_anon_label{self.anon_label_counter}"
         self.anon_label_counter += 1
         return label_name
 

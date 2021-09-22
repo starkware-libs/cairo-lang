@@ -10,13 +10,13 @@ from starkware.starknet.core.os.contract_hash import compute_contract_hash
 from starkware.starknet.definitions import fields
 from starkware.starknet.services.api.contract_definition import ContractDefinition
 from starkware.starknet.storage.starknet_storage import StorageLeaf
-from starkware.storage.storage import HASH_BYTES, Fact, FactFetchingContext, HashFunctionType
+from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import EmptyNodeFact
+from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
 from starkware.starkware_utils.validated_dataclass import (
     ValidatedDataclass,
     ValidatedMarshmallowDataclass,
 )
-from starkware.starkware_utils.patricia_tree.patricia_tree import PatriciaTree
-from starkware.starkware_utils.patricia_tree.nodes import EmptyNodeFact
+from starkware.storage.storage import HASH_BYTES, Fact, FactFetchingContext, HashFunctionType
 
 
 @marshmallow_dataclass.dataclass(frozen=True)

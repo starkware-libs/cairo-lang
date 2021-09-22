@@ -14,7 +14,8 @@ Example:
 
 
 mocked_time_func: ContextVar[Callable[[], float]] = ContextVar(
-    'mocked_time_func', default=def_time_func)
+    "mocked_time_func", default=def_time_func
+)
 
 
 def time():

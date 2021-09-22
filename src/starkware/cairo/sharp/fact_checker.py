@@ -2,25 +2,13 @@ from web3 import HTTPProvider, Web3
 
 FACT_REGISTRY_ABI = [
     {
-        'constant': True,
-        'inputs': [
-            {
-                'internalType': 'bytes32',
-                'name': 'fact',
-                'type': 'bytes32'
-            }
-        ],
-        'name': 'isValid',
-        'outputs': [
-            {
-                'internalType': 'bool',
-                'name': '',
-                'type': 'bool'
-            }
-        ],
-        'payable': False,
-        'stateMutability': 'view',
-        'type': 'function'
+        "constant": True,
+        "inputs": [{"internalType": "bytes32", "name": "fact", "type": "bytes32"}],
+        "name": "isValid",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "payable": False,
+        "stateMutability": "view",
+        "type": "function",
     }
 ]
 
@@ -39,7 +27,8 @@ class FactChecker:
         # Initialize a contract instance, used to query the fact-registry contract.
         w3 = Web3(HTTPProvider(node_rpc_url))
         self.contract = w3.eth.contract(  # type: ignore
-            address=fact_registry_address, abi=FACT_REGISTRY_ABI)
+            address=fact_registry_address, abi=FACT_REGISTRY_ABI
+        )
 
     def is_valid(self, fact: str) -> bool:
         """

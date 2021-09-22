@@ -11,7 +11,6 @@ from services.everest.business_logic.internal_transaction import (
     EverestInternalTransaction,
     EverestTransactionExecutionInfo,
 )
-from services.everest.business_logic.internal_transaction import EverestInternalTransaction
 from services.everest.business_logic.state import CarriedStateBase
 from services.everest.definitions import fields as everest_fields
 from starkware.cairo.lang.vm.utils import RunResources

@@ -37,8 +37,9 @@ def extract_public_memory(public_input: PublicInput) -> Dict[int, int]:
     for entry in public_input.public_memory:
         addr = entry.address
         value = entry.value
-        assert addr not in memory, \
-            f'Duplicate public memory entries found with the same address: {addr}'
+        assert (
+            addr not in memory
+        ), f"Duplicate public memory entries found with the same address: {addr}"
         memory[addr] = value
     return memory
 
@@ -48,9 +49,7 @@ def extract_program_output(public_input: PublicInput, memory: Dict[int, int]) ->
     Returns a list of field elements represeting the program output.
     This function fails if the program doesn't have an output segment.
     """
-    assert 'output' in public_input.memory_segments, 'Missing output segment.'
-    output_addresses = public_input.memory_segments['output']
-    assert output_addresses.stop_ptr is not None, 'Missing stop_ptr for the output segment.'
-    return [
-        memory[addr]
-        for addr in range(output_addresses.begin_addr, output_addresses.stop_ptr)]
+    assert "output" in public_input.memory_segments, "Missing output segment."
+    output_addresses = public_input.memory_segments["output"]
+    assert output_addresses.stop_ptr is not None, "Missing stop_ptr for the output segment."
+    return [memory[addr] for addr in range(output_addresses.begin_addr, output_addresses.stop_ptr)]

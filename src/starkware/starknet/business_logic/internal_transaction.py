@@ -4,8 +4,6 @@ import functools
 import logging
 from abc import abstractmethod
 from dataclasses import field
-from starkware.cairo.lang.vm.relocatable import RelocatableValue
-from starkware.starknet.public.abi import STORAGE_PTR_OFFSET, SYSCALL_PTR_OFFSET
 from typing import ClassVar, Dict, List, Optional, Tuple, Type, cast
 
 import marshmallow
@@ -15,6 +13,7 @@ from marshmallow_oneofschema import OneOfSchema
 from services.everest.api.gateway.transaction import EverestTransaction
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
+from starkware.cairo.lang.vm.relocatable import RelocatableValue
 from starkware.cairo.lang.vm.security import SecurityError
 from starkware.cairo.lang.vm.utils import ResourcesError, RunResources
 from starkware.cairo.lang.vm.vm import HintException, VmException, VmExceptionBase
@@ -34,6 +33,7 @@ from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.definitions.transaction_type import TransactionType
+from starkware.starknet.public.abi import STORAGE_PTR_OFFSET, SYSCALL_PTR_OFFSET
 from starkware.starknet.services.api.contract_definition import (
     ContractDefinition,
     ContractEntryPoint,
@@ -477,9 +477,10 @@ class InternalInvokeFunction(InternalTransaction):
             )
 
         # Complete handler validations.
-        storage_stop_ptr = segment_utils.get_os_segment_stop_ptr(
-            runner=runner, ptr_offset=STORAGE_PTR_OFFSET, os_context=os_context
-        )
+        with wrap_with_stark_exception(code=StarknetErrorCode.SECURITY_ERROR):
+            storage_stop_ptr = segment_utils.get_os_segment_stop_ptr(
+                runner=runner, ptr_offset=STORAGE_PTR_OFFSET, os_context=os_context
+            )
         syscall_handler.finalize_storage_validations(
             segments=runner.segments, storage_stop_ptr=storage_stop_ptr
         )

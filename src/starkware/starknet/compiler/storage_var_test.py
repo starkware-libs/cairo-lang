@@ -1,60 +1,10 @@
 import re
 
-from starkware.cairo.lang.compiler.parser import parse_type
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_test_utils import (
     strip_comments_and_linebreaks,
 )
-from starkware.cairo.lang.compiler.type_system import mark_type_resolved
-from starkware.starknet.compiler.storage_var import check_felts_only_type
 from starkware.starknet.compiler.test_utils import preprocess_str, verify_exception
 from starkware.starknet.public.abi import starknet_keccak
-
-
-def test_check_felts_only_type():
-    program = preprocess_str(
-        """
-struct A:
-    member x : felt
-end
-
-struct B:
-end
-
-struct C:
-    member x : felt
-    member y : (felt, A, B)
-    member z : A
-end
-
-struct D:
-    member x : felt*
-end
-
-struct E:
-    member x : D
-end
-    """
-    )
-
-    for (typ, expected_res) in [
-        # Positive cases.
-        ("test_scope.A", True),
-        ("test_scope.B", True),
-        ("test_scope.C", True),
-        ("(felt, felt)", True),
-        ("(felt, (felt, test_scope.C))", True),
-        # Negative cases.
-        ("test_scope.D", False),
-        ("test_scope.E", False),
-        ("(felt, test_scope.D)", False),
-    ]:
-        assert (
-            check_felts_only_type(
-                cairo_type=mark_type_resolved(parse_type(typ)),
-                identifier_manager=program.identifiers,
-            )
-            == expected_res
-        )
 
 
 def test_storage_var_success():

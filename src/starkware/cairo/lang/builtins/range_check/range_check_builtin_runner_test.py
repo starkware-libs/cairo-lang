@@ -19,12 +19,14 @@ end
     compile_and_run(CODE_FORMAT.format(value=1))
 
     with pytest.raises(
-            VmException,
-            match=f'Value {PRIME - 1}, in range check builtin 0, is out of range '
-            r'\[0, {bound}\)'.format(bound=2**128)):
+        VmException,
+        match=f"Value {PRIME - 1}, in range check builtin 0, is out of range "
+        r"\[0, {bound}\)".format(bound=2 ** 128),
+    ):
         compile_and_run(CODE_FORMAT.format(value=-1))
 
     with pytest.raises(
-            VmException,
-            match=f'Range-check builtin: Expected value at address 2:0 to be an integer. Got: 2:0'):
-        compile_and_run(CODE_FORMAT.format(value='range_check_ptr'))
+        VmException,
+        match=f"Range-check builtin: Expected value at address 2:0 to be an integer. Got: 2:0",
+    ):
+        compile_and_run(CODE_FORMAT.format(value="range_check_ptr"))

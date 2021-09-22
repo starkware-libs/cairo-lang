@@ -10,32 +10,35 @@ from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDa
 
 logger = logging.getLogger(__name__)
 
-TConfig = TypeVar('TConfig', bound='Config')
+TConfig = TypeVar("TConfig", bound="Config")
 
 
 # General utilities.
 
-def load_config(
-        config_file_path: Optional[str] = None, load_logging_config: Optional[bool] = True) -> dict:
-    if config_file_path is None:
-        config_file_path = '/config.yml'
 
-    config = yaml.safe_load(open(config_file_path, 'r'))
+def load_config(
+    config_file_path: Optional[str] = None, load_logging_config: Optional[bool] = True
+) -> dict:
+    if config_file_path is None:
+        config_file_path = "/config.yml"
+
+    config = yaml.safe_load(open(config_file_path, "r"))
     if load_logging_config:
-        logging.config.dictConfig(config.get('LOGGING', {}))
+        logging.config.dictConfig(config.get("LOGGING", {}))
 
     return config
 
 
 def fetch_application_config(global_config: dict) -> dict:
-    return global_config.get('application', {})
+    return global_config.get("application", {})
 
 
 def fetch_service_config(global_config: dict) -> dict:
-    return fetch_application_config(global_config).get('config', {})
+    return fetch_application_config(global_config).get("config", {})
 
 
 # Base class for config schemas.
+
 
 class Config(ValidatedMarshmallowDataclass):
     @classmethod
@@ -52,4 +55,5 @@ class Config(ValidatedMarshmallowDataclass):
 def log_fields(config: Config):
     for field in dataclasses.fields(config):
         logger.info(
-            f'Initialized {field.name} configuration with value: {getattr(config, field.name)}')
+            f"Initialized {field.name} configuration with value: {getattr(config, field.name)}"
+        )

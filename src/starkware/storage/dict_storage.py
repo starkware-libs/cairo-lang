@@ -53,4 +53,4 @@ class CachedStorage(Storage):
         return value
 
     async def del_value(self, key: bytes):
-        raise NotImplementedError('CachedStorage is expected to handle only immutable items')
+        raise NotImplementedError("CachedStorage is expected to handle only immutable items")

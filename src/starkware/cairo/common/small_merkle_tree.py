@@ -50,8 +50,11 @@ class MerkleTree:
 
 
 def get_preimage_dictionary(
-        initial_leaves: Collection[Tuple[int, int]], modifications: Collection[Tuple[int, int]],
-        tree_height: int, default_leaf: int) -> Tuple[int, int, Dict[int, Tuple[int, int]]]:
+    initial_leaves: Collection[Tuple[int, int]],
+    modifications: Collection[Tuple[int, int]],
+    tree_height: int,
+    default_leaf: int,
+) -> Tuple[int, int, Dict[int, Tuple[int, int]]]:
     """
     Given a set of initial leaves and a set of modifications
     (both are maps from leaf index to value, where all the leaves in `modifications` appear

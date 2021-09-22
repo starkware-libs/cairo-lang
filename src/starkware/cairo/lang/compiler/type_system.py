@@ -1,7 +1,12 @@
 import dataclasses
 
 from starkware.cairo.lang.compiler.ast.cairo_types import (
-    CairoType, TypeFelt, TypePointer, TypeStruct, TypeTuple)
+    CairoType,
+    TypeFelt,
+    TypePointer,
+    TypeStruct,
+    TypeTuple,
+)
 from starkware.cairo.lang.compiler.ast.expr import ExprCast, Expression
 from starkware.cairo.lang.compiler.expression_transformer import ExpressionTransformer
 
@@ -18,15 +23,13 @@ def mark_type_resolved(cairo_type: CairoType) -> CairoType:
     elif isinstance(cairo_type, TypeStruct):
         if cairo_type.is_fully_resolved:
             return cairo_type
-        return dataclasses.replace(
-            cairo_type,
-            is_fully_resolved=True)
+        return dataclasses.replace(cairo_type, is_fully_resolved=True)
     elif isinstance(cairo_type, TypeTuple):
         return dataclasses.replace(
-            cairo_type,
-            members=[mark_type_resolved(member) for member in cairo_type.members])
+            cairo_type, members=[mark_type_resolved(member) for member in cairo_type.members]
+        )
     else:
-        raise NotImplementedError(f'Type {type(cairo_type).__name__} is not supported.')
+        raise NotImplementedError(f"Type {type(cairo_type).__name__} is not supported.")
 
 
 def is_type_resolved(cairo_type: CairoType) -> bool:
@@ -42,13 +45,14 @@ def is_type_resolved(cairo_type: CairoType) -> bool:
     elif isinstance(cairo_type, TypeTuple):
         return all(map(is_type_resolved, cairo_type.members))
     else:
-        raise NotImplementedError(f'Type {type(cairo_type).__name__} is not supported.')
+        raise NotImplementedError(f"Type {type(cairo_type).__name__} is not supported.")
 
 
 class MarkResolved(ExpressionTransformer):
     def visit_ExprCast(self, expr: ExprCast):
         return dataclasses.replace(
-            expr, expr=self.visit(expr.expr), dest_type=mark_type_resolved(expr.dest_type))
+            expr, expr=self.visit(expr.expr), dest_type=mark_type_resolved(expr.dest_type)
+        )
 
 
 def mark_types_in_expr_resolved(expr: Expression):

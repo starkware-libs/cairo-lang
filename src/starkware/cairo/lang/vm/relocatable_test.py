@@ -38,13 +38,16 @@ def test_relocatable_inequalities():
     assert not (y <= x)
 
 
-@pytest.mark.parametrize('byte_order', ['little', 'big'])
-@pytest.mark.parametrize('n_bytes', [16, 32])
+@pytest.mark.parametrize("byte_order", ["little", "big"])
+@pytest.mark.parametrize("n_bytes", [16, 32])
 def test_relocatable_value_serialization(byte_order, n_bytes):
     for num in [19, RelocatableValue(2, 5)]:
-        assert RelocatableValue.from_bytes(
-            RelocatableValue.to_bytes(num, n_bytes, byte_order),
-            byte_order) == num
+        assert (
+            RelocatableValue.from_bytes(
+                RelocatableValue.to_bytes(num, n_bytes, byte_order), byte_order
+            )
+            == num
+        )
 
 
 def test_to_tuple_from_tuple():
@@ -59,5 +62,6 @@ def test_to_tuple_from_tuple():
 def test_relocatable_value_frozen():
     x = RelocatableValue(1, 2)
     with pytest.raises(
-            dataclasses.FrozenInstanceError, match="cannot assign to field 'no_such_field'"):
+        dataclasses.FrozenInstanceError, match="cannot assign to field 'no_such_field'"
+    ):
         x.no_such_field = 5

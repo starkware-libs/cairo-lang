@@ -4,8 +4,12 @@ from typing import Optional, Sequence
 
 from starkware.cairo.lang.compiler.ast.expr import ArgList, Expression, ExprIdentifier
 from starkware.cairo.lang.compiler.ast.formatting_utils import (
-    INDENTATION, LocationField, ParticleFormattingConfig, create_particle_sublist,
-    particles_in_lines)
+    INDENTATION,
+    LocationField,
+    ParticleFormattingConfig,
+    create_particle_sublist,
+    particles_in_lines,
+)
 from starkware.cairo.lang.compiler.ast.instructions import CallInstruction
 from starkware.cairo.lang.compiler.ast.node import AstNode
 from starkware.cairo.lang.compiler.error_handling import Location
@@ -45,6 +49,7 @@ class RvalueExpr(Rvalue):
     """
     Represents an rvalue which is a simple expression. E.g., fp + 17.
     """
+
     expr: Expression
 
     @property
@@ -76,6 +81,7 @@ class RvalueCallInst(RvalueCall):
 
     call_inst is CallInstruction that calls the function.
     """
+
     call_inst: CallInstruction
 
     @property
@@ -98,6 +104,7 @@ class RvalueFuncCall(RvalueCall):
     Represents an rvalue of the form:
       func_ident([ident=]expr, ...).
     """
+
     func_ident: ExprIdentifier
     arguments: ArgList
     implicit_arguments: Optional[ArgList]
@@ -114,13 +121,14 @@ class RvalueFuncCall(RvalueCall):
         particles = [self.func_ident.format()]
 
         if self.implicit_arguments is not None:
-            particles[-1] += '{'
-            particles.append(create_particle_sublist(
-                [x.format() for x in self.implicit_arguments.args], '}('))
+            particles[-1] += "{"
+            particles.append(
+                create_particle_sublist([x.format() for x in self.implicit_arguments.args], "}(")
+            )
         else:
-            particles[-1] += '('
+            particles[-1] += "("
 
-        particles.append(create_particle_sublist([x.format() for x in self.arguments.args], ')'))
+        particles.append(create_particle_sublist([x.format() for x in self.arguments.args], ")"))
         return particles
 
     def format(self, allowed_line_length):
@@ -128,9 +136,9 @@ class RvalueFuncCall(RvalueCall):
         return particles_in_lines(
             particles=self.get_particles(),
             config=ParticleFormattingConfig(
-                allowed_line_length=allowed_line_length,
-                line_indent=INDENTATION,
-                one_per_line=True))
+                allowed_line_length=allowed_line_length, line_indent=INDENTATION, one_per_line=True
+            ),
+        )
 
     def format_for_expr(self) -> str:
         """
@@ -141,9 +149,9 @@ class RvalueFuncCall(RvalueCall):
         res = self.func_ident.format()
 
         if self.implicit_arguments is not None:
-            res += '{' + self.implicit_arguments.format() + '}'
+            res += "{" + self.implicit_arguments.format() + "}"
 
-        res += '(' + self.arguments.format() + ')'
+        res += "(" + self.arguments.format() + ")"
         return res
 
     def get_children(self) -> Sequence[Optional[AstNode]]:

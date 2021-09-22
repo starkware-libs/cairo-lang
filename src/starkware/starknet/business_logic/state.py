@@ -17,8 +17,8 @@ from starkware.starknet.business_logic.state_objects import ContractCarriedState
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.services.api.contract_definition import ContractDefinition
 from starkware.starknet.storage.starknet_storage import StorageLeaf
+from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
 from starkware.starkware_utils.config_base import Config
-from starkware.starkware_utils.patricia_tree.patricia_tree import PatriciaTree
 from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
 from starkware.storage.storage import FactFetchingContext
 

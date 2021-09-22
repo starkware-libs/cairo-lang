@@ -15,25 +15,26 @@ def get_package_path():
     Returns ROOT_PATH s.t. $ROOT_PATH/starkware is the package folder.
     """
     import starkware.python
-    return os.path.abspath(os.path.join(os.path.dirname(starkware.python.__file__), '../../'))
+
+    return os.path.abspath(os.path.join(os.path.dirname(starkware.python.__file__), "../../"))
 
 
-def get_build_dir_path(rel_path=''):
+def get_build_dir_path(rel_path=""):
     """
     Returns a path to a file inside the build directory (or the docker).
     rel_path is the relative path of the file with respect to the build directory.
     """
-    build_root = os.environ['BUILD_ROOT']
+    build_root = os.environ["BUILD_ROOT"]
     return os.path.join(build_root, rel_path)
 
 
-def get_source_dir_path(rel_path=''):
+def get_source_dir_path(rel_path=""):
     """
     Returns a path to a file inside the source directory. Does not work in docker.
     rel_path is the relative path of the file with respect to the source directory.
     """
-    source_root = os.path.join(os.environ['BUILD_ROOT'], '../../')
-    assert os.path.exists(os.path.join(source_root, 'src'))
+    source_root = os.path.join(os.environ["BUILD_ROOT"], "../../")
+    assert os.path.exists(os.path.join(source_root, "src"))
     return os.path.join(source_root, rel_path)
 
 
@@ -43,7 +44,7 @@ def assert_same_and_get(*args):
     For example, assert_same_and_get(5, 5, 5) will return 5, and assert_same_and_get(0, 1) will
     raise an AssertionError.
     """
-    assert len(set(args)) == 1, 'Values are not the same (%s)' % (args,)
+    assert len(set(args)) == 1, "Values are not the same (%s)" % (args,)
     return args[0]
 
 
@@ -85,15 +86,15 @@ def indent(code, indentation):
     if len(code) == 0:
         return code
     if isinstance(indentation, int):
-        indentation = ' ' * indentation
+        indentation = " " * indentation
     elif not isinstance(indentation, str):
-        raise TypeError(f'Supports only int or str, got {type(indentation).__name__}')
+        raise TypeError(f"Supports only int or str, got {type(indentation).__name__}")
 
     # Replace every occurrence of \n, with \n followed by indentation,
     # unless the \n is the last characther of the string or is followed by another \n.
     # We enforce the "not followed by ..." condition using negative lookahead (?!\n|$),
     # looking for end of string ($) or another \n.
-    return indentation + re.sub(r'\n(?!\n|$)', '\n' + indentation, code)
+    return indentation + re.sub(r"\n(?!\n|$)", "\n" + indentation, code)
 
 
 def get_random_instance() -> random.Random:
@@ -104,7 +105,8 @@ def get_random_instance() -> random.Random:
 
 
 def initialize_random(
-        random_object: Optional[random.Random] = None, seed: Optional[int] = None) -> random.Random:
+    random_object: Optional[random.Random] = None, seed: Optional[int] = None
+) -> random.Random:
     """
     Returns a Random object initialized according to the given parameters.
     If both are None, the Random instance instantiated in the random module is returned.
@@ -129,7 +131,7 @@ def compare_files(src, dst, fix):
     If 'fix' is False, checks that the files are the same.
     If 'fix' is True, overrides dst with src.
     """
-    subprocess.check_call(['cp' if fix else 'diff', src, dst])
+    subprocess.check_call(["cp" if fix else "diff", src, dst])
 
 
 def remove_trailing_spaces(code):
@@ -137,7 +139,7 @@ def remove_trailing_spaces(code):
     Removes spaces from end of lines.
     For example, remove_trailing_spaces('hello \nworld   \n') -> 'hello\nworld\n'.
     """
-    return re.sub(' +$', '', code, flags=re.MULTILINE)
+    return re.sub(" +$", "", code, flags=re.MULTILINE)
 
 
 def should_discard_key(key, exclude: List[str]) -> bool:
@@ -159,8 +161,9 @@ class WriteOnceDict(UserDict):
     """
 
     def __setitem__(self, key, value):
-        assert key not in self.data, \
-            f"Trying to set key={key} to '{value}' but key={key} is already set to '{self[key]}'."
+        assert (
+            key not in self.data
+        ), f"Trying to set key={key} to '{value}' but key={key} is already set to '{self[key]}'."
         self.data[key] = value
 
 
@@ -169,7 +172,7 @@ def camel_to_snake_case(camel_case_name: str) -> str:
     Converts a name with Capital first letters to lower case with '_' as separators.
     For example, CamelToSnakeCase -> camel_to_snake_case.
     """
-    return (camel_case_name[0] + re.sub(r'([A-Z])', r'_\1', camel_case_name[1:])).lower()
+    return (camel_case_name[0] + re.sub(r"([A-Z])", r"_\1", camel_case_name[1:])).lower()
 
 
 def snake_to_camel_case(snake_case_name: str) -> str:
@@ -177,7 +180,7 @@ def snake_to_camel_case(snake_case_name: str) -> str:
     Converts the first letter to upper case (if possible) and all the '_l' to 'L'.
     For example snake_to_camel_case -> SnakeToCamelCase.
     """
-    return re.subn(r'(^|_)([a-z])', lambda m: m.group(2).upper(), snake_case_name)[0]
+    return re.subn(r"(^|_)([a-z])", lambda m: m.group(2).upper(), snake_case_name)[0]
 
 
 async def cancel_futures(*futures: asyncio.Future):
@@ -201,7 +204,7 @@ def safe_zip(*iterables: Iterable[Any]) -> Iterable:
     """
     sentinel = object()
     for combo in itertools.zip_longest(*iterables, fillvalue=sentinel):
-        assert sentinel not in combo, 'Iterables to safe_zip are not equal in length.'
+        assert sentinel not in combo, "Iterables to safe_zip are not equal in length."
         yield combo
 
 
@@ -225,6 +228,7 @@ def composite(*funcs):
         for func in reversed(funcs[:-1]):
             return_value = func(return_value)
         return return_value
+
     return composition_function
 
 
@@ -237,7 +241,7 @@ def to_bytes(value: int, length: Optional[int] = None, byte_order: Optional[str]
         length = HASH_BYTES
 
     if byte_order is None:
-        byte_order = 'big'
+        byte_order = "big"
 
     return int.to_bytes(value, length=length, byteorder=byte_order)
 
@@ -248,7 +252,7 @@ def from_bytes(value: bytes, byte_order: Optional[str] = None) -> int:
     Default byte order is 'big'.
     """
     if byte_order is None:
-        byte_order = 'big'
+        byte_order = "big"
 
     return int.from_bytes(value, byteorder=byte_order)
 
@@ -257,8 +261,8 @@ def blockify(data, chunk_size: int) -> Iterable:
     """
     Returns the given data partitioned to chunks of chunks_size (last chunk might be smaller).
     """
-    assert chunk_size > 0, f'chunk_size must be greater than 0. Got: {chunk_size}.'
-    return (data[i:i + chunk_size] for i in range(0, len(data), chunk_size))
+    assert chunk_size > 0, f"chunk_size must be greater than 0. Got: {chunk_size}."
+    return (data[i : i + chunk_size] for i in range(0, len(data), chunk_size))
 
 
 def all_subclasses(cls: type) -> List[type]:
@@ -270,4 +274,5 @@ def all_subclasses(cls: type) -> List[type]:
 
 def _all_subclasses(cls: type) -> List[type]:
     return [cls] + list(
-        itertools.chain(*[_all_subclasses(subclass) for subclass in cls.__subclasses__()]))
+        itertools.chain(*[_all_subclasses(subclass) for subclass in cls.__subclasses__()])
+    )

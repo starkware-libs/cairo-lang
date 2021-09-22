@@ -42,6 +42,7 @@ from starkware.cairo.lang.compiler.identifier_definition import (
     FutureIdentifierDefinition,
     StructDefinition,
 )
+from starkware.cairo.lang.compiler.identifier_utils import get_struct_definition
 from starkware.cairo.lang.compiler.instruction import Register
 from starkware.cairo.lang.compiler.preprocessor.preprocessor import (
     PreprocessedProgram,
@@ -58,6 +59,10 @@ from starkware.starknet.compiler.data_encoder import (
     struct_to_argument_info_list,
 )
 from starkware.starknet.definitions.constants import STARKNET_LANG_DIRECTIVE
+from starkware.starknet.public.abi_structs import (
+    prepare_type_for_abi,
+    struct_definition_to_abi_entry,
+)
 from starkware.starknet.security.secure_hints import HintsWhitelist, InsecureHintError
 from starkware.starknet.services.api.contract_definition import SUPPORTED_BUILTINS
 from starkware.starkware_utils.subsequence import is_subsequence
@@ -92,6 +97,10 @@ class StarknetPreprocessor(Preprocessor):
         self.os_context: Optional[Dict[str, int]] = None
         # JSON dict for the ABI output.
         self.abi: List[dict] = []
+        # A map from external struct (short) name to its ABI entry.
+        self.abi_structs: Dict[str, dict] = {}
+        # A map from external struct (short) name to the fully qualified name.
+        self.abi_structs_fullnames: Dict[str, ScopedName] = {}
 
     def get_external_decorator(self, elm: CodeElementFunction) -> Optional[ExprIdentifier]:
         """
@@ -278,6 +287,7 @@ class StarknetPreprocessor(Preprocessor):
             encoding_type=EncodingType.CALLDATA,
             has_range_check_builtin="range_check_ptr" in os_context,
             location=func_location,
+            identifiers=self.identifiers,
         )
 
         for code_element in code_elements:
@@ -373,12 +383,15 @@ class StarknetPreprocessor(Preprocessor):
         outputs = []
         for m_name, member in arg_struct_def.members.items():
             assert is_type_resolved(member.cairo_type)
+            abi_type_info = prepare_type_for_abi(member.cairo_type)
             inputs.append(
                 {
                     "name": m_name,
-                    "type": member.cairo_type.format(),
+                    "type": abi_type_info.modified_type.format(),
                 }
             )
+            for struct_name in abi_type_info.structs:
+                self.add_struct_to_abi(struct_name)
         for m_name, member in ret_struct_def.members.items():
             assert isinstance(member.cairo_type, TypeFelt)
             outputs.append(
@@ -397,11 +410,43 @@ class StarknetPreprocessor(Preprocessor):
             res["stateMutability"] = "view"
         self.abi.append(res)
 
+    def add_struct_to_abi(self, struct_name: ScopedName):
+        """
+        Adds the given struct (add all the structs mentioned in its members) to self.abi_structs.
+        """
+
+        struct_definition = get_struct_definition(
+            struct_name=struct_name, identifier_manager=self.identifiers
+        )
+
+        short_name = struct_name.path[-1]
+
+        if short_name in self.abi_structs:
+            existing_full_name = self.abi_structs_fullnames[short_name]
+            if existing_full_name != struct_name:
+                raise PreprocessorError(
+                    f"Found two external structs named {short_name}: "
+                    f"{existing_full_name}, {struct_name}.",
+                    location=struct_definition.location,
+                )
+            return
+
+        abi_entry, inner_structs = struct_definition_to_abi_entry(
+            struct_definition=struct_definition
+        )
+
+        self.abi_structs_fullnames[short_name] = struct_name
+        self.abi_structs[short_name] = abi_entry
+
+        # Visit the types of the inner structs recursively.
+        for name in inner_structs:
+            self.add_struct_to_abi(name)
+
     def get_program(self) -> StarknetPreprocessedProgram:
         program = super().get_program()
         return StarknetPreprocessedProgram(  # type: ignore
             **program.__dict__,
-            abi=self.abi,
+            abi=list(self.abi_structs.values()) + self.abi,
         )
 
     def process_retdata(

@@ -14,7 +14,8 @@ from starkware.starkware_utils.validated_fields import Field, RangeValidatedFiel
 
 # Fields data: validation data, dataclass metadata.
 tx_id_marshmallow_field = mfields.Integer(
-    strict=True, required=True, validate=validate_non_negative('tx_id'))
+    strict=True, required=True, validate=validate_non_negative("tx_id")
+)
 
 tx_id_field_metadata = dict(marshmallow_field=tx_id_marshmallow_field)
 
@@ -37,8 +38,8 @@ class EthAddressTypeField(Field[str]):
     # Randomization.
     def get_random_value(self, random_object: Optional[random.Random] = None) -> str:
         r = initialize_random(random_object=random_object)
-        raw_address = ''.join(r.choices(population=string.hexdigits, k=40))
-        return Web3.toChecksumAddress(value=f'0x{raw_address}')
+        raw_address = "".join(r.choices(population=string.hexdigits, k=40))
+        return Web3.toChecksumAddress(value=f"0x{raw_address}")
 
     # Validation.
     def is_valid(self, value: str) -> bool:
@@ -46,9 +47,9 @@ class EthAddressTypeField(Field[str]):
 
     def get_invalid_values(self) -> List[str]:
         return [
-            '0x0Fa81Ec60fe5422d49174F1abdfdC06a9F1c52F2',  # Not checksummed.
+            "0x0Fa81Ec60fe5422d49174F1abdfdC06a9F1c52F2",  # Not checksummed.
             self.get_random_value()[:-1],  # Too short address.
-            self.get_random_value() + '0'  # type: ignore # Too long address.
+            self.get_random_value() + "0",  # type: ignore # Too long address.
         ]
 
     @property
@@ -57,7 +58,7 @@ class EthAddressTypeField(Field[str]):
 
     def format_invalid_value_error_message(self, value: str, name: Optional[str] = None) -> str:
         name = self.name if name is None else name
-        return f'{name} {value} is out of range / not checksummed.'
+        return f"{name} {value} is out of range / not checksummed."
 
     # Serialization.
     def get_marshmallow_field(self) -> mfields.Field:
@@ -74,15 +75,16 @@ class EthAddressTypeField(Field[str]):
 
 
 FactRegistryField = EthAddressTypeField(
-    name='Address of fact registry',
-    error_code=StarkErrorCode.INVALID_CONTRACT_ADDRESS)
+    name="Address of fact registry", error_code=StarkErrorCode.INVALID_CONTRACT_ADDRESS
+)
 
 EthAddressField = EthAddressTypeField(
-    name='Ethereum address',
-    error_code=StarkErrorCode.INVALID_ETH_ADDRESS)
+    name="Ethereum address", error_code=StarkErrorCode.INVALID_ETH_ADDRESS
+)
 
 EthAddressIntField = RangeValidatedField(
     lower_bound=constants.ETH_ADDRESS_LOWER_BOUND,
     upper_bound=constants.ETH_ADDRESS_UPPER_BOUND,
-    name_in_error_message='Ethereum address',
-    out_of_range_error_code=StarkErrorCode.OUT_OF_RANGE_ETH_ADDRESS)
+    name_in_error_message="Ethereum address",
+    out_of_range_error_code=StarkErrorCode.OUT_OF_RANGE_ETH_ADDRESS,
+)

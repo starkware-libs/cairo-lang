@@ -22,7 +22,7 @@ def filter_interpreter(python: str, entries: List[str]):
     """
     res = []
     for x in entries:
-        parts = x.split(':')
+        parts = x.split(":")
         if len(parts) == 1:
             # Common entry.
             res.append(x)
@@ -46,10 +46,10 @@ def find_dependency_libraries(python: str, libs: List[str], info_dir: str) -> Di
         lib = library_queue.pop()
         if lib in found_libraries:
             continue
-        filename = os.path.join(info_dir, f'{lib}.info')
-        with open(filename, 'r') as fp:
+        filename = os.path.join(info_dir, f"{lib}.info")
+        with open(filename, "r") as fp:
             found_libraries[lib] = json.load(fp)
-        library_queue += filter_interpreter(python, found_libraries[lib]['lib_deps'])
+        library_queue += filter_interpreter(python, found_libraries[lib]["lib_deps"])
 
     return found_libraries
 
@@ -60,37 +60,39 @@ def fill_init_files(site_dir):
         if dirpath == site_dir:
             continue
 
-        if dirpath in py_dirs or any(filename.endswith('.py') for filename in filenames):
+        if dirpath in py_dirs or any(filename.endswith(".py") for filename in filenames):
             py_dirs.add(os.path.dirname(dirpath))
-            if '__init__.py' not in filenames:
-                with open(os.path.join(dirpath, '__init__.py'), 'w') as f:
+            if "__init__.py" not in filenames:
+                with open(os.path.join(dirpath, "__init__.py"), "w") as f:
                     # Create namespace packages, to allow the import of starkware pip libraries.
-                    f.write('__path__ = __import__(\'pkgutil\').extend_path(__path__, __name__)')
+                    f.write("__path__ = __import__('pkgutil').extend_path(__path__, __name__)")
 
 
 def get_pth_dir(python: str, venv_dir: str):
-    if python == 'python3.7':
-        return os.path.join(venv_dir, 'lib/python3.7/site-packages')
-    elif python == 'pypy3':
-        pth_dir = os.path.join(venv_dir, 'site-packages')
+    if python == "python3.7":
+        return os.path.join(venv_dir, "lib/python3.7/site-packages")
+    elif python == "pypy3":
+        pth_dir = os.path.join(venv_dir, "site-packages")
         os.makedirs(pth_dir, exist_ok=True)
         return pth_dir
     else:
-        raise NotImplementedError(f'Unsupported python executable {python}')
+        raise NotImplementedError(f"Unsupported python executable {python}")
 
 
 def main():
-    parser = ArgumentParser(description='Generates a virtual environment.')
+    parser = ArgumentParser(description="Generates a virtual environment.")
     parser.add_argument(
-        '--name', type=str, help='The name of the virtual environment', required=True)
+        "--name", type=str, help="The name of the virtual environment", required=True
+    )
+    parser.add_argument("--libs", type=str, nargs="*", help="Library list", required=True)
+    parser.add_argument("--python", help="Python executable", type=str, required=True)
+    parser.add_argument("--site_dir", help="Site output directory", type=str, required=True)
     parser.add_argument(
-        '--libs', type=str, nargs='*', help='Library list', required=True)
-    parser.add_argument('--python', help='Python executable', type=str, required=True)
-    parser.add_argument('--site_dir', help='Site output directory', type=str, required=True)
+        "--venv_dir", help="Virtual environment output directory", type=str, required=True
+    )
     parser.add_argument(
-        '--venv_dir', help='Virtual environment output directory', type=str, required=True)
-    parser.add_argument(
-        '--info_dir', help='Directory for all libraries info files', type=str, required=True)
+        "--info_dir", help="Directory for all libraries info files", type=str, required=True
+    )
     args = parser.parse_args()
 
     # Clean directories.
@@ -101,17 +103,17 @@ def main():
 
     # Find python.
     lookup_paths = [
-        '/usr/bin',
-        '/usr/local/bin',
+        "/usr/bin",
+        "/usr/local/bin",
     ]
-    python_exec = shutil.which(args.python, path=':'.join(lookup_paths))
+    python_exec = shutil.which(args.python, path=":".join(lookup_paths))
     # Prepare an empty virtual environment in the background.
     # --symlinks prefers symlinks of copying.
     # --without-pip installs a completely empty venv, with no pip.
     # --clear clears the old venv if exists.
-    venv_proc = subprocess.Popen([
-        python_exec, '-m', 'venv', '--symlinks', '--without-pip', '--clear',
-        args.venv_dir])
+    venv_proc = subprocess.Popen(
+        [python_exec, "-m", "venv", "--symlinks", "--without-pip", "--clear", args.venv_dir]
+    )
 
     # Find all libraries.
     found_libraries = find_dependency_libraries(args.python, args.libs, args.info_dir)
@@ -121,18 +123,18 @@ def main():
     site_files = []
     py_exe_deps = set()
     for lib_name, lib_info in found_libraries.items():
-        imports_list += filter_interpreter(args.python, lib_info['import_paths'])
-        lib_dirs = filter_interpreter(args.python, lib_info['lib_dir'])
-        assert len(lib_dirs) == 1, f'Library {lib_name} has {len(lib_dirs)} library directories.'
-        for filename in filter_interpreter(args.python, lib_info['files']):
+        imports_list += filter_interpreter(args.python, lib_info["import_paths"])
+        lib_dirs = filter_interpreter(args.python, lib_info["lib_dir"])
+        assert len(lib_dirs) == 1, f"Library {lib_name} has {len(lib_dirs)} library directories."
+        for filename in filter_interpreter(args.python, lib_info["files"]):
             src = os.path.join(lib_dirs[0], filename)
             dst = os.path.join(args.site_dir, filename)
             os.makedirs(os.path.dirname(dst), exist_ok=True)
-            assert not os.path.exists(dst), f'Multiple entries for {filename} in site dir.'
+            assert not os.path.exists(dst), f"Multiple entries for {filename} in site dir."
             # Create a hardlink (symlinks don't work well with pytest and conftest.py).
             os.link(src, dst)
             site_files.append(src)
-        py_exe_deps.update(lib_info['py_exe_deps'])
+        py_exe_deps.update(lib_info["py_exe_deps"])
 
     # Since pytest root discovery is base of __init__.py files, we need to fill dummy __init__.py
     # In site dir.
@@ -141,23 +143,27 @@ def main():
     # Generate pth.
     venv_proc.wait()
     pth_dir = get_pth_dir(args.python, args.venv_dir)
-    pth_path = os.path.join(pth_dir, 'venv.pth')
-    with open(pth_path, 'w') as fp:
-        fp.write(''.join(os.path.relpath(dirname, pth_dir) + '\n' for dirname in imports_list))
+    pth_path = os.path.join(pth_dir, "venv.pth")
+    with open(pth_path, "w") as fp:
+        fp.write("".join(os.path.relpath(dirname, pth_dir) + "\n" for dirname in imports_list))
 
     # Generate info file.
-    with open(os.path.join(args.info_dir, f'{args.name}.info'), 'w') as fp:
-        json.dump({
-            'python': args.python,
-            'venv_dir': args.venv_dir,
-            'site_dir': args.site_dir,
-            'pth': pth_path,
-            'site_files': site_files,
-            'imports_list': imports_list,
-            'py_exe_deps': sorted(py_exe_deps),
-        }, fp, indent=4)
-        fp.write('\n')
+    with open(os.path.join(args.info_dir, f"{args.name}.info"), "w") as fp:
+        json.dump(
+            {
+                "python": args.python,
+                "venv_dir": args.venv_dir,
+                "site_dir": args.site_dir,
+                "pth": pth_path,
+                "site_files": site_files,
+                "imports_list": imports_list,
+                "py_exe_deps": sorted(py_exe_deps),
+            },
+            fp,
+            indent=4,
+        )
+        fp.write("\n")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

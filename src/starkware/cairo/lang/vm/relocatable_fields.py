@@ -28,10 +28,8 @@ class MaybeRelocatableDictField(mfields.Field):
         if value is None:
             return None
         return [
-            (RelocatableValue.to_tuple(x), RelocatableValue.to_tuple(y))
-            for x, y in value.items()]
+            (RelocatableValue.to_tuple(x), RelocatableValue.to_tuple(y)) for x, y in value.items()
+        ]
 
     def _deserialize(self, value, attr, data, **kwargs):
-        return {
-            RelocatableValue.from_tuple(x): RelocatableValue.from_tuple(y)
-            for x, y in value}
+        return {RelocatableValue.from_tuple(x): RelocatableValue.from_tuple(y) for x, y in value}

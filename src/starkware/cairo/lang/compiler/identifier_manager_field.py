@@ -21,8 +21,11 @@ class IdentifierManagerField(fields.Field):
 
     def _deserialize(self, value, attr, data, **kwargs) -> IdentifierManager:
         identifier_definition_schema = IdentifierDefinitionSchema()
-        return IdentifierManager.from_dict({
-            ScopedName.from_string(name): identifier_definition_schema.load(
-                serialized_identifier_definition)
-            for name, serialized_identifier_definition in value.items()
-        })
+        return IdentifierManager.from_dict(
+            {
+                ScopedName.from_string(name): identifier_definition_schema.load(
+                    serialized_identifier_definition
+                )
+                for name, serialized_identifier_definition in value.items()
+            }
+        )

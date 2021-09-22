@@ -7,10 +7,17 @@ from starkware.cairo.lang.compiler.ast.expr import Expression
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.parser import parse_expr
 from starkware.cairo.lang.compiler.preprocessor.compound_expressions import (
-    CompoundExpressionContext, CompoundExpressionVisitor, SimplicityLevel,
-    process_compound_expressions)
+    CompoundExpressionContext,
+    CompoundExpressionVisitor,
+    SimplicityLevel,
+    process_compound_expressions,
+)
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_test_utils import (
-    PRIME, preprocess_str, strip_comments_and_linebreaks, verify_exception)
+    PRIME,
+    preprocess_str,
+    strip_comments_and_linebreaks,
+    verify_exception,
+)
 
 
 class CompoundExpressionTestContext(CompoundExpressionContext):
@@ -18,97 +25,111 @@ class CompoundExpressionTestContext(CompoundExpressionContext):
         self.tempvar_name_counter = itertools.count(0)
 
     def new_tempvar_name(self) -> str:
-        return f'x{next(self.tempvar_name_counter)}'
+        return f"x{next(self.tempvar_name_counter)}"
 
     def get_fp_val(self, location: Optional[Location]) -> Expression:
-        raise NotImplementedError('fp is not supported in the test.')
+        raise NotImplementedError("fp is not supported in the test.")
 
 
-@pytest.mark.parametrize('expr_str, to_operation, to_deref_const, to_deref_offset, to_deref', [
+@pytest.mark.parametrize(
+    "expr_str, to_operation, to_deref_const, to_deref_offset, to_deref",
     [
-        '5',
-        '5',
-        '5',
-        'tempvar x0 : felt = 5; x0',
-        'tempvar x0 : felt = 5; x0',
+        [
+            "5",
+            "5",
+            "5",
+            "tempvar x0 : felt = 5; x0",
+            "tempvar x0 : felt = 5; x0",
+        ],
+        [
+            "[ap + 5]",
+            "[ap + 5]",
+            "[ap + 5]",
+            "[ap + 5]",
+            "[ap + 5]",
+        ],
+        [
+            "[ap + 5] + 3",
+            "[ap + 5] + 3",
+            "tempvar x0 : felt = [ap - 0 + 5] + 3; x0",
+            "[ap + 5] + 3",
+            "tempvar x0 : felt = [ap - 0 + 5] + 3; x0",
+        ],
+        [
+            "3 + [ap + 5]",
+            "tempvar x0 : felt = 3; x0 + [ap + 5]",
+            "tempvar x0 : felt = 3; tempvar x1 : felt = x0 + [ap - 1 + 5]; x1",
+            "tempvar x0 : felt = 3; tempvar x1 : felt = x0 + [ap - 1 + 5]; x1",
+            "tempvar x0 : felt = 3; tempvar x1 : felt = x0 + [ap - 1 + 5]; x1",
+        ],
+        [
+            "[[ap + 5]]",
+            "[[ap + 5]]",
+            "tempvar x0 : felt = [[ap - 0 + 5]]; x0",
+            "tempvar x0 : felt = [[ap - 0 + 5]]; x0",
+            "tempvar x0 : felt = [[ap - 0 + 5]]; x0",
+        ],
+        [
+            "[[[ap + 5]]]",
+            "tempvar x0 : felt = [[ap - 0 + 5]]; [x0]",
+            "tempvar x0 : felt = [[ap - 0 + 5]]; tempvar x1 : felt = [x0]; x1",
+            "tempvar x0 : felt = [[ap - 0 + 5]]; tempvar x1 : felt = [x0]; x1",
+            "tempvar x0 : felt = [[ap - 0 + 5]]; tempvar x1 : felt = [x0]; x1",
+        ],
+        [
+            "[3]",
+            "tempvar x0 : felt = 3; [x0]",
+            "tempvar x0 : felt = 3; tempvar x1 : felt = [x0]; x1",
+            "tempvar x0 : felt = 3; tempvar x1 : felt = [x0]; x1",
+            "tempvar x0 : felt = 3; tempvar x1 : felt = [x0]; x1",
+        ],
+        [
+            "-[ap + 3]",
+            "[ap + 3] * (-1)",
+            "tempvar x0 : felt = [ap - 0 + 3] * (-1); x0",
+            "tempvar x0 : felt = [ap - 0 + 3] * (-1); x0",
+            "tempvar x0 : felt = [ap - 0 + 3] * (-1); x0",
+        ],
     ],
-    [
-        '[ap + 5]',
-        '[ap + 5]',
-        '[ap + 5]',
-        '[ap + 5]',
-        '[ap + 5]',
-    ],
-    [
-        '[ap + 5] + 3',
-        '[ap + 5] + 3',
-        'tempvar x0 : felt = [ap - 0 + 5] + 3; x0',
-        '[ap + 5] + 3',
-        'tempvar x0 : felt = [ap - 0 + 5] + 3; x0',
-    ],
-    [
-        '3 + [ap + 5]',
-        'tempvar x0 : felt = 3; x0 + [ap + 5]',
-        'tempvar x0 : felt = 3; tempvar x1 : felt = x0 + [ap - 1 + 5]; x1',
-        'tempvar x0 : felt = 3; tempvar x1 : felt = x0 + [ap - 1 + 5]; x1',
-        'tempvar x0 : felt = 3; tempvar x1 : felt = x0 + [ap - 1 + 5]; x1',
-    ],
-    [
-        '[[ap + 5]]',
-        '[[ap + 5]]',
-        'tempvar x0 : felt = [[ap - 0 + 5]]; x0',
-        'tempvar x0 : felt = [[ap - 0 + 5]]; x0',
-        'tempvar x0 : felt = [[ap - 0 + 5]]; x0',
-    ],
-    [
-        '[[[ap + 5]]]',
-        'tempvar x0 : felt = [[ap - 0 + 5]]; [x0]',
-        'tempvar x0 : felt = [[ap - 0 + 5]]; tempvar x1 : felt = [x0]; x1',
-        'tempvar x0 : felt = [[ap - 0 + 5]]; tempvar x1 : felt = [x0]; x1',
-        'tempvar x0 : felt = [[ap - 0 + 5]]; tempvar x1 : felt = [x0]; x1',
-    ],
-    [
-        '[3]',
-        'tempvar x0 : felt = 3; [x0]',
-        'tempvar x0 : felt = 3; tempvar x1 : felt = [x0]; x1',
-        'tempvar x0 : felt = 3; tempvar x1 : felt = [x0]; x1',
-        'tempvar x0 : felt = 3; tempvar x1 : felt = [x0]; x1',
-    ],
-    [
-        '-[ap + 3]',
-        '[ap + 3] * (-1)',
-        'tempvar x0 : felt = [ap - 0 + 3] * (-1); x0',
-        'tempvar x0 : felt = [ap - 0 + 3] * (-1); x0',
-        'tempvar x0 : felt = [ap - 0 + 3] * (-1); x0',
-    ],
-])
+)
 def test_compound_expression_visitor(
-        expr_str: str, to_operation: str, to_deref_const: str, to_deref_offset: str, to_deref: str):
+    expr_str: str, to_operation: str, to_deref_const: str, to_deref_offset: str, to_deref: str
+):
     """
     Tests rewriting various expression, to the different simplicity levels.
     For example, to_operation is the expected result when the simplicity level is OPERATION.
     """
     expr = parse_expr(expr_str)
     for sim, expected_result in [
-            (SimplicityLevel.OPERATION, to_operation),
-            (SimplicityLevel.DEREF_CONST, to_deref_const),
-            (SimplicityLevel.DEREF_OFFSET, to_deref_offset),
-            (SimplicityLevel.DEREF, to_deref)]:
+        (SimplicityLevel.OPERATION, to_operation),
+        (SimplicityLevel.DEREF_CONST, to_deref_const),
+        (SimplicityLevel.DEREF_OFFSET, to_deref_offset),
+        (SimplicityLevel.DEREF, to_deref),
+    ]:
         visitor = CompoundExpressionVisitor(context=CompoundExpressionTestContext())
         res = visitor.rewrite(expr, sim)
-        assert ''.join(
-            code_element.format(allowed_line_length=100) + '; '
-            for code_element in visitor.code_elements) + res.format() == expected_result
+        assert (
+            "".join(
+                code_element.format(allowed_line_length=100) + "; "
+                for code_element in visitor.code_elements
+            )
+            + res.format()
+            == expected_result
+        )
 
 
 def test_compound_expression_visitor_long():
     visitor = CompoundExpressionVisitor(context=CompoundExpressionTestContext())
     res = visitor.rewrite(
-        parse_expr('[ap + 100] - [fp] * [[-[ap + 200] / [ap + 300]]] + [ap] * [ap]'),
-        SimplicityLevel.OPERATION)
-    assert ''.join(
-        code_element.format(allowed_line_length=100) + '\n'
-        for code_element in visitor.code_elements) == """\
+        parse_expr("[ap + 100] - [fp] * [[-[ap + 200] / [ap + 300]]] + [ap] * [ap]"),
+        SimplicityLevel.OPERATION,
+    )
+    assert (
+        "".join(
+            code_element.format(allowed_line_length=100) + "\n"
+            for code_element in visitor.code_elements
+        )
+        == """\
 tempvar x0 : felt = [ap - 0 + 200] * (-1)
 tempvar x1 : felt = x0 / [ap - 1 + 300]
 tempvar x2 : felt = [x1]
@@ -117,15 +138,19 @@ tempvar x4 : felt = [fp] * x3
 tempvar x5 : felt = [ap - 5 + 100] - x4
 tempvar x6 : felt = [ap - 6] * [ap - 6]
 """
-    assert res.format() == 'x5 + x6'
+    )
+    assert res.format() == "x5 + x6"
 
 
 def test_compound_expression_visitor_inverses():
     visitor = CompoundExpressionVisitor(context=CompoundExpressionTestContext())
-    res = visitor.rewrite(parse_expr('2 - 1 / [ap] + [ap] / 3'), SimplicityLevel.DEREF)
-    assert ''.join(
-        code_element.format(allowed_line_length=100) + '\n'
-        for code_element in visitor.code_elements) == """\
+    res = visitor.rewrite(parse_expr("2 - 1 / [ap] + [ap] / 3"), SimplicityLevel.DEREF)
+    assert (
+        "".join(
+            code_element.format(allowed_line_length=100) + "\n"
+            for code_element in visitor.code_elements
+        )
+        == """\
 tempvar x0 : felt = 2
 tempvar x1 : felt = 1
 tempvar x2 : felt = x1 / [ap - 2]
@@ -133,35 +158,48 @@ tempvar x3 : felt = x0 - x2
 tempvar x4 : felt = [ap - 4] / 3
 tempvar x5 : felt = x3 + x4
 """
-    assert res.format() == 'x5'
+    )
+    assert res.format() == "x5"
 
 
 def test_process_compound_expressions():
-    code_elements, res = process_compound_expressions(list(map(parse_expr, [
-        '[ap - 1] + 5',
-        '[ap - 1] * [ap - 1]',
-        '[ap - 1] * [ap - 1]',
-        '[ap - 2] * [ap - 2] * [ap - 3]',
-        '[ap - 1]',
-    ])), [
-        SimplicityLevel.OPERATION,
-        SimplicityLevel.OPERATION,
-        SimplicityLevel.DEREF,
-        SimplicityLevel.OPERATION,
-        SimplicityLevel.OPERATION,
-    ], context=CompoundExpressionTestContext())
-    assert ''.join(
-        code_element.format(allowed_line_length=100) + '\n'
-        for code_element in code_elements) == """\
+    code_elements, res = process_compound_expressions(
+        list(
+            map(
+                parse_expr,
+                [
+                    "[ap - 1] + 5",
+                    "[ap - 1] * [ap - 1]",
+                    "[ap - 1] * [ap - 1]",
+                    "[ap - 2] * [ap - 2] * [ap - 3]",
+                    "[ap - 1]",
+                ],
+            )
+        ),
+        [
+            SimplicityLevel.OPERATION,
+            SimplicityLevel.OPERATION,
+            SimplicityLevel.DEREF,
+            SimplicityLevel.OPERATION,
+            SimplicityLevel.OPERATION,
+        ],
+        context=CompoundExpressionTestContext(),
+    )
+    assert (
+        "".join(
+            code_element.format(allowed_line_length=100) + "\n" for code_element in code_elements
+        )
+        == """\
 tempvar x0 : felt = [ap - 0 - 1] * [ap - 0 - 1]
 tempvar x1 : felt = [ap - 1 - 2] * [ap - 1 - 2]
 """
+    )
     assert [x.format() for x in res] == [
-        '[ap - 2 - 1] + 5',
-        '[ap - 2 - 1] * [ap - 2 - 1]',
-        'x0',
-        'x1 * [ap - 2 - 3]',
-        '[ap - 2 - 1]',
+        "[ap - 2 - 1] + 5",
+        "[ap - 2 - 1] * [ap - 2 - 1]",
+        "x0",
+        "x1 * [ap - 2 - 3]",
+        "[ap - 2 - 1]",
     ]
 
 
@@ -183,7 +221,9 @@ let __fp__ = [ap - 1] + [ap - 1]
 assert [fp] = fp + fp
 """
     program = preprocess_str(code=code, prime=PRIME)
-    assert program.format() == """\
+    assert (
+        program.format()
+        == """\
 [ap] = [ap + 1] * [ap + 2]
 
 [ap] = [[ap + (-1)]]; ap++
@@ -213,7 +253,10 @@ assert [fp] = fp + fp
 [ap] = [ap + (-1)] + [ap + (-1)]; ap++
 [ap] = [ap + (-2)] + [ap + (-2)]; ap++
 [fp] = [ap + (-2)] + [ap + (-1)]
-""".replace('\n\n', '\n')
+""".replace(
+            "\n\n", "\n"
+        )
+    )
 
 
 def test_compound_expressions_long():
@@ -249,7 +292,9 @@ tempvar y = x + x
 tempvar z = 5 + nondet %{ val %} * 15 + nondet %{ 1 %}
 """
     program = preprocess_str(code=code, prime=PRIME)
-    assert program.format() == """\
+    assert (
+        program.format()
+        == """\
 [ap] = [ap + (-1)] * [ap + (-1)]; ap++
 [ap] = [ap + (-2)] * [ap + (-3)]; ap++
 [ap] = [ap + (-2)] + [ap + (-1)]; ap++
@@ -263,7 +308,10 @@ ap += 1
 %{ memory[ap] = int(1) %}
 ap += 1
 [ap] = [ap + (-2)] + [ap + (-1)]; ap++
-""".replace('\n\n', '\n')
+""".replace(
+            "\n\n", "\n"
+        )
+    )
 
 
 def test_compound_expressions_localvar():
@@ -323,41 +371,56 @@ call rel -15
 
 
 def test_compound_expressions_failures():
-    verify_exception("""\
+    verify_exception(
+        """\
 assert [ap + [ap]] = [ap]
-""", """
+""",
+        """
 file:?:?: ap may only be used in an expression of the form [ap + <const>].
 assert [ap + [ap]] = [ap]
         ^^
-""")
-    verify_exception("""\
+""",
+    )
+    verify_exception(
+        """\
 assert [[ap]] = ap
-""", """
+""",
+        """
 file:?:?: ap may only be used in an expression of the form [ap + <const>].
 assert [[ap]] = ap
                 ^^
-""")
-    verify_exception("""\
+""",
+    )
+    verify_exception(
+        """\
 assert [[fp]] = fp
-""", """
+""",
+        """
 file:?:?: Using the value of fp directly, requires defining a variable named __fp__.
 assert [[fp]] = fp
                 ^^
-""")
-    verify_exception("""\
+""",
+    )
+    verify_exception(
+        """\
 assert [ap] = [ap + 32768]  # Offset is out of bounds.
-""", """
+""",
+        """
 file:?:?: ap may only be used in an expression of the form [ap + <const>].
 assert [ap] = [ap + 32768]  # Offset is out of bounds.
                ^^
-""")
-    verify_exception("""\
+""",
+    )
+    verify_exception(
+        """\
 struct T:
     member a : felt
 end
 assert 7 = cast(7, T*)
-""", """
+""",
+        """
 file:?:?: Cannot compare 'felt' and 'test_scope.T*'.
 assert 7 = cast(7, T*)
 ^********************^
-""")
+""",
+    )

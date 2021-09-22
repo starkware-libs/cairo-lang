@@ -2,11 +2,19 @@ import asyncio
 import dataclasses
 from typing import Optional, Tuple
 
-from starkware.starkware_utils.binary_fact_tree import BinaryFactDict
-from starkware.starkware_utils.binary_fact_tree_node import (
-    BinaryFactTreeNode, read_node_fact, write_node_fact)
-from starkware.starkware_utils.patricia_tree.nodes import (
-    BinaryNodeFact, EdgeNodeFact, EmptyNodeFact, PatriciaNodeFact, verify_path_value)
+from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
+from starkware.starkware_utils.commitment_tree.binary_fact_tree_node import (
+    BinaryFactTreeNode,
+    read_node_fact,
+    write_node_fact,
+)
+from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import (
+    BinaryNodeFact,
+    EdgeNodeFact,
+    EmptyNodeFact,
+    PatriciaNodeFact,
+    verify_path_value,
+)
 from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 from starkware.storage.storage import FactFetchingContext
 
@@ -40,25 +48,29 @@ class VirtualPatriciaNode(BinaryFactTreeNode, ValidatedDataclass):
         verify_path_value(path=self.path, length=self.length)
 
     @classmethod
-    def empty_node(cls, height: int) -> 'VirtualPatriciaNode':
+    def empty_node(cls, height: int) -> "VirtualPatriciaNode":
         return cls(bottom_node=EmptyNodeFact.EMPTY_NODE_HASH, path=0, length=0, height=height)
 
     @classmethod
-    def from_hash(cls, hash_value: bytes, height: int) -> 'VirtualPatriciaNode':
+    def from_hash(cls, hash_value: bytes, height: int) -> "VirtualPatriciaNode":
         """
         Returns a virtual Patricia node of the form (hash, 0, 0).
         """
         return cls(bottom_node=hash_value, path=0, length=0, height=height)
 
     @classmethod
-    def create_leaf(cls, hash_value: bytes) -> 'VirtualPatriciaNode':
+    def create_leaf(cls, hash_value: bytes) -> "VirtualPatriciaNode":
         return cls.from_hash(hash_value=hash_value, height=0)
 
     async def read_bottom_node_fact(
-            self, ffc: FactFetchingContext, facts: Optional[BinaryFactDict]) -> PatriciaNodeFact:
+        self, ffc: FactFetchingContext, facts: Optional[BinaryFactDict]
+    ) -> PatriciaNodeFact:
         return await read_node_fact(
-            ffc=ffc, inner_node_fact_cls=PatriciaNodeFact,  # type: ignore
-            fact_hash=self.bottom_node, facts=facts)
+            ffc=ffc,
+            inner_node_fact_cls=PatriciaNodeFact,  # type: ignore
+            fact_hash=self.bottom_node,
+            facts=facts,
+        )
 
     @property
     def is_empty(self) -> bool:
@@ -85,12 +97,13 @@ class VirtualPatriciaNode(BinaryFactTreeNode, ValidatedDataclass):
             return self.bottom_node
 
         edge_node_fact = EdgeNodeFact(
-            bottom_node=self.bottom_node, edge_path=self.path, edge_length=self.length)
+            bottom_node=self.bottom_node, edge_path=self.path, edge_length=self.length
+        )
         return await write_node_fact(ffc=ffc, inner_node_fact=edge_node_fact, facts=facts)
 
     async def decommit(
-            self, ffc: FactFetchingContext,
-            facts: Optional[BinaryFactDict]) -> 'VirtualPatriciaNode':
+        self, ffc: FactFetchingContext, facts: Optional[BinaryFactDict]
+    ) -> "VirtualPatriciaNode":
         """
         Returns the canonical representation of the information embedded in self.
         Returns (bottom, path, length) for an edge node of form (hash, 0, 0), which is the
@@ -110,16 +123,22 @@ class VirtualPatriciaNode(BinaryFactTreeNode, ValidatedDataclass):
             return self
         if isinstance(root_node_fact, EdgeNodeFact):
             return VirtualPatriciaNode(
-                bottom_node=root_node_fact.bottom_node, path=root_node_fact.edge_path,
-                length=root_node_fact.edge_length, height=self.height)
+                bottom_node=root_node_fact.bottom_node,
+                path=root_node_fact.edge_path,
+                length=root_node_fact.edge_length,
+                height=self.height,
+            )
 
-        raise NotImplementedError(f'Unexpected node fact type: {type(root_node_fact).__name__}.')
+        raise NotImplementedError(f"Unexpected node fact type: {type(root_node_fact).__name__}.")
 
     @classmethod
     async def combine(
-            cls, ffc: FactFetchingContext, left: 'BinaryFactTreeNode',
-            right: 'BinaryFactTreeNode',
-            facts: Optional[BinaryFactDict] = None) -> 'VirtualPatriciaNode':
+        cls,
+        ffc: FactFetchingContext,
+        left: "BinaryFactTreeNode",
+        right: "BinaryFactTreeNode",
+        facts: Optional[BinaryFactDict] = None,
+    ) -> "VirtualPatriciaNode":
         """
         Gets two VirtualPatriciaNode objects left and right representing children nodes, and builds
         their parent node. Returns a new VirtualPatriciaNode.
@@ -129,8 +148,9 @@ class VirtualPatriciaNode(BinaryFactTreeNode, ValidatedDataclass):
         # Downcast arguments.
         assert isinstance(left, VirtualPatriciaNode) and isinstance(right, VirtualPatriciaNode)
 
-        assert right.height == left.height, (
-            f'Only trees of same height can be combined; got: {right.height} and {left.height}.')
+        assert (
+            right.height == left.height
+        ), f"Only trees of same height can be combined; got: {right.height} and {left.height}."
 
         parent_height = right.height + 1
         if left.is_empty and right.is_empty:
@@ -142,15 +162,15 @@ class VirtualPatriciaNode(BinaryFactTreeNode, ValidatedDataclass):
         return await cls._combine_to_virtual_edge_node(ffc=ffc, left=left, right=right, facts=facts)
 
     async def get_children(
-            self, ffc: FactFetchingContext, facts: Optional[BinaryFactDict] = None) -> Tuple[
-                'VirtualPatriciaNode', 'VirtualPatriciaNode']:
+        self, ffc: FactFetchingContext, facts: Optional[BinaryFactDict] = None
+    ) -> Tuple["VirtualPatriciaNode", "VirtualPatriciaNode"]:
         """
         Returns the two VirtualPatriciaNode objects which are the subtrees of the current
         VirtualPatriciaNode.
 
         If facts argument is not None, this dictionary is filled with facts read from the DB.
         """
-        assert not self.is_leaf, 'get_children() must not be called on leaves.'
+        assert not self.is_leaf, "get_children() must not be called on leaves."
 
         children_height = self.height - 1
         if self.is_empty:
@@ -167,46 +187,62 @@ class VirtualPatriciaNode(BinaryFactTreeNode, ValidatedDataclass):
         if isinstance(fact, EdgeNodeFact):
             # A previously committed edge node.
             edge_node = VirtualPatriciaNode(
-                bottom_node=fact.bottom_node, path=fact.edge_path, length=fact.edge_length,
-                height=self.height)
+                bottom_node=fact.bottom_node,
+                path=fact.edge_path,
+                length=fact.edge_length,
+                height=self.height,
+            )
             return edge_node._get_virtual_edge_node_children()
 
         assert isinstance(fact, BinaryNodeFact)
         return (
             self.from_hash(hash_value=fact.left_node, height=children_height),
-            self.from_hash(hash_value=fact.right_node, height=children_height))
+            self.from_hash(hash_value=fact.right_node, height=children_height),
+        )
 
     # Internal utils.
 
     @classmethod
     async def _combine_to_binary_node(
-            cls, ffc: FactFetchingContext, left: 'VirtualPatriciaNode',
-            right: 'VirtualPatriciaNode', facts: Optional[BinaryFactDict]) -> 'VirtualPatriciaNode':
+        cls,
+        ffc: FactFetchingContext,
+        left: "VirtualPatriciaNode",
+        right: "VirtualPatriciaNode",
+        facts: Optional[BinaryFactDict],
+    ) -> "VirtualPatriciaNode":
         """
         Combines two non-empty nodes to form a binary node.
         Writes the constructed node fact to the DB, as well as (up to) two other facts for the
         children if they were not previously committed.
         """
-        left_node_hash, right_node_hash = await asyncio.gather(*(
-            node.commit(ffc=ffc, facts=facts) for node in (left, right)))
+        left_node_hash, right_node_hash = await asyncio.gather(
+            *(node.commit(ffc=ffc, facts=facts) for node in (left, right))
+        )
         parent_node_fact = BinaryNodeFact(left_node=left_node_hash, right_node=right_node_hash)
         parent_fact_hash = await write_node_fact(
-            ffc=ffc, inner_node_fact=parent_node_fact, facts=facts)
+            ffc=ffc, inner_node_fact=parent_node_fact, facts=facts
+        )
 
         return VirtualPatriciaNode(
-            bottom_node=parent_fact_hash, path=0, length=0, height=right.height + 1)
+            bottom_node=parent_fact_hash, path=0, length=0, height=right.height + 1
+        )
 
     @classmethod
     async def _combine_to_virtual_edge_node(
-            cls, ffc: FactFetchingContext, left: 'VirtualPatriciaNode',
-            right: 'VirtualPatriciaNode', facts: Optional[BinaryFactDict]) -> 'VirtualPatriciaNode':
+        cls,
+        ffc: FactFetchingContext,
+        left: "VirtualPatriciaNode",
+        right: "VirtualPatriciaNode",
+        facts: Optional[BinaryFactDict],
+    ) -> "VirtualPatriciaNode":
         """
         Combines an empty node and a non-empty node to form a virtual edge node.
         If the non-empty node is not known to be of canonical form, reads its fact from the DB
         in order to make it such (or make sure it is).
         """
-        assert left.is_empty != right.is_empty, (
-            '_combine_to_virtual_edge_node() must be called on one empty and one non-empty nodes.')
+        assert (
+            left.is_empty != right.is_empty
+        ), "_combine_to_virtual_edge_node() must be called on one empty and one non-empty nodes."
 
         non_empty_child = right if left.is_empty else left
         non_empty_child = await non_empty_child.decommit(ffc=ffc, facts=facts)
@@ -214,14 +250,18 @@ class VirtualPatriciaNode(BinaryFactTreeNode, ValidatedDataclass):
         parent_path = non_empty_child.path
         if left.is_empty:
             # Turn on the MSB bit if the non-empty child is on the right.
-            parent_path += (1 << non_empty_child.length)
+            parent_path += 1 << non_empty_child.length
 
         return VirtualPatriciaNode(
-            bottom_node=non_empty_child.bottom_node, path=parent_path,
-            length=non_empty_child.length + 1, height=non_empty_child.height + 1)
+            bottom_node=non_empty_child.bottom_node,
+            path=parent_path,
+            length=non_empty_child.length + 1,
+            height=non_empty_child.height + 1,
+        )
 
     def _get_virtual_edge_node_children(
-            self) -> Tuple['VirtualPatriciaNode', 'VirtualPatriciaNode']:
+        self,
+    ) -> Tuple["VirtualPatriciaNode", "VirtualPatriciaNode"]:
         """
         Returns the children of a virtual edge node: an empty node and a shorter-by-one virtual
         edge node, according to the direction embedded in the edge path.
@@ -231,7 +271,9 @@ class VirtualPatriciaNode(BinaryFactTreeNode, ValidatedDataclass):
         non_empty_child = VirtualPatriciaNode(
             bottom_node=self.bottom_node,
             path=self.path & ((1 << children_length) - 1),  # Turn the MSB bit off.
-            length=children_length, height=children_height)
+            length=children_length,
+            height=children_height,
+        )
 
         edge_child_direction = self.path >> children_length
         empty_child = VirtualPatriciaNode.empty_node(height=children_height)

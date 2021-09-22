@@ -39,8 +39,9 @@ python_lib(starknet_hints_whitelist_lib
 
     FILES
     hints_whitelist.py
-    whitelists/latest.json
     whitelists/cairo_keccak.json
+    whitelists/cairo_sha256.json
+    whitelists/latest.json
 
     LIBS
     starknet_security_lib

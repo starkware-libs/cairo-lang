@@ -4,7 +4,7 @@ from starkware.cairo.lang.vm.memory_dict import MemoryDict
 from starkware.cairo.lang.vm.memory_segments import MemorySegmentManager
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
 
-PRIME = 2**251 + 17 * 2**192 + 1
+PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
 
 
 def test_relocate_segments():
@@ -35,30 +35,43 @@ def test_relocate_segments():
     segment_offsets = segments.relocate_segments()
     assert segment_offsets == {0: 1, 1: 4, 2: 12, 3: 12, 4: 13, 5: 15, 6: 20}
     assert segments.get_public_memory_addresses(segment_offsets) == [
-        (1, 0), (2, 1), (4, 0), (5, 0), (6, 0), (7, 0), (8, 0), (9, 0), (10, 0), (11, 0), (14, 2)]
+        (1, 0),
+        (2, 1),
+        (4, 0),
+        (5, 0),
+        (6, 0),
+        (7, 0),
+        (8, 0),
+        (9, 0),
+        (10, 0),
+        (11, 0),
+        (14, 2),
+    ]
 
     # Negative flows.
     segments = MemorySegmentManager(memory=MemoryDict({}), prime=PRIME)
     segments.add(size=1)
-    with pytest.raises(AssertionError, match='compute_effective_sizes must be called before'):
+    with pytest.raises(AssertionError, match="compute_effective_sizes must be called before"):
         segments.relocate_segments()
 
     segments.memory[RelocatableValue(0, 2)] = 0
     segments.memory.freeze()
     segments.compute_effective_sizes()
-    with pytest.raises(AssertionError, match='Segment 0 exceeded its allocated size'):
+    with pytest.raises(AssertionError, match="Segment 0 exceeded its allocated size"):
         segments.relocate_segments()
 
 
 def test_get_segment_used_size():
-    memory = MemoryDict({
-        RelocatableValue(0, 0): 0,
-        RelocatableValue(0, 2): 0,
-        RelocatableValue(1, 5): 0,
-        RelocatableValue(1, 7): 0,
-        RelocatableValue(3, 0): 0,
-        RelocatableValue(4, 1): 0,
-    })
+    memory = MemoryDict(
+        {
+            RelocatableValue(0, 0): 0,
+            RelocatableValue(0, 2): 0,
+            RelocatableValue(1, 5): 0,
+            RelocatableValue(1, 7): 0,
+            RelocatableValue(3, 0): 0,
+            RelocatableValue(4, 1): 0,
+        }
+    )
     segments = MemorySegmentManager(memory=memory, prime=PRIME)
     segments.n_segments = 5
     memory.freeze()

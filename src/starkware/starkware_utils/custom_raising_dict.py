@@ -4,8 +4,8 @@ from typing import Generic, Type, TypeVar
 
 from frozendict import frozendict
 
-KT = TypeVar('KT')
-VT = TypeVar('VT')
+KT = TypeVar("KT")
+VT = TypeVar("VT")
 
 
 class CustomRaisingDict(ABC, UserDict, Generic[KT, VT]):
@@ -23,7 +23,7 @@ class CustomRaisingDict(ABC, UserDict, Generic[KT, VT]):
     def __init_subclass__(cls, exception_type: Type[Exception], **kwargs):
         super().__init_subclass__(**kwargs)  # type: ignore[call-arg]
 
-        assert issubclass(exception_type, KeyError), 'Exception type must subclass KeyError.'
+        assert issubclass(exception_type, KeyError), "Exception type must subclass KeyError."
         cls.exception_type = exception_type  # type: ignore
 
     def __getitem__(self, key: KT) -> VT:
@@ -53,8 +53,9 @@ class CustomRaisingFrozenDict(frozendict, Generic[KT, VT]):
         class _CustomRaisingFrozenDict(CustomRaisingDict[KT, VT], exception_type=exception_type):
             pass
 
-        _CustomRaisingFrozenDict.__name__ = _CustomRaisingFrozenDict.__qualname__ = \
-            'CustomRaisingFrozenDict'
+        _CustomRaisingFrozenDict.__name__ = (
+            _CustomRaisingFrozenDict.__qualname__
+        ) = "CustomRaisingFrozenDict"
 
         cls.dict_cls = _CustomRaisingFrozenDict
 

@@ -6,8 +6,8 @@ import pytest
 
 
 def maybe_raises(
-        expected_exception, error_message: Optional[str],
-        escape_error_message: bool = True) -> ContextManager:
+    expected_exception, error_message: Optional[str], escape_error_message: bool = True
+) -> ContextManager:
     """
     A utility function for parameterized tests with both positive and negative cases.
     If error_message is None, it expects no error,

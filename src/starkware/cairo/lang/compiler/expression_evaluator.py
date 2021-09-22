@@ -17,8 +17,13 @@ class ExpressionEvaluator(ExpressionSimplifier):
     prime: int
 
     def __init__(
-            self, prime: int, ap: Optional[int], fp: int, memory: MutableMapping[int, int],
-            identifiers: Optional[IdentifierManager] = None):
+        self,
+        prime: int,
+        ap: Optional[int],
+        fp: int,
+        memory: MutableMapping[int, int],
+        identifiers: Optional[IdentifierManager] = None,
+    ):
         super().__init__(prime=prime)
         assert self.prime is not None
         self.ap = ap
@@ -28,8 +33,9 @@ class ExpressionEvaluator(ExpressionSimplifier):
 
     def eval(self, expr: Expression) -> int:
         expr, expr_type = simplify_type_system(expr, identifiers=self.identifiers)
-        assert isinstance(expr_type, (TypeFelt, TypePointer)), \
-            f"Unable to evaluate expression of type '{expr_type.format()}'."
+        assert isinstance(
+            expr_type, (TypeFelt, TypePointer)
+        ), f"Unable to evaluate expression of type '{expr_type.format()}'."
         res = self.visit(expr)
         assert isinstance(res, ExprConst), f"Unable to evaluate expression '{expr.format()}'."
         assert self.prime is not None
@@ -37,12 +43,12 @@ class ExpressionEvaluator(ExpressionSimplifier):
 
     def visit_ExprReg(self, expr: ExprReg) -> ExprConst:
         if expr.reg is Register.AP:
-            assert self.ap is not None, 'Cannot substitute ap in the expression.'
+            assert self.ap is not None, "Cannot substitute ap in the expression."
             return ExprConst(val=self.ap, location=expr.location)
         elif expr.reg is Register.FP:
             return ExprConst(val=self.fp, location=expr.location)
         else:
-            raise NotImplementedError(f'Register of type {expr.reg} is not supported')
+            raise NotImplementedError(f"Register of type {expr.reg} is not supported")
 
     def visit_ExprDeref(self, expr: ExprDeref) -> Expression:
         addr = self.visit(expr.addr)

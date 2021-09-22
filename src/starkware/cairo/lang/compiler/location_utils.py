@@ -6,7 +6,8 @@ from starkware.cairo.lang.compiler.expression_transformer import ExpressionTrans
 
 
 def add_parent_location(
-        expr: Expression, new_parent_location: Optional[Location], message: str) -> Expression:
+    expr: Expression, new_parent_location: Optional[Location], message: str
+) -> Expression:
     if new_parent_location is None:
         return expr
 
@@ -15,5 +16,7 @@ def add_parent_location(
             if location is None:
                 return new_parent_location
             return location.with_parent_location(
-                new_parent_location=new_parent_location, message=message)  # type: ignore
+                new_parent_location=new_parent_location, message=message  # type: ignore
+            )
+
     return AddParentLocationTransformer().visit(expr)

@@ -11,6 +11,7 @@ class DictTracker:
     """
     Tracks the python dict associated with a Cairo dict.
     """
+
     # Python dict.
     data: dict
     # Pointer to the first unused position in the dict segment.
@@ -35,8 +36,7 @@ class DictManager:
         base = segments.add()
         assert base.segment_index not in self.trackers
         self.trackers[base.segment_index] = DictTracker(
-            data={
-                key: segments.gen_arg(value) for key, value in initial_dict.items()},
+            data={key: segments.gen_arg(value) for key, value in initial_dict.items()},
             current_ptr=base,
         )
         return base
@@ -61,9 +61,10 @@ class DictManager:
             dict_ptr = dict_ptr.address_
         dict_tracker = self.trackers.get(dict_ptr.segment_index)
         if dict_tracker is None:
-            raise ValueError(f'Dictionary pointer {dict_ptr} was not created using dict_new().')
-        assert dict_tracker.current_ptr == dict_ptr, 'Wrong dict pointer supplied. ' \
-            f'Got {dict_ptr}, expected {dict_tracker.current_ptr}.'
+            raise ValueError(f"Dictionary pointer {dict_ptr} was not created using dict_new().")
+        assert dict_tracker.current_ptr == dict_ptr, (
+            "Wrong dict pointer supplied. " f"Got {dict_ptr}, expected {dict_tracker.current_ptr}."
+        )
         return dict_tracker
 
     def get_dict(self, dict_ptr) -> dict:

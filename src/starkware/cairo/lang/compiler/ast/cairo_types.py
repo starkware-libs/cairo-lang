@@ -18,7 +18,7 @@ class CairoType(AstNode):
         Returns a representation of the type as a string.
         """
 
-    def get_pointer_type(self) -> 'CairoType':
+    def get_pointer_type(self) -> "CairoType":
         """
         Returns a type of a pointer to the current type.
         """
@@ -30,7 +30,7 @@ class TypeFelt(CairoType):
     location: Optional[Location] = LocationField
 
     def format(self):
-        return 'felt'
+        return "felt"
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return []
@@ -42,7 +42,7 @@ class TypePointer(CairoType):
     location: Optional[Location] = LocationField
 
     def format(self):
-        return f'{self.pointee.format()}*'
+        return f"{self.pointee.format()}*"
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.pointee]
@@ -63,7 +63,7 @@ class TypeStruct(CairoType):
         """
         Verifies that is_fully_resolved=True and returns scope.
         """
-        assert self.is_fully_resolved, 'Type is expected to be fully resolved at this point.'
+        assert self.is_fully_resolved, "Type is expected to be fully resolved at this point."
         return self.scope
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
@@ -75,6 +75,7 @@ class TypeTuple(CairoType):
     """
     Type for a tuple.
     """
+
     members: List[CairoType]
     location: Optional[Location] = LocationField
 

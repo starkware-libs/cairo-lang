@@ -3,12 +3,15 @@ from random import randrange
 import pytest
 
 from starkware.cairo.lang.compiler.instruction import (
-    N_FLAGS, OFFSET_BITS, decode_instruction_values)
+    N_FLAGS,
+    OFFSET_BITS,
+    decode_instruction_values,
+)
 
 
 def test_decode():
-    offsets = [randrange(0, 2**OFFSET_BITS) for _ in range(3)]
-    flags = randrange(0, 2**N_FLAGS)
+    offsets = [randrange(0, 2 ** OFFSET_BITS) for _ in range(3)]
+    flags = randrange(0, 2 ** N_FLAGS)
     instruction = 0
     for part in [flags] + offsets[::-1]:
         instruction = (instruction << OFFSET_BITS) | part
@@ -16,5 +19,5 @@ def test_decode():
 
 
 def test_unsupported_instruction():
-    with pytest.raises(AssertionError, match='Unsupported instruction.'):
+    with pytest.raises(AssertionError, match="Unsupported instruction."):
         decode_instruction_values(1 << (3 * OFFSET_BITS + N_FLAGS))

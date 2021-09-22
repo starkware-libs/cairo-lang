@@ -1,7 +1,11 @@
 from typing import Callable, Dict, List, Optional, Tuple
 
 from starkware.cairo.lang.compiler.ast.code_elements import (
-    CodeBlock, CodeElement, CodeElementFunction, CodeElementImport)
+    CodeBlock,
+    CodeElement,
+    CodeElementFunction,
+    CodeElementImport,
+)
 from starkware.cairo.lang.compiler.ast.module import CairoFile
 from starkware.cairo.lang.compiler.ast.visitor import Visitor, get_lang_from_file
 from starkware.cairo.lang.compiler.error_handling import Location, LocationError
@@ -10,7 +14,8 @@ from starkware.cairo.lang.compiler.parser import parse_file
 
 
 def collect_imports(
-        curr_pkg_name: str, read_file: Callable[[str], Tuple[str, str]]) -> Dict[str, CairoFile]:
+    curr_pkg_name: str, read_file: Callable[[str], Tuple[str, str]]
+) -> Dict[str, CairoFile]:
     """
     Scans the graph of file imports (using DFS), starting with curr_pkg_name,
     and returns an ordered dictionary mapping package names to CairoFile AST.
@@ -32,14 +37,14 @@ class UsingCycleError(Exception):
     """
 
     def __init__(self, cycle: List[str]):
-        super().__init__(f'Found circular imports dependency:\n{self.cycle_to_string(cycle)}')
+        super().__init__(f"Found circular imports dependency:\n{self.cycle_to_string(cycle)}")
         self.cycle = cycle
 
     @staticmethod
     def cycle_to_string(cycle):
-        res = ''
+        res = ""
         for v in cycle[:-1]:
-            res += f'{v} imports\n'
+            res += f"{v} imports\n"
         res += cycle[-1]
         return res
 
@@ -70,8 +75,8 @@ class ImportsCollector:
             raise ImportLoaderError(str(e), location=location)
         except Exception as e:
             raise ImportLoaderError(
-                f"Could not load module '{curr_pkg_name}'.\nError: {e}",
-                location=location)
+                f"Could not load module '{curr_pkg_name}'.\nError: {e}", location=location
+            )
 
         parsed_file: CairoFile = parse_file(code, filename=filename)
 
@@ -90,8 +95,9 @@ class ImportsCollector:
             if not (self.lang[pkg_name] is None or self.lang[pkg_name] == lang):
                 raise ImportLoaderError(
                     f"Importing modules with %lang directive '{self.lang[pkg_name]}' must "
-                    'be from a module with the same directive.',
-                    location=location)
+                    "be from a module with the same directive.",
+                    location=location,
+                )
 
         # Pop current package from ancestors list after scanning its dependencies.
         self.curr_ancestors.pop()
@@ -118,7 +124,7 @@ class DirectDependenciesCollector(Visitor):
             self.visit(elm.code_elm)
 
     def _visit_default(self, obj):
-        assert isinstance(obj, CodeElement), f'Got unexpected type {type(obj).__name__}.'
+        assert isinstance(obj, CodeElement), f"Got unexpected type {type(obj).__name__}."
 
     def visit_CodeBlock(self, elm: CodeBlock):
         pass

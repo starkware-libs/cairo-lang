@@ -10,4 +10,4 @@ Example:
 
 import sys
 
-sys.stdout.write(' '.join(sorted(set(x.split(':')[-1] for x in sys.argv[1:]))))
+sys.stdout.write(" ".join(sorted(set(x.split(":")[-1] for x in sys.argv[1:]))))

@@ -10,10 +10,10 @@ class InternalProxyStorage(Storage):
         self.internal_client = internal_client
 
     async def set_value(self, key, value):
-        raise NotImplementedError('Cannot set storage values in this version.')
+        raise NotImplementedError("Cannot set storage values in this version.")
 
     async def del_value(self, key):
-        raise NotImplementedError('Cannot delete storage values in this version.')
+        raise NotImplementedError("Cannot delete storage values in this version.")
 
     async def get_value(self, key):
         return await self.internal_client.get_value(key)

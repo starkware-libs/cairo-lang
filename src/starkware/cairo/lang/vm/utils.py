@@ -11,7 +11,7 @@ class IntAsHex(mfields.Field):
     field elements.
     """
 
-    default_error_messages = {'invalid': 'Expected hex string, got: "{input}".'}
+    default_error_messages = {"invalid": 'Expected hex string, got: "{input}".'}
 
     def _serialize(self, value, attr, obj, **kwargs):
         if value is None:
@@ -20,8 +20,8 @@ class IntAsHex(mfields.Field):
         return hex(value)
 
     def _deserialize(self, value, attr, data, **kwargs):
-        if re.match('^0x[0-9a-f]+$', value) is None:
-            self.fail('invalid', input=value)
+        if re.match("^0x[0-9a-f]+$", value) is None:
+            self.fail("invalid", input=value)
 
         return int(value, 16)
 
@@ -48,6 +48,7 @@ class RunResources:
     """
     Maintains the resources of a Cairo run. Can be used across multiple runners.
     """
+
     steps: Optional[int]
 
     @property

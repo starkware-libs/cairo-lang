@@ -2,14 +2,23 @@ import dataclasses
 from enum import Enum, auto
 from typing import List, Optional, Sequence, Tuple
 
-from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypeFelt, TypePointer
+from starkware.cairo.lang.compiler.ast.cairo_types import (
+    CairoType,
+    TypeFelt,
+    TypePointer,
+    TypeStruct,
+    TypeTuple,
+)
 from starkware.cairo.lang.compiler.ast.code_elements import CommentedCodeElement
 from starkware.cairo.lang.compiler.ast.expr import ArgList, ExprAssignment, ExprIdentifier
 from starkware.cairo.lang.compiler.ast.notes import Notes
 from starkware.cairo.lang.compiler.error_handling import Location, ParentLocation
 from starkware.cairo.lang.compiler.identifier_definition import StructDefinition
+from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
+from starkware.cairo.lang.compiler.parser import ParserContext
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_utils import autogen_parse_code_block
+from starkware.cairo.lang.compiler.type_utils import check_felts_only_type
 
 
 class EncodingType(Enum):
@@ -65,11 +74,17 @@ class DataEncodingProcessor:
         EncodingType.RETURN: "return value",
     }
 
-    def __init__(self, encoding_type: EncodingType, has_range_check_builtin: bool):
+    def __init__(
+        self,
+        encoding_type: EncodingType,
+        has_range_check_builtin: bool,
+        identifiers: IdentifierManager,
+    ):
         self.encoding_type = encoding_type
         self.has_range_check_builtin = has_range_check_builtin
         self.code_elements: List[CommentedCodeElement] = []
         self.args: List[ExprAssignment] = []
+        self.identifiers = identifiers
 
     @property
     def var_name(self):
@@ -96,7 +111,10 @@ class DataEncodingProcessor:
         code_block = autogen_parse_code_block(
             path="autogen/starknet/arg_processor",
             code=code,
-            parent_location=parent_location,
+            parser_context=ParserContext(
+                parent_location=parent_location,
+                resolved_types=True,
+            ),
         )
         self.code_elements += code_block.code_elements
 
@@ -129,6 +147,16 @@ class DataEncodingProcessor:
                     )
 
                 code_block_str = self.process_felt_ptr(arg_info=arg_info)
+            elif isinstance(cairo_type, (TypeTuple, TypeStruct)):
+                size = check_felts_only_type(
+                    cairo_type=cairo_type, identifier_manager=self.identifiers
+                )
+                if size is None:
+                    raise PreprocessorError(
+                        f"{self.arg_text} must consist only of felts.",
+                        location=arg_info.location,
+                    )
+                code_block_str = self.process_felts_object(arg_info=arg_info, size=size)
             elif isinstance(cairo_type, TypeFelt):
                 code_block_str = self.process_felt(arg_info=arg_info)
             else:
@@ -172,6 +200,14 @@ class DataEncodingProcessor:
             "Array arguments are not supported in this context", location=arg_info.location
         )
 
+    def process_felts_object(self, arg_info: ArgumentInfo, size: int):
+        """
+        Handles tuples or structs which recursively consist only of felts.
+        """
+        raise PreprocessorError(
+            "Tuples/structs are not supported in this context", location=arg_info.location
+        )
+
 
 class DataDecoder(DataEncodingProcessor):
     def __init__(
@@ -181,9 +217,12 @@ class DataDecoder(DataEncodingProcessor):
         has_range_check_builtin: bool,
         encoding_type: EncodingType,
         location: Location,
+        identifiers: IdentifierManager,
     ):
         super().__init__(
-            encoding_type=encoding_type, has_range_check_builtin=has_range_check_builtin
+            encoding_type=encoding_type,
+            has_range_check_builtin=has_range_check_builtin,
+            identifiers=identifiers,
         )
         self.data_ptr = data_ptr
         self.data_size = data_size
@@ -229,6 +268,13 @@ let __{self.var_name}_arg_{arg_info.name} : felt* = __{self.var_name}_ptr
 tempvar __{self.var_name}_ptr = __{self.var_name}_ptr + __{self.var_name}_arg_{arg_info.name}_len
 """
 
+    def process_felts_object(self, arg_info: ArgumentInfo, size: int):
+        return f"""\
+let __{self.var_name}_arg_{arg_info.name} = [
+    cast(__{self.var_name}_ptr, {TypePointer(pointee=arg_info.cairo_type).format()})]
+let __{self.var_name}_ptr = __{self.var_name}_ptr + {size}
+"""
+
 
 def decode_data(
     data_ptr: str,
@@ -237,6 +283,7 @@ def decode_data(
     encoding_type: EncodingType,
     has_range_check_builtin: bool,
     location: Location,
+    identifiers: IdentifierManager,
 ) -> Tuple[List[CommentedCodeElement], ArgList]:
     """
     Processes the calldata of a function.
@@ -256,6 +303,7 @@ def decode_data(
         encoding_type=encoding_type,
         has_range_check_builtin=has_range_check_builtin,
         location=location,
+        identifiers=identifiers,
     )
     parser.run(arguments)
     args = parser.args
@@ -286,16 +334,30 @@ local __{self.var_name}_ptr : felt* = __{self.var_name}_ptr + {arg_info.name}_le
 memcpy(dst=__{self.var_name}_ptr_copy, src={arg_info.name}, len={arg_info.name}_len)
 """
 
+    def process_felts_object(self, arg_info: ArgumentInfo, size: int):
+        body = "\n".join(
+            f"assert [__{self.var_name}_ptr + {i}] = [__{self.var_name}_tmp + {i}]"
+            for i in range(size)
+        )
+        return f"""\
+# Create a reference to {arg_info.name} as felt*.
+let __{self.var_name}_tmp : felt* = cast(&{arg_info.name}, felt*)
+{body}
+let __{self.var_name}_ptr = __{self.var_name}_ptr + {size}
+"""
+
 
 def encode_data(
     arguments: Sequence[ArgumentInfo],
     encoding_type: EncodingType,
     has_range_check_builtin: bool,
+    identifiers: IdentifierManager,
 ) -> List[CommentedCodeElement]:
 
     parser = DataEncoder(
         encoding_type=encoding_type,
         has_range_check_builtin=has_range_check_builtin,
+        identifiers=identifiers,
     )
     parser.run(arguments)
     return parser.code_elements

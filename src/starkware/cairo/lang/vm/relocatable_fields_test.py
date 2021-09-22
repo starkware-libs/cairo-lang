@@ -6,14 +6,17 @@ import marshmallow_dataclass
 
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 from starkware.cairo.lang.vm.relocatable_fields import (
-    MaybeRelocatableDictField, MaybeRelocatableField)
+    MaybeRelocatableDictField,
+    MaybeRelocatableField,
+)
 
 
 @marshmallow_dataclass.dataclass
 class DummyStruct:
     val: MaybeRelocatable = field(metadata=dict(marshmallow_field=MaybeRelocatableField()))
     dct: Dict[MaybeRelocatable, MaybeRelocatable] = field(
-        metadata=dict(marshmallow_field=MaybeRelocatableDictField()))
+        metadata=dict(marshmallow_field=MaybeRelocatableDictField())
+    )
     Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
 
 

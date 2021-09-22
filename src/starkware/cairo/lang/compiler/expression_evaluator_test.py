@@ -8,7 +8,7 @@ def test_eval_registers():
     prime = 13
 
     evaluator = ExpressionEvaluator(prime=prime, ap=ap, fp=fp, memory={})
-    assert evaluator.eval(parse_expr('2 * ap + 3 * fp - 5')) == (2 * ap + 3 * fp - 5) % prime
+    assert evaluator.eval(parse_expr("2 * ap + 3 * fp - 5")) == (2 * ap + 3 * fp - 5) % prime
 
 
 def test_eval_with_types():
@@ -17,7 +17,7 @@ def test_eval_with_types():
     prime = 13
 
     evaluator = ExpressionEvaluator(prime=prime, ap=ap, fp=fp, memory={})
-    assert evaluator.eval(parse_expr('cast(ap, T*)')) == ap
+    assert evaluator.eval(parse_expr("cast(ap, T*)")) == ap
 
 
 def test_eval_registers_and_memory():
@@ -27,7 +27,9 @@ def test_eval_registers_and_memory():
     memory = {(2 * ap + 3 * fp - 5) % prime: 7, 7: 5, 6: 0}
 
     evaluator = ExpressionEvaluator(prime=prime, ap=ap, fp=fp, memory=memory)
-    assert evaluator.eval(parse_expr('[2 * ap + 3 * fp - 5]')) == 7
-    assert evaluator.eval(parse_expr('[[2 * ap + 3 * fp - 5]] + 3 * ap')) == \
-        (memory[7] + 3 * ap) % prime
-    assert evaluator.eval(parse_expr('[[[2 * ap + 3 * fp - 5]]+1]')) == 0
+    assert evaluator.eval(parse_expr("[2 * ap + 3 * fp - 5]")) == 7
+    assert (
+        evaluator.eval(parse_expr("[[2 * ap + 3 * fp - 5]] + 3 * ap"))
+        == (memory[7] + 3 * ap) % prime
+    )
+    assert evaluator.eval(parse_expr("[[[2 * ap + 3 * fp - 5]]+1]")) == 0

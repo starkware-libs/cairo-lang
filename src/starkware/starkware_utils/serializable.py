@@ -3,8 +3,8 @@ from abc import ABC, abstractmethod
 from json import JSONDecoder, JSONEncoder
 from typing import ClassVar, Dict, Type, TypeVar
 
-TSerializableObject = TypeVar('TSerializableObject', bound='Serializable')
-TStrSerializableObject = TypeVar('TStrSerializableObject', bound='StringSerializable')
+TSerializableObject = TypeVar("TSerializableObject", bound="Serializable")
+TStrSerializableObject = TypeVar("TStrSerializableObject", bound="StringSerializable")
 
 
 class Serializable(ABC):
@@ -52,7 +52,7 @@ class StringSerializable(Serializable):
         then it needs to implement the dumps function.
     """
 
-    _classes: ClassVar[Dict[str, Type['StringSerializable']]] = {}
+    _classes: ClassVar[Dict[str, Type["StringSerializable"]]] = {}
     _serialize_name: ClassVar[str]
 
     def __init_subclass__(cls, **kwargs):
@@ -64,8 +64,8 @@ class StringSerializable(Serializable):
             if mro_cls is StringSerializable:
                 # The dumps method is abstract.
                 continue
-            if 'dumps' in mro_cls.__dict__:
-                cls._serialize_name = f'{mro_cls}'
+            if "dumps" in mro_cls.__dict__:
+                cls._serialize_name = f"{mro_cls}"
                 StringSerializable._classes[cls._serialize_name] = cls
 
     @abstractmethod
@@ -78,20 +78,17 @@ class StringSerializable(Serializable):
         pass
 
     def serialize(self) -> bytes:
-        return self.dumps().encode('ascii')
+        return self.dumps().encode("ascii")
 
     @classmethod
     def deserialize(cls: Type[TStrSerializableObject], data: bytes) -> TStrSerializableObject:
-        return cls.loads(data=data.decode('ascii'))
+        return cls.loads(data=data.decode("ascii"))
 
     class SerializableEncoder(JSONEncoder):
         def default(self, obj):
             if isinstance(obj, StringSerializable):
                 if obj._serialize_name in StringSerializable._classes:
-                    return {
-                        '_serializable': obj._serialize_name,
-                        'value': obj.dumps()
-                    }
+                    return {"_serializable": obj._serialize_name, "value": obj.dumps()}
 
             return JSONEncoder.default(self, obj)
 
@@ -104,12 +101,12 @@ class StringSerializable(Serializable):
             super().__init__(object_hook=self.object_hook, *args, **kwargs)
 
         def object_hook(self, obj):
-            if '_serializable' not in obj:
+            if "_serializable" not in obj:
                 return obj
-            cls_repr = obj['_serializable']
+            cls_repr = obj["_serializable"]
             serialized_class = StringSerializable._classes.get(cls_repr, None)
-            assert serialized_class is not None, f'Could not decode the class {cls_repr}.'
-            return serialized_class.loads(data=obj['value'])
+            assert serialized_class is not None, f"Could not decode the class {cls_repr}."
+            return serialized_class.loads(data=obj["value"])
 
     @staticmethod
     def get_decoder() -> Type[JSONDecoder]:

@@ -1,7 +1,9 @@
 from typing import Any, Dict
 
 from starkware.cairo.lang.builtins.signature.instance_def import (
-    CELLS_PER_SIGNATURE, INPUT_CELLS_PER_SIGNATURE)
+    CELLS_PER_SIGNATURE,
+    INPUT_CELLS_PER_SIGNATURE,
+)
 from starkware.cairo.lang.vm.builtin_runner import BuiltinVerifier, SimpleBuiltinRunner
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
 from starkware.python.math_utils import safe_div
@@ -20,7 +22,8 @@ class SignatureBuiltinRunner(SimpleBuiltinRunner):
             included=included,
             ratio=ratio,
             cells_per_instance=CELLS_PER_SIGNATURE,
-            n_input_cells=INPUT_CELLS_PER_SIGNATURE)
+            n_input_cells=INPUT_CELLS_PER_SIGNATURE,
+        )
         self.process_signature = process_signature
         self.verify_signature = verify_signature
 
@@ -41,20 +44,24 @@ class SignatureBuiltinRunner(SimpleBuiltinRunner):
 
             pubkey = memory[pubkey_addr]
             msg = memory[msg_addr]
-            assert isinstance(pubkey, int), \
-                f'ECDSA builtin: Expected public key at address {pubkey_addr} to be an integer. ' \
-                f'Got: {pubkey}.'
-            assert isinstance(msg, int), \
-                f'ECDSA builtin: Expected message hash at address {msg_addr} to be an integer. ' \
-                f'Got: {msg}.'
-            assert pubkey_addr in self.signatures, \
-                f'Signature hint is missing for ECDSA builtin at address {pubkey_addr}. ' \
+            assert isinstance(pubkey, int), (
+                f"ECDSA builtin: Expected public key at address {pubkey_addr} to be an integer. "
+                f"Got: {pubkey}."
+            )
+            assert isinstance(msg, int), (
+                f"ECDSA builtin: Expected message hash at address {msg_addr} to be an integer. "
+                f"Got: {msg}."
+            )
+            assert pubkey_addr in self.signatures, (
+                f"Signature hint is missing for ECDSA builtin at address {pubkey_addr}. "
                 "Add it using 'ecdsa_builtin.add_signature'."
+            )
 
             signature = self.signatures[pubkey_addr]
-            assert self.verify_signature(pubkey, msg, signature), \
-                f'Signature {signature}, is invalid, with respect to the public key {pubkey}, ' \
-                f'and the message hash {msg}.'
+            assert self.verify_signature(pubkey, msg, signature), (
+                f"Signature {signature}, is invalid, with respect to the public key {pubkey}, "
+                f"and the message hash {msg}."
+            )
             return {pubkey_addr, msg_addr}
 
         runner.vm.add_validation_rule(self.base.segment_index, rule)
@@ -67,28 +74,31 @@ class SignatureBuiltinRunner(SimpleBuiltinRunner):
             pubkey = runner.vm_memory[addr]
             msg = runner.vm_memory[addr + 1]
             res[idx] = {
-                'index': idx,
-                'pubkey': hex(pubkey),
-                'msg': hex(msg),
-                'signature_input': self.process_signature(pubkey, msg, signature),
+                "index": idx,
+                "pubkey": hex(pubkey),
+                "msg": hex(msg),
+                "signature_input": self.process_signature(pubkey, msg, signature),
             }
 
-        return {self.name: sorted(res.values(), key=lambda item: item['index'])}
+        return {self.name: sorted(res.values(), key=lambda item: item["index"])}
 
     def add_signature(self, addr, signature):
         """
         This function should be used in Cairo hints.
         """
-        assert isinstance(addr, RelocatableValue), \
-            f'Expected memory address to be relocatable value. Found: {addr}.'
-        assert addr.offset % CELLS_PER_SIGNATURE == 0, \
-            f'Signature hint must point to the public key cell, not {addr}.'
+        assert isinstance(
+            addr, RelocatableValue
+        ), f"Expected memory address to be relocatable value. Found: {addr}."
+        assert (
+            addr.offset % CELLS_PER_SIGNATURE == 0
+        ), f"Signature hint must point to the public key cell, not {addr}."
         self.signatures[addr] = signature
 
     def get_additional_data(self):
         return [
             [list(RelocatableValue.to_tuple(addr)), signature]
-            for addr, signature in sorted(self.signatures.items())]
+            for addr, signature in sorted(self.signatures.items())
+        ]
 
     def extend_additional_data(self, data, relocate_callback, data_is_trusted=True):
         for addr, signature in data:
@@ -104,8 +114,13 @@ class SignatureBuiltinVerifier(BuiltinVerifier):
         if not self.included:
             return [], []
 
-        addresses = public_input.memory_segments['signature']
+        addresses = public_input.memory_segments["signature"]
         max_size = safe_div(public_input.n_steps, self.ratio) * CELLS_PER_SIGNATURE
-        assert 0 <= addresses.begin_addr <= addresses.stop_ptr <= \
-            addresses.begin_addr + max_size < 2**64
+        assert (
+            0
+            <= addresses.begin_addr
+            <= addresses.stop_ptr
+            <= addresses.begin_addr + max_size
+            < 2 ** 64
+        )
         return [addresses.begin_addr], [addresses.stop_ptr]

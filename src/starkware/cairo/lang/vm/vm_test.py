@@ -5,13 +5,20 @@ import pytest
 
 from starkware.cairo.lang.compiler.cairo_compile import compile_cairo
 from starkware.cairo.lang.vm.memory_dict import (
-    InconsistentMemoryError, MemoryDict, UnknownMemoryError)
+    InconsistentMemoryError,
+    MemoryDict,
+    UnknownMemoryError,
+)
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 from starkware.cairo.lang.vm.vm import (
-    InconsistentAutoDeductionError, RunContext, VirtualMachine, VmException)
+    InconsistentAutoDeductionError,
+    RunContext,
+    VirtualMachine,
+    VmException,
+)
 from starkware.python.test_utils import maybe_raises
 
-PRIME = 2**64 + 13
+PRIME = 2 ** 64 + 13
 
 
 def run_single(code: str, steps: int, *, pc=RelocatableValue(0, 10), ap=100, fp=100, extra_mem={}):
@@ -21,7 +28,7 @@ def run_single(code: str, steps: int, *, pc=RelocatableValue(0, 10), ap=100, fp=
     memory: Dict[MaybeRelocatable, MaybeRelocatable] = {
         **{pc + i: v for i, v in enumerate(program.data)},
         fp - 1: 1234,
-        **extra_mem
+        **extra_mem,
     }
     context = RunContext(
         pc=pc,
@@ -68,8 +75,11 @@ def test_simple():
     vm = run_single(code, 9, pc=10, ap=102, extra_mem={101: 1})
 
     assert [vm.run_context.memory[101 + i] for i in range(7)] == [1, 3, 9, 10, 16, 48, 10]
-    assert vm.accessed_addresses == \
-        set(vm.run_context.memory.keys()) == {*range(10, 28), 99, *range(101, 108)}
+    assert (
+        vm.accessed_addresses
+        == set(vm.run_context.memory.keys())
+        == {*range(10, 28), 99, *range(101, 108)}
+    )
 
 
 def test_jnz():
@@ -87,11 +97,16 @@ def test_jnz():
 
     vm = run_single(code, 100, ap=101)
 
-    assert [vm.run_context.memory[101 + i] for i in range(8 + 25)] == \
-        [7, 6, 5, 4, 3, 2, 1, 0] + [4, 3, 2, 1, 0] * 5
+    assert [vm.run_context.memory[101 + i] for i in range(8 + 25)] == [7, 6, 5, 4, 3, 2, 1, 0] + [
+        4,
+        3,
+        2,
+        1,
+        0,
+    ] * 5
 
 
-@pytest.mark.parametrize('offset', [0, -1])
+@pytest.mark.parametrize("offset", [0, -1])
 def test_jnz_relocatables(offset: int):
     code = """
     jmp body if [ap - 1] != 0
@@ -100,9 +115,11 @@ def test_jnz_relocatables(offset: int):
     [ap] = 1; ap++
     """
     relocatable_value = RelocatableValue(segment_index=5, offset=offset)
-    error_message = \
-        None if relocatable_value.offset >= 0 else \
-        f'Could not complete computation jmp != 0 of non pure value {relocatable_value}'
+    error_message = (
+        None
+        if relocatable_value.offset >= 0
+        else f"Could not complete computation jmp != 0 of non pure value {relocatable_value}"
+    )
     with maybe_raises(expected_exception=VmException, error_message=error_message):
         vm = run_single(code, 2, ap=102, extra_mem={101: relocatable_value})
         assert vm.run_context.memory[102] == 1
@@ -136,8 +153,21 @@ def test_call_ret():
 
     # Consider the memory cells which are at least 1000 to filter out pc and fp addresses.
     mem = [vm.run_context.memory[100 + i] for i in range(25)]
-    assert [x for x in mem if isinstance(x, int) and x >= 1000] == \
-        [1000, 2000, 3000, 2001, 3000, 2002, 1001, 2000, 3000, 2001, 3000, 2002, 1002]
+    assert [x for x in mem if isinstance(x, int) and x >= 1000] == [
+        1000,
+        2000,
+        3000,
+        2001,
+        3000,
+        2002,
+        1001,
+        2000,
+        3000,
+        2001,
+        3000,
+        2002,
+        1002,
+    ]
 
 
 def test_addap():
@@ -259,11 +289,10 @@ f()
 
     # In this test we actually do write the code to a file, to allow the linecache module to fetch
     # the line raising the exception.
-    cairo_file = tempfile.NamedTemporaryFile('w')
+    cairo_file = tempfile.NamedTemporaryFile("w")
     print(code, file=cairo_file)
     cairo_file.flush()
-    program = compile_cairo(
-        code=[(code, cairo_file.name)], prime=PRIME, debug_info=True)
+    program = compile_cairo(code=[(code, cairo_file.name)], prime=PRIME, debug_info=True)
     program_base = 10
     memory = {program_base + i: v for i, v in enumerate(program.data)}
 
@@ -283,7 +312,9 @@ f()
     vm.step()
     with pytest.raises(VmException) as excinfo:
         vm.step()
-    assert str(excinfo.value) == f"""\
+    assert (
+        str(excinfo.value)
+        == f"""\
 {cairo_file.name}:13:1: Error at pc=12:
 Got an exception while executing a hint.
 %{{
@@ -295,6 +326,7 @@ Traceback (most recent call last):
     0 / 0  # Raises exception.
 ZeroDivisionError: division by zero\
 """
+    )
 
 
 def test_hint_indentation_error():
@@ -311,11 +343,10 @@ def f():
 
     # In this test we actually do write the code to a file, to allow the linecache module to fetch
     # the line raising the exception.
-    cairo_file = tempfile.NamedTemporaryFile('w')
+    cairo_file = tempfile.NamedTemporaryFile("w")
     print(code, file=cairo_file)
     cairo_file.flush()
-    program = compile_cairo(
-        code=[(code, cairo_file.name)], prime=PRIME, debug_info=True)
+    program = compile_cairo(code=[(code, cairo_file.name)], prime=PRIME, debug_info=True)
     program_base = 10
     memory = {program_base + i: v for i, v in enumerate(program.data)}
 
@@ -360,11 +391,10 @@ def f():
 
     # In this test we actually do write the code to a file, to allow the linecache module to fetch
     # the line raising the exception.
-    cairo_file = tempfile.NamedTemporaryFile('w')
+    cairo_file = tempfile.NamedTemporaryFile("w")
     print(code, file=cairo_file)
     cairo_file.flush()
-    program = compile_cairo(
-        code=[(code, cairo_file.name)], prime=PRIME, debug_info=True)
+    program = compile_cairo(code=[(code, cairo_file.name)], prime=PRIME, debug_info=True)
     program_base = 10
     memory = {program_base + i: v for i, v in enumerate(program.data)}
 
@@ -466,16 +496,16 @@ def test_skip_instruction_execution():
     )
 
     vm = VirtualMachine(program, context, {})
-    vm.enter_scope({'vm': vm})
+    vm.enter_scope({"vm": vm})
     exec_locals = vm.exec_scopes[-1]
 
-    assert 'x' not in exec_locals
+    assert "x" not in exec_locals
     assert vm.run_context.pc == 0
     vm.step()
-    assert exec_locals['x'] == 0
+    assert exec_locals["x"] == 0
     assert vm.run_context.pc == 2
     vm.step()
-    assert exec_locals['x'] == 1
+    assert exec_locals["x"] == 1
     assert vm.run_context.pc == 4
     assert vm.run_context.ap == initial_ap + 1
     assert vm.run_context.memory[vm.run_context.ap - 1] == 10
@@ -516,7 +546,7 @@ def test_auto_deduction_rules():
     assert vm.run_context.memory[initial_fp] == 200
     assert vm.run_context.memory[initial_fp + 1] == 300
 
-    with pytest.raises(InconsistentAutoDeductionError, match='at address 2:100. 200 != 456'):
+    with pytest.raises(InconsistentAutoDeductionError, match="at address 2:100. 200 != 456"):
         vm.verify_auto_deductions()
 
 
@@ -550,10 +580,10 @@ def test_memory_validation_in_hints():
     assert vm.validated_memory._ValidatedMemoryDict__validated_addresses == {initial_ap_and_fp}
 
     def fail_validation(memory, addr):
-        raise Exception('Validation failed.')
+        raise Exception("Validation failed.")
 
     vm.add_validation_rule(1, fail_validation)
-    with pytest.raises(VmException, match='Exception: Validation failed.'):
+    with pytest.raises(VmException, match="Exception: Validation failed."):
         vm.step()
 
 
@@ -562,7 +592,7 @@ def test_nonpure_mul():
     [ap] = [ap - 1] * 2; ap++
     """
 
-    with pytest.raises(VmException, match='Could not complete computation *'):
+    with pytest.raises(VmException, match="Could not complete computation *"):
         run_single(code, 1, ap=102, extra_mem={101: RelocatableValue(1, 0)})
 
 
@@ -571,7 +601,7 @@ def test_nonpure_jmp_rel():
     jmp rel [ap - 1]
     """
 
-    with pytest.raises(VmException, match='Could not complete computation jmp rel'):
+    with pytest.raises(VmException, match="Could not complete computation jmp rel"):
         run_single(code, 1, ap=102, extra_mem={101: RelocatableValue(1, 0)})
 
 
@@ -589,7 +619,7 @@ def test_jmp_segment():
         **{program_base_b + i: v for i, v in enumerate(program.data)},
         99: 0,
         100: program_base_b,
-        101: program_base_a
+        101: program_base_a,
     }
     context = RunContext(
         pc=program_base_a,
@@ -627,9 +657,12 @@ def test_simple_deductions():
     vm = run_single(code, 6, ap=101, extra_mem={99: 3, 100: 2})
 
     assert [vm.run_context.memory[101 + i] for i in range(6)] == [
-        (2 * PRIME + 2) // 3, (2 * PRIME + 2) // 3,
-        PRIME - 1, PRIME - 1,
-        2, 2
+        (2 * PRIME + 2) // 3,
+        (2 * PRIME + 2) // 3,
+        PRIME - 1,
+        PRIME - 1,
+        2,
+        2,
     ]
 
 
@@ -638,7 +671,7 @@ def test_failing_assert_eq():
     [ap] = [ap + 1] + [ap + 2]
     """
 
-    with pytest.raises(VmException, match='An ASSERT_EQ instruction failed'):
+    with pytest.raises(VmException, match="An ASSERT_EQ instruction failed"):
         run_single(code, 1, extra_mem={100: 1, 101: 3, 102: 2})
 
 
@@ -646,7 +679,7 @@ def test_call_unknown():
     code = """
     call rel [ap]
     """
-    with pytest.raises(VmException, match='Unknown value for memory cell at address 100'):
+    with pytest.raises(VmException, match="Unknown value for memory cell at address 100"):
         run_single(code, 1)
 
 
@@ -655,12 +688,16 @@ def test_call_wrong_operands():
     call rel 0
     """
     with pytest.raises(
-            VmException, match=r'Call failed to write return-pc \(inconsistent op0\): 0 != 0:12. ' +
-            'Did you forget to increment ap?'):
+        VmException,
+        match=r"Call failed to write return-pc \(inconsistent op0\): 0 != 0:12. "
+        + "Did you forget to increment ap?",
+    ):
         run_single(code, 1, extra_mem={101: 0})
     with pytest.raises(
-            VmException, match=r'Call failed to write return-fp \(inconsistent dst\): 0 != 100. ' +
-            'Did you forget to increment ap?'):
+        VmException,
+        match=r"Call failed to write return-fp \(inconsistent dst\): 0 != 100. "
+        + "Did you forget to increment ap?",
+    ):
         run_single(code, 1, extra_mem={100: 0})
 
 
@@ -688,7 +725,9 @@ def test_traceback():
     with pytest.raises(VmException) as exc_info:
         run_single(code, 100, ap=101, extra_mem={99: 3, 100: 2})
 
-    assert str(exc_info.value) == """\
+    assert (
+        str(exc_info.value)
+        == """\
 :5:9: Error at pc=0:12:
 Got an exception while executing a hint.
         %{ assert ids.x != 0 %}
@@ -708,3 +747,4 @@ Traceback (most recent call last):
   File "", line 5, in <module>
 AssertionError\
 """
+    )

@@ -11,17 +11,17 @@ python_lib(starkware_utils_lib
     PREFIX starkware/starkware_utils
 
     FILES
-    binary_fact_tree.py
-    binary_fact_tree_node.py
+    commitment_tree/binary_fact_tree.py
+    commitment_tree/binary_fact_tree_node.py
+    commitment_tree/merkle_tree/traverse_tree.py
+    commitment_tree/patricia_tree/nodes.py
+    commitment_tree/patricia_tree/patricia_tree.py
+    commitment_tree/patricia_tree/virtual_patricia_node.py
     config_base.py
     custom_raising_dict.py
     error_handling.py
     field_validators.py
     marshmallow_dataclass_fields.py
-    merkle_tree/traverse_tree.py
-    patricia_tree/nodes.py
-    patricia_tree/patricia_tree.py
-    patricia_tree/virtual_patricia_node.py
     subsequence.py
     validated_dataclass.py
     validated_fields.py
@@ -46,8 +46,8 @@ full_python_test(patricia_tree_test
     TESTED_MODULES starkware/starkware_utils
 
     FILES
-    patricia_tree/nodes_test.py
-    patricia_tree/virtual_patricia_node_test.py
+    commitment_tree/patricia_tree/nodes_test.py
+    commitment_tree/patricia_tree/virtual_patricia_node_test.py
 
     LIBS
     cairo_common_lib

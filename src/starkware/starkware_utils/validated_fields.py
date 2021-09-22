@@ -10,9 +10,13 @@ from starkware.python.utils import get_random_bytes, initialize_random
 from starkware.starkware_utils.error_handling import ErrorCode, StarkErrorCode, stark_assert
 from starkware.starkware_utils.field_validators import validate_in_range
 from starkware.starkware_utils.marshmallow_dataclass_fields import (
-    BytesAsBase64Str, BytesAsHex, IntAsHex, IntAsStr)
+    BytesAsBase64Str,
+    BytesAsHex,
+    IntAsHex,
+    IntAsStr,
+)
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class Field(ABC, Generic[T]):
@@ -95,7 +99,8 @@ class Field(ABC, Generic[T]):
         return dict(
             marshmallow_field=self.get_marshmallow_field(),
             validated_field=self,
-            name_in_messages=self.name if field_name is None else field_name)
+            name_in_messages=self.name if field_name is None else field_name,
+        )
 
 
 class OptionalField(Field[Optional[T]]):
@@ -125,7 +130,7 @@ class OptionalField(Field[Optional[T]]):
 
     def format(self, value: Optional[T]) -> str:
         if value is None:
-            return 'None'
+            return "None"
         return self.field.format(value=value)
 
     # Randomization.
@@ -147,9 +152,10 @@ class OptionalField(Field[Optional[T]]):
         return [value for value in self.field.get_invalid_values() if value is not None]
 
     def format_invalid_value_error_message(
-            self, value: Optional[T], name: Optional[str] = None) -> str:
+        self, value: Optional[T], name: Optional[str] = None
+    ) -> str:
         if value is None:
-            return f'{name} is valid (None).'
+            return f"{name} is valid (None)."
         return self.field.format_invalid_value_error_message(value=value, name=name)
 
     def get_marshmallow_field(self) -> mfields.Field:
@@ -167,7 +173,7 @@ class RangeValidatedField(Field[int]):
     name_in_error_message: str
     out_of_range_error_code: ErrorCode
     formatter: Optional[Callable[[int], str]] = None
-    out_of_range_message: ClassVar[str] = '{field_name} {field_value} is out of range'
+    out_of_range_message: ClassVar[str] = "{field_name} {field_value} is out of range"
 
     @property
     def name(self):
@@ -185,8 +191,8 @@ class RangeValidatedField(Field[int]):
 
     def format_invalid_value_error_message(self, value: int, name: Optional[str] = None) -> str:
         return self.out_of_range_message.format(
-            field_name=self.name if name is None else name,
-            field_value=self._format_value(value))
+            field_name=self.name if name is None else name, field_value=self._format_value(value)
+        )
 
     @property
     def error_code(self) -> ErrorCode:
@@ -208,8 +214,9 @@ class RangeValidatedField(Field[int]):
         if self.formatter is None:
             return mfields.Integer(required=True)
         raise NotImplementedError(
-            f'{self.name}: The given formatter {self.formatter.__name__} '
-            'does not have a suitable metadata.')
+            f"{self.name}: The given formatter {self.formatter.__name__} "
+            "does not have a suitable metadata."
+        )
 
 
 class BytesLengthField(Field[bytes]):
@@ -220,7 +227,7 @@ class BytesLengthField(Field[bytes]):
     def __init__(self, name: str, error_code: StarkErrorCode, length: int):
         self._name = name
         self._error_code = error_code
-        assert length > 0, 'Bytes length must be at least 1.'
+        assert length > 0, "Bytes length must be at least 1."
         self.length = length
 
     @property
@@ -236,7 +243,7 @@ class BytesLengthField(Field[bytes]):
         return len(value) == self.length
 
     def get_invalid_values(self) -> List[bytes]:
-        return [b'\x00' * (self.length - 1), b'\x00' * (self.length + 1)]
+        return [b"\x00" * (self.length - 1), b"\x00" * (self.length + 1)]
 
     @property
     def error_code(self) -> ErrorCode:
@@ -245,7 +252,7 @@ class BytesLengthField(Field[bytes]):
     def format_invalid_value_error_message(self, value: bytes, name: Optional[str] = None) -> str:
         name = self.name if name is None else name
         value_repr = self.format(value=value)
-        return f'{name} {value_repr} length is not {self.length} bytes, instead it is {len(value)}'
+        return f"{name} {value_repr} length is not {self.length} bytes, instead it is {len(value)}"
 
     # Serialization.
     def get_marshmallow_field(self) -> mfields.Field:
@@ -257,9 +264,12 @@ class BytesLengthField(Field[bytes]):
 
 # Field metadata utilities.
 
+
 def _generate_metadata(
-        marshmallow_field_cls: Type[mfields.Field], validated_field: Optional[Field],
-        required: Optional[bool] = None) -> Dict[str, Any]:
+    marshmallow_field_cls: Type[mfields.Field],
+    validated_field: Optional[Field],
+    required: Optional[bool] = None,
+) -> Dict[str, Any]:
     if required is None:
         required = True
 
@@ -271,38 +281,50 @@ def _generate_metadata(
 
 
 def int_metadata(
-        validated_field: Optional[Field], required: Optional[bool] = None) -> Dict[str, Any]:
+    validated_field: Optional[Field], required: Optional[bool] = None
+) -> Dict[str, Any]:
     return _generate_metadata(
-        marshmallow_field_cls=mfields.Integer, validated_field=validated_field, required=required)
+        marshmallow_field_cls=mfields.Integer, validated_field=validated_field, required=required
+    )
 
 
 def int_as_hex_metadata(
-        validated_field: Optional[Field], required: Optional[bool] = None) -> Dict[str, Any]:
+    validated_field: Optional[Field], required: Optional[bool] = None
+) -> Dict[str, Any]:
     return _generate_metadata(
-        marshmallow_field_cls=IntAsHex, validated_field=validated_field, required=required)
+        marshmallow_field_cls=IntAsHex, validated_field=validated_field, required=required
+    )
 
 
 def int_as_str_metadata(
-        validated_field: Optional[Field], required: Optional[bool] = None) -> Dict[str, Any]:
+    validated_field: Optional[Field], required: Optional[bool] = None
+) -> Dict[str, Any]:
     return _generate_metadata(
-        marshmallow_field_cls=IntAsStr, validated_field=validated_field, required=required)
+        marshmallow_field_cls=IntAsStr, validated_field=validated_field, required=required
+    )
 
 
 def bytes_as_hex_metadata(
-        validated_field: Optional[Field], required: Optional[bool] = None) -> Dict[str, Any]:
+    validated_field: Optional[Field], required: Optional[bool] = None
+) -> Dict[str, Any]:
     return _generate_metadata(
-        marshmallow_field_cls=BytesAsHex, validated_field=validated_field, required=required)
+        marshmallow_field_cls=BytesAsHex, validated_field=validated_field, required=required
+    )
 
 
 def bytes_as_base64_str_metadata(
-        validated_field: Optional[Field], required: Optional[bool] = None) -> Dict[str, Any]:
+    validated_field: Optional[Field], required: Optional[bool] = None
+) -> Dict[str, Any]:
     return _generate_metadata(
-        marshmallow_field_cls=BytesAsBase64Str, validated_field=validated_field, required=required)
+        marshmallow_field_cls=BytesAsBase64Str, validated_field=validated_field, required=required
+    )
+
 
 
 def sequential_id_metadata(
-        field_name: str, required: bool = True,
-        allow_previous_id: bool = False) -> Dict[str, Any]:
+    field_name: str, required: bool = True, allow_previous_id: bool = False
+) -> Dict[str, Any]:
     validator = validate_in_range(field_name=field_name, min_value=-1 if allow_previous_id else 0)
     return dict(
-        marshmallow_field=mfields.Integer(strict=True, required=required, validate=validator))
+        marshmallow_field=mfields.Integer(strict=True, required=required, validate=validator)
+    )

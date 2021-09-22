@@ -26,7 +26,8 @@ class ModuleReader:
         return set(filename for filename, scope in self.source_files_with_scopes)
 
     def module_to_file_path(
-            self, module_name: str, isfile: Callable[[str], bool] = os.path.isfile) -> str:
+        self, module_name: str, isfile: Callable[[str], bool] = os.path.isfile
+    ) -> str:
         """
         Translates module name to file path.
         """
@@ -55,7 +56,7 @@ class ModuleReader:
         filename = self.module_to_file_path(module_name)
         self.source_files.add(filename)
         self.source_files_with_scopes.add((filename, ScopedName.from_string(module_name)))
-        with open(filename, 'r') as f:
+        with open(filename, "r") as f:
             return f.read(), filename
 
 
@@ -63,5 +64,5 @@ class ModuleNotFoundException(Exception):
     def __init__(self, module: str, paths: List[str]):
         msg = f"Could not find module '{module}'. Searched in the following paths:"
         for path in paths:
-            msg += '\n' + path
+            msg += "\n" + path
         super().__init__(msg)

@@ -8,6 +8,7 @@ from starkware.cairo.lang.compiler.ast.code_elements import (
     CommentedCodeElement,
 )
 from starkware.cairo.lang.compiler.error_handling import Location, ParentLocation
+from starkware.cairo.lang.compiler.parser import ParserContext
 from starkware.cairo.lang.compiler.preprocessor.identifier_aware_visitor import (
     IdentifierAwareVisitor,
 )
@@ -163,7 +164,9 @@ end
     code_block = autogen_parse_code_block(
         path=function_info.autogen_code_name,
         code=code,
-        parent_location=function_info.parent_location,
+        parser_context=ParserContext(
+            parent_location=function_info.parent_location,
+        ),
     )
 
     call_func = code_block.code_elements[1].code_elm
@@ -196,7 +199,9 @@ end
     code_block = autogen_parse_code_block(
         path=AUTOGEN_PREFIX + contract_name,
         code=code,
-        parent_location=contract_info.parent_location,
+        parser_context=ParserContext(
+            parent_location=contract_info.parent_location,
+        ),
     )
     assert len(code_block.code_elements) == 1
     res = code_block.code_elements[0].code_elm
@@ -265,7 +270,9 @@ call call_contract
         return autogen_parse_code_block(
             path=function_info.autogen_code_name,
             code=code,
-            parent_location=function_info.parent_location,
+            parser_context=ParserContext(
+                parent_location=function_info.parent_location,
+            ),
         )
 
 
@@ -301,7 +308,9 @@ class ContractInterfaceImplentationVisitor(IdentifierAwareVisitor):
             return autogen_parse_code_block(
                 path=function_info.autogen_code_name,
                 code=code,
-                parent_location=function_info.parent_location,
+                parser_context=ParserContext(
+                    parent_location=function_info.parent_location,
+                ),
             ).code_elements
 
         code_elements: List[CommentedCodeElement] = []
@@ -317,7 +326,7 @@ let __calldata_ptr = calldata_ptr_start
         args = [
             ArgumentInfo(
                 name=typed_identifier.identifier.name,
-                cairo_type=typed_identifier.get_type(),
+                cairo_type=self.resolve_type(typed_identifier.get_type()),
                 location=non_optional_location(typed_identifier.identifier.location),
             )
             for typed_identifier in function_info.elm.arguments.identifiers
@@ -325,9 +334,8 @@ let __calldata_ptr = calldata_ptr_start
         code_elements += encode_data(
             arguments=args,
             encoding_type=EncodingType.CALLDATA,
-            # Passing has_range_check_builtin=True will skip the check for the existence of the
-            # range check builtin.
             has_range_check_builtin=True,
+            identifiers=self.identifiers,
         )
 
         code_elements += get_code_elements(
@@ -357,10 +365,9 @@ let (retdata_size, retdata) = call_contract(
                 data_size="retdata_size",
                 arguments=rets,
                 encoding_type=EncodingType.RETURN,
-                # Passing has_range_check_builtin=True will skip the check for the existence of the
-                # range check builtin.
                 has_range_check_builtin=True,
                 location=function_info.parent_location[0],
+                identifiers=self.identifiers,
             )
             # Update the return values.
             return_str = ret_arg_list.format()

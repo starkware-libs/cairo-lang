@@ -4,7 +4,7 @@ from typing import Callable, Union
 
 from starkware.cairo.lang.compiler.ast.expr import ExprConst, Expression
 
-RegChangeLike = Union[Union[int, Expression, 'RegChange']]
+RegChangeLike = Union[Union[int, Expression, "RegChange"]]
 
 
 class RegChange(ABC):
@@ -91,17 +91,18 @@ class RegTrackingData:
     possible to deduce the register at another pointer (as long as both points belong to the same
     group).
     """
+
     group: int = 0
     offset: int = 0
 
     @classmethod
-    def new(cls, group_alloc: Callable) -> 'RegTrackingData':
+    def new(cls, group_alloc: Callable) -> "RegTrackingData":
         return cls(
             group=group_alloc(),
             offset=0,
         )
 
-    def __sub__(self, other: 'RegTrackingData') -> RegChange:
+    def __sub__(self, other: "RegTrackingData") -> RegChange:
         """
         If possible, returns the difference between the values of ap between self and other.
         Otherwise, returns RegChangeUnknown.
@@ -112,15 +113,15 @@ class RegTrackingData:
             return RegChangeUnknown()
         return RegChangeKnown(self.offset - other.offset)
 
-    def add(self, change: RegChangeLike, group_alloc: Callable) -> 'RegTrackingData':
+    def add(self, change: RegChangeLike, group_alloc: Callable) -> "RegTrackingData":
         change = RegChange.from_expr(change)
         if isinstance(change, RegChangeKnown):
             return RegTrackingData(group=self.group, offset=self.offset + change.value)
         if isinstance(change, RegChangeUnknown):
             return RegTrackingData(group=group_alloc(), offset=0)
-        raise NotImplementedError(f'Unsupported change type {type(change).__name__}')
+        raise NotImplementedError(f"Unsupported change type {type(change).__name__}")
 
-    def converge(self, other: 'RegTrackingData', group_alloc: Callable):
+    def converge(self, other: "RegTrackingData", group_alloc: Callable):
         if not isinstance(other, RegTrackingData):
             return other.converge(self, group_alloc)
         if self != other:

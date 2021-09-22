@@ -292,3 +292,30 @@ func signed_div_rem{range_check_ptr}(value, div, bound) -> (q, r):
     assert_le(biased_q, 2 * bound - 1)
     return (q, r)
 end
+
+# Splits the given (unsigned) value into n "limbs", where each limb is in the range [0, bound),
+# as follows:
+#   value = x[0] + x[1] * base + x[2] * base**2 + ... + x[n - 1] * base**(n - 1).
+# bound must be less than the range check bound (2**128).
+# Note that bound may be smaller than base, in which case the function will fail if there is a
+# limb which is >= bound.
+# Assumptions:
+#   1 < bound <= base
+#   base**n < field characteristic.
+func split_int{range_check_ptr}(value, n, base, bound, output : felt*):
+    if n == 0:
+        %{ assert ids.value == 0, 'split_int(): value is out of range.' %}
+        assert value = 0
+        return ()
+    end
+
+    %{
+        memory[ids.output] = res = (int(ids.value) % PRIME) % ids.base
+        assert res < ids.bound, f'split_int(): Limb {res} is out of range.'
+    %}
+    tempvar low_part = [output]
+    assert_nn_le(low_part, bound - 1)
+
+    return split_int(
+        value=(value - low_part) / base, n=n - 1, base=base, bound=bound, output=output + 1)
+end

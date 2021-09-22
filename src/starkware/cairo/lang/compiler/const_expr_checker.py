@@ -1,5 +1,12 @@
 from starkware.cairo.lang.compiler.ast.expr import (
-    ExprConst, ExprDeref, ExprFutureLabel, ExprNeg, ExprOperator, ExprPyConst, ExprReg)
+    ExprConst,
+    ExprDeref,
+    ExprFutureLabel,
+    ExprNeg,
+    ExprOperator,
+    ExprPyConst,
+    ExprReg,
+)
 
 
 class ConstExprChecker:
@@ -9,7 +16,7 @@ class ConstExprChecker:
     """
 
     def visit(self, obj):
-        return getattr(self, f'visit_{type(obj).__name__}')(obj)
+        return getattr(self, f"visit_{type(obj).__name__}")(obj)
 
     def visit_ExprConst(self, expr: ExprConst):
         return True
