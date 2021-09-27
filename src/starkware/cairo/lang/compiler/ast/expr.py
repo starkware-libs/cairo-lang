@@ -406,7 +406,7 @@ class ExprFutureLabel(Expression):
         return self.identifier.to_expr_str()
 
     @property
-    def locaion(self):
+    def location(self):
         return self.identifier.location
 
     def get_children(self) -> Sequence[Optional[AstNode]]:

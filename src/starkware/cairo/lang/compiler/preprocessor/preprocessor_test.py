@@ -5,6 +5,7 @@ from starkware.cairo.lang.compiler.ast.module import CairoModule
 from starkware.cairo.lang.compiler.error_handling import LocationError
 from starkware.cairo.lang.compiler.identifier_definition import (
     ConstDefinition,
+    FunctionDefinition,
     LabelDefinition,
     ReferenceDefinition,
 )
@@ -163,6 +164,37 @@ future_label2:
 [ap] = 4; ap++
 [ap] = 6; ap++
 [ap] = 8; ap++
+"""
+    )
+
+
+def test_assign_future_function_label():
+    code = """\
+g(f)
+g((f + 1) * 2 + 3)
+
+func f() -> ():
+    ret
+end
+func g(x: felt) -> ():
+    ret
+end
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    f_definition = program.identifiers.get_by_full_name(ScopedName.from_string("test_scope.f"))
+    assert isinstance(f_definition, FunctionDefinition)
+    assert (
+        program.format()
+        == f"""\
+[ap] = {f_definition.pc}; ap++
+call rel 13
+[ap] = {f_definition.pc}; ap++
+[ap] = [ap + (-1)] + 1; ap++
+[ap] = [ap + (-1)] * 2; ap++
+[ap] = [ap + (-1)] + 3; ap++
+call rel 3
+ret
+ret
 """
     )
 

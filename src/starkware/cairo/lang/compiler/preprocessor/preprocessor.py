@@ -1899,7 +1899,7 @@ Expected expression of type '{expected_type.format()}', got '{expr_type.format()
         assert identifier_definition is not None
 
         if isinstance(identifier_definition, FutureIdentifierDefinition):
-            if identifier_definition.identifier_type == LabelDefinition:
+            if identifier_definition.identifier_type in [LabelDefinition, FunctionDefinition]:
                 # Allow future label assignment.
                 return ExprFutureLabel(identifier=var)
             raise PreprocessorError(
