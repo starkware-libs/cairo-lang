@@ -6,6 +6,7 @@ python_lib(starknet_cli_lib
 
     LIBS
     cairo_compile_lib
+    cairo_tracer_lib
     cairo_version_lib
     cairo_vm_utils_lib
     services_external_api_lib

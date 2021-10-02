@@ -1,6 +1,6 @@
 import dataclasses
 from enum import Enum, auto
-from typing import List, Optional, Sequence, Tuple
+from typing import Callable, List, Optional, Sequence, Tuple
 
 from starkware.cairo.lang.compiler.ast.cairo_types import (
     CairoType,
@@ -313,16 +313,36 @@ def decode_data(
 
 
 class DataEncoder(DataEncodingProcessor):
+    def __init__(
+        self,
+        arg_name_func: Callable[[ArgumentInfo], str],
+        encoding_type: EncodingType,
+        has_range_check_builtin: bool,
+        identifiers: IdentifierManager,
+    ):
+        """
+        Constructs a DataEncoder instance.
+
+        arg_name_func is a function that get ArgumentInfo and returns the name of the reference
+        containing that argument.
+        """
+        super().__init__(
+            encoding_type=encoding_type,
+            has_range_check_builtin=has_range_check_builtin,
+            identifiers=identifiers,
+        )
+        self.arg_name_func = arg_name_func
+
     def process_felt(self, arg_info: ArgumentInfo):
         return f"""\
-assert [__{self.var_name}_ptr] = {arg_info.name}
+assert [__{self.var_name}_ptr] = {self.arg_name_func(arg_info)}
 let __{self.var_name}_ptr = __{self.var_name}_ptr + 1
 """
 
     def process_felt_ptr(self, arg_info: ArgumentInfo):
         return f"""\
 # Check that the length is non-negative.
-assert [range_check_ptr] = {arg_info.name}_len
+assert [range_check_ptr] = {self.arg_name_func(arg_info)}_len
 # Store the updated range_check_ptr as a local variable to keep it available after
 # the memcpy.
 local range_check_ptr = range_check_ptr + 1
@@ -330,8 +350,12 @@ local range_check_ptr = range_check_ptr + 1
 let __{self.var_name}_ptr_copy = __{self.var_name}_ptr
 # Store the updated __{self.var_name}_ptr as a local variable to keep it available after
 # the memcpy.
-local __{self.var_name}_ptr : felt* = __{self.var_name}_ptr + {arg_info.name}_len
-memcpy(dst=__{self.var_name}_ptr_copy, src={arg_info.name}, len={arg_info.name}_len)
+local __{self.var_name}_ptr : felt* = __{self.var_name}_ptr + \
+{self.arg_name_func(arg_info)}_len
+memcpy(
+    dst=__{self.var_name}_ptr_copy,
+    src={self.arg_name_func(arg_info)},
+    len={self.arg_name_func(arg_info)}_len)
 """
 
     def process_felts_object(self, arg_info: ArgumentInfo, size: int):
@@ -340,8 +364,8 @@ memcpy(dst=__{self.var_name}_ptr_copy, src={arg_info.name}, len={arg_info.name}_
             for i in range(size)
         )
         return f"""\
-# Create a reference to {arg_info.name} as felt*.
-let __{self.var_name}_tmp : felt* = cast(&{arg_info.name}, felt*)
+# Create a reference to {self.arg_name_func(arg_info)} as felt*.
+let __{self.var_name}_tmp : felt* = cast(&{self.arg_name_func(arg_info)}, felt*)
 {body}
 let __{self.var_name}_ptr = __{self.var_name}_ptr + {size}
 """
@@ -352,9 +376,11 @@ def encode_data(
     encoding_type: EncodingType,
     has_range_check_builtin: bool,
     identifiers: IdentifierManager,
+    arg_name_func: Callable[[ArgumentInfo], str] = lambda arg_info: arg_info.name,
 ) -> List[CommentedCodeElement]:
 
     parser = DataEncoder(
+        arg_name_func=arg_name_func,
         encoding_type=encoding_type,
         has_range_check_builtin=has_range_check_builtin,
         identifiers=identifiers,

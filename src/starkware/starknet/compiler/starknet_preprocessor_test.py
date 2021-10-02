@@ -153,12 +153,17 @@ def test_wrapper_with_return_args():
 %lang starknet
 %builtins pedersen range_check ecdsa
 
+struct Point:
+    member x : felt
+    member y : felt
+end
+
 struct HashBuiltin:
 end
 
 @external
-func f{ecdsa_ptr}(a : felt, b : felt) -> (c : felt, d : felt):
-    return (c=1, d=2)
+func f{ecdsa_ptr}(a : felt, b : felt) -> (c : felt, d : Point):
+    return (c=1, d=Point(2, 3))
 end
 """
     )
@@ -170,7 +175,8 @@ end
 # Implementation of f
 [ap] = [fp + (-5)]; ap++                 # Return ecdsa_ptr.
 [ap] = 1; ap++                           # Return c=1
-[ap] = 2; ap++                           # Return d=2
+[ap] = 2; ap++                           # Return d.x=2
+[ap] = 3; ap++                           # Return d.y=3
 ret
 
 # Implementation of __wrappers__.f
@@ -179,17 +185,18 @@ ret
 [ap] = [[fp + (-5)] + 4]; ap++           # Pass ecdsa_ptr.
 [ap] = [[fp + (-3)]]; ap++               # Pass a.
 [ap] = [[fp + (-3)] + 1]; ap++           # Pass b.
-call rel -12                             # Call f.
+call rel -14                             # Call f.
 %{ memory[ap] = segments.add() %}        # Allocate memory for return value
 ap += 1
-[[ap + (-1)]] = [ap + (-3)]              # [retdata_ptr] = c
-[[ap + (-1)] + 1] = [ap + (-2)]          # [retdata_ptr + 1] = d
+[[ap + (-1)]] = [ap + (-4)]              # [retdata_ptr] = c
+[[ap + (-1)] + 1] = [ap + (-3)]          # [retdata_ptr + 1] = d.x
+[[ap + (-1)] + 2] = [ap + (-2)]          # [retdata_ptr + 2] = d.y
 [ap] = [[fp + (-5)]]; ap++               # Return syscall_ptr
 [ap] = [[fp + (-5)] + 1]; ap++           # Return storage_ptr
 [ap] = [[fp + (-5)] + 2]; ap++           # Return pedersen_ptr.
 [ap] = [[fp + (-5)] + 3]; ap++           # Return range_check.
-[ap] = [ap + (-8)]; ap++                 # Return ecdsa.
-[ap] = 2; ap++                           # Return retdata_size=2
+[ap] = [ap + (-9)]; ap++                 # Return ecdsa.
+[ap] = 3; ap++                           # Return retdata_size=3
 [ap] = [ap + (-7)]; ap++                 # Return retdata_ptr
 ret
 """
@@ -373,6 +380,23 @@ func fc(arg : felt**):
     )
 
 
+def test_unsupported_return_type():
+    verify_exception(
+        """
+%lang starknet
+@external
+func fc() -> (arg : felt**):
+    return (cast(0, felt**))
+end
+""",
+        """
+file:?:?: Unsupported return value type felt**.
+func fc() -> (arg : felt**):
+                    ^****^
+""",
+    )
+
+
 def test_invalid_hint():
     verify_exception(
         """
@@ -411,6 +435,9 @@ end
 struct NonExternalStruct:
 end
 
+struct ExternalStruct3:
+    member x: felt
+end
 
 @external
 func f(a : felt, arr_len : felt, arr : felt*) -> (b : felt, c : felt):
@@ -418,8 +445,8 @@ func f(a : felt, arr_len : felt, arr : felt*) -> (b : felt, c : felt):
 end
 
 @view
-func g() -> (a: felt):
-    return (0)
+func g() -> (a: ExternalStruct3):
+    return (ExternalStruct3(0))
 end
 
 @l1_handler
@@ -430,6 +457,12 @@ end
     )
 
     assert program.abi == [
+        {
+            "type": "struct",
+            "name": "ExternalStruct3",
+            "members": [{"name": "x", "offset": 0, "type": "felt"}],
+            "size": 1,
+        },
         {
             "type": "struct",
             "name": "ExternalStruct2",
@@ -459,7 +492,7 @@ end
             "inputs": [],
             "name": "g",
             "outputs": [
-                {"name": "a", "type": "felt"},
+                {"name": "a", "type": "ExternalStruct3"},
             ],
             "type": "function",
             "stateMutability": "view",

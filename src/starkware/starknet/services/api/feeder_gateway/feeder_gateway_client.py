@@ -16,7 +16,7 @@ class FeederGatewayClient(EverestFeederGatewayClient):
 
     async def call_contract(
         self, invoke_tx: InvokeFunction, block_id: Optional[int] = None
-    ) -> Dict[str, List[int]]:
+    ) -> Dict[str, List[str]]:
         raw_response = await self._send_request(
             send_method="POST",
             uri=f"/call_contract?blockId={json.dumps(block_id)}",
@@ -30,14 +30,14 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         )
         return json.loads(raw_response)
 
-    async def get_code(self, contract_address: int, block_id: Optional[int] = None) -> List[int]:
+    async def get_code(self, contract_address: int, block_id: Optional[int] = None) -> List[str]:
         uri = f"/get_code?contractAddress={hex(contract_address)}&blockId={json.dumps(block_id)}"
         raw_response = await self._send_request(send_method="GET", uri=uri)
         return json.loads(raw_response)
 
     async def get_storage_at(
         self, contract_address: int, key: int, block_id: Optional[int] = None
-    ) -> int:
+    ) -> str:
         uri = (
             f"/get_storage_at?contractAddress={hex(contract_address)}&key={key}&"
             f"blockId={json.dumps(block_id)}"

@@ -14,6 +14,7 @@ from starkware.cairo.lang.compiler.parser import parse_type
 from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.compiler.type_system import mark_type_resolved
 from starkware.cairo.lang.compiler.type_utils import check_felts_only_type
+from starkware.cairo.lang.tracer.tracer_data import field_element_repr
 from starkware.cairo.lang.version import __version__
 from starkware.cairo.lang.vm.reconstruct_traceback import reconstruct_traceback
 from starkware.starknet.compiler.compile import get_selector_from_name
@@ -24,6 +25,10 @@ from starkware.starknet.services.api.feeder_gateway.feeder_gateway_client import
 from starkware.starknet.services.api.gateway.gateway_client import GatewayClient
 from starkware.starknet.services.api.gateway.transaction import Deploy, InvokeFunction
 from starkware.starkware_utils.error_handling import StarkErrorCode
+
+
+def felt_formatter(hex_felt: str) -> str:
+    return field_element_repr(val=int(hex_felt, 16), prime=fields.FeltField.upper_bound)
 
 
 def get_gateway_client(args) -> GatewayClient:
@@ -184,7 +189,7 @@ async def invoke_or_call(args, command_args, call: bool):
     if call:
         feeder_client = get_feeder_gateway_client(args)
         gateway_response = await feeder_client.call_contract(tx, args.block_id)
-        print(*gateway_response["result"])
+        print(*map(felt_formatter, gateway_response["result"]))
     else:
         gateway_client = get_gateway_client(args)
         gateway_response = await gateway_client.add_transaction(tx=tx)
@@ -262,7 +267,7 @@ def handle_network_param(args):
     network = os.environ.get("STARKNET_NETWORK") if args.network is None else args.network
     if network is not None:
         if network != "alpha":
-            print(f"Unknown network '{network}'.")
+            print(f"Unknown network '{network}'.", file=sys.stderr)
             return 1
 
         dns = "alpha2.starknet.io"

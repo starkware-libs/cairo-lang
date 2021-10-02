@@ -136,6 +136,7 @@ class CarriedStateBase(Generic[TCarriedState], ABC):
     @contextlib.contextmanager
     def copy_and_apply(self) -> Iterator[TCarriedState]:
         copied_state = self._copy()
+        # The exit logic will not be called in case an exception is raised inside the context.
         yield copied_state
         copied_state._apply()  # Apply to self.
 

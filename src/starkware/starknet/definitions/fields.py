@@ -12,11 +12,7 @@ from starkware.starkware_utils.field_validators import (
     validate_positive,
 )
 from starkware.starkware_utils.marshmallow_dataclass_fields import BytesAsHex, IntAsStr
-from starkware.starkware_utils.validated_fields import (
-    RangeValidatedField,
-    int_as_hex_metadata,
-    sequential_id_metadata,
-)
+from starkware.starkware_utils.validated_fields import RangeValidatedField, sequential_id_metadata
 
 # Fields data: validation data, dataclass metadata.
 
@@ -33,13 +29,12 @@ FeltField = RangeValidatedField(
     upper_bound=constants.FELT_UPPER_BOUND,
     name_in_error_message="Field element",
     out_of_range_error_code=StarknetErrorCode.INVALID_FIELD_ELEMENT,
+    formatter=hex,
 )
 
 
 def felt_metadata(name_in_error_message: str) -> Dict[str, Any]:
-    return int_as_hex_metadata(
-        validated_field=dataclasses.replace(FeltField, name_in_error_message=name_in_error_message)
-    )
+    return dataclasses.replace(FeltField, name_in_error_message=name_in_error_message).metadata()
 
 
 felt_list_metadata = dict(marshmallow_field=mfields.List(IntAsStr(validate=FeltField.validate)))
@@ -51,9 +46,10 @@ ContractAddressField = RangeValidatedField(
     upper_bound=constants.CONTRACT_ADDRESS_UPPER_BOUND,
     name_in_error_message="Contract address",
     out_of_range_error_code=StarknetErrorCode.OUT_OF_RANGE_CONTRACT_ADDRESS,
+    formatter=hex,
 )
 
-contract_address_metadata = int_as_hex_metadata(validated_field=ContractAddressField)
+contract_address_metadata = ContractAddressField.metadata()
 
 
 def bytes_as_hex_dict_keys_metadata(
@@ -85,18 +81,20 @@ EntryPointSelectorField = RangeValidatedField(
     upper_bound=constants.ENTRY_POINT_SELECTOR_UPPER_BOUND,
     name_in_error_message="Entry point selector",
     out_of_range_error_code=StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_SELECTOR,
+    formatter=hex,
 )
 
-entry_point_selector_metadata = int_as_hex_metadata(validated_field=EntryPointSelectorField)
+entry_point_selector_metadata = EntryPointSelectorField.metadata()
 
 EntryPointOffsetField = RangeValidatedField(
     lower_bound=constants.ENTRY_POINT_OFFSET_LOWER_BOUND,
     upper_bound=constants.ENTRY_POINT_OFFSET_UPPER_BOUND,
     name_in_error_message="Entry point offset",
     out_of_range_error_code=StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_OFFSET,
+    formatter=hex,
 )
 
-entry_point_offset_metadata = int_as_hex_metadata(validated_field=EntryPointOffsetField)
+entry_point_offset_metadata = EntryPointOffsetField.metadata()
 
 global_state_commitment_tree_height_metadata = dict(
     marshmallow_field=mfields.Integer(

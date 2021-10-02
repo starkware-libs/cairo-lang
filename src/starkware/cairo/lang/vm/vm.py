@@ -349,8 +349,8 @@ class VirtualMachine:
                         compiled=self.compile_hint(
                             hint.code, f"<hint{hint_id}>", hint_index=hint_index
                         ),
-                        # Use hint=hint in the lambda's arguments to capture this value (otherwise, it
-                        # will use the same hint object for all iterations).
+                        # Use hint=hint in the lambda's arguments to capture this value (otherwise,
+                        # it will use the same hint object for all iterations).
                         consts=lambda pc, ap, fp, memory, hint=hint: VmConsts(
                             context=VmConstsContext(
                                 identifiers=program.identifiers,

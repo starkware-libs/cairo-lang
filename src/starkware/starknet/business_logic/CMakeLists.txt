@@ -63,5 +63,6 @@ python_lib(starknet_internal_transaction_lib
     starkware_utils_lib
     pip_marshmallow
     pip_marshmallow_dataclass
+    pip_marshmallow_enum
     pip_marshmallow_oneofschema
 )

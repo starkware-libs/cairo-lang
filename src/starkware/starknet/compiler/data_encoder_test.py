@@ -182,19 +182,20 @@ end
         encoding_type=EncodingType.RETURN,
         has_range_check_builtin=True,
         identifiers=identifiers,
+        arg_name_func=lambda arg_info: f"x.{arg_info.name}",
     )
 
     assert (
         "".join(code_element.format(100) + "\n" for code_element in code_elements)
         == """\
-assert [__return_value_ptr] = a
+assert [__return_value_ptr] = x.a
 let __return_value_ptr = __return_value_ptr + 1
 
-assert [__return_value_ptr] = b_len
+assert [__return_value_ptr] = x.b_len
 let __return_value_ptr = __return_value_ptr + 1
 
 # Check that the length is non-negative.
-assert [range_check_ptr] = b_len
+assert [range_check_ptr] = x.b_len
 # Store the updated range_check_ptr as a local variable to keep it available after
 # the memcpy.
 local range_check_ptr = range_check_ptr + 1
@@ -202,11 +203,11 @@ local range_check_ptr = range_check_ptr + 1
 let __return_value_ptr_copy = __return_value_ptr
 # Store the updated __return_value_ptr as a local variable to keep it available after
 # the memcpy.
-local __return_value_ptr : felt* = __return_value_ptr + b_len
-memcpy(dst=__return_value_ptr_copy, src=b, len=b_len)
+local __return_value_ptr : felt* = __return_value_ptr + x.b_len
+memcpy(dst=__return_value_ptr_copy, src=x.b, len=x.b_len)
 
-# Create a reference to c as felt*.
-let __return_value_tmp : felt* = cast(&c, felt*)
+# Create a reference to x.c as felt*.
+let __return_value_tmp : felt* = cast(&x.c, felt*)
 assert [__return_value_ptr + 0] = [__return_value_tmp + 0]
 assert [__return_value_ptr + 1] = [__return_value_tmp + 1]
 assert [__return_value_ptr + 2] = [__return_value_tmp + 2]

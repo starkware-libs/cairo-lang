@@ -1,5 +1,6 @@
 import asyncio
 import dataclasses
+import logging
 from abc import abstractmethod
 from dataclasses import field
 from typing import Dict, Iterable, List, Optional, Set, Tuple, cast
@@ -16,11 +17,15 @@ from services.everest.definitions import fields as everest_fields
 from starkware.cairo.lang.vm.utils import RunResources
 from starkware.starknet.business_logic.state import CarriedState, StateSelector
 from starkware.starknet.definitions import fields
+from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.services.api.gateway.transaction import Transaction
 from starkware.starkware_utils.config_base import Config
+from starkware.starkware_utils.error_handling import StarkException
 from starkware.starkware_utils.marshmallow_dataclass_fields import SetField
 from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
+
+logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -190,9 +195,20 @@ class InternalTransactionInterface(EverestInternalTransaction):
         assert isinstance(general_config, StarknetGeneralConfig)
 
         with state.copy_and_apply() as state_to_update:
-            execution_info = await self._apply_specific_state_updates(
-                state=state_to_update, general_config=general_config
-            )
+            try:
+                execution_info = await self._apply_specific_state_updates(
+                    state=state_to_update, general_config=general_config
+                )
+            except StarkException:
+                # Raise StarkException-s as-is, so failure information is not lost.
+                raise
+            except Exception as exception:
+                # Wrap all exceptions with StarkException, so the Batcher can continue running
+                #   even after unexpected errors.
+                logger.error(f"Unexpected failure; exception details: {exception}.", exc_info=True)
+                raise StarkException(
+                    code=StarknetErrorCode.UNEXPECTED_FAILURE, message=str(exception)
+                )
 
         return execution_info
 

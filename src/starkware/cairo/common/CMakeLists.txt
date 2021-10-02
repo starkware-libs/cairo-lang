@@ -4,6 +4,7 @@ python_lib(cairo_common_lib
     alloc.cairo
     bitwise.cairo
     cairo_builtins.cairo
+    cairo_blake2s/blake2s_utils.py
     cairo_keccak/keccak_utils.py
     cairo_sha256/sha256_utils.py
     default_dict.cairo

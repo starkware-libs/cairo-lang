@@ -9,10 +9,8 @@ from starkware.cairo.lang.compiler.ast.cairo_types import (
 )
 from starkware.cairo.lang.compiler.ast.code_elements import (
     BuiltinsDirective,
-    CodeElementCompoundAssertEq,
     CodeElementFuncCall,
     CodeElementFunction,
-    CodeElementHint,
     CodeElementInstruction,
     LangDirective,
 )
@@ -23,16 +21,11 @@ from starkware.cairo.lang.compiler.ast.expr import (
     ExprConst,
     ExprDeref,
     Expression,
-    ExprHint,
     ExprIdentifier,
     ExprOperator,
     ExprReg,
 )
-from starkware.cairo.lang.compiler.ast.instructions import (
-    AddApInstruction,
-    InstructionAst,
-    RetInstruction,
-)
+from starkware.cairo.lang.compiler.ast.instructions import InstructionAst, RetInstruction
 from starkware.cairo.lang.compiler.ast.rvalue import RvalueFuncCall
 from starkware.cairo.lang.compiler.ast.types import TypedIdentifier
 from starkware.cairo.lang.compiler.error_handling import Location
@@ -44,18 +37,22 @@ from starkware.cairo.lang.compiler.identifier_definition import (
 )
 from starkware.cairo.lang.compiler.identifier_utils import get_struct_definition
 from starkware.cairo.lang.compiler.instruction import Register
+from starkware.cairo.lang.compiler.parser import ParserContext
 from starkware.cairo.lang.compiler.preprocessor.preprocessor import (
     PreprocessedProgram,
     Preprocessor,
 )
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
+from starkware.cairo.lang.compiler.preprocessor.preprocessor_utils import autogen_parse_code_block
 from starkware.cairo.lang.compiler.program import CairoHint
 from starkware.cairo.lang.compiler.references import create_simple_ref_expr
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.compiler.type_system import is_type_resolved
+from starkware.cairo.lang.compiler.type_utils import check_felts_only_type
 from starkware.starknet.compiler.data_encoder import (
     EncodingType,
     decode_data,
+    encode_data,
     struct_to_argument_info_list,
 )
 from starkware.starknet.definitions.constants import STARKNET_LANG_DIRECTIVE
@@ -323,8 +320,8 @@ class StarknetPreprocessor(Preprocessor):
 
         # Add function return values.
         retdata_size, retdata_ptr = self.process_retdata(
-            ret_struct_ptr=ExprIdentifier(name="ret_struct"),
-            ret_struct_type=ret_struct_type,
+            func_name=elm.identifier.name,
+            ret_struct_ptr="ret_struct",
             struct_def=ret_struct_def,
             location=func_location,
         )
@@ -393,13 +390,16 @@ class StarknetPreprocessor(Preprocessor):
             for struct_name in abi_type_info.structs:
                 self.add_struct_to_abi(struct_name)
         for m_name, member in ret_struct_def.members.items():
-            assert isinstance(member.cairo_type, TypeFelt)
+            assert is_type_resolved(member.cairo_type)
+            abi_type_info = prepare_type_for_abi(member.cairo_type)
             outputs.append(
                 {
                     "name": m_name,
-                    "type": "felt",
+                    "type": abi_type_info.modified_type.format(),
                 }
             )
+            for struct_name in abi_type_info.structs:
+                self.add_struct_to_abi(struct_name)
         res = {
             "name": name,
             "type": entry_type,
@@ -451,52 +451,29 @@ class StarknetPreprocessor(Preprocessor):
 
     def process_retdata(
         self,
-        ret_struct_ptr: Expression,
-        ret_struct_type: CairoType,
+        func_name: str,
+        ret_struct_ptr: str,
         struct_def: StructDefinition,
-        location: Optional[Location],
+        location: Location,
     ) -> Tuple[Expression, Expression]:
         """
         Processes the return values and return retdata_size and retdata_ptr.
         """
 
-        # Verify all of the return types are felts.
-        for _, member_def in struct_def.members.items():
+        # Verify all of the return types are felts-only type. See check_felts_only_type().
+        for member_def in struct_def.members.values():
             cairo_type = member_def.cairo_type
-            if not isinstance(cairo_type, TypeFelt):
+            is_felts_only = (
+                check_felts_only_type(cairo_type=cairo_type, identifier_manager=self.identifiers)
+                is not None
+            )
+            if not is_felts_only:
                 raise PreprocessorError(
-                    f"Unsupported argument type {cairo_type.format()}.",
+                    f"Unsupported return value type {cairo_type.format()}.",
                     location=cairo_type.location,
                 )
 
-        self.add_reference(
-            name=self.current_scope + "retdata_ptr",
-            value=ExprDeref(
-                addr=ExprReg(reg=Register.AP),
-                location=location,
-            ),
-            cairo_type=TypePointer(TypeFelt()),
-            require_future_definition=False,
-            location=location,
-        )
-
-        self.visit(
-            CodeElementHint(
-                hint=ExprHint(
-                    hint_code="memory[ap] = segments.add()",
-                    n_prefix_newlines=0,
-                    location=location,
-                ),
-                location=location,
-            )
-        )
-
-        # Skip check of hint whitelist as it fails before the workaround below.
-        super().visit_CodeElementInstruction(
-            CodeElementInstruction(
-                InstructionAst(body=AddApInstruction(ExprConst(1)), inc_ap=False, location=location)
-            )
-        )
+        self.prepare_return_struct(func_name=func_name, location=location)
 
         # Remove the references from the last instruction's flow tracking as they are
         # not needed by the hint and they cause the hint whitelist to fail.
@@ -505,14 +482,43 @@ class StarknetPreprocessor(Preprocessor):
         self.instructions[-1].hints[0] = hint, dataclasses.replace(
             hint_flow_tracking_data, reference_ids={}
         )
-        self.visit(
-            CodeElementCompoundAssertEq(
-                ExprDeref(ExprCast(ExprIdentifier("retdata_ptr"), TypePointer(ret_struct_type))),
-                ret_struct_ptr,
-            )
+        code_elements = encode_data(
+            arguments=struct_to_argument_info_list(struct_def),
+            encoding_type=EncodingType.RETURN,
+            has_range_check_builtin="range_check_ptr" in self.get_os_context(),
+            identifiers=self.identifiers,
+            arg_name_func=lambda arg_info: f"{ret_struct_ptr}.{arg_info.name}",
         )
 
-        return (ExprConst(struct_def.size), ExprIdentifier("retdata_ptr"))
+        for code_element in code_elements:
+            self.visit(code_element.code_elm)
+
+        return (ExprConst(struct_def.size), ExprIdentifier("__return_value_ptr_start"))
+
+    def prepare_return_struct(self, func_name: str, location: Location):
+        code = """\
+let __return_value_ptr_start = [ap]
+let __return_value_ptr = __return_value_ptr_start
+%{ memory[ap] = segments.add() %}
+ap += 1
+"""
+
+        code_block = autogen_parse_code_block(
+            path=f"autogen/starknet/external/return/{func_name}",
+            code=code,
+            parser_context=ParserContext(
+                parent_location=(location, "While handling return value of"),
+                resolved_types=True,
+            ),
+        )
+
+        # Call super().visit_CodeElementInstruction instead of self.visit on the last code element
+        # to skip hint whitelist check.
+        for code_elm in code_block.code_elements[:-1]:
+            self.visit(code_elm.code_elm)
+        last_code_element = code_block.code_elements[-1].code_elm
+        assert isinstance(last_code_element, CodeElementInstruction)
+        super().visit_CodeElementInstruction(last_code_element)
 
     def validate_l1_handler_signature(self, elm: CodeElementFunction):
         """
