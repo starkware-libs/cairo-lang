@@ -46,8 +46,7 @@ def update_builtin_pointers(
 
 def prepare_os_context(runner: CairoFunctionRunner) -> List[MaybeRelocatable]:
     syscall_segment = runner.segments.add()
-    storage_segment = runner.segments.add()
-    os_context: List[MaybeRelocatable] = [syscall_segment, storage_segment]
+    os_context: List[MaybeRelocatable] = [syscall_segment]
 
     for builtin in runner.program.builtins:
         builtin_runner = runner.builtin_runners[f"{builtin}_builtin"]
@@ -62,8 +61,7 @@ def validate_and_process_os_context(
     initial_os_context: List[MaybeRelocatable],
 ):
     """
-    Validates and processes an OS context that was returned by a transaction,
-    excluding the storage_ptr which is validated during the run by the syscall handler.
+    Validates and processes an OS context that was returned by a transaction.
     Returns the syscall processor object containing the accumulated syscall information.
     """
     # The returned values are os_context, retdata_size, retdata_ptr.
@@ -75,7 +73,7 @@ def validate_and_process_os_context(
         with wrap_with_stark_exception(code=StarknetErrorCode.SECURITY_ERROR):
             stack_ptr = builtin_runner.final_stack(runner=runner, pointer=stack_ptr)
 
-    final_os_context_ptr = stack_ptr - 2
+    final_os_context_ptr = stack_ptr - 1
     assert final_os_context_ptr + len(initial_os_context) == os_context_end
 
     # Validate system calls.

@@ -2,9 +2,7 @@ import os
 import sys
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-assert os.path.basename(ROOT_DIR) in ["src", "site-packages", "dist-packages"] or os.path.basename(
-    ROOT_DIR
-).endswith("-site")
+assert os.path.exists(os.path.join(ROOT_DIR, "starkware"))
 
 
 def generate_python_dependencies(dependencies_path, start_time):

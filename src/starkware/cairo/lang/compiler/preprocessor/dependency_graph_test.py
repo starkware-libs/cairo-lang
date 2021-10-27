@@ -174,7 +174,7 @@ from module import func2
     # Test get_main_functions_to_compile().
 
     assert get_main_functions_to_compile(
-        identifiers=dependency_graph_visitor.identifiers, main_scope=scope("module")
+        identifiers=dependency_graph_visitor.identifiers, scopes_to_compile={scope("module")}
     ) == {
         scope("module.func0"),
         scope("module.func1"),
@@ -182,7 +182,7 @@ from module import func2
         scope("module.func3"),
     }
     assert get_main_functions_to_compile(
-        identifiers=dependency_graph_visitor.identifiers, main_scope=scope("__main__")
+        identifiers=dependency_graph_visitor.identifiers, scopes_to_compile={scope("__main__")}
     ) == {
         scope("module.func1"),
         scope("__main__.foo"),
@@ -191,7 +191,7 @@ from module import func2
         scope("__main__.main"),
     }
     assert get_main_functions_to_compile(
-        identifiers=dependency_graph_visitor.identifiers, main_scope=scope("")
+        identifiers=dependency_graph_visitor.identifiers, scopes_to_compile={scope("")}
     ) == {
         scope("module.func2"),
         scope("module"),

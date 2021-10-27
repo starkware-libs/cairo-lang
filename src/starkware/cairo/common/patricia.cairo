@@ -447,8 +447,8 @@ func patricia_update{hash_ptr : HashBuiltin*, range_check_ptr}(
     end
 
     %{
-        from starkware.python.merkle_tree import build_update_tree
         from starkware.cairo.common.patricia_utils import canonic, patricia_guess_descents
+        from starkware.python.merkle_tree import build_update_tree
 
         # Build modifications list.
         modifications = []

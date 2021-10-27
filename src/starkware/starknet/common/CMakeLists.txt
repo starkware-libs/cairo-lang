@@ -5,6 +5,9 @@ python_lib(starknet_common_lib
     messages.cairo
     storage.cairo
     syscalls.cairo
+
+    LIBS
+    cairo_common_lib
 )
 
 full_python_test(starknet_common_lib_test

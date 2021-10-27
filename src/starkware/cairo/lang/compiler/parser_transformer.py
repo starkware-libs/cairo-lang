@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Optional
+from typing import List, Optional
 
 from lark import Transformer, v_args
 
@@ -37,6 +37,7 @@ from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeElementTemporaryVariable,
     CodeElementUnpackBinding,
     CodeElementWith,
+    CodeElementWithAttr,
     CommentedCodeElement,
     LangDirective,
 )
@@ -54,7 +55,6 @@ from starkware.cairo.lang.compiler.ast.expr import (
     ExprOperator,
     ExprParentheses,
     ExprPow,
-    ExprPyConst,
     ExprReg,
     ExprSubscript,
     ExprTuple,
@@ -74,6 +74,7 @@ from starkware.cairo.lang.compiler.ast.instructions import (
 from starkware.cairo.lang.compiler.ast.module import CairoFile
 from starkware.cairo.lang.compiler.ast.notes import Notes
 from starkware.cairo.lang.compiler.ast.rvalue import (
+    Rvalue,
     RvalueCall,
     RvalueCallInst,
     RvalueExpr,
@@ -96,6 +97,7 @@ class ParserContext:
     Represents information that affects the parsing process.
     """
 
+    short_string_max_length: int = 31
     parent_location: Optional[ParentLocation] = None
 
     # If True, treat type identifiers as resolved.
@@ -104,6 +106,11 @@ class ParserContext:
 
 class ParserError(LocationError):
     pass
+
+
+@dataclasses.dataclass
+class Comma:
+    location: Optional[Location]
 
 
 class ParserTransformer(Transformer):
@@ -137,27 +144,56 @@ class ParserTransformer(Transformer):
         return TypePointer(pointee=value[0], location=self.meta2loc(meta))
 
     @v_args(meta=True)
+    def type_pointer2(self, value, meta):
+        location = self.meta2loc(meta)
+        inner_location = dataclasses.replace(location, end_col=location.end_col - 1)
+        return TypePointer(
+            pointee=TypePointer(pointee=value[0], location=inner_location), location=location
+        )
+
+    @v_args(meta=True)
     def type_tuple(self, value, meta):
         return TypeTuple(members=value, location=self.meta2loc(meta))
+
+    @v_args(meta=True)
+    def comma(self, value, meta):
+        return Comma(location=self.meta2loc(meta))
 
     # Expression.
     @v_args(meta=True)
     def arg_list(self, value, meta):
-        if len(value) % 3 == 1:
-            has_trailing_comma = True
-        else:
-            has_trailing_comma = False
-            assert len(value) % 3 == 0
-            value.append(Notes())
-        args = value[1::3]
-        # Join the notes before and after the comma.
-        notes = [
-            prev_after + before for before, prev_after in zip(value[::3], [Notes()] + value[2::3])
-        ]
+        saw_comma = True
+        all_notes: List[Notes] = []
+        current_notes: List[Notes] = []
+        args: List[ExprAssignment] = []
+        for v in value:
+            if isinstance(v, ExprAssignment):
+                if not saw_comma:
+                    raise ParserError(
+                        "Expected a comma before this expression.", location=v.location
+                    )
+                all_notes.append(Notes.merge(current_notes))
+                args.append(v)
+
+                # Reset state.
+                saw_comma = False
+                current_notes = []
+            elif isinstance(v, Notes):
+                # Join the notes before and after the comma.
+                current_notes.append(v)
+            elif isinstance(v, Comma):
+                if saw_comma:
+                    raise ParserError("Unexpected comma.", location=v.location)
+                saw_comma = True
+            else:
+                raise NotImplementedError(f"Unexpected parser item {type(v).__name__}")
+
+        all_notes.append(Notes.merge(current_notes))
+
         return ArgList(
             args=args,
-            notes=notes,
-            has_trailing_comma=has_trailing_comma,
+            notes=all_notes,
+            has_trailing_comma=saw_comma,
             location=self.meta2loc(meta),
         )
 
@@ -191,8 +227,26 @@ class ParserTransformer(Transformer):
         )
 
     @v_args(meta=True)
-    def atom_pyconst(self, value, meta):
-        return ExprPyConst.from_str(src=value[0], location=self.meta2loc(meta))
+    def atom_short_string(self, value, meta):
+        location = self.meta2loc(meta)
+        token_text = value[0].value
+        assert token_text[0] == token_text[-1] == "'"
+        text = token_text[1:-1]
+        max_length = self.parser_context.short_string_max_length
+        if len(text) > max_length:
+            raise ParserError(
+                f"Short string (e.g., 'abc') length must be at most {max_length}.",
+                location=location,
+            )
+        try:
+            text_bytes = text.encode("ascii")
+        except UnicodeEncodeError:
+            raise ParserError(f"Expected an ascii string. Found: {repr(text)}.", location=location)
+        return ExprConst(
+            val=int.from_bytes(text_bytes, "big"),
+            format_str=token_text,
+            location=location,
+        )
 
     @v_args(meta=True)
     def atom_hint(self, value, meta):
@@ -239,20 +293,8 @@ class ParserTransformer(Transformer):
         return ExprNeg(val=value[0], location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def two_stars(self, value, meta):
-        is_two_chars = meta.end_pos == meta.start_pos + 2
-        if not is_two_chars:
-            raise ParserError(
-                'Unexpected operator. Did you mean "**"?', location=self.meta2loc(meta)
-            )
-
-    @v_args(meta=True)
     def expr_pow(self, value, meta):
-        return ExprPow(a=value[0], b=value[3], notes=value[2], location=self.meta2loc(meta))
-
-    @v_args(meta=True)
-    def atom_parentheses(self, value, meta):
-        return ExprParentheses(val=value[1], notes=value[0], location=self.meta2loc(meta))
+        return ExprPow(a=value[0], b=value[2], notes=value[1], location=self.meta2loc(meta))
 
     @v_args(meta=True)
     def atom_deref(self, value, meta):
@@ -275,8 +317,19 @@ class ParserTransformer(Transformer):
         )
 
     @v_args(meta=True)
-    def atom_tuple(self, value, meta):
-        return ExprTuple(members=value[0], location=self.meta2loc(meta))
+    def atom_tuple_or_parentheses(self, value, meta):
+        (arg_list,) = value
+        assert isinstance(arg_list, ArgList)
+
+        args = arg_list.args
+
+        # Check if this is regular parentheses.
+        if not arg_list.has_trailing_comma and len(args) == 1 and args[0].identifier is None:
+            return ExprParentheses(
+                val=args[0].expr, notes=arg_list.notes[0], location=arg_list.location
+            )
+
+        return ExprTuple(members=arg_list, location=self.meta2loc(meta))
 
     # Register.
 
@@ -383,8 +436,11 @@ class ParserTransformer(Transformer):
 
     # RValues.
 
-    def rvalue_expr(self, value):
+    @v_args(meta=True)
+    def rvalue_expr(self, value, meta) -> Rvalue:
         (expr,) = value
+        if isinstance(expr, ExprFuncCall):
+            return expr.rvalue
         return RvalueExpr(expr=expr)
 
     def rvalue_call_instruction(self, value):
@@ -477,7 +533,10 @@ class ParserTransformer(Transformer):
         return CodeElementFuncCall(func_call=value[0])
 
     def code_element_label(self, value):
-        return CodeElementLabel(identifier=value[0])
+        identifier = value[0]
+        if "." in identifier.name:
+            raise ParserError("Unexpected '.' in label name.", location=identifier.location)
+        return CodeElementLabel(identifier=identifier)
 
     @v_args(meta=True)
     def code_element_hint(self, value, meta):
@@ -513,6 +572,9 @@ class ParserTransformer(Transformer):
             return value[0]
         else:
             raise NotImplementedError(f"Unexpected argument: value={value}")
+
+    def decorator(self, value):
+        return value[0]
 
     def decorator_list(self, value):
         return value
@@ -559,6 +621,22 @@ class ParserTransformer(Transformer):
             code_block=value[-1],
         )
 
+    def code_element_with_attr(self, value):
+        assert len(value) >= 2
+        attribute_value, notes = [], []
+        for token in value[1:-1]:
+            if type(token) is Notes:
+                notes.append(token)
+            else:
+                attribute_value.append(token.value)
+
+        return CodeElementWithAttr(
+            attribute_name=value[0],
+            attribute_value=attribute_value,
+            code_block=value[-1],
+            notes=notes,
+        )
+
     @v_args(meta=True)
     def code_element_if(self, value, meta):
         condition = value[0]
@@ -594,12 +672,12 @@ class ParserTransformer(Transformer):
 
     @v_args(meta=True)
     def directive_builtins(self, value, meta):
-        builtins = [ident.name for ident in value]
+        builtins = [ident.name for ident in value[1:]]
         return BuiltinsDirective(builtins=builtins, location=self.meta2loc(meta))
 
     @v_args(meta=True)
     def directive_lang(self, value, meta):
-        return LangDirective(name=value[0].name, location=self.meta2loc(meta))
+        return LangDirective(name=value[1].name, location=self.meta2loc(meta))
 
     @v_args(meta=True)
     def aliased_identifier(self, value, meta):

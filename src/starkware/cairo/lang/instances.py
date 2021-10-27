@@ -7,6 +7,8 @@ from starkware.cairo.lang.builtins.hash.instance_def import PedersenInstanceDef
 from starkware.cairo.lang.builtins.range_check.instance_def import RangeCheckInstanceDef
 from starkware.cairo.lang.builtins.signature.instance_def import EcdsaInstanceDef
 
+PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
+
 
 @dataclasses.dataclass
 class CpuInstanceDef:
@@ -58,7 +60,7 @@ small_instance = CairoLayout(
             element_height=256,
             element_bits=252,
             n_inputs=2,
-            hash_limit=2 ** 251 + 17 * 2 ** 192 + 1,
+            hash_limit=PRIME,
         ),
         range_check=RangeCheckInstanceDef(
             ratio=8,
@@ -85,7 +87,7 @@ dex_instance = CairoLayout(
             element_height=256,
             element_bits=252,
             n_inputs=2,
-            hash_limit=2 ** 251 + 17 * 2 ** 192 + 1,
+            hash_limit=PRIME,
         ),
         range_check=RangeCheckInstanceDef(
             ratio=8,
@@ -118,7 +120,7 @@ all_instance = CairoLayout(
             element_height=256,
             element_bits=252,
             n_inputs=2,
-            hash_limit=2 ** 251 + 17 * 2 ** 192 + 1,
+            hash_limit=PRIME,
         ),
         range_check=RangeCheckInstanceDef(
             ratio=8,

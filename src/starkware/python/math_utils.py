@@ -43,6 +43,14 @@ def is_power_of_2(x):
     return isinstance(x, int) and x > 0 and x & (x - 1) == 0
 
 
+def prev_power_of_2(x: int):
+    """
+    Returns the maximal power of two which is <= x.
+    """
+    assert isinstance(x, int) and x > 0
+    return next_power_of_2(x + 1) // 2
+
+
 def is_quad_residue(n, p):
     """
     Returns True if n is a quadratic residue mod p.

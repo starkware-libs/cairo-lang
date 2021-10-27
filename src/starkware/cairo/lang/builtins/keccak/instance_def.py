@@ -15,3 +15,7 @@ class KeccakInstanceDef:
     @property
     def cells_per_builtin(self):
         return 2 * len(self.state_rep)
+
+    @property
+    def range_check_units_per_builtin(self):
+        return 0

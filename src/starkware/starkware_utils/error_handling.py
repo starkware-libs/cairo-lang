@@ -151,7 +151,7 @@ class StarkException(WebFriendlyException):
         return self.code == other.code and self.message == other.message
 
 
-def stark_assert(expr: bool, code, message: Optional[str] = None):
+def stark_assert(expr: bool, *, code, message: Optional[str] = None):
     """
     Verifies that the given expression is True. If not, raises a StarkException with the given
     code and message.
@@ -160,7 +160,7 @@ def stark_assert(expr: bool, code, message: Optional[str] = None):
         raise StarkException(code=code, message=message)
 
 
-def stark_assert_eq(exp_val, actual_val, code, message: Optional[str] = None):
+def stark_assert_eq(exp_val, actual_val, *, code, message: Optional[str] = None):
     """
     Verifies that the expected value is equal to the actual value, raising a StarkException with
     the appropriate code and message, where the expected and actual values are added to the message.
@@ -168,7 +168,7 @@ def stark_assert_eq(exp_val, actual_val, code, message: Optional[str] = None):
     _stark_assert_not_symbol(exp_val, actual_val, symbol="!=", code=code, message=message)
 
 
-def stark_assert_ne(exp_val, actual_val, code, message: Optional[str] = None):
+def stark_assert_ne(exp_val, actual_val, *, code, message: Optional[str] = None):
     """
     Verifies that the expected value is not equal to the actual value, raising a StarkException
     with the appropriate code and message, where the expected and actual values are added to the
@@ -177,7 +177,7 @@ def stark_assert_ne(exp_val, actual_val, code, message: Optional[str] = None):
     _stark_assert_not_symbol(exp_val, actual_val, symbol="==", code=code, message=message)
 
 
-def stark_assert_le(exp_val, actual_val, code, message: Optional[str] = None):
+def stark_assert_le(exp_val, actual_val, *, code, message: Optional[str] = None):
     """
     Verifies that the expected value is less than or equal to the actual value, raising a
     StarkException with the appropriate code and message, where the expected and actual values are
@@ -186,7 +186,7 @@ def stark_assert_le(exp_val, actual_val, code, message: Optional[str] = None):
     _stark_assert_not_symbol(exp_val, actual_val, symbol=">", code=code, message=message)
 
 
-def stark_assert_lt(exp_val, actual_val, code, message: Optional[str] = None):
+def stark_assert_lt(exp_val, actual_val, *, code, message: Optional[str] = None):
     """
     Verifies that the expected value is strictly less than the actual value, raising a
     StarkException with the appropriate code and message, where the expected and actual values are

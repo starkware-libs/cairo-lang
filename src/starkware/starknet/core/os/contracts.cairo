@@ -15,13 +15,17 @@ end
 struct ContractDefinition:
     member api_version : felt
 
-    # The length and pointer to the external entry points table of the contract.
+    # The length and pointer to the external entry point table of the contract.
     member n_external_functions : felt
     member external_functions : ContractEntryPoint*
 
-    # The length and pointer to the L1 handler entry points table of the contract.
+    # The length and pointer to the L1 handler entry point table of the contract.
     member n_l1_handlers : felt
     member l1_handlers : ContractEntryPoint*
+
+    # The length and pointer to the constructor entry point table of the contract.
+    member n_constructors : felt
+    member constructors : ContractEntryPoint*
 
     member n_builtins : felt
     # 'builtin_list' is a continuous memory segment containing the ASCII encoding of the (ordered)
@@ -47,26 +51,26 @@ func contract_hash{hash_ptr : HashBuiltin*}(contract_definition : ContractDefini
         hash_state_ptr=hash_state, item=contract_definition.api_version)
 
     # Hash external entry points.
-    let (hash_state) = hash_update_single(
-        hash_state_ptr=hash_state, item=contract_definition.n_external_functions)
-    let (hash_state) = hash_update(
-        hash_state_ptr=hash_state,
+    let (hash_state) = hash_update_with_hashchain(
+        hash_state=hash_state,
         data_ptr=contract_definition.external_functions,
         data_length=contract_definition.n_external_functions * ContractEntryPoint.SIZE)
 
     # Hash L1 handler entry points.
-    let (hash_state) = hash_update_single(
-        hash_state_ptr=hash_state, item=contract_definition.n_l1_handlers)
-    let (hash_state) = hash_update(
-        hash_state_ptr=hash_state,
+    let (hash_state) = hash_update_with_hashchain(
+        hash_state=hash_state,
         data_ptr=contract_definition.l1_handlers,
         data_length=contract_definition.n_l1_handlers * ContractEntryPoint.SIZE)
 
+    # Hash constructor entry points.
+    let (hash_state) = hash_update_with_hashchain(
+        hash_state=hash_state,
+        data_ptr=contract_definition.constructors,
+        data_length=contract_definition.n_constructors * ContractEntryPoint.SIZE)
+
     # Hash builtins.
-    let (hash_state) = hash_update_single(
-        hash_state_ptr=hash_state, item=contract_definition.n_builtins)
-    let (hash_state) = hash_update(
-        hash_state_ptr=hash_state,
+    let (hash_state) = hash_update_with_hashchain(
+        hash_state=hash_state,
         data_ptr=contract_definition.builtin_list,
         data_length=contract_definition.n_builtins)
 
@@ -75,15 +79,26 @@ func contract_hash{hash_ptr : HashBuiltin*}(contract_definition : ContractDefini
         hash_state_ptr=hash_state, item=contract_definition.hinted_contract_definition_hash)
 
     # Hash bytecode.
-    let (hash_state) = hash_update_single(
-        hash_state_ptr=hash_state, item=contract_definition.bytecode_length)
-    let (hash_state) = hash_update(
-        hash_state_ptr=hash_state,
+    let (hash_state) = hash_update_with_hashchain(
+        hash_state=hash_state,
         data_ptr=contract_definition.bytecode_ptr,
         data_length=contract_definition.bytecode_length)
 
     let (hash : felt) = hash_finalize(hash_state_ptr=hash_state)
     return (hash=hash)
+end
+
+func hash_update_with_hashchain{hash_ptr : HashBuiltin*}(
+        hash_state : HashState*, data_ptr : felt*, data_length : felt) -> (hash_state : HashState*):
+    # Hash data.
+    let (list_hash_state : HashState*) = hash_init()
+    let (list_hash_state) = hash_update(
+        hash_state_ptr=list_hash_state, data_ptr=data_ptr, data_length=data_length)
+    let (hash : felt) = hash_finalize(hash_state_ptr=list_hash_state)
+
+    # Update contract hash state with the resulting hash of the data.
+    let (hash_state) = hash_update_single(hash_state_ptr=hash_state, item=hash)
+    return (hash_state=hash_state)
 end
 
 # A list entry that maps a hash to the corresponding contract definition.

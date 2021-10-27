@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from typing import Generic, Iterator, Optional, Type, TypeVar
 
 from starkware.python.object_utils import generic_object_repr
+from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
 from starkware.starkware_utils.config_base import Config
 from starkware.storage.storage import FactFetchingContext
 
@@ -176,5 +177,6 @@ class SharedStateBase(ABC):
         ffc: FactFetchingContext,
         previous_carried_state: CarriedStateBase,
         current_carried_state: CarriedStateBase,
+        facts: Optional[BinaryFactDict] = None,
     ) -> TSharedState:
         pass

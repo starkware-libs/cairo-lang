@@ -9,6 +9,7 @@ import subprocess
 from time import sleep
 from typing import Dict
 
+from eth_account.signers.base import BaseAccount
 from web3 import HTTPProvider, Web3, eth
 
 from demo.amm_demo.prove_batch import Account, Balance, BatchProver, SwapTransaction
@@ -49,7 +50,7 @@ def init_prover(bin_dir: str, node_rpc_url: str) -> BatchProver:
     return prover
 
 
-def deploy_contract(batch_prover: BatchProver, w3: Web3, operator: eth.Account) -> eth.Contract:
+def deploy_contract(batch_prover: BatchProver, w3: Web3, operator: BaseAccount) -> eth.Contract:
     """
     Deploys the AMM demo smart-contract and returns its address.
     The contract is initialized with the current state of the batch_prover.
@@ -96,7 +97,7 @@ def deploy_contract(batch_prover: BatchProver, w3: Web3, operator: eth.Account) 
         "Press enter to continue."
     )
 
-    return w3.eth.contract(abi=abi, address=contract_address)
+    return w3.eth.contract(abi=abi, address=contract_address)  # type: ignore
 
 
 def main():
@@ -192,7 +193,7 @@ def tx_kwargs(w3: Web3, sender_account: eth.Account):
     return {"from": sender_account, "gas": 10 ** 6, "gasPrice": GAS_PRICE, "nonce": nonce}
 
 
-def send_transaction(w3, transaction, sender_account: eth.Account):
+def send_transaction(w3, transaction, sender_account: BaseAccount):
     """
     Sends an Ethereum transaction and waits for it to be mined.
 

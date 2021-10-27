@@ -1,12 +1,11 @@
 import asyncio
-import dataclasses
 from typing import Collection
 
 import pytest
 
 from starkware.cairo.common.patricia_utils import compute_patricia_from_leaves_for_test
 from starkware.crypto.signature.fast_pedersen_hash import async_pedersen_hash_func, pedersen_hash
-from starkware.python.utils import from_bytes, to_bytes
+from starkware.python.utils import to_bytes
 from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import (
     BinaryNodeFact,
     EmptyNodeFact,
@@ -14,36 +13,14 @@ from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import (
 from starkware.starkware_utils.commitment_tree.patricia_tree.virtual_patricia_node import (
     VirtualPatriciaNode,
 )
-from starkware.storage.storage import Fact, FactFetchingContext, HashFunctionType
+from starkware.starkware_utils.commitment_tree.test_utils import LeafFact
+from starkware.storage.storage import FactFetchingContext
 from starkware.storage.test_utils import MockStorage
 
 
 @pytest.fixture
 def ffc() -> FactFetchingContext:
     return FactFetchingContext(storage=MockStorage(), hash_func=async_pedersen_hash_func)
-
-
-@dataclasses.dataclass(frozen=True)
-class LeafFact(Fact):
-    value: int
-
-    @classmethod
-    def prefix(cls) -> bytes:
-        return b"leaf"
-
-    def serialize(self) -> bytes:
-        return to_bytes(self.value)
-
-    async def _hash(self, hash_func: HashFunctionType) -> bytes:
-        return self.serialize()
-
-    @classmethod
-    def deserialize(cls, data: bytes) -> "LeafFact":
-        return cls(from_bytes(data))
-
-    @classmethod
-    def empty(cls) -> "LeafFact":
-        return cls(value=0)
 
 
 async def make_virtual_edge_non_canonical(

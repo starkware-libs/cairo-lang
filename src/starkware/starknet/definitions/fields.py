@@ -4,6 +4,7 @@ from typing import Any, Dict, Type
 import marshmallow
 import marshmallow.fields as mfields
 
+from starkware.python.utils import from_bytes
 from starkware.starknet.definitions import constants
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starkware_utils.field_validators import (
@@ -40,6 +41,7 @@ def felt_metadata(name_in_error_message: str) -> Dict[str, Any]:
 felt_list_metadata = dict(marshmallow_field=mfields.List(IntAsStr(validate=FeltField.validate)))
 
 call_data_metadata = felt_list_metadata
+signature_metadata = felt_list_metadata
 
 ContractAddressField = RangeValidatedField(
     lower_bound=constants.CONTRACT_ADDRESS_LOWER_BOUND,
@@ -50,6 +52,26 @@ ContractAddressField = RangeValidatedField(
 )
 
 contract_address_metadata = ContractAddressField.metadata()
+
+ContractAddressSalt = RangeValidatedField(
+    lower_bound=constants.CONTRACT_ADDRESS_SALT_LOWER_BOUND,
+    upper_bound=constants.CONTRACT_ADDRESS_SALT_UPPER_BOUND,
+    name_in_error_message="Contract salt",
+    out_of_range_error_code=StarknetErrorCode.OUT_OF_RANGE_CONTRACT_ADDRESS_SALT,
+    formatter=hex,
+)
+
+contract_address_salt_metadata = ContractAddressSalt.metadata()
+
+CallerAddressField = RangeValidatedField(
+    lower_bound=constants.CALLER_ADDRESS_LOWER_BOUND,
+    upper_bound=constants.CALLER_ADDRESS_UPPER_BOUND,
+    name_in_error_message="Caller address",
+    out_of_range_error_code=StarknetErrorCode.OUT_OF_RANGE_CALLER_ADDRESS,
+    formatter=hex,
+)
+
+caller_address_metadata = CallerAddressField.metadata()
 
 
 def bytes_as_hex_dict_keys_metadata(
@@ -68,7 +90,17 @@ def bytes_as_hex_dict_keys_metadata(
 
 contract_definitions_metadata = dict(marshmallow_field=mfields.Dict(keys=BytesAsHex))
 
-contract_hash_metadata = dict(marshmallow_field=BytesAsHex(required=True))
+
+def validate_contract_hash(contract_hash: bytes):
+    if from_bytes(value=contract_hash, byte_order="big") >= constants.CONTRACT_HASH_UPPER_BOUND:
+        raise ValueError(
+            f"Contract hash must represent a field element; got: 0x{contract_hash.hex()}."
+        )
+
+
+contract_hash_metadata = dict(
+    marshmallow_field=BytesAsHex(required=True, validate=validate_contract_hash),
+)
 
 contract_storage_commitment_tree_height_metadata = dict(
     marshmallow_field=mfields.Integer(
@@ -106,14 +138,15 @@ global_state_commitment_tree_height_metadata = dict(
 
 state_root_metadata = dict(marshmallow_field=BytesAsHex(required=True))
 
+TransactionHashField = RangeValidatedField(
+    lower_bound=constants.TRANSACTION_HASH_LOWER_BOUND,
+    upper_bound=constants.TRANSACTION_HASH_UPPER_BOUND,
+    name_in_error_message="Transaction hash",
+    out_of_range_error_code=StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_HASH,
+    formatter=hex,
+)
 
-def tx_id_dict_keys_metadata(values_schema: Type[marshmallow.Schema]) -> Dict[str, mfields.Dict]:
-    return dict(
-        marshmallow_field=mfields.Dict(
-            keys=mfields.Integer(required=True, validate=validate_non_negative("transaction ID")),
-            values=mfields.Nested(values_schema),
-        )
-    )
+transaction_hash_metadata = TransactionHashField.metadata()
 
 
 timestamp_metadata = dict(

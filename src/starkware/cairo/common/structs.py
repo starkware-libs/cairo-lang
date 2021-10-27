@@ -100,7 +100,7 @@ class CairoStructProxy:
         return self.build()(*args, **kwargs)
 
     @property
-    def struct_definition_(self):
+    def struct_definition_(self) -> StructDefinition:
         return self.factory.get_struct_definition(self.path)
 
     @property

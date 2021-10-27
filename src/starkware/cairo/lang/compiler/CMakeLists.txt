@@ -46,6 +46,7 @@ python_lib(cairo_compile_lib
     preprocessor/compound_expressions.py
     preprocessor/default_pass_manager.py
     preprocessor/dependency_graph.py
+    preprocessor/directives.py
     preprocessor/flow.py
     preprocessor/identifier_aware_visitor.py
     preprocessor/identifier_collector.py
@@ -59,6 +60,7 @@ python_lib(cairo_compile_lib
     preprocessor/struct_collector.py
     preprocessor/unique_labels.py
     program.py
+    proxy_identifier_manager.py
     references.py
     resolve_search_result.py
     scoped_name.py
@@ -71,9 +73,9 @@ python_lib(cairo_compile_lib
     LIBS
     cairo_constants_lib
     cairo_version_lib
+    starkware_dataclasses_utils_lib
     starkware_expression_string_lib
     starkware_python_utils_lib
-    starkware_utils_lib
     pip_marshmallow_dataclass
     pip_marshmallow_enum
     pip_marshmallow_oneofschema
@@ -148,6 +150,7 @@ full_python_test(cairo_compile_test
     preprocessor/reg_tracking_test.py
     preprocessor/struct_collector_test.py
     preprocessor/unique_labels_test.py
+    proxy_identifier_manager_test.py
     references_test.py
     resolve_search_result_test.py
     scoped_name_test.py

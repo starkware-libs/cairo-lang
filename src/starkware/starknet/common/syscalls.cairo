@@ -1,6 +1,6 @@
-from starkware.starknet.common.storage import Storage
+from starkware.cairo.common.dict_access import DictAccess
 
-const SEND_MESSAGE_TO_L1_SELECTOR = %[int.from_bytes(b'SendMessageToL1', 'big')%]
+const SEND_MESSAGE_TO_L1_SELECTOR = 'SendMessageToL1'
 
 # Describes the SendMessageToL1 system call format.
 struct SendMessageToL1SysCall:
@@ -10,7 +10,7 @@ struct SendMessageToL1SysCall:
     member payload_ptr : felt*
 end
 
-const CALL_CONTRACT_SELECTOR = %[int.from_bytes(b'CallContract', 'big')%]
+const CALL_CONTRACT_SELECTOR = 'CallContract'
 
 # Describes the CallContract system call format.
 struct CallContractRequest:
@@ -24,16 +24,11 @@ struct CallContractRequest:
     member calldata_size : felt
     # The calldata.
     member calldata : felt*
-
-    # The storage pointer before the syscall.
-    member storage_ptr : felt*
 end
 
 struct CallContractResponse:
     member retdata_size : felt
     member retdata : felt*
-    # The storage pointer after the syscall.
-    member storage_ptr : felt*
 end
 
 struct CallContract:
@@ -41,7 +36,7 @@ struct CallContract:
     member response : CallContractResponse
 end
 
-func call_contract{syscall_ptr : felt*, storage_ptr : Storage*}(
+func call_contract{syscall_ptr : felt*}(
         contract_address : felt, function_selector : felt, calldata_size : felt,
         calldata : felt*) -> (retdata_size : felt, retdata : felt*):
     let syscall = [cast(syscall_ptr, CallContract*)]
@@ -50,17 +45,15 @@ func call_contract{syscall_ptr : felt*, storage_ptr : Storage*}(
         contract_address=contract_address,
         function_selector=function_selector,
         calldata_size=calldata_size,
-        calldata=calldata,
-        storage_ptr=storage_ptr)
+        calldata=calldata)
     %{ syscall_handler.call_contract(segments=segments, syscall_ptr=ids.syscall_ptr) %}
     let response = syscall.response
 
     let syscall_ptr = syscall_ptr + CallContract.SIZE
-    let storage_ptr = cast(response.storage_ptr, Storage*)
     return (retdata_size=response.retdata_size, retdata=response.retdata)
 end
 
-const GET_CALLER_ADDRESS_SELECTOR = %[int.from_bytes(b'GetCallerAddress', 'big')%]
+const GET_CALLER_ADDRESS_SELECTOR = 'GetCallerAddress'
 
 # Describes the GetCallerAddress system call format.
 struct GetCallerAddressRequest:
@@ -85,4 +78,77 @@ func get_caller_address{syscall_ptr : felt*}() -> (caller_address : felt):
     %{ syscall_handler.get_caller_address(segments=segments, syscall_ptr=ids.syscall_ptr) %}
     let syscall_ptr = syscall_ptr + GetCallerAddress.SIZE
     return (caller_address=syscall.response.caller_address)
+end
+
+const GET_TX_SIGNATURE_SELECTOR = 'GetTxSignature'
+
+struct GetTxSignatureRequest:
+    # The system call selector (= GET_TX_SIGNATURE_SELECTOR).
+    member selector : felt
+end
+
+struct GetTxSignatureResponse:
+    member signature_len : felt
+    member signature : felt*
+end
+
+struct GetTxSignature:
+    member request : GetTxSignatureRequest
+    member response : GetTxSignatureResponse
+end
+
+# Returns the signature information of the transaction.
+#
+# Note that currently a malicious sequencer may choose to return different values each time
+# this function is called.
+func get_tx_signature{syscall_ptr : felt*}() -> (signature_len : felt, signature : felt*):
+    let syscall = [cast(syscall_ptr, GetTxSignature*)]
+    assert syscall.request = GetTxSignatureRequest(selector=GET_TX_SIGNATURE_SELECTOR)
+    %{ syscall_handler.get_tx_signature(segments=segments, syscall_ptr=ids.syscall_ptr) %}
+    let syscall_ptr = syscall_ptr + GetTxSignature.SIZE
+    return (signature_len=syscall.response.signature_len, signature=syscall.response.signature)
+end
+
+const STORAGE_READ_SELECTOR = 'StorageRead'
+
+# Describes the StorageRead system call format.
+struct StorageReadRequest:
+    # The system call selector (= STORAGE_READ_SELECTOR).
+    member selector : felt
+    member address : felt
+end
+
+struct StorageReadResponse:
+    member value : felt
+end
+
+struct StorageRead:
+    member request : StorageReadRequest
+    member response : StorageReadResponse
+end
+
+func storage_read{syscall_ptr : felt*}(address : felt) -> (value : felt):
+    let syscall = [cast(syscall_ptr, StorageRead*)]
+    assert syscall.request = StorageReadRequest(selector=STORAGE_READ_SELECTOR, address=address)
+    %{ syscall_handler.storage_read(segments=segments, syscall_ptr=ids.syscall_ptr) %}
+    let response = syscall.response
+    let syscall_ptr = syscall_ptr + StorageRead.SIZE
+    return (value=response.value)
+end
+
+const STORAGE_WRITE_SELECTOR = 'StorageWrite'
+
+# Describes the StorageWrite system call format.
+struct StorageWrite:
+    member selector : felt
+    member address : felt
+    member value : felt
+end
+
+func storage_write{syscall_ptr : felt*}(address : felt, value : felt) -> ():
+    assert [cast(syscall_ptr, StorageWrite*)] = StorageWrite(
+        selector=STORAGE_WRITE_SELECTOR, address=address, value=value)
+    %{ syscall_handler.storage_write(segments=segments, syscall_ptr=ids.syscall_ptr) %}
+    let syscall_ptr = syscall_ptr + StorageWrite.SIZE
+    return ()
 end

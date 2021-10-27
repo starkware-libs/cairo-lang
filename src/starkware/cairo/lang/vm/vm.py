@@ -67,8 +67,8 @@ class VmException(LocationError, VmExceptionBase):
                 hint_location = inst_location.hints[hint_index]
                 if hint_location is not None:
                     location = hint_location.location
-        super().__init__(
-            f"Error at pc={self.pc}:\n{inner_exc}", location=location, traceback=traceback
+        LocationError.__init__(
+            self, f"Error at pc={self.pc}:\n{inner_exc}", location=location, traceback=traceback
         )
         if notes is not None:
             self.notes += notes
@@ -88,7 +88,7 @@ class PureValueError(VmExceptionBase):
     def __init__(self, oper, *values):
         self.oper = oper
         self.values = values
-        values_str = f"values {values}" if len(values) > 1 else f"value {values[0]}"
+        values_str = f"values: {values}" if len(values) > 1 else f"value: {values[0]}"
         super().__init__(f"Could not complete computation {oper} of non pure {values_str}.")
 
 
@@ -455,6 +455,11 @@ class VirtualMachine:
         dst: Optional[MaybeRelocatable],
         op1: Optional[MaybeRelocatable],
     ) -> Tuple[Optional[MaybeRelocatable], Optional[MaybeRelocatable]]:
+        """
+        Returns a tuple (deduced_op0, deduced_res).
+        Deduces the value of op0 if possible (based on dst and op1). Otherwise, returns None.
+        If res was already deduced, returns its deduced value as well.
+        """
         if instruction.opcode is Instruction.Opcode.CALL:
             return self.run_context.pc + instruction.size, None
         elif instruction.opcode is Instruction.Opcode.ASSERT_EQ:
@@ -475,6 +480,11 @@ class VirtualMachine:
         dst: Optional[MaybeRelocatable],
         op0: Optional[MaybeRelocatable],
     ) -> Tuple[Optional[MaybeRelocatable], Optional[MaybeRelocatable]]:
+        """
+        Returns a tuple (deduced_op1, deduced_res).
+        Deduces the value of op1 if possible (based on dst and op0). Otherwise, returns None.
+        If res was already deduced, returns its deduced value as well.
+        """
         if instruction.opcode is Instruction.Opcode.ASSERT_EQ:
             if (instruction.res is Instruction.Res.OP1) and (dst is not None):
                 return dst, dst
@@ -496,8 +506,10 @@ class VirtualMachine:
         instruction: Instruction,
         op0: MaybeRelocatable,
         op1: MaybeRelocatable,
-        op0_addr: MaybeRelocatable,
     ) -> Optional[MaybeRelocatable]:
+        """
+        Computes the value of res if possible.
+        """
         if instruction.res is Instruction.Res.OP1:
             return op1
         elif instruction.res is Instruction.Res.ADD:
@@ -513,15 +525,12 @@ class VirtualMachine:
         else:
             raise NotImplementedError("Invalid res value")
 
-    def compute_operands(
-        self, instruction: Instruction
-    ) -> Tuple[Operands, List[int], List[MaybeRelocatable]]:
+    def compute_operands(self, instruction: Instruction) -> Tuple[Operands, List[int]]:
         """
         Computes the values of the operands. Deduces dst if needed.
         Returns:
           operands - an Operands instance with the values of the operands.
           mem_addresses - the memory addresses for the 3 memory units used (dst, op0, op1).
-          mem_values - the corresponding memory values.
         """
         # Try to fetch dst, op0, op1.
         # op0 throughout this function represents the value at op0_addr.
@@ -575,7 +584,7 @@ class VirtualMachine:
 
         # Compute res if needed.
         if res is None:
-            res = self.compute_res(instruction, op0, op1, op0_addr)
+            res = self.compute_res(instruction, op0, op1)
 
         # Deduce dst.
         if dst is None:
@@ -599,7 +608,6 @@ class VirtualMachine:
         return (
             Operands(dst=dst, op0=op0, op1=op1, res=res),
             [dst_addr, op0_addr, op1_addr],
-            [dst, op0, op1],
         )
 
     def is_zero(self, value):
@@ -723,9 +731,7 @@ class VirtualMachine:
     def run_instruction(self, instruction, instruction_encoding):
         try:
             # Compute operands.
-            operands, operands_mem_addresses, operands_mem_values = self.compute_operands(
-                instruction
-            )
+            operands, operands_mem_addresses = self.compute_operands(instruction)
         except Exception as exc:
             raise self.as_vm_exception(exc) from None
 

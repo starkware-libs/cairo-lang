@@ -14,6 +14,7 @@ from starkware.cairo.lang.compiler.identifier_definition import (
     ConstDefinition,
     IdentifierDefinition,
     LabelDefinition,
+    NamespaceDefinition,
     ReferenceDefinition,
     StructDefinition,
 )
@@ -168,7 +169,7 @@ class VmConsts(VmConstsBase):
     def handle_scope(
         self,
         name: str,
-        identifier: Union[IdentifierScope, LabelDefinition],
+        identifier: Union[IdentifierScope, LabelDefinition, NamespaceDefinition],
         scope: ScopedName,
         set_value: Optional[MaybeRelocatable],
     ):
@@ -182,6 +183,7 @@ class VmConsts(VmConstsBase):
         )
 
     handle_LabelDefinition = handle_scope
+    handle_NamespaceDefinition = handle_scope
     handle_FunctionDefinition = handle_scope
 
     def handle_StructDefinition(

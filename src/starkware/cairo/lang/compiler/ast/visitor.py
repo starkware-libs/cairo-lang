@@ -7,6 +7,7 @@ from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeElementFunction,
     CodeElementScoped,
     CodeElementWith,
+    CodeElementWithAttr,
     CommentedCodeElement,
     LangDirective,
 )
@@ -79,6 +80,13 @@ class Visitor:
                 )
                 for commented_code_elm in elm.code_elements
             ]
+        )
+
+    def visit_CodeElementWithAttr(self, elm: CodeElementWithAttr):
+        return CodeElementWithAttr(
+            attribute_name=elm.attribute_name,
+            attribute_value=elm.attribute_value,
+            code_block=self.visit(elm.code_block),
         )
 
     def visit_CodeElementWith(self, elm: CodeElementWith):

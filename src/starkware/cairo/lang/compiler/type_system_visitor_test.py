@@ -151,16 +151,6 @@ file:?:?: Subscript-operator for tuples supports only constant offsets, found 'E
 """,
     )
 
-    # The simplifier in TypeSystemVisitor cannot access PRIME, so PyConsts are unsimplified.
-    verify_exception(
-        "(fp, fp, fp)[%[1%]]",
-        """
-file:?:?: Subscript-operator for tuples supports only constant offsets, found 'ExprPyConst'.
-(fp, fp, fp)[%[1%]]
-             ^***^
-""",
-    )
-
     verify_exception(
         "(fp, fp, fp)[3]",
         """

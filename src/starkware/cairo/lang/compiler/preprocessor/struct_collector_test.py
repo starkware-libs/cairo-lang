@@ -174,6 +174,6 @@ end
         """
 file:?:?: Decorators for structs are not supported.
 @decorator
-^********^
+ ^*******^
 """,
     )

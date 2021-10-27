@@ -62,9 +62,9 @@ class IdentifierAwareVisitor(Visitor):
                 raise PreprocessorError(f"Redefinition of '{name}'.", location=location)
             if not isinstance(identifier_definition, future_definition.identifier_type):
                 raise PreprocessorError(
-                    f"Identifier '{name}' expected to be of type "
-                    f"'{future_definition.identifier_type.__name__}', not "
-                    f"'{type(identifier_definition).__name__}'.",
+                    f"Identifier '{name}' expected to be "
+                    f"'{future_definition.identifier_type.TYPE}', not "
+                    f"'{identifier_definition.TYPE}'.",
                     location=location,
                 )
 

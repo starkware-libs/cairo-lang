@@ -28,19 +28,19 @@
                 "required_version": ">=2.0,<5.0"
             },
             {
-                "installed_version": "5.1.0",
+                "installed_version": "5.2.0",
                 "key": "multidict",
                 "package_name": "multidict",
                 "required_version": ">=4.5,<7.0"
             },
             {
-                "installed_version": "3.10.0.0",
+                "installed_version": "3.10.0.2",
                 "key": "typing-extensions",
                 "package_name": "typing-extensions",
                 "required_version": ">=3.6.5"
             },
             {
-                "installed_version": "1.6.3",
+                "installed_version": "1.7.0",
                 "key": "yarl",
                 "package_name": "yarl",
                 "required_version": ">=1.0,<2.0"
@@ -87,7 +87,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "4.2.2",
+            "installed_version": "4.2.4",
             "key": "cachetools",
             "package_name": "cachetools"
         }
@@ -95,7 +95,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "2021.5.30",
+            "installed_version": "2021.10.8",
             "key": "certifi",
             "package_name": "certifi"
         }
@@ -111,7 +111,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "2.0.4",
+            "installed_version": "2.0.6",
             "key": "charset-normalizer",
             "package_name": "charset-normalizer"
         }
@@ -225,7 +225,7 @@
             }
         ],
         "package": {
-            "installed_version": "0.5.5",
+            "installed_version": "0.5.6",
             "key": "eth-account",
             "package_name": "eth-account"
         }
@@ -259,7 +259,7 @@
                 "required_version": ">=1.0.0-beta.1,<2.0.0"
             },
             {
-                "installed_version": "3.10.1",
+                "installed_version": "3.11.0",
                 "key": "pycryptodome",
                 "package_name": "pycryptodome",
                 "required_version": ">=3.4.7,<4.0.0"
@@ -389,20 +389,20 @@
     {
         "dependencies": [
             {
-                "installed_version": "3.10.0.0",
+                "installed_version": "3.10.0.2",
                 "key": "typing-extensions",
                 "package_name": "typing-extensions",
                 "required_version": ">=3.6.4"
             },
             {
-                "installed_version": "3.5.0",
+                "installed_version": "3.6.0",
                 "key": "zipp",
                 "package_name": "zipp",
                 "required_version": ">=0.5"
             }
         ],
         "package": {
-            "installed_version": "4.7.0",
+            "installed_version": "4.8.1",
             "key": "importlib-metadata",
             "package_name": "importlib-metadata"
         }
@@ -431,7 +431,7 @@
             }
         ],
         "package": {
-            "installed_version": "0.7.0",
+            "installed_version": "0.8.0a2",
             "key": "ipfshttpclient",
             "package_name": "ipfshttpclient"
         }
@@ -445,7 +445,7 @@
                 "required_version": ">=17.4.0"
             },
             {
-                "installed_version": "4.7.0",
+                "installed_version": "4.8.1",
                 "key": "importlib-metadata",
                 "package_name": "importlib-metadata",
                 "required_version": null
@@ -457,7 +457,7 @@
                 "required_version": ">=0.14.0"
             },
             {
-                "installed_version": "57.0.0",
+                "installed_version": "58.1.0",
                 "key": "setuptools",
                 "package_name": "setuptools",
                 "required_version": null
@@ -478,7 +478,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "0.8.5",
+            "installed_version": "0.12.0",
             "key": "lark-parser",
             "package_name": "lark-parser"
         }
@@ -594,7 +594,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "5.1.0",
+            "installed_version": "5.2.0",
             "key": "multidict",
             "package_name": "multidict"
         }
@@ -656,7 +656,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "21.1.2",
+            "installed_version": "21.2.4",
             "key": "pip",
             "package_name": "pip"
         }
@@ -664,7 +664,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "21.1.2",
+                "installed_version": "21.2.4",
                 "key": "pip",
                 "package_name": "pip",
                 "required_version": ">=6.0.0"
@@ -679,14 +679,14 @@
     {
         "dependencies": [
             {
-                "installed_version": "4.7.0",
+                "installed_version": "4.8.1",
                 "key": "importlib-metadata",
                 "package_name": "importlib-metadata",
                 "required_version": ">=0.12"
             }
         ],
         "package": {
-            "installed_version": "0.13.1",
+            "installed_version": "1.0.0",
             "key": "pluggy",
             "package_name": "pluggy"
         }
@@ -700,16 +700,9 @@
         }
     },
     {
-        "dependencies": [
-            {
-                "installed_version": "1.16.0",
-                "key": "six",
-                "package_name": "six",
-                "required_version": ">=1.9"
-            }
-        ],
+        "dependencies": [],
         "package": {
-            "installed_version": "3.17.3",
+            "installed_version": "3.18.1",
             "key": "protobuf",
             "package_name": "protobuf"
         }
@@ -725,7 +718,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "3.10.1",
+            "installed_version": "3.11.0",
             "key": "pycryptodome",
             "package_name": "pycryptodome"
         }
@@ -755,7 +748,7 @@
                 "required_version": ">=19.2.0"
             },
             {
-                "installed_version": "4.7.0",
+                "installed_version": "4.8.1",
                 "key": "importlib-metadata",
                 "package_name": "importlib-metadata",
                 "required_version": ">=0.12"
@@ -773,10 +766,10 @@
                 "required_version": null
             },
             {
-                "installed_version": "0.13.1",
+                "installed_version": "1.0.0",
                 "key": "pluggy",
                 "package_name": "pluggy",
-                "required_version": ">=0.12,<1.0.0a1"
+                "required_version": ">=0.12,<2.0"
             },
             {
                 "installed_version": "1.10.0",
@@ -792,7 +785,7 @@
             }
         ],
         "package": {
-            "installed_version": "6.2.4",
+            "installed_version": "6.2.5",
             "key": "pytest",
             "package_name": "pytest"
         }
@@ -800,7 +793,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "6.2.4",
+                "installed_version": "6.2.5",
                 "key": "pytest",
                 "package_name": "pytest",
                 "required_version": ">=5.4.0"
@@ -815,13 +808,13 @@
     {
         "dependencies": [
             {
-                "installed_version": "2021.5.30",
+                "installed_version": "2021.10.8",
                 "key": "certifi",
                 "package_name": "certifi",
                 "required_version": ">=2017.4.17"
             },
             {
-                "installed_version": "2.0.4",
+                "installed_version": "2.0.6",
                 "key": "charset-normalizer",
                 "package_name": "charset-normalizer",
                 "required_version": "~=2.0.0"
@@ -833,7 +826,7 @@
                 "required_version": ">=2.5,<4"
             },
             {
-                "installed_version": "1.26.6",
+                "installed_version": "1.26.7",
                 "key": "urllib3",
                 "package_name": "urllib3",
                 "required_version": ">=1.21.1,<1.27"
@@ -863,7 +856,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "57.0.0",
+            "installed_version": "58.1.0",
             "key": "setuptools",
             "package_name": "setuptools"
         }
@@ -886,7 +879,7 @@
             }
         ],
         "package": {
-            "installed_version": "1.8",
+            "installed_version": "1.9",
             "key": "sympy",
             "package_name": "sympy"
         }
@@ -918,7 +911,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "3.10.0.0",
+            "installed_version": "3.10.0.2",
             "key": "typing-extensions",
             "package_name": "typing-extensions"
         }
@@ -932,7 +925,7 @@
                 "required_version": ">=0.3.0"
             },
             {
-                "installed_version": "3.10.0.0",
+                "installed_version": "3.10.0.2",
                 "key": "typing-extensions",
                 "package_name": "typing-extensions",
                 "required_version": ">=3.7.4"
@@ -947,7 +940,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "1.26.6",
+            "installed_version": "1.26.7",
             "key": "urllib3",
             "package_name": "urllib3"
         }
@@ -975,10 +968,10 @@
                 "required_version": ">=2.0.0b6,<3.0.0"
             },
             {
-                "installed_version": "0.5.5",
+                "installed_version": "0.5.6",
                 "key": "eth-account",
                 "package_name": "eth-account",
-                "required_version": ">=0.5.5,<0.6.0"
+                "required_version": ">=0.5.6,<0.6.0"
             },
             {
                 "installed_version": "0.2.0",
@@ -1005,10 +998,10 @@
                 "required_version": ">=0.1.0,<1.0.0"
             },
             {
-                "installed_version": "0.7.0",
+                "installed_version": "0.8.0a2",
                 "key": "ipfshttpclient",
                 "package_name": "ipfshttpclient",
-                "required_version": "==0.7.0"
+                "required_version": "==0.8.0a2"
             },
             {
                 "installed_version": "3.2.0",
@@ -1023,7 +1016,7 @@
                 "required_version": ">=1.1.6,<2.0.0"
             },
             {
-                "installed_version": "3.17.3",
+                "installed_version": "3.18.1",
                 "key": "protobuf",
                 "package_name": "protobuf",
                 "required_version": ">=3.10.0,<4"
@@ -1035,7 +1028,7 @@
                 "required_version": ">=2.16.0,<3.0.0"
             },
             {
-                "installed_version": "3.10.0.0",
+                "installed_version": "3.10.0.2",
                 "key": "typing-extensions",
                 "package_name": "typing-extensions",
                 "required_version": ">=3.7.4.1,<4"
@@ -1048,7 +1041,7 @@
             }
         ],
         "package": {
-            "installed_version": "5.23.0",
+            "installed_version": "5.24.0",
             "key": "web3",
             "package_name": "web3"
         }
@@ -1064,7 +1057,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "0.36.2",
+            "installed_version": "0.37.0",
             "key": "wheel",
             "package_name": "wheel"
         }
@@ -1078,20 +1071,20 @@
                 "required_version": ">=2.0"
             },
             {
-                "installed_version": "5.1.0",
+                "installed_version": "5.2.0",
                 "key": "multidict",
                 "package_name": "multidict",
                 "required_version": ">=4.0"
             },
             {
-                "installed_version": "3.10.0.0",
+                "installed_version": "3.10.0.2",
                 "key": "typing-extensions",
                 "package_name": "typing-extensions",
                 "required_version": ">=3.7.4"
             }
         ],
         "package": {
-            "installed_version": "1.6.3",
+            "installed_version": "1.7.0",
             "key": "yarl",
             "package_name": "yarl"
         }
@@ -1099,7 +1092,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "3.5.0",
+            "installed_version": "3.6.0",
             "key": "zipp",
             "package_name": "zipp"
         }

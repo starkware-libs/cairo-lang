@@ -1,8 +1,9 @@
 import asyncio
 import concurrent
+import concurrent.futures
 import dataclasses
 from abc import ABC, abstractmethod
-from typing import Dict, Iterator, List, Optional, Set, Tuple, Type, TypeVar, Union
+from typing import Dict, List, Optional, Set, Tuple, Type, TypeVar, Union
 
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
@@ -293,15 +294,11 @@ class OsStarknetStorage(StarknetStorageInterface):
         commitment_tree: PatriciaTree,
         updated_commitment_tree: PatriciaTree,
         commitment_tree_facts: BinaryFactDict,
-        read_values: List[int],
     ):
         """
         The constructor is private.
         """
         self.commitment_tree = commitment_tree  # This is the previous commitment tree.
-
-        # Generate read responses in the order of OS requests.
-        self.read_values_generator: Iterator[int] = iter(read_values)
 
         # The return values of commitment_update, computed at the creation of this object (before
         # entering the CairoRunner run) for optimization.
@@ -309,14 +306,10 @@ class OsStarknetStorage(StarknetStorageInterface):
         self.commitment_tree_facts = commitment_tree_facts
 
     def read(self, address: int) -> int:
-        return next(self.read_values_generator)
+        raise NotImplementedError("read() is not implemented in OsStarknetStorage.")
 
     def write(self, address: int, value: int):
-        """
-        Mocks write request. We don't need to keep track on writing operations in the StarkNet OS
-        run, as we collected in advance (in the batching phase) all read requests and modified
-        addresses.
-        """
+        raise NotImplementedError("write() is not implemented in OsStarknetStorage.")
 
     def commitment_update(self) -> Tuple[PatriciaTree, BinaryFactDict]:
         return self.updated_commitment_tree, self.commitment_tree_facts
@@ -327,7 +320,6 @@ class OsStarknetStorage(StarknetStorageInterface):
         previous_commitment_tree: PatriciaTree,
         updated_commitment_tree: PatriciaTree,
         ffc: FactFetchingContext,
-        read_values: List[int],
         accessed_addresses: Set[int],
     ) -> "OsStarknetStorage":
         # Compute commitment tree facts.
@@ -350,5 +342,4 @@ class OsStarknetStorage(StarknetStorageInterface):
             commitment_tree=previous_commitment_tree,
             updated_commitment_tree=updated_commitment_tree,
             commitment_tree_facts=commitment_tree_facts,
-            read_values=read_values,
         )

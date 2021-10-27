@@ -15,7 +15,6 @@ from starkware.cairo.lang.compiler.ast.expr import (
     ExprNeg,
     ExprOperator,
     ExprParentheses,
-    ExprPyConst,
     ExprReg,
     ExprSubscript,
 )
@@ -75,6 +74,37 @@ def test_hex_int():
     assert parse_expr("-0x1234") == parse_expr("- 0x1234")
 
 
+def test_short_string():
+    expr = parse_expr(" 'ab' ")
+    assert expr == ExprConst(val=ord("a") * 256 + ord("b"))
+    assert expr.format_str == "'ab'"
+    assert expr.format() == "'ab'"
+
+    expr = parse_expr("-'abc'")
+    assert expr == ExprNeg(val=ExprConst(val=int.from_bytes(b"abc", "big")))
+    assert expr.val.format_str == "'abc'"
+    assert expr.format() == "-'abc'"
+
+    assert parse_expr("-'abcd'") == parse_expr("- 'abcd'")
+
+    verify_exception(
+        """let x = '0123456789012345678901234567890123456789'""",
+        """
+file:?:?: Short string (e.g., 'abc') length must be at most 31.
+let x = '0123456789012345678901234567890123456789'
+        ^****************************************^
+""",
+    )
+    verify_exception(
+        """let x = '\u1234'""",
+        """
+file:?:?: Expected an ascii string. Found: '\u1234'.
+let x = '\u1234'
+        ^*^
+""",
+    )
+
+
 def test_types():
     assert isinstance(parse_type("felt"), TypeFelt)
     assert parse_type("my_namespace.MyStruct  *  *").format() == "my_namespace.MyStruct**"
@@ -120,12 +150,6 @@ def test_typed_identifier():
 
     typed_identifier = parse(None, "local    t :   felt", "typed_identifier", TypedIdentifier)
     assert typed_identifier.format() == "local t : felt"
-
-
-def test_exp_pyconst():
-    expr = parse_expr("  %[foo bar%]   ")
-    assert expr == ExprPyConst(code="foo bar")
-    assert expr.format() == "%[foo bar%]"
 
 
 def test_add_expr():
@@ -223,6 +247,39 @@ def test_tuple_expr():
     assert parse_expr("( 1  , ap, )").format() == "(1, ap,)"
     assert parse_expr("( 1 , a=2, b=(c=()))").format() == "(1, a=2, b=(c=()))"
 
+    verify_exception(
+        "let x = (,)",
+        """
+file:?:?: Unexpected comma.
+let x = (,)
+         ^
+""",
+    )
+    verify_exception(
+        "let x = (a, ,)",
+        """
+file:?:?: Unexpected comma.
+let x = (a, ,)
+            ^
+""",
+    )
+    verify_exception(
+        "let x = ((a)(b))",
+        """
+file:?:?: Unexpected token Token('LPAR', '('). Expected one of: ")", ",", ".", "[", operator.
+let x = ((a)(b))
+            ^
+""",
+    )
+    verify_exception(
+        "let x = ((a)\n(b))",
+        """
+file:?:?: Expected a comma before this expression.
+(b))
+^*^
+""",
+    )
+
 
 def test_tuple_expr_with_notes():
     assert (
@@ -263,9 +320,9 @@ def test_pow_expr():
     verify_exception(
         "let x = 2 * * 3",
         """
-file:?:?: Unexpected operator. Did you mean "**"?
+file:?:?: Unexpected token Token('STAR', '*'). Expected: expression.
 let x = 2 * * 3
-          ^*^
+            ^
 """,
     )
 
@@ -435,6 +492,18 @@ def test_instruction():
     assert expr.format() == "ap += [fp] + 2"
     assert parse_instruction("ap  +=[ fp]+   2").format() == "ap += [fp] + 2"
     assert parse_instruction("ap  +=[ fp]+   2;ap ++").format() == "ap += [fp] + 2; ap++"
+
+
+def test_label():
+    assert parse_code_element("test  :").format(100) == "test:"
+    verify_exception(
+        "test.a:\n",
+        """
+file:?:?: Unexpected '.' in label name.
+test.a:
+^****^
+""",
+    )
 
 
 def test_import():
@@ -640,7 +709,7 @@ func myfunc():
 end
 """,
         """
-file:?:?: Unexpected token Token(IDENTIFIER, \'world\'). Expected one of: "@", "func", \
+file:?:?: Unexpected token Token('IDENTIFIER', \'world\'). Expected one of: "@", "func", \
 "namespace", "struct".
 @hello world
        ^***^
@@ -655,7 +724,8 @@ func myfunc():
 end
 """,
         """
-file:?:?: Unexpected token Token(MINUS, \'-\'). Expected one of: "@", "func", "namespace", "struct".
+file:?:?: Unexpected token Token('MINUS', \'-\'). Expected one of: "@", "func", "namespace", \
+"struct".
 @hello-world
       ^
 """,
@@ -731,5 +801,28 @@ def test_locations():
         expr.body.b.addr.a,
         expr.body.b.addr.b,
     ]
+    for expr, mark in safe_zip(exprs, marks):
+        assert get_location_marks(code, expr.location) == code + "\n" + mark
+
+
+def test_pointer():
+    code_with_marks = """\
+ felt** ***
+ ^********^
+ ^*******^
+ ^******^
+ ^****^
+ ^***^
+ ^**^
+"""
+
+    lines = code_with_marks.splitlines()
+    code, marks = lines[0], lines[1:]
+    typ = parse_type(code)
+    exprs = [
+        typ,
+    ]
+    for i in range(len(marks) - 1):
+        exprs.append(exprs[-1].pointee)
     for expr, mark in safe_zip(exprs, marks):
         assert get_location_marks(code, expr.location) == code + "\n" + mark

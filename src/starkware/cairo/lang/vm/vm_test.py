@@ -118,7 +118,7 @@ def test_jnz_relocatables(offset: int):
     error_message = (
         None
         if relocatable_value.offset >= 0
-        else f"Could not complete computation jmp != 0 of non pure value {relocatable_value}"
+        else f"Could not complete computation jmp != 0 of non pure value: {relocatable_value}"
     )
     with maybe_raises(expected_exception=VmException, error_message=error_message):
         vm = run_single(code, 2, ap=102, extra_mem={101: relocatable_value})

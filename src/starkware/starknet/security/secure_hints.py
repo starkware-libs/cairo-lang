@@ -7,8 +7,10 @@ import marshmallow
 import marshmallow.fields as mfields
 import marshmallow_dataclass
 
+from starkware.cairo.lang.compiler.parser import parse_expr
 from starkware.cairo.lang.compiler.preprocessor.flow import ReferenceManager
 from starkware.cairo.lang.compiler.program import CairoHint, Program
+from starkware.starknet.security.simple_references import is_simple_reference
 
 
 class SetField(mfields.List):
@@ -166,5 +168,11 @@ class HintsWhitelist:
             if re.match("^__temp[0-9]+$", ref_name.path[-1]):
                 continue
             ref = reference_manager.get_ref(ref_id)
-            ref_exprs.add(NamedExpression(name=str(ref_name), expr=ref.value.format()))
+            # Format and parse to get a canonical form of the expression to guarantee the same
+            # simplicity value after serialization.
+            ref_expr_str = ref.value.format()
+            cannocial_form = parse_expr(ref_expr_str)
+            if is_simple_reference(cannocial_form, simplicity_bound=20):
+                continue
+            ref_exprs.add(NamedExpression(name=str(ref_name), expr=ref_expr_str))
         return ref_exprs

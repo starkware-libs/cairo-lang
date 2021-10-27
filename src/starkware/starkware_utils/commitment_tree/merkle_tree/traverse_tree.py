@@ -1,5 +1,6 @@
 import asyncio
-from typing import AsyncIterator, Callable, Optional, TypeVar
+from asyncio.tasks import Task
+from typing import AsyncIterator, Callable, List, Optional, TypeVar
 
 NodeType = TypeVar("NodeType")
 
@@ -28,23 +29,29 @@ async def traverse_tree(
     await queue.put((0, root))
 
     async def worker_func():
-        while True:
-            height, node = await queue.get()
-            try:
-                async for child in get_children_callback(node):
-                    await queue.put((height - 1, child))
-            finally:
-                queue.task_done()
+        try:
+            while True:
+                height, node = await queue.get()
+                try:
+                    async for child in get_children_callback(node):
+                        await queue.put((height - 1, child))
+                finally:
+                    queue.task_done()
+        except asyncio.CancelledError:
+            return
 
     # Run several workers to process the nodes.
-    workers = asyncio.gather(*(worker_func() for _ in range(n_workers)))
+    # Do not use workers=asyncio.gather(...), as then the workers object would itself be a task that
+    # may raise CancelledError.
+    workers: List[Task] = []
+    for _ in range(n_workers):
+        workers.append(asyncio.create_task(worker_func()))
 
     await queue.join()
 
-    workers.cancel()
-    try:
-        await workers
-    except asyncio.CancelledError:
-        pass
+    for worker in workers:
+        worker.cancel()
+
+    await asyncio.gather(*workers)
 
     assert queue.empty()

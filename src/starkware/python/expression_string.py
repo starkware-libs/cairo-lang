@@ -68,6 +68,8 @@ class ExpressionString:
         and '5^7' will not require parentheses, and the result will start with '5 * 7 * ...' or
         '5^7 * ...'.
         """
+        if format_spec == "":
+            format_spec = "LOWEST"
         return self._maybe_add_parentheses(OperatorPrecedence[format_spec])
 
     def __str__(self):

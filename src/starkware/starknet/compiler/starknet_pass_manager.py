@@ -9,6 +9,7 @@ from starkware.starknet.compiler.contract_interface import (
     ContractInterfaceDeclVisitor,
     ContractInterfaceImplentationVisitor,
 )
+from starkware.starknet.compiler.external_wrapper import WRAPPER_SCOPE, ExternalWrapperVisitor
 from starkware.starknet.compiler.starknet_preprocessor import StarknetPreprocessor
 from starkware.starknet.compiler.storage_var import (
     StorageVarDeclVisitor,
@@ -30,6 +31,7 @@ def starknet_pass_manager(
         preprocessor_cls=StarknetPreprocessor,
         opt_unused_functions=opt_unused_functions,
         preprocessor_kwargs=dict(hint_whitelist=hint_whitelist),
+        additional_scopes_to_compile={WRAPPER_SCOPE},
     )
     # Use ModuleCollector.additional_modules to import necessary modules, whose import line
     # may be added after the module_collector phase.
@@ -60,6 +62,16 @@ def starknet_pass_manager(
         new_stage_name="contract_interface_signature",
         new_stage=VisitorStage(
             lambda context: ContractInterfaceDeclVisitor(identifiers=context.identifiers),
+            modify_ast=True,
+        ),
+    )
+    manager.add_after(
+        existing_stage="struct_collector",
+        new_stage_name="external_wrapper",
+        new_stage=VisitorStage(
+            lambda context: ExternalWrapperVisitor(
+                builtins=context.builtins, identifiers=context.identifiers
+            ),
             modify_ast=True,
         ),
     )

@@ -20,6 +20,9 @@ from starkware.cairo.lang.vm.memory_dict import MemoryDict
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
 from starkware.python.utils import add_counters, sub_counters
 
+DEFAULT_CAIRO_PIE_VERSION = "1.0"
+CURRENT_CAIRO_PIE_VERSION = "1.1"
+
 
 @dataclasses.dataclass
 class SegmentInfo:
@@ -183,17 +186,22 @@ class CairoPie:
     memory: MemoryDict
     additional_data: Dict[str, Any]
     execution_resources: ExecutionResources
+    version: Dict[str, str] = field(
+        default_factory=lambda: {"cairo_pie": CURRENT_CAIRO_PIE_VERSION}
+    )
 
     METADATA_FILENAME = "metadata.json"
     MEMORY_FILENAME = "memory.bin"
     ADDITIONAL_DATA_FILENAME = "additional_data.json"
     EXECUTION_RESOURCES_FILENAME = "execution_resources.json"
+    VERSION_FILENAME = "version.json"
+    OPTIONAL_FILES = [VERSION_FILENAME]
     ALL_FILES = [
         METADATA_FILENAME,
         MEMORY_FILENAME,
         ADDITIONAL_DATA_FILENAME,
         EXECUTION_RESOURCES_FILENAME,
-    ]
+    ] + OPTIONAL_FILES
     MAX_SIZE = 1024 ** 3
 
     @classmethod
@@ -226,7 +234,12 @@ class CairoPie:
                 execution_resources = ExecutionResources.Schema().load(
                     json.loads(fp.read(cls.MAX_SIZE).decode("ascii"))
                 )
-        return cls(metadata, memory, additional_data, execution_resources)
+            version = {"cairo_pie": DEFAULT_CAIRO_PIE_VERSION}
+            if cls.VERSION_FILENAME in zf.namelist():
+                with zf.open(cls.VERSION_FILENAME, "r") as fp:
+                    version = json.loads(fp.read(cls.MAX_SIZE).decode("ascii"))
+
+        return cls(metadata, memory, additional_data, execution_resources, version)
 
     def to_file(self, file):
         with zipfile.ZipFile(file, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
@@ -242,6 +255,8 @@ class CairoPie:
                         "ascii"
                     )
                 )
+            with zf.open(self.VERSION_FILENAME, "w") as fp:
+                fp.write(json.dumps(self.version).encode("ascii"))
 
     @classmethod
     def deserialize(cls, cairo_pie_bytes: bytes) -> "CairoPie":
@@ -316,23 +331,29 @@ class CairoPie:
             zip_info.orig_filename == zip_info.filename for zip_info in zf.filelist  # type: ignore
         ), "File name mismatch."
 
-        # Make sure we have exactly the files we expect, and that their size is reasonable.
+        # Make sure we have exactly the files we expect.
         inner_files = {zip_info.filename: zip_info for zip_info in zf.filelist}
-        assert sorted(inner_files.keys()) == sorted(
+        assert sorted(inner_files.keys() | cls.OPTIONAL_FILES) == sorted(
             cls.ALL_FILES
         ), "Invalid list of inner files in the CairoPIE zip."
+
+        # Make sure the file sizes are reasonable.
+        file_size = lambda name: inner_files[name].file_size if name in inner_files else 0
         assert (
-            inner_files[cls.METADATA_FILENAME].file_size < cls.MAX_SIZE
+            file_size(cls.METADATA_FILENAME) < cls.MAX_SIZE
         ), f"Invalid file size for {cls.METADATA_FILENAME}."
         assert (
-            inner_files[cls.MEMORY_FILENAME].file_size < cls.MAX_SIZE
+            file_size(cls.MEMORY_FILENAME) < cls.MAX_SIZE
         ), f"Invalid file size for {cls.MEMORY_FILENAME}."
         assert (
-            inner_files[cls.ADDITIONAL_DATA_FILENAME].file_size < cls.MAX_SIZE
+            file_size(cls.ADDITIONAL_DATA_FILENAME) < cls.MAX_SIZE
         ), f"Invalid file size for {cls.ADDITIONAL_DATA_FILENAME}."
         assert (
-            inner_files[cls.EXECUTION_RESOURCES_FILENAME].file_size < 10000
+            file_size(cls.EXECUTION_RESOURCES_FILENAME) < 10000
         ), f"Invalid file size for {cls.EXECUTION_RESOURCES_FILENAME}."
+        assert (
+            file_size(cls.VERSION_FILENAME) < 10000
+        ), f"Invalid file size for {cls.VERSION_FILENAME}."
 
     def get_segment(self, segment_info: SegmentInfo):
         return self.memory.get_range(

@@ -115,6 +115,20 @@ local name = [ap]
       ^**^
 """,
     )
+    verify_exception(
+        """
+func foo():
+end
+
+func foo():
+end
+""",
+        """
+file:?:?: Redefinition of 'test_scope.foo'.
+func foo():
+     ^*^
+""",
+    )
 
 
 def test_imports():

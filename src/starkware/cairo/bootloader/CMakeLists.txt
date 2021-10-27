@@ -22,19 +22,6 @@ python_exe(cairo_hash_program_exe
     MODULE starkware.cairo.bootloader.hash_program
 )
 
-full_python_test(cairo_hash_program_test
-    PREFIX starkware/cairo/bootloader
-    PYTHON python3.7
-    TESTED_MODULES starkware/cairo/bootloader
-
-    FILES
-    hash_program_test.py
-
-    LIBS
-    cairo_hash_program_lib
-    pip_pytest
-)
-
 python_lib(cairo_bootloader_fact_topology_lib
     PREFIX starkware/cairo/bootloader
     FILES

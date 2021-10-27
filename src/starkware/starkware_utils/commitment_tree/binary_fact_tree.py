@@ -1,11 +1,13 @@
 from abc import abstractmethod
+from importlib import import_module
+from logging import Logger
 from typing import Collection, Dict, Optional, Tuple, Type, TypeVar
 
 from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
 from starkware.storage.storage import Fact, FactFetchingContext
 
 TFact = TypeVar("TFact", bound=Fact)
-BinaryFactDict = Dict[bytes, Tuple[bytes, ...]]
+BinaryFactDict = Dict[int, Tuple[int, ...]]
 
 
 class BinaryFactTree(ValidatedMarshmallowDataclass):
@@ -60,3 +62,14 @@ class BinaryFactTree(ValidatedMarshmallowDataclass):
         }, f"get_leaves() on single leaf index returned an unexpected result."
 
         return leaves[index]
+
+    @staticmethod
+    def from_config(import_path: str, logger: Optional[Logger] = None) -> Type["BinaryFactTree"]:
+        """
+        Creates a tree class from an import string.
+        """
+        if logger is not None:
+            logger.info(f"Importing {import_path}")
+        parts = import_path.rsplit(".", 1)
+        state_class = getattr(import_module(parts[0]), parts[1])
+        return state_class

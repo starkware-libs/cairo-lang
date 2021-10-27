@@ -161,7 +161,7 @@ class DataEncodingProcessor:
                 code_block_str = self.process_felt(arg_info=arg_info)
             else:
                 raise PreprocessorError(
-                    f"Unsupported argument type {cairo_type.format()}.",
+                    f"Unsupported {self.arg_text} type {cairo_type.format()}.",
                     location=cairo_type.location,
                 )
 
@@ -333,6 +333,9 @@ class DataEncoder(DataEncodingProcessor):
         )
         self.arg_name_func = arg_name_func
 
+        # True if the compiler can track the change in the ap register in the generated code.
+        self.known_ap_change = True
+
     def process_felt(self, arg_info: ArgumentInfo):
         return f"""\
 assert [__{self.var_name}_ptr] = {self.arg_name_func(arg_info)}
@@ -340,6 +343,7 @@ let __{self.var_name}_ptr = __{self.var_name}_ptr + 1
 """
 
     def process_felt_ptr(self, arg_info: ArgumentInfo):
+        self.known_ap_change = False
         return f"""\
 # Check that the length is non-negative.
 assert [range_check_ptr] = {self.arg_name_func(arg_info)}_len

@@ -1,5 +1,3 @@
-# WARNING: This library is used by the Cairo playground hint server. Please don't add files
-# unless they should be there.
 python_lib(cairo_relocatable_lib
     PREFIX starkware/cairo/lang/vm
 

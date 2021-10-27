@@ -39,7 +39,7 @@ class FutureIdentifierDefinition(IdentifierDefinition):
     """
 
     TYPE: ClassVar[str] = "future"
-    identifier_type: type
+    identifier_type: Type[IdentifierDefinition]
 
 
 @marshmallow_dataclass.dataclass
@@ -117,6 +117,12 @@ class FunctionDefinition(LabelDefinition):
 
 
 @marshmallow_dataclass.dataclass
+class NamespaceDefinition(IdentifierDefinition):
+    TYPE: ClassVar[str] = "namespace"
+    Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
+
+
+@marshmallow_dataclass.dataclass
 class ReferenceDefinition(IdentifierDefinition):
     TYPE: ClassVar[str] = "reference"
     Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
@@ -157,6 +163,7 @@ class IdentifierDefinitionSchema(OneOfSchema):
         MemberDefinition.TYPE: MemberDefinition.Schema,
         LabelDefinition.TYPE: LabelDefinition.Schema,
         FunctionDefinition.TYPE: FunctionDefinition.Schema,
+        NamespaceDefinition.TYPE: NamespaceDefinition.Schema,
         ReferenceDefinition.TYPE: ReferenceDefinition.Schema,
         ScopeDefinition.TYPE: ScopeDefinition.Schema,
         StructDefinition.TYPE: StructDefinition.Schema,

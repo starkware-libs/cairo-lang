@@ -6,5 +6,6 @@ python_lib(starknet_feeder_gateway_client_lib
 
     LIBS
     everest_feeder_gateway_client_lib
+    starknet_definitions_lib
     starknet_transaction_lib
 )

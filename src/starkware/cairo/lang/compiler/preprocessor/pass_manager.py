@@ -17,6 +17,8 @@ class PassManagerContext:
     identifiers: IdentifierManager
     modules: List[CairoModule] = dataclasses.field(default_factory=list)
     identifier_locations: Dict[ScopedName, Location] = dataclasses.field(default_factory=dict)
+    # List of builtins.
+    builtins: Optional[List[str]] = None
     preprocessed_program: Optional[PreprocessedProgram] = None
     # A set of functions to compile (None means all functions will be compiled).
     # If the unused function optimization is enabled, only reachable functions will be compiled.
@@ -102,3 +104,4 @@ class VisitorStage(Stage):
             modified_modules.append(visitor.visit(module))
         if self.modify_ast:
             context.modules = modified_modules
+        return visitor

@@ -2,6 +2,7 @@ import os
 from typing import Callable, Dict, Iterable, List, Optional, TypeVar, Union
 
 import marshmallow
+import marshmallow.exceptions
 import marshmallow.validate
 from web3 import Web3
 

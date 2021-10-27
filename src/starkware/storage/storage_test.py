@@ -2,8 +2,8 @@ import asyncio
 
 import pytest
 
-from starkware.storage import Storage
 from starkware.storage.dict_storage import DictStorage
+from starkware.storage.storage import Storage
 from starkware.storage.test_utils import DummyLockManager
 
 

@@ -25,6 +25,7 @@ from starkware.cairo.lang.compiler.identifier_definition import (
     FutureIdentifierDefinition,
     IdentifierDefinition,
     LabelDefinition,
+    NamespaceDefinition,
     ReferenceDefinition,
     StructDefinition,
 )
@@ -162,6 +163,10 @@ class IdentifierCollector(Visitor):
                     function_scope + arg_id.name, ReferenceDefinition, arg_id.location
                 )
 
+        assert elm.element_type in ["func", "namespace"]
+        identifier_type = FunctionDefinition if elm.element_type == "func" else NamespaceDefinition
+        self.add_future_identifier(function_scope, identifier_type, elm.identifier.location)
+
         handle_function_arguments(identifier_list=elm.arguments, struct_name=args_scope)
         handle_function_arguments(
             identifier_list=elm.implicit_arguments, struct_name=implicit_args_scope
@@ -183,9 +188,6 @@ class IdentifierCollector(Visitor):
                         "argument.",
                         location=arg_id.location,
                     )
-
-        ident_type = FunctionDefinition if elm.element_type == "func" else LabelDefinition
-        self.add_future_identifier(function_scope, ident_type, elm.identifier.location)
 
         # Add SIZEOF_LOCALS for current block at identifier definition location if available.
         self.add_future_identifier(

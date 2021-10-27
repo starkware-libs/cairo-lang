@@ -2,6 +2,7 @@ python_lib(starknet_security_lib
     PREFIX starkware/starknet/security
     FILES
     secure_hints.py
+    simple_references.py
 
     LIBS
     cairo_compile_lib
@@ -18,6 +19,7 @@ full_python_test(starknet_hints_latest_whitelist_test
     FILES
     latest_whitelist_test.py
     secure_hints_test.py
+    simple_references_test.py
     starknet_common.cairo
 
     LIBS

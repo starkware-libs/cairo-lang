@@ -3,13 +3,7 @@ from functools import lru_cache
 from typing import List, Optional
 
 import lark
-from lark.exceptions import (
-    LarkError,
-    UnexpectedCharacters,
-    UnexpectedEOF,
-    UnexpectedToken,
-    VisitError,
-)
+from lark.exceptions import LarkError, UnexpectedCharacters, UnexpectedToken, VisitError
 
 from starkware.cairo.lang.compiler.ast.cairo_types import CairoType
 from starkware.cairo.lang.compiler.ast.code_elements import CodeElement
@@ -26,8 +20,17 @@ from starkware.cairo.lang.compiler.parser_transformer import (
 grammar_file = os.path.join(os.path.dirname(__file__), "cairo.ebnf")
 gram_parser = lark.Lark(
     open(grammar_file, "r").read(),
-    start=["cairo_file", "repl"],
+    start=[
+        "cairo_file",
+        "code_block",
+        "code_element",
+        "expr",
+        "instruction",
+        "type",
+        "typed_identifier",
+    ],
     lexer="standard",
+    parser="lalr",
     propagate_positions=True,
 )
 
@@ -41,7 +44,15 @@ def wrap_lark_error(err: LarkError, input_file: InputFile) -> Exception:
     err_str = str(err)
 
     if isinstance(err, UnexpectedToken):
-        expected = set(err.expected)
+        # Handle unexpected part.
+        unexpected_token = err.token  # type: ignore
+        if unexpected_token.type == "$END":
+            unexpected_msg = f"Unexpected end of input"
+        else:
+            unexpected_msg = f"Unexpected token {repr(unexpected_token)}"
+
+        # Handle expected part.
+        expected = set(err.accepts)
         if {"FP", "AP"} <= expected:
             expected.remove("FP")
             expected.remove("AP")
@@ -50,73 +61,102 @@ def wrap_lark_error(err: LarkError, input_file: InputFile) -> Exception:
             expected.remove("MINUS")
         if {"CAST", "LPAR", "LSQB", "IDENTIFIER", "INT", "AMPERSAND", "register"} <= expected:
             expected -= {
+                "AMPERSAND",
                 "CAST",
-                "LPAR",
-                "LSQB",
+                "HEXINT",
                 "IDENTIFIER",
                 "INT",
-                "HEXINT",
-                "PYCONST",
+                "LPAR",
+                "LSQB",
                 "NONDET",
-                "AMPERSAND",
+                "PYCONST",
+                "SHORT_STRING",
                 "register",
             }
             expected.add("expression")
-        if {"PLUS", "MINUS", "STAR", "SLASH"} <= expected:
-            expected -= {"PLUS", "MINUS", "STAR", "SLASH"}
+        if {"PLUS", "MINUS", "STAR", "SLASH", "_DBL_STAR"} <= expected:
+            expected -= {"PLUS", "MINUS", "STAR", "SLASH", "_DBL_STAR"}
             expected.add("operator")
+        if {"STAR", "_DBL_STAR"} <= expected and "PLUS" not in expected:
+            expected.remove("_DBL_STAR")
         if "COMMENT" in expected:
             expected.remove("COMMENT")
         if "_NEWLINE" in expected:
             expected.remove("_NEWLINE")
         TOKENS = {
+            "$END": "end of input",
             "_ARROW": '"->"',
             "_AT": '"@"',
             "_DBL_EQ": '"=="',
             "_DBL_PLUS": '"++"',
+            "_DBL_STAR": '"**"',
             "_NEQ": '"!="',
+            "ALLOC_LOCALS": '"alloc_locals"',
             "AMPERSAND": '"&"',
-            "CAST": '"cast"',
+            "AS": '"as"',
+            "ASSERT": '"assert"',
+            "BUILTINS": '"%builtins"',
             "CALL": '"call"',
+            "CAST": '"cast"',
             "COLON": '":"',
+            "COMMA": '","',
+            "CONST": '"const"',
             "DOT": '"."',
+            "END": '"end"',
             "EQUAL": '"="',
+            "FROM": '"from"',
             "FUNC": '"func"',
-            "IDENTIFIER": "identifier",
-            "INT": "integer",
             "HEXINT": "integer",
+            "HINT": "hint",
+            "IDENTIFIER": "identifier",
+            "IF": '"if"',
+            "INT": "integer",
+            "JMP": '"jmp"',
+            "LANG": '"%lang"',
             "LBRACE": '"{"',
+            "LET": '"let"',
+            "LOCAL": '"local"',
             "LPAR": '"("',
             "LSQB": '"["',
+            "MEMBER": '"member"',
             "MINUS": '"-"',
             "NAMESPACE": '"namespace"',
             "PLUS": '"+"',
             "RBRACE": '"}"',
+            "RET": '"ret"',
+            "RETURN": '"return"',
             "RPAR": '")"',
             "RSQB": '"]"',
             "SEMICOLON": '";"',
             "SLASH": '"/"',
             "STAR": '"*"',
+            "STATIC_ASSERT": '"static_assert"',
             "STRUCT": '"struct"',
+            "SHORT_STRING": "short string",
+            "TEMPVAR": '"tempvar"',
+            "WITH": '"with"',
+            "WITH_ATTR": '"with_attr"',
         }
         expected_lst = sorted(TOKENS.get(x, x) for x in expected)
+        expected_lst_suffix = "."
+        if len(expected_lst) > 10:
+            expected_lst = expected_lst[:10]
+            expected_lst_suffix = ", ..."
         if len(expected_lst) > 1:
             err_str = (
-                f'Unexpected token {repr(err.token)}. Expected one of: {", ".join(expected_lst)}.'
+                f"{unexpected_msg}. Expected one of: "
+                f'{", ".join(expected_lst)}{expected_lst_suffix}'
             )
         else:
-            err_str = f'Unexpected token {repr(err.token)}. Expected: {", ".join(expected_lst)}.'
+            err_str = f'{unexpected_msg}. Expected: {", ".join(expected_lst)}.'
 
-        line, col, width = err.line, err.column, len(err.token)
+        line, col, width = err.line, err.column, len(unexpected_token)
     elif isinstance(err, UnexpectedCharacters):
         line, col, width = err.line, err.column, 1
         # Make sure line and col make sense.
         if not (0 <= line - 1 < len(lines) and 0 <= col - 1 < len(lines[line - 1])):
             raise err
         err_str = f'Unexpected character "{lines[line - 1][col - 1]}".'
-    elif isinstance(err, UnexpectedEOF):
-        line = len(lines)
-        col, width = len(lines[-1]), 1
     else:
         # Unsupported error.
         return err
@@ -145,8 +185,23 @@ def parse(
     input_file = InputFile(filename=filename, content=code)
     parser_transformer = ParserTransformer(input_file, parser_context=parser_context)
 
+    parser = gram_parser.parse_interactive(code, start=code_type)
+    parser_state = parser.parser_state
     try:
-        tree = gram_parser.parse(code, start=code_type)
+        token = None
+        for token in parser.lexer_state.lex(parser_state):
+            old_state_stack = list(parser_state.state_stack)
+            old_value_stack = list(parser_state.value_stack)
+            parser.feed_token(token)
+        old_state_stack = list(parser_state.state_stack)
+        old_value_stack = list(parser_state.value_stack)
+        tree = parser.feed_eof(last_token=token)
+    except UnexpectedToken as err:
+        # Restore the old state stack.
+        parser_state.state_stack = old_state_stack
+        parser_state.value_stack = old_value_stack
+        err.interactive_parser = parser
+        raise wrap_lark_error(err, input_file) from None
     except LarkError as err:
         raise wrap_lark_error(err, input_file) from None
 
@@ -168,7 +223,7 @@ def lex(code: str) -> List[lark.lexer.Token]:
     """
     Runs the lexer on the given code and returns the lark-parser tokens.
     """
-    return gram_parser.lex(code)
+    return list(gram_parser.lex(code))
 
 
 def parse_file(

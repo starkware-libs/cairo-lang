@@ -1,5 +1,4 @@
 import base64
-import dataclasses
 import gzip
 import json
 from abc import abstractmethod
@@ -18,8 +17,14 @@ from services.everest.api.gateway.transaction import (
 from services.everest.definitions import fields as everest_fields
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
+from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.definitions.transaction_type import TransactionType
-from starkware.starknet.services.api.contract_definition import ContractDefinition
+from starkware.starknet.services.api.contract_definition import (
+    CONSTRUCTOR_SELECTOR,
+    ContractDefinition,
+)
+from starkware.starknet.services.api.gateway.contract_address import calculate_contract_address
+from starkware.starknet.services.api.gateway.transaction_hash import calculate_transaction_hash
 from starkware.starkware_utils.error_handling import wrap_with_stark_exception
 
 
@@ -37,6 +42,13 @@ class Transaction(EverestTransaction):
         Subclasses should define it as a class variable.
         """
 
+    @abstractmethod
+    def calculate_hash(self, general_config: StarknetGeneralConfig) -> int:
+        """
+        Calculates the transaction hash in the StarkNet network - a unique identifier of the
+        transaction. See calculate_transaction_hash() docstring for more details.
+        """
+
 
 @marshmallow_dataclass.dataclass(frozen=True)
 class Deploy(Transaction):
@@ -44,8 +56,9 @@ class Deploy(Transaction):
     Represents a transaction in the StarkNet network that is a deployment of a StarkNet contract.
     """
 
-    contract_address: int = field(metadata=fields.contract_address_metadata)
+    contract_address_salt: int = field(metadata=fields.contract_address_salt_metadata)
     contract_definition: ContractDefinition
+    constructor_calldata: List[int] = field(metadata=fields.call_data_metadata)
 
     # Class variables.
     tx_type: ClassVar[TransactionType] = TransactionType.DEPLOY
@@ -83,16 +96,22 @@ class Deploy(Transaction):
 
         return data
 
-    def _remove_debug_info(self) -> "Deploy":
+    def calculate_hash(self, general_config: StarknetGeneralConfig) -> int:
         """
-        Sets debug_info in the Cairo contract program to None.
-        Returns an altered Deploy instance.
+        Calculates the transaction hash in the StarkNet network.
         """
-        altered_program = dataclasses.replace(self.contract_definition.program, debug_info=None)
-        altered_contract_definition = dataclasses.replace(
-            self.contract_definition, program=altered_program
+        contract_address = calculate_contract_address(
+            salt=self.contract_address_salt,
+            contract_definition=self.contract_definition,
+            caller_address=0,
         )
-        return dataclasses.replace(self, contract_definition=altered_contract_definition)
+        return calculate_transaction_hash(
+            tx_type=TransactionType.DEPLOY,
+            contract_address=contract_address,
+            entry_point_selector=CONSTRUCTOR_SELECTOR,
+            calldata=self.constructor_calldata,
+            chain_id=general_config.chain_id.value,
+        )
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -106,9 +125,25 @@ class InvokeFunction(Transaction):
     # A field element that encodes the signature of the called function.
     entry_point_selector: int = field(metadata=fields.entry_point_selector_metadata)
     calldata: List[int] = field(metadata=fields.call_data_metadata)
+    # Additional information given by the caller that represents the signature of the transaction.
+    # The exact way this field is handled is defined by the called contract's function, like
+    # calldata.
+    signature: List[int] = field(metadata=fields.signature_metadata)
 
     # Class variables.
     tx_type: ClassVar[TransactionType] = TransactionType.INVOKE_FUNCTION
+
+    def calculate_hash(self, general_config: StarknetGeneralConfig) -> int:
+        """
+        Calculates the transaction hash in the StarkNet network.
+        """
+        return calculate_transaction_hash(
+            tx_type=TransactionType.INVOKE_FUNCTION,
+            contract_address=self.contract_address,
+            entry_point_selector=self.entry_point_selector,
+            calldata=self.calldata,
+            chain_id=general_config.chain_id.value,
+        )
 
 
 class TransactionSchema(OneOfSchema):

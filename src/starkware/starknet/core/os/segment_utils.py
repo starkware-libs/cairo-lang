@@ -5,7 +5,7 @@ from starkware.cairo.lang.vm.memory_dict import UnknownMemoryError
 from starkware.cairo.lang.vm.memory_segments import MemorySegmentManager
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
-from starkware.starknet.public.abi import STORAGE_PTR_OFFSET, SYSCALL_PTR_OFFSET
+from starkware.starknet.public.abi import SYSCALL_PTR_OFFSET
 from starkware.starkware_utils.error_handling import stark_assert, wrap_with_stark_exception
 
 
@@ -15,7 +15,7 @@ def get_os_segment_ptr_range(
     """
     Returns the base and stop ptr of the OS-designated segment that starts at ptr_offset.
     """
-    allowed_offsets = (STORAGE_PTR_OFFSET, SYSCALL_PTR_OFFSET)
+    allowed_offsets = (SYSCALL_PTR_OFFSET,)
     assert (
         ptr_offset in allowed_offsets
     ), f"Illegal OS ptr offset; must be one of: {allowed_offsets}."
@@ -66,36 +66,15 @@ def validate_segment_pointers(
         segment_base_ptr.offset == 0
     ), f"Segment base pointer must be zero; got {segment_base_ptr.offset}."
 
-    expected_storage_stop_ptr = segment_base_ptr + segments.get_segment_used_size(
+    expected_stop_ptr = segment_base_ptr + segments.get_segment_used_size(
         segment_index=segment_base_ptr.segment_index
     )
 
     stark_assert(
-        expected_storage_stop_ptr == segment_stop_ptr,
+        expected_stop_ptr == segment_stop_ptr,
         code=StarknetErrorCode.SECURITY_ERROR,
         message=(
             f"Invalid stop pointer for segment. "
-            f"Expected: {expected_storage_stop_ptr}, found: {segment_stop_ptr}."
+            f"Expected: {expected_stop_ptr}, found: {segment_stop_ptr}."
         ),
-    )
-
-
-def extract_segment(
-    runner: CairoFunctionRunner,
-    segment_base_ptr: MaybeRelocatable,
-    segment_stop_ptr: MaybeRelocatable,
-) -> List[MaybeRelocatable]:
-    """
-    Extracts from runner the segment between given base and stop pointers.
-    Performs a few sanity checks.
-    """
-
-    validate_segment_pointers(
-        segments=runner.segments,
-        segment_base_ptr=segment_base_ptr,
-        segment_stop_ptr=segment_stop_ptr,
-    )
-
-    return get_segment_range(
-        runner=runner, segment_base_ptr=segment_base_ptr, segment_stop_ptr=segment_stop_ptr
     )

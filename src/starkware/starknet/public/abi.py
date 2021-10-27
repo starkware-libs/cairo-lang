@@ -11,7 +11,6 @@ ADDR_BOUND = 2 ** 251 - MAX_STORAGE_ITEM_SIZE
 
 # OS context offset.
 SYSCALL_PTR_OFFSET = 0
-STORAGE_PTR_OFFSET = 1
 
 
 def starknet_keccak(data: bytes) -> int:

@@ -17,6 +17,7 @@ from starkware.starknet.business_logic.state_objects import ContractCarriedState
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.services.api.contract_definition import ContractDefinition
 from starkware.starknet.storage.starknet_storage import StorageLeaf
+from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
 from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
 from starkware.starkware_utils.config_base import Config
 from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
@@ -330,7 +331,11 @@ class SharedState(SharedStateBase, ValidatedMarshmallowDataclass):
         ffc: FactFetchingContext,
         previous_carried_state: CarriedStateBase,
         current_carried_state: CarriedStateBase,
+        facts: Optional[BinaryFactDict] = None,
     ) -> "SharedState":
+        # Note that previous_carried_state is part of the API of
+        # SharedStateBase.apply_state_updates().
+
         # Downcast arguments to application-specific types.
         assert isinstance(previous_carried_state, CarriedState)
         assert isinstance(current_carried_state, CarriedState)

@@ -112,8 +112,9 @@ end
 # element.
 # For example, if value=17 * 2^128 + 8, then high=17 and low=8.
 func split_felt{range_check_ptr}(value) -> (high, low):
-    const MAX_HIGH = %[(PRIME - 1) >> 128%]
-    const MAX_LOW = %[(PRIME - 1) & ((1 << 128) - 1)%]
+    # Note: the following code works because PRIME - 1 is divisible by 2**128.
+    const MAX_HIGH = (-1) / 2 ** 128
+    const MAX_LOW = 0
 
     # Guess the low and high parts of the integer.
     let low = [range_check_ptr]
@@ -122,7 +123,8 @@ func split_felt{range_check_ptr}(value) -> (high, low):
 
     %{
         from starkware.cairo.common.math_utils import assert_integer
-        assert PRIME < 2**256
+        assert ids.MAX_HIGH < 2**128 and ids.MAX_LOW < 2**128
+        assert PRIME - 1 == ids.MAX_HIGH * 2**128 + ids.MAX_LOW
         assert_integer(ids.value)
         ids.low = ids.value & ((1 << 128) - 1)
         ids.high = ids.value >> 128

@@ -13,24 +13,22 @@ TEST_MODULES = {
 struct Storage:
 end
 
-func storage_read{storage_ptr : Storage*}(address : felt) -> (value : felt):
-    ret
-end
-
-func storage_write{storage_ptr : Storage*}(address : felt, value : felt):
-    ret
-end
-
 func normalize_address{range_check_ptr}(addr : felt) -> (res : felt):
     ret
 end
 """,
     "starkware.starknet.common.syscalls": """
-from starkware.starknet.common.storage import Storage
-
-func call_contract{syscall_ptr : felt*, storage_ptr : Storage*}(
+func call_contract{syscall_ptr : felt*}(
         contract_address : felt, function_selector : felt, calldata_size : felt,
         calldata : felt*) -> (retdata_size : felt, retdata : felt*):
+    ret
+end
+
+func storage_read{syscall_ptr : felt*}(address : felt) -> (value : felt):
+    ret
+end
+
+func storage_write{syscall_ptr : felt*}(address : felt, value : felt):
     ret
 end
 """,
@@ -52,6 +50,8 @@ end
 """,
     "starkware.cairo.common.memcpy": """
 func memcpy(dst : felt*, src : felt*, len):
+    # Manually revoke ap tracking to better simulate memcpy().
+    ap += [ap]
     ret
 end
 """,

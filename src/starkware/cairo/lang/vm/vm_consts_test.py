@@ -11,6 +11,7 @@ from starkware.cairo.lang.compiler.identifier_definition import (
     IdentifierDefinition,
     LabelDefinition,
     MemberDefinition,
+    NamespaceDefinition,
     ReferenceDefinition,
     StructDefinition,
 )
@@ -55,11 +56,12 @@ def test_vmconsts_simple():
     assert isinstance(consts.x, VmConsts)
 
 
-def test_label():
+def test_label_and_namespace():
     identifier_values = {
-        scope("x"): LabelDefinition(10),
-        scope("x.y"): ConstDefinition(1),
-        scope("y"): ConstDefinition(2),
+        scope("a"): NamespaceDefinition(),
+        scope("a.x"): LabelDefinition(10),
+        scope("a.x.y"): ConstDefinition(1),
+        scope("a.y"): ConstDefinition(2),
     }
     context = VmConstsContext(
         identifiers=IdentifierManager.from_dict(identifier_values),
@@ -70,9 +72,9 @@ def test_label():
         pc=0,
     )
     consts = VmConsts(context=context, accessible_scopes=[ScopedName()])
-    assert consts.x.instruction_offset_ == 10
-    assert consts.y == 2
-    assert consts.x.y == 1
+    assert consts.a.x.instruction_offset_ == 10
+    assert consts.a.y == 2
+    assert consts.a.x.y == 1
 
 
 def test_alias():

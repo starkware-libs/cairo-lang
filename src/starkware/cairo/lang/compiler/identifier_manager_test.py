@@ -8,6 +8,7 @@ from starkware.cairo.lang.compiler.identifier_manager import (
     IdentifierManager,
     IdentifierSearchResult,
     MissingIdentifierError,
+    NotAnIdentifierError,
 )
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 
@@ -21,7 +22,10 @@ def test_identifier_manager_get():
     manager = IdentifierManager.from_dict(identifier_dict)
 
     for name in ["a", "a.b"]:
-        with pytest.raises(MissingIdentifierError, match=f"Unknown identifier '{name}'."):
+        with pytest.raises(
+            NotAnIdentifierError,
+            match=f"Expected '{name}' to be an identifier, found a scope name.",
+        ):
             manager.get(scope(name))
 
     # Search 'a.b.c.*'.

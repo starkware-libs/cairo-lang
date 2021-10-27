@@ -6,9 +6,11 @@
 HEXINT: /0x[0-9a-fA-F]+/
 HINT: /%\{(.*?)%\}/s
 IDENTIFIER: /[a-zA-Z_][a-zA-Z_0-9]*/
-PYCONST: /%\[.*?%\]/s
+STRING: /"(.*?)"/
+SHORT_STRING: /'(.*?)'/
 _DBL_PLUS: "++"
 _DBL_EQ: "=="
+_DBL_STAR: "**"
 _NEQ: "!="
 _ARROW: "->"
 _AT: "@"
@@ -17,17 +19,18 @@ _AT: "@"
 type: "felt"                           -> type_felt
     | identifier                       -> type_struct
     | type "*"                         -> type_pointer
+    | type _DBL_STAR                   -> type_pointer2
     | "(" ((type ",")* type ","?)? ")" -> type_tuple
 
 // Expressions.
 expr_assignment: expr | identifier_def "=" expr
 ?arg_list_item: expr_assignment
-arg_list: ((notes arg_list_item notes ",")* notes arg_list_item (notes ",")?)? notes
+comma: ","
+_expr_sep: (comma | nonempty_notes)+
+arg_list: (notes arg_list_item? (_expr_sep arg_list_item)* _expr_sep?)
 
-?decorator: _AT identifier_def
+decorator: _AT identifier_def
 decorator_list: (decorator _NEWLINE*)*
-
-two_stars: "*" "*"
 
 ?expr: sum
 ?sum: product
@@ -40,22 +43,21 @@ two_stars: "*" "*"
       | "&" unary                             -> unary_addressof
       | "-" unary                             -> unary_neg
 ?pow: atom
-    | atom two_stars notes pow -> expr_pow
+    | atom _DBL_STAR notes pow -> expr_pow
 identifier: IDENTIFIER ("." IDENTIFIER)*
 identifier_def: IDENTIFIER
 ?atom: INT                                    -> atom_number
      | HEXINT                                 -> atom_hex_number
-     | PYCONST                                -> atom_pyconst
+     | SHORT_STRING                           -> atom_short_string
      | "nondet" HINT                          -> atom_hint
      | reg                                    -> atom_reg
      | function_call                          -> atom_func_call
      | identifier
-     | "(" notes expr ")"                     -> atom_parentheses
      | "[" notes expr "]"                     -> atom_deref
      | atom "[" notes expr "]"                -> atom_subscript
      | atom "." identifier_def                -> atom_dot
      | "cast" "(" notes expr "," type ")"     -> atom_cast
-     | "(" arg_list ")"                       -> atom_tuple
+     | "(" arg_list ")"                       -> atom_tuple_or_parentheses
 !reg: "ap" -> reg_ap
     | "fp" -> reg_fp
 
@@ -91,13 +93,14 @@ instruction: instruction_body                    -> instruction_noap
 function_call: identifier ("{" arg_list "}")? "(" arg_list ")"
 
 // Reference expressions.
-?rvalue: call_instruction                        -> rvalue_call_instruction
-       | function_call
-       | expr                                    -> rvalue_expr
+rvalue: call_instruction     -> rvalue_call_instruction
+      | expr                 -> rvalue_expr
 
 // Directives.
-directive: "%builtins" identifier+  -> directive_builtins
-         | "%lang" identifier       -> directive_lang
+BUILTINS: "%builtins"
+LANG: "%lang"
+directive: BUILTINS identifier+  -> directive_builtins
+         | LANG identifier       -> directive_lang
 
 // Import statement.
 aliased_identifier: identifier_def ("as" identifier_def)?
@@ -120,9 +123,15 @@ _struct: decorator_list _some_namespace identifier_def ":"_NEWLINE code_block "e
 
 _with_statement: "with" (aliased_identifier ",")* aliased_identifier ":" _NEWLINE code_block "end"
 
+_attr_val: "(" notes (STRING notes)* ")"
+_with_attr_statement: "with_attr" identifier_def _attr_val? ":" _NEWLINE code_block "end"
+
 // Cairo file.
 _NEWLINE: "\n"
 COMMENT: /#.*/
+
+// Note: code_element_label is using identifier instead of identifier_def, in order to make the
+// parser LALR-friendly.
 code_element: instruction                                       -> code_element_instruction
             | "const" identifier_def "=" expr                   -> code_element_const
             | "member" typed_identifier                         -> code_element_member
@@ -135,9 +144,10 @@ code_element: instruction                                       -> code_element_
             | "return" function_call                            -> code_element_tail_call
             | _if                                               -> code_element_if
             | function_call                                     -> code_element_func_call
-            | identifier_def ":"                                -> code_element_label
+            | identifier ":"                                    -> code_element_label
             | _func                                             -> code_element_function
             | _struct                                           -> code_element_struct
+            | _with_attr_statement                              -> code_element_with_attr
             | _with_statement                                   -> code_element_with
             | HINT                                              -> code_element_hint
             | directive                                         -> code_element_directive
@@ -151,6 +161,5 @@ cairo_file: code_block
 
 // Notes (comments inside parentheses).
 note_new_line: _NEWLINE
+nonempty_notes: (note_new_line | COMMENT)+ -> notes
 notes: (note_new_line | COMMENT)*
-
-?repl: expr | code_element

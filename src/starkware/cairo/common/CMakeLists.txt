@@ -16,6 +16,7 @@ python_lib(cairo_common_lib
     hash_chain.cairo
     hash_chain.py
     hash_state.cairo
+    hash_state.py
     hash.cairo
     invoke.cairo
     keccak.cairo

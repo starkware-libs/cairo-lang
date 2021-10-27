@@ -1,5 +1,7 @@
 from starkware.cairo.common.cairo_builtins import BitwiseBuiltin
 
+const ALL_ONES = 2 ** 251 - 1
+
 # Computes the bitwise operations and, xor and or.
 #
 # Arguments:
@@ -77,4 +79,16 @@ func bitwise_or{bitwise_ptr : BitwiseBuiltin*}(x : felt, y : felt) -> (x_or_y : 
     let x_or_y = bitwise_ptr.x_or_y
     let bitwise_ptr = bitwise_ptr + BitwiseBuiltin.SIZE
     return (x_or_y=x_or_y)
+end
+
+# Computes the bitwise not of a single 251-bit integer.
+#
+# Argument:
+#   x - the field element to operate on. The input should be a 251-bit
+#     integer, and is taken as unsigned int.
+#
+# Returns:
+#   not_x = ~x (bitwise not).
+func bitwise_not(x : felt) -> (not_x : felt):
+    return (not_x=ALL_ONES - x)
 end

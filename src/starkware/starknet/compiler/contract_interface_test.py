@@ -5,7 +5,7 @@ from starkware.starknet.public.abi import get_selector_from_name
 def test_contract_interface_success():
     selector = get_selector_from_name("foo")
     usage_code = """
-func main{syscall_ptr : felt*, storage_ptr : Storage*, range_check_ptr}():
+func main{syscall_ptr : felt*, range_check_ptr}():
     let (y0, y1) = Contract.foo(contract_address=0, x0=0, x1=0, arr_len=0, arr=cast(0, felt*))
     return()
 end
@@ -13,8 +13,6 @@ end
 
     code = f"""
 %lang starknet
-
-from starkware.starknet.common.storage import Storage
 
 {usage_code}
 
@@ -28,8 +26,6 @@ end
     expected_code = f"""
 %lang starknet
 
-from starkware.starknet.common.storage import Storage
-
 # Dummy library functions.
 
 func alloc() -> (result):
@@ -37,10 +33,11 @@ func alloc() -> (result):
 end
 
 func memcpy(dst : felt*, src : felt*, len):
+    ap += [ap]
     ret
 end
 
-func call_contract{{syscall_ptr : felt*, storage_ptr : Storage*}}(
+func call_contract{{syscall_ptr : felt*}}(
         contract_address : felt, function_selector : felt, calldata_size : felt,
         calldata : felt*) -> (retdata_size : felt, retdata : felt*):
     ret
@@ -49,7 +46,7 @@ end
 {usage_code}
 
 namespace Contract:
-    func foo{{syscall_ptr : felt*, storage_ptr : Storage*, range_check_ptr}}(
+    func foo{{syscall_ptr : felt*, range_check_ptr}}(
             contract_address : felt, x0 : felt, x1 : felt,
             arr_len : felt, arr : felt*) -> (y0 : felt, y1 : felt):
         alloc_locals
@@ -107,7 +104,7 @@ end
 file:?:?: @contract_interface can only be used in source files that contain the \
 "%lang starknet" directive.
 @contract_interface
-^*****************^
+ ^****************^
 """,
     )
     verify_exception(
@@ -135,7 +132,7 @@ end
         """
 file:?:?: Unexpected decorator for a contract interface.
 @another_decorator
-^****************^
+ ^***************^
 """,
     )
     verify_exception(
@@ -173,7 +170,7 @@ end
         """
 file:?:?: Unexpected decorator for a contract interface function.
 @decorator
-^********^
+ ^*******^
 """,
     )
     verify_exception(
@@ -228,7 +225,6 @@ def test_missing_range_check_ptr():
     verify_exception(
         """\
 %lang starknet
-from starkware.starknet.common.storage import Storage
 
 @contract_interface
 namespace Contract:
@@ -236,7 +232,7 @@ namespace Contract:
     end
 end
 
-func test{syscall_ptr : felt*, storage_ptr : Storage*}():
+func test{syscall_ptr : felt*}():
     Contract.foo(contract_address=0)
     return()
 end
@@ -248,10 +244,8 @@ file:?:?: While trying to retrieve the implicit argument 'range_check_ptr' in:
 file:?:?: While handling contract interface function:
     func foo():
          ^*^
-AUTOGEN_FILEfile:?:?: Unknown identifier 'range_check_ptr'.
-func foo{syscall_ptr : felt*, storage_ptr : Storage*, range_check_ptr}(
-                                                      ^*************^
-""".replace(
-            "AUTOGEN_FILE", autogen_file
-        ),
+file:?:?: Unknown identifier 'range_check_ptr'.
+func foo{syscall_ptr : felt*, range_check_ptr}(
+                              ^*************^
+""",
     )

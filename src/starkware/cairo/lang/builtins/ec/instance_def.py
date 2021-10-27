@@ -21,3 +21,7 @@ class EcOpInstanceDef:
     @property
     def cells_per_builtin(self):
         return CELLS_PER_EC_OP
+
+    @property
+    def range_check_units_per_builtin(self):
+        return 0

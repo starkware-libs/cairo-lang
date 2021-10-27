@@ -1,13 +1,12 @@
 import dataclasses
+import functools
+import operator
 from dataclasses import field
 from typing import List, Optional, Sequence
 
 from starkware.cairo.lang.compiler.ast.formatting_utils import FormattingError, LocationField
 from starkware.cairo.lang.compiler.ast.node import AstNode
 from starkware.cairo.lang.compiler.error_handling import Location
-
-NotesField = field(default_factory=lambda: Notes(), hash=False, compare=False)
-NoteListField = field(default_factory=list, hash=False, compare=False)
 
 
 @dataclasses.dataclass
@@ -50,6 +49,12 @@ class Notes(AstNode):
             location=self.location,
         )
 
+    @classmethod
+    def merge(cls, notes: List["Notes"]) -> "Notes":
+        if len(notes) == 0:
+            return cls()
+        return functools.reduce(operator.add, notes)
+
     def format(self):
         code = ""
         if self.starts_new_line:
@@ -66,3 +71,7 @@ class Notes(AstNode):
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return []
+
+
+NotesField = field(default_factory=lambda: Notes(), hash=False, compare=False)
+NoteListField: List[Notes] = field(default_factory=list, hash=False, compare=False)

@@ -35,7 +35,7 @@ def test_compiler():
 const x = 5
 const y = 2 * x
 [ap] = [[fp + 2 * 0x3] + ((7 - 1 + y))]; ap++
-ap += 4 + %[ 2**10 %]
+ap += 3 + 'a'
 
 # An empty line with a comment.
 [ap] = [fp] # This is a comment.
@@ -52,7 +52,7 @@ jmp label if [fp + 3 + 1] != 0
         program.format()
         == """\
 [ap] = [[fp + 6] + 16]; ap++
-ap += 1028
+ap += 100
 [ap] = [fp]
 [ap] = [ap + (-5)]
 jmp rel -1
@@ -811,6 +811,20 @@ end
         """
 file:?:?: The 'as' keyword is not supported in 'with' statements.
 with x as y:
+          ^
+""",
+    )
+
+
+def test_with_attr_statement():
+    verify_exception(
+        """
+with_attr x:
+end
+""",
+        """
+file:?:?: with_attr is not supported yet.
+with_attr x:
           ^
 """,
     )
@@ -3035,6 +3049,21 @@ func foo():
     )
 
 
+def test_namespace_is_not_a_label():
+    verify_exception(
+        """
+namespace MyNamespace:
+end
+jmp MyNamespace
+""",
+        """
+file:?:?: Expected a label name. Identifier 'MyNamespace' is of type namespace.
+jmp MyNamespace
+    ^*********^
+""",
+    )
+
+
 def test_struct_assignments():
     struct_def = """\
 struct B:
@@ -3642,7 +3671,7 @@ end
         """
 file:?:?: Unsupported decorator: 'external'.
 @external
-^*******^
+ ^******^
 """,
     )
 
@@ -3736,6 +3765,6 @@ end
 file:?:?: The compiler was unable to deduce the change of the ap register, as required by this \
 decorator.
 @known_ap_change
-^**************^
+ ^*************^
 """,
     )

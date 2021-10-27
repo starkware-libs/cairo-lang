@@ -127,10 +127,28 @@ class DBObject(Serializable):
 
     @classmethod
     async def get(cls: Type[TDBObject], storage: Storage, suffix: bytes) -> Optional[TDBObject]:
-        res = await storage.get_value(cls.db_key(suffix))
-        if res is None:
+        """
+        Returns the value under key cls.db_key(suffix) in the storage.
+        If key does not exist, returns None.
+        """
+        result = await storage.get_value(key=cls.db_key(suffix=suffix))
+
+        if result is None:
             return None
-        return cls.deserialize(res)
+
+        return cls.deserialize(data=result)
+
+    @classmethod
+    async def get_or_fail(cls: Type[TDBObject], storage: Storage, suffix: bytes) -> TDBObject:
+        """
+        Returns the value under key cls.db_key(suffix) in the storage.
+        If key does not exist, raises an exception.
+        """
+        db_key = cls.db_key(suffix=suffix)
+        result = await storage.get_value(key=db_key)
+        assert result is not None, f"Key {db_key!r} does not appear in storage."
+
+        return cls.deserialize(data=result)
 
     async def set(self, storage: Storage, suffix: bytes):
         await storage.set_value(self.db_key(suffix), self.serialize())

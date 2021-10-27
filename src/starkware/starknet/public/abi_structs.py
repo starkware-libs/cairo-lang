@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Set, Tuple
+from typing import Any, List, Set, Tuple
 
 from starkware.cairo.lang.compiler.ast.cairo_types import (
     CairoType,
@@ -9,6 +9,7 @@ from starkware.cairo.lang.compiler.ast.cairo_types import (
     TypeTuple,
 )
 from starkware.cairo.lang.compiler.identifier_definition import MemberDefinition, StructDefinition
+from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.parser import parse_type
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.compiler.type_system import mark_type_resolved
@@ -107,3 +108,17 @@ def struct_definition_from_abi_entry(abi_entry: dict) -> StructDefinition:
         size=abi_entry["size"],
         location=None,
     )
+
+
+def identifier_manager_from_abi(abi: List[Any]) -> IdentifierManager:
+    """
+    Returns an IdentifierManager object which contains all struct definitions found in the ABI.
+    """
+    identifier_manager = IdentifierManager()
+    for abi_entry in abi:
+        if abi_entry["type"] == "struct":
+            struct_definition = struct_definition_from_abi_entry(abi_entry=abi_entry)
+            identifier_manager.add_identifier(
+                name=struct_definition.full_name, definition=struct_definition
+            )
+    return identifier_manager

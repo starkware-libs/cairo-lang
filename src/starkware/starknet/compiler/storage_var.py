@@ -44,8 +44,8 @@ def generate_storage_var_functions(
 
     code = f"""\
 namespace {var_name}:
-    from starkware.starknet.common.storage import (
-        Storage, normalize_address, storage_read, storage_write)
+    from starkware.starknet.common.storage import normalize_address
+    from starkware.starknet.common.syscalls import storage_read, storage_write
     from starkware.cairo.common.cairo_builtins import HashBuiltin
     from starkware.cairo.common.hash import hash2
 
@@ -53,12 +53,15 @@ namespace {var_name}:
         {addr_func_body}
     end
 
-    func read{{storage_ptr : Storage*, pedersen_ptr : HashBuiltin*, range_check_ptr}}():
+    func read{{
+        syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr
+    }}():
         {read_func_body}
     end
 
-    func write{{storage_ptr : Storage*, pedersen_ptr : HashBuiltin*, range_check_ptr}}(
-            value : felt):
+    func write{{
+        syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr
+    }}(value : felt):
         {write_func_body}
     end
 end\
@@ -70,29 +73,29 @@ end\
 
     # Copy the arguments and return values.
     assert isinstance(res, CodeElementFunction) and res.element_type == "namespace"
-    addr_func = res.code_block.code_elements[4].code_elm
+    addr_func = res.code_block.code_elements[5].code_elm
     assert (
         isinstance(addr_func, CodeElementFunction)
         and addr_func.element_type == "func"
         and addr_func.identifier.name == "addr"
-    )
+    ), f"Unexpected address function code element: {addr_func}."
     addr_func.arguments = elm.arguments
 
-    read_func = res.code_block.code_elements[6].code_elm
+    read_func = res.code_block.code_elements[7].code_elm
     assert (
         isinstance(read_func, CodeElementFunction)
         and read_func.element_type == "func"
         and read_func.identifier.name == "read"
-    )
+    ), f"Unexpected read function code element: {read_func}."
     read_func.arguments = elm.arguments
     read_func.returns = elm.returns
 
-    write_func = res.code_block.code_elements[8].code_elm
+    write_func = res.code_block.code_elements[9].code_elm
     assert (
         isinstance(write_func, CodeElementFunction)
         and write_func.element_type == "func"
         and write_func.identifier.name == "write"
-    )
+    ), f"Unexpected write function code element: {write_func}."
     # Append the value argument to the storage var arguments.
     write_func.arguments = dataclasses.replace(
         elm.arguments,
@@ -178,7 +181,7 @@ def process_storage_var(visitor: IdentifierAwareVisitor, elm: CodeElementFunctio
         )
     # Copy the return implicit args and the return values to a contiguous segment.
     read_func_body += """
-tempvar storage_ptr = storage_ptr
+tempvar syscall_ptr = syscall_ptr
 tempvar pedersen_ptr = pedersen_ptr
 tempvar range_check_ptr = range_check_ptr
 """

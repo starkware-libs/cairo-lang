@@ -20,3 +20,7 @@ class EcdsaInstanceDef:
     @property
     def cells_per_builtin(self):
         return CELLS_PER_SIGNATURE
+
+    @property
+    def range_check_units_per_builtin(self):
+        return 0

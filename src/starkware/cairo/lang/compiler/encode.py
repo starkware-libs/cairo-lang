@@ -72,7 +72,7 @@ def encode_instruction(inst: Instruction, prime: int) -> List[int]:
         Instruction.Res.UNCONSTRAINED: 0,
     }[inst.res]
     assert (inst.res is Instruction.Res.UNCONSTRAINED) == (
-        inst.pc_update == Instruction.PcUpdate.JNZ
+        inst.pc_update is Instruction.PcUpdate.JNZ
     ), "res must be UNCONSTRAINED iff pc_update is JNZ"
 
     # Set pc_update.

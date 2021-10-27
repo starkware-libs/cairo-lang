@@ -16,7 +16,6 @@ from starkware.cairo.lang.compiler.ast.expr import (
     ExprOperator,
     ExprParentheses,
     ExprPow,
-    ExprPyConst,
     ExprReg,
     ExprSubscript,
     ExprTuple,
@@ -51,9 +50,6 @@ class ExpressionTransformer:
         return ExprConst(
             val=expr.val, format_str=expr.format_str, location=self.location_modifier(expr.location)
         )
-
-    def visit_ExprPyConst(self, expr: ExprPyConst):
-        return ExprPyConst(code=expr.code, location=self.location_modifier(expr.location))
 
     def visit_ExprHint(self, expr: ExprHint):
         return ExprHint(

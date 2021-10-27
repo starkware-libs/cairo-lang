@@ -64,7 +64,7 @@
         },
         {
             "name": "keyword.other.meta",
-            "match": "\\b(const|let|local|tempvar|felt|as|from|import|static_assert|return|assert|member|cast|alloc_locals|with|nondet)\\b"
+            "match": "\\b(const|let|local|tempvar|felt|as|from|import|static_assert|return|assert|member|cast|alloc_locals|with|with_attr|nondet)\\b"
         },
         {
             "name": "markup.italic",
@@ -129,6 +129,14 @@
         {
             "name": "constant.numeric.decimal",
             "match": "\\b[+-]?[0-9]+\\b"
+        },
+        {
+            "name": "constant.numeric.hexadecimal",
+            "match": "\\b[+-]?0x[0-9a-fA-F]+\\b"
+        },
+        {
+            "name": "string.quoted.single",
+            "match": "'[^']*'"
         },
         {
             "begin": "%{",

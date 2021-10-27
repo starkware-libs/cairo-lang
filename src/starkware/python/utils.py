@@ -97,6 +97,10 @@ def indent(code, indentation):
     return indentation + re.sub(r"\n(?!\n|$)", "\n" + indentation, code)
 
 
+def join_lines(lines: Iterable[str]) -> str:
+    return "\n".join(lines)
+
+
 def get_random_instance() -> random.Random:
     """
     Returns the Random instance in the random module level.

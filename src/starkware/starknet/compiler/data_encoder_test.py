@@ -122,7 +122,9 @@ let __return_value_arg_a_len = [__return_value_ptr]
 
 def test_decode_data_failure():
     location = dummy_location()
-    with pytest.raises(PreprocessorError, match=re.escape("Unsupported argument type felt**.")):
+    with pytest.raises(
+        PreprocessorError, match=re.escape("Unsupported calldata argument type felt**.")
+    ):
         run_decode_data(
             [
                 ArgumentInfo(name="arg_a", cairo_type=FELT_STAR_STAR, location=location),

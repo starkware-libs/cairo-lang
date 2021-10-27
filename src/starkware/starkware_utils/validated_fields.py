@@ -7,7 +7,7 @@ from typing import Any, Callable, ClassVar, Dict, Generic, List, Optional, Type,
 import marshmallow.fields as mfields
 
 from starkware.python.utils import get_random_bytes, initialize_random
-from starkware.starkware_utils.error_handling import ErrorCode, StarkErrorCode, stark_assert
+from starkware.starkware_utils.error_handling import ErrorCode, stark_assert
 from starkware.starkware_utils.field_validators import validate_in_range
 from starkware.starkware_utils.marshmallow_dataclass_fields import (
     BytesAsBase64Str,
@@ -224,7 +224,7 @@ class BytesLengthField(Field[bytes]):
     Represents a field with value of type bytes, of a given length.
     """
 
-    def __init__(self, name: str, error_code: StarkErrorCode, length: int):
+    def __init__(self, name: str, error_code: ErrorCode, length: int):
         self._name = name
         self._error_code = error_code
         assert length > 0, "Bytes length must be at least 1."

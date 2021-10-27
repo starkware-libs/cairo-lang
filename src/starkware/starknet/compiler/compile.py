@@ -19,14 +19,15 @@ from starkware.cairo.lang.compiler.module_reader import ModuleReader
 from starkware.cairo.lang.compiler.preprocessor.pass_manager import PassManager
 from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
-from starkware.starknet.compiler.starknet_pass_manager import starknet_pass_manager
-from starkware.starknet.compiler.starknet_preprocessor import (
+from starkware.starknet.compiler.external_wrapper import (
+    CONSTRUCTOR_DECORATOR,
     EXTERNAL_DECORATOR,
     L1_HANDLER_DECORATOR,
     VIEW_DECORATOR,
     WRAPPER_SCOPE,
-    StarknetPreprocessedProgram,
 )
+from starkware.starknet.compiler.starknet_pass_manager import starknet_pass_manager
+from starkware.starknet.compiler.starknet_preprocessor import StarknetPreprocessedProgram
 from starkware.starknet.public.abi import get_selector_from_name
 from starkware.starknet.services.api.contract_definition import (
     ContractDefinition,
@@ -71,18 +72,26 @@ def get_entry_points_by_type(program: Program) -> Dict[EntryPointType, List[Cont
         EntryPointType.L1_HANDLER: get_entry_points_by_decorators(
             wrapper_scope=wrapper_scope, decorators=(L1_HANDLER_DECORATOR,)
         ),
+        EntryPointType.CONSTRUCTOR: get_entry_points_by_decorators(
+            wrapper_scope=wrapper_scope, decorators=(CONSTRUCTOR_DECORATOR,)
+        ),
     }
 
 
 def get_entry_points_by_decorators(
     wrapper_scope: IdentifierScope, decorators: Tuple[str, ...]
 ) -> List[ContractEntryPoint]:
-    return [
-        ContractEntryPoint(selector=get_selector_from_name(func_name=func_name), offset=func_def.pc)
-        for func_name, func_def in wrapper_scope.identifiers.items()
-        if isinstance(func_def, FunctionDefinition)
-        and any(decorator in func_def.decorators for decorator in decorators)
-    ]
+    return sorted(
+        [
+            ContractEntryPoint(
+                selector=get_selector_from_name(func_name=func_name), offset=func_def.pc
+            )
+            for func_name, func_def in wrapper_scope.identifiers.items()
+            if isinstance(func_def, FunctionDefinition)
+            and any(decorator in func_def.decorators for decorator in decorators)
+        ],
+        key=lambda entry_point: entry_point.selector,
+    )
 
 
 def compile_starknet_files(

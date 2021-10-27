@@ -8,7 +8,6 @@ from starkware.cairo.lang.compiler.ast.expr import (
     ExprOperator,
     ExprParentheses,
     ExprPow,
-    ExprPyConst,
 )
 from starkware.cairo.lang.compiler.error_handling import LocationError
 from starkware.cairo.lang.compiler.expression_transformer import ExpressionTransformer
@@ -28,8 +27,6 @@ class SimplifierError(LocationError):
 class ExpressionSimplifier(ExpressionTransformer):
     """
     Simplifies expressions by computing constant expressions and substituting variables.
-    Note that invoking this class on a non-trusted expression may be unsafe as this class uses
-    python's eval() to evaluate ExprPyConst.
     """
 
     def __init__(self, prime: Optional[int] = None):
@@ -37,12 +34,6 @@ class ExpressionSimplifier(ExpressionTransformer):
 
     def visit_ExprConst(self, expr: ExprConst):
         return ExprConst(val=self._to_field_element(expr.val), location=expr.location)
-
-    def visit_ExprPyConst(self, expr: ExprPyConst):
-        if self.prime is None:
-            return expr
-        val = eval(expr.code, {"PRIME": self.prime}, {})
-        return ExprConst(val=val, location=expr.location)
 
     def visit_ExprOperator(self, expr: ExprOperator):
         a = self.visit(expr.a)

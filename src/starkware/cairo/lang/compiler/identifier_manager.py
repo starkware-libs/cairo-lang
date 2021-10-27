@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Dict, List, Optional, Set, Union
+from typing import Dict, List, MutableMapping, Optional, Set, Union
 
 from starkware.cairo.lang.compiler.identifier_definition import (
     AliasDefinition,
@@ -31,6 +31,11 @@ class NotAScopeError(IdentifierError):
         self.definition = definition
         self.non_parsed = non_parsed
         super().__init__(f"Identifier '{fullname}' is {definition.TYPE}, expected a scope.")
+
+
+class NotAnIdentifierError(IdentifierError):
+    def __init__(self, fullname: ScopedName):
+        super().__init__(f"Expected '{fullname}' to be an identifier, found a scope name.")
 
 
 @dataclasses.dataclass
@@ -140,7 +145,7 @@ class IdentifierManager:
 
         try:
             result = self.root.get(name)
-        except MissingIdentifierError:
+        except (MissingIdentifierError, NotAnIdentifierError):
             return None
 
         if len(result.non_parsed) != 0:
@@ -279,7 +284,70 @@ class IdentifierScope:
         self.manager = manager
         self.fullname = fullname
         self.subscopes: Dict[str, IdentifierScope] = {}
-        self.identifiers: Dict[str, IdentifierDefinition] = {}
+        self.identifiers: MutableMapping[str, IdentifierDefinition] = {}
+
+    def get_single_scope(self, name: str) -> Optional["IdentifierScope"]:
+        """
+        Returns the direct child scope by name, or None if not present.
+        """
+        return self.subscopes.get(name)
+
+    def get(self, name: ScopedName) -> IdentifierSearchResult:
+        """
+        Retrieves the identifer with the given name
+        (possibly not fully parsed, without alias resolution).
+        """
+        assert len(name) > 0, "The 'name' argument must not be empty."
+
+        first_name, non_parsed = name.path[0], name[1:]
+        canonical_name = self.fullname + first_name
+
+        if len(name) > 1:
+            scope = self.get_single_scope(first_name)
+            if scope is not None:
+                return scope.get(non_parsed)
+
+        identifier = self.identifiers.get(first_name)
+        if identifier is not None:
+            return IdentifierSearchResult(
+                identifier_definition=identifier,
+                canonical_name=canonical_name,
+                non_parsed=non_parsed,
+            )
+
+        if first_name in self.subscopes:
+            raise NotAnIdentifierError(self.fullname + first_name)
+
+        raise MissingIdentifierError(fullname=self.fullname + first_name)
+
+    def get_scope(self, name: ScopedName) -> "IdentifierScope":
+        """
+        Retrieves the scope with the given name.
+        Raises NotAScopeError if name refers to an identifier rather than a scope
+        (without alias resolution).
+        """
+        if len(name) == 0:
+            return self
+        first_name, non_parsed = name.path[0], name[1:]
+        scope = self.get_single_scope(first_name)
+        if scope is not None:
+            return scope.get_scope(non_parsed)
+
+        fullname = self.fullname + first_name
+        identifier = self.identifiers.get(first_name)
+        if identifier is None:
+            raise MissingIdentifierError(fullname=fullname)
+
+        raise NotAScopeError(
+            fullname=fullname,
+            definition=identifier,
+            non_parsed=non_parsed,
+        )
+
+    def add_subscope(self, first_name: str):
+        self.subscopes[first_name] = IdentifierScope(
+            manager=self.manager, fullname=self.fullname + first_name
+        )
 
     def add_identifier(self, name: ScopedName, definition: IdentifierDefinition):
         """
@@ -295,52 +363,10 @@ class IdentifierScope:
             self.manager.dict[self.fullname + first_name] = definition
             return
 
-        if first_name not in self.subscopes:
-            self.subscopes[first_name] = IdentifierScope(
-                manager=self.manager, fullname=self.fullname + first_name
-            )
+        scope = self.get_single_scope(first_name)
+        if scope is None:
+            self.add_subscope(first_name=first_name)
+            scope = self.get_single_scope(first_name)
 
-        self.subscopes[first_name].add_identifier(non_parsed, definition)
-
-    def get(self, name: ScopedName) -> IdentifierSearchResult:
-        """
-        Retrieves the identifer with the given name
-        (possibly not fully parsed, without alias resolution).
-        """
-        assert len(name) > 0, "The 'name' argument must not be empty."
-
-        first_name, non_parsed = name.path[0], name[1:]
-        canonical_name = self.fullname + first_name
-
-        if len(name) > 1 and first_name in self.subscopes:
-            return self.subscopes[first_name].get(non_parsed)
-
-        if first_name in self.identifiers:
-            return IdentifierSearchResult(
-                identifier_definition=self.identifiers[first_name],
-                canonical_name=canonical_name,
-                non_parsed=non_parsed,
-            )
-
-        raise MissingIdentifierError(fullname=self.fullname + first_name)
-
-    def get_scope(self, name: ScopedName) -> "IdentifierScope":
-        """
-        Retrieves the scope with the given name.
-        Raises NotAScopeError if name refers to an identifier rather than a scope
-        (without alias resolution).
-        """
-        if len(name) == 0:
-            return self
-        first_name, non_parsed = name.path[0], name[1:]
-        if first_name not in self.subscopes:
-            fullname = self.fullname + first_name
-            if first_name in self.identifiers:
-                raise NotAScopeError(
-                    fullname=fullname,
-                    definition=self.identifiers[first_name],
-                    non_parsed=non_parsed,
-                )
-            else:
-                raise MissingIdentifierError(fullname=fullname)
-        return self.subscopes[first_name].get_scope(non_parsed)
+        assert scope is not None
+        scope.add_identifier(non_parsed, definition)

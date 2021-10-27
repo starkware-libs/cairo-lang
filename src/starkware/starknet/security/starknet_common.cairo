@@ -15,9 +15,11 @@ from starkware.cairo.common.memset import memset
 from starkware.cairo.common.signature import verify_ecdsa_signature
 from starkware.cairo.common.squash_dict import squash_dict
 from starkware.cairo.common.uint256 import (
-    uint256_add, uint256_and, uint256_cond_neg, uint256_eq, uint256_lt, uint256_mul, uint256_neg,
-    uint256_not, uint256_or, uint256_shl, uint256_shr, uint256_signed_div_rem, uint256_signed_lt,
-    uint256_sub, uint256_unsigned_div_rem, uint256_xor)
+    uint256_add, uint256_and, uint256_cond_neg, uint256_eq, uint256_le, uint256_lt, uint256_mul,
+    uint256_neg, uint256_not, uint256_or, uint256_shl, uint256_shr, uint256_signed_div_rem,
+    uint256_signed_le, uint256_signed_lt, uint256_signed_nn, uint256_signed_nn_le, uint256_sub,
+    uint256_unsigned_div_rem, uint256_xor)
 from starkware.starknet.common.messages import send_message_to_l1
-from starkware.starknet.common.storage import normalize_address, storage_read, storage_write
-from starkware.starknet.common.syscalls import call_contract, get_caller_address
+from starkware.starknet.common.storage import normalize_address
+from starkware.starknet.common.syscalls import (
+    call_contract, get_caller_address, get_tx_signature, storage_read, storage_write)

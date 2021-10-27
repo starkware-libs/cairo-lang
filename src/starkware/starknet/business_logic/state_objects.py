@@ -1,11 +1,11 @@
 import asyncio
 import dataclasses
 from dataclasses import field
-from typing import ClassVar, Dict, Iterable, List, Optional, cast
+from typing import ClassVar, Dict, Iterable, List, cast
 
 import marshmallow_dataclass
 
-from starkware.python.utils import safe_zip
+from starkware.python.utils import safe_zip, to_bytes
 from starkware.starknet.core.os.contract_hash import compute_contract_hash
 from starkware.starknet.definitions import fields
 from starkware.starknet.services.api.contract_definition import ContractDefinition
@@ -29,7 +29,7 @@ class ContractDefinitionFact(ValidatedMarshmallowDataclass, Fact):
     contract_definition: ContractDefinition
 
     async def _hash(self, hash_func: HashFunctionType) -> bytes:
-        return compute_contract_hash(contract_definition=self.contract_definition)
+        return to_bytes(compute_contract_hash(contract_definition=self.contract_definition))
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -87,15 +87,12 @@ class ContractState(ValidatedMarshmallowDataclass, Fact):
         contract_hashes -= {ContractState.UNINITIALIZED_CONTRACT_HASH}
 
         # Fetch corresponding contract definitions from storage.
-        contract_definition_facts: List[Optional[ContractDefinitionFact]] = await asyncio.gather(
+        contract_definition_facts: List[ContractDefinitionFact] = await asyncio.gather(
             *(
-                ContractDefinitionFact.get(storage=ffc.storage, suffix=contract_hash)
+                ContractDefinitionFact.get_or_fail(storage=ffc.storage, suffix=contract_hash)
                 for contract_hash in contract_hashes
             )
         )
-        assert (
-            None not in contract_definition_facts
-        ), "Not all contract definition facts appear in storage."
         contract_definitions = [
             fact.contract_definition
             for fact in cast(List[ContractDefinitionFact], contract_definition_facts)

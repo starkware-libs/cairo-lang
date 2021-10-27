@@ -3,7 +3,7 @@ import dataclasses
 import logging
 from abc import abstractmethod
 from dataclasses import field
-from typing import Dict, Iterable, List, Optional, Set, Tuple, cast
+from typing import Iterable, List, Optional, Set, cast
 
 import marshmallow_dataclass
 
@@ -14,6 +14,7 @@ from services.everest.business_logic.internal_transaction import (
 )
 from services.everest.business_logic.state import CarriedStateBase
 from services.everest.definitions import fields as everest_fields
+from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
 from starkware.cairo.lang.vm.utils import RunResources
 from starkware.starknet.business_logic.state import CarriedState, StateSelector
 from starkware.starknet.definitions import fields
@@ -46,11 +47,6 @@ class ContractCallResponse:
     """
 
     retdata: List[int]
-    # Indicates how far the storage_ptr of the **caller** storage has advanced during this call,
-    # **including** nested calls; kept to hint the StarkNet OS run as to where to advance the
-    # storage_ptr when encountering this system call, while executing the parent call
-    # (which is before the actual execution of this call).
-    storage_ptr_diff: int
 
 
 @dataclasses.dataclass(frozen=True)
@@ -62,11 +58,13 @@ class ContractCall(ValidatedDataclass):
     No need for validations here, as the fields are taken from validated objects.
     """
 
-    # Should be None if the call represents the parent transaction itself.
-    from_address: Optional[int]
+    # Should be zero if the call represents the parent transaction itself.
+    from_address: int
     # The called contract address.
     to_address: int
     calldata: List[int]
+    signature: List[int]
+    cairo_usage: ExecutionResources
 
     # Information kept for the StarkNet OS run in the GpsAmbassador.
     # The response of the direct internal calls invoked by this call; kept in the order
@@ -87,19 +85,19 @@ class ContractCall(ValidatedDataclass):
     @classmethod
     def empty(cls, to_address: int) -> "ContractCall":
         return cls(
-            from_address=None,
+            from_address=0,
             to_address=to_address,
             calldata=[],
+            signature=[],
+            cairo_usage=ExecutionResources.empty(),
             internal_call_responses=[],
             storage_read_values=[],
             storage_accessed_addresses=set(),
         )
 
     @classmethod
-    def empty_for_tests(cls, internal_call_responses: List[ContractCallResponse]) -> "ContractCall":
-        return dataclasses.replace(
-            cls.empty(to_address=0), internal_call_responses=internal_call_responses
-        )
+    def empty_for_tests(cls) -> "ContractCall":
+        return cls.empty(to_address=0)
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -224,9 +222,9 @@ class InternalTransactionInterface(EverestInternalTransaction):
         state: CarriedState,
         general_config: StarknetGeneralConfig,
         loop: asyncio.AbstractEventLoop,
-        caller_address: Optional[int],
+        caller_address: int,
         run_resources: RunResources,
-    ) -> Tuple[TransactionExecutionInfo, Dict[int, int]]:
+    ) -> TransactionExecutionInfo:
         pass
 
     def verify_signatures(self):

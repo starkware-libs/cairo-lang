@@ -58,7 +58,7 @@ class EmptyNodeFact(PatriciaNodeFact):
         """
         return self.EMPTY_NODE_HASH
 
-    def to_tuple(self) -> Tuple[bytes, ...]:
+    def to_tuple(self) -> Tuple[int, ...]:
         return ()
 
 
@@ -106,8 +106,8 @@ class BinaryNodeFact(PatriciaNodeFact):
         """
         return await hash_func(self.left_node, self.right_node)
 
-    def to_tuple(self) -> Tuple[bytes, ...]:
-        return self.left_node, self.right_node
+    def to_tuple(self) -> Tuple[int, ...]:
+        return from_bytes(self.left_node), from_bytes(self.right_node)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -162,8 +162,8 @@ class EdgeNodeFact(PatriciaNodeFact):
 
         return to_bytes(hash_value)
 
-    def to_tuple(self) -> Tuple[bytes, ...]:
-        return to_bytes(self.edge_length), to_bytes(self.edge_path), self.bottom_node
+    def to_tuple(self) -> Tuple[int, ...]:
+        return self.edge_length, self.edge_path, from_bytes(self.bottom_node)
 
 
 def get_node_type(fact_preimage: bytes) -> Type["PatriciaNodeFact"]:

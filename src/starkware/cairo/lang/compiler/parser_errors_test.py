@@ -1,6 +1,3 @@
-import pytest
-
-from starkware.cairo.lang.compiler.parser import ParserError, parse_file
 from starkware.cairo.lang.compiler.parser_test_utils import verify_exception
 
 
@@ -10,7 +7,7 @@ def test_unexpected_token():
 x + = y
 """,
         """
-file:?:?: Unexpected token Token(EQUAL, '='). Expected: expression.
+file:?:?: Unexpected token Token('EQUAL', '='). Expected: expression.
 x + = y
     ^
 """,
@@ -20,7 +17,7 @@ x + = y
 let x =
 """,
         r"""
-file:?:?: Unexpected token Token(_NEWLINE, '\n'). Expected one of: "call", expression.
+file:?:?: Unexpected token Token('_NEWLINE', '\n'). Expected one of: "call", expression.
 let x =
        ^
 """,
@@ -30,7 +27,7 @@ let x =
 foo bar
 """,
         """
-file:?:?: Unexpected token Token(IDENTIFIER, 'bar'). Expected one of: "(", ".", ":", "=", "[", \
+file:?:?: Unexpected token Token('IDENTIFIER', 'bar'). Expected one of: "(", ".", ":", "=", "[", \
 "{", operator.
 foo bar
     ^*^
@@ -41,7 +38,7 @@ foo bar
 foo = bar test
 """,
         """
-file:?:?: Unexpected token Token(IDENTIFIER, 'test'). Expected one of: "(", ".", ";", "[", "{", \
+file:?:?: Unexpected token Token('IDENTIFIER', 'test'). Expected one of: "(", ".", ";", "[", "{", \
 operator.
 foo = bar test
           ^**^
@@ -52,19 +49,19 @@ foo = bar test
 const func
 """,
         """
-file:?:?: Unexpected token Token(FUNC, 'func'). Expected: identifier.
+file:?:?: Unexpected token Token('FUNC', 'func'). Expected: identifier.
 const func
       ^**^
 """,
     )
     verify_exception(
         """
-%[ 5 %] %[ 7 %]
+5 7
 """,
         """
-file:?:?: Unexpected token Token(PYCONST, '%[ 7 %]'). Expected one of: ".", "=", "[", operator.
-%[ 5 %] %[ 7 %]
-        ^*****^
+file:?:?: Unexpected token Token('INT', '7'). Expected one of: ".", "=", "[", operator.
+5 7
+  ^
 """,
     )
     verify_exception(
@@ -72,7 +69,7 @@ file:?:?: Unexpected token Token(PYCONST, '%[ 7 %]'). Expected one of: ".", "=",
 static_assert ap
 """,
         r"""
-file:?:?: Unexpected token Token(_NEWLINE, '\n'). Expected one of: ".", "==", "[", operator.
+file:?:?: Unexpected token Token('_NEWLINE', '\n'). Expected one of: ".", "==", "[", operator.
 static_assert ap
                 ^
 """,
@@ -82,7 +79,7 @@ static_assert ap
 [ap] = x& + y
 """,
         """
-file:?:?: Unexpected token Token(AMPERSAND, '&'). Expected one of: "(", ".", ";", "[", "{", \
+file:?:?: Unexpected token Token('AMPERSAND', '&'). Expected one of: "(", ".", ";", "[", "{", \
 operator.
 [ap] = x& + y
         ^
@@ -93,7 +90,7 @@ operator.
 func &
 """,
         """
-file:?:?: Unexpected token Token(AMPERSAND, '&'). Expected: identifier.
+file:?:?: Unexpected token Token('AMPERSAND', '&'). Expected: identifier.
 func &
      ^
 """,
@@ -103,7 +100,7 @@ func &
 let x : T 5
 """,
         """
-file:?:?: Unexpected token Token(INT, '5'). Expected one of: "*", ".", "=".
+file:?:?: Unexpected token Token('INT', '5'). Expected one of: "*", ".", "=".
 let x : T 5
           ^
 """,
@@ -113,7 +110,7 @@ let x : T 5
 foo( *
 """,
         """
-file:?:?: Unexpected token Token(STAR, '*'). Expected one of: ")", expression.
+file:?:?: Unexpected token Token('STAR', '*'). Expected one of: ")", ",", expression.
 foo( *
      ^
 """,
@@ -123,7 +120,7 @@ foo( *
 if x y
 """,
         """
-file:?:?: Unexpected token Token(IDENTIFIER, 'y'). Expected one of: "!=", "(", ".", "==", "[", \
+file:?:?: Unexpected token Token('IDENTIFIER', 'y'). Expected one of: "!=", "(", ".", "==", "[", \
 "{", operator.
 if x y
      ^
@@ -134,7 +131,7 @@ if x y
 x = y; ap--
 """,
         """
-file:?:?: Unexpected token Token(MINUS, '-'). Expected: "++".
+file:?:?: Unexpected token Token('MINUS', '-'). Expected: "++".
 x = y; ap--
          ^
 """,
@@ -144,7 +141,7 @@ x = y; ap--
 func foo()*
 """,
         """
-file:?:?: Unexpected token Token(STAR, '*'). Expected one of: "->", ":".
+file:?:?: Unexpected token Token('STAR', '*'). Expected one of: "->", ":".
 func foo()*
           ^
 """,
@@ -166,15 +163,15 @@ x~y
 
 def test_parser_error():
     # Unexpected EOF - missing 'end'.
-    with pytest.raises(ParserError, match="Unexpected end-of-input.") as e:
-        parse_file(
-            code="""
+    verify_exception(
+        """
 func f():
 const a = 5
-"""
-        )
-    assert str(e.value).endswith(
+""",
         """
+file:?:?: Unexpected end of input. Expected one of: "%builtins", "%lang", "@", "alloc_locals", \
+"assert", "call", "const", "end", "from", "func", ...
 const a = 5
-          ^"""
+           ^
+""",
     )

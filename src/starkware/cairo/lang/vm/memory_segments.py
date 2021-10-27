@@ -140,7 +140,7 @@ class MemorySegmentManager:
             self.memory[ptr + i] = v
         return ptr + len(data)
 
-    def gen_arg(self, arg, apply_modulo_to_args=True):
+    def gen_arg(self, arg, apply_modulo_to_args=True) -> MaybeRelocatable:
         """
         Converts args to Cairo-friendly ones.
         If an argument is Iterable it is replaced by a pointer to a new segment containing the items

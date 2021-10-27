@@ -1,8 +1,9 @@
-from typing import Callable, Dict, Optional, Sequence, Tuple, Type
+from typing import Callable, Dict, Optional, Sequence, Set, Tuple, Type
 
 from starkware.cairo.lang.compiler.ast.module import CairoModule
 from starkware.cairo.lang.compiler.import_loader import collect_imports
 from starkware.cairo.lang.compiler.preprocessor.dependency_graph import DependencyGraphStage
+from starkware.cairo.lang.compiler.preprocessor.directives import DirectivesCollectorStage
 from starkware.cairo.lang.compiler.preprocessor.identifier_collector import IdentifierCollector
 from starkware.cairo.lang.compiler.preprocessor.pass_manager import (
     PassManager,
@@ -22,6 +23,7 @@ def default_pass_manager(
     preprocessor_cls: Optional[Type[Preprocessor]] = None,
     opt_unused_functions: bool = True,
     preprocessor_kwargs: Optional[Dict] = None,
+    additional_scopes_to_compile: Optional[Set[ScopedName]] = None,
 ) -> PassManager:
     manager = PassManager()
     manager.add_stage("module_collector", ModuleCollector(read_module=read_module))
@@ -32,12 +34,18 @@ def default_pass_manager(
         "identifier_collector",
         VisitorStage(lambda context: IdentifierCollector(identifiers=context.identifiers)),
     )
-    if opt_unused_functions:
-        manager.add_stage("dependency_graph", DependencyGraphStage())
+    manager.add_stage("directives_collector", DirectivesCollectorStage())
     manager.add_stage(
         "struct_collector",
         VisitorStage(lambda context: StructCollector(identifiers=context.identifiers)),
     )
+    if opt_unused_functions:
+        if additional_scopes_to_compile is None:
+            additional_scopes_to_compile = set()
+        manager.add_stage(
+            "dependency_graph",
+            DependencyGraphStage(additional_scopes_to_compile=additional_scopes_to_compile),
+        )
     manager.add_stage(
         "preprocessor", PreprocessorStage(prime, preprocessor_cls, preprocessor_kwargs)
     )
@@ -59,9 +67,11 @@ class PreprocessorStage(Stage):
         self.preprocessor_kwargs = {} if preprocessor_kwargs is None else preprocessor_kwargs
 
     def run(self, context: PassManagerContext):
+        assert context.builtins is not None
         preprocessor = self.preprocessor_cls(
             prime=self.prime,
             identifiers=context.identifiers,
+            builtins=context.builtins,
             functions_to_compile=context.functions_to_compile,
             **self.preprocessor_kwargs,
         )

@@ -14,6 +14,7 @@ from typing import (
     cast,
 )
 
+from starkware.python.utils import from_bytes
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict, TFact
 from starkware.starkware_utils.commitment_tree.merkle_tree.traverse_tree import traverse_tree
 from starkware.storage.storage import Fact, FactFetchingContext
@@ -122,9 +123,7 @@ class BinaryFactTreeNode(ABC):
 
         if self.is_leaf:
             assert set(indices) == {0}, f"Merkle tree indices out of range: {indices}."
-            leaf = await get_node_fact_or_fail(
-                ffc=ffc, node_fact_cls=fact_cls, fact_hash=self.leaf_hash
-            )
+            leaf = await fact_cls.get_or_fail(storage=ffc.storage, suffix=self.leaf_hash)
 
             return {0: leaf}
 
@@ -249,7 +248,7 @@ class InnerNodeFact(Fact):
     """
 
     @abstractmethod
-    def to_tuple(self) -> Tuple[bytes, ...]:
+    def to_tuple(self) -> Tuple[int, ...]:
         """
         Returns a representation of the fact's preimage as a tuple.
         """
@@ -258,27 +257,16 @@ class InnerNodeFact(Fact):
 TInnerNodeFact = TypeVar("TInnerNodeFact", bound=InnerNodeFact)
 
 
-async def get_node_fact_or_fail(
-    ffc: FactFetchingContext, node_fact_cls: Type[TFact], fact_hash: bytes
-) -> TFact:
-    node_fact = await node_fact_cls.get(storage=ffc.storage, suffix=fact_hash)
-    assert node_fact is not None, f"Fact missing from DB: 0x{fact_hash.hex()}."
-
-    return node_fact
-
-
 async def read_node_fact(
     ffc: FactFetchingContext,
     inner_node_fact_cls: Type[TInnerNodeFact],
     fact_hash: bytes,
     facts: Optional[BinaryFactDict],
 ) -> TInnerNodeFact:
-    node_fact = await get_node_fact_or_fail(
-        ffc=ffc, node_fact_cls=inner_node_fact_cls, fact_hash=fact_hash
-    )
+    node_fact = await inner_node_fact_cls.get_or_fail(storage=ffc.storage, suffix=fact_hash)
 
     if facts is not None:
-        facts[fact_hash] = node_fact.to_tuple()
+        facts[from_bytes(fact_hash)] = node_fact.to_tuple()
 
     return node_fact
 
@@ -289,7 +277,7 @@ async def write_node_fact(
     fact_hash = await inner_node_fact.set_fact(ffc=ffc)
 
     if facts is not None:
-        facts[fact_hash] = inner_node_fact.to_tuple()
+        facts[from_bytes(fact_hash)] = inner_node_fact.to_tuple()
 
     return fact_hash
 

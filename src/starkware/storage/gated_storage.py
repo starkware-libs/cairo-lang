@@ -1,8 +1,8 @@
 import hashlib
 from typing import Optional, Tuple
 
-from starkware.storage import Storage
 from starkware.storage.names import generate_unique_key
+from starkware.storage.storage import Storage
 
 MAGIC_HEADER = hashlib.sha256(b"Gated storage magic header").digest()
 
@@ -18,8 +18,8 @@ class GatedStorage(Storage):
         self.storage1 = storage1
 
     @classmethod
-    async def create_from_config(self, limit: int, storage0: dict, storage1: dict):
-        return GatedStorage(
+    async def create_from_config(cls, limit: int, storage0: dict, storage1: dict):
+        return cls(
             limit=limit,
             storage0=await Storage.from_config(storage0),
             storage1=await Storage.from_config(storage1),

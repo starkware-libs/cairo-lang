@@ -17,7 +17,7 @@ python_lib(starknet_cli_lib
     starknet_feeder_gateway_client_lib
     starknet_gateway_client_lib
     starknet_transaction_lib
-    starkware_utils_lib
+    starkware_error_handling_lib
 )
 
 python_venv(starknet_cli_venv

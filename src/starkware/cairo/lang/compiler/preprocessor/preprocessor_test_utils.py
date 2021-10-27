@@ -75,4 +75,6 @@ def verify_exception(
     with pytest.raises(exc_type) as e:
         preprocess_codes(codes=[(code, "")], pass_manager=pass_manager, main_scope=main_scope)
     # Remove line and column information from the error using a regular expression.
-    assert re.sub(":[0-9]+:[0-9]+", "file:?:?", str(e.value)) == error.strip()
+    assert (
+        re.sub("(autogen[a-zA-Z0-9_/.]+)?:[0-9]+:[0-9]+", "file:?:?", str(e.value)) == error.strip()
+    )

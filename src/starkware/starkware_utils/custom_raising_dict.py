@@ -66,7 +66,4 @@ class CustomRaisingFrozenDict(frozendict, Generic[KT, VT]):
         This is implemented in order to avoid using frozendict's __hash__, which does not use
         cls.dict_cls.items().
         """
-        if self._hash is None:
-            self._hash = hash((self.dict_cls, frozenset(self.items())))
-
-        return self._hash
+        return hash((self.dict_cls, frozenset(self.items())))

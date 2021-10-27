@@ -21,7 +21,6 @@ from starkware.cairo.lang.compiler.ast.expr import (
     ExprNeg,
     ExprOperator,
     ExprParentheses,
-    ExprPyConst,
     ExprReg,
     ExprSubscript,
     ExprTuple,
@@ -52,9 +51,6 @@ class TypeSystemVisitor(IdentifierAwareVisitor):
         self.identifiers_initalized = identifiers is not None
 
     def visit_ExprConst(self, expr: ExprConst) -> Tuple[ExprConst, TypeFelt]:
-        return expr, TypeFelt(location=expr.location)
-
-    def visit_ExprPyConst(self, expr: ExprPyConst) -> Tuple[ExprPyConst, TypeFelt]:
         return expr, TypeFelt(location=expr.location)
 
     def visit_ExprHint(self, expr: ExprHint) -> Tuple[ExprHint, TypeFelt]:

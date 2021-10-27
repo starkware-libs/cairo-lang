@@ -153,7 +153,28 @@ return  (1,[fp],
 label2:
 
   jmp rel 17 if [ap+3]!=  0
-[fp] = [fp] * [fp]"""
+[fp] = [fp] * [fp]
+with_attr     no_value_attribute:
+[ap] = [fp]; ap++
+end
+with_attr single_line_attribute  (
+
+    "A single line value"
+
+    ) :
+    [ap] = [fp]; ap++
+end
+with_attr long_value_attribute(
+    "A single line with_attr expression that is too long and does not fit into a single line"):
+    [ap] = [fp]; ap++
+end
+with_attr error_message  (  "Attribute value " "with"
+
+" multiple"
+"\\n"
+"lines"  ) :
+    [ap] = [fp]; ap++
+end"""
     after = """\
 ap += [fp]
 %lang starknet
@@ -182,6 +203,24 @@ fibonacci(a=3, b=[fp + 1])
 label2:
 jmp rel 17 if [ap + 3] != 0
 [fp] = [fp] * [fp]
+with_attr no_value_attribute:
+    [ap] = [fp]; ap++
+end
+with_attr single_line_attribute("A single line value"):
+    [ap] = [fp]; ap++
+end
+with_attr long_value_attribute(
+        "A single line with_attr expression that is too long and does not fit into a single line"):
+    [ap] = [fp]; ap++
+end
+with_attr error_message(
+        "Attribute value "
+        "with"
+        " multiple"
+        "\\n"
+        "lines"):
+    [ap] = [fp]; ap++
+end
 """
     assert parse_file(before).format() == after
 
@@ -531,3 +570,14 @@ with a, b as c, d:
 end
 """
     )
+
+
+def test_with_attr():
+    code = """\
+with_attr attribute_name  ("Comments"
+        # within attribute value
+        " are not supported") :
+    [ap] = [fp]; ap++
+end"""
+    with pytest.raises(FormattingError, match="Comments inside expressions are not supported"):
+        parse_code_element(code).format(allowed_line_length=100)

@@ -38,6 +38,7 @@ from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeElementTemporaryVariable,
     CodeElementUnpackBinding,
     CodeElementWith,
+    CodeElementWithAttr,
     LangDirective,
 )
 from starkware.cairo.lang.compiler.ast.expr import (
@@ -80,6 +81,7 @@ from starkware.cairo.lang.compiler.identifier_definition import (
     IdentifierDefinition,
     LabelDefinition,
     MemberDefinition,
+    NamespaceDefinition,
     ReferenceDefinition,
     StructDefinition,
 )
@@ -225,6 +227,7 @@ class Preprocessor(IdentifierAwareVisitor):
     def __init__(
         self,
         prime: int,
+        builtins: List[str],
         identifiers: Optional[IdentifierManager] = None,
         supported_decorators: Optional[Set[str]] = None,
         functions_to_compile: Optional[Set[ScopedName]] = None,
@@ -244,7 +247,8 @@ class Preprocessor(IdentifierAwareVisitor):
         self.next_instruction_hints: List[Tuple[CodeElementHint, FlowTrackingDataActual]] = []
 
         # List of builtins.
-        self.builtins: Optional[List[str]] = None
+        self.builtins = builtins
+
         # True if directives are allowed at this point.
         self.directives_allowed = True
 
@@ -374,7 +378,7 @@ class Preprocessor(IdentifierAwareVisitor):
             instructions=list(self.instructions),
             identifiers=self.identifiers,
             identifier_locations=self.identifier_locations,
-            builtins=[] if self.builtins is None else self.builtins,
+            builtins=self.builtins,
         )
 
     def create_struct_from_identifier_list(
@@ -476,7 +480,11 @@ class Preprocessor(IdentifierAwareVisitor):
                 elm.element_type == "namespace"
             ), f"""\
 Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
-            self.add_label(identifier=elm.identifier)
+            self.add_name_definition(
+                self.current_scope + elm.name,
+                NamespaceDefinition(),
+                location=elm.identifier.location,
+            )
 
         # Add function arguments and return values and process body.
         args_scope = new_scope + CodeElementFunction.ARGUMENT_SCOPE
@@ -569,6 +577,11 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
         with self.set_reference_states(new_reference_states):
             for commented_code_element in elm.code_block.code_elements:
                 self.visit(commented_code_element.code_elm)
+
+    def visit_CodeElementWithAttr(self, elm: CodeElementWithAttr):
+        raise PreprocessorError(
+            "with_attr is not supported yet.", location=elm.attribute_name.location
+        )
 
     @contextmanager
     def set_reference_states(self, new_reference_states: Dict[ScopedName, ReferenceState]):
@@ -913,7 +926,7 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
                 return None
             if not isinstance(expr.addr, ExprOperator) or expr.addr.op != "+":
                 return None
-            if not isinstance(expr.addr.a, ExprReg) or expr.addr.a.reg != Register.AP:
+            if not isinstance(expr.addr.a, ExprReg) or expr.addr.a.reg is not Register.AP:
                 return None
             if not isinstance(expr.addr.b, ExprConst):
                 return None
@@ -1730,23 +1743,7 @@ Expected expression of type '{member_def.cairo_type.format()}', got '{cairo_type
 
     # Directives.
     def visit_BuiltinsDirective(self, directive: BuiltinsDirective):
-        if self.builtins is not None:
-            raise PreprocessorError(
-                "Redefinition of builtins directive.",
-                location=directive.location,
-            )
-
-        seen_builtins = set()
-        for builtin in directive.builtins:
-            if builtin in seen_builtins:
-                raise PreprocessorError(
-                    f"The builtin '{builtin}' appears twice in builtins directive.",
-                    location=directive.location,
-                )
-
-            seen_builtins.add(builtin)
-
-        self.builtins = directive.builtins
+        pass
 
     def visit_LangDirective(self, directive: LangDirective):
         raise PreprocessorError(

@@ -156,7 +156,7 @@ def process_contract_function(
     selector_value = get_selector_from_name(function_info.name)
     code = f"""\
 const {function_info.selector} = {selector_value}
-func {function_info.name}{{syscall_ptr : felt*, storage_ptr : Storage*, range_check_ptr}}(
+func {function_info.name}{{syscall_ptr : felt*, range_check_ptr}}(
     contract_address : felt):
 end
 """
@@ -191,7 +191,6 @@ def generate_contract_interface_namespace(
 namespace {contract_name}:
     from starkware.cairo.common.alloc import alloc
     from starkware.cairo.common.memcpy import memcpy
-    from starkware.starknet.common.storage import Storage
     from starkware.starknet.common.syscalls import call_contract
 end
 """
@@ -355,7 +354,7 @@ let (retdata_size, retdata) = call_contract(
             rets = [
                 ArgumentInfo(
                     name=typed_identifier.identifier.name,
-                    cairo_type=typed_identifier.get_type(),
+                    cairo_type=self.resolve_type(typed_identifier.get_type()),
                     location=non_optional_location(typed_identifier.identifier.location),
                 )
                 for typed_identifier in function_info.elm.returns.identifiers

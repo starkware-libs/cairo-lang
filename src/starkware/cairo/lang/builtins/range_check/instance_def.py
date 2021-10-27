@@ -15,3 +15,7 @@ class RangeCheckInstanceDef:
     @property
     def cells_per_builtin(self):
         return CELLS_PER_RANGE_CHECK
+
+    @property
+    def range_check_units_per_builtin(self):
+        return self.n_parts

@@ -59,25 +59,6 @@ class ExprConst(Expression):
 
 
 @dataclasses.dataclass
-class ExprPyConst(Expression):
-    code: str
-    location: Optional[Location] = LocationField
-
-    @classmethod
-    def from_str(cls, src: str, location: Optional[Location] = None):
-        assert src.startswith("%[")
-        assert src.endswith("%]")
-        code = src[2:-2]
-        return cls(code, location)
-
-    def to_expr_str(self):
-        return ExpressionString.highest(f"%[{self.code}%]")
-
-    def get_children(self) -> Sequence[Optional[AstNode]]:
-        return []
-
-
-@dataclasses.dataclass
 class ExprHint(Expression):
     hint_code: str
     # The number of new lines following the "%{" symbol.

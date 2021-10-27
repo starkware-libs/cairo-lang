@@ -474,6 +474,38 @@ class CodeElementFunction(CodeElement):
 
 
 @dataclasses.dataclass
+class CodeElementWithAttr(CodeElement):
+    attribute_name: ExprIdentifier
+    attribute_value: List[str]
+    code_block: CodeBlock
+    notes: List[Notes] = NoteListField
+
+    def format(self, allowed_line_length):
+        for note in self.notes:
+            note.assert_no_comments()
+
+        inner_code = self.code_block.format(allowed_line_length=allowed_line_length - INDENTATION)
+        inner_code = indent(inner_code, INDENTATION)
+
+        if len(self.attribute_value) == 0:
+            # Attribute has no value.
+            return f"with_attr {self.attribute_name.format()}:\n{inner_code}end"
+
+        len_without_value = len(f"with_attr {self.attribute_name.format()}():")
+        if (
+            len(self.attribute_value) == 1
+            and len_without_value + len(self.attribute_value[0]) <= allowed_line_length
+        ):
+            attribute_value = self.attribute_value[0]
+        else:
+            attribute_value = "\n" + indent("\n".join(self.attribute_value), 2 * INDENTATION)
+        return f"with_attr {self.attribute_name.format()}({attribute_value}):\n{inner_code}end"
+
+    def get_children(self) -> Sequence[Optional[AstNode]]:
+        return [self.attribute_name, self.code_block]
+
+
+@dataclasses.dataclass
 class CodeElementWith(CodeElement):
     identifiers: List[AliasedIdentifier]
     code_block: CodeBlock
@@ -571,7 +603,7 @@ class CodeElementDirective(CodeElement):
 class CodeElementImport(CodeElement):
     path: ExprIdentifier
     import_items: List[AliasedIdentifier]
-    notes: List[Notes] = NoteListField  # type: ignore
+    notes: List[Notes] = NoteListField
     location: Optional[Location] = LocationField
 
     def format(self, allowed_line_length):
