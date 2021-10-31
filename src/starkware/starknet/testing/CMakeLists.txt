@@ -39,6 +39,7 @@ full_python_test(starknet_testing_test
     test.cairo
 
     LIBS
+    cairo_common_lib
     starknet_testing_lib
     pip_pytest
     pip_pytest_asyncio

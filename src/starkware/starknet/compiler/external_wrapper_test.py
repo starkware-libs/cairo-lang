@@ -99,11 +99,11 @@ struct Point:
     member y : felt
 end
 
-struct HashBuiltin:
+struct EcdsaBuiltin:
 end
 
 @external
-func f{ecdsa_ptr}(a : felt, b : felt) -> (c_len : felt, c : felt*, d : Point):
+func f{ecdsa_ptr : EcdsaBuiltin*}(a : felt, b : felt) -> (c_len : felt, c : felt*, d : Point):
     return (c_len=1, c=cast(0, felt*), d=Point(2, 3))
 end
 """

@@ -81,7 +81,7 @@ class StarknetContract:
         elif name in self._struct_definition_mapping:
             return self.get_contract_struct(name=name)
         else:
-            raise AttributeError
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     def get_contract_struct(self, name: str) -> type:
         """

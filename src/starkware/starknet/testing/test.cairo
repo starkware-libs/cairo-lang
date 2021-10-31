@@ -1,14 +1,28 @@
 %lang starknet
-%builtins range_check
+%builtins pedersen range_check
 
+from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.starknet.common.messages import send_message_to_l1
 from starkware.starknet.common.syscalls import (
     get_caller_address, get_tx_signature, storage_read, storage_write)
+
+@contract_interface
+namespace MyContract:
+    func increase_value(address : felt, value : felt):
+    end
+end
 
 @external
 func increase_value{syscall_ptr : felt*}(address : felt, value : felt):
     let (res) = storage_read(address=address)
     return storage_write(address=address, value=res + value)
+end
+
+@external
+func call_increase_value{syscall_ptr : felt*, range_check_ptr}(
+        contract_address : felt, address : felt, value : felt):
+    MyContract.increase_value(contract_address=contract_address, address=address, value=value)
+    return ()
 end
 
 @external
@@ -29,7 +43,8 @@ func takes_array{syscall_ptr : felt*}(a_len : felt, a : felt*) -> (res):
 end
 
 @external
-func get_signature{syscall_ptr : felt*}() -> (res_len : felt, res : felt*):
+func get_signature{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*}() -> (
+        res_len : felt, res : felt*):
     let (sig_len, sig) = get_tx_signature()
     return (res_len=sig_len, res=sig)
 end

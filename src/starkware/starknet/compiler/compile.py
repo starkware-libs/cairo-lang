@@ -100,6 +100,20 @@ def compile_starknet_files(
     disable_hint_validation: bool = False,
     cairo_path: Optional[List[str]] = None,
 ) -> ContractDefinition:
+    return compile_starknet_codes(
+        codes=get_codes(files),
+        debug_info=debug_info,
+        disable_hint_validation=disable_hint_validation,
+        cairo_path=cairo_path,
+    )
+
+
+def compile_starknet_codes(
+    codes: List[Tuple[str, str]],
+    debug_info: bool = False,
+    disable_hint_validation: bool = False,
+    cairo_path: Optional[List[str]] = None,
+) -> ContractDefinition:
     if cairo_path is None:
         cairo_path = []
     module_reader = get_module_reader(cairo_path=cairo_path)
@@ -111,7 +125,7 @@ def compile_starknet_files(
     )
 
     program, preprocessed = compile_cairo_ex(
-        code=get_codes(files), debug_info=debug_info, pass_manager=pass_manager
+        code=codes, debug_info=debug_info, pass_manager=pass_manager
     )
 
     # Dump and load program, so that it is converted to the canonical form.

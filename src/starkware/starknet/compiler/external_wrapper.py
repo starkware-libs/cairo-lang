@@ -285,7 +285,7 @@ let retdata_size = 0
             code=call_code,
             parser_context=ParserContext(
                 parent_location=(func_location, "While constructing the external wrapper for:"),
-                resolved_types=False,
+                resolved_types=True,
             ),
         ).code_elements
         # Override the location of call to the wrapped function, to simplify the error message

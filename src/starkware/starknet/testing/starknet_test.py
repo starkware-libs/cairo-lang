@@ -70,3 +70,14 @@ async def test_l1_to_l2_message(starknet: Starknet, contract: StarknetContract):
     )
     execution_info = await contract.get_value(address=user).invoke()
     assert execution_info.result == (28,)
+
+
+@pytest.mark.asyncio
+async def test_contract_interaction(starknet: Starknet):
+    contract_definition = compile_starknet_files([CONTRACT_FILE], debug_info=True)
+    contract = await starknet.deploy(contract_def=contract_definition)
+    proxy_contract = await starknet.deploy(contract_def=contract_definition)
+
+    await proxy_contract.call_increase_value(contract.contract_address, 123, 234).invoke()
+    assert (await proxy_contract.get_value(123).invoke()).result == (0,)
+    assert (await contract.get_value(123).invoke()).result == (234,)
