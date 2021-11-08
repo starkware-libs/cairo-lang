@@ -257,12 +257,11 @@ class ExternalWrapperVisitor(IdentifierAwareVisitor):
 let ret_struct = {func_alias_name}{{{implicit_arguments}}}({call_args.format()})
 """
         if not known_ap_change:
-            # If the return value handling is expected to revoke ap tracking, copy the builtins into
-            # local variables.
+            # If the return value handling is expected to revoke ap tracking, alloc_locals is
+            # required.
             for decl, name in zip(return_args_decl, return_args_exprs):
                 if name in implicit_arguments_identifiers:
                     using_locals = True
-                    call_code += f"local {decl} = {name}\n"
         if encode_return_func is not None:
             if "range_check_ptr" not in os_context:
                 raise PreprocessorError(

@@ -7,6 +7,8 @@ from starkware.starkware_utils.error_handling import ErrorCode, StarkErrorCode
 class StarknetErrorCode(ErrorCode):
     BLOCK_NOT_FOUND = 0
     CONTRACT_ADDRESS_UNAVAILABLE = auto()
+    CONTRACT_BYTECODE_SIZE_TOO_LARGE = auto()
+    CONTRACT_DEFINITION_OBJECT_SIZE_TOO_LARGE = auto()
     ENTRY_POINT_NOT_FOUND_IN_CONTRACT = auto()
     INVALID_CONTRACT_DEFINITION = auto()
     INVALID_FIELD_ELEMENT = auto()

@@ -36,6 +36,7 @@ python_lib(cairo_compile_lib
     identifier_manager_field.py
     identifier_utils.py
     import_loader.py
+    injector.py
     instruction_builder.py
     instruction.py
     location_utils.py
@@ -43,6 +44,7 @@ python_lib(cairo_compile_lib
     offset_reference.py
     parser_transformer.py
     parser.py
+    preprocessor/memento.py
     preprocessor/compound_expressions.py
     preprocessor/default_pass_manager.py
     preprocessor/dependency_graph.py
@@ -132,6 +134,7 @@ full_python_test(cairo_compile_test
     identifier_manager_test.py
     identifier_utils_test.py
     import_loader_test.py
+    injector_test.py
     instruction_builder_test.py
     instruction_test.py
     module_reader_test.py
@@ -139,6 +142,7 @@ full_python_test(cairo_compile_test
     parser_errors_test.py
     parser_test_utils.py
     parser_test.py
+    preprocessor/memento_test.py
     preprocessor/compound_expressions_test.py
     preprocessor/conftest.py
     preprocessor/dependency_graph_test.py

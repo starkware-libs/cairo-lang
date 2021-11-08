@@ -5,6 +5,7 @@ import marshmallow
 import marshmallow_dataclass
 
 from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypePointer
+from starkware.cairo.lang.compiler.ast.code_elements import CodeElement
 from starkware.cairo.lang.compiler.ast.expr import (
     ExprCast,
     ExprConst,
@@ -29,6 +30,10 @@ class FlowTrackingError(Exception):
     def __init__(self, message):
         super().__init__(message)
         self.notes: List[str] = []
+
+
+class ApDeductionError(FlowTrackingError):
+    pass
 
 
 def create_simple_ref_expr(
@@ -80,6 +85,19 @@ class Reference:
         metadata=dict(marshmallow_field=marshmallow.fields.Field(load_only=True, dump_only=True)),
     )
 
+    # The code element responsible of creating this reference.
+    definition_code_element: Optional[CodeElement] = field(
+        default=None,
+        metadata=dict(
+            marshmallow_field=marshmallow.fields.Nested(
+                marshmallow.Schema(),
+                dump_only=True,
+                load_only=True,
+            )
+        ),
+        compare=False,
+    )
+
     Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
 
     def eval(self, ap_tracking_data: RegTrackingData):
@@ -89,7 +107,7 @@ class Reference:
         ap_diff = ap_tracking_data - self.ap_tracking_data
         try:
             return translate_ap(self.value, ap_diff)
-        except FlowTrackingError as exc:
+        except ApDeductionError as exc:
             if len(self.locations) > 0:
                 exc.notes.append("Reference was defined here:")
                 for location in self.locations:
@@ -129,7 +147,7 @@ class SubstituteRegisterTransformer(ExpressionTransformer):
     def visit_ExprReg(self, expr: ExprReg):
         if expr.reg is Register.AP:
             if self.ap is None:
-                raise FlowTrackingError("Failed to deduce ap.")
+                raise ApDeductionError("Failed to deduce ap.")
             return self.ap(expr.location)
         elif expr.reg is Register.FP:
             return self.fp(expr.location)

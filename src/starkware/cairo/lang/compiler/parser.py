@@ -6,7 +6,7 @@ import lark
 from lark.exceptions import LarkError, UnexpectedCharacters, UnexpectedToken, VisitError
 
 from starkware.cairo.lang.compiler.ast.cairo_types import CairoType
-from starkware.cairo.lang.compiler.ast.code_elements import CodeElement
+from starkware.cairo.lang.compiler.ast.code_elements import CodeBlock, CodeElement
 from starkware.cairo.lang.compiler.ast.expr import Expression
 from starkware.cairo.lang.compiler.ast.instructions import InstructionAst
 from starkware.cairo.lang.compiler.ast.module import CairoFile
@@ -265,3 +265,12 @@ def parse_code_element(code: str, parser_context: Optional[ParserContext] = None
     Parses the given string and returns a CodeElement instance.
     """
     return parse(None, code, "code_element", CodeElement, parser_context=parser_context)
+
+
+def parse_block(code: str) -> CodeBlock:
+    return parse(
+        filename=None,
+        code=code,
+        code_type="code_block",
+        expected_type=CodeBlock,
+    )

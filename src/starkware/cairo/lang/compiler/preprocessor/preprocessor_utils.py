@@ -1,5 +1,5 @@
 import hashlib
-from typing import Optional
+from typing import List, Optional
 
 from starkware.cairo.lang.compiler.ast.code_elements import CodeBlock, CodeElementEmptyLine
 from starkware.cairo.lang.compiler.ast.types import TypedIdentifier
@@ -8,15 +8,18 @@ from starkware.cairo.lang.compiler.parser import ParserContext, parse
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
 
 
-def assert_no_modifier(typed_identifier: TypedIdentifier):
+def assert_no_modifier(typed_identifier: TypedIdentifier, excluded: Optional[List[str]] = None):
     """
     Throws a PreprocessorError if typed_identifier has a modifier.
     """
-    if typed_identifier.modifier is not None:
-        raise PreprocessorError(
-            f"Unexpected modifier '{typed_identifier.modifier.format()}'.",
-            location=typed_identifier.modifier.location,
-        )
+    if typed_identifier.modifier is None:
+        return
+    if excluded is not None and typed_identifier.modifier.name in excluded:
+        return
+    raise PreprocessorError(
+        f"Unexpected modifier '{typed_identifier.modifier.format()}'.",
+        location=typed_identifier.modifier.location,
+    )
 
 
 def verify_empty_code_block(

@@ -12,11 +12,7 @@ from starkware.cairo.lang.compiler.ast.expr import Expression
 from starkware.cairo.lang.compiler.ast.formatting_utils import LocationField
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.fields import CairoTypeAsStr
-from starkware.cairo.lang.compiler.preprocessor.flow import (
-    FlowTrackingData,
-    FlowTrackingDataActual,
-    ReferenceManager,
-)
+from starkware.cairo.lang.compiler.preprocessor.flow import FlowTrackingData, ReferenceManager
 from starkware.cairo.lang.compiler.references import Reference
 from starkware.cairo.lang.compiler.scoped_name import ScopedName, ScopedNameAsStr
 
@@ -134,15 +130,9 @@ class ReferenceDefinition(IdentifierDefinition):
     def eval(
         self, reference_manager: ReferenceManager, flow_tracking_data: FlowTrackingData
     ) -> Expression:
-        reference = flow_tracking_data.resolve_reference(
+        return flow_tracking_data.evaluate_reference(
             reference_manager=reference_manager, name=self.full_name
         )
-        assert isinstance(
-            flow_tracking_data, FlowTrackingDataActual
-        ), "Resolved references can only come from FlowTrackingDataActual."
-        expr = reference.eval(flow_tracking_data.ap_tracking)
-
-        return expr
 
 
 @marshmallow_dataclass.dataclass

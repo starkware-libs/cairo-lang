@@ -1,7 +1,9 @@
-from typing import ChainMap, Dict, Optional
+import dataclasses
+from typing import ChainMap, Dict, Optional, Tuple
 
 from starkware.cairo.lang.compiler.identifier_definition import IdentifierDefinition
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager, IdentifierScope
+from starkware.cairo.lang.compiler.preprocessor.memento import Memento
 
 
 class ProxyIdentifierManager(IdentifierManager):
@@ -56,3 +58,22 @@ class ProxyIdentifierScope(IdentifierScope):
             if name not in self.parent.subscopes:
                 self.parent.subscopes[name] = subscope.parent
             subscope._apply()
+
+
+@dataclasses.dataclass
+class IdentifierManagerMemento(Memento[IdentifierManager]):
+    original: IdentifierManager
+
+    @classmethod
+    def from_object(
+        cls, value: IdentifierManager
+    ) -> Tuple["IdentifierManagerMemento", IdentifierManager]:
+        return cls(original=value), ProxyIdentifierManager(parent=value)
+
+    def restore(self, value: IdentifierManager) -> IdentifierManager:
+        return self.original
+
+    def apply(self, value: IdentifierManager) -> IdentifierManager:
+        assert isinstance(value, ProxyIdentifierManager)
+        value.apply()
+        return self.original

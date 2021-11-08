@@ -2230,9 +2230,9 @@ call rel -11
     )
 
 
-def test_reference_over_calls_failures():
-    verify_exception(
-        f"""
+def test_reference_over_calls_no_revocation():
+    program = preprocess_str(
+        code=f"""
 func f():
     ap += 3
     jmp label1 if [ap] != 0
@@ -2241,84 +2241,52 @@ func f():
     ret
 end
 
-let x = ap + 1
-call f
-[x] = 0
-""",
-        """
-file:?:?: Reference 'x' was revoked.
-[x] = 0
- ^
-Reference was defined here:
-file:?:?
-let x = ap + 1
-    ^
-""",
-    )
-
-    verify_exception(
-        f"""
-func f():
-    ap += 3
-    jmp label1 if [ap] != 0
-    [ap] = [ap]; ap++
-    ret
-    label1:
+func main():
+    alloc_locals
+    let x = [ap + 1]
+    call f
+    x = 0
     ret
 end
-
-let x = ap + 1
-call f
-[x] = 0
 """,
-        """
-file:?:?: Reference 'x' was revoked.
-[x] = 0
- ^
-Reference was defined here:
-file:?:?
-let x = ap + 1
-    ^
-""",
+        prime=PRIME,
     )
-
-
-@pytest.mark.parametrize(
-    "revoking_instruction, has_def_location",
-    [
-        ("ap += [fp]", True),
-        ("call label", True),
-        ("call rel 0", True),
-        ("ret", False),
-        ("jmp label", False),
-        ("jmp rel 0", False),
-        ("jmp abs 0", False),
-    ],
-)
-def test_references_revoked(revoking_instruction, has_def_location):
-    def_loction_str = (
-        """\
-Reference was defined here:
-file:?:?
-let x = ap
-    ^
+    assert (
+        program.format()
+        == """\
+ap += 3
+jmp rel 3 if [ap] != 0
+[ap] = [ap]; ap++
+ret
+ap += 1
+[fp] = [ap + 1]
+call rel -9
+[fp] = 0
+ret
 """
-        if has_def_location
-        else ""
     )
 
+
+def test_revoke_correction_invalid_reference():
     verify_exception(
         f"""
-label:
-let x = ap
-{revoking_instruction}
-[x] = 0
+func main():
+    alloc_locals
+    let x = ap
+    ap += [ap]
+    x = x
+end
 """,
-        f"""
-file:?:?: Reference 'x' was revoked.
-[x] = 0
- ^
-{def_loction_str}
+        """\
+file:?:?: While auto generating local variable for 'x'.
+    let x = ap
+        ^
+file:?:?: While expanding the reference 'x' in:
+    let x = ap
+        ^
+file:?:?: ap may only be used in an expression of the form [ap + <const>].
+    let x = ap
+            ^^
 """,
     )
 
@@ -2326,29 +2294,83 @@ file:?:?: Reference 'x' was revoked.
 def test_references_revoked_multiple_location():
     verify_exception(
         f"""
-if [ap] == 0:
-    let x = ap
-else:
-    let y = ap
-    let x = y
+func main():
+    alloc_locals
+    if [ap] == 0:
+        let x = [ap]
+    else:
+        let y = [ap]
+        let x = y
+    end
+    ap += [fp]
+    x = 0
 end
-ap += [fp]
-[x] = 0
 """,
-        """
-
+        """\
 file:?:?: Reference 'x' was revoked.
-[x] = 0
- ^
+    x = 0
+    ^
 Reference was defined here:
 file:?:?
-    let x = y
-        ^
+        let x = y
+            ^
 file:?:?
-    let x = ap
-        ^
+        let x = [ap]
+            ^
 """,
     )
+
+
+@pytest.mark.parametrize(
+    "revoking_instruction, alloc_locals, valid, has_def_location",
+    [
+        ("ap += [fp]", "alloc_locals", True, None),
+        ("ap += [fp]", "", False, True),
+        ("ap += [fp]", "ap += SIZEOF_LOCALS", False, True),
+        ("call label", "alloc_locals", True, None),
+        ("call label", "", False, True),
+        ("call rel 0", "alloc_locals", True, None),
+        ("call rel 0", "", False, True),
+        ("ret", "alloc_locals", False, False),
+        ("jmp label", "alloc_locals", False, False),
+        ("jmp rel 0", "alloc_locals", False, False),
+        ("jmp abs 0", "alloc_locals", False, False),
+    ],
+)
+def test_references_revoked(revoking_instruction, valid, alloc_locals, has_def_location):
+    code = f"""
+func main():
+    {alloc_locals}
+    label:
+    let x = [ap]
+    {revoking_instruction}
+    x = 0
+    ret
+end
+"""
+    if not valid:
+        assert has_def_location is not None
+        def_loction_str = (
+            """\
+Reference was defined here:
+file:?:?
+    let x = [ap]
+        ^
+"""
+            if has_def_location
+            else ""
+        )
+        verify_exception(
+            code,
+            f"""
+file:?:?: Reference 'x' was revoked.
+    x = 0
+    ^
+{def_loction_str}
+""",
+        )
+    else:
+        preprocess_str(code, prime=PRIME)
 
 
 def test_references_failures():
@@ -2420,6 +2442,7 @@ def test_implicit_arg_revocation():
         """
 func foo{x}(y):
     foo(y=1)
+    # The following instruction revokes the implicit argument x
     ap += [fp]
     return foo(y=2)
 end
@@ -2436,6 +2459,46 @@ file:?:?
     foo(y=1)
     ^******^
 """,
+    )
+
+
+def test_implicit_arg_no_revocation():
+    program = preprocess_str(
+        code="""
+struct T:
+    member a : felt
+    member b : felt
+end
+func foo{x}(y):
+    alloc_locals
+    tempvar z: T = T(1,2)
+    foo(y=1)
+    # The following instruction revokes the implicit argument x, which is therefore copied to a
+    # local variable.
+    ap += [fp]
+    return foo(y=z.a)
+end
+""",
+        prime=PRIME,
+    )
+    assert (
+        program.format()
+        == """\
+ap += 3
+[ap] = 1; ap++
+[ap] = 2; ap++
+[fp] = [ap + (-2)]
+[fp + 1] = [ap + (-1)]
+[ap] = [fp + (-4)]; ap++
+[ap] = 1; ap++
+call rel -11
+[fp + 2] = [ap + (-1)]
+ap += [fp]
+[ap] = [fp + 2]; ap++
+[ap] = [fp]; ap++
+call rel -17
+ret
+"""
     )
 
 
@@ -2701,7 +2764,10 @@ func g():
     a = b + c
     # The type of e is deduced from the return type of f().
     a = e.b
-    let (_, _, local c, _, _) = f()
+    let (a, _, local c, x, _) = f()
+    ap += [ap]
+    a = a
+    x = x
     ret
 end
 """
@@ -2718,7 +2784,7 @@ end
 [ap] = [[ap + (-6)]]; ap++
 [ap] = [[ap + (-6)]]; ap++
 ret
-ap += 3
+ap += 5
 call rel -17
 [fp] = [ap + (-5)]
 [fp + 1] = [ap + (-4)]
@@ -2728,6 +2794,11 @@ call rel -17
 [ap + (-7)] = [ap + (-2)]
 call rel -25
 [fp + 2] = [ap + (-4)]
+[fp + 3] = [ap + (-6)]
+[fp + 4] = [ap + (-3)]
+ap += [ap]
+[fp + 3] = [fp + 3]
+[fp + 4] = [fp + 4]
 ret
 """
     )
@@ -3715,7 +3786,9 @@ call rel -5
     program = preprocess_codes(
         codes=[(files["."], ".")],
         pass_manager=default_pass_manager(
-            prime=PRIME, read_module=read_file_from_dict(files), opt_unused_functions=False
+            prime=PRIME,
+            read_module=read_file_from_dict(files),
+            opt_unused_functions=False,
         ),
     )
     assert (

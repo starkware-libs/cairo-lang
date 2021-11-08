@@ -1,7 +1,8 @@
 import dataclasses
+from collections import defaultdict
 from contextlib import contextmanager
 from enum import Enum, auto
-from typing import Dict, List, Optional, Set, Tuple, cast
+from typing import DefaultDict, Dict, List, Optional, Set, Tuple, Type, cast
 
 from starkware.cairo.lang.compiler.ast.arguments import IdentifierList
 from starkware.cairo.lang.compiler.ast.cairo_types import (
@@ -33,12 +34,14 @@ from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeElementReference,
     CodeElementReturn,
     CodeElementReturnValueReference,
+    CodeElementScoped,
     CodeElementStaticAssert,
     CodeElementTailCall,
     CodeElementTemporaryVariable,
     CodeElementUnpackBinding,
     CodeElementWith,
     CodeElementWithAttr,
+    CommentedCodeElement,
     LangDirective,
 )
 from starkware.cairo.lang.compiler.ast.expr import (
@@ -46,6 +49,7 @@ from starkware.cairo.lang.compiler.ast.expr import (
     ExprCast,
     ExprConst,
     ExprDeref,
+    ExprDot,
     Expression,
     ExprFutureLabel,
     ExprHint,
@@ -70,6 +74,7 @@ from starkware.cairo.lang.compiler.ast.instructions import (
 )
 from starkware.cairo.lang.compiler.ast.module import CairoModule
 from starkware.cairo.lang.compiler.ast.rvalue import RvalueCallInst, RvalueFuncCall
+from starkware.cairo.lang.compiler.ast.types import TypedIdentifier
 from starkware.cairo.lang.compiler.constants import SIZE_CONSTANT
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.expression_simplifier import ExpressionSimplifier
@@ -87,6 +92,7 @@ from starkware.cairo.lang.compiler.identifier_definition import (
 )
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierError, IdentifierManager
 from starkware.cairo.lang.compiler.identifier_utils import get_struct_definition
+from starkware.cairo.lang.compiler.injector import inject_code_elements
 from starkware.cairo.lang.compiler.instruction import Register
 from starkware.cairo.lang.compiler.instruction_builder import (
     InstructionBuilderError,
@@ -104,7 +110,9 @@ from starkware.cairo.lang.compiler.preprocessor.flow import (
     FlowTracking,
     FlowTrackingDataActual,
     FlowTrackingDataUnreachable,
+    FlowTrackingMemento,
     InstructionFlows,
+    LostReferenceError,
     ReferenceManager,
 )
 from starkware.cairo.lang.compiler.preprocessor.identifier_aware_visitor import (
@@ -113,6 +121,13 @@ from starkware.cairo.lang.compiler.preprocessor.identifier_aware_visitor import 
 from starkware.cairo.lang.compiler.preprocessor.local_variables import (
     create_simple_ref_expr,
     preprocess_local_variables,
+)
+from starkware.cairo.lang.compiler.preprocessor.memento import (
+    AppendOnlyListMemento,
+    ByValueMemento,
+    ChainMapMemento,
+    MembersMemento,
+    Memento,
 )
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_utils import assert_no_modifier
@@ -123,6 +138,7 @@ from starkware.cairo.lang.compiler.preprocessor.reg_tracking import (
     RegChangeUnknown,
     RegTrackingData,
 )
+from starkware.cairo.lang.compiler.proxy_identifier_manager import IdentifierManagerMemento
 from starkware.cairo.lang.compiler.references import FlowTrackingError, Reference, translate_ap
 from starkware.cairo.lang.compiler.resolve_search_result import resolve_search_result
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
@@ -134,6 +150,33 @@ from starkware.python.utils import safe_zip
 # Indicates that the compiler should be able to deduce the change in the ap register for this
 # function.
 KNOWN_AP_CHANGE_DECORATOR = "known_ap_change"
+
+# Maximum number of tries in a reference trial. See ReferenceTrial.
+MAX_REFERENCE_RETRIES = 4
+
+
+class ReferenceTrial:
+    """
+    Keeps track of an active trial, in which the preprocessor will optimistically compile a
+    function, and every revoked reference will be listed in bad_references, and evaluated
+    as a dummy fp based reference for the duration of the trial.
+    """
+
+    def __init__(self):
+        # A map of revoked references.
+        # The key is (reference_name, reference object id (id())).
+        # The value is (reference, exception).
+        self.bad_references: Dict[Tuple[ScopedName, int], Tuple[Reference, Exception]] = {}
+
+    @property
+    def failed(self) -> bool:
+        return len(self.bad_references) > 0
+
+    @property
+    def exception(self) -> Exception:
+        assert self.failed
+        _, err = next(iter(self.bad_references.values()))
+        return err
 
 
 @dataclasses.dataclass
@@ -210,6 +253,21 @@ class ReferenceState(Enum):
     ALLOW_IMPLICIT = auto()
 
 
+class PreprocessorMemento(MembersMemento["Preprocessor"]):
+    @classmethod
+    def get_fields(cls) -> Dict[str, Type[Memento]]:
+        return dict(
+            instructions=AppendOnlyListMemento[PreprocessedInstruction],
+            current_pc=ByValueMemento[int],
+            flow_tracking=FlowTrackingMemento,
+            next_temp_id=ByValueMemento[int],
+            reference_states=ChainMapMemento[ScopedName, ReferenceState],
+            scoped_temp_ids=ChainMapMemento[ScopedName, bool],
+            identifiers=IdentifierManagerMemento,
+            identifier_locations=ChainMapMemento[ScopedName, Location],
+        )
+
+
 class Preprocessor(IdentifierAwareVisitor):
     """
     Reads the AST representing the input and recreates it after handling the following:
@@ -264,8 +322,10 @@ class Preprocessor(IdentifierAwareVisitor):
         self.reference_states: Dict[ScopedName, ReferenceState] = {}
 
         # A set of temporary identifiers that are not expected to be collected by the
-        # identifier collector
-        self.scoped_temp_ids: Set[ScopedName] = set()
+        # identifier collector.
+        # Implemented as a dictionary to bool, because it has an efficient memento.
+        # See PreprocessorMemento.
+        self.scoped_temp_ids: Dict[ScopedName, bool] = {}
 
         if supported_decorators is None:
             supported_decorators = set()
@@ -275,6 +335,13 @@ class Preprocessor(IdentifierAwareVisitor):
         # A set of all scoped prefixes that were not traversed and need to be pruned form the
         # identifier manager.
         self.removed_prefixes: Set[ScopedName] = set()
+
+        # Current code element that is being processed.
+        self.current_code_element: Optional[CodeElement] = None
+
+        # When a reference trial is active, this object holds the required information about it.
+        # See ReferenceTrial.
+        self.reference_trial: Optional[ReferenceTrial] = None
 
     def search_identifier(
         self, name: str, location: Optional[Location]
@@ -312,16 +379,25 @@ class Preprocessor(IdentifierAwareVisitor):
 
     def visit_uncommented_code_block(self, code_elements: List[CodeElement]):
         # Process code.
-        for elm in code_elements:
-            self.visit(elm)
+        prev_code_element = self.current_code_element
+        try:
+            for elm in code_elements:
+                self.current_code_element = elm
+                self.visit(elm)
+                # Directives must appear at the top.
+                if not isinstance(elm, (CodeElementDirective, CodeElementEmptyLine)):
+                    self.directives_allowed = False
+        finally:
+            self.current_code_element = prev_code_element
 
-            # Directives must appear at the top.
-            if not isinstance(elm, (CodeElementDirective, CodeElementEmptyLine)):
-                self.directives_allowed = False
         # Make sure there are no hints at the end of the code block.
         self.check_no_hints(
             "Found a hint at the end of a code block. Hints must be followed by an instruction."
         )
+
+    def visit_CodeElementScoped(self, elm: CodeElementScoped):
+        with self.scoped(elm.scope, parent=elm):
+            self.visit_uncommented_code_block(elm.code_elements)
 
     def visit_CodeBlock(self, code_block: CodeBlock):
         # Remove the CommentedCodeElement wrapper.
@@ -515,17 +591,9 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
 
         # Process code_elements.
         with self.scoped(new_scope, parent=elm), self.set_reference_states(new_reference_states):
-            # Process local variable declaration.
-            code_elements = preprocess_local_variables(
-                code_elements=[x.code_elm for x in elm.code_block.code_elements],
-                scope=new_scope,
-                new_unique_id_callback=self.new_unique_id,
-                get_size_callback=self.get_size,
-                get_unpacking_struct_definition_callback=self.get_unpacking_struct_definition,
-                default_location=elm.identifier.location,
+            self.visit_function_body_with_retries(
+                code_block=elm.code_block, location=elm.identifier.location
             )
-
-            self.visit_uncommented_code_block(code_elements)
 
         if elm.element_type == "func":
             if self.flow_tracking.data != FlowTrackingDataUnreachable():
@@ -547,6 +615,113 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
             if self.function_metadata[new_scope].total_ap_change == RegChangeUnconstrained():
                 # No returns occured.
                 self.function_metadata[new_scope].total_ap_change = RegChangeUnknown()
+
+    def visit_function_body_with_retries(self, code_block: CodeBlock, location: Optional[Location]):
+        """
+        Visits the body of a function, with a reference trial if possible, to fix revocations.
+        See ReferenceTrial.
+        """
+        # Add checkpoint.
+        memento: Optional[PreprocessorMemento] = None
+        try_index = 0
+        try:
+            while True:
+                memento, preprocessor = PreprocessorMemento.from_object(self)
+                has_alloc_locals, code_elements = preprocess_local_variables(
+                    code_elements=[x.code_elm for x in code_block.code_elements],
+                    scope=self.current_scope,
+                    get_size_callback=self.get_size,
+                    get_unpacking_struct_definition_callback=self.get_unpacking_struct_definition,
+                    default_location=location,
+                )
+
+                # Functions without alloc_locals cannot fix reference revocations, and thus are not
+                # retried.
+                if not has_alloc_locals:
+                    self.visit_uncommented_code_block(code_elements)
+                    return
+
+                # Visit body with a reference trial.
+                self.reference_trial = reference_trial = ReferenceTrial()
+                try:
+                    self.visit_uncommented_code_block(code_elements)
+                finally:
+                    self.reference_trial = None
+
+                if not reference_trial.failed:
+                    # Success, accept the new changes.
+                    return
+
+                # Failure.
+                if try_index >= MAX_REFERENCE_RETRIES:
+                    # Too many retries, raise.
+                    raise reference_trial.exception
+                try_index += 1
+
+                # Roll back.
+                # PreprocessorMemento is inplace, so the restored preprocessor should be self.
+                # This is important, since the caller still has the self object.
+                assert self is memento.restore(preprocessor)
+                memento = None
+
+                # Fix revocations.
+                code_block = self.fix_reference_revocations(
+                    code_block=code_block, reference_trial=reference_trial
+                )
+        finally:
+            if memento is not None:
+                assert self is memento.apply(preprocessor)
+
+    def fix_reference_revocations(
+        self, code_block: CodeBlock, reference_trial: ReferenceTrial
+    ) -> CodeBlock:
+        """
+        Fixes reference revocations that occurred during a reference trial, by injecting local x = x
+        for each reference after the code element that defined it.
+        """
+
+        # A mapping of code elements to inject. See inject_code_elements().
+        injections: DefaultDict[int, List[CommentedCodeElement]] = defaultdict(list)
+        for (name, _reference_id), (reference, err) in reference_trial.bad_references.items():
+            _, expr_type = self.simplify_expr(reference.value)
+            definition_code_element = reference.definition_code_element
+            if definition_code_element is None:
+                # Definition site not found. Unrecoverable revocation.
+                raise err
+
+            # Inject a 'local x = x' after the code element that defines the reference.
+            base_name = name.path[-1]
+            # location: Optional[Location]
+            if len(reference.locations) > 0:
+                location = reference.locations[-1].with_parent_location(
+                    new_parent_location=reference.locations[-1],
+                    message=f"While auto generating local variable for '{base_name}'.",
+                )
+            else:
+                location = None
+            identifier = ExprIdentifier(
+                name=name.path[-1],
+                location=location,
+            )
+            injections[id(definition_code_element)].append(
+                CommentedCodeElement(
+                    code_elm=CodeElementLocalVariable(
+                        typed_identifier=TypedIdentifier(
+                            identifier=identifier,
+                            expr_type=expr_type,
+                            location=location,
+                        ),
+                        expr=identifier,
+                        location=location,
+                    ),
+                    comment=None,
+                    location=location,
+                )
+            )
+        return inject_code_elements(
+            ast=code_block,
+            injections=injections,
+        )
 
     def visit_CodeElementWith(self, elm: CodeElementWith):
         new_reference_states = dict(self.reference_states)
@@ -575,8 +750,7 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
             new_reference_states[src_full_name] = ReferenceState.ALLOW_IMPLICIT
 
         with self.set_reference_states(new_reference_states):
-            for commented_code_element in elm.code_block.code_elements:
-                self.visit(commented_code_element.code_elm)
+            self.visit(elm.code_block)
 
     def visit_CodeElementWithAttr(self, elm: CodeElementWithAttr):
         raise PreprocessorError(
@@ -640,8 +814,7 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
 
         # Equal code block.
         if eq_code_block is not None:
-            for commented_code_element in eq_code_block.code_elements:
-                self.visit(commented_code_element.code_elm)
+            self.visit(eq_code_block)
 
         if self.flow_tracking.data != FlowTrackingDataUnreachable() and neq_code_block is not None:
             # Code block ended with a flow to next line. Since we have a "Not equal" block, we
@@ -663,8 +836,7 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
 
         # Not equal code block.
         if neq_code_block is not None:
-            for commented_code_element in neq_code_block.code_elements:
-                self.visit(commented_code_element.code_elm)
+            self.visit(neq_code_block)
 
         # Add the end label.
         self.visit(CodeElementLabel(identifier=label_end))
@@ -1509,7 +1681,11 @@ Expected {expected_len} unpacking identifier{suffix}, found {len(unpacking_ident
         for typed_identifier, member_def in zip(
             elm.unpacking_list.identifiers, struct_def.members.values()
         ):
-            assert_no_modifier(typed_identifier)
+            excluded = []
+            if self.current_scope in self.function_metadata:
+                excluded = ["local"]
+            # Forbid locals outside of functions.
+            assert_no_modifier(typed_identifier, excluded=excluded)
 
             if typed_identifier.name == "_":
                 continue
@@ -1562,6 +1738,7 @@ Expected expression of type '{member_def.cairo_type.format()}', got '{cairo_type
             value=value,
             ap_tracking_data=self.flow_tracking.get_ap_tracking(),
             locations=[] if location is None else [location],
+            definition_code_element=self.current_code_element,
         )
 
         self.flow_tracking.add_reference(name, reference)
@@ -1925,6 +2102,17 @@ Expected expression of type '{expected_type.format()}', got '{expr_type.format()
                         message=f"While expanding the reference '{var.name}' in:",
                     )
                 return res_expr
+            except LostReferenceError as err:
+                err_to_throw = PreprocessorError(
+                    f"Reference '{var.name}' was revoked.", location=var.location, notes=err.notes
+                )
+                if self.reference_trial is None:
+                    raise err_to_throw
+                self.reference_trial.bad_references[err.name, id(err.reference)] = (
+                    err.reference,
+                    err_to_throw,
+                )
+                return self.get_dummy_reference_expr(identifier_definition)
             except FlowTrackingError as exc:
                 raise PreprocessorError(
                     f"Reference '{var.name}' was revoked.", location=var.location, notes=exc.notes
@@ -1936,6 +2124,28 @@ Expected expression of type '{expected_type.format()}', got '{expr_type.format()
             f"Unexpected identifier {var.name} of type {identifier_definition.TYPE}.",
             location=var.location,
         )
+
+    def get_dummy_reference_expr(self, identifier_definition: IdentifierDefinition) -> Expression:
+        if isinstance(identifier_definition, ReferenceDefinition):
+            parent = identifier_definition
+        elif isinstance(identifier_definition, OffsetReferenceDefinition):
+            parent = identifier_definition.parent
+        else:
+            # Should not happen.
+            raise NotImplementedError(
+                f"Unsupported identifier type {type(identifier_definition).__name__}."
+            )
+        DUMMY_OFFSET = 2 ** 15 - 1
+        expr = create_simple_ref_expr(
+            reg=Register.FP,
+            offset=DUMMY_OFFSET,
+            cairo_type=parent.cairo_type,
+            location=None,
+        )
+        if isinstance(identifier_definition, OffsetReferenceDefinition):
+            for member_name in identifier_definition.member_path.path:
+                expr = ExprDot(expr=expr, member=ExprIdentifier(name=member_name))
+        return expr
 
     def get_instruction_size(self, instruction: InstructionAst, allow_auto_deduction: bool = False):
         """
@@ -1977,7 +2187,7 @@ Expected expression of type '{expected_type.format()}', got '{expr_type.format()
         """
         name = f"__temp{self.next_temp_id}"
         self.next_temp_id += 1
-        self.scoped_temp_ids.add(self.current_scope + name)
+        self.scoped_temp_ids[self.current_scope + name] = True
         return name
 
     def _add_next_hint(self, hint: CodeElementHint):
