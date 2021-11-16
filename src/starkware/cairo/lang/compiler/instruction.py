@@ -11,8 +11,23 @@ class Register(Enum):
     FP = auto()
 
 
+class BytecodeElement:
+    @property
+    def size(self):
+        raise NotImplementedError
+
+
 @dataclasses.dataclass
-class Instruction:
+class BytecodeData(BytecodeElement):
+    data: int
+
+    @property
+    def size(self):
+        return 1
+
+
+@dataclasses.dataclass
+class Instruction(BytecodeElement):
     # Offsets. In the range [-2**15, 2*15) = [-2**(OFFSET_BITS-1), 2**(OFFSET_BITS-1)).
     off0: int
     off1: int

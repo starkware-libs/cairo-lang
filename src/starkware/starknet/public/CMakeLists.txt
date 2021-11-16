@@ -7,6 +7,7 @@ python_lib(starknet_abi_lib
     LIBS
     cairo_compile_lib
     cairo_vm_crypto_lib
+    starkware_python_utils_lib
     pip_eth_hash
     pip_pycryptodome
 )

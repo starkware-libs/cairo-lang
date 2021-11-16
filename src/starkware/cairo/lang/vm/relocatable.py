@@ -4,6 +4,9 @@ from typing import Dict, Tuple, TypeVar, Union
 MaybeRelocatable = Union[int, "RelocatableValue"]
 T = TypeVar("T", int, MaybeRelocatable)
 
+RELOCATABLE_OFFSET_LOWER_BOUND = -(2 ** 63)
+RELOCATABLE_OFFSET_UPPER_BOUND = 2 ** 63
+
 
 @dataclasses.dataclass(frozen=True)
 class RelocatableValue:

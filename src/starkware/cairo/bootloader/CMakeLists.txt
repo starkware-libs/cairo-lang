@@ -9,6 +9,7 @@ python_lib(cairo_hash_program_lib
     cairo_compile_lib
     cairo_version_lib
     cairo_vm_crypto_lib
+    starkware_python_utils_lib
 )
 
 python_venv(cairo_hash_program_venv
@@ -43,6 +44,7 @@ python_lib(cairo_bootloader_generate_fact_lib
     cairo_hash_program_lib
     cairo_relocatable_lib
     cairo_vm_lib
+    starkware_python_utils_lib
     pip_eth_hash
     pip_pycryptodome
 )

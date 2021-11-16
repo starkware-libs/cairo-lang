@@ -1,6 +1,7 @@
-from typing import Optional
+import logging
+from typing import Any, Dict, Optional
 
-from cachetools import LRUCache
+import cachetools
 
 from starkware.storage import metrics
 from starkware.storage.storage import Storage
@@ -30,10 +31,20 @@ class DictStorage(Storage):
 
 
 class CachedStorage(Storage):
-    def __init__(self, storage: Storage, max_size, metric_active: bool = False):
+    def __init__(self, storage: Storage, max_size: int, metric_active: bool = False):
         self.storage = storage
-        self.cache = LRUCache(max_size)
+        self.cache = cachetools.LRUCache(maxsize=max_size)
         self.metric_active = metric_active
+
+    @classmethod
+    async def create_from_config(
+        cls, config: Dict[str, Any], logger: Optional[logging.Logger] = None
+    ) -> "CachedStorage":
+        return cls(
+            storage=await Storage.create_instance_from_config(config=config["storage"]),
+            max_size=config["max_size"],
+            metric_active=config["metric_active"],
+        )
 
     async def set_value(self, key: bytes, value: bytes):
         self.cache[key] = value

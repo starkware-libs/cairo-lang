@@ -65,6 +65,7 @@ from starkware.cairo.lang.compiler.ast.instructions import (
     AssertEqInstruction,
     CallInstruction,
     CallLabelInstruction,
+    DefineWordInstruction,
     InstructionAst,
     InstructionBody,
     JnzInstruction,
@@ -100,6 +101,9 @@ from starkware.cairo.lang.compiler.instruction_builder import (
 )
 from starkware.cairo.lang.compiler.location_utils import add_parent_location
 from starkware.cairo.lang.compiler.offset_reference import OffsetReferenceDefinition
+from starkware.cairo.lang.compiler.preprocessor.auxiliary_info_collector import (
+    AuxiliaryInfoCollector,
+)
 from starkware.cairo.lang.compiler.preprocessor.compound_expressions import (
     CompoundExpressionContext,
     SimplicityLevel,
@@ -210,6 +214,7 @@ class PreprocessedProgram:
     # This provides additional information on the compiled program which can be used by IDEs.
     identifier_locations: Dict[ScopedName, Location]
     builtins: List[str]
+    auxiliary_info: AuxiliaryInfoCollector
 
     def format(self, with_locations: bool = False) -> str:
         """
@@ -280,6 +285,7 @@ class Preprocessor(IdentifierAwareVisitor):
     identifiers: An optional initial IdentifierManager.
     supported_decorators: A set of decorators that may appear before a function decleration.
     functions_to_compile: A set of functions to compile. None means compile everything.
+    auxiliary_info_cls: A class to be used to collect extra information during preprocessing.
     """
 
     def __init__(
@@ -289,6 +295,7 @@ class Preprocessor(IdentifierAwareVisitor):
         identifiers: Optional[IdentifierManager] = None,
         supported_decorators: Optional[Set[str]] = None,
         functions_to_compile: Optional[Set[ScopedName]] = None,
+        auxiliary_info_cls: Optional[Type[AuxiliaryInfoCollector]] = None,
     ):
         super().__init__(
             identifiers=identifiers,
@@ -335,6 +342,10 @@ class Preprocessor(IdentifierAwareVisitor):
         # A set of all scoped prefixes that were not traversed and need to be pruned form the
         # identifier manager.
         self.removed_prefixes: Set[ScopedName] = set()
+
+        self.auxiliary_info = (
+            auxiliary_info_cls.create(prime) if auxiliary_info_cls is not None else None
+        )
 
         # Current code element that is being processed.
         self.current_code_element: Optional[CodeElement] = None
@@ -455,6 +466,7 @@ class Preprocessor(IdentifierAwareVisitor):
             identifiers=self.identifiers,
             identifier_locations=self.identifier_locations,
             builtins=self.builtins,
+            auxiliary_info=self.auxiliary_info,
         )
 
     def create_struct_from_identifier_list(
@@ -589,6 +601,14 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
                     new_scope + typed_identifier.name
                 ] = ReferenceState.ALLOW_IMPLICIT
 
+        if self.auxiliary_info is not None:
+            self.auxiliary_info.start_function_info(
+                name=str(new_scope),
+                start_pc=self.current_pc,
+                implicit_args_struct=implicit_args_struct,
+                args_struct=args_struct,
+            )
+
         # Process code_elements.
         with self.scoped(new_scope, parent=elm), self.set_reference_states(new_reference_states):
             self.visit_function_body_with_retries(
@@ -616,6 +636,9 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
                 # No returns occured.
                 self.function_metadata[new_scope].total_ap_change = RegChangeUnknown()
 
+            if self.auxiliary_info is not None:
+                self.auxiliary_info.finish_function_info(end_pc=self.current_pc)
+
     def visit_function_body_with_retries(self, code_block: CodeBlock, location: Optional[Location]):
         """
         Visits the body of a function, with a reference trial if possible, to fix revocations.
@@ -635,9 +658,10 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
                     default_location=location,
                 )
 
-                # Functions without alloc_locals cannot fix reference revocations, and thus are not
-                # retried.
-                if not has_alloc_locals:
+                # These cases cannot be fixed for reference revocations:
+                # * Functions without alloc_locals.
+                # * Contexts with self.auxiliary_info.
+                if not has_alloc_locals or self.auxiliary_info is not None:
                     self.visit_uncommented_code_block(code_elements)
                     return
 
@@ -779,6 +803,11 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
                 a=elm.condition.a, op="-", b=elm.condition.b, location=elm.condition.location
             )
         )
+        if self.auxiliary_info is not None:
+            self.auxiliary_info.start_if(
+                expr_a=elm.condition.a, expr_b=elm.condition.b, cond_eq=elm.condition.eq
+            )
+
         compound_expressions_code_elements, (res_cond_expr,) = process_compound_expressions(
             [cond_expr], [SimplicityLevel.DEREF], context=self._compound_expression_context
         )
@@ -803,6 +832,9 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
                 )
             )
         )
+
+        if self.auxiliary_info is not None:
+            self.auxiliary_info.end_if()
 
         # Determine code blocks.
         eq_code_block: Optional[CodeBlock]
@@ -894,6 +926,9 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
             name, ConstDefinition(value=val.val), location=elm.identifier.location
         )
 
+        if self.auxiliary_info is not None:
+            self.auxiliary_info.add_const(name, val.val)
+
     def visit_CodeElementMember(self, elm: CodeElementMember):
         self.check_no_hints("Hints before member definitions are not allowed.")
 
@@ -957,6 +992,9 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
             location=elm.typed_identifier.location,
         )
 
+        if self.auxiliary_info is not None:
+            self.auxiliary_info.add_reference(name, elm.expr, elm.typed_identifier.location)
+
     def visit_CodeElementLocalVariable(self, elm: CodeElementLocalVariable):
         raise PreprocessorError(
             "Local variables are not supported outside of functions.", location=elm.location
@@ -964,6 +1002,13 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
 
     def visit_CodeElementTemporaryVariable(self, elm: CodeElementTemporaryVariable):
         assert_no_modifier(elm.typed_identifier)
+
+        if self.auxiliary_info is not None:
+            self.auxiliary_info.start_temp_var(
+                self.current_scope + elm.typed_identifier.identifier.name,
+                elm.expr,
+                elm.typed_identifier.location,
+            )
 
         if elm.expr is None or isinstance(elm.expr, ExprHint):
             # If this is an uninitialized tempvar, only increment ap.
@@ -1032,6 +1077,9 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
             location=elm.typed_identifier.identifier.location,
         )
 
+        if self.auxiliary_info is not None:
+            self.auxiliary_info.finish_temp_var()
+
     def visit_CodeElementCompoundAssertEq(self, instruction: CodeElementCompoundAssertEq):
         expr_a, expr_type_a = self.simplify_expr(instruction.a)
         expr_b, expr_type_b = self.simplify_expr(instruction.b)
@@ -1040,6 +1088,9 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
                 f"Cannot compare '{expr_type_a.format()}' and '{expr_type_b.format()}'.",
                 location=instruction.location,
             )
+
+        if self.auxiliary_info is not None:
+            self.auxiliary_info.start_compound_assert_eq(lhs=instruction.a, rhs=instruction.b)
 
         src_exprs = self.simplified_expr_to_felt_expr_list(expr=expr_a, expr_type=expr_type_a)
         dst_exprs = self.simplified_expr_to_felt_expr_list(expr=expr_b, expr_type=expr_type_b)
@@ -1063,6 +1114,9 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
             for code_element in compound_expressions_code_elements:
                 self.visit(code_element)
             self.visit(assert_eq)
+
+        if self.auxiliary_info is not None:
+            self.auxiliary_info.finish_compound_assert_eq()
 
     def visit_CodeElementStaticAssert(self, elm: CodeElementStaticAssert):
         a = self.simplify_expr_as_felt(elm.a)
@@ -1348,6 +1402,9 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
                 f"return cannot be used outside of a function.", location=elm.location
             )
 
+        if self.auxiliary_info is not None:
+            self.auxiliary_info.start_return()
+
         self.push_arguments(
             arguments=cast(List[ExprAssignment], elm.exprs),
             implicit_args=None,
@@ -1359,6 +1416,9 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
             instruction=InstructionAst(body=RetInstruction(), inc_ap=False, location=elm.location)
         )
         self.visit(code_elm_ret)
+
+        if self.auxiliary_info is not None:
+            self.auxiliary_info.finish_return(exprs=elm.exprs)
 
     def check_tail_call_cast(
         self, src_struct: StructDefinition, dest_struct: StructDefinition
@@ -1388,6 +1448,9 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
             raise PreprocessorError(
                 f"return cannot be used outside of a function.", location=elm.location
             )
+
+        if self.auxiliary_info is not None:
+            self.auxiliary_info.start_tail_call(args=[a.expr for a in elm.func_call.arguments.args])
 
         # Visit function call before type check to get better error message.
         self.visit(CodeElementFuncCall(func_call=elm.func_call))
@@ -1448,6 +1511,9 @@ Cannot convert the implicit arguments of {func_name} to the implicit arguments o
                 )
             )
         )
+
+        if self.auxiliary_info is not None:
+            self.auxiliary_info.finish_tail_call()
 
     def add_implicit_return_references(
         self,
@@ -1536,6 +1602,12 @@ Cannot convert the implicit arguments of {func_name} to the implicit arguments o
             location=elm.func_call.location,
         )
 
+        if self.auxiliary_info is not None:
+            self.auxiliary_info.start_func_call(
+                name=str(res.canonical_name),
+                args=[arg.expr for arg in elm.func_call.arguments.args],
+            )
+
         self.push_arguments(
             arguments=cast(List[ExprAssignment], elm.func_call.arguments.args),
             implicit_args=processed_implicit_args,
@@ -1554,6 +1626,9 @@ Cannot convert the implicit arguments of {func_name} to the implicit arguments o
             )
         )
         self.visit(code_elm_call)
+
+        if self.auxiliary_info is not None:
+            self.auxiliary_info.finish_func_call()
 
         self.add_implicit_return_references(
             implicit_args=processed_implicit_args,
@@ -1630,6 +1705,9 @@ Cannot convert the implicit arguments of {func_name} to the implicit arguments o
 
         # Visit call_elm to advance pc.
         self.visit(call_elm)
+
+        if self.auxiliary_info is not None:
+            self.auxiliary_info.add_func_ret_vars([elm.typed_identifier.name])
 
         cairo_type = self.resolve_type(expr_type)
         struct_size = self.get_size(cairo_type)
@@ -1715,6 +1793,9 @@ Expected expression of type '{member_def.cairo_type.format()}', got '{cairo_type
                 location=typed_identifier.location,
             )
 
+            if self.auxiliary_info is not None:
+                self.auxiliary_info.add_func_ret_vars([typed_identifier.identifier.name])
+
     def add_label(self, identifier: ExprIdentifier):
         name = self.current_scope + identifier.name
         self.flow_tracking.converge_with_label(name)
@@ -1780,6 +1861,10 @@ Expected expression of type '{member_def.cairo_type.format()}', got '{cairo_type
         self.check_no_hints("Hints before labels are not allowed.")
         self.add_label(elm.identifier)
 
+        if self.auxiliary_info is not None:
+            _, label_full_name = self.get_label(elm.identifier.name, elm.identifier.location)
+            self.auxiliary_info.record_label(label_full_name=label_full_name)
+
     def visit_CodeElementHint(self, elm: CodeElementHint):
         self._add_next_hint(hint=elm)
 
@@ -1809,6 +1894,8 @@ Expected expression of type '{member_def.cairo_type.format()}', got '{cairo_type
         return res
 
     def visit_AssertEqInstruction(self, instruction: AssertEqInstruction):
+        if self.auxiliary_info is not None:
+            self.auxiliary_info.add_assert_eq(lhs=instruction.a, rhs=instruction.b)
         return InstructionFlows(next_inst=RegChangeKnown(0)), AssertEqInstruction(
             a=self.simplify_expr_as_felt(instruction.a),
             b=self.simplify_expr_as_felt(instruction.b),
@@ -1834,6 +1921,13 @@ Expected expression of type '{member_def.cairo_type.format()}', got '{cairo_type
             if condition is not None:
                 condition = self.simplify_expr_as_felt(condition)
             res_instruction = dataclasses.replace(instruction, condition=condition)
+            if self.auxiliary_info is not None:
+                self.auxiliary_info.record_jump_to_labeled_instruction(
+                    label_name=label_full_name,
+                    condition=condition,
+                    current_pc=self.current_pc,
+                    pc_dest=None,
+                )
         else:
             jump_offset = ExprConst(
                 val=label_pc - self.current_pc, location=instruction.label.location
@@ -1848,6 +1942,16 @@ Expected expression of type '{member_def.cairo_type.format()}', got '{cairo_type
                     jump_offset=jump_offset,
                     condition=self.simplify_expr_as_felt(instruction.condition),
                     location=instruction.location,
+                )
+
+            if self.auxiliary_info is not None:
+                self.auxiliary_info.record_jump_to_labeled_instruction(
+                    label_name=label_full_name,
+                    condition=self.simplify_expr_as_felt(instruction.condition)
+                    if instruction.condition is not None
+                    else None,
+                    current_pc=self.current_pc,
+                    pc_dest=label_pc,
                 )
 
             if label_pc <= self.current_pc:
@@ -1907,8 +2011,18 @@ Expected expression of type '{member_def.cairo_type.format()}', got '{cairo_type
 
     def visit_AddApInstruction(self, instruction: AddApInstruction):
         expr = self.simplify_expr_as_felt(instruction.expr)
+
+        if self.auxiliary_info is not None:
+            self.auxiliary_info.add_add_ap(expr)
+
         return InstructionFlows(next_inst=RegChange.from_expr(expr)), AddApInstruction(
             expr=expr, location=instruction.location
+        )
+
+    def visit_DefineWordInstruction(self, instruction: DefineWordInstruction):
+        return InstructionFlows(), DefineWordInstruction(
+            expr=self.simplify_expr_as_felt(instruction.expr),
+            location=instruction.location,
         )
 
     def visit_RetInstruction(self, instruction: RetInstruction):
@@ -2135,10 +2249,9 @@ Expected expression of type '{expected_type.format()}', got '{expr_type.format()
             raise NotImplementedError(
                 f"Unsupported identifier type {type(identifier_definition).__name__}."
             )
-        DUMMY_OFFSET = 2 ** 15 - 1
         expr = create_simple_ref_expr(
             reg=Register.FP,
-            offset=DUMMY_OFFSET,
+            offset=0,
             cairo_type=parent.cairo_type,
             location=None,
         )

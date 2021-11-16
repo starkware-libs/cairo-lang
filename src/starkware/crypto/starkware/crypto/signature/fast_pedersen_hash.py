@@ -10,6 +10,7 @@ from starkware.crypto.signature.signature import (
     N_ELEMENT_BITS_HASH,
     SHIFT_POINT,
 )
+from starkware.python.utils import from_bytes, to_bytes
 
 curve = Curve("Curve0", FIELD_PRIME, ALPHA, BETA, EC_ORDER, *SHIFT_POINT)
 
@@ -48,9 +49,7 @@ def pedersen_hash_func(x: bytes, y: bytes) -> bytes:
     A variant of 'pedersen_hash', where the elements and their resulting hash are in bytes.
     """
     assert len(x) == len(y) == 32, "Unexpected element length."
-    return pedersen_hash(
-        *(int.from_bytes(element, "big", signed=False) for element in (x, y))
-    ).to_bytes(32, "big")
+    return to_bytes(pedersen_hash(*(from_bytes(element) for element in (x, y))))
 
 
 async def async_pedersen_hash_func(x: bytes, y: bytes) -> bytes:

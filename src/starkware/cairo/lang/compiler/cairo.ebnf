@@ -87,6 +87,7 @@ call_instruction: "call" "rel" expr                   -> inst_call_rel
                  | call_instruction
                  | RET                                 -> inst_ret
                  | "ap" "+=" expr                      -> inst_add_ap
+                 | "dw" expr                           -> inst_data_word
 instruction: instruction_body                    -> instruction_noap
            | instruction_body ";" "ap" _DBL_PLUS -> instruction_ap
 

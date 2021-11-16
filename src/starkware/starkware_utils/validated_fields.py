@@ -19,6 +19,9 @@ from starkware.starkware_utils.marshmallow_dataclass_fields import (
 T = TypeVar("T")
 
 
+# Mypy has a problem with dataclasses that contain unimplemented abstract methods.
+# See https://github.com/python/mypy/issues/5374 for details on this problem.
+@dataclasses.dataclass(frozen=True)  # type: ignore
 class Field(ABC, Generic[T]):
     """
     A class representing data types for fields in ValidatedMarshmallowDataclass.
@@ -30,11 +33,16 @@ class Field(ABC, Generic[T]):
     4.  A name for messages: in 'name_in_messages'.
     """
 
+    name: str
+    error_code: ErrorCode
+
     @property
+    @classmethod
     @abstractmethod
-    def name(self) -> str:
+    def error_message(cls) -> str:
         """
-        The default name that appears in messages.
+        The default error message that appears when the value is invalid.
+        Subclasses should define it as a class variable.
         """
 
     @abstractmethod
@@ -62,13 +70,6 @@ class Field(ABC, Generic[T]):
     def validate(self, value: T, name: Optional[str] = None):
         error_message = self.format_invalid_value_error_message(value=value, name=name)
         stark_assert(self.is_valid(value=value), code=self.error_code, message=error_message)
-
-    @property
-    @abstractmethod
-    def error_code(self) -> ErrorCode:
-        """
-        The error codes that is returned if the value is not valid.
-        """
 
     @abstractmethod
     def get_invalid_values(self) -> List[T]:
@@ -110,23 +111,22 @@ class OptionalField(Field[Optional[T]]):
     a value for this field, will load the class with a None value in this field.
     """
 
+    # Class variables:
+    error_message: ClassVar[str] = "Invalid OptionalField value {value}"
+
     def __init__(self, field: Field[T], none_probability: float):
         """
         Wraps the given field as an optional field. The probability to get None in
         get_random_value is going to be none_probability. Otherwise, it returns a random value from
         the wrapped field.
         """
+        super().__init__(name=field.name, error_code=field.error_code)
         self.field = field
         self.none_probability = max(0, min(1, none_probability))
-
         self.mfield: mfields.Field = copy.copy(self.field.get_marshmallow_field())  # type: ignore
         self.mfield.allow_none = True
         self.mfield.missing = None
         self.mfield.required = False
-
-    @property
-    def name(self) -> str:
-        return self.field.name
 
     def format(self, value: Optional[T]) -> str:
         if value is None:
@@ -143,10 +143,6 @@ class OptionalField(Field[Optional[T]]):
     # Validation.
     def is_valid(self, value: Optional[T]) -> bool:
         return value is None or self.field.is_valid(value=value)
-
-    @property
-    def error_code(self) -> ErrorCode:
-        return self.field.error_code
 
     def get_invalid_values(self) -> List[Optional[T]]:
         return [value for value in self.field.get_invalid_values() if value is not None]
@@ -170,14 +166,10 @@ class RangeValidatedField(Field[int]):
 
     lower_bound: int  # Inclusive.
     upper_bound: int  # Non-inclusive.
-    name_in_error_message: str
-    out_of_range_error_code: ErrorCode
     formatter: Optional[Callable[[int], str]] = None
-    out_of_range_message: ClassVar[str] = "{field_name} {field_value} is out of range"
 
-    @property
-    def name(self):
-        return self.name_in_error_message
+    # Class variables:
+    error_message: ClassVar[str] = "{field_name} {field_value} is out of range"
 
     def format(self, value: int) -> str:
         return self._format_value(value=value)
@@ -190,13 +182,10 @@ class RangeValidatedField(Field[int]):
         return self.lower_bound <= value < self.upper_bound
 
     def format_invalid_value_error_message(self, value: int, name: Optional[str] = None) -> str:
-        return self.out_of_range_message.format(
-            field_name=self.name if name is None else name, field_value=self._format_value(value)
+        return self.error_message.format(
+            field_name=self.name if name is None else name,
+            field_value=self._format_value(value),
         )
-
-    @property
-    def error_code(self) -> ErrorCode:
-        return self.out_of_range_error_code
 
     def get_invalid_values(self) -> List[int]:
         return [self.lower_bound - 1, self.upper_bound]
@@ -224,15 +213,13 @@ class BytesLengthField(Field[bytes]):
     Represents a field with value of type bytes, of a given length.
     """
 
+    error_message: ClassVar[str] = "{field_name} {field_value} is out of range"
+
     def __init__(self, name: str, error_code: ErrorCode, length: int):
-        self._name = name
-        self._error_code = error_code
+        super().__init__(name=name, error_code=error_code)
+
         assert length > 0, "Bytes length must be at least 1."
         self.length = length
-
-    @property
-    def name(self) -> str:
-        return self._name
 
     # Randomization.
     def get_random_value(self, random_object: Optional[random.Random] = None) -> bytes:
@@ -244,10 +231,6 @@ class BytesLengthField(Field[bytes]):
 
     def get_invalid_values(self) -> List[bytes]:
         return [b"\x00" * (self.length - 1), b"\x00" * (self.length + 1)]
-
-    @property
-    def error_code(self) -> ErrorCode:
-        return self._error_code
 
     def format_invalid_value_error_message(self, value: bytes, name: Optional[str] = None) -> str:
         name = self.name if name is None else name
@@ -322,9 +305,16 @@ def bytes_as_base64_str_metadata(
 
 
 def sequential_id_metadata(
-    field_name: str, required: bool = True, allow_previous_id: bool = False
+    field_name: str,
+    required: bool = True,
+    allow_previous_id: bool = False,
+    allow_none: bool = False,
 ) -> Dict[str, Any]:
-    validator = validate_in_range(field_name=field_name, min_value=-1 if allow_previous_id else 0)
+    validator = validate_in_range(
+        field_name=field_name, min_value=-1 if allow_previous_id else 0, allow_none=allow_none
+    )
     return dict(
-        marshmallow_field=mfields.Integer(strict=True, required=required, validate=validator)
+        marshmallow_field=mfields.Integer(
+            strict=True, required=required, allow_none=allow_none, validate=validator
+        )
     )

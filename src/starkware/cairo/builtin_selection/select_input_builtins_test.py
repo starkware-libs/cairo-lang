@@ -5,6 +5,7 @@ import pytest
 from starkware.cairo.common.test_utils import create_memory_struct
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.cairo.lang.vm.cairo_runner import CairoRunner
+from starkware.python.utils import from_bytes
 
 
 @pytest.mark.parametrize(
@@ -34,7 +35,7 @@ def test_select_input_builtins(builtin_selection_indicators):
 
     # Setup function.
     builtins_encoding = {
-        builtin: int.from_bytes(builtin.encode("ascii"), "big")
+        builtin: from_bytes(builtin.encode("ascii"))
         for builtin in ["output", "pedersen", "range_check", "ecdsa", "bitwise"]
     }
     all_builtins = [output_base, hash_base, range_check_base, signature_base, bitwise_base]

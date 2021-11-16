@@ -23,8 +23,12 @@ class StarknetMessage(ValidatedDataclass):
     classmethod.
     """
 
-    from_address: int = field(metadata=fields.felt_metadata(name_in_error_message="from address"))
-    to_address: int = field(metadata=fields.felt_metadata(name_in_error_message="to address"))
+    from_address: int = field(
+        metadata=everest_fields.felt_metadata(name_in_error_message="from address")
+    )
+    to_address: int = field(
+        metadata=everest_fields.felt_metadata(name_in_error_message="to address")
+    )
     payload: List[int] = field(metadata=fields.felt_list_metadata)
     message_type: MessageType
 

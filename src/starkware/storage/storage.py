@@ -1,14 +1,18 @@
 import asyncio
 import concurrent
 import contextlib
+import dataclasses
 from abc import ABC, abstractmethod
-from importlib import import_module
-from typing import Awaitable, Callable, Dict, Optional, Sequence, Tuple, Type, TypeVar
+from typing import Any, Awaitable, Callable, Dict, Optional, Sequence, Tuple, Type, TypeVar
 
+from starkware.python.utils import from_bytes, to_bytes
+from starkware.starkware_utils.config_base import get_object_by_path
 from starkware.starkware_utils.serializable import Serializable
+from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 
 HASH_BYTES = 32
 HashFunctionType = Callable[[bytes, bytes], Awaitable[bytes]]
+TIntToIntMapping = TypeVar("TIntToIntMapping", bound="IntToIntMapping")
 
 
 class Storage(ABC):
@@ -17,16 +21,19 @@ class Storage(ABC):
     """
 
     @staticmethod
-    async def from_config(config, logger=None) -> "Storage":
+    async def create_instance_from_config(config: Dict[str, Any], logger=None) -> "Storage":
         """
         Creates a Storage instance from a config dictionary.
         """
-
-        parts = config["class"].rsplit(".", 1)
-        storage_class = getattr(import_module(parts[0]), parts[1])
+        storage_class = get_object_by_path(path=config["class"])
         if hasattr(storage_class, "create_from_config"):
-            return await storage_class.create_from_config(**config["config"])
-        return storage_class(**config.get("config", {}))
+            storage_instance = await storage_class.create_from_config(**config["config"])
+        else:
+            storage_instance = storage_class(**config.get("config", {}))
+        assert isinstance(storage_instance, Storage)
+        if logger is not None:
+            logger.info(f"Instance of {type(storage_instance)} was created.")
+        return storage_instance
 
     @abstractmethod
     async def set_value(self, key: bytes, value: bytes):
@@ -115,13 +122,6 @@ TDBObject = TypeVar("TDBObject", bound="DBObject")
 
 class DBObject(Serializable):
     @classmethod
-    @abstractmethod
-    def prefix(cls) -> bytes:
-        """
-        Prefix for the keys in the database.
-        """
-
-    @classmethod
     def db_key(cls, suffix: bytes) -> bytes:
         return cls.prefix() + b":" + suffix
 
@@ -204,6 +204,40 @@ class IndexedDBObject(DBObject):
         return (self.key(index), self.serialize())
 
 
+@dataclasses.dataclass(frozen=True)
+class IntToIntMapping(ValidatedDataclass, IndexedDBObject):
+    """
+    Represents a mapping from integer key to integer value.
+    """
+
+    value: int
+
+    def serialize(self) -> bytes:
+        length = (self.value.bit_length() + 7) // 8  # Floor division.
+        return to_bytes(value=self.value, length=length)
+
+    @classmethod
+    def deserialize(cls: Type[TIntToIntMapping], data: bytes) -> TIntToIntMapping:
+        return cls(value=from_bytes(data))
+
+    @classmethod
+    async def get_value_or_fail(cls, storage: Storage, key: int) -> int:
+        """
+        Reads the value object from storage under the given key, and
+        returns its corresponding value. Raises an error, if does not exist in storage.
+        """
+        value_db_object = await cls.get_obj(storage=storage, index=key)
+        assert (
+            value_db_object is not None
+        ), f"{cls.__name__} value of key {key} does not appear in storage."
+
+        return value_db_object.value
+
+    @classmethod
+    async def setnx_value(cls, storage: Storage, key: int, value: int) -> bool:
+        return await cls(value=value).setnx_obj(storage=storage, index=key)
+
+
 class FactFetchingContext:
     """
     Information needed to fetch and store facts from a storage.
@@ -260,19 +294,21 @@ class LockObject(ABC):
 
 class LockManager(ABC):
     @staticmethod
-    async def from_config(config, logger=None) -> "LockManager":
+    async def create_instance_from_config(config: Dict[str, Any], logger=None) -> "LockManager":
         """
         Creates a LockManager instance from a config dictionary.
         """
-
-        parts = config["class"].rsplit(".", 1)
-        lock_manager_class = getattr(import_module(parts[0]), parts[1])
-        return lock_manager_class(**config["config"])
+        lock_manager_class = get_object_by_path(path=config["class"])
+        lock_manager_instance = lock_manager_class(**config["config"])
+        if logger is not None:
+            logger.info(f"Created instance of {type(lock_manager_instance)}")
+        assert isinstance(lock_manager_instance, LockManager)
+        return lock_manager_instance
 
     @staticmethod
     @contextlib.asynccontextmanager
     async def from_config_context(config, logger=None):
-        lock_manager = await LockManager.from_config(config=config, logger=logger)
+        lock_manager = await LockManager.create_instance_from_config(config=config, logger=logger)
         try:
             yield lock_manager
         finally:

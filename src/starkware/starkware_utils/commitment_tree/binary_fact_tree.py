@@ -1,20 +1,30 @@
 from abc import abstractmethod
+from dataclasses import field
 from importlib import import_module
 from logging import Logger
 from typing import Collection, Dict, Optional, Tuple, Type, TypeVar
 
+import marshmallow_dataclass
+
 from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
+from starkware.starkware_utils.validated_fields import bytes_as_hex_metadata
 from starkware.storage.storage import Fact, FactFetchingContext
 
 TFact = TypeVar("TFact", bound=Fact)
 BinaryFactDict = Dict[int, Tuple[int, ...]]
 
 
+# Mypy has a problem with dataclasses that contain unimplemented abstract methods.
+# See https://github.com/python/mypy/issues/5374 for details on this problem.
+@marshmallow_dataclass.dataclass(frozen=True)  # type: ignore[misc]
 class BinaryFactTree(ValidatedMarshmallowDataclass):
     """
     An abstract base class for Merkle and Patricia-Merkle tree.
     An immutable binary tree backed by an immutable fact storage.
     """
+
+    root: bytes = field(metadata=bytes_as_hex_metadata(validated_field=None))
+    height: int
 
     @classmethod
     @abstractmethod

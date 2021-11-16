@@ -11,10 +11,11 @@ struct SendMessageToL1SysCall:
 end
 
 const CALL_CONTRACT_SELECTOR = 'CallContract'
+const DELEGATE_CALL_SELECTOR = 'DelegateCall'
 
 # Describes the CallContract system call format.
 struct CallContractRequest:
-    # The system call selector (= CALL_CONTRACT_SELECTOR).
+    # The system call selector (= CALL_CONTRACT_SELECTOR or DELEGATE_CALL_SELECTOR).
     member selector : felt
     # The address of the L2 contract to call.
     member contract_address : felt
@@ -53,6 +54,23 @@ func call_contract{syscall_ptr : felt*}(
     return (retdata_size=response.retdata_size, retdata=response.retdata)
 end
 
+func delegate_call{syscall_ptr : felt*}(
+        contract_address : felt, function_selector : felt, calldata_size : felt,
+        calldata : felt*) -> (retdata_size : felt, retdata : felt*):
+    let syscall = [cast(syscall_ptr, CallContract*)]
+    assert syscall.request = CallContractRequest(
+        selector=DELEGATE_CALL_SELECTOR,
+        contract_address=contract_address,
+        function_selector=function_selector,
+        calldata_size=calldata_size,
+        calldata=calldata)
+    %{ syscall_handler.delegate_call(segments=segments, syscall_ptr=ids.syscall_ptr) %}
+    let response = syscall.response
+
+    let syscall_ptr = syscall_ptr + CallContract.SIZE
+    return (retdata_size=response.retdata_size, retdata=response.retdata)
+end
+
 const GET_CALLER_ADDRESS_SELECTOR = 'GetCallerAddress'
 
 # Describes the GetCallerAddress system call format.
@@ -78,6 +96,57 @@ func get_caller_address{syscall_ptr : felt*}() -> (caller_address : felt):
     %{ syscall_handler.get_caller_address(segments=segments, syscall_ptr=ids.syscall_ptr) %}
     let syscall_ptr = syscall_ptr + GetCallerAddress.SIZE
     return (caller_address=syscall.response.caller_address)
+end
+
+const GET_SEQUENCER_ADDRESS_SELECTOR = 'GetSequencerAddress'
+
+# Describes the GetSequencerAddress system call format.
+struct GetSequencerAddressRequest:
+    # The system call selector (= GET_SEQUENCER_ADDRESS_SELECTOR).
+    member selector : felt
+end
+
+struct GetSequencerAddressResponse:
+    member sequencer_address : felt
+end
+
+struct GetSequencerAddress:
+    member request : GetSequencerAddressRequest
+    member response : GetSequencerAddressResponse
+end
+
+# Returns the address of the sequencer contract.
+func get_sequencer_address{syscall_ptr : felt*}() -> (sequencer_address : felt):
+    let syscall = [cast(syscall_ptr, GetSequencerAddress*)]
+    assert syscall.request = GetSequencerAddressRequest(selector=GET_SEQUENCER_ADDRESS_SELECTOR)
+    %{ syscall_handler.get_sequencer_address(segments=segments, syscall_ptr=ids.syscall_ptr) %}
+    let syscall_ptr = syscall_ptr + GetSequencerAddress.SIZE
+    return (sequencer_address=syscall.response.sequencer_address)
+end
+
+const GET_CONTRACT_ADDRESS_SELECTOR = 'GetContractAddress'
+
+# Describes the GetContractAddress system call format.
+struct GetContractAddressRequest:
+    # The system call selector (= GET_CONTRACT_ADDRESS_SELECTOR).
+    member selector : felt
+end
+
+struct GetContractAddressResponse:
+    member contract_address : felt
+end
+
+struct GetContractAddress:
+    member request : GetContractAddressRequest
+    member response : GetContractAddressResponse
+end
+
+func get_contract_address{syscall_ptr : felt*}() -> (contract_address : felt):
+    let syscall = [cast(syscall_ptr, GetContractAddress*)]
+    assert syscall.request = GetContractAddressRequest(selector=GET_CONTRACT_ADDRESS_SELECTOR)
+    %{ syscall_handler.get_contract_address(segments=segments, syscall_ptr=ids.syscall_ptr) %}
+    let syscall_ptr = syscall_ptr + GetContractAddress.SIZE
+    return (contract_address=syscall.response.contract_address)
 end
 
 const GET_TX_SIGNATURE_SELECTOR = 'GetTxSignature'

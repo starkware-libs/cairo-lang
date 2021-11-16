@@ -11,6 +11,7 @@ func unsafe_keccak(data : felt*, length : felt) -> (low, high):
     local high
     %{
         from eth_hash.auto import keccak
+
         data, length = ids.data, ids.length
 
         if '__keccak_max_size' in globals():

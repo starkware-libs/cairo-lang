@@ -1,6 +1,6 @@
-from collections import UserDict
-from typing import Callable, Dict, List, Type, cast
+from typing import Callable, Dict, Iterable, List, Optional, Tuple, Type, Union, cast
 
+from starkware.cairo.lang.vm.memory_dict_backend import MemoryDictBackend
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 
 ADDR_SIZE_IN_BYTES = 8
@@ -24,7 +24,15 @@ class InconsistentMemoryError(Exception):
         )
 
 
-class MemoryDict(UserDict):
+MemoryDictInitializer = Optional[
+    Union[
+        Dict[MaybeRelocatable, MaybeRelocatable],
+        Iterable[Tuple[MaybeRelocatable, MaybeRelocatable]],
+    ]
+]
+
+
+class MemoryDict:
     """
     Dictionary used for VM memory. Adds the following checks:
     * Checks that all memory addresses are valid.
@@ -32,14 +40,58 @@ class MemoryDict(UserDict):
     * setitem: Checks that memory value is not changed.
     """
 
-    def __init__(self, *args, **kwargs):
-        # The order is important: self._frozen definition must precede super().__init__().
+    def __init__(
+        self,
+        values: MemoryDictInitializer = None,
+        backend=MemoryDictBackend,
+    ):
+        if values is None:
+            values = []
+        elif isinstance(values, dict):
+            values = values.items()
+        self.data = backend(values)
+
         self._frozen: bool = False
-        super().__init__(*args, **kwargs)
 
         # A dict of segment relocation rules mapping a segment index to a RelocatableValue.
         # See add_relocation_rule for more details.
         self.relocation_rules: Dict[int, RelocatableValue] = {}
+
+    def get(
+        self, addr, default_value: Optional[MaybeRelocatable] = None
+    ) -> Optional[MaybeRelocatable]:
+        return self.relocate_value(self.data.get(addr, default_value))
+
+    def items(self) -> Iterable[Tuple[MaybeRelocatable, MaybeRelocatable]]:
+        return self.data.items()
+
+    def keys(self):
+        return self.data.keys()
+
+    def __iter__(self):
+        return iter(self.data)
+
+    def __repr__(self):
+        return repr(self.data)
+
+    def __eq__(self, other):
+        if not isinstance(other, MemoryDict):
+            return NotImplemented
+        return self.data == other.data
+
+    def setdefault(self, key, default=None):
+        # Copied from _collections_abc.MutableMapping.
+        try:
+            return self[key]
+        except KeyError:
+            self[key] = default
+        return default
+
+    def __contains__(self, addr):
+        return addr in self.data
+
+    def __len__(self):
+        return len(self.data)
 
     def _check_element(self, num: MaybeRelocatable, name: str, exc_type: Type[Exception]):
         """
@@ -125,7 +177,7 @@ class MemoryDict(UserDict):
     def __getitem__(self, addr: MaybeRelocatable) -> MaybeRelocatable:
         self._check_element(addr, "Memory address", KeyError)
         try:
-            value = super().__getitem__(addr)
+            value = self.data[addr]
         except KeyError:
             raise UnknownMemoryError(addr) from None
 

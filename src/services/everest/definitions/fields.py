@@ -1,14 +1,16 @@
+import dataclasses
 import random
 import string
-from typing import List, Optional
+from typing import Any, ClassVar, Dict, List, Optional
 
 import marshmallow.fields as mfields
 from eth_typing import ChecksumAddress
 from web3 import Web3
 
 from services.everest.definitions import constants
+from starkware.crypto.signature.signature import FIELD_PRIME
 from starkware.python.utils import initialize_random
-from starkware.starkware_utils.error_handling import ErrorCode, StarkErrorCode
+from starkware.starkware_utils.error_handling import StarkErrorCode
 from starkware.starkware_utils.field_validators import validate_non_negative
 from starkware.starkware_utils.validated_fields import Field, RangeValidatedField
 
@@ -27,13 +29,10 @@ class EthAddressTypeField(Field[str]):
     A field representation of an Ethereum address.
     """
 
-    def __init__(self, name, error_code):
-        self._name = name
-        self._error_code = error_code
+    error_message: ClassVar[str] = "{name} {value} is out of range / not checksummed."
 
-    @property
-    def name(self) -> str:
-        return self._name
+    def __init__(self, name, error_code):
+        super().__init__(name, error_code)
 
     # Randomization.
     def get_random_value(self, random_object: Optional[random.Random] = None) -> str:
@@ -52,13 +51,11 @@ class EthAddressTypeField(Field[str]):
             self.get_random_value() + "0",  # type: ignore # Too long address.
         ]
 
-    @property
-    def error_code(self) -> ErrorCode:
-        return self._error_code
-
     def format_invalid_value_error_message(self, value: str, name: Optional[str] = None) -> str:
-        name = self.name if name is None else name
-        return f"{name} {value} is out of range / not checksummed."
+        return self.error_message.format(
+            name=self.name if name is None else name,
+            value=value,
+        )
 
     # Serialization.
     def get_marshmallow_field(self) -> mfields.Field:
@@ -85,6 +82,18 @@ EthAddressField = EthAddressTypeField(
 EthAddressIntField = RangeValidatedField(
     lower_bound=constants.ETH_ADDRESS_LOWER_BOUND,
     upper_bound=constants.ETH_ADDRESS_UPPER_BOUND,
-    name_in_error_message="Ethereum address",
-    out_of_range_error_code=StarkErrorCode.OUT_OF_RANGE_ETH_ADDRESS,
+    name="Ethereum address",
+    error_code=StarkErrorCode.OUT_OF_RANGE_ETH_ADDRESS,
 )
+
+FeltField = RangeValidatedField(
+    lower_bound=0,
+    upper_bound=FIELD_PRIME,
+    name="Field element",
+    error_code=StarkErrorCode.OUT_OF_RANGE_FIELD_ELEMENT,
+    formatter=hex,
+)
+
+
+def felt_metadata(name_in_error_message: str) -> Dict[str, Any]:
+    return dataclasses.replace(FeltField, name=name_in_error_message).metadata()

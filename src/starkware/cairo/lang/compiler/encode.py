@@ -2,6 +2,8 @@ from typing import List, Optional
 
 from starkware.cairo.lang.compiler.instruction import (
     OFFSET_BITS,
+    BytecodeData,
+    BytecodeElement,
     Instruction,
     Register,
     decode_instruction_values,
@@ -25,10 +27,14 @@ OPCODE_ASSERT_EQ_BIT = 14
 # RESERVED_BIT = 15.
 
 
-def encode_instruction(inst: Instruction, prime: int) -> List[int]:
+def encode_instruction(element: BytecodeElement, prime: int) -> List[int]:
     """
     Given an Instruction, returns a list of 1 or 2 integers representing the instruction.
     """
+    if isinstance(element, BytecodeData):
+        return [element.data]
+    assert isinstance(element, Instruction)
+    inst = element
     assert prime > 2 ** (3 * OFFSET_BITS + 16)
     assert (
         -(2 ** (OFFSET_BITS - 1)) <= inst.off0 < 2 ** (OFFSET_BITS - 1)

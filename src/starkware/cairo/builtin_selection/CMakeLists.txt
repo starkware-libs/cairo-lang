@@ -25,5 +25,6 @@ full_python_test(cairo_builtin_selection_test
     cairo_test_utils
     cairo_vm_lib
     starkware_crypto_lib
+    starkware_python_utils_lib
     pip_pytest
 )

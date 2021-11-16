@@ -1,3 +1,5 @@
+sequencer_address: '0x0'
 contract_storage_commitment_tree_height: 251
 global_state_commitment_tree_height: 251
 invoke_tx_max_n_steps: 1000000
+tx_commitment_tree_height: 64

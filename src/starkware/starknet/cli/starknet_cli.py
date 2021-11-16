@@ -8,6 +8,7 @@ import os
 import sys
 from typing import List
 
+from services.everest.definitions import fields as everest_fields
 from services.external_api.base_client import RetryConfig
 from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt, TypePointer
 from starkware.cairo.lang.compiler.parser import parse_type
@@ -28,7 +29,7 @@ from starkware.starkware_utils.error_handling import StarkErrorCode
 
 
 def felt_formatter(hex_felt: str) -> str:
-    return field_element_repr(val=int(hex_felt, 16), prime=fields.FeltField.upper_bound)
+    return field_element_repr(val=int(hex_felt, 16), prime=everest_fields.FeltField.upper_bound)
 
 
 def get_gateway_client(args) -> GatewayClient:
@@ -80,6 +81,9 @@ async def deploy(args, command_args):
         help="The contract definition to deploy.",
         required=True,
     )
+    parser.add_argument(
+        "--token", type=str, help="Used for deploying contracts in Alpha MainNet.", required=False
+    )
     parser.parse_args(command_args, namespace=args)
     inputs = parse_inputs(args.inputs)
 
@@ -104,7 +108,7 @@ async def deploy(args, command_args):
         constructor_calldata=inputs,
     )
 
-    gateway_response = await gateway_client.add_transaction(tx=tx)
+    gateway_response = await gateway_client.add_transaction(tx=tx, token=args.token)
     contract_address = int(gateway_response["address"], 16)
     assert (
         gateway_response["code"] == StarkErrorCode.TRANSACTION_RECEIVED.name
@@ -152,15 +156,10 @@ async def invoke_or_call(args, command_args, call: bool):
         help="The signature information for the invoked function.",
     )
     if call:
-        parser.add_argument(
-            "--block_id",
-            type=int,
-            required=False,
-            help=(
-                "The ID of the block used as the context for the call operation. "
-                "In case this argument is not given, uses the latest block."
-            ),
+        add_block_identifier_argument(
+            parser=parser, block_role_description="be used as the context for the call operation"
         )
+
     parser.parse_args(command_args, namespace=args)
 
     inputs = parse_inputs(args.inputs)
@@ -221,7 +220,9 @@ async def invoke_or_call(args, command_args, call: bool):
     gateway_response: dict
     if call:
         feeder_client = get_feeder_gateway_client(args)
-        gateway_response = await feeder_client.call_contract(tx, args.block_id)
+        gateway_response = await feeder_client.call_contract(
+            invoke_tx=tx, block_hash=args.block_hash, block_number=args.block_number
+        )
         print(*map(felt_formatter, gateway_response["result"]))
     else:
         gateway_client = get_gateway_client(args)
@@ -295,8 +296,21 @@ async def get_transaction(args, command_args):
 
     feeder_gateway_client = get_feeder_gateway_client(args)
 
-    tx_as_dict = await feeder_gateway_client.get_transaction(tx_hash=args.hash)
-    print(json.dumps(tx_as_dict, indent=4, sort_keys=True))
+    tx_info_as_dict = await feeder_gateway_client.get_transaction(tx_hash=args.hash)
+    print(json.dumps(tx_info_as_dict, indent=4, sort_keys=True))
+
+
+async def get_transaction_receipt(args, command_args):
+    parser = argparse.ArgumentParser(description="Outputs the transaction receipt given its ID.")
+    parser.add_argument(
+        "--hash", type=str, required=True, help="The hash of the transaction to query."
+    )
+    parser.parse_args(command_args, namespace=args)
+
+    feeder_gateway_client = get_feeder_gateway_client(args)
+
+    tx_receipt_as_dict = await feeder_gateway_client.get_transaction_receipt(tx_hash=args.hash)
+    print(json.dumps(tx_receipt_as_dict, indent=4, sort_keys=True))
 
 
 def handle_network_param(args):
@@ -309,7 +323,7 @@ def handle_network_param(args):
             print(f"Unknown network '{network}'.", file=sys.stderr)
             return 1
 
-        dns = "alpha3.starknet.io"
+        dns = "alpha4.starknet.io"
         if args.gateway_url is None:
             args.gateway_url = f"https://{dns}/gateway"
 
@@ -326,19 +340,17 @@ async def get_block(args, command_args):
             "In case no ID is given, outputs the latest block."
         )
     )
-    parser.add_argument(
-        "--id",
-        type=int,
-        help=(
-            "The ID of the block to display. In case this argument is not given, uses the latest "
-            "block."
-        ),
+    add_block_identifier_argument(
+        parser=parser, block_role_description="display", with_block_prefix=False
     )
+
     parser.parse_args(command_args, namespace=args)
 
     feeder_gateway_client = get_feeder_gateway_client(args)
 
-    block_as_dict = await feeder_gateway_client.get_block(block_id=args.id)
+    block_as_dict = await feeder_gateway_client.get_block(
+        block_hash=args.hash, block_number=args.number
+    )
     print(json.dumps(block_as_dict, indent=4, sort_keys=True))
 
 
@@ -352,20 +364,16 @@ async def get_code(args, command_args):
     parser.add_argument(
         "--contract_address", type=str, help="The address of the contract.", required=True
     )
-    parser.add_argument(
-        "--block_id",
-        type=int,
-        help=(
-            "The ID of the block to extract information from. "
-            "In case this argument is not given, uses the latest block."
-        ),
-    )
+    add_block_identifier_argument(parser=parser, block_role_description="extract information from")
+
     parser.parse_args(command_args, namespace=args)
 
     feeder_gateway_client = get_feeder_gateway_client(args)
 
     code = await feeder_gateway_client.get_code(
-        contract_address=int(args.contract_address, 16), block_id=args.block_id
+        contract_address=int(args.contract_address, 16),
+        block_hash=args.block_hash,
+        block_number=args.block_number,
     )
     print(json.dumps(code, indent=4, sort_keys=True))
 
@@ -391,36 +399,56 @@ async def get_storage_at(args, command_args):
     parser.add_argument(
         "--key", type=int, help="The position in the contract's storage.", required=True
     )
-    parser.add_argument(
-        "--block_id",
-        type=int,
-        help=(
-            "The ID of the block to extract information from. "
-            "In case this argument is not given, uses the latest block."
-        ),
-    )
+    add_block_identifier_argument(parser=parser, block_role_description="extract information from")
+
     parser.parse_args(command_args, namespace=args)
 
     feeder_gateway_client = get_feeder_gateway_client(args)
 
     print(
         await feeder_gateway_client.get_storage_at(
-            contract_address=int(args.contract_address, 16), key=args.key, block_id=args.block_id
+            contract_address=int(args.contract_address, 16),
+            key=args.key,
+            block_hash=args.block_hash,
+            block_number=args.block_number,
         )
+    )
+
+
+def add_block_identifier_argument(
+    parser: argparse.ArgumentParser, block_role_description: str, with_block_prefix: bool = True
+):
+    identifier_prefix = "block_" if with_block_prefix else ""
+    parser.add_argument(
+        f"--{identifier_prefix}hash",
+        type=str,
+        help=(
+            f"The hash of the block to {block_role_description}. "
+            "In case this argument and block_number are not given, uses the latest block."
+        ),
+    )
+    parser.add_argument(
+        f"--{identifier_prefix}number",
+        type=int,
+        help=(
+            f"The number of the block to {block_role_description}. "
+            "In case this argument and block_hash are not given, uses the latest block."
+        ),
     )
 
 
 async def main():
     subparsers = {
-        "deploy": deploy,
-        "invoke": functools.partial(invoke_or_call, call=False),
         "call": functools.partial(invoke_or_call, call=True),
-        "tx_status": tx_status,
-        "get_transaction": get_transaction,
+        "deploy": deploy,
         "get_block": get_block,
         "get_code": get_code,
-        "get_storage_at": get_storage_at,
         "get_contract_addresses": get_contract_addresses,
+        "get_storage_at": get_storage_at,
+        "get_transaction": get_transaction,
+        "get_transaction_receipt": get_transaction_receipt,
+        "invoke": functools.partial(invoke_or_call, call=False),
+        "tx_status": tx_status,
     }
     parser = argparse.ArgumentParser(description="A tool to communicate with StarkNet.")
     parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")

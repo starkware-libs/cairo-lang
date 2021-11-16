@@ -56,8 +56,7 @@ export BUILD_ROOT=$(realpath $(dirname $0)/{build_path_bash})
 source ${{BUILD_ROOT}}/{venv_dir_rel}/bin/activate
 {args.environment_variables} \
 CMAKE_TARGET_NAME={args.name} \
-${{BUILD_ROOT}}/{venv_dir_rel}/bin/python -u -m {args.module} \
-{exe_args} $@
+${{BUILD_ROOT}}/{venv_dir_rel}/bin/python -u -m {args.module} {exe_args} "$@"
 """
         )
 

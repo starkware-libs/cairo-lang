@@ -6,6 +6,7 @@ python_lib(starknet_storage_lib
 
     LIBS
     cairo_constants_lib
+    starkware_python_utils_lib
     starkware_storage_lib
     starkware_utils_lib
 )

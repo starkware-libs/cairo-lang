@@ -11,7 +11,6 @@ class StarknetErrorCode(ErrorCode):
     CONTRACT_DEFINITION_OBJECT_SIZE_TOO_LARGE = auto()
     ENTRY_POINT_NOT_FOUND_IN_CONTRACT = auto()
     INVALID_CONTRACT_DEFINITION = auto()
-    INVALID_FIELD_ELEMENT = auto()
     INVALID_PROGRAM = auto()
     INVALID_RETURN_DATA = auto()
     INVALID_STATUS_MODE = auto()
@@ -19,6 +18,8 @@ class StarknetErrorCode(ErrorCode):
     L1_TO_L2_MESSAGE_ZEROED_COUNTER = auto()
     MULTIPLE_ENTRY_POINTS_MATCH_SELECTOR = auto()
     NON_PERMITTED_CONTRACT = auto()
+    OUT_OF_RANGE_ADDRESS = auto()
+    OUT_OF_RANGE_BLOCK_HASH = auto()
     OUT_OF_RANGE_BLOCK_ID = auto()
     OUT_OF_RANGE_CALLER_ADDRESS = auto()
     OUT_OF_RANGE_CONTRACT_ADDRESS = auto()
@@ -27,11 +28,13 @@ class StarknetErrorCode(ErrorCode):
     OUT_OF_RANGE_CONTRACT_STORAGE_KEY = auto()
     OUT_OF_RANGE_ENTRY_POINT_OFFSET = auto()
     OUT_OF_RANGE_ENTRY_POINT_SELECTOR = auto()
+    OUT_OF_RANGE_SEQUENCER_ADDRESS = auto()
     OUT_OF_RANGE_TRANSACTION_HASH = auto()
     OUT_OF_RANGE_TRANSACTION_ID = auto()
     OUT_OF_RESOURCES = auto()
     SECURITY_ERROR = auto()
     TRANSACTION_FAILED = auto()
+    TRANSACTION_LIMIT_EXCEEDED = auto()
     UNEXPECTED_FAILURE = auto()
     UNINITIALIZED_CONTRACT = auto()
 
@@ -39,7 +42,7 @@ class StarknetErrorCode(ErrorCode):
 # Errors that are raised by the gateways and caused by wrong usage of the user.
 
 external_txs_loading_common_error_codes: List[ErrorCode] = [
-    StarknetErrorCode.INVALID_FIELD_ELEMENT,
+    StarkErrorCode.OUT_OF_RANGE_FIELD_ELEMENT,
     StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_OFFSET,
     StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_SELECTOR,
     StarkErrorCode.SCHEMA_VALIDATION_ERROR,

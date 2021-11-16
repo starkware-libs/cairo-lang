@@ -493,6 +493,9 @@ def test_instruction():
     assert parse_instruction("ap  +=[ fp]+   2").format() == "ap += [fp] + 2"
     assert parse_instruction("ap  +=[ fp]+   2;ap ++").format() == "ap += [fp] + 2; ap++"
 
+    # Data word.
+    assert parse_instruction("dw  0x123").format() == "dw 0x123"
+
 
 def test_label():
     assert parse_code_element("test  :").format(100) == "test:"

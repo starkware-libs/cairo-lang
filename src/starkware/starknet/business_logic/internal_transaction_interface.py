@@ -77,7 +77,7 @@ class ContractCall(ValidatedDataclass):
     storage_accessed_addresses: Set[int] = field(
         metadata=dict(
             marshmallow_field=SetField(
-                fields.felt_metadata("storage_accessed_address")["marshmallow_field"]
+                everest_fields.felt_metadata("storage_accessed_address")["marshmallow_field"]
             )
         )
     )
@@ -222,7 +222,6 @@ class InternalTransactionInterface(EverestInternalTransaction):
         state: CarriedState,
         general_config: StarknetGeneralConfig,
         loop: asyncio.AbstractEventLoop,
-        caller_address: int,
         run_resources: RunResources,
     ) -> TransactionExecutionInfo:
         pass

@@ -13,6 +13,7 @@ from starkware.cairo.lang.compiler.ast.instructions import (
     AssertEqInstruction,
     CallInstruction,
     CallLabelInstruction,
+    DefineWordInstruction,
     InstructionAst,
     JnzInstruction,
     JumpInstruction,
@@ -21,14 +22,20 @@ from starkware.cairo.lang.compiler.ast.instructions import (
 )
 from starkware.cairo.lang.compiler.const_expr_checker import is_const_expr
 from starkware.cairo.lang.compiler.error_handling import LocationError
-from starkware.cairo.lang.compiler.instruction import OFFSET_BITS, Instruction, Register
+from starkware.cairo.lang.compiler.instruction import (
+    OFFSET_BITS,
+    BytecodeData,
+    BytecodeElement,
+    Instruction,
+    Register,
+)
 
 
 class InstructionBuilderError(LocationError):
     pass
 
 
-def build_instruction(instruction: InstructionAst) -> Instruction:
+def build_instruction(instruction: InstructionAst) -> BytecodeElement:
     if isinstance(instruction.body, AssertEqInstruction):
         return _build_assert_eq_instruction(instruction)
     elif isinstance(instruction.body, JumpInstruction):
@@ -41,6 +48,8 @@ def build_instruction(instruction: InstructionAst) -> Instruction:
         return _build_ret_instruction(instruction)
     elif isinstance(instruction.body, AddApInstruction):
         return _build_addap_instruction(instruction)
+    elif isinstance(instruction.body, DefineWordInstruction):
+        return _build_data_word(instruction)
     else:
         raise InstructionBuilderError(
             f"Instructions of type {type(instruction.body).__name__} are not implemented.",
@@ -341,6 +350,26 @@ def _build_addap_instruction(instruction_ast: InstructionAst) -> Instruction:
         fp_update=Instruction.FpUpdate.REGULAR,
         opcode=Instruction.Opcode.NOP,
     )
+
+
+def _build_data_word(instruction_ast: InstructionAst) -> BytecodeData:
+    """
+    Builds a BytecodeData object from the AST object, assuming the instruction is a
+    DefineWordInstruction.
+    """
+    instruction_body: DefineWordInstruction = cast(DefineWordInstruction, instruction_ast.body)
+
+    if instruction_ast.inc_ap:
+        raise InstructionBuilderError(
+            "ap++ may not be used with the dw opcode.", location=instruction_ast.location
+        )
+
+    if not isinstance(instruction_body.expr, ExprConst):
+        raise InstructionBuilderError(
+            "dw must be followed by a constant expression.", location=instruction_body.expr.location
+        )
+
+    return BytecodeData(data=instruction_body.expr.val)
 
 
 @dataclasses.dataclass

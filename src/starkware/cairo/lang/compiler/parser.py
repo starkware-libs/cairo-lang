@@ -102,6 +102,7 @@ def wrap_lark_error(err: LarkError, input_file: InputFile) -> Exception:
             "COMMA": '","',
             "CONST": '"const"',
             "DOT": '"."',
+            "DW": '"dw"',
             "END": '"end"',
             "EQUAL": '"="',
             "FROM": '"from"',

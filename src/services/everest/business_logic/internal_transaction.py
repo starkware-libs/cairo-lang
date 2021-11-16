@@ -49,7 +49,7 @@ class SchemaTracker:
             self.classes[cls_name] = cls
 
 
-class EverestTransactionExecutionInfo(ValidatedMarshmallowDataclass):
+class EverestTransactionExecutionInfo:
     """
     Base class of classes containing information generated from an execution of a transaction on
     the state. Each Everest application may implement it specifically.

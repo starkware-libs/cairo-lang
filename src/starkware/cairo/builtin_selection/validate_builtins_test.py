@@ -9,7 +9,7 @@ from starkware.cairo.lang.builtins.range_check.range_check_builtin_runner import
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.cairo.lang.instances import small_instance
 from starkware.cairo.lang.vm.cairo_runner import CairoRunner
-from starkware.cairo.lang.vm.vm import VmException
+from starkware.cairo.lang.vm.vm_exceptions import VmException
 
 CAIRO_FILE = os.path.join(os.path.dirname(__file__), "validate_builtins.cairo")
 

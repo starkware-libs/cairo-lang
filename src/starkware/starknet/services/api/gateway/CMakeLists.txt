@@ -18,7 +18,6 @@ python_lib(starknet_transaction_lib
     transaction.py
 
     LIBS
-    everest_definitions_lib
     everest_transaction_lib
     starknet_contract_address_lib
     starknet_contract_definition_lib

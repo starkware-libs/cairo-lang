@@ -1,7 +1,7 @@
 import pytest
 
 from starkware.cairo.lang.builtins.builtin_runner_test_utils import PRIME, compile_and_run
-from starkware.cairo.lang.vm.vm import VmException
+from starkware.cairo.lang.vm.vm_exceptions import VmException
 
 
 def test_validation_rules():

@@ -5,6 +5,7 @@ from typing import List
 from eth_hash.auto import keccak
 
 from starkware.cairo.bootloader.fact_topology import FactTopology
+from starkware.python.utils import to_bytes
 
 
 def keccak_ints(values: List[int]) -> str:
@@ -13,9 +14,9 @@ def keccak_ints(values: List[int]) -> str:
     This function is compatible with
       Web3.solidityKeccak(['uint256[]'], [values]).hex()
     """
-    return "0x" + binascii.hexlify(
-        keccak(b"".join(value.to_bytes(32, "big") for value in values))
-    ).decode("ascii")
+    return "0x" + binascii.hexlify(keccak(b"".join(to_bytes(value) for value in values))).decode(
+        "ascii"
+    )
 
 
 def generate_program_fact(

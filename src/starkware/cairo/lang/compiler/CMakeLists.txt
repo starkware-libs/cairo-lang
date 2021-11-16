@@ -44,7 +44,7 @@ python_lib(cairo_compile_lib
     offset_reference.py
     parser_transformer.py
     parser.py
-    preprocessor/memento.py
+    preprocessor/auxiliary_info_collector.py
     preprocessor/compound_expressions.py
     preprocessor/default_pass_manager.py
     preprocessor/dependency_graph.py
@@ -53,6 +53,7 @@ python_lib(cairo_compile_lib
     preprocessor/identifier_aware_visitor.py
     preprocessor/identifier_collector.py
     preprocessor/local_variables.py
+    preprocessor/memento.py
     preprocessor/pass_manager.py
     preprocessor/preprocess_codes.py
     preprocessor/preprocessor_error.py

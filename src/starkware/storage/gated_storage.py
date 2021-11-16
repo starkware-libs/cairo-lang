@@ -1,5 +1,5 @@
 import hashlib
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from starkware.storage.names import generate_unique_key
 from starkware.storage.storage import Storage
@@ -18,11 +18,13 @@ class GatedStorage(Storage):
         self.storage1 = storage1
 
     @classmethod
-    async def create_from_config(cls, limit: int, storage0: dict, storage1: dict):
+    async def create_from_config(
+        cls, limit: int, storage0_config: Dict[str, Any], storage1_config: Dict[str, Any]
+    ) -> "GatedStorage":
         return cls(
             limit=limit,
-            storage0=await Storage.from_config(storage0),
-            storage1=await Storage.from_config(storage1),
+            storage0=await Storage.create_instance_from_config(config=storage0_config),
+            storage1=await Storage.create_instance_from_config(config=storage1_config),
         )
 
     async def _compress_value(self, key: bytes, value: bytes) -> Tuple[bytes, bytes]:

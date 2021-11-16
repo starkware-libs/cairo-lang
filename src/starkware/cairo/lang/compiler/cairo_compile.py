@@ -3,7 +3,7 @@ import json
 import os
 import sys
 import time
-from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
+from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple, Type, Union
 
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.cairo.lang.compiler.assembler import assemble
@@ -12,6 +12,9 @@ from starkware.cairo.lang.compiler.error_handling import LocationError
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierError
 from starkware.cairo.lang.compiler.identifier_utils import get_struct_definition
 from starkware.cairo.lang.compiler.module_reader import ModuleReader
+from starkware.cairo.lang.compiler.preprocessor.auxiliary_info_collector import (
+    AuxiliaryInfoCollector,
+)
 from starkware.cairo.lang.compiler.preprocessor.default_pass_manager import default_pass_manager
 from starkware.cairo.lang.compiler.preprocessor.pass_manager import PassManager
 from starkware.cairo.lang.compiler.preprocessor.preprocess_codes import preprocess_codes
@@ -192,6 +195,7 @@ def compile_cairo_ex(
     pass_manager: Optional[PassManager] = None,
     add_start: bool = False,
     main_scope: Optional[ScopedName] = None,
+    auxiliary_info_cls: Optional[Type[AuxiliaryInfoCollector]] = None,
 ) -> Tuple[Program, PreprocessedProgram]:
     """
     Same as compile_cairo, but returns the preprocessed program as well.
@@ -213,7 +217,9 @@ def compile_cairo_ex(
     if pass_manager is None:
         assert prime is not None, "Exactly one of prime and pass_manager must be given."
         module_reader = get_module_reader(cairo_path)
-        pass_manager = default_pass_manager(prime=prime, read_module=module_reader.read)
+        pass_manager = default_pass_manager(
+            prime=prime, read_module=module_reader.read, auxiliary_info_cls=auxiliary_info_cls
+        )
     else:
         assert prime is None, "Exactly one of prime and pass_manager must be given."
         assert len(cairo_path) == 0, "cairo_path cannot be specified where pass_manager is used."

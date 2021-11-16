@@ -16,6 +16,7 @@ python_lib(starknet_business_logic_lib
     starknet_storage_lib
     starkware_config_utils_lib
     starkware_dataclasses_utils_lib
+    starkware_error_handling_lib
     starkware_python_utils_lib
     starkware_storage_lib
     starkware_utils_lib

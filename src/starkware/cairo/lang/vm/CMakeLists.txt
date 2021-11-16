@@ -28,14 +28,18 @@ python_lib(cairo_vm_lib
     builtin_runner.py
     cairo_pie.py
     memory_dict.py
+    memory_dict_backend.py
     memory_segments.py
     output_builtin_runner.py
     security.py
     trace_entry.py
     utils.py
     validated_memory_dict.py
+    virtual_machine_base.py
     vm.py
     vm_consts.py
+    vm_core.py
+    vm_exceptions.py
 
     LIBS
     cairo_compile_lib

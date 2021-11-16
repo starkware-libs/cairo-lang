@@ -13,8 +13,8 @@ from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import (
 from starkware.starkware_utils.commitment_tree.patricia_tree.virtual_patricia_node import (
     VirtualPatriciaNode,
 )
-from starkware.starkware_utils.commitment_tree.test_utils import LeafFact
 from starkware.storage.storage import FactFetchingContext
+from starkware.storage.storage_utils import LeafFact
 from starkware.storage.test_utils import MockStorage
 
 

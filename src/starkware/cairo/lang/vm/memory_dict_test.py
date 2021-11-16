@@ -8,6 +8,13 @@ from starkware.cairo.lang.vm.memory_dict import (
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
 
 
+def test_memory_dict_items():
+    memory = MemoryDict()
+    assert list(memory.items()) == []
+    memory = MemoryDict({1: 2, 3: 4, 5: 6})
+    assert list(memory.items()) == [(1, 2), (3, 4), (5, 6)]
+
+
 def test_memory_dict_serialize():
     memory = MemoryDict({1: 2, 3: 4, 5: 6})
     expected_serialized = bytes(

@@ -4,7 +4,7 @@ import functools
 import logging
 from abc import abstractmethod
 from dataclasses import field
-from typing import ClassVar, Dict, List, Tuple, Type, cast
+from typing import ClassVar, Dict, List, Optional, Tuple, Type, cast
 
 import marshmallow
 import marshmallow_dataclass
@@ -16,7 +16,7 @@ from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
 from starkware.cairo.lang.vm.security import SecurityError
 from starkware.cairo.lang.vm.utils import ResourcesError, RunResources
-from starkware.cairo.lang.vm.vm import HintException, VmException, VmExceptionBase
+from starkware.cairo.lang.vm.vm_exceptions import HintException, VmException, VmExceptionBase
 from starkware.starknet.business_logic.internal_transaction_interface import (
     ContractCall,
     InternalTransactionInterface,
@@ -165,6 +165,7 @@ class InternalDeploy(InternalTransaction):
         contract_address = calculate_contract_address(
             salt=external_tx.contract_address_salt,
             contract_definition=external_tx.contract_definition,
+            constructor_calldata=external_tx.constructor_calldata,
             caller_address=0,
         )
         return cls(
@@ -253,6 +254,7 @@ class InternalDeploy(InternalTransaction):
 
         tx = InternalInvokeFunction(
             contract_address=self.contract_address,
+            code_address=self.contract_address,
             entry_point_selector=get_selector_from_name("constructor"),
             entry_point_type=EntryPointType.CONSTRUCTOR,
             calldata=self.constructor_calldata,
@@ -268,7 +270,6 @@ class InternalDeploy(InternalTransaction):
         state: CarriedState,
         general_config: StarknetGeneralConfig,
         loop: asyncio.AbstractEventLoop,
-        caller_address: int,
         run_resources: RunResources,
     ) -> TransactionExecutionInfo:
         raise NotImplementedError
@@ -283,6 +284,9 @@ class InternalInvokeFunction(InternalTransaction):
 
     # For fields that are shared with InvokeFunction, see documentation there.
     contract_address: int = field(metadata=fields.contract_address_metadata)
+    # The address that holds the code to execute.
+    # It may differ from contract_address in the case of delegate call.
+    code_address: int = field(metadata=fields.contract_address_metadata)
     entry_point_selector: int = field(metadata=fields.entry_point_selector_metadata)
     # The decorator type of the called function. Note that a single function may be decorated with
     # multiple decorators and this member specifies which one.
@@ -297,6 +301,31 @@ class InternalInvokeFunction(InternalTransaction):
     # Class variables.
     tx_type: ClassVar[TransactionType] = TransactionType.INVOKE_FUNCTION
     related_external_cls: ClassVar[Type[Transaction]] = InvokeFunction
+
+    @classmethod
+    def create_for_testing(
+        cls,
+        contract_address: int,
+        calldata: List[int],
+        entry_point_selector: int,
+        code_address: Optional[int] = None,
+        entry_point_type: Optional[EntryPointType] = None,
+        signature: Optional[List[int]] = None,
+        hash_value: Optional[int] = None,
+        caller_address: Optional[int] = None,
+    ):
+        return cls(
+            contract_address=contract_address,
+            code_address=contract_address if code_address is None else code_address,
+            entry_point_selector=entry_point_selector,
+            entry_point_type=(
+                EntryPointType.EXTERNAL if entry_point_type is None else entry_point_type
+            ),
+            calldata=calldata,
+            signature=[] if signature is None else signature,
+            hash_value=0 if hash_value is None else hash_value,
+            caller_address=0 if caller_address is None else caller_address,
+        )
 
     @classmethod
     def _specific_from_external(
@@ -319,6 +348,7 @@ class InternalInvokeFunction(InternalTransaction):
     ) -> "InternalInvokeFunction":
         return cls(
             contract_address=external_tx.contract_address,
+            code_address=external_tx.contract_address,
             entry_point_selector=external_tx.entry_point_selector,
             entry_point_type=entry_point_type,
             calldata=external_tx.calldata,
@@ -329,8 +359,12 @@ class InternalInvokeFunction(InternalTransaction):
 
     def to_external(self) -> InvokeFunction:
         assert self.entry_point_type is EntryPointType.EXTERNAL, (
-            f"It it illegal to convert to external an InternalInvokeFunction of a non-external "
+            "It it illegal to convert to external an InternalInvokeFunction of a non-external "
             f"Cairo contract function; got: {self.entry_point_type.name}."
+        )
+        assert self.code_address == self.contract_address, (
+            "It it illegal to convert to external an InternalInvokeFunction with "
+            f"code_address ({self.code_address}) != contract_address ({self.contract_address})."
         )
 
         return InvokeFunction(
@@ -348,7 +382,7 @@ class InternalInvokeFunction(InternalTransaction):
         # Downcast arguments to application-specific types.
         assert isinstance(general_config, StarknetGeneralConfig)
 
-        return StateSelector(contract_addresses={self.contract_address})
+        return StateSelector(contract_addresses={self.contract_address, self.code_address})
 
     async def _apply_specific_state_updates(
         self, state: CarriedState, general_config: StarknetGeneralConfig
@@ -365,7 +399,6 @@ class InternalInvokeFunction(InternalTransaction):
             state=state,
             general_config=general_config,
             loop=loop,
-            caller_address=self.caller_address,
             run_resources=RunResources(steps=general_config.invoke_tx_max_n_steps),
         )
 
@@ -379,7 +412,6 @@ class InternalInvokeFunction(InternalTransaction):
         state: CarriedState,
         general_config: StarknetGeneralConfig,
         loop: asyncio.AbstractEventLoop,
-        caller_address: int,
         run_resources: RunResources,
     ) -> TransactionExecutionInfo:
         """
@@ -399,7 +431,7 @@ class InternalInvokeFunction(InternalTransaction):
             state=state,
             general_config=general_config,
             loop=loop,
-            caller_address=caller_address,
+            caller_address=self.caller_address,
             run_resources=run_resources,
         )
 
@@ -423,7 +455,7 @@ class InternalInvokeFunction(InternalTransaction):
         # Build transaction execution info.
         contract_call_cairo_usage = state.cairo_usage - previous_cairo_usage
         call_info = ContractCall(
-            from_address=caller_address,
+            from_address=self.caller_address,
             to_address=self.contract_address,
             calldata=self.calldata,
             signature=self.signature,
@@ -449,22 +481,19 @@ class InternalInvokeFunction(InternalTransaction):
         run_resources: RunResources,
     ) -> Tuple[CairoFunctionRunner, syscall_utils.BusinessLogicSysCallHandler]:
         """
-        Runs the selected entry point with the given calldata in the contract specified by the
-        transaction.
+        Runs the selected entry point with the given calldata in the code of the contract deployed
+        at self.code_address.
+        The execution is done in the context (e.g., storage) of the contract at
+        self.contract_address.
         Returns the corresponding CairoFunctionRunner and BusinessLogicSysCallHandler in order to
         retrieve the execution information.
         """
-        # Extract pre-fetched contract object from carried state.
-        pre_run_contract_carried_state = state.contract_states[self.contract_address]
-        contract_state = pre_run_contract_carried_state.state
-        stark_assert(
-            contract_state.initialized,
-            code=StarknetErrorCode.UNINITIALIZED_CONTRACT,
-            message=f"Contract with address {self.contract_address} is not deployed.",
-        )
+        # Extract pre-fetched contract code from carried state.
+        code_contract_state = state.contract_states[self.code_address].state
+        code_contract_state.assert_initialized(contract_address=self.code_address)
 
         # Prepare input for Cairo function runner.
-        contract_definition = state.contract_definitions[contract_state.contract_hash]
+        contract_definition = state.contract_definitions[code_contract_state.contract_hash]
         contract_definition.validate()
         entry_point = self._get_selected_entry_point(contract_definition=contract_definition)
 
@@ -472,6 +501,11 @@ class InternalInvokeFunction(InternalTransaction):
         with wrap_with_stark_exception(code=StarknetErrorCode.SECURITY_ERROR):
             runner = CairoFunctionRunner(program=contract_definition.program, layout="all")
         os_context = os_utils.prepare_os_context(runner=runner)
+
+        # Extract pre-fetched contract state from carried state.
+        pre_run_contract_carried_state = state.contract_states[self.contract_address]
+        contract_state = pre_run_contract_carried_state.state
+        contract_state.assert_initialized(contract_address=self.contract_address)
 
         starknet_storage = BusinessLogicStarknetStorage(
             commitment_tree=contract_state.storage_commitment_tree,
@@ -491,7 +525,6 @@ class InternalInvokeFunction(InternalTransaction):
             signature=self.signature,
             starknet_storage=starknet_storage,
             general_config=general_config,
-            internal_transaction_factory=InternalInvokeFunction,
             initial_syscall_ptr=initial_syscall_ptr,
         )
 

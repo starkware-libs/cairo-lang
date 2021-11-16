@@ -22,11 +22,24 @@ python_lib(starkware_storage_lib
     storage.py
 
     LIBS
+    starkware_config_utils_lib
+    starkware_python_utils_lib
     starkware_serializability_utils_lib
     starkware_storage_metric_lib
     starkware_utils_time_lib
     pip_cachetools
     pip_marshmallow
+)
+
+python_lib(starkware_storage_utils_lib
+    PREFIX starkware/storage
+
+    FILES
+    storage_utils.py
+
+    LIBS
+    starkware_python_utils_lib
+    starkware_storage_lib
 )
 
 python_lib(starkware_storage_test_utils_lib

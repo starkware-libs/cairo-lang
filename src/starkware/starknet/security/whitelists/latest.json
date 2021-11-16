@@ -207,6 +207,7 @@
             "allowed_expressions": [],
             "hint_lines": [
                 "from eth_hash.auto import keccak",
+                "",
                 "data, length = ids.data, ids.length",
                 "",
                 "if '__keccak_max_size' in globals():",
@@ -475,7 +476,25 @@
         {
             "allowed_expressions": [],
             "hint_lines": [
+                "syscall_handler.delegate_call(segments=segments, syscall_ptr=ids.syscall_ptr)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
                 "syscall_handler.get_caller_address(segments=segments, syscall_ptr=ids.syscall_ptr)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "syscall_handler.get_contract_address(segments=segments, syscall_ptr=ids.syscall_ptr)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "syscall_handler.get_sequencer_address(segments=segments, syscall_ptr=ids.syscall_ptr)"
             ]
         },
         {

@@ -5,7 +5,7 @@ from typing import Optional
 import pytest
 
 from starkware.cairo.lang.builtins.builtin_runner_test_utils import compile_and_run
-from starkware.cairo.lang.vm.vm import VmException
+from starkware.cairo.lang.vm.vm_exceptions import VmException
 from starkware.python.test_utils import maybe_raises
 
 

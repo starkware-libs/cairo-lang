@@ -162,7 +162,9 @@ func load_contract_definition_facts_inner{pedersen_ptr : HashBuiltin*}(
     contract_definition_fact.hash = hash
 
     %{
-        assert ids.contract_definition_fact.hash == int.from_bytes(contract_hash, 'big'), \
+        from starkware.python.utils import from_bytes
+
+        assert ids.contract_definition_fact.hash == from_bytes(contract_hash), \
             'Computed contract_hash is inconsistent with the hash in the os_input'
         vm_load_program(contract_definition.program, ids.contract_definition.bytecode_ptr)
     %}

@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Set, Tuple, Type, TypeVar, Union
 
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
+from starkware.python.utils import from_bytes, to_bytes
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
 from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
 from starkware.storage.storage import HASH_BYTES, Fact, FactFetchingContext, HashFunctionType
@@ -32,7 +33,7 @@ class StorageLeaf(Fact):
         return b"starknet_storage_leaf"
 
     def serialize(self) -> bytes:
-        return self.value.to_bytes(HASH_BYTES, "big")
+        return to_bytes(self.value)
 
     async def _hash(self, hash_func: HashFunctionType) -> bytes:
         # Note that the return value size needs to be HASH_BYTES.
@@ -40,7 +41,7 @@ class StorageLeaf(Fact):
 
     @classmethod
     def deserialize(cls: Type[TStorageLeaf], data: bytes) -> TStorageLeaf:
-        return cls(int.from_bytes(data, "big"))
+        return cls(value=from_bytes(data))
 
     @classmethod
     def empty(cls) -> "StorageLeaf":

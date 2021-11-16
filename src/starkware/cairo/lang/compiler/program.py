@@ -22,6 +22,7 @@ from starkware.cairo.lang.compiler.identifier_manager_field import IdentifierMan
 from starkware.cairo.lang.compiler.preprocessor.flow import FlowTrackingDataActual, ReferenceManager
 from starkware.cairo.lang.compiler.references import Reference
 from starkware.cairo.lang.compiler.scoped_name import ScopedName, ScopedNameAsStr
+from starkware.starkware_utils.marshmallow_dataclass_fields import IntAsHex
 from starkware.starkware_utils.validated_dataclass import SerializableMarshmallowDataclass
 
 
@@ -79,8 +80,10 @@ class StrippedProgram(ProgramBase):
 
 @marshmallow_dataclass.dataclass(repr=False)
 class Program(ProgramBase, SerializableMarshmallowDataclass):
-    prime: int
-    data: List[int]
+    prime: int = field(metadata=dict(marshmallow_field=IntAsHex(required=True)))
+    data: List[int] = field(
+        metadata=dict(marshmallow_field=mfields.List(IntAsHex(), required=True))
+    )
     hints: Dict[int, List[CairoHint]]
     builtins: List[str]
     main_scope: ScopedName = field(metadata=dict(marshmallow_field=ScopedNameAsStr()))

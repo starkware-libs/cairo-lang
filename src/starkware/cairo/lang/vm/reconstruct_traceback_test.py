@@ -4,7 +4,7 @@ from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.cairo.lang.compiler.cairo_compile import compile_cairo
 from starkware.cairo.lang.vm.cairo_runner import get_main_runner
 from starkware.cairo.lang.vm.reconstruct_traceback import reconstruct_traceback
-from starkware.cairo.lang.vm.vm import VmException
+from starkware.cairo.lang.vm.vm_exceptions import VmException
 
 
 def test_reconstruct_traceback():
@@ -38,7 +38,7 @@ def test_reconstruct_traceback():
         exception_str
         == """\
 Error at pc=0:2:
-An ASSERT_EQ instruction failed: 1 != 0
+An ASSERT_EQ instruction failed: 1 != 0.
 Cairo traceback (most recent call last):
 Unknown location (pc=0:8)
 Unknown location (pc=0:5)\
@@ -53,7 +53,7 @@ Unknown location (pc=0:5)\
 filename:3:9: Error at pc=0:2:
         assert 0 = 1
         ^**********^
-An ASSERT_EQ instruction failed: 1 != 0
+An ASSERT_EQ instruction failed: 1 != 0.
 Cairo traceback (most recent call last):
 filename:13:9
         foo()

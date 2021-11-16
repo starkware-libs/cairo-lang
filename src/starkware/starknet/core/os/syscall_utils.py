@@ -21,7 +21,7 @@ from starkware.starknet.business_logic.state import CarriedState
 from starkware.starknet.core.os.os_program import get_os_program
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
-from starkware.starknet.services.api.gateway.transaction import InvokeFunction
+from starkware.starknet.services.api.contract_definition import EntryPointType
 from starkware.starknet.storage.starknet_storage import (
     BusinessLogicStarknetStorage,
     StarknetStorageInterface,
@@ -52,8 +52,12 @@ class SysCallHandlerBase(ABC):
     base class for execution of system calls in the StarkNet OS.
     """
 
-    def __init__(self):
+    def __init__(self, general_config: StarknetGeneralConfig):
         os_program = get_os_program()
+
+        # StarkNet general configuration.
+        self.general_config = general_config
+
         self.structs = CairoStructFactory.from_program(
             program=os_program,
             additional_imports=[
@@ -63,6 +67,12 @@ class SysCallHandlerBase(ABC):
                 "starkware.starknet.common.syscalls.GetCallerAddress",
                 "starkware.starknet.common.syscalls.GetCallerAddressRequest",
                 "starkware.starknet.common.syscalls.GetCallerAddressResponse",
+                "starkware.starknet.common.syscalls.GetSequencerAddress",
+                "starkware.starknet.common.syscalls.GetSequencerAddressRequest",
+                "starkware.starknet.common.syscalls.GetSequencerAddressResponse",
+                "starkware.starknet.common.syscalls.GetContractAddress",
+                "starkware.starknet.common.syscalls.GetContractAddressRequest",
+                "starkware.starknet.common.syscalls.GetContractAddressResponse",
                 "starkware.starknet.common.syscalls.GetTxSignature",
                 "starkware.starknet.common.syscalls.GetTxSignatureRequest",
                 "starkware.starknet.common.syscalls.GetTxSignatureResponse",
@@ -86,10 +96,25 @@ class SysCallHandlerBase(ABC):
                 syscall_request_struct=self.structs.CallContractRequest,
                 syscall_size=self.structs.CallContract.size,
             ),
+            "delegate_call": SysCallInfo(
+                selector=get_selector("delegate_call"),
+                syscall_request_struct=self.structs.CallContractRequest,
+                syscall_size=self.structs.CallContract.size,
+            ),
             "get_caller_address": SysCallInfo(
                 selector=get_selector("get_caller_address"),
                 syscall_request_struct=self.structs.GetCallerAddressRequest,
                 syscall_size=self.structs.GetCallerAddress.size,
+            ),
+            "get_sequencer_address": SysCallInfo(
+                selector=get_selector("get_sequencer_address"),
+                syscall_request_struct=self.structs.GetSequencerAddressRequest,
+                syscall_size=self.structs.GetSequencerAddress.size,
+            ),
+            "get_contract_address": SysCallInfo(
+                selector=get_selector("get_contract_address"),
+                syscall_request_struct=self.structs.GetContractAddressRequest,
+                syscall_size=self.structs.GetContractAddress.size,
             ),
             "send_message_to_l1": SysCallInfo(
                 selector=get_selector("send_message_to_l1"),
@@ -116,7 +141,19 @@ class SysCallHandlerBase(ABC):
     # Public API.
 
     def call_contract(self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue):
-        retdata = self._call_contract(segments=segments, syscall_ptr=syscall_ptr)
+        retdata = self._call_contract(
+            segments=segments, syscall_ptr=syscall_ptr, syscall_name="call_contract"
+        )
+        self._write_call_contract_response(
+            segments=segments,
+            syscall_ptr=syscall_ptr,
+            retdata=retdata,
+        )
+
+    def delegate_call(self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue):
+        retdata = self._call_contract(
+            segments=segments, syscall_ptr=syscall_ptr, syscall_name="delegate_call"
+        )
         self._write_call_contract_response(
             segments=segments,
             syscall_ptr=syscall_ptr,
@@ -132,6 +169,37 @@ class SysCallHandlerBase(ABC):
         response = self.structs.GetCallerAddressResponse(caller_address=caller_address)
         self._write_syscall_response(
             syscall_name="GetCallerAddress",
+            response=response,
+            segments=segments,
+            syscall_ptr=syscall_ptr,
+        )
+
+    def get_contract_address(self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue):
+        contract_address = self._get_contract_address(segments=segments, syscall_ptr=syscall_ptr)
+
+        response = self.structs.GetContractAddressResponse(contract_address=contract_address)
+        self._write_syscall_response(
+            syscall_name="GetContractAddress",
+            response=response,
+            segments=segments,
+            syscall_ptr=syscall_ptr,
+        )
+
+    def get_sequencer_address(self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue):
+        """
+        Handles the get_sequencer_address system call.
+        """
+        self._read_and_validate_syscall_request(
+            syscall_name="get_sequencer_address",
+            segments=segments,
+            syscall_ptr=syscall_ptr,
+        )
+
+        response = self.structs.GetSequencerAddressResponse(
+            sequencer_address=self.general_config.sequencer_address
+        )
+        self._write_syscall_response(
+            syscall_name="GetSequencerAddress",
             response=response,
             segments=segments,
             syscall_ptr=syscall_ptr,
@@ -225,10 +293,12 @@ class SysCallHandlerBase(ABC):
 
     @abstractmethod
     def _call_contract(
-        self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue
+        self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue, syscall_name: str
     ) -> List[int]:
         """
         Returns the call retdata.
+
+        syscall_name can be "call_contract" or "delegate_call".
         """
 
     def _write_call_contract_response(
@@ -253,9 +323,17 @@ class SysCallHandlerBase(ABC):
         segments.write_arg(ptr=response.retdata, arg=retdata)
 
     @abstractmethod
-    def _get_caller_address(self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue):
+    def _get_caller_address(
+        self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue
+    ) -> int:
         """
         Specific implementation of the get_caller_address system call.
+        """
+
+    @abstractmethod
+    def _get_contract_address(self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue):
+        """
+        Specific implementation of the get_contract_address system call.
         """
 
     def _send_message_to_l1(self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue):
@@ -318,10 +396,9 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
         signature: List[int],
         starknet_storage: BusinessLogicStarknetStorage,
         general_config: StarknetGeneralConfig,
-        internal_transaction_factory: Type[InternalTransactionInterface],
         initial_syscall_ptr: RelocatableValue,
     ):
-        super().__init__()
+        super().__init__(general_config=general_config)
 
         self.run_resources = run_resources
         self.state = state
@@ -330,8 +407,6 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
         self.signature = signature
         self.starknet_storage = starknet_storage
         self.loop = starknet_storage.loop
-        self.general_config = general_config
-        self.internal_transaction_factory = internal_transaction_factory
 
         # Accumulated execution info.
         self.internal_call_responses: List[ContractCallResponse] = []
@@ -384,34 +459,47 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
         return request
 
     def _call_contract(
-        self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue
+        self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue, syscall_name: str
     ) -> List[int]:
         # Parse request and prepare the call.
         request = self._read_and_validate_syscall_request(
-            syscall_name="call_contract", segments=segments, syscall_ptr=syscall_ptr
+            syscall_name=syscall_name, segments=segments, syscall_ptr=syscall_ptr
         )
         calldata = segments.memory.get_range_as_ints(
             addr=request.calldata, size=request.calldata_size
         )
-        external_tx = InvokeFunction(
-            contract_address=cast(int, request.contract_address),
+
+        code_address = cast(int, request.contract_address)
+        if syscall_name == "delegate_call":
+            contract_address = self.contract_address
+            caller_address = self.caller_address
+        elif syscall_name == "call_contract":
+            contract_address = code_address
+            caller_address = self.contract_address
+        else:
+            raise NotImplemented(f"Unsupported call type {syscall_name}.")
+
+        from starkware.starknet.business_logic.internal_transaction import InternalInvokeFunction
+
+        tx = InternalInvokeFunction(
+            contract_address=contract_address,
+            code_address=code_address,
             entry_point_selector=cast(int, request.function_selector),
+            entry_point_type=EntryPointType.EXTERNAL,
             calldata=calldata,
             signature=[],
-        )
-        tx = self.internal_transaction_factory.from_external(
-            external_tx=external_tx, general_config=self.general_config
+            hash_value=0,
+            caller_address=caller_address,
         )
 
         with self.contract_call_execution_context(
-            tx=tx, called_contract_address=external_tx.contract_address, segments=segments
+            tx=tx, called_contract_address=tx.contract_address, segments=segments
         ):
             # Execute contract call.
             execution_info = tx._synchronous_apply_specific_state_updates(
                 state=self.state,
                 general_config=self.general_config,
                 loop=self.loop,
-                caller_address=self.contract_address,
                 run_resources=self.run_resources,
             )
 
@@ -507,15 +595,20 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
     def _get_caller_address(
         self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue
     ) -> int:
-        """
-        Batcher specific implementation of the get_caller_address.
-        """
-
         self._read_and_validate_syscall_request(
             syscall_name="get_caller_address", segments=segments, syscall_ptr=syscall_ptr
         )
 
         return self.caller_address
+
+    def _get_contract_address(
+        self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue
+    ) -> int:
+        self._read_and_validate_syscall_request(
+            syscall_name="get_contract_address", segments=segments, syscall_ptr=syscall_ptr
+        )
+
+        return self.contract_address
 
     def _get_tx_signature(
         self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue
@@ -545,9 +638,10 @@ class OsSysCallHandler(SysCallHandlerBase):
     def __init__(
         self,
         contract_calls: List[ContractCall],
+        general_config: StarknetGeneralConfig,
         starknet_storage_by_address: Mapping[int, StarknetStorageInterface],
     ):
-        super().__init__()
+        super().__init__(general_config=general_config)
 
         self._call_response_iterator: Iterator[ContractCallResponse] = iter([])
         self._contract_calls_iterator = iter(contract_calls)
@@ -585,7 +679,10 @@ class OsSysCallHandler(SysCallHandlerBase):
         return segments.add_temp_segment()
 
     def _call_contract(
-        self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue
+        self,
+        segments: MemorySegmentManager,
+        syscall_ptr: RelocatableValue,
+        syscall_name: str,
     ) -> List[int]:
         request = self.structs.CallContractRequest.from_ptr(
             memory=segments.memory, addr=syscall_ptr
@@ -596,10 +693,12 @@ class OsSysCallHandler(SysCallHandlerBase):
     def _get_caller_address(
         self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue
     ) -> int:
-        """
-        OS specific implementation of the get_caller_address.
-        """
         return self.call_stack[-1].from_address
+
+    def _get_contract_address(
+        self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue
+    ) -> int:
+        return self.call_stack[-1].to_address
 
     def _get_tx_signature(
         self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue

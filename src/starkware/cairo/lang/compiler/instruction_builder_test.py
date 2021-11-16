@@ -1,7 +1,7 @@
 import pytest
 
 from starkware.cairo.lang.compiler.error_handling import get_location_marks
-from starkware.cairo.lang.compiler.instruction import Instruction, Register
+from starkware.cairo.lang.compiler.instruction import BytecodeElement, Instruction, Register
 from starkware.cairo.lang.compiler.instruction_builder import (
     InstructionBuilderError,
     build_instruction,
@@ -9,9 +9,9 @@ from starkware.cairo.lang.compiler.instruction_builder import (
 from starkware.cairo.lang.compiler.parser import parse_instruction
 
 
-def parse_and_build(inst: str) -> Instruction:
+def parse_and_build(inst: str) -> BytecodeElement:
     """
-    Parses the given instruction and builds the Instruction instance.
+    Parses the given instruction and builds the BytecodeElement instance.
     """
     return build_instruction(parse_instruction(inst))
 

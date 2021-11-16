@@ -17,6 +17,7 @@ python_lib(starknet_os_abi_lib
     cairo_vm_crypto_lib
     starknet_abi_lib
     starknet_contract_definition_lib
+    starkware_python_utils_lib
 )
 
 python_lib(starknet_os_utils_lib
@@ -41,6 +42,7 @@ python_lib(starknet_os_utils_lib
     cairo_vm_lib
     starknet_abi_lib
     starknet_business_logic_lib
+    starknet_contract_definition_lib
     starknet_definitions_lib
     starknet_general_config_lib
     starknet_internal_transaction_interface_lib

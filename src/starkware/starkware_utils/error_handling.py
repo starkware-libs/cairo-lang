@@ -24,8 +24,6 @@ class StarkErrorCode(ErrorCode):
     BATCH_FULL = auto()
     #: Batch not ready to be created; does not indicate an error.
     BATCH_NOT_READY = auto()
-    #: Order amount exceeds capacity.
-    CONFLICTING_ORDER_AMOUNTS = auto()
     #: Fact not registered in fact registry.
     FACT_NOT_REGISTERED = auto()
     #: Not enough onchain balance to complete deposit.
@@ -90,6 +88,8 @@ class StarkErrorCode(ErrorCode):
     OUT_OF_RANGE_BATCH_ID = auto()
     #: Ethereum address value is out of range.
     OUT_OF_RANGE_ETH_ADDRESS = auto()
+    #: Field element value is out of range.
+    OUT_OF_RANGE_FIELD_ELEMENT = auto()
     #: Expiration timestamp value is out of range.
     OUT_OF_RANGE_EXPIRATION_TIMESTAMP = auto()
     #: Nonce value is out of range.

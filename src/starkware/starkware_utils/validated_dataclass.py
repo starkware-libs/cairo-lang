@@ -8,7 +8,6 @@ import marshmallow.fields as mfields
 import marshmallow_dataclass
 import typeguard
 
-from starkware.python.utils import camel_to_snake_case
 from starkware.starkware_utils.serializable import StringSerializable
 from starkware.starkware_utils.validated_fields import Field
 
@@ -23,14 +22,7 @@ class SerializableMarshmallowDataclass(StringSerializable):
     Serializable interface.
     """
 
-    class_name_prefix: ClassVar[bytes]
     Schema: ClassVar[Type[marshmallow.Schema]]
-
-    @classmethod
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)  # type: ignore[call-arg]
-
-        cls.class_name_prefix = camel_to_snake_case(camel_case_name=cls.__name__).encode("ascii")
 
     def dump(self) -> dict:
         return self.Schema().dump(obj=self)
@@ -45,14 +37,6 @@ class SerializableMarshmallowDataclass(StringSerializable):
     @classmethod
     def loads(cls: Type[TSerializableDataclass], data: str) -> TSerializableDataclass:
         return cls.Schema().loads(json_data=data)
-
-    @classmethod
-    def prefix(cls) -> bytes:
-        """
-        Converts the class name to a lower case name with '_' as separators and returns the
-        bytes version of this name. For example HelloWorldAB -> b'hello_world_a_b'.
-        """
-        return cls.class_name_prefix
 
 
 class ValidatedDataclass:

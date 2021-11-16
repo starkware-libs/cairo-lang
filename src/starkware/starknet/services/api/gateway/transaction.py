@@ -10,11 +10,7 @@ import marshmallow.decorators
 import marshmallow_dataclass
 from marshmallow_oneofschema import OneOfSchema
 
-from services.everest.api.gateway.transaction import (
-    EverestAddTransactionRequest,
-    EverestTransaction,
-)
-from services.everest.definitions import fields as everest_fields
+from services.everest.api.gateway.transaction import EverestTransaction
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
@@ -103,6 +99,7 @@ class Deploy(Transaction):
         contract_address = calculate_contract_address(
             salt=self.contract_address_salt,
             contract_definition=self.contract_definition,
+            constructor_calldata=self.constructor_calldata,
             caller_address=0,
         )
         return calculate_transaction_hash(
@@ -166,9 +163,3 @@ class TransactionSchema(OneOfSchema):
 
 
 Transaction.Schema = TransactionSchema
-
-
-@marshmallow_dataclass.dataclass(frozen=True)
-class AddTransactionRequest(EverestAddTransactionRequest):
-    tx: Transaction
-    tx_id: int = field(metadata=everest_fields.tx_id_field_metadata)

@@ -9,6 +9,7 @@ python_lib(starknet_cli_lib
     cairo_tracer_lib
     cairo_version_lib
     cairo_vm_utils_lib
+    everest_definitions_lib
     services_external_api_lib
     starknet_abi_lib
     starknet_compile_lib

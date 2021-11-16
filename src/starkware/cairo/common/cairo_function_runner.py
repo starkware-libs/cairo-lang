@@ -21,7 +21,7 @@ from starkware.cairo.lang.vm.output_builtin_runner import OutputBuiltinRunner
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 from starkware.cairo.lang.vm.security import SecurityError, verify_secure_runner
 from starkware.cairo.lang.vm.utils import RunResources
-from starkware.cairo.lang.vm.vm import VmException
+from starkware.cairo.lang.vm.vm_exceptions import VmException
 
 
 class CairoFunctionRunner(CairoRunner):

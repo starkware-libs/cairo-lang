@@ -170,7 +170,7 @@ const a = 5
 """,
         """
 file:?:?: Unexpected end of input. Expected one of: "%builtins", "%lang", "@", "alloc_locals", \
-"assert", "call", "const", "end", "from", "func", ...
+"assert", "call", "const", "dw", "end", "from", ...
 const a = 5
            ^
 """,

@@ -14,6 +14,7 @@ from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.vm.crypto import pedersen_hash
+from starkware.python.utils import from_bytes
 from starkware.starknet.public.abi import starknet_keccak
 from starkware.starknet.services.api.contract_definition import ContractDefinition, EntryPointType
 
@@ -111,7 +112,7 @@ def get_contract_definition_struct(
             )
         ),
         n_builtins=len(builtin_list),
-        builtin_list=[int.from_bytes(builtin.encode("ascii"), "big") for builtin in builtin_list],
+        builtin_list=[from_bytes(builtin.encode("ascii")) for builtin in builtin_list],
         hinted_contract_definition_hash=starknet_keccak(
             json.dumps(
                 {

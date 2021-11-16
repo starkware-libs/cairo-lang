@@ -119,9 +119,11 @@ class CairoRunner:
                 )
 
         supported_builtin_list = list(builtin_factories.keys())
-        assert is_subsequence(
-            self.program.builtins, supported_builtin_list
-        ), f"{self.program.builtins} is not a subsequence of {supported_builtin_list}."
+        err_msg = (
+            f"The builtins specified by the %builtins directive must be subsequence of "
+            f"{supported_builtin_list}. Got {self.program.builtins}."
+        )
+        assert is_subsequence(self.program.builtins, supported_builtin_list), err_msg
 
         self.memory = memory if memory is not None else MemoryDict()
         self.segments = MemorySegmentManager(memory=self.memory, prime=self.program.prime)

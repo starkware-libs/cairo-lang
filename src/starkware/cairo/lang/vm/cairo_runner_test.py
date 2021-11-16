@@ -7,7 +7,7 @@ from starkware.cairo.lang.compiler.cairo_compile import compile_cairo
 from starkware.cairo.lang.vm.builtin_runner import InsufficientAllocatedCells
 from starkware.cairo.lang.vm.cairo_runner import CairoRunner, get_runner_from_code
 from starkware.cairo.lang.vm.utils import RunResources
-from starkware.cairo.lang.vm.vm import VmException, VmExceptionBase
+from starkware.cairo.lang.vm.vm_exceptions import VmException, VmExceptionBase
 
 CAIRO_FILE = os.path.join(os.path.dirname(__file__), "test.cairo")
 PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
@@ -80,8 +80,11 @@ def test_builtin_list():
     program = compile_cairo(code=[("%builtins pedersen output\n", "")], prime=PRIME)
     with pytest.raises(
         AssertionError,
-        match=r"\['pedersen', 'output'\] is not a subsequence of "
-        r"\['output', 'pedersen', 'range_check', 'ecdsa', 'bitwise'].",
+        match=re.escape(
+            "The builtins specified by the %builtins directive must be subsequence of"
+            " ['output', 'pedersen', 'range_check', 'ecdsa', 'bitwise']. "
+            "Got ['pedersen', 'output']."
+        ),
     ):
         CairoRunner(program, layout="small")
 

@@ -10,12 +10,8 @@ from starkware.cairo.lang.vm.memory_dict import (
     UnknownMemoryError,
 )
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
-from starkware.cairo.lang.vm.vm import (
-    InconsistentAutoDeductionError,
-    RunContext,
-    VirtualMachine,
-    VmException,
-)
+from starkware.cairo.lang.vm.vm import RunContext, VirtualMachine
+from starkware.cairo.lang.vm.vm_exceptions import InconsistentAutoDeductionError, VmException
 from starkware.python.test_utils import maybe_raises
 
 PRIME = 2 ** 64 + 13

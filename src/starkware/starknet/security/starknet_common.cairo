@@ -22,4 +22,5 @@ from starkware.cairo.common.uint256 import (
 from starkware.starknet.common.messages import send_message_to_l1
 from starkware.starknet.common.storage import normalize_address
 from starkware.starknet.common.syscalls import (
-    call_contract, get_caller_address, get_tx_signature, storage_read, storage_write)
+    call_contract, delegate_call, get_caller_address, get_contract_address, get_sequencer_address,
+    get_tx_signature, storage_read, storage_write)

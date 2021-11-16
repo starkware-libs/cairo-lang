@@ -3,6 +3,8 @@ from abc import ABC, abstractmethod
 from json import JSONDecoder, JSONEncoder
 from typing import ClassVar, Dict, Type, TypeVar
 
+from starkware.python.utils import camel_to_snake_case
+
 TSerializableObject = TypeVar("TSerializableObject", bound="Serializable")
 TStrSerializableObject = TypeVar("TStrSerializableObject", bound="StringSerializable")
 
@@ -11,6 +13,22 @@ class Serializable(ABC):
     """
     Base class to classes whose objects can be (de)serialized.
     """
+
+    class_name_prefix: ClassVar[bytes]
+
+    @classmethod
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)  # type: ignore[call-arg]
+
+        cls.class_name_prefix = camel_to_snake_case(camel_case_name=cls.__name__).encode("ascii")
+
+    @classmethod
+    def prefix(cls) -> bytes:
+        """
+        Converts the class name to a lower case name with '_' as separators and returns the
+        bytes version of this name. For example HelloWorldAB -> b'hello_world_a_b'.
+        """
+        return cls.class_name_prefix
 
     @abstractmethod
     def serialize(self) -> bytes:

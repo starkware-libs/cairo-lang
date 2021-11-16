@@ -36,6 +36,7 @@ const x = 5
 const y = 2 * x
 [ap] = [[fp + 2 * 0x3] + ((7 - 1 + y))]; ap++
 ap += 3 + 'a'
+dw x + 5
 
 # An empty line with a comment.
 [ap] = [fp] # This is a comment.
@@ -53,6 +54,7 @@ jmp label if [fp + 3 + 1] != 0
         == """\
 [ap] = [[fp + 6] + 16]; ap++
 ap += 100
+dw 10
 [ap] = [fp]
 [ap] = [ap + (-5)]
 jmp rel -1
@@ -2230,6 +2232,38 @@ call rel -11
     )
 
 
+def test_struct_no_revocation():
+    program = preprocess_str(
+        code=f"""
+struct A:
+    member x : felt
+    member y : felt
+end
+func main() -> (res : A):
+    alloc_locals
+    tempvar a : A = A(1, 2)
+    ap += [ap]
+    return (res=a)
+end
+""",
+        prime=PRIME,
+    )
+    assert (
+        program.format()
+        == """\
+ap += 2
+[ap] = 1; ap++
+[ap] = 2; ap++
+[fp] = [ap + (-2)]
+[fp + 1] = [ap + (-1)]
+ap += [ap]
+[ap] = [fp]; ap++
+[ap] = [fp + 1]; ap++
+ret
+"""
+    )
+
+
 def test_reference_over_calls_no_revocation():
     program = preprocess_str(
         code=f"""
@@ -3840,4 +3874,24 @@ decorator.
 @known_ap_change
  ^*************^
 """,
+    )
+
+
+def test_define_word_failure():
+    verify_exception(
+        """
+tempvar x = 5
+dw x
+""",
+        """
+file:?:?: While expanding the reference 'x' in:
+dw x
+   ^
+file:?:?: dw must be followed by a constant expression.
+tempvar x = 5
+        ^
+Preprocessed instruction:
+dw [ap + (-1)]
+""",
+        exc_type=InstructionBuilderError,
     )

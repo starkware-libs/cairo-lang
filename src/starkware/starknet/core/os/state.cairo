@@ -59,13 +59,12 @@ func state_update{hash_ptr : HashBuiltin*, range_check_ptr, storage_updates_ptr 
     let (local commitment_tree_update_output : CommitmentTreeUpdateOutput*) = alloc()
 
     %{
-        def as_int(x):
-            return int.from_bytes(x, 'big')
+        from starkware.python.utils import from_bytes
 
-        ids.commitment_tree_update_output.initial_storage_root = as_int(
+        ids.commitment_tree_update_output.initial_storage_root = from_bytes(
             os_input.global_state_commitment_tree.root)
         new_tree, commitment_tree_facts = global_state_storage.commitment_update()
-        ids.commitment_tree_update_output.final_storage_root = as_int(new_tree.root)
+        ids.commitment_tree_update_output.final_storage_root = from_bytes(new_tree.root)
         preimage = {
             int(root): children
             for root, children in commitment_tree_facts.items()
@@ -85,13 +84,21 @@ end
 
 func get_contract_state_hash{hash_ptr : HashBuiltin*}(
         contract_hash : felt, storage_root : felt) -> (hash : felt):
+    const CONTRACT_STATE_HASH_VERSION = 0
+    const RESERVED = 0
     if contract_hash == 0:
         if storage_root == 0:
             return (hash=0)
         end
     end
 
-    return hash2(contract_hash, storage_root)
+    # Set res = H(H(contract_hash, storage_root), RESERVED).
+    let (hash_value) = hash2(contract_hash, storage_root)
+    let (hash_value) = hash2(hash_value, RESERVED)
+
+    # Return H(hash_value, CONTRACT_STATE_HASH_VERSION). CONTRACT_STATE_HASH_VERSION must be in the
+    # outermost hash to guarantee unique "decoding".
+    return hash2(hash_value, CONTRACT_STATE_HASH_VERSION)
 end
 
 # Takes a dict of StateEntry structs and produces a dict of hashes by hashing
@@ -112,13 +119,12 @@ func hash_state_changes{hash_ptr : HashBuiltin*, range_check_ptr, storage_update
     local final_storage_root
 
     %{
-        def as_int(x):
-            return int.from_bytes(x, 'big')
+        from starkware.python.utils import from_bytes
 
         storage = storage_by_address[ids.state_changes.key]
-        ids.initial_storage_root = as_int(storage.commitment_tree.root)
+        ids.initial_storage_root = from_bytes(storage.commitment_tree.root)
         new_tree, commitment_tree_facts = storage.commitment_update()
-        ids.final_storage_root = as_int(new_tree.root)
+        ids.final_storage_root = from_bytes(new_tree.root)
         preimage = {
             int(root): children
             for root, children in commitment_tree_facts.items()

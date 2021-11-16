@@ -65,6 +65,7 @@ from starkware.cairo.lang.compiler.ast.instructions import (
     AssertEqInstruction,
     CallInstruction,
     CallLabelInstruction,
+    DefineWordInstruction,
     InstructionAst,
     JnzInstruction,
     JumpInstruction,
@@ -421,6 +422,10 @@ class ParserTransformer(Transformer):
     @v_args(meta=True)
     def inst_add_ap(self, value, meta):
         return AddApInstruction(expr=value[0], location=self.meta2loc(meta))
+
+    @v_args(meta=True)
+    def inst_data_word(self, value, meta):
+        return DefineWordInstruction(expr=value[0], location=self.meta2loc(meta))
 
     @v_args(meta=True)
     def inst_ret(self, value, meta):

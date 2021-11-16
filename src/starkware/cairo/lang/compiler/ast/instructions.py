@@ -156,6 +156,23 @@ class AddApInstruction(InstructionBody):
 
 
 @dataclasses.dataclass
+class DefineWordInstruction(InstructionBody):
+    """
+    Represents the instruction "dw expr".
+    This instruction encodes directly to a field element value in the program bytecode.
+    """
+
+    expr: Expression
+    location: Optional[Location] = LocationField
+
+    def format(self):
+        return f"dw {self.expr.format()}"
+
+    def get_children(self) -> Sequence[Optional[AstNode]]:
+        return [self.expr]
+
+
+@dataclasses.dataclass
 class InstructionAst(AstNode):
     """
     Represents an instruction, including the ap++ flag (inc_ap).

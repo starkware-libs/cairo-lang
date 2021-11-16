@@ -1,7 +1,8 @@
 import dataclasses
 import logging
 import logging.config
-from typing import Optional, Type, TypeVar
+from importlib import import_module
+from typing import Any, Optional, Type, TypeVar
 
 import marshmallow
 import yaml
@@ -35,6 +36,15 @@ def fetch_application_config(global_config: dict) -> dict:
 
 def fetch_service_config(global_config: dict) -> dict:
     return fetch_application_config(global_config).get("config", {})
+
+
+def get_object_by_path(path: str) -> Any:
+    """
+    Imports an object definition from a given path.
+    Returns the object, not the instance!
+    """
+    parts = path.rsplit(".", 1)
+    return getattr(import_module(parts[0]), parts[1])
 
 
 # Base class for config schemas.

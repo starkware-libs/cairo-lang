@@ -58,9 +58,11 @@ func split_64{range_check_ptr}(a : felt) -> (low : felt, high : felt):
         ids.low = ids.a & ((1<<64) - 1)
         ids.high = ids.a >> 64
     %}
-    assert_nn_le(low, HALF_SHIFT)
-    [range_check_ptr] = high
-    let range_check_ptr = range_check_ptr + 1
+    assert a = low + high * HALF_SHIFT
+    assert [range_check_ptr + 0] = low
+    assert [range_check_ptr + 1] = HALF_SHIFT - 1 - low
+    assert [range_check_ptr + 2] = high
+    let range_check_ptr = range_check_ptr + 3
     return (low, high)
 end
 

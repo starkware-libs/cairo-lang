@@ -1,4 +1,3 @@
-from dataclasses import field
 from typing import Collection, Dict, Optional, Tuple, Type
 
 import marshmallow_dataclass
@@ -12,7 +11,6 @@ from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import EmptyN
 from starkware.starkware_utils.commitment_tree.patricia_tree.virtual_patricia_node import (
     VirtualPatriciaNode,
 )
-from starkware.starkware_utils.validated_fields import bytes_as_hex_metadata
 from starkware.storage.storage import Fact, FactFetchingContext
 
 
@@ -21,9 +19,6 @@ class PatriciaTree(BinaryFactTree):
     """
     An immutable Patricia-Merkle tree backed by an immutable fact storage.
     """
-
-    root: bytes = field(metadata=bytes_as_hex_metadata(validated_field=None))
-    height: int
 
     @classmethod
     async def empty_tree(

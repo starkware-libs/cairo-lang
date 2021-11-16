@@ -41,6 +41,16 @@ class _ImmediateStorage(Storage):
             await task
 
 
+class LocalStorage(_ImmediateStorage):
+    """
+    A storage class with local cache. Write requests are not flushed to the actual storage, read
+    requests for keys not in cache are read from the actual storage.
+    """
+
+    def __init__(self, storage: Storage):
+        super().__init__(storage=storage, avoid_write_through=True)
+
+
 @asynccontextmanager
 async def immediate_storage(storage: Storage, avoid_write_through: bool = False):
     try:
