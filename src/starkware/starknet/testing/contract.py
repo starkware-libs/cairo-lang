@@ -69,6 +69,12 @@ class StarknetContract:
     def __dir__(self):
         return object.__dir__(self) + list(self._abi_function_mapping.keys())
 
+    def __getstate__(self):
+        return self.__dict__
+
+    def __setstate__(self, state):
+        self.__dict__ = state
+    
     def __getattr__(self, name: str):
         if name in self._abi_function_mapping:
             if name not in self._contract_functions:
