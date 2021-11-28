@@ -35,6 +35,7 @@ class StarknetErrorCode(ErrorCode):
     SECURITY_ERROR = auto()
     TRANSACTION_FAILED = auto()
     TRANSACTION_LIMIT_EXCEEDED = auto()
+    TRANSACTION_NOT_FOUND = auto()
     UNEXPECTED_FAILURE = auto()
     UNINITIALIZED_CONTRACT = auto()
 

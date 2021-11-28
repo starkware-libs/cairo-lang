@@ -1,3 +1,7 @@
+set(PROGRAM_HASH_TEST_UTILS_LIB_ADDITIONAL_LIBS cairo_hash_program_lib)
+
+include(bootloader_test_utils.cmake)
+
 python_lib(cairo_hash_program_lib
     PREFIX starkware/cairo/bootloader
 

@@ -2,7 +2,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "5.3.1",
+            "installed_version": "6.0",
             "key": "pyyaml",
             "package_name": "PyYAML"
         }
@@ -10,10 +10,22 @@
     {
         "dependencies": [
             {
-                "installed_version": "3.0.1",
+                "installed_version": "1.2.0",
+                "key": "aiosignal",
+                "package_name": "aiosignal",
+                "required_version": ">=1.1.2"
+            },
+            {
+                "installed_version": "4.0.1",
                 "key": "async-timeout",
                 "package_name": "async-timeout",
-                "required_version": ">=3.0,<4.0"
+                "required_version": ">=4.0.0a3,<5.0"
+            },
+            {
+                "installed_version": "0.13.0",
+                "key": "asynctest",
+                "package_name": "asynctest",
+                "required_version": "==0.13.0"
             },
             {
                 "installed_version": "21.2.0",
@@ -22,10 +34,16 @@
                 "required_version": ">=17.3.0"
             },
             {
-                "installed_version": "4.0.0",
-                "key": "chardet",
-                "package_name": "chardet",
-                "required_version": ">=2.0,<5.0"
+                "installed_version": "2.0.8",
+                "key": "charset-normalizer",
+                "package_name": "charset-normalizer",
+                "required_version": ">=2.0,<3.0"
+            },
+            {
+                "installed_version": "1.2.0",
+                "key": "frozenlist",
+                "package_name": "frozenlist",
+                "required_version": ">=1.1.1"
             },
             {
                 "installed_version": "5.2.0",
@@ -37,27 +55,57 @@
                 "installed_version": "3.10.0.2",
                 "key": "typing-extensions",
                 "package_name": "typing-extensions",
-                "required_version": ">=3.6.5"
+                "required_version": ">=3.7.4"
             },
             {
-                "installed_version": "1.7.0",
+                "installed_version": "1.7.2",
                 "key": "yarl",
                 "package_name": "yarl",
                 "required_version": ">=1.0,<2.0"
             }
         ],
         "package": {
-            "installed_version": "3.7.4.post0",
+            "installed_version": "3.8.1",
             "key": "aiohttp",
             "package_name": "aiohttp"
         }
     },
     {
-        "dependencies": [],
+        "dependencies": [
+            {
+                "installed_version": "1.2.0",
+                "key": "frozenlist",
+                "package_name": "frozenlist",
+                "required_version": ">=1.1.0"
+            }
+        ],
         "package": {
-            "installed_version": "3.0.1",
+            "installed_version": "1.2.0",
+            "key": "aiosignal",
+            "package_name": "aiosignal"
+        }
+    },
+    {
+        "dependencies": [
+            {
+                "installed_version": "3.10.0.2",
+                "key": "typing-extensions",
+                "package_name": "typing-extensions",
+                "required_version": ">=3.6.5"
+            }
+        ],
+        "package": {
+            "installed_version": "4.0.1",
             "key": "async-timeout",
             "package_name": "async-timeout"
+        }
+    },
+    {
+        "dependencies": [],
+        "package": {
+            "installed_version": "0.13.0",
+            "key": "asynctest",
+            "package_name": "asynctest"
         }
     },
     {
@@ -71,7 +119,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "2.1.0",
+            "installed_version": "2.1.1",
             "key": "base58",
             "package_name": "base58"
         }
@@ -103,15 +151,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "4.0.0",
-            "key": "chardet",
-            "package_name": "chardet"
-        }
-    },
-    {
-        "dependencies": [],
-        "package": {
-            "installed_version": "2.0.6",
+            "installed_version": "2.0.8",
             "key": "charset-normalizer",
             "package_name": "charset-normalizer"
         }
@@ -119,14 +159,14 @@
     {
         "dependencies": [
             {
-                "installed_version": "0.11.1",
+                "installed_version": "0.11.2",
                 "key": "toolz",
                 "package_name": "toolz",
                 "required_version": ">=0.8.0"
             }
         ],
         "package": {
-            "installed_version": "0.11.0",
+            "installed_version": "0.11.2",
             "key": "cytoolz",
             "package_name": "cytoolz"
         }
@@ -241,7 +281,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "0.11.0",
+                "installed_version": "0.11.2",
                 "key": "cytoolz",
                 "package_name": "cytoolz",
                 "required_version": ">=0.9.0,<1.0.0"
@@ -330,7 +370,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "0.11.0",
+                "installed_version": "0.11.2",
                 "key": "cytoolz",
                 "package_name": "cytoolz",
                 "required_version": ">=0.10.1,<1.0.0"
@@ -357,7 +397,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "2.2.1",
+            "installed_version": "2.2.3",
             "key": "fastecdsa",
             "package_name": "fastecdsa"
         }
@@ -373,6 +413,14 @@
     {
         "dependencies": [],
         "package": {
+            "installed_version": "1.2.0",
+            "key": "frozenlist",
+            "package_name": "frozenlist"
+        }
+    },
+    {
+        "dependencies": [],
+        "package": {
             "installed_version": "0.2.2",
             "key": "hexbytes",
             "package_name": "hexbytes"
@@ -381,7 +429,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "3.2",
+            "installed_version": "3.3",
             "key": "idna",
             "package_name": "idna"
         }
@@ -402,7 +450,7 @@
             }
         ],
         "package": {
-            "installed_version": "4.8.1",
+            "installed_version": "4.8.2",
             "key": "importlib-metadata",
             "package_name": "importlib-metadata"
         }
@@ -445,7 +493,7 @@
                 "required_version": ">=17.4.0"
             },
             {
-                "installed_version": "4.8.1",
+                "installed_version": "4.8.2",
                 "key": "importlib-metadata",
                 "package_name": "importlib-metadata",
                 "required_version": null
@@ -457,7 +505,7 @@
                 "required_version": ">=0.14.0"
             },
             {
-                "installed_version": "58.1.0",
+                "installed_version": "58.4.0",
                 "key": "setuptools",
                 "package_name": "setuptools",
                 "required_version": null
@@ -494,7 +542,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "3.13.0",
+            "installed_version": "3.14.1",
             "key": "marshmallow",
             "package_name": "marshmallow"
         }
@@ -502,7 +550,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "3.13.0",
+                "installed_version": "3.14.1",
                 "key": "marshmallow",
                 "package_name": "marshmallow",
                 "required_version": ">=3.13.0,<4.0"
@@ -523,7 +571,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "3.13.0",
+                "installed_version": "3.14.1",
                 "key": "marshmallow",
                 "package_name": "marshmallow",
                 "required_version": ">=2.0.0"
@@ -538,7 +586,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "3.13.0",
+                "installed_version": "3.14.1",
                 "key": "marshmallow",
                 "package_name": "marshmallow",
                 "required_version": ">=3.0.0,<4.0.0"
@@ -561,7 +609,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "2.1.0",
+                "installed_version": "2.1.1",
                 "key": "base58",
                 "package_name": "base58",
                 "required_version": null
@@ -618,7 +666,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "1.21.2",
+            "installed_version": "1.21.4",
             "key": "numpy",
             "package_name": "numpy"
         }
@@ -626,14 +674,14 @@
     {
         "dependencies": [
             {
-                "installed_version": "2.4.7",
+                "installed_version": "3.0.6",
                 "key": "pyparsing",
                 "package_name": "pyparsing",
-                "required_version": ">=2.0.2"
+                "required_version": ">=2.0.2,!=3.0.5"
             }
         ],
         "package": {
-            "installed_version": "21.0",
+            "installed_version": "21.3",
             "key": "packaging",
             "package_name": "packaging"
         }
@@ -656,7 +704,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "21.2.4",
+            "installed_version": "21.3.1",
             "key": "pip",
             "package_name": "pip"
         }
@@ -664,14 +712,14 @@
     {
         "dependencies": [
             {
-                "installed_version": "21.2.4",
+                "installed_version": "21.3.1",
                 "key": "pip",
                 "package_name": "pip",
                 "required_version": ">=6.0.0"
             }
         ],
         "package": {
-            "installed_version": "2.1.0",
+            "installed_version": "2.2.0",
             "key": "pipdeptree",
             "package_name": "pipdeptree"
         }
@@ -679,7 +727,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "4.8.1",
+                "installed_version": "4.8.2",
                 "key": "importlib-metadata",
                 "package_name": "importlib-metadata",
                 "required_version": ">=0.12"
@@ -694,7 +742,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "0.11.0",
+            "installed_version": "0.12.0",
             "key": "prometheus-client",
             "package_name": "prometheus-client"
         }
@@ -702,7 +750,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "3.18.1",
+            "installed_version": "3.19.1",
             "key": "protobuf",
             "package_name": "protobuf"
         }
@@ -710,7 +758,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "1.10.0",
+            "installed_version": "1.11.0",
             "key": "py",
             "package_name": "py"
         }
@@ -726,7 +774,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "2.4.7",
+            "installed_version": "3.0.6",
             "key": "pyparsing",
             "package_name": "pyparsing"
         }
@@ -748,7 +796,7 @@
                 "required_version": ">=19.2.0"
             },
             {
-                "installed_version": "4.8.1",
+                "installed_version": "4.8.2",
                 "key": "importlib-metadata",
                 "package_name": "importlib-metadata",
                 "required_version": ">=0.12"
@@ -760,7 +808,7 @@
                 "required_version": null
             },
             {
-                "installed_version": "21.0",
+                "installed_version": "21.3",
                 "key": "packaging",
                 "package_name": "packaging",
                 "required_version": null
@@ -772,7 +820,7 @@
                 "required_version": ">=0.12,<2.0"
             },
             {
-                "installed_version": "1.10.0",
+                "installed_version": "1.11.0",
                 "key": "py",
                 "package_name": "py",
                 "required_version": ">=1.8.2"
@@ -800,7 +848,7 @@
             }
         ],
         "package": {
-            "installed_version": "0.15.1",
+            "installed_version": "0.16.0",
             "key": "pytest-asyncio",
             "package_name": "pytest-asyncio"
         }
@@ -814,13 +862,13 @@
                 "required_version": ">=2017.4.17"
             },
             {
-                "installed_version": "2.0.6",
+                "installed_version": "2.0.8",
                 "key": "charset-normalizer",
                 "package_name": "charset-normalizer",
                 "required_version": "~=2.0.0"
             },
             {
-                "installed_version": "3.2",
+                "installed_version": "3.3",
                 "key": "idna",
                 "package_name": "idna",
                 "required_version": ">=2.5,<4"
@@ -856,7 +904,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "58.1.0",
+            "installed_version": "58.4.0",
             "key": "setuptools",
             "package_name": "setuptools"
         }
@@ -895,7 +943,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "0.11.1",
+            "installed_version": "0.11.2",
             "key": "toolz",
             "package_name": "toolz"
         }
@@ -903,7 +951,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "2.12.1",
+            "installed_version": "2.13.2",
             "key": "typeguard",
             "package_name": "typeguard"
         }
@@ -956,7 +1004,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "3.7.4.post0",
+                "installed_version": "3.8.1",
                 "key": "aiohttp",
                 "package_name": "aiohttp",
                 "required_version": ">=3.7.4.post0,<4"
@@ -1016,7 +1064,7 @@
                 "required_version": ">=1.1.6,<2.0.0"
             },
             {
-                "installed_version": "3.18.1",
+                "installed_version": "3.19.1",
                 "key": "protobuf",
                 "package_name": "protobuf",
                 "required_version": ">=3.10.0,<4"
@@ -1041,7 +1089,7 @@
             }
         ],
         "package": {
-            "installed_version": "5.24.0",
+            "installed_version": "5.25.0",
             "key": "web3",
             "package_name": "web3"
         }
@@ -1065,7 +1113,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "3.2",
+                "installed_version": "3.3",
                 "key": "idna",
                 "package_name": "idna",
                 "required_version": ">=2.0"
@@ -1084,7 +1132,7 @@
             }
         ],
         "package": {
-            "installed_version": "1.7.0",
+            "installed_version": "1.7.2",
             "key": "yarl",
             "package_name": "yarl"
         }

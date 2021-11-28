@@ -6,11 +6,12 @@ import functools
 import json
 import os
 import sys
-from typing import List
+from typing import Any, Dict, List
 
 from services.everest.definitions import fields as everest_fields
 from services.external_api.base_client import RetryConfig
 from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt, TypePointer
+from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.parser import parse_type
 from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.compiler.type_system import mark_type_resolved
@@ -26,6 +27,11 @@ from starkware.starknet.services.api.feeder_gateway.feeder_gateway_client import
 from starkware.starknet.services.api.gateway.gateway_client import GatewayClient
 from starkware.starknet.services.api.gateway.transaction import Deploy, InvokeFunction
 from starkware.starkware_utils.error_handling import StarkErrorCode
+
+NETWORKS = {
+    "alpha": "alpha4.starknet.io",
+    "alpha-mainnet": "alpha-mainnet.starknet.io",
+}
 
 
 def felt_formatter(hex_felt: str) -> str:
@@ -58,6 +64,48 @@ def get_feeder_gateway_client(args) -> FeederGatewayClient:
     # Limit the number of retries.
     retry_config = RetryConfig(n_retries=1)
     return FeederGatewayClient(url=feeder_gateway_url, retry_config=retry_config)
+
+
+def parse_inputs(values: List[str]) -> List[int]:
+    result = []
+    for value in values:
+        try:
+            result.append(int(value, 16) if value.startswith("0x") else int(value))
+        except ValueError:
+            raise ValueError(
+                f"Invalid input value: '{value}'. Expected a decimal or hexadecimal integer."
+            )
+    return result
+
+
+def validate_arguments(
+    inputs: List[int], abi_entry: Dict[str, Any], identifier_manager: IdentifierManager
+):
+    previous_felt_input = None
+    current_inputs_ptr = 0
+    for input_desc in abi_entry["inputs"]:
+        typ = mark_type_resolved(parse_type(input_desc["type"]))
+        typ_size = check_felts_only_type(cairo_type=typ, identifier_manager=identifier_manager)
+        if typ_size is not None:
+            assert current_inputs_ptr + typ_size <= len(inputs), (
+                f"Expected at least {current_inputs_ptr + typ_size} inputs, " f"got {len(inputs)}."
+            )
+
+            current_inputs_ptr += typ_size
+        elif typ == TypePointer(pointee=TypeFelt()):
+            assert previous_felt_input is not None, (
+                f'The array argument {input_desc["name"]} of type felt* must be preceded '
+                "by a length argument of type felt."
+            )
+
+            current_inputs_ptr += previous_felt_input
+        else:
+            raise Exception(f'Type {input_desc["type"]} is not supported.')
+        previous_felt_input = inputs[current_inputs_ptr - 1] if typ == TypeFelt() else None
+
+    assert (
+        len(inputs) == current_inputs_ptr
+    ), f"Wrong number of arguments. Expected {current_inputs_ptr}, got {len(inputs)}."
 
 
 async def deploy(args, command_args):
@@ -101,6 +149,19 @@ async def deploy(args, command_args):
         raise ValueError("Invalid salt format.")
 
     contract_definition = ContractDefinition.loads(args.contract.read())
+    abi = contract_definition.abi
+    assert abi is not None, "Missing ABI in the given contract definition."
+
+    for abi_entry in abi:
+        if abi_entry["type"] == "constructor":
+            validate_arguments(
+                inputs=inputs,
+                abi_entry=abi_entry,
+                identifier_manager=identifier_manager_from_abi(abi=abi),
+            )
+            break
+    else:
+        assert len(inputs) == 0, "--inputs cannot be specified for contracts without a constructor."
 
     tx = Deploy(
         contract_address_salt=salt,
@@ -120,18 +181,6 @@ Deploy transaction was sent.
 Contract address: 0x{contract_address:064x}
 Transaction hash: {gateway_response['transaction_hash']}"""
     )
-
-
-def parse_inputs(values: List[str]) -> List[int]:
-    result = []
-    for value in values:
-        try:
-            result.append(int(value, 16) if value.startswith("0x") else int(value))
-        except ValueError:
-            raise ValueError(
-                f"Invalid input value: '{value}'. Expected a decimal or hexadecimal integer."
-            )
-    return result
 
 
 async def invoke_or_call(args, command_args, call: bool):
@@ -167,9 +216,6 @@ async def invoke_or_call(args, command_args, call: bool):
 
     abi = json.load(args.abi)
 
-    # Load types.
-    identifier_manager = identifier_manager_from_abi(abi=abi)
-
     assert args.address.startswith("0x"), f"The address must start with '0x'. Got: {args.address}."
     try:
         address = int(args.address, 16)
@@ -177,37 +223,15 @@ async def invoke_or_call(args, command_args, call: bool):
         raise ValueError(f"Invalid address format: {args.address}.")
     for abi_entry in abi:
         if abi_entry["type"] == "function" and abi_entry["name"] == args.function:
-            previous_felt_input = None
-            current_inputs_ptr = 0
-            for input_desc in abi_entry["inputs"]:
-                typ = mark_type_resolved(parse_type(input_desc["type"]))
-                typ_size = check_felts_only_type(
-                    cairo_type=typ, identifier_manager=identifier_manager
-                )
-                if typ_size is not None:
-                    assert current_inputs_ptr + typ_size <= len(inputs), (
-                        f"Expected at least {current_inputs_ptr + typ_size} inputs, "
-                        f"got {len(inputs)}."
-                    )
-
-                    current_inputs_ptr += typ_size
-                elif typ == TypePointer(pointee=TypeFelt()):
-                    assert previous_felt_input is not None, (
-                        f'The array argument {input_desc["name"]} of type felt* must be preceded '
-                        "by a length argument of type felt."
-                    )
-
-                    current_inputs_ptr += previous_felt_input
-                else:
-                    raise Exception(f'Type {input_desc["type"]} is not supported.')
-                previous_felt_input = inputs[current_inputs_ptr - 1] if typ == TypeFelt() else None
+            validate_arguments(
+                inputs=inputs,
+                abi_entry=abi_entry,
+                identifier_manager=identifier_manager_from_abi(abi=abi),
+            )
             break
     else:
         raise Exception(f"Function {args.function} not found.")
     selector = get_selector_from_name(args.function)
-    assert (
-        len(inputs) == current_inputs_ptr
-    ), f"Wrong number of arguments. Expected {current_inputs_ptr}, got {len(inputs)}."
     calldata = inputs
 
     tx = InvokeFunction(
@@ -319,11 +343,15 @@ def handle_network_param(args):
     """
     network = os.environ.get("STARKNET_NETWORK") if args.network is None else args.network
     if network is not None:
-        if network != "alpha":
-            print(f"Unknown network '{network}'.", file=sys.stderr)
+        if network not in NETWORKS:
+            networks_str = ", ".join(NETWORKS.keys())
+            print(
+                f"Unknown network '{network}'. Supported networks: {networks_str}.",
+                file=sys.stderr,
+            )
             return 1
 
-        dns = "alpha4.starknet.io"
+        dns = NETWORKS[network]
         if args.gateway_url is None:
             args.gateway_url = f"https://{dns}/gateway"
 

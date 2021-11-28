@@ -52,4 +52,21 @@ python_lib(starknet_os_utils_lib
     starkware_python_utils_lib
     pip_cachetools
 )
+
 add_dependencies(starknet_os_utils_lib starknet_os_program)
+
+full_python_test(starknet_os_program_hash_test
+    PREFIX starkware/starknet/core/os
+    PYTHON python3.7
+    TESTED_MODULES starkware/starknet/core/os
+
+    FILES
+    program_hash_test.py
+
+    LIBS
+    cairo_hash_program_lib
+    program_hash_test_utils_lib
+    starknet_os_utils_lib
+    starkware_python_utils_lib
+    pip_pytest
+)

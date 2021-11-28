@@ -22,12 +22,12 @@ from starkware.starkware_utils.validated_fields import (
 
 # Fields data: validation data, dataclass metadata.
 
-block_number_metadata = sequential_id_metadata(field_name="block number")
+block_number_metadata = sequential_id_metadata(field_name="Block number")
 optional_block_number_metadata = sequential_id_metadata(
-    field_name="block number", required=False, allow_none=True
+    field_name="Block number", required=False, allow_none=True
 )
 optional_transaction_index_metadata = sequential_id_metadata(
-    field_name="transaction index", required=False, allow_none=True
+    field_name="Transaction index", required=False, allow_none=True
 )
 
 felt_list_metadata = dict(

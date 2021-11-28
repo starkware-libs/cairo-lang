@@ -15,7 +15,7 @@ pipdeptree
 prometheus-client
 pytest
 pytest-asyncio
-PyYAML>=5.3.1,<5.4
+PyYAML
 sympy
 typeguard
 Web3
