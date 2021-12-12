@@ -9,6 +9,7 @@ python_lib(starknet_feeder_gateway_client_lib
     starknet_definitions_lib
     starknet_transaction_lib
     starkware_dataclasses_utils_lib
+    pip_typing_extensions
 )
 
 python_lib(starknet_block_hash_lib

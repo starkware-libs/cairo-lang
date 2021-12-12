@@ -1,5 +1,4 @@
 import copy
-from collections import defaultdict
 from typing import Dict, List, Optional, Union, cast
 
 from starkware.cairo.lang.vm.crypto import async_pedersen_hash_func
@@ -10,8 +9,7 @@ from starkware.starknet.business_logic.internal_transaction import (
 from starkware.starknet.business_logic.internal_transaction_interface import (
     TransactionExecutionInfo,
 )
-from starkware.starknet.business_logic.state import CarriedState, SharedState
-from starkware.starknet.business_logic.state_objects import ContractCarriedState, ContractState
+from starkware.starknet.business_logic.state import CarriedState
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public.abi import get_selector_from_name
@@ -62,17 +60,11 @@ class StarknetState:
         """
         if general_config is None:
             general_config = StarknetGeneralConfig()
+
         ffc = FactFetchingContext(storage=DictStorage(), hash_func=async_pedersen_hash_func)
-        empty_contract_state = await ContractState.empty(
-            storage_commitment_tree_height=general_config.contract_storage_commitment_tree_height,
-            ffc=ffc,
+        state = await CarriedState.create_empty_for_test(
+            shared_state=None, ffc=ffc, general_config=general_config
         )
-        empty_contract_carried_state = ContractCarriedState(
-            state=empty_contract_state, storage_updates={}
-        )
-        shared_state = await SharedState.empty(ffc=ffc, general_config=general_config)
-        state = CarriedState.empty(shared_state=shared_state, ffc=ffc)
-        state.contract_states = defaultdict(lambda: copy.deepcopy(empty_contract_carried_state))
         return cls(state=state, general_config=general_config)
 
     async def deploy(

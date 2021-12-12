@@ -1,4 +1,3 @@
-import logging
 from typing import Any, Dict, Optional
 
 import cachetools
@@ -31,19 +30,19 @@ class DictStorage(Storage):
 
 
 class CachedStorage(Storage):
-    def __init__(self, storage: Storage, max_size: int, metric_active: bool = False):
+    def __init__(self, storage: Storage, max_size: int, metric_active: Optional[bool] = None):
         self.storage = storage
-        self.cache = cachetools.LRUCache(maxsize=max_size)
-        self.metric_active = metric_active
+        self.cache: cachetools.LRUCache[bytes, Any] = cachetools.LRUCache(maxsize=max_size)
+        self.metric_active = False if metric_active is None else metric_active
 
     @classmethod
     async def create_from_config(
-        cls, config: Dict[str, Any], logger: Optional[logging.Logger] = None
+        cls, storage_config: Dict[str, Any], max_size: int, metric_active: bool
     ) -> "CachedStorage":
         return cls(
-            storage=await Storage.create_instance_from_config(config=config["storage"]),
-            max_size=config["max_size"],
-            metric_active=config["metric_active"],
+            storage=await Storage.create_instance_from_config(config=storage_config),
+            max_size=max_size,
+            metric_active=metric_active,
         )
 
     async def set_value(self, key: bytes, value: bytes):

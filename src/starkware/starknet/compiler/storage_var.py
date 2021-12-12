@@ -1,7 +1,7 @@
 import dataclasses
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
-from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypeFelt, TypePointer
+from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypePointer
 from starkware.cairo.lang.compiler.ast.code_elements import CodeElementFunction
 from starkware.cairo.lang.compiler.ast.formatting_utils import get_max_line_length
 from starkware.cairo.lang.compiler.error_handling import Location
@@ -12,6 +12,7 @@ from starkware.cairo.lang.compiler.preprocessor.identifier_aware_visitor import 
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_utils import verify_empty_code_block
 from starkware.cairo.lang.compiler.type_utils import check_felts_only_type
+from starkware.python.utils import safe_zip
 from starkware.starknet.definitions.constants import STARKNET_LANG_DIRECTIVE
 from starkware.starknet.public.abi import MAX_STORAGE_ITEM_SIZE, get_storage_var_address
 
@@ -134,13 +135,20 @@ def process_storage_var(visitor: IdentifierAwareVisitor, elm: CodeElementFunctio
                 location=decorator.location,
             )
 
+    arg_sizes: List[int] = []
     for arg in elm.arguments.identifiers:
-        arg_type = arg.get_type()
-        if not isinstance(arg_type, TypeFelt):
+        unresolved_arg_type = arg.get_type()
+        arg_type = visitor.resolve_type(unresolved_arg_type)
+        arg_size = check_felts_only_type(
+            cairo_type=arg_type, identifier_manager=visitor.identifiers
+        )
+        if arg_size is None:
             raise PreprocessorError(
-                "Only felt arguments are supported in storage variables.",
-                location=arg_type.location,
+                "Arguments of storage variables must be a felts-only type "
+                "(cannot contain pointers).",
+                location=unresolved_arg_type.location,
             )
+        arg_sizes.append(arg_size)
 
     unresolved_return_type = get_return_type(elm=elm)
     return_type = visitor.resolve_type(unresolved_return_type)
@@ -149,7 +157,8 @@ def process_storage_var(visitor: IdentifierAwareVisitor, elm: CodeElementFunctio
         is None
     ):
         raise PreprocessorError(
-            "The return type of storage variables must consist of felts.",
+            "The return type of storage variables must be a felts-only type "
+            "(cannot contain pointers).",
             location=elm.returns.location if elm.returns is not None else elm.identifier.location,
         )
     var_size = visitor.get_size(return_type)
@@ -164,10 +173,11 @@ def process_storage_var(visitor: IdentifierAwareVisitor, elm: CodeElementFunctio
     var_name = elm.identifier.name
     addr = storage_var_name_to_base_addr(var_name)
     addr_func_body = f"let res = {addr}\n"
-    for arg in elm.arguments.identifiers:
-        addr_func_body += (
-            f"let (res) = hash2{{hash_ptr=pedersen_ptr}}(res, {arg.identifier.name})\n"
-        )
+    for arg, arg_size in safe_zip(elm.arguments.identifiers, arg_sizes):
+        assert arg_size is not None
+        for i in range(arg_size):
+            value_str = f"cast(&{arg.identifier.name}, felt*)[{i}]"
+            addr_func_body += f"let (res) = hash2{{hash_ptr=pedersen_ptr}}(res, {value_str})\n"
     if len(elm.arguments.identifiers) > 0:
         addr_func_body += "let (res) = normalize_address(addr=res)\n"
     addr_func_body += "return (res=res)\n"

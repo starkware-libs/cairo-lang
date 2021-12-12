@@ -23,6 +23,7 @@ python_lib(starknet_compile_lib
     starknet_definitions_lib
     starknet_hints_whitelist_lib
     starknet_security_lib
+    starkware_python_utils_lib
     starkware_utils_lib
 )
 

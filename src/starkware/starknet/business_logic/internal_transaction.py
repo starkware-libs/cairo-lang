@@ -234,14 +234,12 @@ class InternalDeploy(InternalTransaction):
             ExecutionResources.empty(), n_steps=self.n_cairo_steps_estimation
         )
         state.cairo_usage += cairo_usage
-        state.output_length += self.deployment_info_header_size + len(self.constructor_calldata)
 
         return await self.invoke_constructor(state=state, general_config=general_config)
 
     async def invoke_constructor(
         self, state: CarriedState, general_config: StarknetGeneralConfig
     ) -> TransactionExecutionInfo:
-
         if len(self.contract_definition.entry_points_by_type[EntryPointType.CONSTRUCTOR]) == 0:
             stark_assert(
                 len(self.constructor_calldata) == 0,
@@ -263,7 +261,7 @@ class InternalDeploy(InternalTransaction):
             caller_address=0,
         )
 
-        return await tx.apply_state_updates(state=state, general_config=general_config)
+        return await tx._apply_specific_state_updates(state=state, general_config=general_config)
 
     def _synchronous_apply_specific_state_updates(
         self,
@@ -444,19 +442,12 @@ class InternalInvokeFunction(InternalTransaction):
         # Update resources usage (for bouncer).
         state.cairo_usage += runner.get_execution_resources()
 
-        # Update output length (for bouncer).
-        state.output_length += syscall_handler.output_length  # L2-to-L1 direction.
-        if self.entry_point_type is EntryPointType.L1_HANDLER:
-            # Add the length of the L1-to-L2 message sent by the OS,
-            # which is of the following format: from_address=calldata[0],
-            # to_address=contract_address, payload_size, payload=[selector, *calldata[1:]].
-            state.output_length += 3 + len(self.calldata)
-
         # Build transaction execution info.
         contract_call_cairo_usage = state.cairo_usage - previous_cairo_usage
         call_info = ContractCall(
             from_address=self.caller_address,
             to_address=self.contract_address,
+            code_address=self.code_address,
             calldata=self.calldata,
             signature=self.signature,
             cairo_usage=contract_call_cairo_usage,

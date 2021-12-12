@@ -1,3 +1,5 @@
+from starkware.cairo.common.bitwise import bitwise_and, bitwise_or, bitwise_xor
+from starkware.cairo.common.cairo_builtins import BitwiseBuiltin
 from starkware.cairo.common.math import assert_le, assert_nn_le, assert_not_zero
 from starkware.cairo.common.math_cmp import is_le
 from starkware.cairo.common.pow import pow
@@ -250,32 +252,6 @@ end
 
 # Bitwise.
 
-# Computes the bitwise XOR of 2 n-bit words.
-# This is an inefficient implementation, and will be replaced with a builtin in the future.
-func felt_xor{range_check_ptr}(a, b, n) -> (res : felt):
-    alloc_locals
-    local a_lsb
-    local b_lsb
-
-    if n == 0:
-        assert a = 0
-        assert b = 0
-        return (0)
-    end
-
-    %{
-        ids.a_lsb = ids.a & 1
-        ids.b_lsb = ids.b & 1
-    %}
-    assert a_lsb * a_lsb = a_lsb
-    assert b_lsb * b_lsb = b_lsb
-
-    local res_bit = a_lsb + b_lsb - 2 * a_lsb * b_lsb
-
-    let (res) = felt_xor((a - a_lsb) / 2, (b - b_lsb) / 2, n - 1)
-    return (res=res * 2 + res_bit)
-end
-
 # Return true if both integers are equal.
 func uint256_eq{range_check_ptr}(a : Uint256, b : Uint256) -> (res):
     if a.high != b.high:
@@ -287,54 +263,28 @@ func uint256_eq{range_check_ptr}(a : Uint256, b : Uint256) -> (res):
     return (1)
 end
 
-# Computes the bitwise AND of 2 n-bit words.
-# This is an inefficient implementation, and will be replaced with a builtin in the future.
-func felt_and{range_check_ptr}(a, b, n) -> (res : felt):
-    alloc_locals
-    local a_lsb
-    local b_lsb
-
-    if n == 0:
-        assert a = 0
-        assert b = 0
-        return (res=0)
-    end
-
-    %{
-        ids.a_lsb = ids.a & 1
-        ids.b_lsb = ids.b & 1
-    %}
-    assert a_lsb * a_lsb = a_lsb
-    assert b_lsb * b_lsb = b_lsb
-
-    local res_bit = a_lsb * b_lsb
-
-    let (res) = felt_and((a - a_lsb) / 2, (b - b_lsb) / 2, n - 1)
-    return (res=res * 2 + res_bit)
-end
-
 # Computes the bitwise XOR of 2 uint256 integers.
-func uint256_xor{range_check_ptr}(a : Uint256, b : Uint256) -> (res : Uint256):
-    alloc_locals
-    let (local low) = felt_xor(a.low, b.low, 128)
-    let (high) = felt_xor(a.high, b.high, 128)
+func uint256_xor{range_check_ptr, bitwise_ptr : BitwiseBuiltin*}(a : Uint256, b : Uint256) -> (
+        res : Uint256):
+    let (low) = bitwise_xor(a.low, b.low)
+    let (high) = bitwise_xor(a.high, b.high)
     return (Uint256(low, high))
 end
 
 # Computes the bitwise AND of 2 uint256 integers.
-func uint256_and{range_check_ptr}(a : Uint256, b : Uint256) -> (res : Uint256):
-    alloc_locals
-    let (local low) = felt_and(a.low, b.low, 128)
-    let (high) = felt_and(a.high, b.high, 128)
+func uint256_and{range_check_ptr, bitwise_ptr : BitwiseBuiltin*}(a : Uint256, b : Uint256) -> (
+        res : Uint256):
+    let (low) = bitwise_and(a.low, b.low)
+    let (high) = bitwise_and(a.high, b.high)
     return (Uint256(low, high))
 end
 
 # Computes the bitwise OR of 2 uint256 integers.
-func uint256_or{range_check_ptr}(a : Uint256, b : Uint256) -> (res : Uint256):
-    let (a) = uint256_not(a)
-    let (b) = uint256_not(b)
-    let (res) = uint256_and(a, b)
-    return uint256_not(res)
+func uint256_or{range_check_ptr, bitwise_ptr : BitwiseBuiltin*}(a : Uint256, b : Uint256) -> (
+        res : Uint256):
+    let (low) = bitwise_or(a.low, b.low)
+    let (high) = bitwise_or(a.high, b.high)
+    return (Uint256(low, high))
 end
 
 # Computes 2**exp % 2**256 as a uint256 integer.

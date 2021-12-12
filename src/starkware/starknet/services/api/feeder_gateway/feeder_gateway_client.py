@@ -1,6 +1,8 @@
 import json
 from typing import Any, Dict, List, Optional, Union
 
+from typing_extensions import Literal
+
 from services.everest.api.feeder_gateway.feeder_gateway_client import EverestFeederGatewayClient
 from starkware.starknet.definitions import fields
 from starkware.starknet.services.api.gateway.transaction import InvokeFunction
@@ -8,6 +10,7 @@ from starkware.starkware_utils.validated_fields import RangeValidatedField
 
 CastableToHash = Union[int, str]
 JsonObject = Dict[str, Any]
+BlockIdentifier = Union[int, Literal["pending"]]
 
 
 class FeederGatewayClient(EverestFeederGatewayClient):
@@ -23,15 +26,14 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         self,
         invoke_tx: InvokeFunction,
         block_hash: Optional[CastableToHash] = None,
-        block_number: Optional[int] = None,
+        block_number: Optional[BlockIdentifier] = None,
     ) -> Dict[str, List[str]]:
-
+        formatted_block_identifier = get_formatted_block_identifier(
+            block_hash=block_hash, block_number=block_number
+        )
         raw_response = await self._send_request(
             send_method="POST",
-            uri=(
-                "/call_contract?"
-                f"{block_identifier(block_hash=block_hash, block_number=block_number)}"
-            ),
+            uri=(f"/call_contract?{formatted_block_identifier}"),
             data=invoke_tx.dumps(),
         )
         return json.loads(raw_response)
@@ -39,11 +41,14 @@ class FeederGatewayClient(EverestFeederGatewayClient):
     async def get_block(
         self,
         block_hash: Optional[CastableToHash] = None,
-        block_number: Optional[int] = None,
+        block_number: Optional[BlockIdentifier] = None,
     ) -> JsonObject:
+        formatted_block_identifier = get_formatted_block_identifier(
+            block_hash=block_hash, block_number=block_number
+        )
         raw_response = await self._send_request(
             send_method="GET",
-            uri=f"/get_block?{block_identifier(block_hash=block_hash, block_number=block_number)}",
+            uri=f"/get_block?{formatted_block_identifier}",
         )
         return json.loads(raw_response)
 
@@ -51,13 +56,15 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         self,
         contract_address: int,
         block_hash: Optional[CastableToHash] = None,
-        block_number: Optional[int] = None,
+        block_number: Optional[BlockIdentifier] = None,
     ) -> List[str]:
-        uri = (
-            f"/get_code?contractAddress={hex(contract_address)}&"
-            f"{block_identifier(block_hash=block_hash, block_number=block_number)}"
+        formatted_block_identifier = get_formatted_block_identifier(
+            block_hash=block_hash, block_number=block_number
         )
-        raw_response = await self._send_request(send_method="GET", uri=uri)
+        raw_response = await self._send_request(
+            send_method="GET",
+            uri=f"/get_code?contractAddress={hex(contract_address)}&{formatted_block_identifier}",
+        )
         return json.loads(raw_response)
 
     async def get_storage_at(
@@ -65,11 +72,14 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         contract_address: int,
         key: int,
         block_hash: Optional[CastableToHash] = None,
-        block_number: Optional[int] = None,
+        block_number: Optional[BlockIdentifier] = None,
     ) -> str:
+        formatted_block_identifier = get_formatted_block_identifier(
+            block_hash=block_hash, block_number=block_number
+        )
         uri = (
             f"/get_storage_at?contractAddress={hex(contract_address)}&key={key}&"
-            f"{block_identifier(block_hash=block_hash, block_number=block_number)}"
+            f"{formatted_block_identifier}"
         )
         raw_response = await self._send_request(send_method="GET", uri=uri)
         return json.loads(raw_response)
@@ -151,8 +161,13 @@ def tx_identifier(tx_hash: Optional[CastableToHash], tx_id: Optional[int]) -> st
         return f"transactionHash={hash_str}"
 
 
-def block_identifier(block_hash: Optional[CastableToHash], block_number: Optional[int]) -> str:
+def get_formatted_block_identifier(
+    block_hash: Optional[CastableToHash], block_number: Optional[BlockIdentifier]
+) -> str:
     if block_hash is None:
-        return f"blockNumber={json.dumps(block_number)}"
+        block_number_str = (
+            block_number if isinstance(block_number, str) else json.dumps(block_number)
+        )
+        return f"blockNumber={block_number_str}"
     else:
         return f"blockHash={format_hash(hash_value=block_hash, hash_field=fields.BlockHashField)}"

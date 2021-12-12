@@ -1,6 +1,8 @@
 import asyncio
 import dataclasses
+import functools
 import logging
+import operator
 from abc import abstractmethod
 from dataclasses import field
 from typing import Iterable, List, Optional, Set, cast
@@ -81,12 +83,18 @@ class ContractCall(ValidatedDataclass):
             )
         )
     )
+    # The address that holds the executed code; relevant just for delegate calls, where it may
+    # differ from the code of the to_address contract.
+    code_address: Optional[int] = field(
+        metadata=dict(**fields.optional_contract_address_metadata, missing=None)
+    )
 
     @classmethod
     def empty(cls, to_address: int) -> "ContractCall":
         return cls(
             from_address=0,
             to_address=to_address,
+            code_address=None,
             calldata=[],
             signature=[],
             cairo_usage=ExecutionResources.empty(),
@@ -98,6 +106,11 @@ class ContractCall(ValidatedDataclass):
     @classmethod
     def empty_for_tests(cls) -> "ContractCall":
         return cls.empty(to_address=0)
+
+    @property
+    def state_selector(self) -> StateSelector:
+        code_address = self.to_address if self.code_address is None else self.code_address
+        return StateSelector(contract_addresses={self.to_address, code_address})
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -132,19 +145,21 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
 
     @property
     def state_selector(self) -> StateSelector:
-        return StateSelector(
-            contract_addresses={contract_call.to_address for contract_call in self.contract_calls}
+        return functools.reduce(
+            operator.__or__,
+            (contract_call.state_selector for contract_call in self.contract_calls),
+            StateSelector.empty(),
         )
 
     @staticmethod
     def get_state_selector_of_many(
         execution_infos: List["TransactionExecutionInfo"],
     ) -> StateSelector:
-        state_selector = StateSelector.empty()
-        for execution_info in execution_infos:
-            state_selector |= execution_info.state_selector
-
-        return state_selector
+        return functools.reduce(
+            operator.__or__,
+            (execution_info.state_selector for execution_info in execution_infos),
+            StateSelector.empty(),
+        )
 
 
 class InternalTransactionInterface(EverestInternalTransaction):

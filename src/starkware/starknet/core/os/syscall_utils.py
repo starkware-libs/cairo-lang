@@ -414,9 +414,6 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
         # l2_to_l1_messages including ones sent from internal calls.
         self.l2_to_l1_messages: List[L2ToL1MessageInfo] = []
 
-        # The output length does not include internal transactions.
-        self.output_length = 0
-
         # Kept for validations during the run.
         self.expected_syscall_ptr = initial_syscall_ptr
 
@@ -477,7 +474,7 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
             contract_address = code_address
             caller_address = self.contract_address
         else:
-            raise NotImplemented(f"Unsupported call type {syscall_name}.")
+            raise NotImplementedError(f"Unsupported call type {syscall_name}.")
 
         from starkware.starknet.business_logic.internal_transaction import InternalInvokeFunction
 
@@ -590,7 +587,6 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
         )
 
         self.l2_to_l1_messages.append(l2_to_l1_message_info)
-        self.output_length += 3 + payload_size  # Add 3 for: to, from addresses and payload_size.
 
     def _get_caller_address(
         self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue
@@ -628,6 +624,14 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
         # storage_write system call.
         self.starknet_storage.read(address=address)
         self.starknet_storage.write(address=address, value=value)
+
+        # Update the number of writing operations done in this contract (for the bouncer).
+        previous_n_writings = self.state.contract_address_to_n_storage_writings.get(
+            self.contract_address, 0
+        )
+        self.state.contract_address_to_n_storage_writings[self.contract_address] = (
+            previous_n_writings + 1
+        )
 
 
 class OsSysCallHandler(SysCallHandlerBase):

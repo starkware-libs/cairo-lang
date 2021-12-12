@@ -29,7 +29,7 @@ from starkware.starknet.services.api.gateway.transaction import Deploy, InvokeFu
 from starkware.starkware_utils.error_handling import StarkErrorCode
 
 NETWORKS = {
-    "alpha": "alpha4.starknet.io",
+    "alpha-goerli": "alpha4.starknet.io",
     "alpha-mainnet": "alpha-mainnet.starknet.io",
 }
 

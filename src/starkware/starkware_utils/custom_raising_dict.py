@@ -57,7 +57,7 @@ class CustomRaisingFrozenDict(frozendict, Generic[KT, VT]):
             _CustomRaisingFrozenDict.__qualname__
         ) = "CustomRaisingFrozenDict"
 
-        cls.dict_cls = _CustomRaisingFrozenDict
+        cls.dict_cls = _CustomRaisingFrozenDict  # type: ignore
 
     def __hash__(self):
         """

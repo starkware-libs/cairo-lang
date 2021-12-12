@@ -153,7 +153,7 @@ class DataEncodingProcessor:
                 )
                 if size is None:
                     raise PreprocessorError(
-                        f"{self.arg_text} must consist only of felts.",
+                        f"{self.arg_text} must be a felts-only type (cannot contain pointers).",
                         location=arg_info.location,
                     )
                 code_block_str = self.process_felts_object(arg_info=arg_info, size=size)

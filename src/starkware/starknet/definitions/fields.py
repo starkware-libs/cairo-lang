@@ -47,6 +47,9 @@ ContractAddressField = RangeValidatedField(
 
 contract_address_metadata = ContractAddressField.metadata()
 
+OptionalContractAddressField = OptionalField(field=ContractAddressField, none_probability=0)
+optional_contract_address_metadata = OptionalContractAddressField.metadata()
+
 ContractAddressSalt = RangeValidatedField(
     lower_bound=constants.CONTRACT_ADDRESS_SALT_LOWER_BOUND,
     upper_bound=constants.CONTRACT_ADDRESS_SALT_UPPER_BOUND,
@@ -122,6 +125,7 @@ global_state_commitment_tree_height_metadata = dict(
 
 
 state_root_metadata = dict(marshmallow_field=BytesAsHex(required=True))
+optional_state_root_metadata = dict(marshmallow_field=BytesAsHex(required=False, allow_none=True))
 
 TransactionHashField = RangeValidatedField(
     lower_bound=constants.TRANSACTION_HASH_LOWER_BOUND,

@@ -1,8 +1,10 @@
 import asyncio
+import copy
 import dataclasses
 import logging
+import typing
 from collections import ChainMap, defaultdict
-from typing import Dict, MutableMapping, Optional, Set
+from typing import Dict, MutableMapping, Optional, Set, Tuple
 
 import marshmallow_dataclass
 
@@ -27,6 +29,7 @@ logger = logging.getLogger(__name__)
 state_objects_logger = logging.getLogger(f"{__name__}:state_objects_logger")
 
 ContractCarriedStateMapping = MutableMapping[int, ContractCarriedState]
+ContractCarriedStateChainMapping = typing.ChainMap[int, ContractCarriedState]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -71,10 +74,10 @@ class CarriedState(CarriedStateBase["CarriedState"]):
         parent_state: Optional["CarriedState"],
         shared_state: "SharedState",
         ffc: FactFetchingContext,
-        contract_definitions: Dict[bytes, ContractDefinition],
-        contract_states: ContractCarriedStateMapping,
+        contract_definitions: typing.ChainMap[bytes, ContractDefinition],
+        contract_states: ContractCarriedStateChainMapping,
         cairo_usage: ExecutionResources,
-        output_length: int,
+        contract_address_to_n_storage_writings: typing.ChainMap[int, int],
     ):
         """
         Private constructor.
@@ -86,22 +89,22 @@ class CarriedState(CarriedStateBase["CarriedState"]):
         self.shared_state = shared_state
 
         # A mapping from contract definition hash to contract definition.
-        self.contract_definitions: Dict[bytes, ContractDefinition] = contract_definitions
+        self.contract_definitions = contract_definitions
 
         # A mapping from contract address to its carried state.
-        self.contract_states: ContractCarriedStateMapping = contract_states
-
-        # The contract states that will change as a result of transaction application on the state.
-        self._updated_contract_states: ContractCarriedStateMapping = {}
+        self.contract_states = contract_states
 
         # The accumulated Cairo usage.
-        self.cairo_usage: ExecutionResources = cairo_usage
+        self.cairo_usage = cairo_usage
 
         # Carried state fetches commitment tree leaves from storage during transaction processing.
-        self.ffc: FactFetchingContext = ffc
+        self.ffc = ffc
 
-        # Cumulative length of SN OS output (that eventually goes onchain).
-        self.output_length = output_length
+        # A mapping from contract address to the cumulative number of storage writing operations.
+        self.contract_address_to_n_storage_writings = contract_address_to_n_storage_writings
+
+        # A mapping from contract address to the cumulative number of storage writing operations.
+        self.contract_address_to_n_storage_writings = contract_address_to_n_storage_writings
 
     @classmethod
     def _create_from_parent_state(cls, parent_state: "CarriedState") -> "CarriedState":
@@ -112,13 +115,12 @@ class CarriedState(CarriedStateBase["CarriedState"]):
             parent_state=parent_state,
             shared_state=parent_state.shared_state,
             ffc=parent_state.ffc,
-            contract_definitions=parent_state.contract_definitions,
-            contract_states={},
+            contract_definitions=parent_state.contract_definitions.new_child(),
+            contract_states=parent_state.contract_states.new_child(),
             cairo_usage=parent_state.cairo_usage,
-            output_length=parent_state.output_length,
-        )
-        carried_state.contract_states = ChainMap(
-            carried_state._updated_contract_states, parent_state.contract_states
+            contract_address_to_n_storage_writings=(
+                parent_state.contract_address_to_n_storage_writings.new_child()
+            ),
         )
 
         return carried_state
@@ -132,12 +134,10 @@ class CarriedState(CarriedStateBase["CarriedState"]):
             parent_state=None,
             ffc=ffc,
             shared_state=shared_state,
-            contract_definitions={},
-            contract_states={},
+            contract_definitions=ChainMap(),
+            contract_states=ChainMap(),
             cairo_usage=ExecutionResources.empty(),
-            # Global information that will appear in the output at the end of the OS run:
-            # Previous root, new root, L2-to-L1 message segment size, L1-to-L2 message segment size.
-            output_length=4,
+            contract_address_to_n_storage_writings=ChainMap(),
         )
 
     @classmethod
@@ -164,7 +164,9 @@ class CarriedState(CarriedStateBase["CarriedState"]):
             contract_definitions={},
             shared_state=shared_state,
             contract_states=defaultdict(
-                lambda: ContractCarriedState(state=empty_contract_state, storage_updates={})
+                lambda: ContractCarriedState(
+                    state=copy.deepcopy(empty_contract_state), storage_updates={}
+                )
             ),
         )
 
@@ -173,7 +175,7 @@ class CarriedState(CarriedStateBase["CarriedState"]):
         cls,
         shared_state: "SharedState",
         ffc: FactFetchingContext,
-        contract_definitions: Dict[bytes, ContractDefinition],
+        contract_definitions: MutableMapping[bytes, ContractDefinition],
         contract_states: ContractCarriedStateMapping,
     ) -> "CarriedState":
         """
@@ -181,11 +183,15 @@ class CarriedState(CarriedStateBase["CarriedState"]):
         Other members are initialized with the empty object values.
         This is a utility function and should not be used in the regular flow.
         """
-        carried_state = cls.empty(ffc=ffc, shared_state=shared_state)
-        carried_state.contract_definitions = contract_definitions
-        carried_state.contract_states = contract_states
-
-        return carried_state
+        return cls(
+            parent_state=None,
+            ffc=ffc,
+            shared_state=shared_state,
+            contract_definitions=ChainMap(contract_definitions),
+            contract_states=ChainMap(contract_states),
+            cairo_usage=ExecutionResources.empty(),
+            contract_address_to_n_storage_writings=ChainMap(),
+        )
 
     @property
     def state_selector(self) -> StateSelector:
@@ -196,31 +202,11 @@ class CarriedState(CarriedStateBase["CarriedState"]):
         return StateSelector(contract_addresses=set(self.contract_states.keys()))
 
     def select(self, state_selector: StateSelectorBase) -> "CarriedState":
-        """
-        Returns a new CarriedState copied from this one after deleting unused commitment tree state
-        leaves.
-        """
-        # Downcast arguments to application-specific types.
-        assert isinstance(state_selector, StateSelector)
-
-        selected_contract_states = {
-            contract_address: self.contract_states[contract_address]
-            for contract_address in state_selector.contract_addresses & self.contract_states.keys()
-        }
-
-        return CarriedState(
-            parent_state=self.parent_state,
-            ffc=self.ffc,
-            shared_state=self.shared_state,
-            contract_definitions=self.contract_definitions,
-            contract_states=selected_contract_states,
-            cairo_usage=self.cairo_usage.copy(),
-            output_length=self.output_length,
-        )
+        raise NotImplementedError("select() is not implemented on StarkNet CarriedState.")
 
     def _fill_missing(self, other: "CarriedState"):
         """
-        Updates this state with the missing entries from another CarriedState instance.
+        Enriches state with the missing information from another CarriedState instance.
         This is a private method, only to be called from public fill_missing method.
         """
         self.contract_states.update(other.contract_states)
@@ -252,16 +238,38 @@ class CarriedState(CarriedStateBase["CarriedState"]):
         """
         raise NotImplementedError
 
+    @property
+    def chain_maps(self) -> Tuple[typing.ChainMap, ...]:
+        return (
+            self.contract_states,
+            self.contract_definitions,
+            self.contract_address_to_n_storage_writings,
+        )
+
+    def _validate_references_of_chain_maps(self):
+        assert self.parent_state is not None
+        for child_chain_map, parent_chain_map in zip(self.chain_maps, self.parent_state.chain_maps):
+            # Verify that the child's parent maps are all references to its (expected) parent maps.
+            assert all(
+                child_map is parent_map
+                # safe_zip also verifies that the lists are of the same length.
+                for child_map, parent_map in safe_zip(
+                    child_chain_map.parents.maps, parent_chain_map.maps
+                )
+            ), "Child ChainMap does not hold a reference to its parent."
+
     def _apply(self):
         """
         Applies state updates to self.parent_state.
         This method should not be directly used; use copy_and_apply instead.
         """
         assert self.parent_state is not None
+        self._validate_references_of_chain_maps()
 
-        self.parent_state.contract_states.update(self._updated_contract_states)
+        # Apply state updates.
         self.parent_state.cairo_usage = self.cairo_usage
-        self.parent_state.output_length = self.output_length
+        for child_chain_map, parent_chain_map in zip(self.chain_maps, self.parent_state.chain_maps):
+            parent_chain_map.update(child_chain_map.maps[0])
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -356,16 +364,14 @@ class SharedState(SharedStateBase, ValidatedMarshmallowDataclass):
                 for contract_state in current_carried_state.contract_states.values()
             )
         )
-        current_carried_state.contract_states = dict(
-            safe_zip(current_carried_state.contract_states.keys(), updated_contract_states)
+        contract_states = ChainMap(
+            dict(safe_zip(current_carried_state.contract_states.keys(), updated_contract_states))
         )
 
         # Apply changes.
         contract_state_modifications = {
             contract_address: contract_carried_state.state
-            for contract_address, contract_carried_state in (
-                current_carried_state.contract_states.items()
-            )
+            for contract_address, contract_carried_state in (contract_states.items())
         }
         updated_global_contract_root = await self.contract_states.update(
             ffc=ffc, modifications=list(contract_state_modifications.items())

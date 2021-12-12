@@ -343,6 +343,13 @@
         {
             "allowed_expressions": [],
             "hint_lines": [
+                "ids.a_lsb = ids.a & 1",
+                "ids.b_lsb = ids.b & 1"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
                 "ids.is_250 = 1 if ids.addr < 2**250 else 0"
             ]
         },
