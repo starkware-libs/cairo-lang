@@ -79,7 +79,8 @@ class ParticleLineBuilder:
         """
         Adds to current line, opening a new one if needed.
         """
-        if len(self.line) + len(string) > self.config.allowed_line_length and not self.line_is_new:
+        expected_line_length = len(self.line) + len(string.rstrip())
+        if expected_line_length > self.config.allowed_line_length and not self.line_is_new:
             self.newline()
         self.line += string
         self.line_is_new = False

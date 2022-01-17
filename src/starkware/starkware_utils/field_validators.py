@@ -61,6 +61,10 @@ def validate_url(
     )
 
 
+validate_feeder_gateway_url = validate_url(
+    url_name="Feeder gateway endpoint", schemes={"http", "https"}, require_full_url=False
+)
+
 validate_gateway_url = validate_url(
     url_name="Gateway endpoint", schemes={"http", "https"}, require_full_url=False
 )
@@ -232,7 +236,8 @@ def validate_customer_id(field_name: str) -> ValidatorType:
     error_message = "Invalid {field_name}: {{input}}; must be an alphanumeric string".format(
         field_name=field_name
     )
-    return marshmallow.validate.Regexp(regex=r"^[A-Za-z0-9_-]+$", error=error_message)
+    customer_id_regex = r"(^[A-Za-z0-9_-]+$)|(^[A-Za-z0-9_-]*\$\{var\.namespace\}[A-Za-z0-9_-]*$)"
+    return marshmallow.validate.Regexp(regex=customer_id_regex, error=error_message)
 
 
 def validate_absolute_linux_path(field_name: str, *, allow_none: bool) -> ValidatorType:

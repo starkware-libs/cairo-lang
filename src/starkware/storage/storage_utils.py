@@ -15,7 +15,7 @@ class LeafFact(Fact):
     def serialize(self) -> bytes:
         return to_bytes(self.value)
 
-    async def _hash(self, hash_func: HashFunctionType) -> bytes:
+    def _hash(self, hash_func: HashFunctionType) -> bytes:
         return self.serialize()
 
     @classmethod

@@ -6,7 +6,7 @@ from typing import Optional
 from starkware.storage.storage import HASH_BYTES, LockError, LockManager, LockObject, Storage
 
 
-async def hash_func(left: bytes, right: bytes) -> bytes:
+def hash_func(left: bytes, right: bytes) -> bytes:
     assert len(left) == HASH_BYTES
     assert len(right) == HASH_BYTES
     return hashlib.sha256(left + right).digest()

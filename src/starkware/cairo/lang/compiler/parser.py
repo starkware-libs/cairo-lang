@@ -169,7 +169,7 @@ def wrap_lark_error(err: LarkError, input_file: InputFile) -> Exception:
         end_col=min(col + width, len(lines[line - 1]) + 1),
         input_file=input_file,
     )
-    return ParserError(err_str, location)
+    return ParserError(err_str, location=location)
 
 
 def parse(

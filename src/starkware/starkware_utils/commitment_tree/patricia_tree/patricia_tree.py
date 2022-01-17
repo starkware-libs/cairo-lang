@@ -8,9 +8,13 @@ from starkware.starkware_utils.commitment_tree.binary_fact_tree import (
     TFact,
 )
 from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import EmptyNodeFact
+from starkware.starkware_utils.commitment_tree.patricia_tree.virtual_calculation_node import (
+    VirtualCalculationNode,
+)
 from starkware.starkware_utils.commitment_tree.patricia_tree.virtual_patricia_node import (
     VirtualPatriciaNode,
 )
+from starkware.starkware_utils.commitment_tree.update_tree import update_tree
 from starkware.storage.storage import Fact, FactFetchingContext
 
 
@@ -61,8 +65,12 @@ class PatriciaTree(BinaryFactTree):
         storage and returns a new PatriciaTree representing the fact of the root of the new tree.
         """
         virtual_root_node = VirtualPatriciaNode.from_hash(hash_value=self.root, height=self.height)
-        updated_virtual_root_node = await virtual_root_node._update(
-            ffc=ffc, modifications=modifications, facts=facts
+        updated_virtual_root_node = await update_tree(
+            tree=virtual_root_node,
+            ffc=ffc,
+            modifications=modifications,
+            facts=facts,
+            calculation_node_cls=VirtualCalculationNode,
         )
 
         # In case root is an edge node, its fact must be explicitly written to DB.

@@ -1,9 +1,10 @@
 import dataclasses
-from typing import Any, List, Tuple
+from typing import List
 
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
-from starkware.starknet.business_logic.internal_transaction_interface import (
+from starkware.starknet.business_logic.transaction_execution_objects import (
     ContractCall,
+    Event,
     L2ToL1MessageInfo,
     TransactionExecutionInfo,
 )
@@ -39,17 +40,27 @@ class StarknetTransactionExecutionInfo(ValidatedDataclass):
     for the user.
     """
 
-    result: Tuple[Any, ...]
+    result: tuple
+    # High-level events emitted by the main call through an @event decorated function.
+    main_call_events: List[tuple]
+    # All low-level events (emitted through emit_event syscall, including those corresponding to
+    # high-level ones).
+    raw_events: List[Event]
     l2_to_l1_messages: List[L2ToL1MessageInfo]
     call_info: StarknetContractCall
     internal_calls: List[StarknetContractCall]
 
     @classmethod
     def from_internal(
-        cls, tx_execution_info: TransactionExecutionInfo, result: Tuple[Any, ...]
+        cls,
+        tx_execution_info: TransactionExecutionInfo,
+        result: tuple,
+        main_call_events: List[tuple],
     ) -> "StarknetTransactionExecutionInfo":
         return cls(
             result=result,
+            main_call_events=main_call_events,
+            raw_events=tx_execution_info.get_sorted_events(),
             l2_to_l1_messages=tx_execution_info.l2_to_l1_messages,
             call_info=StarknetContractCall.from_internal_version(
                 contract_call=tx_execution_info.call_info

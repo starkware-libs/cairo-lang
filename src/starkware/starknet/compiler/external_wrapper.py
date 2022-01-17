@@ -10,15 +10,20 @@ from starkware.cairo.lang.compiler.ast.code_elements import (
     CommentedCodeElement,
 )
 from starkware.cairo.lang.compiler.ast.expr import (
-    ExprConst,
-    ExprDeref,
+    ArgList,
+    ExprAssignment,
+    Expression,
     ExprIdentifier,
-    ExprOperator,
-    ExprReg,
 )
+from starkware.cairo.lang.compiler.ast.notes import Notes
 from starkware.cairo.lang.compiler.ast.types import TypedIdentifier
+from starkware.cairo.lang.compiler.ast.visitor import Visitor
 from starkware.cairo.lang.compiler.error_handling import Location
-from starkware.cairo.lang.compiler.identifier_definition import AliasDefinition, StructDefinition
+from starkware.cairo.lang.compiler.identifier_definition import (
+    AliasDefinition,
+    MemberDefinition,
+    StructDefinition,
+)
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.instruction import Register
 from starkware.cairo.lang.compiler.parser import ParserContext
@@ -26,10 +31,14 @@ from starkware.cairo.lang.compiler.preprocessor.identifier_aware_visitor import 
     IdentifierAwareVisitor,
 )
 from starkware.cairo.lang.compiler.preprocessor.identifier_collector import IdentifierCollector
+from starkware.cairo.lang.compiler.preprocessor.pass_manager import PassManagerContext, Stage
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_utils import autogen_parse_code_block
 from starkware.cairo.lang.compiler.preprocessor.struct_collector import StructCollector
+from starkware.cairo.lang.compiler.references import create_simple_ref_expr
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
+from starkware.cairo.lang.compiler.type_casts import FELT_STAR
+from starkware.python.utils import safe_zip
 from starkware.starknet.compiler.data_encoder import (
     DataEncoder,
     EncodingType,
@@ -37,6 +46,11 @@ from starkware.starknet.compiler.data_encoder import (
     struct_to_argument_info_list,
 )
 from starkware.starknet.definitions.constants import STARKNET_LANG_DIRECTIVE
+from starkware.starknet.public.abi import DEFAULT_ENTRY_POINT_NAME, DEFAULT_L1_ENTRY_POINT_NAME
+from starkware.starknet.services.api.contract_definition import SUPPORTED_BUILTINS
+
+RAW_INPUT_DECORATOR = "raw_input"
+RAW_OUTPUT_DECORATOR = "raw_output"
 
 EXTERNAL_DECORATOR = "external"
 L1_HANDLER_DECORATOR = "l1_handler"
@@ -49,20 +63,35 @@ ENTRY_POINT_DECORATORS = {
     VIEW_DECORATOR,
     CONSTRUCTOR_DECORATOR,
 }
+SUPPORTED_DECORATORS = ENTRY_POINT_DECORATORS | {RAW_INPUT_DECORATOR, RAW_OUTPUT_DECORATOR}
 
 WRAPPER_SCOPE = ScopedName.from_string("__wrappers__")
 
+BUILTIN_PTR_TO_BUILTIN = {
+    f"{builtin_name}_ptr": builtin_name for builtin_name in SUPPORTED_BUILTINS
+}
 
-def get_external_decorator(elm: CodeElementFunction) -> Optional[ExprIdentifier]:
+
+def parse_entry_point_decorators(
+    elm: CodeElementFunction,
+) -> Tuple[Optional[ExprIdentifier], bool, bool]:
     """
-    If the function has one of the external decorators, returns it.
+    If the function has one of the external decorators, returns
+      (external_decorator, is_raw_input, is_raw_output).
     Otherwise, returns None.
     """
+    is_raw_input = False
+    is_raw_output = False
+    external_decorator = None
     for decorator in elm.decorators:
-        if decorator.name in ENTRY_POINT_DECORATORS:
-            return decorator
+        if decorator.name in ENTRY_POINT_DECORATORS and external_decorator is None:
+            external_decorator = decorator
+        if decorator.name == RAW_INPUT_DECORATOR:
+            is_raw_input = True
+        if decorator.name == RAW_OUTPUT_DECORATOR:
+            is_raw_output = True
 
-    return None
+    return external_decorator, is_raw_input, is_raw_output
 
 
 def get_abi_entry_type(external_decorator_name: str) -> str:
@@ -76,6 +105,222 @@ def get_abi_entry_type(external_decorator_name: str) -> str:
         raise NotImplementedError(f"Unsupported decorator {external_decorator_name}")
 
 
+class PreExternalWrapperVisitor(Visitor):
+    """
+    Scans the external wrappers before ExternalWrapperVisitor, runs some validations and collects
+    the used builtins.
+    """
+
+    def __init__(self, builtins: Optional[List[str]]):
+        super().__init__()
+        # The list of builtins in the %builtins directive, or None if the %builtins directive is
+        # missing.
+        self.directive_builtins = builtins
+        # The set of builtins used by external functions. This will only be used if the builtin
+        # directive is not specified.
+        # Always assume that the range_check builtin is required.
+        self.collected_builtins = {"range_check"}
+
+        # The constructor definition. Only one constructor is allowed.
+        self.constructor: Optional[CodeElementFunction] = None
+
+    def _visit_default(self, obj):
+        return obj
+
+    def visit_CodeElementFunction(self, elm: CodeElementFunction):
+        is_default_entry_point = elm.name in [DEFAULT_ENTRY_POINT_NAME, DEFAULT_L1_ENTRY_POINT_NAME]
+        if is_default_entry_point:
+            self.validate_default_entry_point_signature(elm)
+
+        external_decorator, is_raw_input, is_raw_output = parse_entry_point_decorators(elm=elm)
+        if external_decorator is None:
+            return super().visit_CodeElementFunction(elm=elm)
+
+        if is_raw_input:
+            self.validate_raw_input_signature(elm=elm)
+
+        if is_raw_output:
+            self.validate_raw_output_signature(elm=elm)
+
+        if self.file_lang != STARKNET_LANG_DIRECTIVE:
+            raise PreprocessorError(
+                "External decorators can only be used in source files that contain the "
+                '"%lang starknet" directive.',
+                location=external_decorator.location,
+            )
+
+        if external_decorator.name == L1_HANDLER_DECORATOR:
+            if not is_raw_input:
+                self.validate_l1_handler_arguments(elm=elm)
+            self.validate_l1_handler_return_values(elm=elm)
+        elif external_decorator.name == CONSTRUCTOR_DECORATOR:
+            self.validate_constructor_signature(elm=elm)
+
+        self.validate_implicit_arguments(elm=elm)
+
+    def validate_implicit_arguments(self, elm: CodeElementFunction):
+        if elm.implicit_arguments is None:
+            return
+
+        for typed_identifier in elm.implicit_arguments.identifiers:
+            ptr_name = typed_identifier.name
+            if ptr_name == "syscall_ptr":
+                continue
+
+            builtin_name = BUILTIN_PTR_TO_BUILTIN.get(ptr_name)
+
+            if builtin_name is None:
+                allowed_builtin = False
+            else:
+                # If the %builtins directive is specified, check if the builtin is present.
+                if self.directive_builtins is None:
+                    allowed_builtin = True
+                else:
+                    allowed_builtin = builtin_name in self.directive_builtins
+
+            if not allowed_builtin:
+                raise PreprocessorError(
+                    f"Unexpected implicit argument '{ptr_name}' in an external function.",
+                    location=typed_identifier.identifier.location,
+                )
+
+            assert builtin_name is not None
+            self.collected_builtins.add(builtin_name)
+
+    def validate_constructor_signature(self, elm: CodeElementFunction):
+        """
+        Validates the signature of the constructor.
+        """
+
+        if self.constructor is not None:
+            previous_def_loc = self.constructor.identifier.location
+            notes = (
+                []
+                if previous_def_loc is None
+                else [
+                    previous_def_loc.to_string_with_content(
+                        "The constructor was previously defined here:"
+                    )
+                ]
+            )
+
+            raise PreprocessorError(
+                "Multiple constructors definitions are not supported.",
+                location=elm.identifier.location,
+                notes=notes,
+            )
+
+        self.constructor = elm
+
+        if elm.name != "constructor":
+            raise PreprocessorError(
+                "The constructor name must be 'constructor'.",
+                location=elm.identifier.location,
+            )
+
+        if elm.returns is not None:
+            raise PreprocessorError(
+                "A constructor can not have a return value.", location=elm.returns.location
+            )
+
+    def validate_l1_handler_arguments(self, elm: CodeElementFunction):
+        """
+        Validates the signature of an l1_handler.
+        """
+
+        args = elm.arguments.identifiers
+        if len(args) == 0 or args[0].name != "from_address":
+            # An empty argument list has no location so we point to the identifier.
+            location = elm.identifier.location if len(args) == 0 else args[0].location
+            raise PreprocessorError(
+                "The first argument of an L1 handler must be named 'from_address'.",
+                location=location,
+            )
+
+        from_address_type = args[0].get_type()
+        if not isinstance(from_address_type, TypeFelt):
+            raise PreprocessorError(
+                "The type of 'from_address' must be felt.", location=from_address_type.location
+            )
+
+    def validate_l1_handler_return_values(self, elm: CodeElementFunction):
+        if elm.returns is not None:
+            raise PreprocessorError(
+                "An L1 handler can not have a return value.", location=elm.returns.location
+            )
+
+    def validate_default_entry_point_signature(self, elm: CodeElementFunction):
+        """
+        Validates the signature of a default entry point.
+        """
+
+        if elm.name == DEFAULT_ENTRY_POINT_NAME:
+            expected_decorator = EXTERNAL_DECORATOR
+        elif elm.name == DEFAULT_L1_ENTRY_POINT_NAME:
+            expected_decorator = L1_HANDLER_DECORATOR
+        else:
+            raise NotImplementedError(f"The {elm.name} default entry point is not supported.")
+
+        if len(elm.decorators) == 0:
+            raise PreprocessorError(
+                f"The {elm.name} entry point needs to be decorated with '@{expected_decorator}'.",
+                location=elm.identifier.location,
+            )
+
+        allowed_decorators = [expected_decorator, RAW_INPUT_DECORATOR, RAW_OUTPUT_DECORATOR]
+        for decorator in elm.decorators:
+            if decorator.name not in allowed_decorators:
+                raise PreprocessorError(
+                    f"The {elm.name} entry point may only be decorated with "
+                    f"'@{expected_decorator}'.",
+                    location=decorator.location,
+                )
+
+    def validate_raw_input_signature(self, elm: CodeElementFunction):
+        expected_args = [
+            TypedIdentifier(identifier=ExprIdentifier("selector"), expr_type=TypeFelt()),
+            TypedIdentifier(identifier=ExprIdentifier("calldata_size"), expr_type=TypeFelt()),
+            TypedIdentifier(identifier=ExprIdentifier("calldata"), expr_type=FELT_STAR),
+        ]
+
+        args = elm.arguments.identifiers
+        if args != expected_args:
+            raise PreprocessorError(
+                f"@{RAW_INPUT_DECORATOR} requires the following arguments:\n"
+                "(selector: felt, calldata_size: felt, calldata: felt*).",
+                location=elm.arguments.location,
+            )
+
+    def validate_raw_output_signature(self, elm: CodeElementFunction):
+        expected_returns = [
+            TypedIdentifier(identifier=ExprIdentifier("retdata_size"), expr_type=TypeFelt()),
+            TypedIdentifier(identifier=ExprIdentifier("retdata"), expr_type=FELT_STAR),
+        ]
+
+        returns = elm.returns
+        if returns is None or returns.identifiers != expected_returns:
+            raise PreprocessorError(
+                f"@{RAW_OUTPUT_DECORATOR} requires the following return values:\n"
+                "(retdata_size: felt, retdata: felt*).",
+                location=elm.identifier.location if returns is None else returns.location,
+            )
+
+    def get_collected_builtins(self):
+        """
+        Returns the builtins collected from the external functions, ordered by SUPPORTED_BUILTINS.
+        """
+        return [builtin for builtin in SUPPORTED_BUILTINS if builtin in self.collected_builtins]
+
+
+class PreExternalWrapperStage(Stage):
+    def run(self, context: PassManagerContext):
+        visitor = PreExternalWrapperVisitor(builtins=context.builtins)
+        for module in context.modules:
+            visitor.visit(module)
+        if context.builtins is None:
+            context.builtins = visitor.get_collected_builtins()
+
+
 class ExternalWrapperVisitor(IdentifierAwareVisitor):
     """
     Adds function wrappers for external functions (@external, @view, @l1_handler, ...)
@@ -84,11 +329,6 @@ class ExternalWrapperVisitor(IdentifierAwareVisitor):
 
     def __init__(self, builtins: List[str], identifiers: Optional[IdentifierManager] = None):
         super().__init__(identifiers=identifiers)
-
-        self.builtins = builtins
-
-        # The constructor definition. Only one constructor is allowed.
-        self.constructor: Optional[CodeElementFunction] = None
 
         # A mapping from name to offset in the os_context that is passed to the contract.
         self.os_context: Dict[str, int] = self.get_os_context(builtins=builtins)
@@ -107,8 +347,34 @@ class ExternalWrapperVisitor(IdentifierAwareVisitor):
 
         return os_context
 
+    def prepare_raw_input_args(
+        self,
+        selector: Expression,
+        calldata_size: Expression,
+        calldata_ptr: Expression,
+        arg_struct_members: Dict[str, MemberDefinition],
+        func_location: Location,
+    ) -> ArgList:
+
+        call_args = ArgList(
+            args=[
+                ExprAssignment(identifier=arg_name, expr=expr)
+                for arg_name, expr in safe_zip(
+                    arg_struct_members, [selector, calldata_size, calldata_ptr]
+                )
+            ],
+            notes=[Notes()] * (len(arg_struct_members) + 1),
+            has_trailing_comma=True,
+            location=func_location,
+        )
+        return call_args
+
     def create_func_wrapper(
-        self, elm: CodeElementFunction, func_alias_name: str
+        self,
+        elm: CodeElementFunction,
+        func_alias_name: str,
+        is_raw_input: bool,
+        is_raw_output: bool,
     ) -> List[CodeElementFunction]:
         """
         Generates a wrapper that converts between the StarkNet contract ABI and the
@@ -130,38 +396,37 @@ class ExternalWrapperVisitor(IdentifierAwareVisitor):
         assert func_location is not None
 
         # We expect the call stack to look as follows:
+        # Selector
         # pointer to os_context struct.
         # calldata size.
         # pointer to the call data array.
         # ret_fp.
         # ret_pc.
-        os_context_ptr = ExprDeref(
-            addr=ExprOperator(
-                ExprReg(reg=Register.FP, location=func_location),
-                "+",
-                ExprConst(-5, location=func_location),
-                location=func_location,
-            ),
+        selector = create_simple_ref_expr(
+            reg=Register.FP,
+            offset=-6,
+            cairo_type=TypeFelt(),
             location=func_location,
         )
 
-        calldata_size = ExprDeref(
-            addr=ExprOperator(
-                ExprReg(reg=Register.FP, location=func_location),
-                "+",
-                ExprConst(-4, location=func_location),
-                location=func_location,
-            ),
+        os_context_ptr = create_simple_ref_expr(
+            reg=Register.FP,
+            offset=-5,
+            cairo_type=FELT_STAR,
             location=func_location,
         )
 
-        calldata_ptr = ExprDeref(
-            addr=ExprOperator(
-                ExprReg(reg=Register.FP, location=func_location),
-                "+",
-                ExprConst(-3, location=func_location),
-                location=func_location,
-            ),
+        calldata_size = create_simple_ref_expr(
+            reg=Register.FP,
+            offset=-4,
+            cairo_type=TypeFelt(),
+            location=func_location,
+        )
+
+        calldata_ptr = create_simple_ref_expr(
+            reg=Register.FP,
+            offset=-3,
+            cairo_type=FELT_STAR,
             location=func_location,
         )
 
@@ -172,11 +437,7 @@ class ExternalWrapperVisitor(IdentifierAwareVisitor):
             args = []
             for typed_identifier in elm.implicit_arguments.identifiers:
                 ptr_name = typed_identifier.name
-                if ptr_name not in os_context:
-                    raise PreprocessorError(
-                        f"Unexpected implicit argument '{ptr_name}' in an external function.",
-                        location=typed_identifier.identifier.location,
-                    )
+                assert ptr_name in os_context
 
                 implicit_arguments_identifiers[ptr_name] = typed_identifier
 
@@ -228,55 +489,77 @@ class ExternalWrapperVisitor(IdentifierAwareVisitor):
             location=func_location,
         )
 
-        # Prepare code for handling the arguments.
-        decode_code_elements, call_args = decode_data(
-            data_ptr=calldata_ptr.format(),
-            data_size=calldata_size.format(),
-            arguments=struct_to_argument_info_list(arg_struct_def),
-            encoding_type=EncodingType.CALLDATA,
-            has_range_check_builtin="range_check_ptr" in os_context,
-            location=func_location,
-            identifiers=self.identifiers,
-        )
+        if is_raw_input:
+            call_args = self.prepare_raw_input_args(
+                selector=selector,
+                calldata_size=calldata_size,
+                calldata_ptr=calldata_ptr,
+                arg_struct_members=arg_struct_def.members,
+                func_location=func_location,
+            )
+            decode_code_elements: List[CommentedCodeElement] = []
+        else:
+            # Prepare code for handling the arguments.
+            decode_code_elements, call_args = decode_data(
+                data_ptr=calldata_ptr.format(),
+                data_size=calldata_size.format(),
+                arguments=struct_to_argument_info_list(arg_struct_def),
+                encoding_type=EncodingType.CALLDATA,
+                has_range_check_builtin="range_check_ptr" in os_context,
+                location=func_location,
+                identifiers=self.identifiers,
+            )
 
-        # Prepare code for handling the return values.
-        ret_struct_name = (
-            ScopedName.from_string(f"{elm.name}.{func_alias_name}")
-            + CodeElementFunction.RETURN_SCOPE
-        )
-        ret_struct_def = self.get_struct_definition(name=ret_struct_name, location=func_location)
+        if is_raw_output:
+            encode_return_func = None
+        else:
+            # Prepare code for handling the return values.
+            ret_struct_name = (
+                ScopedName.from_string(f"{elm.name}.{func_alias_name}")
+                + CodeElementFunction.RETURN_SCOPE
+            )
+            ret_struct_def = self.get_struct_definition(
+                name=ret_struct_name, location=func_location
+            )
 
-        encode_return_func, known_ap_change = self.process_retdata(
-            func_name=elm.name,
-            struct_def=ret_struct_def,
-            location=func_location,
-        )
+            encode_return_func, known_ap_change = self.process_retdata(
+                func_name=elm.name,
+                struct_def=ret_struct_def,
+                location=func_location,
+            )
 
         # Prepare code for calling the original function.
         call_code = f"""\
 let ret_struct = {func_alias_name}{{{implicit_arguments}}}({call_args.format()})
 """
-        if not known_ap_change:
-            # If the return value handling is expected to revoke ap tracking, alloc_locals is
-            # required.
-            for decl, name in zip(return_args_decl, return_args_exprs):
-                if name in implicit_arguments_identifiers:
-                    using_locals = True
-        if encode_return_func is not None:
+        if encode_return_func is None:
+            if is_raw_output:
+                call_code += """\
+let retdata_size = ret_struct.retdata_size
+let retdata = ret_struct.retdata
+"""
+            else:
+                call_code += """\
+%{ memory[ap] = segments.add() %}        # Allocate memory for return value.
+tempvar retdata : felt*
+let retdata_size = 0
+"""
+        else:
+            if not known_ap_change:
+                # If the return value handling is expected to revoke ap tracking, alloc_locals is
+                # required.
+                for decl, name in zip(return_args_decl, return_args_exprs):
+                    if name in implicit_arguments_identifiers:
+                        using_locals = True
+
             if "range_check_ptr" not in os_context:
                 raise PreprocessorError(
-                    "In order to use external functions, the '%builtins' directive must include "
-                    "the 'range_check' builtin.",
+                    "In order to use external functions, the '%builtins' directive must "
+                    "include the 'range_check' builtin.",
                     location=func_location,
                 )
             call_code += f"""\
 let (range_check_ptr, retdata_size, retdata) = {elm.name}_encode_return(ret_struct, range_check_ptr)
-"""
-        else:
-            call_code += """\
-%{ memory[ap] = segments.add() %}        # Allocate memory for return value.
-tempvar retdata : felt*
-let retdata_size = 0
 """
 
         call_code_elements = autogen_parse_code_block(
@@ -428,88 +711,15 @@ end
 
         return func_elm
 
-    def validate_constructor_signature(self, elm: CodeElementFunction):
-        """
-        Validates the signature of the constructor.
-        """
-
-        if self.constructor is not None:
-            previous_def_loc = self.constructor.identifier.location
-            notes = (
-                []
-                if previous_def_loc is None
-                else [
-                    previous_def_loc.to_string_with_content(
-                        "The constructor was previously defined here:"
-                    )
-                ]
-            )
-
-            raise PreprocessorError(
-                "Multiple constructors definitions are not supported.",
-                location=elm.identifier.location,
-                notes=notes,
-            )
-
-        self.constructor = elm
-
-        if elm.name != "constructor":
-            raise PreprocessorError(
-                "The constructor name must be 'constructor'.",
-                location=elm.identifier.location,
-            )
-
-        if elm.returns is not None:
-            raise PreprocessorError(
-                "A constructor can not have a return value.", location=elm.returns.location
-            )
-
-    def validate_l1_handler_signature(self, elm: CodeElementFunction):
-        """
-        Validates the signature of an l1_handler.
-        """
-
-        args = elm.arguments.identifiers
-        if len(args) == 0 or args[0].name != "from_address":
-            # An empty argument list has no location so we point to the identifier.
-            location = elm.identifier.location if len(args) == 0 else args[0].location
-            raise PreprocessorError(
-                "The first argument of an L1 handler must be named 'from_address'.",
-                location=location,
-            )
-
-        from_address_type = args[0].get_type()
-        if not isinstance(from_address_type, TypeFelt):
-            raise PreprocessorError(
-                "The type of 'from_address' must be felt.", location=from_address_type.location
-            )
-
-        if elm.returns is not None:
-            raise PreprocessorError(
-                "An L1 handler can not have a return value.", location=elm.returns.location
-            )
-
     def visit_CodeElementFunction(self, elm: CodeElementFunction):
-        external_decorator = get_external_decorator(elm)
+        external_decorator, is_raw_input, is_raw_output = parse_entry_point_decorators(elm=elm)
         if external_decorator is None:
             return super().visit_CodeElementFunction(elm=elm)
-
-        if self.file_lang != STARKNET_LANG_DIRECTIVE:
-            raise PreprocessorError(
-                "External decorators can only be used in source files that contain the "
-                '"%lang starknet" directive.',
-                location=external_decorator.location,
-            )
 
         location = elm.identifier.location
 
         # Retrieve the canonical name of the function before switching scopes.
         func_canonical_name = self.current_scope + elm.name
-
-        if external_decorator.name == L1_HANDLER_DECORATOR:
-            self.validate_l1_handler_signature(elm)
-        elif external_decorator.name == CONSTRUCTOR_DECORATOR:
-            self.validate_constructor_signature(elm)
 
         # Generate an alias that will allow us to call the original function.
         func_alias_name = f"__wrapped_func"
@@ -531,7 +741,12 @@ end
         )
 
         with self.scoped(WRAPPER_SCOPE, parent=elm):
-            wrapper_funcs = self.create_func_wrapper(elm=elm, func_alias_name=func_alias_name)
+            wrapper_funcs = self.create_func_wrapper(
+                elm=elm,
+                func_alias_name=func_alias_name,
+                is_raw_input=is_raw_input,
+                is_raw_output=is_raw_output,
+            )
 
         return CodeElementScoped(
             scope=self.current_scope,

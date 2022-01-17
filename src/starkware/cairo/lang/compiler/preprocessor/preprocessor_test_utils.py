@@ -77,4 +77,4 @@ def verify_exception(
     # Remove line and column information from the error using a regular expression.
     assert (
         re.sub("(autogen[a-zA-Z0-9_/.]+)?:[0-9]+:[0-9]+", "file:?:?", str(e.value)) == error.strip()
-    )
+    ), f"Unexpected error string. Expected:\n{error.strip()}\nFound:\n{e.value}"

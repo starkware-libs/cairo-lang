@@ -360,7 +360,7 @@ def cairo_assemble_program(
 ) -> Program:
     program = assemble(
         preprocessed_program,
-        main_scope=MAIN_SCOPE,
+        main_scope=main_scope,
         add_debug_info=add_debug_info,
         file_contents_for_debug_info=file_contents_for_debug_info,
     )

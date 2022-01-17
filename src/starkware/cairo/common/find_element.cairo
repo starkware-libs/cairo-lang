@@ -1,4 +1,4 @@
-from starkware.cairo.common.math import assert_le, assert_nn_le
+from starkware.cairo.common.math import assert_le, assert_le_felt, assert_nn_le
 
 const FIND_ELEMENT_RANGE_CHECK_USAGE = 2
 
@@ -98,13 +98,13 @@ func search_sorted_lower{range_check_ptr}(array_ptr : felt*, elm_size, n_elms, k
     local elm_ptr : felt* = array_ptr + elm_size * index
 
     if index != n_elms:
-        assert_le(a=key, b=[elm_ptr])
+        assert_le_felt(a=key, b=[elm_ptr])
     else:
         tempvar range_check_ptr = range_check_ptr
     end
 
     if index != 0:
-        assert_le(a=[elm_ptr - elm_size] + 1, b=key)
+        assert_le_felt(a=[elm_ptr - elm_size] + 1, b=key)
     end
 
     return (elm_ptr=elm_ptr)

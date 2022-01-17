@@ -3,7 +3,7 @@ from abc import abstractmethod
 from typing import ClassVar, List, Tuple, Type
 
 from starkware.python.utils import blockify, from_bytes, to_bytes
-from starkware.starkware_utils.commitment_tree.binary_fact_tree_node import InnerNodeFact
+from starkware.starkware_utils.commitment_tree.inner_node_fact import InnerNodeFact
 from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 from starkware.storage.storage import HASH_BYTES, HashFunctionType
 
@@ -52,7 +52,7 @@ class EmptyNodeFact(PatriciaNodeFact):
     def deserialize(cls, data: bytes) -> "EmptyNodeFact":
         return cls()
 
-    async def _hash(self, hash_func: HashFunctionType) -> bytes:
+    def _hash(self, hash_func: HashFunctionType) -> bytes:
         """
         Computes the hash value of the empty node, which is zero.
         """
@@ -100,11 +100,11 @@ class BinaryNodeFact(PatriciaNodeFact):
             left_node=data[: cls.HASH_BYTES_LENGTH], right_node=data[cls.HASH_BYTES_LENGTH :]
         )
 
-    async def _hash(self, hash_func: HashFunctionType) -> bytes:
+    def _hash(self, hash_func: HashFunctionType) -> bytes:
         """
         Computes the hash value of the edge node: hash(hash(left_node), hash(right_node)).
         """
-        return await hash_func(self.left_node, self.right_node)
+        return hash_func(self.left_node, self.right_node)
 
     def to_tuple(self) -> Tuple[int, ...]:
         return from_bytes(self.left_node), from_bytes(self.right_node)
@@ -151,11 +151,11 @@ class EdgeNodeFact(PatriciaNodeFact):
             edge_length=from_bytes(edge_length),
         )
 
-    async def _hash(self, hash_func: HashFunctionType) -> bytes:
+    def _hash(self, hash_func: HashFunctionType) -> bytes:
         """
         Computes the hash value of the edge node: hash(bottom_node, edge_path) + edge_length.
         """
-        bottom_path_hash = await hash_func(self.bottom_node, to_bytes(self.edge_path))
+        bottom_path_hash = hash_func(self.bottom_node, to_bytes(self.edge_path))
 
         # Add the edge length.
         hash_value = from_bytes(bottom_path_hash) + self.edge_length

@@ -50,11 +50,3 @@ def pedersen_hash_func(x: bytes, y: bytes) -> bytes:
     """
     assert len(x) == len(y) == 32, "Unexpected element length."
     return to_bytes(pedersen_hash(*(from_bytes(element) for element in (x, y))))
-
-
-async def async_pedersen_hash_func(x: bytes, y: bytes) -> bytes:
-    """
-    Async variant of 'pedersen_hash_func'.
-    """
-
-    return pedersen_hash_func(x, y)

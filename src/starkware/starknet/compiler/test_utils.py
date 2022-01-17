@@ -24,11 +24,21 @@ func call_contract{syscall_ptr : felt*}(
     ret
 end
 
+func delegate_call{syscall_ptr : felt*}(
+        contract_address : felt, function_selector : felt, calldata_size : felt,
+        calldata : felt*) -> (retdata_size : felt, retdata : felt*):
+    ret
+end
+
 func storage_read{syscall_ptr : felt*}(address : felt) -> (value : felt):
     ret
 end
 
 func storage_write{syscall_ptr : felt*}(address : felt, value : felt):
+    ret
+end
+
+func emit_event{syscall_ptr : felt*}(keys_len : felt, keys : felt*, data_len : felt, data : felt*):
     ret
 end
 """,

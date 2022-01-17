@@ -34,6 +34,7 @@ class EncodingType(Enum):
 @dataclasses.dataclass
 class ArgumentInfo:
     name: str
+    # The resolved type of the argument.
     cairo_type: CairoType
     location: Location
 
@@ -127,7 +128,16 @@ class DataEncodingProcessor:
                 f"While handling {self.arg_text} '{arg_info.name}'",
             )
             cairo_type = arg_info.cairo_type
-            if isinstance(cairo_type, TypePointer) and isinstance(cairo_type.pointee, TypeFelt):
+            if isinstance(cairo_type, TypePointer):
+                elm_size = check_felts_only_type(
+                    cairo_type=cairo_type.pointee, identifier_manager=self.identifiers
+                )
+                if elm_size is None:
+                    raise PreprocessorError(
+                        "Only pointers to types that consist of felts are supported.",
+                        location=arg_info.cairo_type.location,
+                    )
+
                 has_len = (
                     prev_arg is not None
                     and prev_arg.name == f"{arg_info.name}_len"
@@ -146,7 +156,7 @@ class DataEncodingProcessor:
                         location=arg_info.location,
                     )
 
-                code_block_str = self.process_felt_ptr(arg_info=arg_info)
+                code_block_str = self.process_array(arg_info=arg_info, elm_size=elm_size)
             elif isinstance(cairo_type, (TypeTuple, TypeStruct)):
                 size = check_felts_only_type(
                     cairo_type=cairo_type, identifier_manager=self.identifiers
@@ -195,7 +205,7 @@ class DataEncodingProcessor:
             "felt arguments are not supported in this context", location=arg_info.location
         )
 
-    def process_felt_ptr(self, arg_info: ArgumentInfo):
+    def process_array(self, arg_info: ArgumentInfo, elm_size: int):
         raise PreprocessorError(
             "Array arguments are not supported in this context", location=arg_info.location
         )
@@ -256,16 +266,19 @@ let __{self.var_name}_arg_{arg_info.name} = [__{self.var_name}_ptr]
 let __{self.var_name}_ptr = __{self.var_name}_ptr + 1
 """
 
-    def process_felt_ptr(self, arg_info: ArgumentInfo):
+    def process_array(self, arg_info: ArgumentInfo, elm_size: int):
+        type_str = arg_info.cairo_type.format()
+        var = f"__{self.var_name}_arg_{arg_info.name}"
+        len_var = f"__{self.var_name}_arg_{arg_info.name}_len"
         return f"""\
 # Check that the length is non-negative.
-assert [range_check_ptr] = __{self.var_name}_arg_{arg_info.name}_len
+assert [range_check_ptr] = {len_var}
 let range_check_ptr = range_check_ptr + 1
 # Create the reference.
-let __{self.var_name}_arg_{arg_info.name} : felt* = __{self.var_name}_ptr
+let {var} = cast(__{self.var_name}_ptr, {type_str})
 # Use 'tempvar' instead of 'let' to avoid repeating this computation for the
 # following arguments.
-tempvar __{self.var_name}_ptr = __{self.var_name}_ptr + __{self.var_name}_arg_{arg_info.name}_len
+tempvar __{self.var_name}_ptr = __{self.var_name}_ptr + {len_var} * {elm_size}
 """
 
     def process_felts_object(self, arg_info: ArgumentInfo, size: int):
@@ -342,11 +355,12 @@ assert [__{self.var_name}_ptr] = {self.arg_name_func(arg_info)}
 let __{self.var_name}_ptr = __{self.var_name}_ptr + 1
 """
 
-    def process_felt_ptr(self, arg_info: ArgumentInfo):
+    def process_array(self, arg_info: ArgumentInfo, elm_size: int):
+        len_var = f"{self.arg_name_func(arg_info)}_len"
         self.known_ap_change = False
         return f"""\
 # Check that the length is non-negative.
-assert [range_check_ptr] = {self.arg_name_func(arg_info)}_len
+assert [range_check_ptr] = {len_var}
 # Store the updated range_check_ptr as a local variable to keep it available after
 # the memcpy.
 local range_check_ptr = range_check_ptr + 1
@@ -354,12 +368,11 @@ local range_check_ptr = range_check_ptr + 1
 let __{self.var_name}_ptr_copy = __{self.var_name}_ptr
 # Store the updated __{self.var_name}_ptr as a local variable to keep it available after
 # the memcpy.
-local __{self.var_name}_ptr : felt* = __{self.var_name}_ptr + \
-{self.arg_name_func(arg_info)}_len
+local __{self.var_name}_ptr : felt* = __{self.var_name}_ptr + {len_var} * {elm_size}
 memcpy(
     dst=__{self.var_name}_ptr_copy,
     src={self.arg_name_func(arg_info)},
-    len={self.arg_name_func(arg_info)}_len)
+    len={len_var} * {elm_size})
 """
 
     def process_felts_object(self, arg_info: ArgumentInfo, size: int):

@@ -47,6 +47,8 @@ end
     addr = starknet_keccak(b"my_var")
     addr2 = starknet_keccak(b"my_var2")
     expected_result = f"""\
+%builtins range_check
+
 # Code for the dummy modules.
 ret
 ret
@@ -174,7 +176,7 @@ call rel ???                   # Call storage_write().
 ret
 """
     assert (
-        re.sub("call rel -?[0-9]+", "call rel ???", program.format())
+        re.sub("call rel -?[0-9]+", "call rel ???", strip_comments_and_linebreaks(program.format()))
         == strip_comments_and_linebreaks(expected_result).lstrip()
     )
 
@@ -242,7 +244,7 @@ func f() -> (res : felt):
 end
 """,
         """
-file:?:?: Storage variables must have no decorators in addition to @storage_var.
+file:?:?: Unexpected decorator for a storage variable.
 @invalid_decorator
  ^***************^
 """,
@@ -258,6 +260,19 @@ end
 file:?:?: Arguments of storage variables must be a felts-only type (cannot contain pointers).
 func f(x, y : felt*) -> (res : felt):
               ^***^
+""",
+    )
+    verify_exception(
+        """
+%lang starknet
+@storage_var
+func f(addr : felt) -> (res : felt):
+end
+""",
+        f"""
+file:?:?: 'addr' cannot be used as a storage variable argument name.
+func f(addr : felt) -> (res : felt):
+       ^**^
 """,
     )
     verify_exception(

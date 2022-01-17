@@ -1,13 +1,13 @@
 from dataclasses import field
 from enum import Enum
 
-import marshmallow.fields as mfields
 import marshmallow_dataclass
 
 from starkware.python.utils import from_bytes
 from starkware.starknet.definitions import constants, fields
 from starkware.starkware_utils.config_base import Config
 from starkware.starkware_utils.field_validators import validate_non_negative
+from starkware.starkware_utils.marshmallow_dataclass_fields import StrictRequiredInteger
 
 DOCKER_GENERAL_CONFIG_PATH = "/general_config.yml"
 
@@ -57,12 +57,20 @@ class StarknetGeneralConfig(Config):
 
     tx_commitment_tree_height: int = field(
         metadata=dict(
-            marshmallow_field=mfields.Integer(
-                strict=True,
-                required=True,
-                validate=validate_non_negative("tx_commitment_tree_height"),
+            marshmallow_field=StrictRequiredInteger(
+                validate=validate_non_negative("Transaction commitment tree height"),
             ),
             description="Height of Patricia tree of the transaction commitment in a block.",
         ),
         default=constants.TRANSACTION_COMMITMENT_TREE_HEIGHT,
+    )
+
+    event_commitment_tree_height: int = field(
+        metadata=dict(
+            marshmallow_field=StrictRequiredInteger(
+                validate=validate_non_negative("Event commitment tree height"),
+            ),
+            description="Height of Patricia tree of the event commitment in a block.",
+        ),
+        default=constants.EVENT_COMMITMENT_TREE_HEIGHT,
     )

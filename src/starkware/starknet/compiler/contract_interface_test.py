@@ -1,3 +1,5 @@
+import functools
+
 from starkware.starknet.compiler.test_utils import preprocess_str, verify_exception
 from starkware.starknet.public.abi import get_selector_from_name
 
@@ -5,9 +7,19 @@ from starkware.starknet.public.abi import get_selector_from_name
 def test_contract_interface_success():
     selector = get_selector_from_name("foo")
     usage_code = """
+struct MyStruct:
+    member a: felt
+    member b: (felt, felt)
+end
+
 func main{syscall_ptr : felt*, range_check_ptr}():
-    let (y0, y1) = Contract.foo(contract_address=0, x0=0, x1=0, arr_len=0, arr=cast(0, felt*))
-    return()
+    let (y0, y1) = Contract.foo(
+        contract_address=0, x=0, arr_len=0, arr=cast(0, felt*), struct_arr_len=1,
+        struct_arr=cast(0, MyStruct*))
+    let (y2, y3) = Contract.delegate_foo(
+        contract_address=0, x=0, arr_len=0, arr=cast(0, felt*), struct_arr_len=1,
+        struct_arr=cast(0, MyStruct*))
+    return ()
 end
 """
 
@@ -18,10 +30,61 @@ end
 
 @contract_interface
 namespace Contract:
-    func foo(x0 : felt, x1 : felt, arr_len : felt, arr : felt*) -> (y0 : felt, y1 : felt):
+    func foo(
+        x : felt, arr_len : felt, arr : felt*, struct_arr_len : felt,
+        struct_arr : MyStruct*) -> (y0 : felt, y1 : felt):
     end
 end
 """
+
+    expected_array_encoding = """
+        assert [__calldata_ptr] = {arr_name}_len
+        let __calldata_ptr = __calldata_ptr + 1
+        # Check that the length is non-negative.
+        assert [range_check_ptr] = {arr_name}_len
+        # Store the updated range_check_ptr as a local variable to keep it available after
+        # the memcpy.
+        local range_check_ptr = range_check_ptr + 1
+        # Keep a reference to __calldata_ptr.
+        let __calldata_ptr_copy = __calldata_ptr
+        # Store the updated __calldata_ptr as a local variable to keep it available after
+        # the memcpy.
+        local __calldata_ptr : felt* = __calldata_ptr + {arr_name}_len * {elm_size}
+        memcpy(dst=__calldata_ptr_copy, src={arr_name}, len={arr_name}_len * {elm_size})
+"""
+
+    expected_function_code = """
+    func {delegate_prefix}foo{{syscall_ptr : felt*, range_check_ptr}}(
+            contract_address : felt, x : felt, arr_len : felt, arr : felt*, struct_arr_len : felt,
+            struct_arr : MyStruct*) -> (y0 : felt, y1 : felt):
+        alloc_locals
+        let (local calldata_ptr_start : felt*) = alloc()
+        let __calldata_ptr = calldata_ptr_start
+        assert [__calldata_ptr] = x
+        let __calldata_ptr = __calldata_ptr + 1
+        {felt_array_encoding}
+        {struct_array_encoding}
+        let (retdata_size, retdata) = {syscall_function}(
+            contract_address=contract_address,
+            function_selector={selector},
+            calldata_size=__calldata_ptr - calldata_ptr_start,
+            calldata=calldata_ptr_start)
+        let __return_value_ptr = retdata
+        let y0 = [__return_value_ptr]
+        let __return_value_ptr = __return_value_ptr + 1
+        let y1 = [__return_value_ptr]
+        let __return_value_ptr = __return_value_ptr + 1
+        let __return_value_actual_size = __return_value_ptr - cast(retdata, felt*)
+        assert retdata_size = __return_value_actual_size
+        return (y0, y1)
+    end
+"""
+
+    expected_function_code_format = functools.partial(
+        expected_function_code.format,
+        felt_array_encoding=expected_array_encoding.format(arr_name="arr", elm_size=1),
+        struct_array_encoding=expected_array_encoding.format(arr_name="struct_arr", elm_size=3),
+    )
 
     expected_code = f"""
 %lang starknet
@@ -43,48 +106,20 @@ func call_contract{{syscall_ptr : felt*}}(
     ret
 end
 
+func delegate_call{{syscall_ptr : felt*}}(
+        contract_address : felt, function_selector : felt, calldata_size : felt,
+        calldata : felt*) -> (retdata_size : felt, retdata : felt*):
+    ret
+end
+
 {usage_code}
 
 namespace Contract:
-    func foo{{syscall_ptr : felt*, range_check_ptr}}(
-            contract_address : felt, x0 : felt, x1 : felt,
-            arr_len : felt, arr : felt*) -> (y0 : felt, y1 : felt):
-        alloc_locals
-        let (local __calldata_ptr_start : felt*) = alloc()
-        let __calldata_ptr = __calldata_ptr_start
-        assert [__calldata_ptr] = x0
-        let __calldata_ptr = __calldata_ptr + 1
-        assert [__calldata_ptr] = x1
-        let __calldata_ptr = __calldata_ptr + 1
-        assert [__calldata_ptr] = arr_len
-        let __calldata_ptr = __calldata_ptr + 1
+    {expected_function_code_format(
+        delegate_prefix='', syscall_function='call_contract', selector=selector)}
 
-        # Check that the length is non-negative.
-        assert [range_check_ptr] = arr_len
-        # Store the updated range_check_ptr as a local variable to keep it available after
-        # the memcpy.
-        local range_check_ptr = range_check_ptr + 1
-        # Keep a reference to __calldata_ptr.
-        let __calldata_ptr_copy = __calldata_ptr
-        # Store the updated __calldata_ptr as a local variable to keep it available after
-        # the memcpy.
-        local __calldata_ptr : felt* = __calldata_ptr + arr_len
-        memcpy(dst=__calldata_ptr_copy, src=arr, len=arr_len)
-
-        let (retdata_size, retdata) = call_contract(
-            contract_address=contract_address,
-            function_selector={selector},
-            calldata_size=__calldata_ptr - __calldata_ptr_start,
-            calldata=__calldata_ptr_start)
-        let __return_value_ptr = retdata
-        let y0 = [__return_value_ptr]
-        let __return_value_ptr = __return_value_ptr + 1
-        let y1 = [__return_value_ptr]
-        let __return_value_ptr = __return_value_ptr + 1
-        let __return_value_actual_size = __return_value_ptr - cast(retdata, felt*)
-        assert retdata_size = __return_value_actual_size
-        return (y0, y1)
-    end
+    {expected_function_code_format(
+        delegate_prefix='delegate_', syscall_function='delegate_call', selector=selector)}
 end
 """
     program = preprocess_str(code)
@@ -217,11 +252,6 @@ func foo(arr : felt*):
 
 
 def test_missing_range_check_ptr():
-    autogen_file = (
-        "autogen/starknet/contract_interface/Contract/foo/"
-        "172b67737f06d64900ecbb9f0d7d90d8c82e23b9d4d9fbb104eb7bfafeebed25.cairo"
-    )
-
     verify_exception(
         """\
 %lang starknet

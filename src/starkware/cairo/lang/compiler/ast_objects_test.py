@@ -581,3 +581,12 @@ with_attr attribute_name  ("Comments"
 end"""
     with pytest.raises(FormattingError, match="Comments inside expressions are not supported"):
         parse_code_element(code).format(allowed_line_length=100)
+
+
+def test_100_chars_long_import():
+    code = """\
+from a.b.c import (
+    import1, import2, import3, import4, import5, import6, import6, import8, import8, aaaaaaaaaaaaaa,
+    import9)
+"""
+    assert parse_file(code).format() == code

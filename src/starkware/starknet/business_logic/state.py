@@ -1,9 +1,9 @@
-import asyncio
 import copy
 import dataclasses
 import logging
 import typing
 from collections import ChainMap, defaultdict
+from dataclasses import field
 from typing import Dict, MutableMapping, Optional, Set, Tuple
 
 import marshmallow_dataclass
@@ -14,14 +14,17 @@ from services.everest.business_logic.state import (
     StateSelectorBase,
 )
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
-from starkware.python.utils import safe_zip
+from starkware.python.utils import gather_in_chunks, safe_zip
 from starkware.starknet.business_logic.state_objects import ContractCarriedState, ContractState
+from starkware.starknet.definitions import fields
+from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.services.api.contract_definition import ContractDefinition
 from starkware.starknet.storage.starknet_storage import StorageLeaf
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
 from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
 from starkware.starkware_utils.config_base import Config
+from starkware.starkware_utils.error_handling import stark_assert_eq, stark_assert_le
 from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
 from starkware.storage.storage import FactFetchingContext
 
@@ -30,6 +33,42 @@ state_objects_logger = logging.getLogger(f"{__name__}:state_objects_logger")
 
 ContractCarriedStateMapping = MutableMapping[int, ContractCarriedState]
 ContractCarriedStateChainMapping = typing.ChainMap[int, ContractCarriedState]
+
+
+@marshmallow_dataclass.dataclass(frozen=True)
+class BlockInfo(ValidatedMarshmallowDataclass):
+    # The sequence number of the last batch created.
+    block_number: int = field(metadata=fields.block_number_metadata)
+
+    # Timestamp of the beginning of the last batch creation attempt.
+    block_timestamp: int = field(metadata=fields.timestamp_metadata)
+
+    @classmethod
+    def empty(cls) -> "BlockInfo":
+        """
+        Returns an empty BlockInfo object; i.e., the one before the first in the chain.
+        """
+        return cls(block_number=-1, block_timestamp=0)
+
+    def validate_legal_progress(self, next_block_info: "BlockInfo"):
+        """
+        Validates that next_block_info is a legal progress of self.
+        """
+        # Check that the block number increases by 1.
+        stark_assert_eq(
+            next_block_info.block_number,
+            self.block_number + 1,
+            code=StarknetErrorCode.INVALID_BLOCK_NUMBER,
+            message="Block number must increase by 1.",
+        )
+
+        # Check that block timestamp in not decreasing.
+        stark_assert_le(
+            self.block_timestamp,
+            next_block_info.block_timestamp,
+            code=StarknetErrorCode.INVALID_BLOCK_TIMESTAMP,
+            message="Block timestamp must not decrease.",
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -59,7 +98,7 @@ class StateSelector(StateSelectorBase):
         return self.contract_addresses <= other.contract_addresses
 
 
-class CarriedState(CarriedStateBase["CarriedState"]):
+class CarriedState(CarriedStateBase):
     """
     A state containing a mapping from contract addresses to their states and the accumulated
     modifications to the contract storage across transactions.
@@ -78,6 +117,8 @@ class CarriedState(CarriedStateBase["CarriedState"]):
         contract_states: ContractCarriedStateChainMapping,
         cairo_usage: ExecutionResources,
         contract_address_to_n_storage_writings: typing.ChainMap[int, int],
+        block_info: BlockInfo,
+        syscall_counter: typing.ChainMap[str, int],
     ):
         """
         Private constructor.
@@ -86,6 +127,7 @@ class CarriedState(CarriedStateBase["CarriedState"]):
         super().__init__(parent_state=parent_state)
 
         # The last committed state; the one this carried state was created from.
+        # Used for dynamic retrieval of facts during transaction execution.
         self.shared_state = shared_state
 
         # A mapping from contract definition hash to contract definition.
@@ -103,8 +145,10 @@ class CarriedState(CarriedStateBase["CarriedState"]):
         # A mapping from contract address to the cumulative number of storage writing operations.
         self.contract_address_to_n_storage_writings = contract_address_to_n_storage_writings
 
-        # A mapping from contract address to the cumulative number of storage writing operations.
-        self.contract_address_to_n_storage_writings = contract_address_to_n_storage_writings
+        self.block_info = block_info
+
+        # A mapping from system call to the cumulative times it was invoked.
+        self.syscall_counter = syscall_counter
 
     @classmethod
     def _create_from_parent_state(cls, parent_state: "CarriedState") -> "CarriedState":
@@ -121,14 +165,19 @@ class CarriedState(CarriedStateBase["CarriedState"]):
             contract_address_to_n_storage_writings=(
                 parent_state.contract_address_to_n_storage_writings.new_child()
             ),
+            block_info=parent_state.block_info,
+            syscall_counter=parent_state.syscall_counter.new_child(),
         )
 
         return carried_state
 
     @classmethod
-    def empty(cls, shared_state: "SharedState", ffc: FactFetchingContext) -> "CarriedState":
+    def create_unfilled(
+        cls, shared_state: "SharedState", ffc: FactFetchingContext
+    ) -> "CarriedState":
         """
-        Returns an empty carried state.
+        Creates a carried state based on the given shared state, where the fields related to the
+        commitment leaves (e.g., contract states) are kept unfilled.
         """
         return cls(
             parent_state=None,
@@ -138,6 +187,8 @@ class CarriedState(CarriedStateBase["CarriedState"]):
             contract_states=ChainMap(),
             cairo_usage=ExecutionResources.empty(),
             contract_address_to_n_storage_writings=ChainMap(),
+            block_info=shared_state.block_info,
+            syscall_counter=ChainMap(),
         )
 
     @classmethod
@@ -191,6 +242,8 @@ class CarriedState(CarriedStateBase["CarriedState"]):
             contract_states=ChainMap(contract_states),
             cairo_usage=ExecutionResources.empty(),
             contract_address_to_n_storage_writings=ChainMap(),
+            block_info=shared_state.block_info,
+            syscall_counter=ChainMap(),
         )
 
     @property
@@ -216,7 +269,7 @@ class CarriedState(CarriedStateBase["CarriedState"]):
         if not isinstance(other, CarriedState):
             return NotImplemented
 
-        return self.contract_states == other.contract_states
+        return self.contract_states == other.contract_states and self.block_info == other.block_info
 
     def update_contract_storage(self, contract_address: int, modifications: Dict[int, StorageLeaf]):
         """
@@ -244,6 +297,7 @@ class CarriedState(CarriedStateBase["CarriedState"]):
             self.contract_states,
             self.contract_definitions,
             self.contract_address_to_n_storage_writings,
+            self.syscall_counter,
         )
 
     def _validate_references_of_chain_maps(self):
@@ -271,14 +325,18 @@ class CarriedState(CarriedStateBase["CarriedState"]):
         for child_chain_map, parent_chain_map in zip(self.chain_maps, self.parent_state.chain_maps):
             parent_chain_map.update(child_chain_map.maps[0])
 
+        # Update additional entire block-related information.
+        self.parent_state.block_info = self.block_info
+
 
 @marshmallow_dataclass.dataclass(frozen=True)
-class SharedState(SharedStateBase, ValidatedMarshmallowDataclass):
+class SharedState(SharedStateBase):
     """
     A class representing a combination of the onchain and offchain state.
     """
 
     contract_states: PatriciaTree
+    block_info: BlockInfo
 
     @classmethod
     async def empty(cls, ffc: FactFetchingContext, general_config: Config) -> "SharedState":
@@ -298,14 +356,17 @@ class SharedState(SharedStateBase, ValidatedMarshmallowDataclass):
             leaf_fact=empty_contract_state,
         )
 
-        return cls(contract_states=empty_contract_states)
+        return cls(
+            contract_states=empty_contract_states,
+            block_info=BlockInfo.empty(),
+        )
 
     def to_carried_state(self, ffc: FactFetchingContext) -> CarriedState:
         """
         Returns an unfilled CarriedState. Its contract states should be filled using
         get_filled_carried_state() method.
         """
-        return CarriedState.empty(ffc=ffc, shared_state=self)
+        return CarriedState.create_unfilled(ffc=ffc, shared_state=self)
 
     async def get_filled_carried_state(
         self, ffc: FactFetchingContext, state_selector: StateSelectorBase
@@ -358,8 +419,8 @@ class SharedState(SharedStateBase, ValidatedMarshmallowDataclass):
         )
 
         # Update contract storage roots with cached changes.
-        updated_contract_states = await asyncio.gather(
-            *(
+        updated_contract_states = await gather_in_chunks(
+            awaitables=(
                 contract_state.update(ffc=ffc)
                 for contract_state in current_carried_state.contract_states.values()
             )
@@ -377,4 +438,7 @@ class SharedState(SharedStateBase, ValidatedMarshmallowDataclass):
             ffc=ffc, modifications=list(contract_state_modifications.items())
         )
 
-        return SharedState(contract_states=updated_global_contract_root)
+        return SharedState(
+            contract_states=updated_global_contract_root,
+            block_info=current_carried_state.block_info,
+        )

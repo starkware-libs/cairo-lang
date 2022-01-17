@@ -126,7 +126,7 @@ class ExecutionResources:
 
     n_steps: int
     builtin_instance_counter: Dict[str, int]
-    n_memory_holes: int = field(metadata=dict(marshmallow_field=mfields.Integer(missing=0)))
+    n_memory_holes: int = field(metadata=dict(marshmallow_field=mfields.Integer(load_default=0)))
     Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
 
     def run_validity_checks(self):
@@ -161,7 +161,6 @@ class ExecutionResources:
             builtin_instance_counter=diff_builtin_instance_counter,
             n_memory_holes=self.n_memory_holes - other.n_memory_holes,
         )
-        diff_execution_resources.run_validity_checks()
 
         return diff_execution_resources
 

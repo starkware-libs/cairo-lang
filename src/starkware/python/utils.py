@@ -5,8 +5,9 @@ import random
 import re
 import subprocess
 from collections import UserDict
-from typing import Any, Iterable, List, Optional
+from typing import Any, AsyncIterable, Awaitable, Iterable, List, Optional, TypeVar
 
+T = TypeVar("T")
 HASH_BYTES = 32
 
 
@@ -282,6 +283,49 @@ def blockify(data, chunk_size: int) -> Iterable:
     return (data[i : i + chunk_size] for i in range(0, len(data), chunk_size))
 
 
+def iter_blockify(data: Iterable[T], chunk_size: int) -> Iterable[List[T]]:
+    """
+    Returns the given data partitioned to tuple-chunks of chunks_size (last chunk might be smaller).
+    """
+    assert chunk_size > 0, f"chunk_size must be greater than 0. Got: {chunk_size}."
+
+    iterator = iter(data)
+    while True:
+        chunk = list(itertools.islice(iterator, chunk_size))
+        if len(chunk) == 0:
+            break
+
+        yield chunk
+
+
+async def gather_in_chunks(
+    awaitables: Iterable[Awaitable[T]], chunk_size: Optional[int] = None
+) -> List[T]:
+    """
+    Awaits on the given awaitables using asyncio.gather in chunks of chunk_size;
+    Returns a list containing the results.
+    """
+    return [
+        element
+        async for element in gen_gather_in_chunks(awaitables=awaitables, chunk_size=chunk_size)
+    ]
+
+
+async def gen_gather_in_chunks(
+    awaitables: Iterable[Awaitable[T]], chunk_size: Optional[int] = None
+) -> AsyncIterable[T]:
+    """
+    Awaits on the given awaitables using asyncio.gather in chunks of chunk_size;
+    Yields the results.
+    """
+    chunk_size = 100 if chunk_size is None else chunk_size
+    for awaitable_chunk in iter_blockify(data=awaitables, chunk_size=chunk_size):
+        chunk = await asyncio.gather(*awaitable_chunk)
+
+        for element in chunk:
+            yield element
+
+
 def all_subclasses(cls: type) -> List[type]:
     """
     Recursively finds all subclasses of a given class.
@@ -293,3 +337,7 @@ def _all_subclasses(cls: type) -> List[type]:
     return [cls] + list(
         itertools.chain(*[_all_subclasses(subclass) for subclass in cls.__subclasses__()])
     )
+
+
+def get_exception_repr(exception: Exception) -> str:
+    return f"{type(exception).__name__}({exception})"

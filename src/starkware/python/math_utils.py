@@ -75,6 +75,25 @@ def sqrt(n, p):
     return min(sympy.ntheory.residue_ntheory.sqrt_mod(n, p, all_roots=True))
 
 
+def isqrt(n: int) -> int:
+    """
+    Returns the integer square root of the nonnegative integer n. This is the floor of the exact
+    square root of n.
+    Unlike math.sqrt(), this function doesn't have rounding error issues.
+    """
+    assert n >= 0
+
+    # The following algorithm was copied from
+    # https://stackoverflow.com/questions/15390807/integer-square-root-in-python.
+    x = n
+    y = (x + 1) // 2
+    while y < x:
+        x = y
+        y = (x + n // x) // 2
+    assert x ** 2 <= n < (x + 1) ** 2
+    return x
+
+
 # Elliptic curve functions.
 class EcInfinity:
     pass
@@ -151,3 +170,13 @@ def ec_safe_mult(m: int, point: Tuple[int, int], alpha: int, p: int) -> Union[Tu
     if m % 2 == 0:
         return ec_safe_mult(m // 2, ec_safe_add(point, point, alpha, p), alpha, p)
     return ec_safe_add(ec_safe_mult(m - 1, point, alpha, p), point, alpha, p)
+
+
+def horner_eval(coefs, point, prime):
+    """
+    Computes the evaluation of a polynomial on the given point in the field GF(prime).
+    """
+    res = 0
+    for coef in coefs[::-1]:
+        res = (res * point + coef) % prime
+    return res

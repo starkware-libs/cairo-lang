@@ -1,3 +1,6 @@
+import math
+import random
+
 import pytest
 
 from starkware.python.math_utils import (
@@ -6,8 +9,10 @@ from starkware.python.math_utils import (
     ec_add,
     ec_double,
     ec_mult,
+    horner_eval,
     is_power_of_2,
     is_quad_residue,
+    isqrt,
     next_power_of_2,
     prev_power_of_2,
     safe_div,
@@ -110,6 +115,17 @@ def test_sqrt():
     assert sqrt(2, 7) == 3
 
 
+def test_isqrt():
+    for x in range(100):
+        assert isqrt(x) == int(math.sqrt(x))
+    assert isqrt(2 ** 60) == 2 ** 30
+    assert isqrt(2 ** 60 + 1) == 2 ** 30
+    assert isqrt(2 ** 60 - 1) == 2 ** 30 - 1
+    assert isqrt(3 ** 100) == 3 ** 50
+    assert isqrt(3 ** 100 + 1) == 3 ** 50
+    assert isqrt(3 ** 100 - 1) == 3 ** 50 - 1
+
+
 def test_is_power_of_2():
     assert not is_power_of_2(0)
     assert is_power_of_2(1)
@@ -117,3 +133,13 @@ def test_is_power_of_2():
     assert not is_power_of_2(3)
     assert is_power_of_2(2 ** 129)
     assert not is_power_of_2(2 ** 129 + 1)
+
+
+def test_horner_eval():
+    PRIME = (1 << 251) + (17 << 192) + 1
+    N = 16
+    coefs = [random.randint(0, PRIME - 1) for i in range(N)]
+    point = random.randint(0, PRIME - 1)
+    assert sum(coef * pow(point, i, PRIME) for i, coef in enumerate(coefs)) % PRIME == horner_eval(
+        coefs, point, PRIME
+    )

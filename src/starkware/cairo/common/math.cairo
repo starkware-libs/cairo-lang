@@ -69,6 +69,7 @@ func assert_nn_le{range_check_ptr}(a, b):
 end
 
 # Asserts that value is in the range [lower, upper).
+# Prover assumption: 0 <= upper - lower <= RANGE_CHECK_BOUND.
 func assert_in_range{range_check_ptr}(value, lower, upper):
     assert_le(lower, value)
     assert_le(value, upper - 1)
@@ -111,6 +112,7 @@ end
 # The unsigned integer lift is the unique integer in the range [0, PRIME) that represents the field
 # element.
 # For example, if value=17 * 2^128 + 8, then high=17 and low=8.
+@known_ap_change
 func split_felt{range_check_ptr}(value) -> (high, low):
     # Note: the following code works because PRIME - 1 is divisible by 2**128.
     const MAX_HIGH = (-1) / 2 ** 128
@@ -141,15 +143,27 @@ end
 # Asserts that the unsigned integer lift (as a number in the range [0, PRIME)) of a is lower than
 # or equal to that of b.
 # See split_felt() for more details.
+@known_ap_change
 func assert_le_felt{range_check_ptr}(a, b):
+    alloc_locals
+    local small_inputs
     %{
         from starkware.cairo.common.math_utils import assert_integer
         assert_integer(ids.a)
         assert_integer(ids.b)
-        assert (ids.a % PRIME) <= (ids.b % PRIME), \
-            f'a = {ids.a % PRIME} is not less than or equal to b = {ids.b % PRIME}.'
+        a = ids.a % PRIME
+        b = ids.b % PRIME
+        assert a <= b, f'a = {a} is not less than or equal to b = {b}.'
+
+        ids.small_inputs = int(
+            a < range_check_builtin.bound and (b - a) < range_check_builtin.bound)
     %}
-    alloc_locals
+    if small_inputs != 0:
+        assert_nn_le(a, b)
+        ap += 33
+        return ()
+    end
+
     let (local a_high, local a_low) = split_felt(a)
     let (b_high, b_low) = split_felt(b)
 
@@ -163,6 +177,7 @@ end
 
 # Asserts that the unsigned integer lift (as a number in the range [0, PRIME)) of a is lower than
 # that of b.
+@known_ap_change
 func assert_lt_felt{range_check_ptr}(a, b):
     %{
         from starkware.cairo.common.math_utils import assert_integer
@@ -320,4 +335,25 @@ func split_int{range_check_ptr}(value, n, base, bound, output : felt*):
 
     return split_int(
         value=(value - low_part) / base, n=n - 1, base=base, bound=bound, output=output + 1)
+end
+
+# Returns the floor value of the square root of the given value.
+# Assumptions: 0 <= value < 2**250.
+func sqrt{range_check_ptr}(value) -> (res):
+    alloc_locals
+    local root : felt
+
+    %{
+        from starkware.python.math_utils import isqrt
+        value = ids.value % PRIME
+        assert value < 2 ** 250, f"value={value} is outside of the range [0, 2**250)."
+        assert 2 ** 250 < PRIME
+        ids.root = isqrt(value)
+    %}
+
+    assert_nn_le(root, 2 ** 125 - 1)
+    tempvar root_plus_one = root + 1
+    assert_in_range(value, root * root, root_plus_one * root_plus_one)
+
+    return (res=root)
 end

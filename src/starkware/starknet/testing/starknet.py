@@ -3,8 +3,9 @@ from typing import List, Optional, Union
 from starkware.starknet.compiler.compile import compile_starknet_files
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.services.api.contract_definition import ContractDefinition, EntryPointType
-from starkware.starknet.services.api.messages import StarknetMessage
+from starkware.starknet.services.api.messages import StarknetMessageToL1
 from starkware.starknet.testing.contract import StarknetContract
+from starkware.starknet.testing.objects import StarknetTransactionExecutionInfo
 from starkware.starknet.testing.state import CastableToAddress, CastableToAddressSalt, StarknetState
 
 
@@ -19,6 +20,10 @@ class Starknet:
 
     def __init__(self, state: StarknetState):
         self.state = state
+
+        # l1_to_l2_nonce starts from 2**128 to avoid nonce collisions with
+        # messages that were sent using starkware.starknet.testing.postman.Postman.
+        self.l1_to_l2_nonce = 2 ** 128
 
     @classmethod
     async def empty(cls, general_config: Optional[StarknetGeneralConfig] = None) -> "Starknet":
@@ -45,19 +50,28 @@ class Starknet:
             cairo_path is None
         ), "The cairo_path argument can only be used with the source argument."
         assert contract_def is not None
-        address = await self.state.deploy(
+        address, execution_info = await self.state.deploy(
             contract_definition=contract_def,
             contract_address_salt=contract_address_salt,
             constructor_calldata=[] if constructor_calldata is None else constructor_calldata,
         )
         assert contract_def.abi is not None, "Missing ABI."
-        return StarknetContract(state=self.state, abi=contract_def.abi, contract_address=address)
+
+        deploy_execution_info = StarknetTransactionExecutionInfo.from_internal(
+            tx_execution_info=execution_info, result=(), main_call_events=[]
+        )
+        return StarknetContract(
+            state=self.state,
+            abi=contract_def.abi,
+            contract_address=address,
+            deploy_execution_info=deploy_execution_info,
+        )
 
     def consume_message_from_l2(self, from_address: int, to_address: int, payload: List[int]):
         """
         Mocks the L1 contract function consumeMessageFromL2.
         """
-        starknet_message = StarknetMessage.create_message_to_l1(
+        starknet_message = StarknetMessageToL1(
             from_address=from_address,
             to_address=to_address,
             payload=payload,
@@ -70,14 +84,23 @@ class Starknet:
         to_address: CastableToAddress,
         selector: Union[int, str],
         payload: List[int],
+        nonce: Optional[int] = None,
     ):
         """
         Mocks the L1 contract function sendMessageToL2.
+
+        Takes an optional nonce paramater to force a specific nonce, this
+        should only be used by the Postman class.
         """
+        if nonce is None:
+            nonce = self.l1_to_l2_nonce
+            self.l1_to_l2_nonce += 1
+
         await self.state.invoke_raw(
             contract_address=to_address,
             selector=selector,
             calldata=[from_address, *payload],
             caller_address=0,
             entry_point_type=EntryPointType.L1_HANDLER,
+            nonce=nonce,
         )

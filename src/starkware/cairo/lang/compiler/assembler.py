@@ -65,6 +65,7 @@ def assemble(
         hints=hints,
         main_scope=main_scope,
         identifiers=preprocessed_program.identifiers,
+        attributes=preprocessed_program.attributes,
         builtins=preprocessed_program.builtins,
         reference_manager=preprocessed_program.reference_manager,
         debug_info=debug_info,

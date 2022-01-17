@@ -21,7 +21,7 @@ from typing import Any, Iterable, List, Optional, Tuple
 
 from starkware.cairo.lang.vm.crypto import pedersen_hash
 from starkware.python.math_utils import is_power_of_2
-from starkware.starkware_utils.commitment_tree.binary_fact_tree_node import UpdateTree
+from starkware.starkware_utils.commitment_tree.update_tree import UpdateTree
 
 Triplet = Tuple[int, int, int]
 

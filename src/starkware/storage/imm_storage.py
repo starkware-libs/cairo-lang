@@ -1,8 +1,11 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from typing import Dict, List, Optional
 
 from starkware.storage.storage import Storage
+
+logger = logging.getLogger(__name__)
 
 
 class _ImmediateStorage(Storage):
@@ -37,7 +40,13 @@ class _ImmediateStorage(Storage):
             self.write_tasks.append(asyncio.create_task(self.storage.del_value(key)))
 
     async def wait_for_all(self):
-        for task in self.write_tasks:
+        logger.debug("Performing remaining writing tasks to storage...")
+
+        logging_chunk_size = 2 ** 8
+        for n_handled_tasks, task in enumerate(self.write_tasks):
+            if n_handled_tasks % logging_chunk_size == 0:
+                logger.debug(f"{len(self.write_tasks) - n_handled_tasks} writing tasks left.")
+
             await task
 
 

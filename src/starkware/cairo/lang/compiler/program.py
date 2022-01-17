@@ -20,6 +20,7 @@ from starkware.cairo.lang.compiler.identifier_manager import (
 )
 from starkware.cairo.lang.compiler.identifier_manager_field import IdentifierManagerField
 from starkware.cairo.lang.compiler.preprocessor.flow import FlowTrackingDataActual, ReferenceManager
+from starkware.cairo.lang.compiler.preprocessor.preprocessor import AttributeScope
 from starkware.cairo.lang.compiler.references import Reference
 from starkware.cairo.lang.compiler.scoped_name import ScopedName, ScopedNameAsStr
 from starkware.starkware_utils.marshmallow_dataclass_fields import IntAsHex
@@ -92,6 +93,7 @@ class Program(ProgramBase, SerializableMarshmallowDataclass):
     )
     # Holds all the allocated references in the program.
     reference_manager: ReferenceManager
+    attributes: List[AttributeScope] = field(default_factory=list)
     debug_info: Optional[DebugInfo] = None
 
     def stripped(self) -> StrippedProgram:

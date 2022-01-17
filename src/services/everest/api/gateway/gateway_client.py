@@ -12,9 +12,6 @@ class EverestGatewayClient(BaseClient):
 
     prefix: ClassVar[str] = "/gateway"
 
-    async def is_alive(self) -> str:
-        return await self._send_request(send_method="GET", uri="/is_alive")
-
     async def add_transaction_request(
         self, add_tx_request: EverestAddTransactionRequest
     ) -> Dict[str, str]:

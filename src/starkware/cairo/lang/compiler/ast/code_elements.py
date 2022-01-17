@@ -504,6 +504,9 @@ class CodeElementWithAttr(CodeElement):
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.attribute_name, self.code_block]
 
+    def get_value(self):
+        return "".join(clause[1:-1] for clause in self.attribute_value)
+
 
 @dataclasses.dataclass
 class CodeElementWith(CodeElement):

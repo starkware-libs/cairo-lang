@@ -7,6 +7,7 @@ from starkware.cairo.lang.compiler.debug_info import DebugInfo, InstructionLocat
 from starkware.cairo.lang.compiler.encode import is_call_instruction
 from starkware.cairo.lang.compiler.expression_evaluator import ExpressionEvaluator
 from starkware.cairo.lang.compiler.instruction import decode_instruction_values
+from starkware.cairo.lang.compiler.preprocessor.preprocessor import AttributeBase, AttributeScope
 from starkware.cairo.lang.compiler.program import Program, ProgramBase
 from starkware.cairo.lang.vm.builtin_runner import BuiltinRunner
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
@@ -24,6 +25,22 @@ from starkware.cairo.lang.vm.vm_exceptions import (
 Rule = Callable[["VirtualMachineBase", RelocatableValue], Optional[int]]
 
 MAX_TRACEBACK_ENTRIES = 20
+ERROR_MESSAGE_ATTRIBUTE = "error_message"
+
+
+@dataclasses.dataclass
+class VmAttributeScope(AttributeBase):
+    start_pc: MaybeRelocatable
+    end_pc: MaybeRelocatable
+
+    @classmethod
+    def from_attribute_scope(cls, attr: AttributeScope, program_base: MaybeRelocatable):
+        return cls(
+            name=attr.name,
+            value=attr.value,
+            start_pc=program_base + attr.start_pc,
+            end_pc=program_base + attr.end_pc,
+        )
 
 
 @dataclasses.dataclass
@@ -120,6 +137,7 @@ class VirtualMachineBase(ABC):
         self.hint_pc_and_index: Dict[int, Tuple[MaybeRelocatable, int]] = {}
         self.instruction_debug_info: Dict[MaybeRelocatable, InstructionLocation] = {}
         self.debug_file_contents: Dict[str, str] = {}
+        self.error_message_attributes: List[VmAttributeScope] = []
         self.program = program
         self.validated_memory = ValidatedMemoryDict(memory=run_context.memory)
 
@@ -202,6 +220,11 @@ class VirtualMachineBase(ABC):
 
         self.load_debug_info(program.debug_info, program_base)
         self.load_hints(program, program_base)
+        self.error_message_attributes.extend(
+            VmAttributeScope.from_attribute_scope(attr=attr, program_base=program_base)
+            for attr in program.attributes
+            if attr.name == ERROR_MESSAGE_ATTRIBUTE
+        )
 
     def enter_scope(self, new_scope_locals: Optional[dict] = None):
         """
@@ -305,6 +328,7 @@ class VirtualMachineBase(ABC):
             pc=pc,
             inst_location=self.get_location(pc=pc),
             inner_exc=exc,
+            error_attr_value=self.get_error_attr_value(pc),
             traceback=traceback,
             notes=notes,
             hint_index=hint_index,
@@ -313,12 +337,24 @@ class VirtualMachineBase(ABC):
     def get_location(self, pc) -> Optional[InstructionLocation]:
         return self.instruction_debug_info.get(pc)
 
+    def get_error_attr_value(self, pc) -> str:
+        """
+        Returns the error messages that correspond to the error_message attribute scopes surrounding
+        the given pc.
+        """
+        error_value = ""
+        for error_message_attr in self.error_message_attributes:
+            if error_message_attr.start_pc <= pc < error_message_attr.end_pc:
+                error_value += f"Error message: {error_message_attr.value}\n"
+        return error_value
+
     def get_traceback(self) -> Optional[str]:
         """
         Returns the traceback at the current pc.
         """
         traceback = ""
         for traceback_pc in self.run_context.get_traceback_entries():
+            traceback += self.get_error_attr_value(traceback_pc)
             location = self.get_location(pc=traceback_pc)
             if location is None:
                 traceback += f"Unknown location (pc={traceback_pc})\n"

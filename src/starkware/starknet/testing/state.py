@@ -1,21 +1,22 @@
 import copy
-from typing import Dict, List, Optional, Union, cast
+from typing import Dict, List, Optional, Tuple, Union, cast
 
-from starkware.cairo.lang.vm.crypto import async_pedersen_hash_func
+from starkware.cairo.lang.vm.crypto import pedersen_hash_func
 from starkware.starknet.business_logic.internal_transaction import (
     InternalDeploy,
     InternalInvokeFunction,
 )
-from starkware.starknet.business_logic.internal_transaction_interface import (
+from starkware.starknet.business_logic.state import CarriedState
+from starkware.starknet.business_logic.transaction_execution_objects import (
+    Event,
     TransactionExecutionInfo,
 )
-from starkware.starknet.business_logic.state import CarriedState
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public.abi import get_selector_from_name
 from starkware.starknet.services.api.contract_definition import ContractDefinition, EntryPointType
-from starkware.starknet.services.api.gateway.transaction import Deploy, InvokeFunction
-from starkware.starknet.services.api.messages import StarknetMessage
+from starkware.starknet.services.api.gateway.transaction import Deploy
+from starkware.starknet.services.api.messages import StarknetMessageToL1
 from starkware.storage.dict_storage import DictStorage
 from starkware.storage.storage import FactFetchingContext
 
@@ -30,7 +31,7 @@ class StarknetState:
     Example usage:
       starknet = await StarknetState.empty()
       contract_definition = compile_starknet_files([CONTRACT_FILE], debug_info=True)
-      contract_address = await starknet.deploy(contract_definition=contract_definition)
+      contract_address, _ = await starknet.deploy(contract_definition=contract_definition)
       res = await starknet.invoke_raw(
           contract_address=contract_address, selector="func", calldata=[1, 2])
     """
@@ -44,7 +45,9 @@ class StarknetState:
         # A mapping from L2-to-L1 message hash to its counter.
         self._l2_to_l1_messages: Dict[str, int] = {}
         # A list of all L2-to-L1 messages sent, in chronological order.
-        self.l2_to_l1_messages_log: List[StarknetMessage] = []
+        self.l2_to_l1_messages_log: List[StarknetMessageToL1] = []
+        # A list of all events emitted, in chronological order.
+        self.events: List[Event] = []
 
     def copy(self) -> "StarknetState":
         """
@@ -61,10 +64,11 @@ class StarknetState:
         if general_config is None:
             general_config = StarknetGeneralConfig()
 
-        ffc = FactFetchingContext(storage=DictStorage(), hash_func=async_pedersen_hash_func)
+        ffc = FactFetchingContext(storage=DictStorage(), hash_func=pedersen_hash_func)
         state = await CarriedState.create_empty_for_test(
             shared_state=None, ffc=ffc, general_config=general_config
         )
+
         return cls(state=state, general_config=general_config)
 
     async def deploy(
@@ -72,9 +76,9 @@ class StarknetState:
         contract_definition: ContractDefinition,
         constructor_calldata: List[int],
         contract_address_salt: Optional[CastableToAddressSalt] = None,
-    ) -> int:
+    ) -> Tuple[int, TransactionExecutionInfo]:
         """
-        Deploys a contract. Returns the contract address.
+        Deploys a contract. Returns the contract address and the execution info.
 
         Args:
         contract_definition - a compiled StarkNet contract returned by compile_starknet_files().
@@ -101,9 +105,11 @@ class StarknetState:
         )
 
         with self.state.copy_and_apply() as state_copy:
-            await tx.apply_state_updates(state=state_copy, general_config=self.general_config)
+            tx_execution_info = await tx.apply_state_updates(
+                state=state_copy, general_config=self.general_config
+            )
 
-        return tx.contract_address
+        return tx.contract_address, tx_execution_info
 
     async def invoke_raw(
         self,
@@ -113,6 +119,7 @@ class StarknetState:
         caller_address: int,
         signature: Optional[List[int]] = None,
         entry_point_type: EntryPointType = EntryPointType.EXTERNAL,
+        nonce: Optional[int] = None,
     ) -> TransactionExecutionInfo:
         """
         Invokes a contract function. Returns the execution info.
@@ -135,17 +142,15 @@ class StarknetState:
         if signature is None:
             signature = []
 
-        external_tx = InvokeFunction(
+        tx = InternalInvokeFunction.create(
+            general_config=self.general_config,
             contract_address=contract_address,
             entry_point_selector=selector,
+            entry_point_type=entry_point_type,
             calldata=calldata,
             signature=signature,
-        )
-        tx = InternalInvokeFunction._specific_from_external_by_entry_point_type(
-            external_tx=external_tx,
-            entry_point_type=entry_point_type,
-            general_config=self.general_config,
             caller_address=caller_address,
+            nonce=nonce,
         )
 
         with self.state.copy_and_apply() as state_copy:
@@ -153,8 +158,9 @@ class StarknetState:
                 state=state_copy, general_config=self.general_config
             )
 
+        # Add messages.
         for message in tx_execution_info.l2_to_l1_messages:
-            starknet_message = StarknetMessage.create_message_to_l1(
+            starknet_message = StarknetMessageToL1(
                 from_address=message.from_address,
                 to_address=message.to_address,
                 payload=message.payload,
@@ -162,6 +168,9 @@ class StarknetState:
             self.l2_to_l1_messages_log.append(starknet_message)
             message_hash = starknet_message.get_hash()
             self._l2_to_l1_messages[message_hash] = self._l2_to_l1_messages.get(message_hash, 0) + 1
+
+        # Add events.
+        self.events += tx_execution_info.get_sorted_events()
 
         return tx_execution_info
 

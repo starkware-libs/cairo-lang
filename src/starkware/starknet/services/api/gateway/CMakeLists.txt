@@ -7,6 +7,7 @@ python_lib(starknet_transaction_hash_lib
     LIBS
     cairo_common_lib
     cairo_vm_crypto_lib
+    starknet_contract_definition_lib
     starknet_definitions_lib
     starkware_python_utils_lib
 )

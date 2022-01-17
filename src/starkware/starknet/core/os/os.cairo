@@ -6,9 +6,10 @@ from starkware.cairo.common.dict import DictAccess
 from starkware.cairo.common.math import assert_not_equal
 from starkware.cairo.common.segments import relocate_segment
 from starkware.cairo.common.serialize import serialize_word
-from starkware.starknet.core.os.output import OsCarriedOutputs, OsOutput, os_output_serialize
+from starkware.starknet.core.os.output import (
+    BlockInfo, OsCarriedOutputs, OsOutput, os_output_serialize)
 from starkware.starknet.core.os.state import state_update
-from starkware.starknet.core.os.transactions import MessageHeader, execute_transactions
+from starkware.starknet.core.os.transactions import execute_transactions
 
 # Executes transactions on StarkNet.
 func main{output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecdsa_ptr, bitwise_ptr}(
@@ -30,11 +31,18 @@ func main{output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecds
         ids.os_output.initial_outputs.messages_to_l2 = segments.add_temp_segment()
         ids.os_output.initial_outputs.deployment_info = segments.add_temp_segment()
     %}
+
+    assert os_output.block_info = BlockInfo(
+        block_timestamp=nondet %{ syscall_handler.block_info.block_timestamp %},
+        block_number=nondet %{ syscall_handler.block_info.block_number %})
+
     tempvar outputs : OsCarriedOutputs = os_output.initial_outputs
 
     with outputs:
-        let (local reserved_range_checks_end, state_changes) = execute_transactions()
+        let (local reserved_range_checks_end, state_changes) = execute_transactions(
+            block_info=&os_output.block_info)
     end
+
     assert os_output.final_outputs = outputs
     local ecdsa_ptr = ecdsa_ptr
     local bitwise_ptr = bitwise_ptr

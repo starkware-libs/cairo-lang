@@ -9,6 +9,7 @@ from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.python.utils import from_bytes, to_bytes
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
 from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
+from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 from starkware.storage.storage import HASH_BYTES, Fact, FactFetchingContext, HashFunctionType
 
 
@@ -16,7 +17,7 @@ TStorageLeaf = TypeVar("TStorageLeaf", bound="StorageLeaf")
 
 
 @dataclasses.dataclass(frozen=True)
-class StorageLeaf(Fact):
+class StorageLeaf(Fact, ValidatedDataclass):
     """
     A class representing a commitment tree leaf in a Cairo contract storage.
     The content of the leaf is a single integer.
@@ -35,7 +36,7 @@ class StorageLeaf(Fact):
     def serialize(self) -> bytes:
         return to_bytes(self.value)
 
-    async def _hash(self, hash_func: HashFunctionType) -> bytes:
+    def _hash(self, hash_func: HashFunctionType) -> bytes:
         # Note that the return value size needs to be HASH_BYTES.
         return self.serialize()
 

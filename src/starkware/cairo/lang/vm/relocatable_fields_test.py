@@ -1,7 +1,6 @@
 from dataclasses import field
-from typing import ClassVar, Dict, Type
+from typing import Dict
 
-import marshmallow
 import marshmallow_dataclass
 
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
@@ -11,13 +10,12 @@ from starkware.cairo.lang.vm.relocatable_fields import (
 )
 
 
-@marshmallow_dataclass.dataclass
+@marshmallow_dataclass.dataclass(frozen=True)
 class DummyStruct:
     val: MaybeRelocatable = field(metadata=dict(marshmallow_field=MaybeRelocatableField()))
     dct: Dict[MaybeRelocatable, MaybeRelocatable] = field(
         metadata=dict(marshmallow_field=MaybeRelocatableDictField())
     )
-    Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
 
 
 def test_relocatable_fields_serialize_deserialize():

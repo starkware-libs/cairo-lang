@@ -115,6 +115,7 @@ def check_preprocessor_equivalence(proc0: Preprocessor, proc1: Preprocessor):
     assert proc0.current_pc == proc1.current_pc
     assert proc0.flow_tracking.data == proc1.flow_tracking.data
     assert proc0.next_temp_id == proc1.next_temp_id
+    assert proc0.attributes == proc1.attributes
 
     def strip_identifiers(identifiers: IdentifierManager):
         """
@@ -143,7 +144,9 @@ def test_preprocessor_checkpoint():
             member b : felt
         end
         func foo1(b : B) -> (res : felt):
-            return (res=2)
+            with_attr attr:
+                return (res=2)
+            end
         end
         """
     code2 = """\

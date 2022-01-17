@@ -14,6 +14,7 @@ find_program(PYTHON "python3")
 
 include("src/cmake_utils/cmake_rules.cmake")
 include("src/starkware/cairo/lang/cairo_cmake_rules.cmake")
+include("src/starkware/starknet/compiler/starknet_cmake_rules.cmake")
 
 # Repos needs to be first as it defines macros that are needed by src.
 add_subdirectory(src)

@@ -110,7 +110,6 @@ full_python_test(cairo_vm_test
     cairo_vm_utils_lib
     starkware_python_utils_lib
     starkware_python_test_utils_lib
-    pip_marshmallow
     pip_marshmallow_dataclass
     pip_pytest
 )

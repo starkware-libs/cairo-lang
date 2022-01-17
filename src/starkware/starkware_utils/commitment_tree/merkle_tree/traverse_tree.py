@@ -1,8 +1,16 @@
 import asyncio
-from asyncio.tasks import Task
-from typing import AsyncIterator, Callable, List, Optional, TypeVar
+from typing import AsyncIterator, Callable, Optional, TypeVar
 
 NodeType = TypeVar("NodeType")
+
+
+class AbortWorker:
+    """
+    Aborts a worker.
+    """
+
+    def __lt__(self, other):
+        return True
 
 
 async def traverse_tree(
@@ -29,29 +37,25 @@ async def traverse_tree(
     await queue.put((0, root))
 
     async def worker_func():
-        try:
-            while True:
-                height, node = await queue.get()
-                try:
-                    async for child in get_children_callback(node):
-                        await queue.put((height - 1, child))
-                finally:
-                    queue.task_done()
-        except asyncio.CancelledError:
-            return
+        while True:
+            item = await queue.get()
+            try:
+                if isinstance(item, AbortWorker):
+                    return
 
-    # Run several workers to process the nodes.
-    # Do not use workers=asyncio.gather(...), as then the workers object would itself be a task that
-    # may raise CancelledError.
-    workers: List[Task] = []
-    for _ in range(n_workers):
-        workers.append(asyncio.create_task(worker_func()))
+                height, node = item
+                async for child in get_children_callback(node):
+                    await queue.put((height - 1, child))
+            finally:
+                queue.task_done()
 
-    await queue.join()
+    async def closer():
+        # Wait for all tasks to be marked with task_done. This guarantees that all tasks were
+        # completed, and no new task will be created.
+        await queue.join()
+        # Push n_workers dummy objects to the queue, which will make the workers exit nicely.
+        for _ in range(n_workers):
+            await queue.put(AbortWorker())
 
-    for worker in workers:
-        worker.cancel()
-
-    await asyncio.gather(*workers)
-
+    await asyncio.gather(closer(), *(worker_func() for _ in range(n_workers)))
     assert queue.empty()

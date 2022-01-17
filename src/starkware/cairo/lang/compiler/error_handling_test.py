@@ -35,3 +35,16 @@ Error message.
 note1
 note2"""
     )
+
+
+def test_missing_source_file():
+    location = Location(
+        start_line=2,
+        start_col=8,
+        end_line=2,
+        end_col=12,
+        input_file=InputFile(filename="missing_file.cairo", content=None),
+    )
+
+    expected_message = "missing_file.cairo:2:8: Error message."
+    assert location.to_string_with_content("Error message.") == expected_message

@@ -7,13 +7,18 @@ from starkware.cairo.lang.compiler.preprocessor.default_pass_manager import (
 from starkware.cairo.lang.compiler.preprocessor.pass_manager import PassManager, VisitorStage
 from starkware.starknet.compiler.contract_interface import (
     ContractInterfaceDeclVisitor,
-    ContractInterfaceImplentationVisitor,
+    ContractInterfaceImplementationVisitor,
 )
-from starkware.starknet.compiler.external_wrapper import WRAPPER_SCOPE, ExternalWrapperVisitor
+from starkware.starknet.compiler.event import EventDeclVisitor, EventImplementationVisitor
+from starkware.starknet.compiler.external_wrapper import (
+    WRAPPER_SCOPE,
+    ExternalWrapperVisitor,
+    PreExternalWrapperStage,
+)
 from starkware.starknet.compiler.starknet_preprocessor import StarknetPreprocessor
 from starkware.starknet.compiler.storage_var import (
     StorageVarDeclVisitor,
-    StorageVarImplentationVisitor,
+    StorageVarImplementationVisitor,
 )
 from starkware.starknet.security.hints_whitelist import get_hints_whitelist
 
@@ -65,8 +70,21 @@ def starknet_pass_manager(
             modify_ast=True,
         ),
     )
+    manager.add_before(
+        existing_stage="identifier_collector",
+        new_stage_name="event_signature",
+        new_stage=VisitorStage(
+            lambda context: EventDeclVisitor(identifiers=context.identifiers),
+            modify_ast=True,
+        ),
+    )
     manager.add_after(
         existing_stage="struct_collector",
+        new_stage_name="pre_external_wrapper",
+        new_stage=PreExternalWrapperStage(),
+    )
+    manager.add_after(
+        existing_stage="pre_external_wrapper",
         new_stage_name="external_wrapper",
         new_stage=VisitorStage(
             lambda context: ExternalWrapperVisitor(
@@ -79,7 +97,7 @@ def starknet_pass_manager(
         existing_stage="struct_collector",
         new_stage_name="storage_var_implementation",
         new_stage=VisitorStage(
-            lambda context: StorageVarImplentationVisitor(identifiers=context.identifiers),
+            lambda context: StorageVarImplementationVisitor(identifiers=context.identifiers),
             modify_ast=True,
         ),
     )
@@ -87,7 +105,15 @@ def starknet_pass_manager(
         existing_stage="struct_collector",
         new_stage_name="contract_interface_implementation",
         new_stage=VisitorStage(
-            lambda context: ContractInterfaceImplentationVisitor(identifiers=context.identifiers),
+            lambda context: ContractInterfaceImplementationVisitor(identifiers=context.identifiers),
+            modify_ast=True,
+        ),
+    )
+    manager.add_after(
+        existing_stage="struct_collector",
+        new_stage_name="event_implementation",
+        new_stage=VisitorStage(
+            lambda context: EventImplementationVisitor(identifiers=context.identifiers),
             modify_ast=True,
         ),
     )

@@ -7,7 +7,9 @@ from starkware.python.utils import (
     all_subclasses,
     blockify,
     composite,
+    gather_in_chunks,
     indent,
+    iter_blockify,
     safe_zip,
     unique,
 )
@@ -58,7 +60,7 @@ def test_composite():
     assert f(3, 5) == 9
 
 
-def test_blockify():
+def test_blockify_sliceable():
     data = [1, 2, 3, 4, 5, 6, 7]
 
     # Edge cases.
@@ -69,6 +71,36 @@ def test_blockify():
 
     assert list(blockify(data=data, chunk_size=4)) == [[1, 2, 3, 4], [5, 6, 7]]
     assert list(blockify(data=data, chunk_size=2)) == [[1, 2], [3, 4], [5, 6], [7]]
+
+
+def test_blockify_iterable():
+    data_length = 7
+    get_data_generator = lambda: (i for i in range(data_length))
+
+    # Edge cases.
+    assert list(iter_blockify(data=[], chunk_size=2)) == []
+    assert list(iter_blockify(data=get_data_generator(), chunk_size=data_length)) == [
+        list(get_data_generator())
+    ]
+    with pytest.raises(expected_exception=AssertionError, match="chunk_size"):
+        list(iter_blockify(data=get_data_generator(), chunk_size=0))
+
+    assert list(iter_blockify(data=get_data_generator(), chunk_size=2)) == [
+        [0, 1],
+        [2, 3],
+        [4, 5],
+        [6],
+    ]
+
+
+@pytest.mark.asyncio
+async def test_gather_in_chunks():
+    async def foo(i: int):
+        return i
+
+    n_awaitables = 7
+    result = await gather_in_chunks(awaitables=(foo(i) for i in range(n_awaitables)), chunk_size=2)
+    assert result == list(range(n_awaitables))
 
 
 def test_all_subclasses():

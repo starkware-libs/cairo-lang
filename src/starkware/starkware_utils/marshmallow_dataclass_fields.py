@@ -1,13 +1,32 @@
 import base64
+import functools
 import re
 from abc import ABC, abstractmethod
+from typing import Any, Callable, Dict
 
 import marshmallow.fields as mfields
 from frozendict import frozendict
 from marshmallow import ValidationError
 from marshmallow.base import FieldABC
+from mypy_extensions import KwArg, VarArg
 
 from starkware.starkware_utils.custom_raising_dict import CustomRaisingDict, CustomRaisingFrozenDict
+
+OptionalFloat: Callable[[VarArg(), KwArg()], mfields.Float] = functools.partial(
+    mfields.Float, allow_none=True
+)
+RequiredBoolean: Callable[[VarArg(), KwArg()], mfields.Boolean] = functools.partial(
+    mfields.Boolean, truthy={True}, falsy={False}, required=True
+)
+RequiredFloat: Callable[[VarArg(), KwArg()], mfields.Float] = functools.partial(
+    mfields.Float, required=True
+)
+StrictRequiredInteger: Callable[[VarArg(), KwArg()], mfields.Integer] = functools.partial(
+    mfields.Integer, strict=True, required=True
+)
+StrictOptionalInteger: Callable[[VarArg(), KwArg()], mfields.Integer] = functools.partial(
+    mfields.Integer, strict=True, allow_none=True
+)
 
 
 class IntAsStr(mfields.Field):
@@ -170,5 +189,5 @@ def enum_field_metadata(
     )
 
 
-boolean_field_metadata = dict(marshmallow_field=mfields.Boolean(truthy={True}, falsy={False}))
-optional_field_metadata = dict(allow_none=True, missing=None)
+boolean_field_metadata: Dict[str, Any] = dict(marshmallow_field=RequiredBoolean())
+optional_field_metadata: Dict[str, Any] = dict(allow_none=True, load_default=None)

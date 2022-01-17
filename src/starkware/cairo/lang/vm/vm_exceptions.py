@@ -18,6 +18,7 @@ class VmException(LocationError, VmExceptionBase):
         pc,
         inst_location: Optional[InstructionLocation],
         inner_exc,
+        error_attr_value: Optional[str] = None,
         traceback: Optional[str] = None,
         notes: Optional[List[str]] = None,
         hint_index: Optional[int] = None,
@@ -33,7 +34,11 @@ class VmException(LocationError, VmExceptionBase):
                 if hint_location is not None:
                     location = hint_location.location
         LocationError.__init__(
-            self, f"Error at pc={self.pc}:\n{inner_exc}", location=location, traceback=traceback
+            self,
+            f"Error at pc={self.pc}:\n{inner_exc}",
+            error_attr_value=error_attr_value,
+            location=location,
+            traceback=traceback,
         )
         if notes is not None:
             self.notes += notes

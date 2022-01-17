@@ -9,10 +9,12 @@ python_lib(starknet_compile_lib
     data_encoder.py
     compile.py
     contract_interface.py
+    event.py
     external_wrapper.py
     starknet_pass_manager.py
     starknet_preprocessor.py
     storage_var.py
+    validation_utils.py
 
     LIBS
     cairo_compile_lib
@@ -25,6 +27,7 @@ python_lib(starknet_compile_lib
     starknet_security_lib
     starkware_python_utils_lib
     starkware_utils_lib
+    pip_typing_extensions
 )
 
 python_lib(starknet_compile_test_utils_lib
@@ -48,6 +51,7 @@ full_python_test(starknet_compile_test
     FILES
     data_encoder_test.py
     contract_interface_test.py
+    event_test.py
     external_wrapper_test.py
     starknet_preprocessor_test.py
     storage_var_test.py

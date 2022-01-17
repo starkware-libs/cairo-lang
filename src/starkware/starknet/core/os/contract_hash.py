@@ -2,7 +2,7 @@ import dataclasses
 import itertools
 import json
 import os
-from typing import Callable
+from typing import Callable, List
 
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.common.structs import CairoStructFactory, CairoStructProxy
@@ -55,13 +55,47 @@ def compute_contract_hash(
     return contract_hash
 
 
+def compute_hinted_contract_definition_hash(contract_definition: ContractDefinition) -> int:
+    """
+    Computes the hash of the contract definition, including hints.
+    """
+    dumped_program = Program.Schema().dump(
+        obj=dataclasses.replace(contract_definition.program, debug_info=None)
+    )
+    if len(dumped_program["attributes"]) == 0:
+        # Remove attributes field from raw dictionary, for hash backward compatibility of
+        # contracts deployed prior to adding this feature.
+        del dumped_program["attributes"]
+
+    input_to_hash = dict(program=dumped_program, abi=contract_definition.abi)
+    return starknet_keccak(data=json.dumps(input_to_hash, sort_keys=True).encode())
+
+
+def get_contract_entry_points(
+    structs: CairoStructProxy,
+    contract_definition: ContractDefinition,
+    entry_point_type: EntryPointType,
+) -> List[CairoStructProxy]:
+    # Check validity of entry points.
+    program_length = len(contract_definition.program.data)
+    entry_points = contract_definition.entry_points_by_type[entry_point_type]
+    for entry_point in entry_points:
+        assert (
+            0 <= entry_point.offset < program_length
+        ), f"Invalid entry point offset {entry_point.offset}, len(program_data)={program_length}."
+
+    return [
+        structs.ContractEntryPoint(selector=entry_point.selector, offset=entry_point.offset)
+        for entry_point in entry_points
+    ]
+
+
 def get_contract_definition_struct(
     identifiers: IdentifierManager, contract_definition: ContractDefinition
 ) -> CairoStructProxy:
     """
     Returns the serialization of a contract as a list of field elements.
     """
-
     structs = CairoStructFactory(
         identifiers=identifiers,
         additional_imports=[
@@ -70,59 +104,41 @@ def get_contract_definition_struct(
         ],
     ).structs
 
-    # Check validity of endpoints.
-    program_len = len(contract_definition.program.data)
-    for entry_points in contract_definition.entry_points_by_type.values():
-        for entry_point in entry_points:
-            assert (
-                0 <= entry_point.offset < program_len
-            ), f"Invalid entry point offset {entry_point.offset}, len(program_data)={program_len}."
-
-    builtin_list = contract_definition.program.builtins
-
     API_VERSION_IDENT = identifiers.get_by_full_name(
         ScopedName.from_string("starkware.starknet.core.os.contracts.API_VERSION")
     )
-
-    external_functions = contract_definition.entry_points_by_type[EntryPointType.EXTERNAL]
-    l1_handlers = contract_definition.entry_points_by_type[EntryPointType.L1_HANDLER]
-    constructors = contract_definition.entry_points_by_type[EntryPointType.CONSTRUCTOR]
     assert isinstance(API_VERSION_IDENT, ConstDefinition)
+
+    external_functions, l1_handlers, constructors = (
+        get_contract_entry_points(
+            structs=structs,
+            contract_definition=contract_definition,
+            entry_point_type=entry_point_type,
+        )
+        for entry_point_type in (
+            EntryPointType.EXTERNAL,
+            EntryPointType.L1_HANDLER,
+            EntryPointType.CONSTRUCTOR,
+        )
+    )
+    flat_external_functions, flat_l1_handlers, flat_constructors = (
+        list(itertools.chain.from_iterable(entry_points))
+        for entry_points in (external_functions, l1_handlers, constructors)
+    )
+
+    builtin_list = contract_definition.program.builtins
     return structs.ContractDefinition(
         api_version=API_VERSION_IDENT.value,
         n_external_functions=len(external_functions),
-        external_functions=list(
-            itertools.chain.from_iterable(
-                structs.ContractEntryPoint(selector=entry_point.selector, offset=entry_point.offset)
-                for entry_point in external_functions
-            )
-        ),
+        external_functions=flat_external_functions,
         n_l1_handlers=len(l1_handlers),
-        l1_handlers=list(
-            itertools.chain.from_iterable(
-                structs.ContractEntryPoint(selector=entry_point.selector, offset=entry_point.offset)
-                for entry_point in l1_handlers
-            )
-        ),
+        l1_handlers=flat_l1_handlers,
         n_constructors=len(constructors),
-        constructors=list(
-            itertools.chain.from_iterable(
-                structs.ContractEntryPoint(selector=entry_point.selector, offset=entry_point.offset)
-                for entry_point in constructors
-            )
-        ),
+        constructors=flat_constructors,
         n_builtins=len(builtin_list),
         builtin_list=[from_bytes(builtin.encode("ascii")) for builtin in builtin_list],
-        hinted_contract_definition_hash=starknet_keccak(
-            json.dumps(
-                {
-                    "program": Program.Schema().dump(
-                        obj=dataclasses.replace(contract_definition.program, debug_info=None)
-                    ),
-                    "abi": contract_definition.abi,
-                },
-                sort_keys=True,
-            ).encode()
+        hinted_contract_definition_hash=compute_hinted_contract_definition_hash(
+            contract_definition=contract_definition
         ),
         bytecode_length=len(contract_definition.program.data),
         bytecode_ptr=contract_definition.program.data,

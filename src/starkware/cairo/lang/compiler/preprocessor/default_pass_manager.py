@@ -74,11 +74,10 @@ class PreprocessorStage(Stage):
         self.preprocessor_kwargs = {} if preprocessor_kwargs is None else preprocessor_kwargs
 
     def run(self, context: PassManagerContext):
-        assert context.builtins is not None
         preprocessor = self.preprocessor_cls(
             prime=self.prime,
             identifiers=context.identifiers,
-            builtins=context.builtins,
+            builtins=[] if context.builtins is None else context.builtins,
             functions_to_compile=context.functions_to_compile,
             auxiliary_info_cls=self.auxiliary_info_cls,
             **self.preprocessor_kwargs,

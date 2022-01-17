@@ -1,14 +1,14 @@
 import dataclasses
 from dataclasses import field
-from typing import ClassVar, Dict, List, Optional, Type
+from typing import Dict, List, Optional
 
-import marshmallow
 import marshmallow.fields as mfields
 import marshmallow_dataclass
 
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.preprocessor.flow import FlowTrackingDataActual
 from starkware.cairo.lang.compiler.scoped_name import ScopedName, ScopedNameAsStr
+from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
 
 
 @dataclasses.dataclass
@@ -40,16 +40,17 @@ class InstructionLocation:
         return all_locations
 
 
-@marshmallow_dataclass.dataclass
-class DebugInfo:
+@marshmallow_dataclass.dataclass(frozen=True)
+class DebugInfo(ValidatedMarshmallowDataclass):
     # A map from (relative) PC to the location of the instruction.
     instruction_locations: Dict[int, InstructionLocation]
     # A partial map from file name to its content. Files that are not in the map, are assumed to
     # exist in the file system.
     file_contents: Dict[str, str] = field(default_factory=dict)
-    Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
 
     def __post_init__(self):
+        super().__post_init__()
+
         # Load InputFile.content from file_contents where it exists.
         for instruction_location in self.instruction_locations.values():
             for loc in instruction_location.get_all_locations():

@@ -21,7 +21,7 @@ class DirectivesCollectorStage(Stage):
                     self.handle_directive(code_elm.directive)
 
         # Finalize.
-        context.builtins = [] if self.builtins is None else self.builtins
+        context.builtins = self.builtins
 
     def handle_directive(self, directive: Directive):
         if isinstance(directive, BuiltinsDirective):

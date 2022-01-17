@@ -24,8 +24,14 @@ class StarkErrorCode(ErrorCode):
     BATCH_FULL = auto()
     #: Batch not ready to be created; does not indicate an error.
     BATCH_NOT_READY = auto()
+    #: Bach was aborted.
+    BATCH_ABORTED = auto()
+    #: Connection error with the node (for example, Infura too many requests).
+    CONNECTION_ERROR = auto()
     #: Fact not registered in fact registry.
     FACT_NOT_REGISTERED = auto()
+    #: Multi-Transaction with zero transactions.
+    EMPTY_TRANSACTIONS_LIST_IN_MULTI_TRANSACTION = auto()
     #: Not enough onchain balance to complete deposit.
     INSUFFICIENT_ONCHAIN_BALANCE = auto()
     #: Invalid batch ID.
@@ -36,8 +42,6 @@ class StarkErrorCode(ErrorCode):
     INVALID_COMMITTEE_MEMBER = auto()
     #: StarkEx contracts information missing or corrupt.
     INVALID_CONTRACT_ADDRESS = auto()
-    #: Invalid response from a contract (for example, Infura too many requests).
-    INVALID_CONTRACT_RESPONSE = auto()
     #: StarkEx deployment information missing or corrupt.
     INVALID_DEPLOYMENT_INFO = auto()
     #: Invalid eth address.
@@ -46,6 +50,8 @@ class StarkErrorCode(ErrorCode):
     INVALID_FACT = auto()
     #: Fee taken is too high.
     INVALID_FEE_TAKEN = auto()
+    #: Batch migration information is invalid.
+    INVALID_BATCH_MIGRATION_INFO = auto()
     #: Invalid order ID.
     INVALID_ORDER_ID = auto()
     #: Invalid order type.

@@ -1,11 +1,10 @@
-import asyncio
 import dataclasses
 from dataclasses import field
 from typing import ClassVar, Dict, Iterable, List, cast
 
 import marshmallow_dataclass
 
-from starkware.python.utils import safe_zip, to_bytes
+from starkware.python.utils import gather_in_chunks, safe_zip, to_bytes
 from starkware.starknet.core.os.contract_hash import compute_contract_hash
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
@@ -30,7 +29,7 @@ class ContractDefinitionFact(ValidatedMarshmallowDataclass, Fact):
 
     contract_definition: ContractDefinition
 
-    async def _hash(self, hash_func: HashFunctionType) -> bytes:
+    def _hash(self, hash_func: HashFunctionType) -> bytes:
         return to_bytes(compute_contract_hash(contract_definition=self.contract_definition))
 
 
@@ -73,7 +72,7 @@ class ContractState(ValidatedMarshmallowDataclass, Fact):
             and self.storage_commitment_tree.root == EmptyNodeFact.EMPTY_NODE_HASH
         )
 
-    async def _hash(self, hash_func: HashFunctionType) -> bytes:
+    def _hash(self, hash_func: HashFunctionType) -> bytes:
         """
         Computes the hash of the node containing the contract's information, including the contract
         definition and storage.
@@ -84,12 +83,12 @@ class ContractState(ValidatedMarshmallowDataclass, Fact):
             return EmptyNodeFact.EMPTY_NODE_HASH
 
         # Set hash_value = H(H(contract_hash, storage_root), RESERVED).
-        hash_value = await hash_func(self.contract_hash, self.storage_commitment_tree.root)
-        hash_value = await hash_func(hash_value, to_bytes(RESERVED))
+        hash_value = hash_func(self.contract_hash, self.storage_commitment_tree.root)
+        hash_value = hash_func(hash_value, to_bytes(RESERVED))
 
         # Return H(hash_value, CONTRACT_STATE_HASH_VERSION). CONTRACT_STATE_HASH_VERSION must be in
         # the outermost hash to guarantee unique "decoding".
-        return await hash_func(hash_value, to_bytes(CONTRACT_STATE_HASH_VERSION))
+        return hash_func(hash_value, to_bytes(CONTRACT_STATE_HASH_VERSION))
 
     @staticmethod
     async def fetch_contract_definitions(
@@ -101,8 +100,8 @@ class ContractState(ValidatedMarshmallowDataclass, Fact):
         contract_hashes -= {ContractState.UNINITIALIZED_CONTRACT_HASH}
 
         # Fetch corresponding contract definitions from storage.
-        contract_definition_facts: List[ContractDefinitionFact] = await asyncio.gather(
-            *(
+        contract_definition_facts = await gather_in_chunks(
+            awaitables=(
                 ContractDefinitionFact.get_or_fail(storage=ffc.storage, suffix=contract_hash)
                 for contract_hash in contract_hashes
             )

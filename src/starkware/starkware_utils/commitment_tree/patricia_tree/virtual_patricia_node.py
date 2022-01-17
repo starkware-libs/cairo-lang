@@ -283,3 +283,14 @@ class VirtualPatriciaNode(BinaryFactTreeNode, ValidatedDataclass):
         else:
             # Non-empty on the right.
             return empty_child, non_empty_child
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, VirtualPatriciaNode):
+            return NotImplemented
+
+        return (
+            self.bottom_node == other.bottom_node
+            and self.path == other.path
+            and self.length == other.length
+            and self.height == other.height
+        )

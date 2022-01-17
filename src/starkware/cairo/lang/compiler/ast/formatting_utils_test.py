@@ -100,3 +100,51 @@ func f(
         )
         == expected
     )
+
+
+def test_linebreak_on_particle_space():
+    """
+    Tests line breaking when the line length is exceeded by the space in the ', ' seperator at the
+    end of a particle.
+    """
+    particles = [
+        "func f(",
+        create_particle_sublist(["x", "y", "z"], ") -> ("),
+        create_particle_sublist([], "):"),
+    ]
+    expected = """\
+func f(
+    x, y,
+    z) -> (
+    ):\
+"""
+    assert (
+        particles_in_lines(
+            particles=particles,
+            config=ParticleFormattingConfig(allowed_line_length=9, line_indent=4),
+        )
+        == expected
+    )
+
+    assert (
+        particles_in_lines(
+            particles=particles,
+            config=ParticleFormattingConfig(allowed_line_length=10, line_indent=4),
+        )
+        == expected
+    )
+
+    expected = """\
+func f(
+    x,
+    y,
+    z) -> (
+    ):\
+"""
+    assert (
+        particles_in_lines(
+            particles=particles,
+            config=ParticleFormattingConfig(allowed_line_length=8, line_indent=4),
+        )
+        == expected
+    )

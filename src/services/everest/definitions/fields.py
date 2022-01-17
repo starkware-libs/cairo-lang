@@ -12,18 +12,15 @@ from starkware.crypto.signature.signature import FIELD_PRIME
 from starkware.python.utils import initialize_random
 from starkware.starkware_utils.error_handling import StarkErrorCode
 from starkware.starkware_utils.field_validators import validate_non_negative
+from starkware.starkware_utils.marshmallow_dataclass_fields import StrictRequiredInteger
 from starkware.starkware_utils.validated_fields import Field, RangeValidatedField
 
 # Fields data: validation data, dataclass metadata.
-tx_id_marshmallow_field = mfields.Integer(
-    strict=True, required=True, validate=validate_non_negative("tx_id")
-)
-
+tx_id_marshmallow_field = StrictRequiredInteger(validate=validate_non_negative("tx_id"))
 tx_id_field_metadata = dict(marshmallow_field=tx_id_marshmallow_field)
 
+
 # Fact Registry Address.
-
-
 class EthAddressTypeField(Field[str]):
     """
     A field representation of an Ethereum address.
@@ -84,6 +81,7 @@ EthAddressIntField = RangeValidatedField(
     upper_bound=constants.ETH_ADDRESS_UPPER_BOUND,
     name="Ethereum address",
     error_code=StarkErrorCode.OUT_OF_RANGE_ETH_ADDRESS,
+    formatter=None,
 )
 
 FeltField = RangeValidatedField(

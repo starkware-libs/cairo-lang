@@ -1,6 +1,7 @@
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.hash_state import (
     HashState, hash_finalize, hash_init, hash_update, hash_update_single)
+from starkware.cairo.common.math import assert_lt_felt
 from starkware.cairo.common.registers import get_fp_and_pc
 
 const API_VERSION = 0
@@ -42,6 +43,34 @@ struct ContractDefinition:
     # The length and pointer of the bytecode.
     member bytecode_length : felt
     member bytecode_ptr : felt*
+end
+
+# Checks that the list of selectors is sorted.
+func validate_entry_points{range_check_ptr}(
+        n_entry_points : felt, entry_points : ContractEntryPoint*):
+    if n_entry_points == 0:
+        return ()
+    end
+
+    return validate_entry_points_inner(
+        n_entry_points=n_entry_points - 1,
+        entry_points=&entry_points[1],
+        prev_selector=entry_points[0].selector)
+end
+
+# Inner function for validate_entry_points.
+func validate_entry_points_inner{range_check_ptr}(
+        n_entry_points : felt, entry_points : ContractEntryPoint*, prev_selector):
+    if n_entry_points == 0:
+        return ()
+    end
+
+    assert_lt_felt(prev_selector, entry_points.selector)
+
+    return validate_entry_points_inner(
+        n_entry_points=n_entry_points - 1,
+        entry_points=&entry_points[1],
+        prev_selector=entry_points[0].selector)
 end
 
 func contract_hash{hash_ptr : HashBuiltin*}(contract_definition : ContractDefinition*) -> (
@@ -111,7 +140,7 @@ end
 
 # Loads the contract definitions from the 'os_input' hint variable.
 # Returns ContractDefinitionFact list that maps a hash to a ContractDefinition.
-func load_contract_definition_facts{pedersen_ptr : HashBuiltin*}() -> (
+func load_contract_definition_facts{pedersen_ptr : HashBuiltin*, range_check_ptr}() -> (
         n_contract_definition_facts, contract_definition_facts : ContractDefinitionFact*):
     alloc_locals
     local n_contract_definition_facts
@@ -136,11 +165,12 @@ end
 
 # Loads 'n_contract_definition_facts' from the hint 'contract_definitions_facts' and appends the
 # corresponding ContractDefinitionFact to contract_definition_facts.
-func load_contract_definition_facts_inner{pedersen_ptr : HashBuiltin*}(
+func load_contract_definition_facts_inner{pedersen_ptr : HashBuiltin*, range_check_ptr}(
         n_contract_definition_facts, contract_definition_facts : ContractDefinitionFact*):
     if n_contract_definition_facts == 0:
         return ()
     end
+    alloc_locals
 
     let contract_definition_fact = contract_definition_facts
     let contract_definition = contract_definition_fact.contract_definition
@@ -157,6 +187,14 @@ func load_contract_definition_facts_inner{pedersen_ptr : HashBuiltin*}(
     %}
 
     assert contract_definition.api_version = API_VERSION
+
+    validate_entry_points(
+        n_entry_points=contract_definition.n_external_functions,
+        entry_points=contract_definition.external_functions)
+
+    validate_entry_points(
+        n_entry_points=contract_definition.n_l1_handlers,
+        entry_points=contract_definition.l1_handlers)
 
     let (hash) = contract_hash{hash_ptr=pedersen_ptr}(contract_definition)
     contract_definition_fact.hash = hash

@@ -20,7 +20,7 @@ async def test_binary_node():
     assert get_node_type(fact_preimage=binary_node.serialize()) is BinaryNodeFact
 
     # Test hash.
-    assert await binary_node._hash(hash_func=hash_func) == await hash_func(left_node, right_node)
+    assert binary_node._hash(hash_func=hash_func) == hash_func(left_node, right_node)
 
     # Test BinaryNodeFact failures.
     illegal_child_nodes = (EmptyNodeFact.EMPTY_NODE_HASH, to_bytes(0xA))
@@ -42,9 +42,9 @@ async def test_edge_node():
     assert get_node_type(fact_preimage=edge_node.serialize()) is EdgeNodeFact
 
     # Test hash.
-    bottom_path_hash = await hash_func(edge_node.bottom_node, to_bytes(edge_node.edge_path))
+    bottom_path_hash = hash_func(edge_node.bottom_node, to_bytes(edge_node.edge_path))
     hash_value = from_bytes(bottom_path_hash) + edge_node.edge_length
-    assert await edge_node._hash(hash_func=hash_func) == to_bytes(hash_value)
+    assert edge_node._hash(hash_func=hash_func) == to_bytes(hash_value)
 
 
 @pytest.mark.asyncio
@@ -55,4 +55,4 @@ async def test_empty_node():
     assert get_node_type(fact_preimage=empty_node.serialize()) is EmptyNodeFact
 
     # Test hash.
-    assert await empty_node._hash(hash_func=hash_func) == EmptyNodeFact.EMPTY_NODE_HASH
+    assert empty_node._hash(hash_func=hash_func) == EmptyNodeFact.EMPTY_NODE_HASH

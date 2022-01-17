@@ -7,6 +7,7 @@ python_lib(starknet_security_lib
     LIBS
     cairo_compile_lib
     cairo_run_lib
+    starkware_dataclasses_utils_lib
     pip_marshmallow
     pip_marshmallow_dataclass
 )

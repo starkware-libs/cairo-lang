@@ -6,7 +6,7 @@ import functools
 import json
 import os
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from services.everest.definitions import fields as everest_fields
 from services.external_api.base_client import RetryConfig
@@ -18,7 +18,8 @@ from starkware.cairo.lang.compiler.type_system import mark_type_resolved
 from starkware.cairo.lang.compiler.type_utils import check_felts_only_type
 from starkware.cairo.lang.tracer.tracer_data import field_element_repr
 from starkware.cairo.lang.version import __version__
-from starkware.cairo.lang.vm.reconstruct_traceback import reconstruct_traceback
+from starkware.cairo.lang.vm.crypto import get_crypto_lib_context_manager
+from starkware.starknet.cli.reconstruct_starknet_traceback import reconstruct_starknet_traceback
 from starkware.starknet.compiler.compile import get_selector_from_name
 from starkware.starknet.definitions import fields
 from starkware.starknet.public.abi_structs import identifier_manager_from_abi
@@ -26,6 +27,9 @@ from starkware.starknet.services.api.contract_definition import ContractDefiniti
 from starkware.starknet.services.api.feeder_gateway.feeder_gateway_client import FeederGatewayClient
 from starkware.starknet.services.api.gateway.gateway_client import GatewayClient
 from starkware.starknet.services.api.gateway.transaction import Deploy, InvokeFunction
+from starkware.starknet.utils.api_utils import cast_to_felts
+from starkware.starknet.wallets.account import DEFAULT_ACCOUNT_DIR, Account
+from starkware.starknet.wallets.starknet_context import StarknetContext
 from starkware.starkware_utils.error_handling import StarkErrorCode
 
 NETWORKS = {
@@ -38,44 +42,110 @@ def felt_formatter(hex_felt: str) -> str:
     return field_element_repr(val=int(hex_felt, 16), prime=everest_fields.FeltField.upper_bound)
 
 
-def get_gateway_client(args) -> GatewayClient:
-    gateway_url = os.environ.get("STARKNET_GATEWAY_URL")
-    if args.gateway_url is not None:
-        gateway_url = args.gateway_url
-    if gateway_url is None:
+def get_optional_arg_value(args, arg_name: str, environment_var: str) -> Optional[str]:
+    """
+    Returns the value of the given argument from args. If the argument was not specified, returns
+    the value of the environment variable.
+    """
+    arg_value = getattr(args, arg_name)
+    if arg_value is not None:
+        return arg_value
+    return os.environ.get(environment_var)
+
+
+def get_arg_value(args, arg_name: str, environment_var: str) -> str:
+    """
+    Same as get_optional_arg_value, except that if the value is not defined, an exception is
+    raised.
+    """
+    value = get_optional_arg_value(args=args, arg_name=arg_name, environment_var=environment_var)
+    if value is None:
         raise Exception(
-            f'gateway_url must be specified with the "{args.command}" subcommand.\n'
+            f'{arg_name} must be specified with the "{args.command}" subcommand.\n'
             "Consider passing --network or setting the STARKNET_NETWORK environment variable."
         )
+    return value
+
+
+def get_network_id(args) -> str:
+    """
+    Returns a textual identifier of the network. Used for account management.
+    By default this is the same as the network name (one of the keys of NETWORKS).
+    """
+    return get_arg_value(args=args, arg_name="network_id", environment_var="STARKNET_NETWORK_ID")
+
+
+def get_wallet_provider(args) -> Optional[str]:
+    """
+    Returns the name of the wallet provider (of the form "module.class") as defined by the user.
+    """
+    value = get_optional_arg_value(args=args, arg_name="wallet", environment_var="STARKNET_WALLET")
+    if value == "":
+        # An empty string means no wallet should be used (direct contract call).
+        return None
+    return value
+
+
+def get_account_dir(args) -> str:
+    """
+    Returns the directory containing the wallet files. By default, DEFAULT_ACCOUNT_DIR is used.
+    """
+    value = get_optional_arg_value(
+        args=args, arg_name="account_dir", environment_var="STARKNET_ACCOUNT_DIR"
+    )
+    if value is None:
+        return DEFAULT_ACCOUNT_DIR
+    return value
+
+
+def get_gateway_client(args) -> GatewayClient:
+    gateway_url = get_arg_value(
+        args=args, arg_name="gateway_url", environment_var="STARKNET_GATEWAY_URL"
+    )
     # Limit the number of retries.
     retry_config = RetryConfig(n_retries=1)
     return GatewayClient(url=gateway_url, retry_config=retry_config)
 
 
 def get_feeder_gateway_client(args) -> FeederGatewayClient:
-    feeder_gateway_url = os.environ.get("STARKNET_FEEDER_GATEWAY_URL")
-    if args.feeder_gateway_url is not None:
-        feeder_gateway_url = args.feeder_gateway_url
-    if feeder_gateway_url is None:
-        raise Exception(
-            f'feeder_gateway_url must be specified with the "{args.command}" subcommand.\n'
-            "Consider passing --network or setting the STARKNET_NETWORK environment variable."
-        )
+    feeder_gateway_url = get_arg_value(
+        args=args, arg_name="feeder_gateway_url", environment_var="STARKNET_FEEDER_GATEWAY_URL"
+    )
     # Limit the number of retries.
     retry_config = RetryConfig(n_retries=1)
     return FeederGatewayClient(url=feeder_gateway_url, retry_config=retry_config)
 
 
-def parse_inputs(values: List[str]) -> List[int]:
-    result = []
-    for value in values:
-        try:
-            result.append(int(value, 16) if value.startswith("0x") else int(value))
-        except ValueError:
-            raise ValueError(
-                f"Invalid input value: '{value}'. Expected a decimal or hexadecimal integer."
-            )
-    return result
+def get_starknet_context(args) -> StarknetContext:
+    """
+    Returns the StarknetContext object based on the CLI arguments.
+    """
+    return StarknetContext(
+        network_id=get_network_id(args),
+        account_dir=get_account_dir(args),
+        gateway_client=get_gateway_client(args),
+        feeder_gateway_client=get_feeder_gateway_client(args),
+    )
+
+
+def get_network(args) -> Optional[str]:
+    """
+    Returns the StarkNet network, if specified. The network should be one of the keys in the
+    NETWORKS dictionary.
+    """
+    return os.environ.get("STARKNET_NETWORK") if args.network is None else args.network
+
+
+def parse_address(addr_str: str) -> int:
+    """
+    Converts the given address (hex string, starting with "0x") to an integer.
+    """
+    addr_str = addr_str.strip()
+    assert addr_str.startswith("0x"), f"The address must start with '0x'. Got: {addr_str}."
+    try:
+        return int(addr_str, 16)
+    except ValueError:
+        raise ValueError(f"Invalid address format: {addr_str}.")
 
 
 def validate_arguments(
@@ -92,20 +162,67 @@ def validate_arguments(
             )
 
             current_inputs_ptr += typ_size
-        elif typ == TypePointer(pointee=TypeFelt()):
+        elif isinstance(typ, TypePointer):
+            typ_size = check_felts_only_type(
+                cairo_type=typ.pointee, identifier_manager=identifier_manager
+            )
+            assert typ_size is not None, f"Type '{typ.format()}' is not supported."
             assert previous_felt_input is not None, (
                 f'The array argument {input_desc["name"]} of type felt* must be preceded '
                 "by a length argument of type felt."
             )
 
-            current_inputs_ptr += previous_felt_input
+            current_inputs_ptr += previous_felt_input * typ_size
         else:
-            raise Exception(f'Type {input_desc["type"]} is not supported.')
+            raise Exception(f"Type {typ.format()} is not supported.")
         previous_felt_input = inputs[current_inputs_ptr - 1] if typ == TypeFelt() else None
 
     assert (
         len(inputs) == current_inputs_ptr
     ), f"Wrong number of arguments. Expected {current_inputs_ptr}, got {len(inputs)}."
+
+
+async def load_account_from_args(args) -> Account:
+    wallet = get_wallet_provider(args)
+    assert wallet is not None, f'--wallet must be specified with the "{args.command}" subcommand.'
+    return await load_account(
+        starknet_context=get_starknet_context(args),
+        wallet=wallet,
+        account_name=args.account,
+    )
+
+
+async def load_account(
+    starknet_context: StarknetContext, wallet: str, account_name: str
+) -> Account:
+    """
+    Constructs an Account instance for the given account name.
+
+    wallet: the name of the python module and class (module.class).
+    """
+    module_name, class_name = wallet.rsplit(".", maxsplit=1)
+
+    # Load the module.
+    try:
+        module_classes = __import__(module_name, fromlist=[class_name])
+    except ModuleNotFoundError as e:
+        if e.name == module_name:
+            raise Exception(
+                f"Unable to find wallet '{wallet}': Module '{module_name}' was not found."
+            ) from None
+        else:
+            # Raise the original exception.
+            raise
+
+    # Load the wallet class.
+    try:
+        account_class = getattr(module_classes, class_name)
+    except AttributeError:
+        raise Exception(
+            f"Unable to find wallet '{wallet}': Class '{class_name}' was not found."
+        ) from None
+
+    return await account_class.create(starknet_context=starknet_context, account_name=account_name)
 
 
 async def deploy(args, command_args):
@@ -133,7 +250,7 @@ async def deploy(args, command_args):
         "--token", type=str, help="Used for deploying contracts in Alpha MainNet.", required=False
     )
     parser.parse_args(command_args, namespace=args)
-    inputs = parse_inputs(args.inputs)
+    inputs = cast_to_felts(args.inputs)
 
     gateway_client = get_gateway_client(args)
     if args.salt is not None and not args.salt.startswith("0x"):
@@ -183,6 +300,16 @@ Transaction hash: {gateway_response['transaction_hash']}"""
     )
 
 
+async def deploy_account(args, command_args):
+    parser = argparse.ArgumentParser(
+        description="Initialize the account and deploy the account contract to StarkNet."
+    )
+    # Use parse_args to add the --help flag for the subcommand.
+    parser.parse_args(command_args, namespace=args)
+    account = await load_account_from_args(args)
+    await account.deploy()
+
+
 async def invoke_or_call(args, command_args, call: bool):
     parser = argparse.ArgumentParser(description="Sends an invoke transaction to StarkNet.")
     parser.add_argument(
@@ -198,6 +325,15 @@ async def invoke_or_call(args, command_args, call: bool):
         "--inputs", type=str, nargs="*", default=[], help="The inputs to the invoked function."
     )
     parser.add_argument(
+        "--nonce",
+        type=int,
+        help=(
+            "Allows to explicitly specify the transaction nonce. "
+            "If not specified, the current nonce of the account contract "
+            "(as returned from StarkNet) will be used."
+        ),
+    )
+    parser.add_argument(
         "--signature",
         type=str,
         nargs="*",
@@ -211,16 +347,12 @@ async def invoke_or_call(args, command_args, call: bool):
 
     parser.parse_args(command_args, namespace=args)
 
-    inputs = parse_inputs(args.inputs)
-    signature = parse_inputs(args.signature)
+    inputs = cast_to_felts(values=args.inputs)
+    signature = cast_to_felts(values=args.signature)
 
     abi = json.load(args.abi)
 
-    assert args.address.startswith("0x"), f"The address must start with '0x'. Got: {args.address}."
-    try:
-        address = int(args.address, 16)
-    except ValueError:
-        raise ValueError(f"Invalid address format: {args.address}.")
+    address = parse_address(args.address)
     for abi_entry in abi:
         if abi_entry["type"] == "function" and abi_entry["name"] == args.function:
             validate_arguments(
@@ -234,12 +366,29 @@ async def invoke_or_call(args, command_args, call: bool):
     selector = get_selector_from_name(args.function)
     calldata = inputs
 
-    tx = InvokeFunction(
-        contract_address=address,
-        entry_point_selector=selector,
-        calldata=calldata,
-        signature=signature,
-    )
+    if get_wallet_provider(args) is not None:
+        account = await load_account_from_args(args)
+        assert signature == [], (
+            "Signature cannot be passed explicitly when using an account contract. "
+            "Consider making a direct contract call using --no_wallet."
+        )
+        wrapped_method = await account.sign_invoke_transaction(
+            contract_address=address, selector=selector, calldata=calldata, nonce=args.nonce
+        )
+        tx = InvokeFunction(
+            contract_address=wrapped_method.address,
+            entry_point_selector=wrapped_method.selector,
+            calldata=wrapped_method.calldata,
+            signature=wrapped_method.signature,
+        )
+    else:
+        assert args.nonce is None, "--nonce cannot be used in direct calls."
+        tx = InvokeFunction(
+            contract_address=address,
+            entry_point_selector=selector,
+            calldata=calldata,
+            signature=signature,
+        )
 
     gateway_response: dict
     if call:
@@ -271,12 +420,15 @@ async def tx_status(args, command_args):
         "--hash", type=str, required=True, help="The hash of the transaction to query."
     )
     parser.add_argument(
-        "--contract",
-        type=argparse.FileType("r"),
+        "--contracts",
+        type=str,
         required=False,
         help=(
-            "An optional path to the compiled contract with debug information. "
-            "If given, the contract will be used to add location information to errors."
+            "Optional paths to compiled contracts with debug information. "
+            "If given, the contracts will be used to add location information to errors. "
+            "Format: '<addr>:<path.json>,<addr2>:<path2.json>'. "
+            "If '<addr>:' is omitted, the path refers to the original contract that was called "
+            "(usually, the account contract)."
         ),
     )
     parser.add_argument(
@@ -296,10 +448,18 @@ async def tx_status(args, command_args):
     error_message = ""
     if has_error_message:
         error_message = tx_status_response["tx_failure_reason"]["error_message"]
-        if args.contract is not None:
-            program_json = json.load(args.contract)["program"]
-            error_message = reconstruct_traceback(
-                program=Program.load(program_json), traceback_txt=error_message
+        if args.contracts is not None:
+            contracts: Dict[Optional[int], Program] = {}
+            for addr_and_path in args.contracts.split(","):
+                addr_and_path_split = addr_and_path.split(":")
+                if len(addr_and_path_split) == 1:
+                    addr, path = None, addr_and_path_split[0]
+                else:
+                    addr_str, path = addr_and_path_split
+                    addr = parse_address(addr_str)
+                contracts[addr] = Program.load(json.load(open(path.strip()))["program"])
+            error_message = reconstruct_starknet_traceback(
+                contracts=contracts, traceback_txt=error_message
             )
             tx_status_response["tx_failure_reason"]["error_message"] = error_message
 
@@ -341,7 +501,7 @@ def handle_network_param(args):
     """
     Gives default values to the gateways if the network parameter is set.
     """
-    network = os.environ.get("STARKNET_NETWORK") if args.network is None else args.network
+    network = get_network(args)
     if network is not None:
         if network not in NETWORKS:
             networks_str = ", ".join(NETWORKS.keys())
@@ -357,6 +517,9 @@ def handle_network_param(args):
 
         if args.feeder_gateway_url is None:
             args.feeder_gateway_url = f"https://{dns}/feeder_gateway"
+
+        if args.network_id is None:
+            args.network_id = network
 
     return 0
 
@@ -457,9 +620,9 @@ def add_block_identifier_argument(
     )
     parser.add_argument(
         f"--{identifier_prefix}number",
-        type=int,
         help=(
-            f"The number of the block to {block_role_description}. "
+            f"The number of the block to {block_role_description}; "
+            "Additional supported keywords: 'pending';"
             "In case this argument and block_hash are not given, uses the latest block."
         ),
     )
@@ -469,6 +632,7 @@ async def main():
     subparsers = {
         "call": functools.partial(invoke_or_call, call=True),
         "deploy": deploy,
+        "deploy_account": deploy_account,
         "get_block": get_block,
         "get_code": get_code,
         "get_contract_addresses": get_contract_addresses,
@@ -480,7 +644,46 @@ async def main():
     }
     parser = argparse.ArgumentParser(description="A tool to communicate with StarkNet.")
     parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
-    parser.add_argument("--network", type=str, help="The name of Network.")
+    parser.add_argument("--network", type=str, help="The name of the StarkNet network.")
+    parser.add_argument(
+        "--network_id",
+        type=str,
+        help="A textual identifier of the network. Used for account management.",
+    )
+    parser.add_argument(
+        "--wallet",
+        type=str,
+        help="The name of the wallet, including the python module and wallet class.",
+    )
+    parser.add_argument(
+        "--no_wallet",
+        dest="wallet",
+        action="store_const",
+        # Set wallet explicitly to an empty string, rather than None, to override the
+        # environment variables.
+        const="",
+        help="Perform a direct contract call without an account contract.",
+    )
+    parser.add_argument(
+        "--account",
+        type=str,
+        default="__default__",
+        help=(
+            "The name of the account. If not given, the default account "
+            "(as defined by the wallet) is used."
+        ),
+    )
+    parser.add_argument(
+        "--account_dir",
+        type=str,
+        help=f"The directory containing the account files (default: '{DEFAULT_ACCOUNT_DIR}').",
+    )
+    parser.add_argument(
+        "--flavor",
+        type=str,
+        choices=["Debug", "Release", "RelWithDebInfo"],
+        help="Build flavor.",
+    )
 
     parser.add_argument("--gateway_url", type=str, help="The URL of a StarkNet gateway.")
     parser.add_argument(
@@ -495,8 +698,9 @@ async def main():
         return ret
 
     try:
-        # Invoke the requested command.
-        return await subparsers[args.command](args, unknown)
+        with get_crypto_lib_context_manager(args.flavor):
+            # Invoke the requested command.
+            return await subparsers[args.command](args, unknown)
     except Exception as exc:
         print(f"Error: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 1

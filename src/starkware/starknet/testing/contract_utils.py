@@ -1,8 +1,106 @@
-from typing import Any, Iterable, List, Tuple, Union
+from collections import namedtuple
+from typing import Any, Dict, Iterable, List, Tuple, Union
 
 from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypeFelt, TypePointer
+from starkware.cairo.lang.compiler.identifier_definition import StructDefinition
 from starkware.cairo.lang.compiler.parser import parse_type
 from starkware.cairo.lang.compiler.type_system import mark_type_resolved
+from starkware.starknet.public.abi import get_selector_from_name
+from starkware.starknet.public.abi_structs import struct_definition_from_abi_entry
+
+EventIdentifier = Union[str, int]
+
+
+class StructManager:
+    def __init__(self, abi: List[Any]):
+        self._struct_definition_mapping = {
+            abi_entry["name"]: struct_definition_from_abi_entry(abi_entry=abi_entry)
+            for abi_entry in abi
+            if abi_entry["type"] == "struct"
+        }
+
+        # Cached contract structs.
+        self._contract_structs: Dict[str, type] = {}
+
+    def __contains__(self, key: str) -> bool:
+        return key in self._struct_definition_mapping
+
+    def get_struct_definition(self, name: str) -> StructDefinition:
+        return self._struct_definition_mapping[name]
+
+    def get_contract_struct(self, name: str) -> type:
+        """
+        Returns a named tuple representing the Cairo struct whose name is given.
+        """
+        if name not in self._contract_structs:
+            # Cache contract struct.
+            self._contract_structs[name] = self._build_contract_struct(name=name)
+
+        return self._contract_structs[name]
+
+    def _build_contract_struct(self, name: str) -> type:
+        """
+        Builds and returns a named tuple representing the Cairo struct whose name is given.
+        """
+        struct_def = self._struct_definition_mapping[name]
+        return namedtuple(typename=name, field_names=struct_def.members.keys())
+
+
+class EventManager:
+    def __init__(self, abi: List[Any]):
+        self._abi_event_mapping = {
+            abi_entry["name"]: abi_entry for abi_entry in abi if abi_entry["type"] == "event"
+        }
+
+        # A mapping from event selector to event name.
+        self._selector_to_name: Dict[int, str] = {
+            get_selector_from_name(name): name for name in self._abi_event_mapping.keys()
+        }
+
+        # Cached contract events and argument types.
+        self._contract_events: Dict[str, type] = {}
+        self._event_name_to_argument_types: Dict[str, List[CairoType]] = {}
+
+    def __contains__(self, identifier: EventIdentifier) -> bool:
+        if isinstance(identifier, str):
+            return identifier in self._abi_event_mapping
+
+        return identifier in self._selector_to_name
+
+    def get_contract_event(self, identifier: EventIdentifier) -> type:
+        """
+        Returns a named tuple representing the event whose name is given.
+        """
+        name = self._get_event_name(identifier=identifier)
+        if name not in self._contract_events:
+            # Cache event.
+            self._process_event(name=name)
+
+        return self._contract_events[name]
+
+    def get_event_argument_types(self, identifier: EventIdentifier) -> List[CairoType]:
+        """
+        Returns the argument Cairo types of the given event.
+        """
+        name = self._get_event_name(identifier=identifier)
+        if name not in self._event_name_to_argument_types:
+            # Cache argument types.
+            self._process_event(name=name)
+
+        return self._event_name_to_argument_types[name]
+
+    def _process_event(self, name: str):
+        """
+        Processes the given event and caches its argument types and its representative named tuple.
+        """
+        event_abi = self._abi_event_mapping[name]
+        names, types = parse_arguments(arguments_abi=event_abi["keys"] + event_abi["data"])
+
+        self._event_name_to_argument_types[name] = types
+        self._contract_events[name] = namedtuple(typename=name, field_names=names)
+
+    def _get_event_name(self, identifier: EventIdentifier) -> str:
+        return identifier if isinstance(identifier, str) else self._selector_to_name[identifier]
 
 
 def parse_arguments(arguments_abi: dict) -> Tuple[List[str], List[CairoType]]:

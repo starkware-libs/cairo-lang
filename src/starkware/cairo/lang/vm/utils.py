@@ -49,18 +49,18 @@ class RunResources:
     Maintains the resources of a Cairo run. Can be used across multiple runners.
     """
 
-    steps: Optional[int]
+    n_steps: Optional[int]
 
     @property
     def consumed(self) -> bool:
         """
         Returns True if the resources were consumed.
         """
-        return self.steps is not None and self.steps <= 0
+        return self.n_steps is not None and self.n_steps <= 0
 
     def consume_step(self):
         """
         Consumes one Cairo step.
         """
-        if self.steps is not None:
-            self.steps -= 1
+        if self.n_steps is not None:
+            self.n_steps -= 1

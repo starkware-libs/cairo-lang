@@ -7,4 +7,5 @@ python_lib(starknet_script_lib
     LIBS
     starknet_cli_lib
     starknet_compile_lib
+    starknet_standard_wallets_lib
 )

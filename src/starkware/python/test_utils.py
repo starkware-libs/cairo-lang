@@ -1,6 +1,8 @@
+import dataclasses
 import re
+from abc import abstractmethod
 from contextlib import nullcontext
-from typing import ContextManager, Optional
+from typing import ContextManager, Optional, Type, TypeVar
 
 import pytest
 
@@ -31,3 +33,37 @@ def maybe_raises(
 
     error_message = re.escape(error_message) if escape_error_message else error_message
     return pytest.raises(expected_exception, match=error_message)
+
+
+T = TypeVar("T")
+
+
+class WithoutValidations:
+    @abstractmethod
+    def perform_validations(self):
+        pass
+
+
+def without_validations(base: Type[T]) -> Type[T]:
+    """
+    Receives a class and returns the same class but with __post_init__ disabled. This is useful in
+    order to create an invalid object for negative tests.
+    """
+
+    class _WithoutValidations(base, WithoutValidations):  # type: ignore
+        def __post_init__(self):
+            pass
+
+        def perform_validations(self):
+            """
+            Performs the validations that were skipped in the constructor.
+            """
+            if hasattr(base, "__post_init__"):
+                super().__post_init__()
+
+            for field_info in dataclasses.fields(self):
+                field = getattr(self, field_info.name)
+                if isinstance(field, WithoutValidations):
+                    field.perform_validations()
+
+    return _WithoutValidations

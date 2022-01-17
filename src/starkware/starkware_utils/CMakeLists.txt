@@ -7,10 +7,15 @@ python_lib(starkware_utils_lib
     commitment_tree/binary_fact_tree.py
     commitment_tree/binary_fact_tree_da_utils.py
     commitment_tree/binary_fact_tree_node.py
+    commitment_tree/calculation.py
+    commitment_tree/inner_node_fact.py
     commitment_tree/merkle_tree/traverse_tree.py
+    commitment_tree/patricia_tree/virtual_calculation_node.py
     commitment_tree/patricia_tree/nodes.py
     commitment_tree/patricia_tree/patricia_tree.py
     commitment_tree/patricia_tree/virtual_patricia_node.py
+    commitment_tree/update_tree.py
+    executor.py
     subsequence.py
     ${STARKWARE_UTILS_LIBS_ADDITIONAL_FILES}
 

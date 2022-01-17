@@ -744,3 +744,72 @@ Traceback (most recent call last):
 AssertionError\
 """
     )
+
+
+def test_traceback_with_attr():
+    code = """
+    call main
+
+    func foo(x):
+        with_attr error_message("Error in foo."):
+            with_attr error_message("Should not appear in trace."):
+                assert 0 = 0
+            end
+            with_attr attr_name("Should not appear in trace (attr_name instead of error_message)."):
+                %{ assert ids.x != 0 %}
+                [ap] = 1; ap++
+            end
+        end
+        return ()
+    end
+
+    func bar(x):
+        with_attr error_message("Error in bar."):
+            foo(x * x * x)
+        end
+        return ()
+    end
+
+    func main():
+        with_attr error_message("Error in main."):
+            with_attr error_message("Running bar(x=1)."):
+                bar(x=1)
+            end
+            with_attr error_message("Running bar(x=0)."):
+                bar(x=0)  # This line will cause an error.
+            end
+        end
+        return ()
+    end
+    """
+
+    with pytest.raises(VmException) as exc_info:
+        run_single(code, 100, pc=RelocatableValue(0, 10), ap=101, extra_mem={99: 3, 100: 2})
+
+    assert (
+        str(exc_info.value)
+        == """\
+Error message: Error in foo.
+:10:17: Error at pc=0:16:
+Got an exception while executing a hint.
+                %{ assert ids.x != 0 %}
+                ^*********************^
+Cairo traceback (most recent call last):
+:2:5: (pc=0:10)
+    call main
+    ^*******^
+Error message: Running bar(x=0).
+Error message: Error in main.
+:30:17: (pc=0:30)
+                bar(x=0)  # This line will cause an error.
+                ^******^
+Error message: Error in bar.
+:19:13: (pc=0:21)
+            foo(x * x * x)
+            ^************^
+
+Traceback (most recent call last):
+  File "", line 10, in <module>
+AssertionError\
+"""
+    )

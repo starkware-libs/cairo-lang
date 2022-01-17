@@ -48,6 +48,7 @@ python_lib(starknet_os_utils_lib
     starknet_internal_transaction_interface_lib
     starknet_storage_lib
     starknet_transaction_lib
+    starknet_transaction_execution_objects_lib
     starkware_error_handling_lib
     starkware_python_utils_lib
     pip_cachetools

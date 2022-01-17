@@ -137,6 +137,13 @@ end
 func handler(from_address, a: ExternalStruct2):
     return ()
 end
+
+struct ExternalStruct4:
+end
+
+@event
+func status(a: felt, arr_len : felt, arr : felt*, external_struct : ExternalStruct4):
+end
 """
     )
 
@@ -158,6 +165,12 @@ end
             "name": "ExternalStruct",
             "members": [{"name": "y", "offset": 0, "type": "(felt, felt)"}],
             "size": 2,
+        },
+        {
+            "type": "struct",
+            "name": "ExternalStruct4",
+            "members": [],
+            "size": 0,
         },
         {
             "inputs": [],
@@ -195,6 +208,17 @@ end
             "name": "handler",
             "outputs": [],
             "type": "l1_handler",
+        },
+        {
+            "name": "status",
+            "type": "event",
+            "keys": [],
+            "data": [
+                {"name": "a", "type": "felt"},
+                {"name": "arr_len", "type": "felt"},
+                {"name": "arr", "type": "felt*"},
+                {"name": "external_struct", "type": "ExternalStruct4"},
+            ],
         },
     ]
 

@@ -11,7 +11,7 @@ def run_generate_hash_test(fix: bool, program_path: str, hash_path: str, command
 
     if fix:
         with open(hash_path, "w") as fp:
-            json.dump({program_hash_key: program_hash}, fp=fp)
+            fp.write(json.dumps({program_hash_key: program_hash}, indent=4) + "\n")
         return
 
     expected_hash = json.load(open(hash_path))[program_hash_key]

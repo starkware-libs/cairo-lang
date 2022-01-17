@@ -64,12 +64,12 @@ class ValidatedDataclass:
         get_random_element.
 
         Example usage:
-            @marshmallow_dataclasses.dataclass
+            @marshmallow_dataclass.dataclass
             class Inner(ValidatedMarshmallowDataclass):
                 a: int = field(validated_field=...)
                 b: int = field(validated_field=...)
 
-            @marshmallow_dataclasses.dataclass
+            @marshmallow_dataclass.dataclass
             class Outer(ValidatedMarshmallowDataclass):
                 c: int = field(validated_field=...)
                 d: int = field(validated_field=...)
@@ -158,7 +158,7 @@ def late_marshmallow_dataclass(cls: Optional[type] = None, **kwargs):
             x: T
             y: int = 5
 
-        @marshmallow_dataclasses.dataclass
+        @marshmallow_dataclass.dataclass
         class Child(Base):
             x: str
             # y: int = 5 will be inherited from parent, due to late_marshmallow_dataclass.
@@ -306,7 +306,9 @@ def validate_field(field: mfields.Field, value: Any):
             validate_list(mfields.List(field.value_field), value.values())
     # Validate inner fields recursively, if field is nested (contains fields).
     elif isinstance(field, mfields.Nested):
-        if value is not None:
+        # The is_dataclass is done for cases where the field's type is not a dataclass, but has
+        # a separate schema.
+        if value is not None and dataclasses.is_dataclass(value):
             ValidatedDataclass.validate_values(value)
 
 

@@ -4,6 +4,7 @@ python_lib(starkware_utils_time_lib
     FILES
     __init__.py
     fastforward.py
+    synchronous_executor.py
     time.py
 )
 

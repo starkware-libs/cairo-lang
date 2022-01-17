@@ -12,10 +12,12 @@ end
 
 const CALL_CONTRACT_SELECTOR = 'CallContract'
 const DELEGATE_CALL_SELECTOR = 'DelegateCall'
+const DELEGATE_L1_HANDLER_SELECTOR = 'DelegateL1Handler'
 
 # Describes the CallContract system call format.
 struct CallContractRequest:
-    # The system call selector (= CALL_CONTRACT_SELECTOR or DELEGATE_CALL_SELECTOR).
+    # The system call selector
+    # (= CALL_CONTRACT_SELECTOR, DELEGATE_CALL_SELECTOR or DELEGATE_L1_HANDLER_SELECTOR).
     member selector : felt
     # The address of the L2 contract to call.
     member contract_address : felt
@@ -65,6 +67,23 @@ func delegate_call{syscall_ptr : felt*}(
         calldata_size=calldata_size,
         calldata=calldata)
     %{ syscall_handler.delegate_call(segments=segments, syscall_ptr=ids.syscall_ptr) %}
+    let response = syscall.response
+
+    let syscall_ptr = syscall_ptr + CallContract.SIZE
+    return (retdata_size=response.retdata_size, retdata=response.retdata)
+end
+
+func delegate_l1_handler{syscall_ptr : felt*}(
+        contract_address : felt, function_selector : felt, calldata_size : felt,
+        calldata : felt*) -> (retdata_size : felt, retdata : felt*):
+    let syscall = [cast(syscall_ptr, CallContract*)]
+    assert syscall.request = CallContractRequest(
+        selector=DELEGATE_L1_HANDLER_SELECTOR,
+        contract_address=contract_address,
+        function_selector=function_selector,
+        calldata_size=calldata_size,
+        calldata=calldata)
+    %{ syscall_handler.delegate_l1_handler(segments=segments, syscall_ptr=ids.syscall_ptr) %}
     let response = syscall.response
 
     let syscall_ptr = syscall_ptr + CallContract.SIZE
@@ -124,6 +143,29 @@ func get_sequencer_address{syscall_ptr : felt*}() -> (sequencer_address : felt):
     return (sequencer_address=syscall.response.sequencer_address)
 end
 
+const GET_BLOCK_NUMBER_SELECTOR = 'GetBlockNumber'
+
+struct GetBlockNumberRequest:
+    member selector : felt
+end
+
+struct GetBlockNumberResponse:
+    member block_number : felt
+end
+
+struct GetBlockNumber:
+    member request : GetBlockNumberRequest
+    member response : GetBlockNumberResponse
+end
+
+func get_block_number{syscall_ptr : felt*}() -> (block_number : felt):
+    let syscall = [cast(syscall_ptr, GetBlockNumber*)]
+    assert syscall.request = GetBlockNumberRequest(selector=GET_BLOCK_NUMBER_SELECTOR)
+    %{ syscall_handler.get_block_number(segments=segments, syscall_ptr=ids.syscall_ptr) %}
+    let syscall_ptr = syscall_ptr + GetBlockNumber.SIZE
+    return (block_number=syscall.response.block_number)
+end
+
 const GET_CONTRACT_ADDRESS_SELECTOR = 'GetContractAddress'
 
 # Describes the GetContractAddress system call format.
@@ -147,6 +189,30 @@ func get_contract_address{syscall_ptr : felt*}() -> (contract_address : felt):
     %{ syscall_handler.get_contract_address(segments=segments, syscall_ptr=ids.syscall_ptr) %}
     let syscall_ptr = syscall_ptr + GetContractAddress.SIZE
     return (contract_address=syscall.response.contract_address)
+end
+
+const GET_BLOCK_TIMESTAMP_SELECTOR = 'GetBlockTimestamp'
+
+struct GetBlockTimestampRequest:
+    # The system call selector (= GET_BLOCK_TIMESTAMP_SELECTOR).
+    member selector : felt
+end
+
+struct GetBlockTimestampResponse:
+    member block_timestamp : felt
+end
+
+struct GetBlockTimestamp:
+    member request : GetBlockTimestampRequest
+    member response : GetBlockTimestampResponse
+end
+
+func get_block_timestamp{syscall_ptr : felt*}() -> (block_timestamp : felt):
+    let syscall = [cast(syscall_ptr, GetBlockTimestamp*)]
+    assert syscall.request = GetBlockTimestampRequest(selector=GET_BLOCK_TIMESTAMP_SELECTOR)
+    %{ syscall_handler.get_block_timestamp(segments=segments, syscall_ptr=ids.syscall_ptr) %}
+    let syscall_ptr = syscall_ptr + GetBlockTimestamp.SIZE
+    return (block_timestamp=syscall.response.block_timestamp)
 end
 
 const GET_TX_SIGNATURE_SELECTOR = 'GetTxSignature'
@@ -214,10 +280,29 @@ struct StorageWrite:
     member value : felt
 end
 
-func storage_write{syscall_ptr : felt*}(address : felt, value : felt) -> ():
+func storage_write{syscall_ptr : felt*}(address : felt, value : felt):
     assert [cast(syscall_ptr, StorageWrite*)] = StorageWrite(
         selector=STORAGE_WRITE_SELECTOR, address=address, value=value)
     %{ syscall_handler.storage_write(segments=segments, syscall_ptr=ids.syscall_ptr) %}
     let syscall_ptr = syscall_ptr + StorageWrite.SIZE
+    return ()
+end
+
+const EMIT_EVENT_SELECTOR = 'EmitEvent'
+
+# Describes the EmitEvent system call format.
+struct EmitEvent:
+    member selector : felt
+    member keys_len : felt
+    member keys : felt*
+    member data_len : felt
+    member data : felt*
+end
+
+func emit_event{syscall_ptr : felt*}(keys_len : felt, keys : felt*, data_len : felt, data : felt*):
+    assert [cast(syscall_ptr, EmitEvent*)] = EmitEvent(
+        selector=EMIT_EVENT_SELECTOR, keys_len=keys_len, keys=keys, data_len=data_len, data=data)
+    %{ syscall_handler.emit_event(segments=segments, syscall_ptr=ids.syscall_ptr) %}
+    let syscall_ptr = syscall_ptr + EmitEvent.SIZE
     return ()
 end

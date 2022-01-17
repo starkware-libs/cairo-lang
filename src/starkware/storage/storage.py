@@ -1,17 +1,19 @@
 import asyncio
-import concurrent
 import contextlib
 import dataclasses
+import logging
 from abc import ABC, abstractmethod
-from typing import Any, Awaitable, Callable, Dict, Optional, Sequence, Tuple, Type, TypeVar
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Type, TypeVar
 
-from starkware.python.utils import from_bytes, to_bytes
+from starkware.python.utils import from_bytes, get_exception_repr, to_bytes
 from starkware.starkware_utils.config_base import get_object_by_path
 from starkware.starkware_utils.serializable import Serializable
 from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 
+logger = logging.getLogger(__name__)
+
 HASH_BYTES = 32
-HashFunctionType = Callable[[bytes, bytes], Awaitable[bytes]]
+HashFunctionType = Callable[[bytes, bytes], bytes]
 TIntToIntMapping = TypeVar("TIntToIntMapping", bound="IntToIntMapping")
 
 
@@ -136,7 +138,7 @@ class DBObject(Serializable):
         if result is None:
             return None
 
-        return cls.deserialize(data=result)
+        return await asyncio.get_event_loop().run_in_executor(None, cls.deserialize, result)
 
     @classmethod
     async def get_or_fail(cls: Type[TDBObject], storage: Storage, suffix: bytes) -> TDBObject:
@@ -148,13 +150,15 @@ class DBObject(Serializable):
         result = await storage.get_value(key=db_key)
         assert result is not None, f"Key {db_key!r} does not appear in storage."
 
-        return cls.deserialize(data=result)
+        return await asyncio.get_event_loop().run_in_executor(None, cls.deserialize, result)
 
     async def set(self, storage: Storage, suffix: bytes):
-        await storage.set_value(self.db_key(suffix), self.serialize())
+        serialized = await asyncio.get_event_loop().run_in_executor(None, self.serialize)
+        await storage.set_value(self.db_key(suffix), serialized)
 
     async def setnx(self, storage: Storage, suffix: bytes) -> bool:
-        return await storage.setnx_value(self.db_key(suffix), self.serialize())
+        serialized = await asyncio.get_event_loop().run_in_executor(None, self.serialize)
+        return await storage.setnx_value(self.db_key(suffix), serialized)
 
     def get_update_for_mset(self, suffix: bytes) -> Tuple[bytes, bytes]:
         """
@@ -265,11 +269,11 @@ class Fact(DBObject):
     """
 
     @abstractmethod
-    async def _hash(self, hash_func: HashFunctionType) -> bytes:
+    def _hash(self, hash_func: HashFunctionType) -> bytes:
         pass
 
     async def set_fact(self, ffc: FactFetchingContext) -> bytes:
-        hash_val = await self._hash(ffc.hash_func)
+        hash_val = self._hash(ffc.hash_func)
         await self.set(storage=ffc.storage, suffix=hash_val)
         return hash_val
 
@@ -290,6 +294,17 @@ class LockObject(ABC):
     @abstractmethod
     async def __aexit__(self, exc_type, exc, tb):
         pass
+
+    async def safe_extend(self, name: str):
+        try:
+            await self.extend()
+        except Exception as exception:
+            logger.error(
+                f"Exception while trying to extend lock {name}: "
+                f"{get_exception_repr(exception=exception)}",
+                exc_info=False,
+            )
+            logger.debug("Exception details", exc_info=True)
 
 
 class LockManager(ABC):
@@ -324,13 +339,3 @@ class LockManager(ABC):
 
     async def destroy(self):
         pass
-
-
-@contextlib.contextmanager
-def distributed_hash_function(hash_function: HashFunctionType, n_hash_workers: int):
-    with concurrent.futures.ProcessPoolExecutor(max_workers=n_hash_workers) as pool:
-
-        async def async_hash_funcion(x, y):
-            return await asyncio.get_event_loop().run_in_executor(pool, hash_function, x, y)
-
-        yield async_hash_funcion

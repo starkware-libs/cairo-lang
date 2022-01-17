@@ -1,4 +1,5 @@
 import os
+import re
 
 import pytest
 
@@ -21,6 +22,9 @@ async def contract(starknet: Starknet) -> StarknetContract:
 
 @pytest.mark.asyncio
 async def test_basic(starknet: Starknet, contract: StarknetContract):
+    execution_info = contract.deploy_execution_info
+    assert execution_info.result == ()
+
     execution_info = await contract.increase_value(address=100, value=5).invoke()
     assert execution_info.result == ()
     execution_info = await contract.get_value(address=100).call()
@@ -81,3 +85,21 @@ async def test_contract_interaction(starknet: Starknet):
     await proxy_contract.call_increase_value(contract.contract_address, 123, 234).invoke()
     assert (await proxy_contract.get_value(123).invoke()).result == (0,)
     assert (await contract.get_value(123).invoke()).result == (234,)
+
+
+@pytest.mark.asyncio
+async def test_struct_arrays(starknet: Starknet):
+    contract_definition = compile_starknet_files([CONTRACT_FILE], debug_info=True)
+    contract = await starknet.deploy(contract_def=contract_definition)
+    assert (await contract.transpose([(123, 234), (4, 5)]).invoke()).result == (
+        [
+            contract.Point(x=123, y=4),
+            contract.Point(x=234, y=5),
+        ],
+    )
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape("argument inp[1] has wrong number of elements (expected 2, got 3 instead)"),
+    ):
+        await contract.transpose([(123, 234), (4, 5, 6)]).invoke()

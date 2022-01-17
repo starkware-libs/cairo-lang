@@ -205,11 +205,24 @@ class PreprocessedInstruction:
 
 
 @dataclasses.dataclass
+class AttributeBase:
+    name: str
+    value: str
+
+
+@dataclasses.dataclass
+class AttributeScope(AttributeBase):
+    start_pc: int
+    end_pc: int
+
+
+@dataclasses.dataclass
 class PreprocessedProgram:
     prime: int
     reference_manager: ReferenceManager
     instructions: List[PreprocessedInstruction]
     identifiers: IdentifierManager
+    attributes: List[AttributeScope]
     # A map from an identifier fully qualified name to the location of its definition.
     # This provides additional information on the compiled program which can be used by IDEs.
     identifier_locations: Dict[ScopedName, Location]
@@ -268,6 +281,7 @@ class PreprocessorMemento(MembersMemento["Preprocessor"]):
             next_temp_id=ByValueMemento[int],
             reference_states=ChainMapMemento[ScopedName, ReferenceState],
             scoped_temp_ids=ChainMapMemento[ScopedName, bool],
+            attributes=AppendOnlyListMemento[AttributeScope],
             identifiers=IdentifierManagerMemento,
             identifier_locations=ChainMapMemento[ScopedName, Location],
         )
@@ -342,6 +356,8 @@ class Preprocessor(IdentifierAwareVisitor):
         # A set of all scoped prefixes that were not traversed and need to be pruned form the
         # identifier manager.
         self.removed_prefixes: Set[ScopedName] = set()
+
+        self.attributes: List[AttributeScope] = []
 
         self.auxiliary_info = (
             auxiliary_info_cls.create(prime) if auxiliary_info_cls is not None else None
@@ -465,6 +481,7 @@ class Preprocessor(IdentifierAwareVisitor):
             instructions=list(self.instructions),
             identifiers=self.identifiers,
             identifier_locations=self.identifier_locations,
+            attributes=self.attributes,
             builtins=self.builtins,
             auxiliary_info=self.auxiliary_info,
         )
@@ -777,8 +794,16 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
             self.visit(elm.code_block)
 
     def visit_CodeElementWithAttr(self, elm: CodeElementWithAttr):
-        raise PreprocessorError(
-            "with_attr is not supported yet.", location=elm.attribute_name.location
+        start_pc = self.current_pc
+        self.visit(elm.code_block)
+        end_pc = self.current_pc
+        self.attributes.append(
+            AttributeScope(
+                name=elm.attribute_name.name,
+                value=elm.get_value(),
+                start_pc=start_pc,
+                end_pc=end_pc,
+            )
         )
 
     @contextmanager
@@ -2052,6 +2077,7 @@ Expected expression of type '{member_def.cairo_type.format()}', got '{cairo_type
             expr=expr,
             get_identifier_callback=self.get_variable,
             resolve_type_callback=self.resolve_type,
+            get_struct_members_callback=self.get_struct_members,
         )
         expr, expr_type = simplify_type_system(expr, identifiers=self.identifiers)
         return self.simplifier.visit(expr), self.resolve_type(expr_type)
@@ -2249,11 +2275,14 @@ Expected expression of type '{expected_type.format()}', got '{expr_type.format()
             raise NotImplementedError(
                 f"Unsupported identifier type {type(identifier_definition).__name__}."
             )
+        location = None
+        if len(parent.references[0].locations) > 0:
+            location = parent.references[0].locations[-1]
         expr = create_simple_ref_expr(
             reg=Register.FP,
             offset=0,
             cairo_type=parent.cairo_type,
-            location=None,
+            location=location,
         )
         if isinstance(identifier_definition, OffsetReferenceDefinition):
             for member_name in identifier_definition.member_path.path:
@@ -2302,6 +2331,16 @@ Expected expression of type '{expected_type.format()}', got '{expr_type.format()
         self.next_temp_id += 1
         self.scoped_temp_ids[self.current_scope + name] = True
         return name
+
+    def get_struct_members(self, struct_type: TypeStruct) -> List[str]:
+        """
+        Returns the list of members of the given struct.
+        """
+        struct_definition = self.identifiers.get_by_full_name(name=struct_type.resolved_scope)
+        assert isinstance(
+            struct_definition, StructDefinition
+        ), f"Expected StructDefinition, found: {type(struct_definition).__name__}."
+        return list(struct_definition.members.keys())
 
     def _add_next_hint(self, hint: CodeElementHint):
         self.next_instruction_hints.append((hint, self.flow_tracking.get()))

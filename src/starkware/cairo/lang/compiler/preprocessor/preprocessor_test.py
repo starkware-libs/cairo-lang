@@ -14,6 +14,7 @@ from starkware.cairo.lang.compiler.instruction_builder import InstructionBuilder
 from starkware.cairo.lang.compiler.parser import parse_type
 from starkware.cairo.lang.compiler.preprocessor.default_pass_manager import default_pass_manager
 from starkware.cairo.lang.compiler.preprocessor.preprocess_codes import preprocess_codes
+from starkware.cairo.lang.compiler.preprocessor.preprocessor import AttributeScope
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_test_utils import (
     PRIME,
     TEST_SCOPE,
@@ -819,17 +820,26 @@ with x as y:
 
 
 def test_with_attr_statement():
-    verify_exception(
-        """
-with_attr x:
+    code = """
+[ap] = 0
+with_attr attr_name("attribute value"):
+    [ap] = 1
 end
-""",
-        """
-file:?:?: with_attr is not supported yet.
-with_attr x:
-          ^
-""",
+[ap] = 2
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert (
+        program.format()
+        == """\
+[ap] = 0
+[ap] = 1
+[ap] = 2
+"""
     )
+    expected_attributes = [
+        AttributeScope(name="attr_name", value="attribute value", start_pc=2, end_pc=4)
+    ]
+    assert program.attributes == expected_attributes
 
 
 def test_implicit_args():
@@ -3728,12 +3738,22 @@ end
         )
 
     verify_exception_for_expr(
-        "T(5, 6, 7)",
+        "T(x=5, y=6, z=7)",
         """
 file:?:?: Cannot cast an expression of type '(felt, felt, felt)' to 'test_scope.T'.
 The former has 3 members while the latter has 2 members.
-    local a : T = T(5, 6, 7)
-                  ^********^
+    local a : T = T(x=5, y=6, z=7)
+                  ^**************^
+""",
+    )
+
+    verify_exception_for_expr(
+        "T(x=5)",
+        """
+file:?:?: Cannot cast an expression of type '(felt)' to 'test_scope.T'.
+The former has 1 members while the latter has 2 members.
+    local a : T = T(x=5)
+                  ^****^
 """,
     )
 
@@ -3743,6 +3763,24 @@ The former has 3 members while the latter has 2 members.
 file:?:?: Expression has no address.
     local a : T = &T(5, 6)
                    ^*****^
+""",
+    )
+
+    verify_exception_for_expr(
+        "T(a=5, b=6)",
+        """
+file:?:?: Argument name mismatch for 'test_scope.T': expected 'x', found 'a'.
+    local a : T = T(a=5, b=6)
+                    ^
+""",
+    )
+
+    verify_exception_for_expr(
+        "T(5, x=6)",
+        """
+file:?:?: Argument name mismatch for 'test_scope.T': expected 'y', found 'x'.
+    local a : T = T(5, x=6)
+                       ^
 """,
     )
 

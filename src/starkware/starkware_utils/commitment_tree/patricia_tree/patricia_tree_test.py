@@ -5,7 +5,7 @@ from typing import Iterable, Set, Tuple
 import pytest
 from queue import Queue
 
-from starkware.crypto.signature.fast_pedersen_hash import async_pedersen_hash_func
+from starkware.crypto.signature.fast_pedersen_hash import pedersen_hash_func
 from starkware.python.random_test import parametrize_random_object
 from starkware.python.utils import from_bytes, to_bytes
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
@@ -22,10 +22,10 @@ from starkware.storage.test_utils import MockStorage
 
 @pytest.fixture
 def ffc() -> FactFetchingContext:
-    return FactFetchingContext(storage=MockStorage(), hash_func=async_pedersen_hash_func)
+    return FactFetchingContext(storage=MockStorage(), hash_func=pedersen_hash_func)
 
 
-async def hash_preimage(preimage: Tuple[int, ...]) -> int:
+def hash_preimage(preimage: Tuple[int, ...]) -> int:
     """
     Preimages have variadic length.
 
@@ -38,7 +38,7 @@ async def hash_preimage(preimage: Tuple[int, ...]) -> int:
     else:
         length, path, bottom = preimage
         node_fact = EdgeNodeFact(bottom_node=to_bytes(bottom), edge_path=path, edge_length=length)
-    return from_bytes(await node_fact._hash(hash_func=async_pedersen_hash_func))
+    return from_bytes(node_fact._hash(hash_func=pedersen_hash_func))
 
 
 def verify_leaves_are_reachable_from_root(
@@ -102,7 +102,7 @@ async def test_update_and_decommit(
     # Sanity check - the hash of the values should be the keys.
     for fact, preimage in preimages.items():
         assert (
-            await hash_preimage(preimage=preimage) == fact
+            hash_preimage(preimage=preimage) == fact
         ), f"Corrupted preimages: hash of {preimage} is not {fact}."
 
     # Verify that the root can be reached using the preimages, from every leaf.

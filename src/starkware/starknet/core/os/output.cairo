@@ -2,13 +2,23 @@ from starkware.cairo.common.segments import relocate_segment
 from starkware.cairo.common.serialize import serialize_word
 from starkware.starknet.core.os.state import CommitmentTreeUpdateOutput
 
-# A cross layer message header, the message payload is concatenated to the end of the header.
-# The sender/receiver can be on L1 or L2 depending on the message direction.
-struct MessageHeader:
-    # The address of the contract sending the message.
+# An L2 to L1 message header, the message payload is concatenated to the end of the header.
+struct MessageToL1Header:
+    # The L2 address of the contract sending the message.
     member from_address : felt
-    # The address of the contract receiving the message.
+    # The L1 address of the contract receiving the message.
     member to_address : felt
+    member payload_size : felt
+end
+
+# An L1 to L2 message header, the message payload is concatenated to the end of the header.
+struct MessageToL2Header:
+    # The L1 address of the contract sending the message.
+    member from_address : felt
+    # The L2 address of the contract receiving the message.
+    member to_address : felt
+    member nonce : felt
+    member selector : felt
     member payload_size : felt
 end
 
@@ -22,10 +32,16 @@ end
 
 # Holds all the information that StarkNet's OS needs to output.
 struct OsCarriedOutputs:
-    member messages_to_l1 : MessageHeader*
-    member messages_to_l2 : MessageHeader*
+    member messages_to_l1 : MessageToL1Header*
+    member messages_to_l2 : MessageToL2Header*
     # A concatenated list of deployment infos, each consists of DeploymentInfoHeader and calldata.
     member deployment_info : DeploymentInfoHeader*
+end
+
+struct BlockInfo:
+    # Currently, the block timestamp is not validated.
+    member block_timestamp : felt
+    member block_number : felt
 end
 
 struct OsOutput:
@@ -33,6 +49,7 @@ struct OsOutput:
     member commitment_tree_update_output : CommitmentTreeUpdateOutput*
     member initial_outputs : OsCarriedOutputs
     member final_outputs : OsCarriedOutputs
+    member block_info : BlockInfo
 end
 
 func os_output_serialize{output_ptr : felt*}(
@@ -42,6 +59,8 @@ func os_output_serialize{output_ptr : felt*}(
     # Serialize roots.
     serialize_word(os_output.commitment_tree_update_output.initial_storage_root)
     serialize_word(os_output.commitment_tree_update_output.final_storage_root)
+
+    serialize_word(os_output.block_info.block_number)
 
     let messages_to_l1_segment_size = (
         os_output.final_outputs.messages_to_l1 -

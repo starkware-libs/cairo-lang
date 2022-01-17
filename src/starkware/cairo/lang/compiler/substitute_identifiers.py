@@ -1,4 +1,4 @@
-from typing import Callable, Optional, Union
+from typing import Callable, List, Optional, Union
 
 from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypeStruct
 from starkware.cairo.lang.compiler.ast.expr import (
@@ -18,6 +18,7 @@ from starkware.cairo.lang.compiler.type_casts import CairoTypeError
 
 GetIdentifierCallback = Callable[[ExprIdentifier], Union[int, Expression]]
 ResolveTypeCallback = Optional[Callable[[CairoType], CairoType]]
+GetStructMembersCallback = Optional[Callable[[TypeStruct], List[str]]]
 
 
 class SubstituteIdentifiers(ExpressionTransformer):
@@ -25,6 +26,7 @@ class SubstituteIdentifiers(ExpressionTransformer):
         self,
         get_identifier_callback: GetIdentifierCallback,
         resolve_type_callback: ResolveTypeCallback = None,
+        get_struct_members_callback: GetStructMembersCallback = None,
     ):
         super().__init__()
         self.get_identifier_callback = get_identifier_callback
@@ -33,6 +35,7 @@ class SubstituteIdentifiers(ExpressionTransformer):
             if resolve_type_callback is not None
             else (lambda cairo_type: cairo_type)
         )
+        self.get_struct_members_callback = get_struct_members_callback
 
     def visit_ExprIdentifier(self, expr: ExprIdentifier) -> Expression:
         val = self.get_identifier_callback(expr)
@@ -87,6 +90,25 @@ class SubstituteIdentifiers(ExpressionTransformer):
             )
         )
 
+        # Verify named arguments in struct constructor.
+        if self.get_struct_members_callback is not None:
+            assert isinstance(struct_type, TypeStruct)
+            struct_members = self.get_struct_members_callback(struct_type)
+            # Note that it's OK if len(struct_members) != len(rvalue.arguments.args) as
+            # length compatibility of cast is checked later on.
+            for member, expr_assignment in zip(struct_members, rvalue.arguments.args):
+                identifier = expr_assignment.identifier
+                if identifier is None:
+                    continue
+
+                call_member = identifier.name
+                if call_member != member:
+                    raise CairoTypeError(
+                        f"Argument name mismatch for '{struct_type.format()}': "
+                        f"expected '{member}', found '{call_member}'.",
+                        location=identifier.location,
+                    )
+
         return self.visit(
             ExprCast(
                 expr=ExprTuple(rvalue.arguments, location=expr.location),
@@ -103,6 +125,7 @@ def substitute_identifiers(
     expr: Expression,
     get_identifier_callback: GetIdentifierCallback,
     resolve_type_callback: ResolveTypeCallback = None,
+    get_struct_members_callback: GetStructMembersCallback = None,
 ) -> Expression:
     """
     Replaces identifiers by other expressions according to the given callback.
@@ -110,4 +133,5 @@ def substitute_identifiers(
     return SubstituteIdentifiers(
         get_identifier_callback=get_identifier_callback,
         resolve_type_callback=resolve_type_callback,
+        get_struct_members_callback=get_struct_members_callback,
     ).visit(expr)

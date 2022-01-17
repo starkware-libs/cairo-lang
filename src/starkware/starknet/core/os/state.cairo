@@ -17,13 +17,23 @@ struct StateEntry:
     member storage_ptr : DictAccess*
 end
 
-func serialize_da_changes{storage_updates_ptr : felt*}(update_ptr : DictAccess*, n_updates : felt):
+struct StorageUpdateEntry:
+    member address : felt
+    member value : felt
+end
+
+func serialize_da_changes{storage_updates : StorageUpdateEntry*}(
+        update_ptr : DictAccess*, n_updates : felt):
     if n_updates == 0:
         return ()
     end
-    assert [storage_updates_ptr] = update_ptr.key
-    assert [storage_updates_ptr + 1] = update_ptr.new_value
-    let storage_updates_ptr = storage_updates_ptr + 2
+    if update_ptr.prev_value == update_ptr.new_value:
+        tempvar storage_updates = storage_updates
+    else:
+        assert [storage_updates] = StorageUpdateEntry(
+            address=update_ptr.key, value=update_ptr.new_value)
+        tempvar storage_updates = storage_updates + StorageUpdateEntry.SIZE
+    end
     return serialize_da_changes(update_ptr=update_ptr + DictAccess.SIZE, n_updates=n_updates - 1)
 end
 
@@ -46,14 +56,18 @@ func state_update{hash_ptr : HashBuiltin*, range_check_ptr, storage_updates_ptr 
     # multi-update.
     let (local hashed_state_changes : DictAccess*) = alloc()
     local n_state_changes = (squashed_dict_end - squashed_dict) / DictAccess.SIZE
-    assert [storage_updates_ptr] = n_state_changes
+    # Make room for number of state updates.
+    let output_n_updates = [storage_updates_ptr]
     let storage_updates_ptr = storage_updates_ptr + 1
-    hash_state_changes(
-        n_state_changes=n_state_changes,
-        state_changes=squashed_dict,
-        hashed_state_changes=hashed_state_changes)
-    local range_check_ptr = range_check_ptr
-    local storage_updates_ptr : felt* = storage_updates_ptr
+    let n_actual_state_changes = 0
+    with n_actual_state_changes:
+        hash_state_changes(
+            n_state_changes=n_state_changes,
+            state_changes=squashed_dict,
+            hashed_state_changes=hashed_state_changes)
+    end
+    # Write number of state updates.
+    assert output_n_updates = n_actual_state_changes
 
     # Compute the initial and final roots of the global state.
     let (local commitment_tree_update_output : CommitmentTreeUpdateOutput*) = alloc()
@@ -104,8 +118,13 @@ end
 # Takes a dict of StateEntry structs and produces a dict of hashes by hashing
 # every entry of the input dict. The output is written to 'hashed_state_changes'
 #
-# Additionally, all the updates are written to the 'global_state_storage' hint variable.
-func hash_state_changes{hash_ptr : HashBuiltin*, range_check_ptr, storage_updates_ptr : felt*}(
+# Writes all updates to the 'global_state_storage' hint variable.
+#
+# Writes all storage changes to output (storage_updates_ptr), 'n_actual_state_changes'
+# will hold the number of contracts with storage changes.
+func hash_state_changes{
+        hash_ptr : HashBuiltin*, range_check_ptr, storage_updates_ptr : felt*,
+        n_actual_state_changes}(
         n_state_changes, state_changes : DictAccess*, hashed_state_changes : DictAccess*):
     if n_state_changes == 0:
         return ()
@@ -135,7 +154,6 @@ func hash_state_changes{hash_ptr : HashBuiltin*, range_check_ptr, storage_update
         dict_accesses=prev_state.storage_ptr,
         dict_accesses_end=new_state.storage_ptr,
         squashed_dict=squashed_storage_dict)
-    local range_check_ptr = range_check_ptr
 
     local n_updates = (squashed_storage_dict_end - squashed_storage_dict) / DictAccess.SIZE
     let vault_merkle_multi_update_ret = patricia_update(
@@ -144,17 +162,6 @@ func hash_state_changes{hash_ptr : HashBuiltin*, range_check_ptr, storage_update
         height=MERKLE_HEIGHT,
         prev_root=initial_storage_root,
         new_root=final_storage_root)
-    local range_check_ptr = range_check_ptr
-
-    # Write contract address.
-    assert [storage_updates_ptr] = state_changes.key
-    # Write n_updates.
-    assert [storage_updates_ptr + 1] = n_updates
-    let storage_updates_ptr = storage_updates_ptr + 2
-    # Write updates.
-    local hash_ptr : HashBuiltin* = hash_ptr
-    serialize_da_changes(update_ptr=squashed_storage_dict, n_updates=n_updates)
-    local storage_updates_ptr : felt* = storage_updates_ptr
 
     let (prev_value) = get_contract_state_hash(
         contract_hash=prev_state.contract_hash, storage_root=initial_storage_root)
@@ -166,8 +173,46 @@ func hash_state_changes{hash_ptr : HashBuiltin*, range_check_ptr, storage_update
 
     %{ global_state_storage.write(address=ids.hashed_state_changes.key, value=ids.new_value) %}
 
+    let hashed_state_changes = hashed_state_changes + DictAccess.SIZE
+
+    # Write storage updates to output (storage_updates_ptr).
+
+    # Prepare updates.
+    local storage_updates_start : StorageUpdateEntry*
+    %{ ids.storage_updates_start = segments.add_temp_segment() %}
+    let storage_updates = storage_updates_start
+    with storage_updates:
+        serialize_da_changes(update_ptr=squashed_storage_dict, n_updates=n_updates)
+    end
+
+    # Number of actual updates.
+    local n_updates = (storage_updates - storage_updates_start) / StorageUpdateEntry.SIZE
+
+    if n_updates == 0:
+        # Relocate the temporary segment even if it's empty (to fix the addresses written in
+        # the memory).
+        relocate_segment(src_ptr=storage_updates_start, dest_ptr=storage_updates_ptr)
+
+        # There are no storage updates for this contract.
+        return hash_state_changes(
+            n_state_changes=n_state_changes - 1,
+            state_changes=state_changes + DictAccess.SIZE,
+            hashed_state_changes=hashed_state_changes)
+    end
+
+    # Write contract address and number of updates.
+    assert [storage_updates_ptr] = state_changes.key
+    assert [storage_updates_ptr + 1] = n_updates
+    let storage_updates_ptr = storage_updates_ptr + 2
+
+    # Write the updates.
+    relocate_segment(src_ptr=storage_updates_start, dest_ptr=storage_updates_ptr)
+    let storage_updates_ptr = cast(storage_updates, felt*)
+
+    let n_actual_state_changes = n_actual_state_changes + 1
+
     return hash_state_changes(
         n_state_changes=n_state_changes - 1,
         state_changes=state_changes + DictAccess.SIZE,
-        hashed_state_changes=hashed_state_changes + DictAccess.SIZE)
+        hashed_state_changes=hashed_state_changes)
 end

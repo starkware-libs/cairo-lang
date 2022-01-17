@@ -64,10 +64,10 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
     """
 
 
-class EverestInternalTransaction(ValidatedMarshmallowDataclass):
+class EverestInternalStateTransaction(ValidatedMarshmallowDataclass):
     """
     Base class of application-specific internal transaction base classes.
-    Contains the API of an internal transaction.
+    Contains the API of an internal transaction that can apply changes on the state.
     """
 
     schema_tracker: ClassVar[Optional[SchemaTracker]] = None
@@ -90,6 +90,57 @@ class EverestInternalTransaction(ValidatedMarshmallowDataclass):
         if cls.schema_tracker is None:
             return
         cls.schema_tracker.add_class(cls)
+
+    @abstractmethod
+    async def apply_state_updates(
+        self, state: CarriedStateBase, general_config: Config
+    ) -> Optional[EverestTransactionExecutionInfo]:
+        """
+        Applies the transaction on the state in an atomic manner.
+        Returns an object containing information about the execution of the transaction, or None -
+        can be decided per application.
+        The arguments must be downcasted (by asserting their type) to the application-specific
+        corresponding types.
+        """
+
+    @abstractmethod
+    def get_state_selector(self, general_config: Config) -> StateSelectorBase:
+        """
+        Returns the state selector of the transaction (i.e., subset of state Merkle leaves it
+        affects).
+        The arguments must be downcasted (by asserting their type) to the application-specific
+        corresponding types.
+        """
+
+    @staticmethod
+    @abstractmethod
+    def get_state_selector_of_many(
+        txs: Iterable["EverestInternalStateTransaction"], general_config: Config
+    ) -> StateSelectorBase:
+        """
+        Returns the state selector of a collection of transactions (i.e., union of selectors).
+        The implementation of this method must be to downcast the return type.
+        """
+
+    @staticmethod
+    def _get_state_selector_of_many(
+        txs: Iterable["EverestInternalStateTransaction"],
+        general_config: Config,
+        state_selector_cls: Type[StateSelectorBase],
+    ) -> StateSelectorBase:
+        return functools.reduce(
+            operator.__or__,
+            (tx.get_state_selector(general_config=general_config) for tx in txs),
+            state_selector_cls.empty(),
+        )
+
+
+class EverestInternalTransaction(EverestInternalStateTransaction):
+    """
+    Base class of application-specific internal transaction base classes.
+    Contains the API of an internal transaction that can apply changes on the state
+    and be converted from/to an external transaction.
+    """
 
     @property
     @classmethod
@@ -121,50 +172,7 @@ class EverestInternalTransaction(ValidatedMarshmallowDataclass):
         """
 
     @abstractmethod
-    def get_state_selector(self, general_config: Config) -> StateSelectorBase:
-        """
-        Returns the state selector of the transaction (i.e., subset of state Merkle leaves it
-        affects).
-        The arguments must be downcasted (by asserting their type) to the application-specific
-        corresponding types.
-        """
-
-    @abstractmethod
-    async def apply_state_updates(
-        self, state: CarriedStateBase, general_config: Config
-    ) -> Optional[EverestTransactionExecutionInfo]:
-        """
-        Applies the transaction on the Merkle state in an atomic manner.
-        Returns an object containing information about the execution of the transaction, or None -
-        can be decided per application.
-        The arguments must be downcasted (by asserting their type) to the application-specific
-        corresponding types.
-        """
-
-    @abstractmethod
     def verify_signatures(self):
         """
         Verifies the signatures in the transaction.
         """
-
-    @staticmethod
-    @abstractmethod
-    def get_state_selector_of_many(
-        txs: Iterable["EverestInternalTransaction"], general_config: Config
-    ) -> StateSelectorBase:
-        """
-        Returns the state selector of a collection of transactions (i.e., union of selectors).
-        The implementation of this method must be to downcast the return type.
-        """
-
-    @staticmethod
-    def _get_state_selector_of_many(
-        txs: Iterable["EverestInternalTransaction"],
-        general_config: Config,
-        state_selector_cls: Type[StateSelectorBase],
-    ) -> StateSelectorBase:
-        return functools.reduce(
-            operator.__or__,
-            (tx.get_state_selector(general_config=general_config) for tx in txs),
-            state_selector_cls.empty(),
-        )

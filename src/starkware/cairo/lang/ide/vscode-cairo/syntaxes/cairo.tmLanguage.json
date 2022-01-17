@@ -51,6 +51,30 @@
             }
         },
         {
+            "name": "meta.control.with_attr",
+            "begin": "\\b(with_attr)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*[(:]",
+            "beginCaptures": {
+                "1": {
+                    "name": "keyword.control.with_attr"
+                },
+                "2": {
+                    "name": "entity.name.function"
+                }
+            },
+            "contentName": "source.cairo",
+            "end": "\\bend\\b",
+            "patterns": [
+                {
+                    "include": "source.cairo"
+                }
+            ],
+            "endCaptures": {
+                "0": {
+                    "name": "keyword.control.end"
+                }
+            }
+        },
+        {
             "name": "keyword.control.else",
             "match": "\\belse\\b"
         },
@@ -137,6 +161,10 @@
         {
             "name": "string.quoted.single",
             "match": "'[^']*'"
+        },
+        {
+            "name": "string.quoted.double",
+            "match": "\"[^\"]*\""
         },
         {
             "begin": "%{",

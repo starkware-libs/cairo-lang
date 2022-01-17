@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type, Union
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type, TypeVar, Union
 
 from starkware.cairo.lang.builtins.bitwise.bitwise_builtin_runner import BitwiseBuiltinRunner
 from starkware.cairo.lang.builtins.hash.hash_builtin_runner import HashBuiltinRunner
@@ -36,6 +36,8 @@ from starkware.crypto.signature.signature import inv_mod_curve_size
 from starkware.python.math_utils import next_power_of_2, safe_div
 from starkware.python.utils import WriteOnceDict
 from starkware.starkware_utils.subsequence import is_subsequence
+
+TCairoRunner = TypeVar("TCairoRunner", bound="CairoRunner")
 
 
 def verify_ecdsa_sig(public_key, msg, signature) -> bool:
@@ -127,7 +129,7 @@ class CairoRunner:
 
         self.memory = memory if memory is not None else MemoryDict()
         self.segments = MemorySegmentManager(memory=self.memory, prime=self.program.prime)
-        self.segment_offsets = None
+        self.segment_offsets: Optional[Dict[int, int]] = None
         self.final_pc: Optional[RelocatableValue] = None
 
         # Flags used to ensure a safe use.
@@ -139,7 +141,7 @@ class CairoRunner:
 
     @classmethod
     def from_file(
-        cls,
+        cls: Type[TCairoRunner],
         filename: str,
         prime: int,
         layout: str = "plain",
@@ -148,7 +150,7 @@ class CairoRunner:
         memory: MemoryDict = None,
         preprocessor_cls: Type[Preprocessor] = Preprocessor,
         proof_mode: Optional[bool] = None,
-    ) -> "CairoRunner":
+    ) -> TCairoRunner:
         module_reader = get_module_reader(cairo_path=[])
         program = compile_cairo_files(
             files=[filename],
@@ -278,7 +280,7 @@ class CairoRunner:
         Runs the VM until pc reaches 'addr', and stop right before that instruction is executed.
         """
         if run_resources is None:
-            run_resources = RunResources(steps=None)
+            run_resources = RunResources(n_steps=None)
 
         while self.vm.run_context.pc != addr and not run_resources.consumed:
             self.vm_step()
@@ -558,6 +560,10 @@ class CairoRunner:
 
     def relocate_value(self, value):
         return relocate_value(value, self.segment_offsets, self.program.prime)
+
+    def get_segment_offsets(self) -> Dict[int, int]:
+        assert self.segment_offsets is not None, "segment_offsets is not initialized."
+        return self.segment_offsets
 
     def relocate(self):
         self.segment_offsets = self.segments.relocate_segments()

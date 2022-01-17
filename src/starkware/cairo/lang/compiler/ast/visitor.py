@@ -53,6 +53,7 @@ class Visitor:
                 returns=elm.returns,
                 code_block=self.visit(elm.code_block),
                 decorators=elm.decorators,
+                additional_attributes=elm.additional_attributes,
             )
 
     def visit_CairoModule(self, module: CairoModule):

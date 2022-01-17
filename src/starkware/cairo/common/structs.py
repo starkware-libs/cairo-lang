@@ -12,7 +12,10 @@ from starkware.python.utils import WriteOnceDict
 
 class CairoStructFactory:
     def __init__(
-        self, identifiers: IdentifierManager, additional_imports: Optional[List[str]] = None
+        self,
+        identifiers: IdentifierManager,
+        main_scope: Optional[ScopedName] = None,
+        additional_imports: Optional[List[str]] = None,
     ):
         """
         Creates a CairoStructFactory that converts Cairo structs to python namedtuples.
@@ -22,6 +25,7 @@ class CairoStructFactory:
           Useful for importing absolute paths, rather than relative.
         """
         self.identifiers = identifiers
+        self.main_scopes = [main_scope] if main_scope is not None else []
 
         self.resolved_identifiers: MutableMapping[ScopedName, ScopedName] = WriteOnceDict()
         if additional_imports is not None:
@@ -33,7 +37,11 @@ class CairoStructFactory:
 
     @classmethod
     def from_program(cls, program: Program, additional_imports: Optional[List[str]] = None):
-        return cls(identifiers=program.identifiers, additional_imports=additional_imports)
+        return cls(
+            identifiers=program.identifiers,
+            additional_imports=additional_imports,
+            main_scope=program.main_scope,
+        )
 
     def _get_full_name(self, name: ScopedName):
         full_name = self.resolved_identifiers.get(name)
@@ -41,7 +49,7 @@ class CairoStructFactory:
             return full_name
 
         return self.identifiers.search(
-            accessible_scopes=[ScopedName.from_string("__main__"), ScopedName()], name=name
+            accessible_scopes=[*self.main_scopes, ScopedName()], name=name
         ).get_canonical_name()
 
     def get_struct_definition(self, name: ScopedName) -> StructDefinition:

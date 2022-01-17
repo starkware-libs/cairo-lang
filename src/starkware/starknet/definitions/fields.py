@@ -3,6 +3,7 @@ from typing import Any, Dict, Type
 
 import marshmallow
 import marshmallow.fields as mfields
+import marshmallow.utils
 
 from services.everest.definitions import fields as everest_fields
 from starkware.python.utils import from_bytes
@@ -13,7 +14,11 @@ from starkware.starkware_utils.field_validators import (
     validate_non_negative,
     validate_positive,
 )
-from starkware.starkware_utils.marshmallow_dataclass_fields import BytesAsHex, IntAsStr
+from starkware.starkware_utils.marshmallow_dataclass_fields import (
+    BytesAsHex,
+    IntAsStr,
+    StrictRequiredInteger,
+)
 from starkware.starkware_utils.validated_fields import (
     OptionalField,
     RangeValidatedField,
@@ -22,12 +27,12 @@ from starkware.starkware_utils.validated_fields import (
 
 # Fields data: validation data, dataclass metadata.
 
-block_number_metadata = sequential_id_metadata(field_name="Block number")
-optional_block_number_metadata = sequential_id_metadata(
-    field_name="Block number", required=False, allow_none=True
+block_number_metadata = sequential_id_metadata(field_name="Block number", allow_previous_id=True)
+default_optional_block_number_metadata = sequential_id_metadata(
+    field_name="Block number", required=False, allow_none=True, load_default=None
 )
-optional_transaction_index_metadata = sequential_id_metadata(
-    field_name="Transaction index", required=False, allow_none=True
+default_optional_transaction_index_metadata = sequential_id_metadata(
+    field_name="Transaction index", required=False, allow_none=True, load_default=None
 )
 
 felt_list_metadata = dict(
@@ -90,8 +95,8 @@ contract_hash_metadata = dict(
 )
 
 contract_storage_commitment_tree_height_metadata = dict(
-    marshmallow_field=mfields.Integer(
-        required=True, validate=validate_positive("contract_storage_commitment_tree_height")
+    marshmallow_field=StrictRequiredInteger(
+        validate=validate_positive("contract_storage_commitment_tree_height")
     )
 )
 
@@ -116,9 +121,7 @@ EntryPointOffsetField = RangeValidatedField(
 entry_point_offset_metadata = EntryPointOffsetField.metadata()
 
 global_state_commitment_tree_height_metadata = dict(
-    marshmallow_field=mfields.Integer(
-        strict=True,
-        required=True,
+    marshmallow_field=StrictRequiredInteger(
         validate=validate_non_negative("global_state_commitment_tree_height"),
     )
 )
@@ -156,15 +159,11 @@ OptionalBlockHashField = OptionalField(field=BlockHashField, none_probability=0)
 optional_block_hash_metadata = OptionalBlockHashField.metadata()
 
 timestamp_metadata = dict(
-    marshmallow_field=mfields.Integer(
-        strict=True, required=True, validate=validate_non_negative("timestamp")
-    )
+    marshmallow_field=StrictRequiredInteger(validate=validate_non_negative("timestamp"))
 )
 
 invoke_tx_n_steps_metadata = dict(
-    marshmallow_field=mfields.Integer(
-        strict=True, required=True, validate=validate_non_negative("invoke_tx_n_steps")
-    )
+    marshmallow_field=StrictRequiredInteger(validate=validate_non_negative("invoke_tx_n_steps"))
 )
 
 
@@ -188,3 +187,6 @@ sequencer_address_metadata = address_metadata(
 caller_address_metadata = address_metadata(
     name="Caller address", error_code=StarknetErrorCode.OUT_OF_RANGE_CALLER_ADDRESS
 )
+
+OptionalNonceField = OptionalField(field=everest_fields.FeltField, none_probability=0)
+optional_nonce_metadata = OptionalNonceField.metadata()

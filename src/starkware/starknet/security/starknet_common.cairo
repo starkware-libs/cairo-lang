@@ -7,7 +7,7 @@ from starkware.cairo.common.keccak import unsafe_keccak
 from starkware.cairo.common.math import (
     abs_value, assert_250_bit, assert_in_range, assert_le, assert_le_felt, assert_lt,
     assert_lt_felt, assert_nn, assert_nn_le, assert_not_equal, assert_not_zero, sign,
-    signed_div_rem, split_felt, split_int, unsigned_div_rem)
+    signed_div_rem, split_felt, split_int, sqrt, unsigned_div_rem)
 from starkware.cairo.common.math_cmp import (
     is_in_range, is_le, is_le_felt, is_nn, is_nn_le, is_not_zero)
 from starkware.cairo.common.memcpy import memcpy
@@ -17,10 +17,11 @@ from starkware.cairo.common.squash_dict import squash_dict
 from starkware.cairo.common.uint256 import (
     uint256_add, uint256_and, uint256_cond_neg, uint256_eq, uint256_le, uint256_lt, uint256_mul,
     uint256_neg, uint256_not, uint256_or, uint256_shl, uint256_shr, uint256_signed_div_rem,
-    uint256_signed_le, uint256_signed_lt, uint256_signed_nn, uint256_signed_nn_le, uint256_sub,
-    uint256_unsigned_div_rem, uint256_xor)
+    uint256_signed_le, uint256_signed_lt, uint256_signed_nn, uint256_signed_nn_le, uint256_sqrt,
+    uint256_sub, uint256_unsigned_div_rem, uint256_xor)
 from starkware.starknet.common.messages import send_message_to_l1
 from starkware.starknet.common.storage import normalize_address
 from starkware.starknet.common.syscalls import (
-    call_contract, delegate_call, get_caller_address, get_contract_address, get_sequencer_address,
+    call_contract, delegate_call, delegate_l1_handler, emit_event, get_block_number,
+    get_block_timestamp, get_caller_address, get_contract_address, get_sequencer_address,
     get_tx_signature, storage_read, storage_write)

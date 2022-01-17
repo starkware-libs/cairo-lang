@@ -1,5 +1,7 @@
 import dataclasses
-from typing import Callable, List, Optional, Tuple
+from typing import List
+
+from typing_extensions import Protocol
 
 from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeBlock,
@@ -7,7 +9,7 @@ from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeElementFunction,
     CommentedCodeElement,
 )
-from starkware.cairo.lang.compiler.error_handling import Location, ParentLocation
+from starkware.cairo.lang.compiler.error_handling import ParentLocation
 from starkware.cairo.lang.compiler.parser import ParserContext
 from starkware.cairo.lang.compiler.preprocessor.identifier_aware_visitor import (
     IdentifierAwareVisitor,
@@ -17,13 +19,16 @@ from starkware.cairo.lang.compiler.preprocessor.preprocessor_utils import (
     autogen_parse_code_block,
     verify_empty_code_block,
 )
-from starkware.starknet.compiler.data_encoder import (
-    ArgumentInfo,
-    EncodingType,
-    decode_data,
-    encode_data,
+from starkware.starknet.compiler.data_encoder import ArgumentInfo, EncodingType, decode_data
+from starkware.starknet.compiler.validation_utils import (
+    encode_calldata_arguments,
+    get_function_attr,
+    has_decorator,
+    non_optional_location,
+    verify_decorators,
+    verify_no_implicit_arguments,
+    verify_starknet_lang,
 )
-from starkware.starknet.definitions.constants import STARKNET_LANG_DIRECTIVE
 from starkware.starknet.public.abi import get_selector_from_name
 
 CONTRACT_INTERFACE_DECORATOR = "contract_interface"
@@ -57,8 +62,7 @@ class ContractFunctionInfo:
     @staticmethod
     def from_code_element(contract_name: str, elm: CodeElementFunction) -> "ContractFunctionInfo":
         name = elm.identifier.name
-        func_location = elm.identifier.location
-        assert func_location is not None
+        func_location = non_optional_location(elm.identifier.location)
 
         if len(elm.decorators) != 0:
             raise PreprocessorError(
@@ -71,12 +75,7 @@ class ContractFunctionInfo:
             error_message="Contract interface functions must have an empty body.",
             default_location=elm.identifier.location,
         )
-
-        if elm.implicit_arguments is not None and len(elm.implicit_arguments.identifiers) != 0:
-            raise PreprocessorError(
-                "Contract interface functions must have no implicit arguments.",
-                location=elm.implicit_arguments.location,
-            )
+        verify_no_implicit_arguments(elm=elm, name_in_error_message="Contract interface functions")
 
         return ContractFunctionInfo(
             elm=elm,
@@ -108,16 +107,14 @@ class ContractInterfaceInfo:
             )
 
         # Make sure there are no decorators other than CONTRACT_INTERFACE_DECORATOR.
-        for decorator in elm.decorators:
-            if decorator.name != CONTRACT_INTERFACE_DECORATOR:
-                raise PreprocessorError(
-                    f"Unexpected decorator for a contract interface.",
-                    location=decorator.location,
-                )
+        verify_decorators(
+            elm=elm,
+            allowed_decorators=[CONTRACT_INTERFACE_DECORATOR],
+            name_in_error_message="a contract interface",
+        )
 
         contract_name = elm.identifier.name
-        contract_name_location = elm.identifier.location
-        assert contract_name_location is not None
+        contract_name_location = non_optional_location(elm.identifier.location)
 
         functions: List[ContractFunctionInfo] = []
         for commented_func_code_elm in elm.code_block.code_elements:
@@ -149,14 +146,27 @@ class ContractInterfaceInfo:
         )
 
 
+def process_function_selector(function_info: ContractFunctionInfo) -> List[CommentedCodeElement]:
+    code = f"""\
+const {function_info.selector} = {get_selector_from_name(function_info.name)}
+"""
+    code_block = autogen_parse_code_block(
+        path=function_info.autogen_code_name,
+        code=code,
+        parser_context=ParserContext(
+            parent_location=function_info.parent_location,
+        ),
+    )
+    return code_block.code_elements
+
+
 def process_contract_function(
-    function_info: ContractFunctionInfo, func_body: CodeBlock
+    function_info: ContractFunctionInfo, func_body: CodeBlock, is_delegate: bool
 ) -> List[CommentedCodeElement]:
     func_code_elm = function_info.elm
-    selector_value = get_selector_from_name(function_info.name)
+    func_name = f"{'delegate_' if is_delegate else ''}{function_info.name}"
     code = f"""\
-const {function_info.selector} = {selector_value}
-func {function_info.name}{{syscall_ptr : felt*, range_check_ptr}}(
+func {func_name}{{syscall_ptr : felt*, range_check_ptr}}(
     contract_address : felt):
 end
 """
@@ -168,8 +178,7 @@ end
             parent_location=function_info.parent_location,
         ),
     )
-
-    call_func = code_block.code_elements[1].code_elm
+    call_func = code_block.code_elements[0].code_elm
     assert isinstance(call_func, CodeElementFunction)
     call_func.arguments = dataclasses.replace(
         func_code_elm.arguments,
@@ -181,17 +190,21 @@ end
     return code_block.code_elements
 
 
+class FuncBodyCallback(Protocol):
+    def __call__(self, function_info: ContractFunctionInfo, is_delegate: bool) -> CodeBlock:
+        pass
+
+
 def generate_contract_interface_namespace(
     contract_info: ContractInterfaceInfo,
-    func_body_callback: Callable[[ContractFunctionInfo], CodeBlock],
+    func_body_callback: FuncBodyCallback,
 ) -> CodeElementFunction:
     contract_name = contract_info.name
-
     code = f"""\
 namespace {contract_name}:
     from starkware.cairo.common.alloc import alloc
     from starkware.cairo.common.memcpy import memcpy
-    from starkware.starknet.common.syscalls import call_contract
+    from starkware.starknet.common.syscalls import call_contract, delegate_call
 end
 """
 
@@ -207,25 +220,17 @@ end
     assert isinstance(res, CodeElementFunction) and res.element_type == "namespace"
 
     for function_info in contract_info.functions:
-        res.code_block.code_elements += process_contract_function(
-            function_info=function_info,
-            func_body=func_body_callback(function_info),
-        )
+        res.code_block.code_elements += process_function_selector(function_info)
+        for is_delegate in [False, True]:
+            res.code_block.code_elements += process_contract_function(
+                function_info=function_info,
+                func_body=func_body_callback(function_info=function_info, is_delegate=is_delegate),
+                is_delegate=is_delegate,
+            )
 
     res.additional_attributes[CONTRACT_INTERFACE_ATTR] = contract_info
 
     return res
-
-
-def is_contract_interface(elm: CodeElementFunction) -> Tuple[bool, Optional[Location]]:
-    """
-    Returns whether the given namespace has the contract_interface decorator.
-    If it does, the location of the decorator is returned.
-    """
-    for decorator in elm.decorators:
-        if decorator.name == CONTRACT_INTERFACE_DECORATOR:
-            return True, decorator.location
-    return False, None
 
 
 class ContractInterfaceDeclVisitor(IdentifierAwareVisitor):
@@ -239,14 +244,16 @@ class ContractInterfaceDeclVisitor(IdentifierAwareVisitor):
         return obj
 
     def visit_CodeElementFunction(self, elm: CodeElementFunction):
-        contract_interface, contract_interface_location = is_contract_interface(elm)
-        if contract_interface:
-            if self.file_lang != STARKNET_LANG_DIRECTIVE:
-                raise PreprocessorError(
-                    "@contract_interface can only be used in source files that contain the "
-                    '"%lang starknet" directive.',
-                    location=contract_interface_location,
-                )
+        is_contract_interface, contract_interface_location = has_decorator(
+            elm=elm, decorator_name=CONTRACT_INTERFACE_DECORATOR
+        )
+        if is_contract_interface:
+            verify_starknet_lang(
+                file_lang=self.file_lang,
+                location=contract_interface_location,
+                name_in_error_message=f"@{CONTRACT_INTERFACE_DECORATOR}",
+            )
+
             return generate_contract_interface_namespace(
                 ContractInterfaceInfo.from_code_element(elm),
                 func_body_callback=self.generate_contract_function_body,
@@ -254,17 +261,19 @@ class ContractInterfaceDeclVisitor(IdentifierAwareVisitor):
 
         return elm
 
-    def generate_contract_function_body(self, function_info: ContractFunctionInfo):
+    def generate_contract_function_body(
+        self, function_info: ContractFunctionInfo, is_delegate: bool
+    ):
         # Add dummy references and calls that will be visited by the identifier collector
         # and the dependency graph.
         # Those statements will later be replaced by the real implementation.
-        code = """
+        code = f"""
 let calldata_ptr_start = 0
 let retdata_size = 0
 let retdata = 0
 call alloc
 call memcpy
-call call_contract
+call {"delegate_call" if is_delegate else "call_contract"}
 """
         return autogen_parse_code_block(
             path=function_info.autogen_code_name,
@@ -275,12 +284,7 @@ call call_contract
         )
 
 
-def non_optional_location(location: Optional[Location]) -> Location:
-    assert location is not None
-    return location
-
-
-class ContractInterfaceImplentationVisitor(IdentifierAwareVisitor):
+class ContractInterfaceImplementationVisitor(IdentifierAwareVisitor):
     """
     Replaces @contract_interface decorated namespaces (obtained from the additional attribute
     CONTRACT_INTERFACE_ATTR added by ContractInterfaceDeclVisitor) with a namespace with
@@ -291,18 +295,20 @@ class ContractInterfaceImplentationVisitor(IdentifierAwareVisitor):
         return obj
 
     def visit_CodeElementFunction(self, elm: CodeElementFunction):
-        attr = elm.additional_attributes.get(CONTRACT_INTERFACE_ATTR)
-        if attr is None:
+        contract_info = get_function_attr(
+            elm=elm, attr_name=CONTRACT_INTERFACE_ATTR, attr_type=ContractInterfaceInfo
+        )
+        if contract_info is None:
             return elm
 
-        assert isinstance(attr, ContractInterfaceInfo)
-
         return generate_contract_interface_namespace(
-            attr,
+            contract_info=contract_info,
             func_body_callback=self.generate_contract_function_body,
         )
 
-    def generate_contract_function_body(self, function_info: ContractFunctionInfo):
+    def generate_contract_function_body(
+        self, function_info: ContractFunctionInfo, is_delegate: bool
+    ):
         def get_code_elements(code: str) -> List[CommentedCodeElement]:
             return autogen_parse_code_block(
                 path=function_info.autogen_code_name,
@@ -322,24 +328,13 @@ let __calldata_ptr = calldata_ptr_start
         )
 
         # Handle inputs.
-        args = [
-            ArgumentInfo(
-                name=typed_identifier.identifier.name,
-                cairo_type=self.resolve_type(typed_identifier.get_type()),
-                location=non_optional_location(typed_identifier.identifier.location),
-            )
-            for typed_identifier in function_info.elm.arguments.identifiers
-        ]
-        code_elements += encode_data(
-            arguments=args,
-            encoding_type=EncodingType.CALLDATA,
-            has_range_check_builtin=True,
-            identifiers=self.identifiers,
+        code_elements += encode_calldata_arguments(
+            arguments=function_info.elm.arguments, visitor=self
         )
-
+        # Add the system call.
         code_elements += get_code_elements(
             code=f"""
-let (retdata_size, retdata) = call_contract(
+let (retdata_size, retdata) = {"delegate_call" if is_delegate else "call_contract"}(
     contract_address=contract_address,
     function_selector={function_info.selector},
     calldata_size=__calldata_ptr - calldata_ptr_start,

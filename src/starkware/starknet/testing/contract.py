@@ -1,5 +1,4 @@
-import functools
-import itertools
+import dataclasses
 import sys
 import types
 from collections import namedtuple
@@ -17,15 +16,16 @@ from starkware.cairo.lang.compiler.ast.cairo_types import (
 from starkware.cairo.lang.compiler.parser import parse_type
 from starkware.cairo.lang.compiler.type_system import mark_type_resolved
 from starkware.python.utils import safe_zip
-from starkware.starknet.public.abi_structs import struct_definition_from_abi_entry
-from starkware.starknet.testing.contract_utils import flatten, parse_arguments
+from starkware.starknet.business_logic.transaction_execution_objects import OrderedEventContent
+from starkware.starknet.testing.contract_utils import (
+    EventManager,
+    StructManager,
+    flatten,
+    parse_arguments,
+)
 from starkware.starknet.testing.objects import StarknetTransactionExecutionInfo
 from starkware.starknet.testing.state import CastableToAddress, StarknetState
-
-# Type annotation for a function that reconstructs the retdata - from a flat list to its Cairo-like
-# structure; gets a list of values and returns a named tuple representing the retdata of a StarkNet
-# function, filled with those values.
-RetdataReconstructFunc = Callable[[List[int]], Tuple]
+from starkware.starknet.utils.api_utils import cast_to_felts
 
 # Represents Python types, in particular those that are parallel to the cairo ones:
 # int, tuple and list (matching the cairo types TypeFelt, TypeTuple/TypeStruct and TypePointer).
@@ -45,21 +45,25 @@ class StarknetContract:
       await contract.foo(a=1, b=[2, 3]).invoke()
     """
 
-    def __init__(self, state: StarknetState, abi: List[Any], contract_address: CastableToAddress):
+    def __init__(
+        self,
+        state: StarknetState,
+        abi: List[Any],
+        contract_address: CastableToAddress,
+        deploy_execution_info: StarknetTransactionExecutionInfo,
+    ):
         self.state = state
+        self.deploy_execution_info = deploy_execution_info
+
+        self.struct_manager = StructManager(abi=abi)
+        self.event_manager = EventManager(abi=abi)
 
         self._abi_function_mapping = {
             abi_entry["name"]: abi_entry for abi_entry in abi if abi_entry["type"] == "function"
         }
-        self._struct_definition_mapping = {
-            abi_entry["name"]: struct_definition_from_abi_entry(abi_entry=abi_entry)
-            for abi_entry in abi
-            if abi_entry["type"] == "struct"
-        }
 
-        # Cached contract functions and structs.
+        # Cached contract functions.
         self._contract_functions: Dict[str, Callable] = {}
-        self._contract_structs: Dict[str, type] = {}
 
         if isinstance(contract_address, str):
             contract_address = int(contract_address, 16)
@@ -71,35 +75,23 @@ class StarknetContract:
 
     def __getattr__(self, name: str):
         if name in self._abi_function_mapping:
-            if name not in self._contract_functions:
-                # Cache contract function.
-                self._contract_functions[name] = self._build_contract_function(
-                    function_abi=self._abi_function_mapping[name]
-                )
-
-            return self._contract_functions[name]
-        elif name in self._struct_definition_mapping:
-            return self.get_contract_struct(name=name)
+            return self.get_contract_function(name=name)
+        elif name in self.struct_manager:
+            return self.struct_manager.get_contract_struct(name=name)
         else:
             raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
-    def get_contract_struct(self, name: str) -> type:
+    def get_contract_function(self, name: str) -> Callable:
         """
-        Returns a named tuple representing the Cairo struct whose name is given
+        Returns a function object that acts as a proxy for a StarkNet contract function.
         """
-        assert name in self._struct_definition_mapping, f"Struct {name} is not defined."
-        if name not in self._contract_structs:
-            # Cache contract struct.
-            self._contract_structs[name] = self._build_contract_struct(name=name)
+        if name not in self._contract_functions:
+            # Cache contract function.
+            self._contract_functions[name] = self._build_contract_function(
+                function_abi=self._abi_function_mapping[name]
+            )
 
-        return self._contract_structs[name]
-
-    def _build_contract_struct(self, name: str) -> type:
-        """
-        Builds and returns a named tuple representing the Cairo struct whose name is given.
-        """
-        struct_def = self._struct_definition_mapping[name]
-        return namedtuple(typename=name, field_names=struct_def.members.keys())
+        return self._contract_functions[name]
 
     def _build_contract_function(self, function_abi: dict) -> Callable:
         """
@@ -183,7 +175,7 @@ class StarknetContract:
                 )
             ]
         if isinstance(arg_type, TypeStruct):
-            struct_def = self._struct_definition_mapping[arg_type.scope.path[-1]]
+            struct_def = self.struct_manager.get_struct_definition(name=arg_type.scope.path[-1])
             return Tuple[
                 tuple(
                     self._get_annotation(arg_type=member.cairo_type, is_nested=True)
@@ -220,123 +212,170 @@ class StarknetContract:
             )
             value = flatten(name=name, value=value)
             if isinstance(arg_cairo_type, TypePointer):
-                calldata.append(len(value))
+                calldata.append(len(args[name]))
 
             calldata.extend(value)
 
-        # Prepare the retdata reconstruction function: a function that turns a flat list of return
-        # values to a Pythonic version of its original Cairo structure.
-        # We build it here to keep StarknetContractFunctionInvocation neat.
         function_name = function_abi["name"]
-        retdata_reconstructor: RetdataReconstructFunc = functools.partial(
-            self._build_retdata,
-            retdata_tuple=namedtuple(f"{function_name}_return_type", retdata_arg_names),
-            arg_types=retdata_arg_types,
-        )
 
         return StarknetContractFunctionInvocation(
             state=self.state,
+            struct_manager=self.struct_manager,
+            event_manager=self.event_manager,
             contract_address=self.contract_address,
-            function_abi=function_abi,
-            calldata=calldata,
-            retdata_reconstructor=retdata_reconstructor,
+            name=function_name,
+            calldata=cast_to_felts(values=calldata),
+            retdata_arg_types=retdata_arg_types,
+            retdata_tuple=namedtuple(f"{function_name}_return_type", retdata_arg_names),
         )
 
-    def _build_retdata(
-        self, retdata: List[int], retdata_tuple: type, arg_types: List[CairoType]
-    ) -> Tuple:
-        """
-        Reconstructs a Pythonic variant of the original Cairo structure of the retdata, deduced by
-        the arguments Cairo types, and fills it with the given (flat list of) return values.
-        """
 
-        def build_retdata_arg(
-            arg_type: CairoType, retdata: Iterator[int]
-        ) -> Union[int, tuple, List[int]]:
-            if isinstance(arg_type, TypeFelt):
-                return next(retdata)
-            if isinstance(arg_type, TypeTuple):
-                return tuple(
-                    build_retdata_arg(arg_type=member, retdata=retdata)
-                    for member in arg_type.members
-                )
-            if isinstance(arg_type, TypeStruct):
-                struct_name = arg_type.scope.path[-1]
-                struct_def = self._struct_definition_mapping[struct_name]
-                contract_struct = self.get_contract_struct(name=struct_name)
-                return contract_struct(
-                    *(
-                        build_retdata_arg(arg_type=member.cairo_type, retdata=retdata)
-                        for member in struct_def.members.values()
-                    )
-                )
-            if isinstance(arg_type, TypePointer) and isinstance(arg_type.pointee, TypeFelt):
-                arr_len = next(retdata)
-                # Return the next arr_len elements from retdata.
-                return list(itertools.islice(retdata, arr_len))
-
-            raise NotImplementedError
-
-        retdata_iterator = iter(retdata)
-        res = [
-            build_retdata_arg(arg_type=arg_type, retdata=retdata_iterator) for arg_type in arg_types
-        ]
-        # Make sure the iterator is empty.
-        assert next(retdata_iterator, None) is None, "Too many return values."
-        return retdata_tuple(*res)
+class ArgumentParsingFailed(Exception):
+    pass
 
 
+@dataclasses.dataclass
 class StarknetContractFunctionInvocation:
     """
-    A call to a StarkNet contract with a particular state and set of inputs
+    Represents a call to a StarkNet contract with a particular state and set of inputs.
     """
 
-    def __init__(
-        self,
-        state: StarknetState,
-        contract_address: CastableToAddress,
-        function_abi: dict,
-        calldata: List[int],
-        retdata_reconstructor: RetdataReconstructFunc,
-    ):
-        self.state = state
-        self.contract_address = contract_address
-        self.function_abi = function_abi
-        self.calldata = calldata
-        self.retdata_reconstructor = retdata_reconstructor
+    state: StarknetState
+    struct_manager: StructManager
+    event_manager: EventManager
+    contract_address: CastableToAddress
+    name: str
+    calldata: List[int]
+    retdata_arg_types: List[CairoType]
+    retdata_tuple: type
 
     async def call(
         self, caller_address: int = 0, signature: List[int] = None
     ) -> StarknetTransactionExecutionInfo:
         """
-        Executes the function call, without changing the state.
+        Executes the function call without changing the state.
         """
-        execution_info = await self.state.copy().invoke_raw(
-            contract_address=self.contract_address,
-            selector=self.function_abi["name"],
-            calldata=self.calldata,
-            caller_address=caller_address,
-            signature=signature,
-        )
-        return StarknetTransactionExecutionInfo.from_internal(
-            tx_execution_info=execution_info,
-            result=self.retdata_reconstructor(execution_info.retdata),
+        return await self._invoke_on_given_state(
+            state=self.state.copy(), caller_address=caller_address, signature=signature
         )
 
     async def invoke(
         self, caller_address: int = 0, signature: List[int] = None
     ) -> StarknetTransactionExecutionInfo:
         """
-        Executes the function call, and apply changes on the state.
+        Executes the function call and apply changes on the state.
         """
-        execution_info = await self.state.invoke_raw(
+        return await self._invoke_on_given_state(
+            state=self.state, caller_address=caller_address, signature=signature
+        )
+
+    async def _invoke_on_given_state(
+        self, state: StarknetState, caller_address: int = 0, signature: List[int] = None
+    ) -> StarknetTransactionExecutionInfo:
+        """
+        Executes the function call and apply changes on the given state.
+        """
+        execution_info = await state.invoke_raw(
             contract_address=self.contract_address,
-            selector=self.function_abi["name"],
+            selector=self.name,
             calldata=self.calldata,
             caller_address=caller_address,
-            signature=signature,
+            signature=None if signature is None else cast_to_felts(values=signature),
         )
+        main_call_raw_events = execution_info.call_info.events
+
         return StarknetTransactionExecutionInfo.from_internal(
             tx_execution_info=execution_info,
-            result=self.retdata_reconstructor(execution_info.retdata),
+            result=self._build_arguments(
+                arg_values=execution_info.retdata,
+                arg_types=self.retdata_arg_types,
+                args_tuple=self.retdata_tuple,
+            ),
+            main_call_events=self._build_events(raw_events=main_call_raw_events),
         )
+
+    def _build_events(self, raw_events: List[OrderedEventContent]) -> List[tuple]:
+        """
+        Given a list of low-level events, builds contract events (i.e., a named tuple) from those
+        corresponding to high-level ones.
+        """
+        events: List[tuple] = []
+        for raw_event in raw_events:
+            if len(raw_event.keys) == 0 or raw_event.keys[0] not in self.event_manager:
+                # It is a low-level event emitted using directly the emit_event syscall.
+                continue
+
+            selector = raw_event.keys[0]
+            arg_values = raw_event.keys[1:] + raw_event.data
+
+            # Try to parse the low-level event as a high-level one (note it is possible for a
+            # low-level event to contain a valid selector in its keys without being a valid high
+            # level event - i.e., without the exact amount of data).
+            try:
+                events.append(
+                    self._build_arguments(
+                        arg_values=arg_values,
+                        arg_types=self.event_manager.get_event_argument_types(identifier=selector),
+                        args_tuple=self.event_manager.get_contract_event(identifier=selector),
+                    )
+                )
+            except ArgumentParsingFailed:
+                pass
+
+        return events
+
+    def _build_arguments(
+        self, arg_values: List[int], arg_types: List[CairoType], args_tuple: type
+    ) -> tuple:
+        """
+        Reconstructs a Pythonic variant of the original Cairo structure of the arguments, deduced by
+        their Cairo types, and fills it with the given (flat list of) values.
+        """
+
+        def build_arg(
+            arg_type: CairoType, arg_value_iterator: Iterator[int]
+        ) -> Union[int, tuple, List[Any]]:
+            """
+            Reconstructs a Pythonic variant of the original Cairo structure of the given argument.
+            """
+            if isinstance(arg_type, TypeFelt):
+                return next(arg_value_iterator)
+            if isinstance(arg_type, TypeTuple):
+                return tuple(
+                    build_arg(arg_type=member, arg_value_iterator=arg_value_iterator)
+                    for member in arg_type.members
+                )
+            if isinstance(arg_type, TypeStruct):
+                struct_name = arg_type.scope.path[-1]
+                struct_def = self.struct_manager.get_struct_definition(name=struct_name)
+                contract_struct = self.struct_manager.get_contract_struct(name=struct_name)
+                return contract_struct(
+                    *(
+                        build_arg(arg_type=member.cairo_type, arg_value_iterator=arg_value_iterator)
+                        for member in struct_def.members.values()
+                    )
+                )
+            if isinstance(arg_type, TypePointer):
+                arr_len = next(arg_value_iterator)
+                return [
+                    build_arg(arg_type=arg_type.pointee, arg_value_iterator=arg_value_iterator)
+                    for _ in range(arr_len)
+                ]
+
+            raise NotImplementedError
+
+        arg_value_iterator = iter(arg_values)
+
+        try:
+            res = [
+                build_arg(arg_type=arg_type, arg_value_iterator=arg_value_iterator)
+                for arg_type in arg_types
+            ]
+        except StopIteration:
+            raise ArgumentParsingFailed("Too few argument values.")
+
+        # Make sure the iterator is empty.
+        if next(arg_value_iterator, None) is not None:
+            raise ArgumentParsingFailed("Too many argument values.")
+
+        return args_tuple(*res)

@@ -4,7 +4,7 @@ from typing import List
 import pytest
 
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
-from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt, TypePointer, TypeTuple
+from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypeFelt, TypePointer
 from starkware.cairo.lang.compiler.error_handling import InputFile, Location
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.parser import parse_type
@@ -24,6 +24,10 @@ scope = ScopedName.from_string
 FELT_STAR_STAR = TypePointer(pointee=FELT_STAR)
 
 
+def parse_resolved_type(typ_str: str) -> CairoType:
+    return mark_type_resolved(parse_type(typ_str))
+
+
 def dummy_location():
     return Location(
         start_line=1,
@@ -32,6 +36,18 @@ def dummy_location():
         end_col=4,
         input_file=InputFile(filename=None, content=""),
     )
+
+
+def identifiers_for_testing() -> IdentifierManager:
+    return preprocess_str(
+        """
+struct MyStruct:
+    member x : felt
+    member y : felt
+end
+""",
+        prime=DEFAULT_PRIME,
+    ).identifiers
 
 
 def run_decode_data(
@@ -46,7 +62,7 @@ def run_decode_data(
         encoding_type=encoding_type,
         has_range_check_builtin=has_range_check_builtin,
         location=dummy_location(),
-        identifiers=IdentifierManager(),
+        identifiers=identifiers_for_testing(),
     )
 
 
@@ -54,11 +70,15 @@ def test_decode_data_flow():
     location = dummy_location()
     arguments = [
         ArgumentInfo(name="a_len", cairo_type=TypeFelt(), location=location),
-        ArgumentInfo(name="a", cairo_type=FELT_STAR, location=location),
+        ArgumentInfo(
+            name="a",
+            cairo_type=parse_resolved_type("(test_scope.MyStruct, (felt, felt))*"),
+            location=location,
+        ),
         ArgumentInfo(name="b", cairo_type=TypeFelt(), location=location),
         ArgumentInfo(
             name="c",
-            cairo_type=TypeTuple(members=[TypeFelt(), TypeTuple(members=[TypeFelt(), TypeFelt()])]),
+            cairo_type=parse_resolved_type("(felt, (felt, felt))"),
             location=location,
         ),
     ]
@@ -76,10 +96,10 @@ let __calldata_ptr = __calldata_ptr + 1
 assert [range_check_ptr] = __calldata_arg_a_len
 let range_check_ptr = range_check_ptr + 1
 # Create the reference.
-let __calldata_arg_a : felt* = __calldata_ptr
+let __calldata_arg_a = cast(__calldata_ptr, (test_scope.MyStruct, (felt, felt))*)
 # Use 'tempvar' instead of 'let' to avoid repeating this computation for the
 # following arguments.
-tempvar __calldata_ptr = __calldata_ptr + __calldata_arg_a_len
+tempvar __calldata_ptr = __calldata_ptr + __calldata_arg_a_len * 4
 
 let __calldata_arg_b = [__calldata_ptr]
 let __calldata_ptr = __calldata_ptr + 1
@@ -123,7 +143,8 @@ let __return_value_arg_a_len = [__return_value_ptr]
 def test_decode_data_failure():
     location = dummy_location()
     with pytest.raises(
-        PreprocessorError, match=re.escape("Unsupported calldata argument type felt**.")
+        PreprocessorError,
+        match=re.escape("Only pointers to types that consist of felts are supported."),
     ):
         run_decode_data(
             [
@@ -159,31 +180,25 @@ def test_decode_data_failure():
 
 
 def test_encode_data_for_return():
-    identifiers = preprocess_str(
-        """
-struct MyStruct:
-    member x : felt
-    member y : felt
-end
-""",
-        prime=DEFAULT_PRIME,
-    ).identifiers
-
     location = dummy_location()
     code_elements = encode_data(
         [
             ArgumentInfo(name="a", cairo_type=TypeFelt(), location=location),
             ArgumentInfo(name="b_len", cairo_type=TypeFelt(), location=location),
-            ArgumentInfo(name="b", cairo_type=FELT_STAR, location=location),
+            ArgumentInfo(
+                name="b",
+                cairo_type=parse_resolved_type("(test_scope.MyStruct, felt)*"),
+                location=location,
+            ),
             ArgumentInfo(
                 name="c",
-                cairo_type=mark_type_resolved(parse_type("(test_scope.MyStruct, felt)")),
+                cairo_type=parse_resolved_type("(test_scope.MyStruct, felt)"),
                 location=location,
             ),
         ],
         encoding_type=EncodingType.RETURN,
         has_range_check_builtin=True,
-        identifiers=identifiers,
+        identifiers=identifiers_for_testing(),
         arg_name_func=lambda arg_info: f"x.{arg_info.name}",
     )
 
@@ -205,8 +220,8 @@ local range_check_ptr = range_check_ptr + 1
 let __return_value_ptr_copy = __return_value_ptr
 # Store the updated __return_value_ptr as a local variable to keep it available after
 # the memcpy.
-local __return_value_ptr : felt* = __return_value_ptr + x.b_len
-memcpy(dst=__return_value_ptr_copy, src=x.b, len=x.b_len)
+local __return_value_ptr : felt* = __return_value_ptr + x.b_len * 3
+memcpy(dst=__return_value_ptr_copy, src=x.b, len=x.b_len * 3)
 
 # Create a reference to x.c as felt*.
 let __return_value_tmp : felt* = cast(&x.c, felt*)

@@ -287,8 +287,12 @@
                 "from starkware.cairo.common.math_utils import assert_integer",
                 "assert_integer(ids.a)",
                 "assert_integer(ids.b)",
-                "assert (ids.a % PRIME) < (ids.b % PRIME), \\",
-                "    f'a = {ids.a % PRIME} is not less than b = {ids.b % PRIME}.'"
+                "a = ids.a % PRIME",
+                "b = ids.b % PRIME",
+                "assert a <= b, f'a = {a} is not less than or equal to b = {b}.'",
+                "",
+                "ids.small_inputs = int(",
+                "    a < range_check_builtin.bound and (b - a) < range_check_builtin.bound)"
             ]
         },
         {
@@ -297,8 +301,8 @@
                 "from starkware.cairo.common.math_utils import assert_integer",
                 "assert_integer(ids.a)",
                 "assert_integer(ids.b)",
-                "assert (ids.a % PRIME) <= (ids.b % PRIME), \\",
-                "    f'a = {ids.a % PRIME} is not less than or equal to b = {ids.b % PRIME}.'"
+                "assert (ids.a % PRIME) < (ids.b % PRIME), \\",
+                "    f'a = {ids.a % PRIME} is not less than b = {ids.b % PRIME}.'"
             ]
         },
         {
@@ -338,6 +342,27 @@
                 "assert both_ints or both_relocatable, \\",
                 "    f'assert_not_equal failed: non-comparable values: {ids.a}, {ids.b}.'",
                 "assert (ids.a - ids.b) % PRIME != 0, f'assert_not_equal failed: {ids.a} = {ids.b}.'"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "from starkware.python.math_utils import isqrt",
+                "n = (ids.n.high << 128) + ids.n.low",
+                "root = isqrt(n)",
+                "assert 0 <= root < 2 ** 128",
+                "ids.root.low = root",
+                "ids.root.high = 0"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "from starkware.python.math_utils import isqrt",
+                "value = ids.value % PRIME",
+                "assert value < 2 ** 250, f\"value={value} is outside of the range [0, 2**250).\"",
+                "assert 2 ** 250 < PRIME",
+                "ids.root = isqrt(value)"
             ]
         },
         {
@@ -470,6 +495,30 @@
             "allowed_expressions": [],
             "hint_lines": [
                 "syscall_handler.delegate_call(segments=segments, syscall_ptr=ids.syscall_ptr)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "syscall_handler.delegate_l1_handler(segments=segments, syscall_ptr=ids.syscall_ptr)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "syscall_handler.emit_event(segments=segments, syscall_ptr=ids.syscall_ptr)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "syscall_handler.get_block_number(segments=segments, syscall_ptr=ids.syscall_ptr)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "syscall_handler.get_block_timestamp(segments=segments, syscall_ptr=ids.syscall_ptr)"
             ]
         },
         {

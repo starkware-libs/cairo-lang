@@ -18,6 +18,7 @@ class InputFile:
         if self.content is None:
             assert self.filename is not None, "Content must be set if filename is None."
             self.content = open(self.filename, "r").read()
+
         return self.content
 
 
@@ -78,7 +79,10 @@ class Location:
         location marks.
         """
         first_line = self.to_string(message=message)
-        content = self.input_file.get_content()
+        try:
+            content = self.input_file.get_content()
+        except FileNotFoundError:
+            return first_line
         return first_line + "\n" + get_location_marks(content, self)
 
     def __repr__(self):
@@ -122,28 +126,44 @@ class LocationError(Exception):
     def __init__(
         self,
         message,
-        location: Optional[Location],
+        location: Optional[Location] = None,
+        error_attr_value: Optional[str] = None,
         traceback: Optional[str] = None,
         notes: Optional[List[str]] = None,
     ):
+        """
+        Constructs an exception with (an optional) location information.
+
+        error_attr_value - an optional error attribute value. If given, it must end with a newline.
+        """
         super().__init__(message, location)
         self.message = message
+        self.error_attr_value = error_attr_value
         self.location = location
         self.traceback = traceback
         self.notes: List[str] = [] if notes is None else notes
 
     def __str__(self):
+        res = ""
+
+        # Add error message.
+        if self.error_attr_value is not None:
+            res += self.error_attr_value
+
+        # Add location.
         if self.location is None:
-            res = self.message + "\n"
+            res += self.message + "\n"
         else:
-            res = ""
+            location_str = ""
             location, message = self.location, self.message
             while True:
-                res = location.to_string_with_content(message) + "\n" + res
+                location_str = location.to_string_with_content(message) + "\n" + location_str
                 if location.parent_location is None:
                     break
                 location, message = location.parent_location
+            res += location_str
 
+        # Add traceback.
         if self.traceback is not None:
             res += self.traceback + "\n"
 

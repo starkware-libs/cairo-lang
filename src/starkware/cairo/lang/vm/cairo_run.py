@@ -6,7 +6,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from typing import BinaryIO, Dict, List, Tuple
+from typing import IO, Dict, List, Tuple
 
 import starkware.python.python_dependencies as python_dependencies
 from starkware.cairo.lang.compiler.debug_info import DebugInfo
@@ -293,7 +293,7 @@ def cairo_run(args):
         else:
             additional_steps = 1 if args.proof_mode else 0
             max_steps = steps_input - additional_steps if steps_input is not None else None
-            runner.run_until_pc(end, run_resources=RunResources(steps=max_steps))
+            runner.run_until_pc(end, run_resources=RunResources(n_steps=max_steps))
             if args.proof_mode:
                 # Run one more step to make sure the last pc that was executed (rather than the pc
                 # after it) is __end__.
@@ -360,7 +360,6 @@ def cairo_run(args):
         runner.print_segment_relocation_table()
 
     if trace_file is not None:
-        field_bytes = math.ceil(program.prime.bit_length() / 8)
         write_binary_trace(trace_file, runner.relocated_trace)
 
     if memory_file is not None:
@@ -374,7 +373,7 @@ def cairo_run(args):
             public_input_file=args.air_public_input,
             memory=runner.relocated_memory,
             public_memory_addresses=runner.segments.get_public_memory_addresses(
-                runner.segment_offsets
+                segment_offsets=runner.get_segment_offsets()
             ),
             memory_segment_addresses=runner.get_memory_segment_addresses(),
             trace=runner.relocated_trace,
@@ -402,8 +401,9 @@ def cairo_run(args):
         args.air_private_input.flush()
 
     if debug_info_file is not None:
-        json.dump(DebugInfo.Schema().dump(runner.get_relocated_debug_info()), debug_info_file)
-        debug_info_file.flush()
+        write_debug_info(
+            debug_info_file=debug_info_file, debug_info=runner.get_relocated_debug_info()
+        )
 
     if args.tracer:
         CAIRO_TRACER = "starkware.cairo.lang.tracer.tracer"
@@ -453,13 +453,13 @@ def cairo_run(args):
     return ret_code
 
 
-def write_binary_trace(trace_file, trace: List[TraceEntry[int]]):
+def write_binary_trace(trace_file: IO[bytes], trace: List[TraceEntry[int]]):
     for trace_entry in trace:
         trace_file.write(trace_entry.serialize())
     trace_file.flush()
 
 
-def write_binary_memory(memory_file: BinaryIO, memory: MemoryDict, field_bytes: int):
+def write_binary_memory(memory_file: IO[bytes], memory: MemoryDict, field_bytes: int):
     """
     Dumps the memory file.
     """
@@ -468,7 +468,7 @@ def write_binary_memory(memory_file: BinaryIO, memory: MemoryDict, field_bytes: 
 
 
 def write_air_public_input(
-    public_input_file,
+    public_input_file: IO[str],
     memory: MemoryDict,
     layout: str,
     public_memory_addresses: List[Tuple[int, int]],
@@ -502,6 +502,11 @@ def write_air_public_input(
     public_input_file.write(PublicInput.Schema().dumps(public_input, indent=4))
     public_input_file.write("\n")
     public_input_file.flush()
+
+
+def write_debug_info(debug_info_file: IO[str], debug_info: DebugInfo):
+    json.dump(obj=DebugInfo.Schema().dump(debug_info), fp=debug_info_file)
+    debug_info_file.flush()
 
 
 if __name__ == "__main__":

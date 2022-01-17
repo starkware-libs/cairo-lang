@@ -28,7 +28,7 @@ def test_run_until_label():
     assert runner.vm.run_context.pc - runner.program_base == 6
     assert runner.vm.current_step == 6
     with pytest.raises(VmException, match="End of program was not reached"):
-        runner.run_until_label("label0", run_resources=RunResources(steps=100))
+        runner.run_until_label("label0", run_resources=RunResources(n_steps=100))
     assert runner.vm.run_context.pc - runner.program_base == 8
     assert runner.vm.current_step == 106
     runner.run_until_next_power_of_2()

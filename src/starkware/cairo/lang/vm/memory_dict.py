@@ -158,7 +158,7 @@ class MemoryDict:
         if relocation is None:
             return value
 
-        return relocation + value.offset
+        return self.relocate_value(relocation) + value.offset
 
     def relocate_memory(self):
         """

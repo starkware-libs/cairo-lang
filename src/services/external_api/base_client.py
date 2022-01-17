@@ -10,6 +10,7 @@ from urllib.parse import urljoin
 import aiohttp
 
 from services.external_api.has_uri_prefix import HasUriPrefix
+from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ class BadRequest(Exception):
 
 
 @dataclasses.dataclass(frozen=True)
-class RetryConfig:
+class RetryConfig(ValidatedDataclass):
     """
     A configuration defining the retry protocol for failed HTTP requests.
     """
@@ -58,6 +59,7 @@ class BaseClient(HasUriPrefix):
         url: str,
         certificates_path: Optional[str] = None,
         retry_config: Optional[RetryConfig] = None,
+        validate_server_crt: bool = True,
     ):
         self.url = url
         self.ssl_context: Optional[ssl.SSLContext] = None
@@ -77,7 +79,11 @@ class BaseClient(HasUriPrefix):
                 keyfile=os.path.join(certificates_path, "user.key"),
             )
 
-            self.ssl_context.load_verify_locations(os.path.join(certificates_path, "server.crt"))
+            # Enforce usage of server certificate authentication.
+            if validate_server_crt:
+                self.ssl_context.load_verify_locations(
+                    os.path.join(certificates_path, "server.crt")
+                )
 
     async def _send_request(
         self, send_method: str, uri: str, data: Optional[Union[str, Dict[str, Any]]] = None
@@ -110,22 +116,29 @@ class BaseClient(HasUriPrefix):
                                 raise BadRequest(status_code=response.status, text=text)
 
                             return text
-            except aiohttp.ClientError:
+            except aiohttp.ClientError as exception:
+                error_message = f"Got {type(exception).__name__}"
+
                 if limited_retries and n_retries_left == 0:
+                    logger.error(error_message, exc_info=True)
                     raise
 
-                logger.error("ClientConnectorError, retrying...", exc_info=True)
+                logger.debug(f"{error_message}, retrying...", exc_info=True)
             except BadRequest as exception:
+                error_message = f"Got {type(exception).__name__}"
+
                 if limited_retries and (
                     n_retries_left == 0
                     or exception.status_code not in self.retry_config.retry_codes
                 ):
+                    logger.error(error_message, exc_info=True)
                     raise
 
-                logger.error(
-                    f"Got BadRequest while trying to access {url}. "
+                logger.debug(
+                    f"{error_message} while trying to access {url}. "
                     f"status_code: {exception.status_code}. text: {exception.text}, "
-                    "retrying..."
+                    "retrying...",
+                    exc_info=True,
                 )
 
             await asyncio.sleep(1)
