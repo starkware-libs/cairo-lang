@@ -20,7 +20,6 @@ from starkware.starknet.services.api.contract_definition import ContractDefiniti
 
 CAIRO_FILE = os.path.join(os.path.dirname(__file__), "contracts.cairo")
 
-
 def load_program() -> Program:
     return compile_cairo_files(
         [CAIRO_FILE],
@@ -28,11 +27,14 @@ def load_program() -> Program:
         main_scope=ScopedName.from_string("starkware.starknet.core.os.contracts"),
     )
 
+# Load the Cairo Program as a static so that it gets initialized at the
+# beginning of a script run.
+CAIRO_PROGRAM = load_program()
 
 def compute_contract_hash(
     contract_definition: ContractDefinition, hash_func: Callable[[int, int], int] = pedersen_hash
 ) -> int:
-    program = load_program()
+    program = CAIRO_PROGRAM
     contract_definition_struct = get_contract_definition_struct(
         identifiers=program.identifiers, contract_definition=contract_definition
     )
