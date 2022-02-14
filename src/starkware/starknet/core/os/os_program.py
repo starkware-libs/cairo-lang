@@ -13,8 +13,12 @@ def get_os_program() -> Program:
     with open(STARKNET_OS_COMPILED_PATH, "r") as file:
         return Program.Schema().loads(json_data=file.read())
 
-
 @cachetools.cached(cache={})
 def get_os_program_hash() -> int:
     program = get_os_program()
     return compute_program_hash_chain(program=program)
+
+# Call this once here so that the cache gets warmed up at
+# the beginning of the script run.
+OS_PROGRAM = get_os_program()
+OS_PROGRAM_HASH = get_os_program_hash()
