@@ -20,7 +20,6 @@ from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import (
 from starkware.starkware_utils.commitment_tree.patricia_tree.virtual_patricia_node import (
     VirtualPatriciaNode,
 )
-from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 from starkware.storage.storage import FactFetchingContext, HashFunctionType
 
 
@@ -67,8 +66,9 @@ class EdgeCalculation(HashCalculation):
         return fact_hash
 
 
+# NOTE: We avoid using ValidatedDataclass here for performance.
 @dataclasses.dataclass(frozen=True)
-class VirtualCalculationNode(CalculationNode[VirtualPatriciaNode], ValidatedDataclass):
+class VirtualCalculationNode(CalculationNode[VirtualPatriciaNode]):
     """
     Represents a virtual calculation node. It consists a bottom calculation and a virtual edge that
     can be empty (and then the calculation just represents the bottom calculation).
@@ -91,16 +91,15 @@ class VirtualCalculationNode(CalculationNode[VirtualPatriciaNode], ValidatedData
         Note that many of the functions in this class rely on the invariants checked in this
         function, and on the fact they are made at initialization time (the object is immutable).
         """
-        super().__post_init__()
-
         verify_path_value(path=self.path, length=self.length)
 
     @classmethod
     def create(cls, node: VirtualPatriciaNode):
         if node.is_empty:
             return cls.empty_node(height=node.height)
+
         return cls(
-            bottom_calculation=ConstantCalculation(hash_value=node.bottom_node),
+            bottom_calculation=ConstantCalculation(value=node.bottom_node),
             path=node.path,
             length=node.length,
             height=node.height,
@@ -117,7 +116,11 @@ class VirtualCalculationNode(CalculationNode[VirtualPatriciaNode], ValidatedData
 
     @property
     def is_empty(self) -> bool:
-        return self.bottom_calculation == ConstantCalculation(EmptyNodeFact.EMPTY_NODE_HASH)
+        # NOTE: we compare directly the values (instead of comparing objects) for performance.
+        if isinstance(self.bottom_calculation, ConstantCalculation):
+            return self.bottom_calculation.value == EmptyNodeFact.EMPTY_NODE_HASH
+
+        return False
 
     @property
     def is_virtual_edge(self) -> bool:
@@ -248,13 +251,13 @@ class VirtualCalculationNode(CalculationNode[VirtualPatriciaNode], ValidatedData
             bottom_fact = await read_node_fact(
                 ffc=ffc,
                 inner_node_fact_cls=PatriciaNodeFact,  # type: ignore
-                fact_hash=self.bottom_calculation.hash_value,
+                fact_hash=self.bottom_calculation.value,
                 facts=facts,
             )
             if isinstance(bottom_fact, EdgeNodeFact):
                 # Moving the edge of the fact into the virtual edge.
                 return VirtualCalculationNode(
-                    bottom_calculation=ConstantCalculation(hash_value=bottom_fact.bottom_node),
+                    bottom_calculation=ConstantCalculation(value=bottom_fact.bottom_node),
                     path=bottom_fact.edge_path,
                     length=bottom_fact.edge_length,
                     height=self.height,

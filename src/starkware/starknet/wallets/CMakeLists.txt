@@ -18,7 +18,12 @@ python_lib(starknet_standard_wallets_lib
     open_zeppelin.py
 
     LIBS
+    cairo_common_lib
     open_zeppelin_contracts_lib
+    starknet_abi_lib
+    starknet_definitions_lib
+    starknet_transaction_lib
     starknet_wallets_lib
     starkware_crypto_lib
+    starkware_error_handling_lib
 )

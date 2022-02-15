@@ -11,7 +11,7 @@ STARKNET_OS_COMPILED_PATH = os.path.join(os.path.dirname(__file__), "starknet_os
 @cachetools.cached(cache={})
 def get_os_program() -> Program:
     with open(STARKNET_OS_COMPILED_PATH, "r") as file:
-        return Program.Schema().loads(json_data=file.read())
+        return Program.loads(data=file.read())
 
 
 @cachetools.cached(cache={})

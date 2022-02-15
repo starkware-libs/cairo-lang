@@ -1,4 +1,3 @@
-import copy
 import dataclasses
 import random
 from abc import ABC, abstractmethod
@@ -91,20 +90,27 @@ class Field(ABC, Generic[T]):
 
     # Serialization.
     @abstractmethod
-    def get_marshmallow_field(self) -> mfields.Field:
+    def get_marshmallow_field(self, required: bool, load_default: Any) -> mfields.Field:
         """
         Returns a marshmallow field that serializes and deserializes values of this field.
         """
 
     # Metadata.
 
-    def metadata(self, field_name: Optional[str] = None):
+    def metadata(
+        self,
+        field_name: Optional[str] = None,
+        required: bool = True,
+        load_default: Any = marshmallow.utils.missing,
+    ) -> Dict[str, Any]:
         """
         Creates the metadata associated with this field. If provided, then use the given field_name
         for messages, and otherwise (if it is None) use the default name.
         """
         return dict(
-            marshmallow_field=self.get_marshmallow_field(),
+            marshmallow_field=self.get_marshmallow_field(
+                required=required, load_default=load_default
+            ),
             validated_field=self,
             name_in_messages=self.name if field_name is None else field_name,
         )
@@ -129,10 +135,6 @@ class OptionalField(Field[Optional[T]]):
         super().__init__(name=field.name, error_code=field.error_code)
         self.field = field
         self.none_probability = max(0, min(1, none_probability))
-        self.mfield: mfields.Field = copy.copy(self.field.get_marshmallow_field())  # type: ignore
-        self.mfield.allow_none = True
-        self.mfield.load_default = None  # type: ignore[attr-defined]
-        self.mfield.required = False
 
     def format(self, value: Optional[T]) -> str:
         if value is None:
@@ -160,8 +162,9 @@ class OptionalField(Field[Optional[T]]):
             return f"{name} is valid (None)."
         return self.field.format_invalid_value_error_message(value=value, name=name)
 
-    def get_marshmallow_field(self) -> mfields.Field:
-        return self.mfield
+    def get_marshmallow_field(self, required: bool, load_default: Any) -> mfields.Field:
+        # Field is created with allow_none=True if load_default is None.
+        return self.field.get_marshmallow_field(required=False, load_default=None)
 
 
 # Mypy has a problem with dataclasses that contain unimplemented abstract methods.
@@ -191,13 +194,13 @@ class BaseRangeValidatedField(Field[int]):
             return str(value)
         return self.formatter(value)
 
-    def get_marshmallow_field(self) -> mfields.Field:
+    def get_marshmallow_field(self, required: bool, load_default: Any) -> mfields.Field:
         if self.formatter == hex:
-            return IntAsHex(required=True)
+            return IntAsHex(required=required, load_default=load_default)
         if self.formatter == str:
-            return IntAsStr(required=True)
+            return IntAsStr(required=required, load_default=load_default)
         if self.formatter is None:
-            return mfields.Integer(required=True)
+            return mfields.Integer(required=required, load_default=load_default)
         raise NotImplementedError(
             f"{self.name}: The given formatter {self.formatter.__name__} "
             "does not have a suitable metadata."
@@ -281,8 +284,8 @@ class BytesLengthField(Field[bytes]):
         return f"{name} {value_repr} length is not {self.length} bytes, instead it is {len(value)}"
 
     # Serialization.
-    def get_marshmallow_field(self) -> mfields.Field:
-        return BytesAsHex(required=True)
+    def get_marshmallow_field(self, required: bool, load_default: Any) -> mfields.Field:
+        return BytesAsHex(required=required, load_default=load_default)
 
     def format(self, value: bytes) -> str:
         return value.hex()
@@ -351,18 +354,16 @@ def sequential_id_metadata(
     field_name: str,
     required: bool = True,
     allow_previous_id: bool = False,
-    allow_none: bool = False,
     load_default: Any = marshmallow.utils.missing,
 ) -> Dict[str, Any]:
+    load_default_value = load_default() if callable(load_default) else load_default
     validator = validate_in_range(
-        field_name=field_name, min_value=-1 if allow_previous_id else 0, allow_none=allow_none
+        field_name=field_name,
+        min_value=-1 if allow_previous_id else 0,
+        allow_none=load_default_value is None,
     )
     return dict(
         marshmallow_field=mfields.Integer(
-            strict=True,
-            required=required,
-            allow_none=allow_none,
-            validate=validator,
-            load_default=load_default,
+            strict=True, required=required, validate=validator, load_default=load_default
         )
     )

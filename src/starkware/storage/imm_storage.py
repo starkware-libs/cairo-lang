@@ -40,7 +40,11 @@ class _ImmediateStorage(Storage):
             self.write_tasks.append(asyncio.create_task(self.storage.del_value(key)))
 
     async def wait_for_all(self):
-        logger.debug("Performing remaining writing tasks to storage...")
+        n_write_tasks = len(self.write_tasks)
+        if n_write_tasks == 0:
+            return
+
+        logger.debug(f"Performing {n_write_tasks} writing tasks to storage...")
 
         logging_chunk_size = 2 ** 8
         for n_handled_tasks, task in enumerate(self.write_tasks):

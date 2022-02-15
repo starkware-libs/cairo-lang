@@ -1,5 +1,5 @@
 import copy
-from typing import Dict, List, Optional, Tuple, Union, cast
+from typing import Dict, List, Optional, Tuple, Union
 
 from starkware.cairo.lang.vm.crypto import pedersen_hash_func
 from starkware.starknet.business_logic.internal_transaction import (
@@ -15,7 +15,6 @@ from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public.abi import get_selector_from_name
 from starkware.starknet.services.api.contract_definition import ContractDefinition, EntryPointType
-from starkware.starknet.services.api.gateway.transaction import Deploy
 from starkware.starknet.services.api.messages import StarknetMessageToL1
 from starkware.storage.dict_storage import DictStorage
 from starkware.storage.storage import FactFetchingContext
@@ -65,7 +64,7 @@ class StarknetState:
             general_config = StarknetGeneralConfig()
 
         ffc = FactFetchingContext(storage=DictStorage(), hash_func=pedersen_hash_func)
-        state = await CarriedState.create_empty_for_test(
+        state = await CarriedState.empty_for_testing(
             shared_state=None, ffc=ffc, general_config=general_config
         )
 
@@ -92,16 +91,12 @@ class StarknetState:
             contract_address_salt = int(contract_address_salt, 16)
         assert isinstance(contract_address_salt, int)
 
-        external_tx = Deploy(
-            contract_address_salt=contract_address_salt,
+        tx = await InternalDeploy.create_for_testing(
+            ffc=self.state.ffc,
             contract_definition=contract_definition,
+            contract_address_salt=contract_address_salt,
             constructor_calldata=constructor_calldata,
-        )
-        tx = cast(
-            InternalDeploy,
-            InternalDeploy.from_external(
-                external_tx=external_tx, general_config=self.general_config
-            ),
+            chain_id=self.general_config.chain_id.value,
         )
 
         with self.state.copy_and_apply() as state_copy:

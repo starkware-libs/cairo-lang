@@ -14,6 +14,7 @@ python_lib(starknet_messages_lib
     starknet_definitions_lib
     starknet_internal_transaction_lib
     starkware_dataclasses_utils_lib
+    starkware_error_handling_lib
 )
 
 python_lib(starknet_contract_definition_lib

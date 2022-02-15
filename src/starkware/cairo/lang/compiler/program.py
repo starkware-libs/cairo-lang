@@ -24,7 +24,7 @@ from starkware.cairo.lang.compiler.preprocessor.preprocessor import AttributeSco
 from starkware.cairo.lang.compiler.references import Reference
 from starkware.cairo.lang.compiler.scoped_name import ScopedName, ScopedNameAsStr
 from starkware.starkware_utils.marshmallow_dataclass_fields import IntAsHex
-from starkware.starkware_utils.validated_dataclass import SerializableMarshmallowDataclass
+from starkware.starkware_utils.serializable_dataclass import SerializableMarshmallowDataclass
 
 
 @dataclasses.dataclass

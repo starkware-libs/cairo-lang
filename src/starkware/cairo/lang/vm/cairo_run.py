@@ -213,7 +213,7 @@ def load_program(program) -> ProgramBase:
             "Did you compile the code before running it? "
             f"Error: '{err}'"
         )
-    return Program.Schema().load(program_json)
+    return Program.load(data=program_json)
 
 
 def cairo_run(args):
@@ -505,7 +505,7 @@ def write_air_public_input(
 
 
 def write_debug_info(debug_info_file: IO[str], debug_info: DebugInfo):
-    json.dump(obj=DebugInfo.Schema().dump(debug_info), fp=debug_info_file)
+    json.dump(obj=debug_info.dump(), fp=debug_info_file)
     debug_info_file.flush()
 
 

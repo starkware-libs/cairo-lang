@@ -26,7 +26,7 @@ from starkware.starknet.compiler.external_wrapper import (
     parse_entry_point_decorators,
 )
 from starkware.starknet.compiler.validation_utils import get_function_attr
-from starkware.starknet.definitions.constants import STARKNET_LANG_DIRECTIVE
+from starkware.starknet.definitions import constants
 from starkware.starknet.public.abi_structs import (
     prepare_type_for_abi,
     struct_definition_to_abi_entry,
@@ -71,7 +71,7 @@ class StarknetPreprocessor(Preprocessor):
             )
 
     def visit_LangDirective(self, directive: LangDirective):
-        if directive.name != STARKNET_LANG_DIRECTIVE:
+        if directive.name != constants.STARKNET_LANG_DIRECTIVE:
             raise PreprocessorError(
                 f"Unsupported %lang directive. Are you using the correct compiler?",
                 location=directive.location,

@@ -25,6 +25,8 @@ ENTRY_POINT_OFFSET_UPPER_BOUND = FIELD_SIZE
 ENTRY_POINT_SELECTOR_LOWER_BOUND = 0
 ENTRY_POINT_SELECTOR_UPPER_BOUND = FIELD_SIZE
 EVENT_COMMITMENT_TREE_HEIGHT = 64
+FEE_LOWER_BOUND = 0
+FEE_UPPER_BOUND = 2 ** 256  # Fee is a uint-256.
 # Default hash to fill the parent_hash field of the first block in the sequence.
 GENESIS_PARENT_BLOCK_HASH = 0
 MAX_MESSAGE_TO_L1_LENGTH = 100
@@ -35,3 +37,17 @@ TRANSACTION_HASH_LOWER_BOUND = 0
 TRANSACTION_HASH_UPPER_BOUND = FIELD_SIZE
 ADDRESS_LOWER_BOUND = 0
 ADDRESS_UPPER_BOUND = 2 ** ADDRESS_BITS
+
+# OS-related constants.
+L1_TO_L2_MSG_HEADER_SIZE = 5
+L2_TO_L1_MSG_HEADER_SIZE = 3
+
+# StarkNet solidity contract-related constants.
+N_DEFAULT_TOPICS = 1  # Events have one default topic.
+# Excluding the default topic.
+LOG_MSG_TO_L1_N_TOPICS = 2
+CONSUMED_MSG_TO_L2_N_TOPICS = 3
+# The headers include the payload size, so we need to add +1 since arrays are encoded with two
+# additional parameters (offset and length) in solidity.
+LOG_MSG_TO_L1_ENCODED_DATA_SIZE = (L2_TO_L1_MSG_HEADER_SIZE + 1) - LOG_MSG_TO_L1_N_TOPICS
+CONSUMED_MSG_TO_L2_ENCODED_DATA_SIZE = (L1_TO_L2_MSG_HEADER_SIZE + 1) - CONSUMED_MSG_TO_L2_N_TOPICS

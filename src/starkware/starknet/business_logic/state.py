@@ -192,7 +192,7 @@ class CarriedState(CarriedStateBase):
         )
 
     @classmethod
-    async def create_empty_for_test(
+    async def empty_for_testing(
         cls,
         shared_state: Optional["SharedState"],
         ffc: FactFetchingContext,

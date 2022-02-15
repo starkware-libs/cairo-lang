@@ -234,8 +234,7 @@ end
 
 # Returns the signature information of the transaction.
 #
-# Note that currently a malicious sequencer may choose to return different values each time
-# this function is called.
+# NOTE: This function is deprecated. Use get_tx_info() instead.
 func get_tx_signature{syscall_ptr : felt*}() -> (signature_len : felt, signature : felt*):
     let syscall = [cast(syscall_ptr, GetTxSignature*)]
     assert syscall.request = GetTxSignatureRequest(selector=GET_TX_SIGNATURE_SELECTOR)
@@ -305,4 +304,48 @@ func emit_event{syscall_ptr : felt*}(keys_len : felt, keys : felt*, data_len : f
     %{ syscall_handler.emit_event(segments=segments, syscall_ptr=ids.syscall_ptr) %}
     let syscall_ptr = syscall_ptr + EmitEvent.SIZE
     return ()
+end
+
+struct TxInfo:
+    # The version of the transaction. It is fixed (currently, 0) in the OS, and should be
+    # signed by the account contract.
+    # This field allows invalidating old transactions, whenever the meaning of the other
+    # transaction fields is changed (in the OS).
+    member version : felt
+
+    # The account contract from which this transaction originates.
+    member account_contract_address : felt
+
+    # The max_fee field of the transaction.
+    member max_fee : felt
+
+    # The signature of the transaction.
+    member signature_len : felt
+    member signature : felt*
+end
+
+const GET_TX_INFO_SELECTOR = 'GetTxInfo'
+
+# Describes the GetTxInfo system call format.
+struct GetTxInfoRequest:
+    # The system call selector (= GET_TX_INFO_SELECTOR).
+    member selector : felt
+end
+
+struct GetTxInfoResponse:
+    member tx_info : TxInfo*
+end
+
+struct GetTxInfo:
+    member request : GetTxInfoRequest
+    member response : GetTxInfoResponse
+end
+
+func get_tx_info{syscall_ptr : felt*}() -> (tx_info : TxInfo*):
+    let syscall = [cast(syscall_ptr, GetTxInfo*)]
+    assert syscall.request = GetTxInfoRequest(selector=GET_TX_INFO_SELECTOR)
+    %{ syscall_handler.get_tx_info(segments=segments, syscall_ptr=ids.syscall_ptr) %}
+    let response = syscall.response
+    let syscall_ptr = syscall_ptr + GetTxInfo.SIZE
+    return (tx_info=response.tx_info)
 end

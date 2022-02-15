@@ -1,7 +1,7 @@
 from typing import Any, AsyncIterator, Collection, Dict, NamedTuple, Optional, Tuple, Type, Union
 
 from starkware.python.utils import from_bytes, gather_in_chunks
-from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict, TFact
+from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
 from starkware.starkware_utils.commitment_tree.binary_fact_tree_node import (
     BinaryFactTreeNode,
     TBinaryFactTreeNode,
@@ -11,6 +11,8 @@ from starkware.starkware_utils.commitment_tree.merkle_tree.traverse_tree import 
 from starkware.starkware_utils.executor import executor_ctx_var
 from starkware.storage.storage import Fact, FactFetchingContext
 
+# Should be Tuple["UpdateTree", "UpdateTree"], but recursive types are not supported in mypy:
+#   https://github.com/python/mypy/issues/731.
 UpdateTree = Optional[Union[Tuple[Any, Any], Fact]]
 NodeType = NamedTuple(
     "NodeType", [("index", int), ("tree", BinaryFactTreeNode), ("update", UpdateTree)]
@@ -40,7 +42,7 @@ async def update_tree(
     """
     # A map from node index to the updated subtree, in which inner nodes are not hashed yet, but
     # rather consist of their children.
-    # This map is populated when we traverse a node and know it's value in the updated tree.
+    # This map is populated when we traverse a node and know its value in the updated tree.
     # This happens when either of these happens:
     # 1. The node has no updates => value remains the same.
     # 2. Node is a leaf update, and we just updated the leaf value.
@@ -67,6 +69,23 @@ async def update_tree(
             del updated_nodes[2 * node_index]
             del updated_nodes[2 * node_index + 1]
 
+    async def update_if_possible(node_index: int, binary_fact_tree_node: BinaryFactTreeNode):
+        updated_nodes[node_index] = calculation_node_cls.create(
+            node=binary_fact_tree_node,
+        )
+        await update_necessary(node_index=node_index)
+
+    async def set_fact(
+        new_fact: UpdateTree, node_index: int, binary_fact_tree_node: BinaryFactTreeNode
+    ):
+        assert isinstance(new_fact, Fact)
+
+        leaf_hash = await new_fact.set_fact(ffc=ffc)
+        updated_nodes[node_index] = calculation_node_cls.create(
+            node=binary_fact_tree_node.create_leaf(hash_value=leaf_hash)
+        )
+        await update_necessary(node_index=node_index)
+
     async def traverse_node(node: NodeType) -> AsyncIterator[NodeType]:
         """
         Callback function for traverse_tree().
@@ -77,23 +96,19 @@ async def update_tree(
         node_index, binary_fact_tree_node, update_subtree = node
 
         if update_subtree is None:
-            # No update to subtree.
-            updated_nodes[node_index] = calculation_node_cls.create(
-                node=binary_fact_tree_node,
+            # No updates to subtree.
+            await update_if_possible(
+                node_index=node_index, binary_fact_tree_node=binary_fact_tree_node
             )
-            await update_necessary(node_index=node_index)
             return
 
         if binary_fact_tree_node.is_leaf:
             # Leaf update.
-            new_fact = update_subtree
-            assert isinstance(new_fact, Fact)
-
-            leaf_hash = await new_fact.set_fact(ffc=ffc)
-            updated_nodes[node_index] = calculation_node_cls.create(
-                node=binary_fact_tree_node.create_leaf(hash_value=leaf_hash)
+            await set_fact(
+                new_fact=update_subtree,
+                node_index=node_index,
+                binary_fact_tree_node=binary_fact_tree_node,
             )
-            await update_necessary(node_index=node_index)
             return
 
         # Inner node with updates.
@@ -131,14 +146,14 @@ async def update_tree(
     return root_node
 
 
-def build_update_tree(height: int, modifications: Collection[Tuple[int, TFact]]) -> UpdateTree:
+def build_update_tree(height: int, modifications: Collection[Tuple[int, Fact]]) -> UpdateTree:
     """
     Constructs a tree from leaf updates. This is not a full binary tree. It is just the subtree
     induced by the modification leaves.
     Returns a tree. A tree is either:
-     * None
-     * a pair of trees
-     * A leaf
+     * None (if no modifications exist in its subtree).
+     * A leaf (if a single modification is given at height 0; i.e., a leaf).
+     * A pair of trees.
     """
     # Bottom layer. This will prefer the last modification to an index.
     if len(modifications) == 0:

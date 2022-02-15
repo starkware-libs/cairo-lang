@@ -1041,14 +1041,15 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
             src_size = self.get_size(dest_type)
 
             if isinstance(elm.expr, ExprHint):
-                if not isinstance(dest_type, TypeFelt):
+                if not isinstance(dest_type, (TypeFelt, TypePointer)):
                     raise PreprocessorError(
-                        "Hint tempvars must be of type felt.", location=elm.expr.location
+                        "Hint tempvars must be of type felt or a pointer.",
+                        location=elm.expr.location,
                     )
                 self.visit(
                     CodeElementHint(
                         hint=ExprHint(
-                            hint_code=f"memory[ap] = int({elm.expr.hint_code})",
+                            hint_code=f"memory[ap] = to_felt_or_relocatable({elm.expr.hint_code})",
                             n_prefix_newlines=0,
                             location=elm.location,
                         ),
@@ -1117,16 +1118,16 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
         if self.auxiliary_info is not None:
             self.auxiliary_info.start_compound_assert_eq(lhs=instruction.a, rhs=instruction.b)
 
-        src_exprs = self.simplified_expr_to_felt_expr_list(expr=expr_a, expr_type=expr_type_a)
-        dst_exprs = self.simplified_expr_to_felt_expr_list(expr=expr_b, expr_type=expr_type_b)
+        dst_exprs = self.simplified_expr_to_felt_expr_list(expr=expr_a, expr_type=expr_type_a)
+        src_exprs = self.simplified_expr_to_felt_expr_list(expr=expr_b, expr_type=expr_type_b)
         original_ap_tracking = self.flow_tracking.get_ap_tracking()
 
-        for src, dst in safe_zip(src_exprs, dst_exprs):
+        for dst, src in safe_zip(dst_exprs, src_exprs):
             ap_diff = self.flow_tracking.get_ap_tracking() - original_ap_tracking
-            src = self.simplifier.visit(translate_ap(src, ap_diff))
             dst = self.simplifier.visit(translate_ap(dst, ap_diff))
+            src = self.simplifier.visit(translate_ap(src, ap_diff))
             compound_expressions_code_elements, (expr_a, expr_b) = process_compound_assert(
-                src, dst, self._compound_expression_context
+                dst, src, self._compound_expression_context
             )
             assert_eq = CodeElementInstruction(
                 instruction=InstructionAst(

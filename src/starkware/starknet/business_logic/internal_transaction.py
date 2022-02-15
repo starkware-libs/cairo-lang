@@ -4,7 +4,7 @@ import functools
 import logging
 from abc import abstractmethod
 from dataclasses import field
-from typing import ClassVar, Dict, List, Optional, Tuple, Type, cast
+from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type, cast
 
 import marshmallow
 import marshmallow_dataclass
@@ -16,9 +16,14 @@ from services.everest.business_logic.state import CarriedStateBase
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
-from starkware.cairo.lang.vm.security import SecurityError
 from starkware.cairo.lang.vm.utils import ResourcesError
-from starkware.cairo.lang.vm.vm_exceptions import HintException, VmException, VmExceptionBase
+from starkware.cairo.lang.vm.vm_exceptions import (
+    HintException,
+    SecurityError,
+    VmException,
+    VmExceptionBase,
+)
+from starkware.python.utils import to_bytes
 from starkware.starknet.business_logic.internal_transaction_interface import (
     InternalStateTransaction,
 )
@@ -34,6 +39,12 @@ from starkware.starknet.business_logic.transaction_execution_objects import (
     TransactionExecutionInfo,
 )
 from starkware.starknet.core.os import os_utils, syscall_utils
+from starkware.starknet.core.os.contract_hash import compute_contract_hash
+from starkware.starknet.core.os.transaction_hash import (
+    TransactionHashPrefix,
+    calculate_deploy_transaction_hash,
+    calculate_transaction_hash_common,
+)
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
@@ -48,13 +59,10 @@ from starkware.starknet.services.api.contract_definition import (
     ContractEntryPoint,
     EntryPointType,
 )
-from starkware.starknet.services.api.gateway.contract_address import calculate_contract_address
-from starkware.starknet.services.api.gateway.transaction import Deploy, InvokeFunction, Transaction
-from starkware.starknet.services.api.gateway.transaction_hash import (
-    TransactionHashPrefix,
-    calculate_deploy_transaction_hash,
-    calculate_transaction_hash_common,
+from starkware.starknet.services.api.gateway.contract_address import (
+    calculate_contract_address_from_hash,
 )
+from starkware.starknet.services.api.gateway.transaction import Deploy, InvokeFunction, Transaction
 from starkware.starknet.storage.starknet_storage import BusinessLogicStarknetStorage
 from starkware.starkware_utils.config_base import Config
 from starkware.starkware_utils.error_handling import (
@@ -62,6 +70,7 @@ from starkware.starkware_utils.error_handling import (
     stark_assert,
     wrap_with_stark_exception,
 )
+from starkware.storage.storage import FactFetchingContext, Storage
 
 logger = logging.getLogger(__name__)
 
@@ -256,7 +265,8 @@ class InternalDeploy(InternalTransaction):
 
     contract_address: int = field(metadata=fields.contract_address_metadata)
     contract_address_salt: int = field(metadata=fields.contract_address_salt_metadata)
-    contract_definition: ContractDefinition
+    contract_hash: bytes = field(metadata=fields.non_required_contract_hash_metadata)
+
     constructor_calldata: List[int] = field(metadata=fields.call_data_metadata)
 
     # A unique identifier of the transaction in the StarkNet network.
@@ -269,31 +279,75 @@ class InternalDeploy(InternalTransaction):
     # The size of the header of the deployment information that is outputted by the StarkNet OS.
     deployment_info_header_size: ClassVar[int] = 3
 
+    @marshmallow.decorators.pre_load
+    def replace_contract_definition_with_contract_hash(
+        schema, data: Dict[str, Any], many: bool, **kwargs
+    ) -> Dict[str, Any]:
+        if "contract_hash" in data:
+            return data
+
+        contract_definition_json = data.pop("contract_definition")
+        contract_definition = ContractDefinition.load(data=contract_definition_json)
+        contract_hash = compute_contract_hash(contract_definition=contract_definition)
+        data["contract_hash"] = to_bytes(contract_hash).hex()
+
+        return data
+
     @classmethod
     def create(
         cls,
         contract_address_salt: int,
         contract_definition: ContractDefinition,
         constructor_calldata: List[int],
-        general_config,
+        chain_id: int,
     ):
-        contract_address = calculate_contract_address(
+        contract_hash = compute_contract_hash(contract_definition=contract_definition)
+        contract_address = calculate_contract_address_from_hash(
             salt=contract_address_salt,
-            contract_definition=contract_definition,
+            contract_hash=contract_hash,
             constructor_calldata=constructor_calldata,
             caller_address=0,
         )
         return cls(
             contract_address=contract_address,
             contract_address_salt=contract_address_salt,
-            contract_definition=contract_definition,
+            contract_hash=to_bytes(contract_hash),
             constructor_calldata=constructor_calldata,
             hash_value=calculate_deploy_transaction_hash(
                 contract_address=contract_address,
                 constructor_calldata=constructor_calldata,
-                chain_id=general_config.chain_id.value,
+                chain_id=chain_id,
             ),
         )
+
+    @classmethod
+    async def create_for_testing(
+        cls,
+        ffc: FactFetchingContext,
+        contract_definition: ContractDefinition,
+        contract_address_salt: int,
+        constructor_calldata: List[int],
+        chain_id: int,
+    ) -> "InternalDeploy":
+        """
+        Creates an InternalDeploy transaction and writes its contract definition to the DB.
+        This constructor should only be used in tests.
+        """
+        contract_definition_fact = ContractDefinitionFact(contract_definition=contract_definition)
+        await contract_definition_fact.set_fact(ffc=ffc)
+        tx = InternalDeploy.create(
+            contract_address_salt=contract_address_salt,
+            contract_definition=contract_definition,
+            constructor_calldata=constructor_calldata,
+            chain_id=chain_id,
+        )
+        return tx
+
+    async def get_contract_definition(self, storage: Storage) -> ContractDefinition:
+        contract_definition_fact = await ContractDefinitionFact.get_or_fail(
+            storage=storage, suffix=self.contract_hash
+        )
+        return contract_definition_fact.contract_definition
 
     @classmethod
     def _specific_from_external(
@@ -304,15 +358,11 @@ class InternalDeploy(InternalTransaction):
             contract_address_salt=external_tx.contract_address_salt,
             contract_definition=external_tx.contract_definition,
             constructor_calldata=external_tx.constructor_calldata,
-            general_config=general_config,
+            chain_id=general_config.chain_id.value,
         )
 
     def to_external(self) -> Deploy:
-        return Deploy(
-            contract_address_salt=self.contract_address_salt,
-            contract_definition=self.contract_definition,
-            constructor_calldata=self.constructor_calldata,
-        )
+        raise NotImplementedError("Cannot convert internal deploy transaction to external object.")
 
     def get_state_selector(self, general_config: Config) -> StateSelector:
         """
@@ -342,18 +392,15 @@ class InternalDeploy(InternalTransaction):
             ),
         )
 
-        self.contract_definition.validate()
+        contract_definition = await self.get_contract_definition(storage=state.ffc.storage)
+        contract_definition.validate()
 
-        # Set contract definition fact to facts storage.
-        contract_definition_fact = ContractDefinitionFact(
-            contract_definition=self.contract_definition
-        )
-        contract_hash = await contract_definition_fact.set_fact(ffc=state.ffc)
-        state.contract_definitions[contract_hash] = self.contract_definition
+        # Add contract definition to carried state.
+        state.contract_definitions[self.contract_hash] = contract_definition
 
         # Create updated contract state.
         newly_deployed_contract_state = await ContractState.create(
-            contract_hash=contract_hash,
+            contract_hash=self.contract_hash,
             storage_commitment_tree=contract_state.storage_commitment_tree,
         )
         state.contract_states[self.contract_address] = ContractCarriedState(
@@ -371,7 +418,8 @@ class InternalDeploy(InternalTransaction):
     async def invoke_constructor(
         self, state: CarriedState, general_config: StarknetGeneralConfig
     ) -> TransactionExecutionInfo:
-        if len(self.contract_definition.entry_points_by_type[EntryPointType.CONSTRUCTOR]) == 0:
+        contract_definition = await self.get_contract_definition(storage=state.ffc.storage)
+        if len(contract_definition.entry_points_by_type[EntryPointType.CONSTRUCTOR]) == 0:
             stark_assert(
                 len(self.constructor_calldata) == 0,
                 code=StarknetErrorCode.TRANSACTION_FAILED,
@@ -390,18 +438,10 @@ class InternalDeploy(InternalTransaction):
             signature=[],
             hash_value=0,
             caller_address=0,
+            nonce=None,
         )
 
         return await tx._apply_specific_state_updates(state=state, general_config=general_config)
-
-    def _synchronous_apply_specific_state_updates(
-        self,
-        state: CarriedState,
-        general_config: StarknetGeneralConfig,
-        loop: asyncio.AbstractEventLoop,
-        tx_execution_context: TransactionExecutionContext,
-    ) -> TransactionExecutionInfo:
-        raise NotImplementedError
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -430,7 +470,7 @@ class InternalInvokeFunction(InternalTransaction):
     # A unique nonce, added by the StarkNet core contract on L1.
     # This nonce is used to make the hash_value of transactions that service L1 messages unique.
     # This field may be set only when entry_point_type is EntryPointType.L1_HANDLER.
-    nonce: Optional[int] = field(metadata=fields.optional_nonce_metadata, default=None)
+    nonce: Optional[int] = field(metadata=fields.optional_nonce_metadata)
 
     # Class variables.
     tx_type: ClassVar[TransactionType] = TransactionType.INVOKE_FUNCTION
@@ -559,27 +599,32 @@ class InternalInvokeFunction(InternalTransaction):
         Applies self to 'state' by running _synchronous_apply_specific_state_updates.
         This is the asynchronous version of the method below.
         """
+        account_contract_address = (
+            0 if self.entry_point_type is EntryPointType.CONSTRUCTOR else self.contract_address
+        )
+
         # Pass the running loop before entering to it. It will be used to run asynchronous
         # tasks, such as fetching data from storage.
         loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
-        _synchronous_apply_specific_state_updates = functools.partial(
-            self._synchronous_apply_specific_state_updates,
+        execute_contract_function = functools.partial(
+            self.execute_contract_function,
             state=state,
             general_config=general_config,
             loop=loop,
             tx_execution_context=TransactionExecutionContext.create(
-                n_steps=general_config.invoke_tx_max_n_steps
+                account_contract_address=account_contract_address,
+                n_steps=general_config.invoke_tx_max_n_steps,
             ),
         )
 
         execution_info = await loop.run_in_executor(
             executor=None,  # Runs on the default executor.
-            func=_synchronous_apply_specific_state_updates,
+            func=execute_contract_function,
         )
 
         return execution_info
 
-    def _synchronous_apply_specific_state_updates(
+    def execute_contract_function(
         self,
         state: CarriedState,
         general_config: StarknetGeneralConfig,
@@ -616,26 +661,11 @@ class InternalInvokeFunction(InternalTransaction):
         # Update resources usage (for bouncer).
         state.cairo_usage += runner.get_execution_resources()
 
-        # Build transaction execution info.
-        contract_call_cairo_usage = state.cairo_usage - previous_cairo_usage
-        call_info = ContractCall(
-            from_address=self.caller_address,
-            to_address=self.contract_address,
-            code_address=self.code_address,
-            entry_point_selector=self.entry_point_selector,
-            entry_point_type=self.entry_point_type,
-            calldata=self.calldata,
-            signature=self.signature,
-            cairo_usage=contract_call_cairo_usage,
-            events=syscall_handler.events,
-            l2_to_l1_messages=[],
-            internal_call_responses=syscall_handler.internal_call_responses,
-            storage_read_values=syscall_handler.starknet_storage.read_values,
-            storage_accessed_addresses=syscall_handler.starknet_storage.accessed_addresses,
-        )
-
+        # Build and return transaction execution info.
         return TransactionExecutionInfo(
-            call_info=call_info,
+            call_info=self._build_call_info(
+                previous_cairo_usage=previous_cairo_usage, syscall_handler=syscall_handler
+            ),
             l2_to_l1_messages=syscall_handler.l2_to_l1_messages,
             retdata=self._get_return_values(runner=runner),
             internal_calls=syscall_handler.internal_calls,
@@ -759,12 +789,12 @@ class InternalInvokeFunction(InternalTransaction):
             initial_os_context=os_context,
         )
 
-        # The OS touches all the arguments so they shouldn't be counted as holes.
-        assert runner.accessed_addresses is not None
         # When execution starts the stack holds entry_points_args + [ret_fp, ret_pc].
         args_ptr = runner.initial_fp - (len(entry_points_args) + 2)
-        for i in range(len(entry_points_args)):
-            runner.accessed_addresses.add(args_ptr + i)
+
+        # The arguments are touched by the OS and should not be counted as holes, mark them
+        # as accessed.
+        runner.mark_as_accessed(address=args_ptr, size=len(entry_points_args))
 
         return runner, syscall_handler
 
@@ -788,14 +818,16 @@ class InternalInvokeFunction(InternalTransaction):
             if ep0.selector == DEFAULT_ENTRY_POINT_SELECTOR:
                 return ep0
 
+        selector_formatter = fields.EntryPointSelectorField.format
+        address_formatter = fields.ContractAddressField.format
         # Non-unique entry points are not possible in a ContractDefinition object, thus
         # len(filtered_entry_points) <= 1.
         stark_assert(
             len(filtered_entry_points) == 1,
             code=StarknetErrorCode.ENTRY_POINT_NOT_FOUND_IN_CONTRACT,
             message=(
-                f"Entry point {self.entry_point_selector} not found in contract with address "
-                f"{self.contract_address}."
+                f"Entry point {selector_formatter(self.entry_point_selector)} not found in contract"
+                f" with address {address_formatter(self.contract_address)}."
             ),
         )
 
@@ -819,12 +851,34 @@ class InternalInvokeFunction(InternalTransaction):
             loop=loop,
             caller_address=self.caller_address,
             tx_execution_context=TransactionExecutionContext.create(
-                n_steps=general_config.invoke_tx_max_n_steps
+                account_contract_address=self.contract_address,
+                n_steps=general_config.invoke_tx_max_n_steps,
             ),
         )
 
         runner, _ = await loop.run_in_executor(executor=None, func=_run)
         return self._get_return_values(runner=runner)
+
+    def _build_call_info(
+        self,
+        previous_cairo_usage: ExecutionResources,
+        syscall_handler: syscall_utils.BusinessLogicSysCallHandler,
+    ) -> ContractCall:
+        return ContractCall(
+            from_address=self.caller_address,
+            to_address=self.contract_address,
+            code_address=self.code_address,
+            entry_point_selector=self.entry_point_selector,
+            entry_point_type=self.entry_point_type,
+            calldata=self.calldata,
+            signature=self.signature,
+            cairo_usage=syscall_handler.state.cairo_usage - previous_cairo_usage,
+            events=syscall_handler.events,
+            l2_to_l1_messages=[],
+            internal_call_responses=syscall_handler.internal_call_responses,
+            storage_read_values=syscall_handler.starknet_storage.read_values,
+            storage_accessed_addresses=syscall_handler.starknet_storage.accessed_addresses,
+        )
 
     def _get_return_values(self, runner: CairoFunctionRunner) -> List[int]:
         with wrap_with_stark_exception(

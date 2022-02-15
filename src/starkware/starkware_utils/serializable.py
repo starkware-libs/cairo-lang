@@ -1,7 +1,7 @@
 import inspect
 from abc import ABC, abstractmethod
 from json import JSONDecoder, JSONEncoder
-from typing import ClassVar, Dict, Type, TypeVar
+from typing import ClassVar, Dict, Optional, Type, TypeVar
 
 from starkware.python.utils import camel_to_snake_case
 
@@ -87,7 +87,7 @@ class StringSerializable(Serializable):
                 StringSerializable._classes[cls._serialize_name] = cls
 
     @abstractmethod
-    def dumps(self) -> str:
+    def dumps(self, indent: Optional[int] = None, sort_keys: bool = False) -> str:
         pass
 
     @classmethod

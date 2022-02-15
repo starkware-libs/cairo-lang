@@ -94,3 +94,11 @@ class ContractDefinition(ValidatedMarshmallowDataclass):
         """
         altered_program = dataclasses.replace(self.program, debug_info=None)
         return dataclasses.replace(self, program=altered_program)
+
+    @property
+    def n_entry_points(self) -> int:
+        """
+        Returns the number of entry points (note that functions with multiple decorators are
+        counted more than once).
+        """
+        return sum(len(eps) for eps in self.entry_points_by_type.values())

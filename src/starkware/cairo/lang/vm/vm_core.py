@@ -374,10 +374,9 @@ class VirtualMachine(VirtualMachineBase):
     def decode_current_instruction(self) -> Instruction:
         try:
             instruction_encoding, imm = self.run_context.get_instruction_encoding()
+            instruction = self.decode_instruction(instruction_encoding, imm)
         except Exception as exc:
             raise self.as_vm_exception(exc) from None
-
-        instruction = self.decode_instruction(instruction_encoding, imm)
 
         return instruction
 

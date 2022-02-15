@@ -6,6 +6,10 @@ from starkware.cairo.lang.compiler.debug_info import InstructionLocation
 from starkware.cairo.lang.compiler.error_handling import LocationError
 
 
+class SecurityError(Exception):
+    pass
+
+
 class VmExceptionBase(Exception):
     """
     Base class for exceptions thrown by the Cairo VM.

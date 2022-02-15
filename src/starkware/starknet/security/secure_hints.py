@@ -96,7 +96,7 @@ class HintsWhitelist(ValidatedMarshmallowDataclass):
     @classmethod
     def from_file(cls, filename: str) -> "HintsWhitelist":
         with open(filename, "r") as fp:
-            return cls.Schema().loads(fp.read())
+            return cls.loads(data=fp.read())
 
     @classmethod
     def from_dir(cls, dirname: str) -> "HintsWhitelist":

@@ -10,12 +10,12 @@ from starkware.starkware_utils.commitment_tree.binary_fact_tree_node import (
     TBinaryFactTreeNode,
     TInnerNodeFact,
 )
-from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 from starkware.storage.storage import FactFetchingContext, HashFunctionType
 
 T = TypeVar("T")
 TCalculationNode = TypeVar("TCalculationNode", bound="CalculationNode")
 NodeFactDict = Dict[bytes, TInnerNodeFact]
+
 
 class Calculation(Generic[T], ABC):
     """
@@ -140,6 +140,33 @@ class Calculation(Generic[T], ABC):
         return result
 
 
+# NOTE: We avoid using ValidatedDataclass here for performance.
+@dataclasses.dataclass(frozen=True)
+class ConstantCalculation(Calculation[T]):
+    """
+    A calculation that contains a value and simply produces it. It doesn't depend on any other
+    calculations.
+    """
+
+    value: T
+
+    def calculate(
+        self,
+        dependency_results: list,
+        hash_func: HashFunctionType,
+        fact_nodes: NodeFactDict,
+    ) -> T:
+        assert len(dependency_results) == 0, "ConstantCalculation has no dependencies."
+        return self.value
+
+    def get_dependency_calculations(self) -> List[Calculation[T]]:
+        return []
+
+
+# A calculation that produces a hash result.
+HashCalculation = Calculation[bytes]
+
+
 class CalculationNode(Calculation[TBinaryFactTreeNode], ABC):
     """
     A calculation that produces a BinaryFactTreeNode. The calculation can be created from either a
@@ -168,31 +195,3 @@ class CalculationNode(Calculation[TBinaryFactTreeNode], ABC):
         Creates a Calculation object from a node. It will produce the node and will have no
         dependencies.
         """
-
-
-class HashCalculation(Calculation[bytes]):
-    """
-    A calculation that produces a hash result.
-    """
-
-
-@dataclasses.dataclass(frozen=True)
-class ConstantCalculation(HashCalculation, ValidatedDataclass):
-    """
-    A calculation that contains a hash and simply produces it. It doesn't depend on any other
-    calculations. It constitutes a leaf calculation so that other calculations can depend on it.
-    """
-
-    hash_value: bytes
-
-    def calculate(
-        self,
-        dependency_results: list,
-        hash_func: HashFunctionType,
-        fact_nodes: NodeFactDict,
-    ) -> bytes:
-        assert len(dependency_results) == 0, "ConstantCalculation has no dependencies."
-        return self.hash_value
-
-    def get_dependency_calculations(self) -> List[Calculation[bytes]]:
-        return []

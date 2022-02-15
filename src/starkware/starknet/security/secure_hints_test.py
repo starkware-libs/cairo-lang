@@ -73,8 +73,7 @@ def test_secure_hints_cases():
 def test_secure_hints_serialization():
     template_program = compile_cairo(ALLOWED_CODE, DEFAULT_PRIME)
     whitelist = HintsWhitelist.from_program(template_program)
-    data = HintsWhitelist.Schema().dumps(whitelist)
-    whitelist = HintsWhitelist.Schema().loads(data)
+    whitelist = HintsWhitelist.loads(data=whitelist.dumps())
     for good_code in GOOD_CODES:
         program = compile_cairo(good_code, DEFAULT_PRIME)
         whitelist.verify_program_hint_secure(program)

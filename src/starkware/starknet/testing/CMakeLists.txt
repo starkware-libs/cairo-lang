@@ -54,8 +54,10 @@ python_lib(starknet_testing_lib
     starknet_internal_transaction_lib
     starknet_messages_lib
     starknet_mock_messaging_contracts_lib
+    starknet_transaction_execution_objects_lib
     starknet_transaction_lib
     starkware_dataclasses_utils_lib
+    starkware_eth_test_utils_lib
     starkware_python_utils_lib
     starkware_storage_lib
     pip_typeguard

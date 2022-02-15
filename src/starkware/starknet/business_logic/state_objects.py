@@ -123,10 +123,11 @@ class ContractState(ValidatedMarshmallowDataclass, Fact):
 
         Takes contract_address as input to improve the error message.
         """
+        address_formatter = fields.ContractAddressField.format
         stark_assert(
             self.initialized,
             code=StarknetErrorCode.UNINITIALIZED_CONTRACT,
-            message=f"Contract with address {contract_address} is not deployed.",
+            message=f"Contract with address {address_formatter(contract_address)} is not deployed.",
         )
 
     async def update(

@@ -108,6 +108,15 @@ class RelocatableValue:
         else:
             raise NotImplementedError(f"Expected MaybeRelocatable, got: {type(value).__name__}.")
 
+    @staticmethod
+    def to_felt_or_relocatable(value: T):
+        """
+        Converts to int unless value is RelocatableValue, otherwise return value as is.
+        """
+        if isinstance(value, RelocatableValue):
+            return value
+        return int(value)
+
     @classmethod
     def from_tuple(cls, value: Tuple[int, ...]) -> MaybeRelocatable:
         """

@@ -164,6 +164,7 @@ class VirtualMachineBase(ABC):
                 "fis_quad_residue": lambda a, p=self.prime: math_utils.is_quad_residue(a, p),
                 "fsqrt": lambda a, p=self.prime: math_utils.sqrt(a, p),
                 "safe_div": math_utils.safe_div,
+                "to_felt_or_relocatable": RelocatableValue.to_felt_or_relocatable,
             }
         )
 

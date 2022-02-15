@@ -6,7 +6,7 @@ from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableVal
 from starkware.starknet.core.os import segment_utils, syscall_utils
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.public.abi import SYSCALL_PTR_OFFSET
-from starkware.starkware_utils.error_handling import stark_assert, wrap_with_stark_exception
+from starkware.starkware_utils.error_handling import wrap_with_stark_exception
 
 
 def update_builtin_pointers(
@@ -86,10 +86,4 @@ def validate_and_process_os_context(
         segment_base_ptr=syscall_base_ptr,
         segment_stop_ptr=syscall_stop_ptr,
     )
-
-    expected_stop_ptr = syscall_handler.expected_syscall_ptr
-    stark_assert(
-        syscall_stop_ptr == expected_stop_ptr,
-        code=StarknetErrorCode.SECURITY_ERROR,
-        message=f"Bad syscall_stop_ptr, Expected {expected_stop_ptr}, got {syscall_stop_ptr}.",
-    )
+    syscall_handler.post_run(runner=runner, syscall_stop_ptr=syscall_stop_ptr)

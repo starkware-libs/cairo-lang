@@ -5,7 +5,7 @@ from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.registers import get_fp_and_pc
 from starkware.starknet.common.messages import send_message_to_l1
 from starkware.starknet.common.syscalls import (
-    get_caller_address, get_tx_signature, storage_read, storage_write)
+    get_caller_address, get_tx_info, storage_read, storage_write)
 
 @contract_interface
 namespace MyContract:
@@ -46,8 +46,8 @@ end
 @external
 func get_signature{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*}() -> (
         res_len : felt, res : felt*):
-    let (sig_len, sig) = get_tx_signature()
-    return (res_len=sig_len, res=sig)
+    let (tx_info) = get_tx_info()
+    return (res_len=tx_info.signature_len, res=tx_info.signature)
 end
 
 @external

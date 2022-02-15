@@ -33,6 +33,7 @@ python_lib(starkware_dataclasses_utils_lib
     FILES
     field_validators.py
     marshmallow_dataclass_fields.py
+    serializable_dataclass.py
     validated_dataclass.py
     validated_fields.py
 

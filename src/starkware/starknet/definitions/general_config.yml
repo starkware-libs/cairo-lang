@@ -2,6 +2,13 @@ sequencer_address: '0x0'
 contract_storage_commitment_tree_height: 251
 global_state_commitment_tree_height: 251
 invoke_tx_max_n_steps: 1000000
+cairo_usage_resource_fee_weights:
+  bitwise_builtin: 0.0
+  ecdsa_builtin: 0.0
+  gas_weight: 0.0
+  n_steps: 0.0
+  pedersen_builtin: 0.0
+  range_check_builtin: 0.0
 tx_commitment_tree_height: 64
 event_commitment_tree_height: 64
 

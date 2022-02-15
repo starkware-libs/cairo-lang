@@ -3,6 +3,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
+from starkware.cairo.lang.vm.vm_exceptions import SecurityError
 
 FIRST_MEMORY_ADDR = 1
 
@@ -85,9 +86,11 @@ class MemorySegmentManager:
             index: 0 for index in range(first_segment_index, self.n_segments)
         }
         for addr in self.memory:
-            assert isinstance(
-                addr, RelocatableValue
-            ), f"Expected memory address to be relocatable value. Found: {addr}."
+            if not isinstance(addr, RelocatableValue):
+                raise SecurityError(
+                    f"Expected memory address to be relocatable value. Found: {addr}."
+                )
+
             previous_max_size = self._segment_used_sizes[addr.segment_index]
             self._segment_used_sizes[addr.segment_index] = max(previous_max_size, addr.offset + 1)
 

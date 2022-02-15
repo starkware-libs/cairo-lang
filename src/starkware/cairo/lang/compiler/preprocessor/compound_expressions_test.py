@@ -301,11 +301,11 @@ tempvar z = 5 + nondet %{ val %} * 15 + nondet %{ 1 %}
 
 [ap] = [ap + (-1)] + [ap + (-1)]; ap++
 
-%{ memory[ap] = int(val) %}
+%{ memory[ap] = to_felt_or_relocatable(val) %}
 ap += 1
 [ap] = [ap + (-1)] * 15; ap++
 [ap] = [ap + (-1)] + 5; ap++
-%{ memory[ap] = int(1) %}
+%{ memory[ap] = to_felt_or_relocatable(1) %}
 ap += 1
 [ap] = [ap + (-2)] + [ap + (-1)]; ap++
 """.replace(

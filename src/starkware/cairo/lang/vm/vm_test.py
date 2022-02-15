@@ -262,6 +262,15 @@ ap += 0
     run_single(code=code, steps=1)
 
 
+def test_nondet_hint_pointer():
+    code = """
+%{ from starkware.cairo.lang.vm.relocatable import RelocatableValue %}
+tempvar x : felt* = cast(nondet %{ RelocatableValue(12, 34) %}, felt*) + 3
+"""
+    vm = run_single(code=code, steps=2)
+    assert vm.run_context.memory[101] == RelocatableValue(12, 37)
+
+
 def test_hint_exception():
     code = """
 # Some comment.
@@ -677,6 +686,23 @@ def test_call_unknown():
     """
     with pytest.raises(VmException, match="Unknown value for memory cell at address 100"):
         run_single(code, 1)
+
+
+def test_invalid_instruction():
+    code = """
+    dw -1
+    """
+    with pytest.raises(VmException) as exc_info:
+        run_single(code, 1)
+
+    assert str(exc_info.value) == (
+        """\
+:2:5: Error at pc=0:10:
+Unsupported instruction.
+    dw -1
+    ^***^\
+"""
+    )
 
 
 def test_call_wrong_operands():

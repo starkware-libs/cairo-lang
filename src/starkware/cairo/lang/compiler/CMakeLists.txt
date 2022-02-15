@@ -111,6 +111,7 @@ python_lib(cairo_compile_test_utils_lib
 
     LIBS
     cairo_compile_lib
+    starkware_python_utils_lib
     pip_pytest
 )
 

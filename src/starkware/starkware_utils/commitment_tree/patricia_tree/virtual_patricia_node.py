@@ -1,4 +1,3 @@
-import asyncio
 import dataclasses
 from typing import Optional, Tuple
 
@@ -15,12 +14,12 @@ from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import (
     PatriciaNodeFact,
     verify_path_value,
 )
-from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 from starkware.storage.storage import FactFetchingContext
 
 
+# NOTE: We avoid using ValidatedDataclass here for performance.
 @dataclasses.dataclass(frozen=True)
-class VirtualPatriciaNode(BinaryFactTreeNode, ValidatedDataclass):
+class VirtualPatriciaNode(BinaryFactTreeNode):
     """
     Represents a virtual Patricia node.
     Virtual node instances are used to build and traverse through a Patricia tree.
@@ -43,8 +42,6 @@ class VirtualPatriciaNode(BinaryFactTreeNode, ValidatedDataclass):
         Note that many of the functions in this class rely on the invariants checked in this
         function, and on the fact they are made at initialization time (the object is immutable).
         """
-        super().__post_init__()
-
         verify_path_value(path=self.path, length=self.length)
 
     @classmethod
@@ -101,66 +98,6 @@ class VirtualPatriciaNode(BinaryFactTreeNode, ValidatedDataclass):
         )
         return await write_node_fact(ffc=ffc, inner_node_fact=edge_node_fact, facts=facts)
 
-    async def decommit(
-        self, ffc: FactFetchingContext, facts: Optional[BinaryFactDict]
-    ) -> "VirtualPatriciaNode":
-        """
-        Returns the canonical representation of the information embedded in self.
-        Returns (bottom, path, length) for an edge node of form (hash, 0, 0), which is the
-        canonical form.
-        """
-        if self.is_leaf or self.is_empty or self.is_virtual_edge:
-            # Node is already decommitted (of canonical form); no work to be done.
-            return self
-
-        # Need to read fact from storage to understand if (hash, 0, 0) represents a binary node,
-        # or a committed edge node.
-        # Note that a fact that was written in a previous combine while building this tree will
-        # appear in cache (in case the FFC's storage is cached).
-        root_node_fact = await self.read_bottom_node_fact(ffc=ffc, facts=facts)
-
-        if isinstance(root_node_fact, BinaryNodeFact):
-            return self
-        if isinstance(root_node_fact, EdgeNodeFact):
-            return VirtualPatriciaNode(
-                bottom_node=root_node_fact.bottom_node,
-                path=root_node_fact.edge_path,
-                length=root_node_fact.edge_length,
-                height=self.height,
-            )
-
-        raise NotImplementedError(f"Unexpected node fact type: {type(root_node_fact).__name__}.")
-
-    @classmethod
-    async def combine(
-        cls,
-        ffc: FactFetchingContext,
-        left: "BinaryFactTreeNode",
-        right: "BinaryFactTreeNode",
-        facts: Optional[BinaryFactDict] = None,
-    ) -> "VirtualPatriciaNode":
-        """
-        Gets two VirtualPatriciaNode objects left and right representing children nodes, and builds
-        their parent node. Returns a new VirtualPatriciaNode.
-
-        If facts argument is not None, this dictionary is filled with facts read from the DB.
-        """
-        # Downcast arguments.
-        assert isinstance(left, VirtualPatriciaNode) and isinstance(right, VirtualPatriciaNode)
-
-        assert (
-            right.height == left.height
-        ), f"Only trees of same height can be combined; got: {right.height} and {left.height}."
-
-        parent_height = right.height + 1
-        if left.is_empty and right.is_empty:
-            return VirtualPatriciaNode.empty_node(height=parent_height)
-
-        if not left.is_empty and not right.is_empty:
-            return await cls._combine_to_binary_node(ffc=ffc, left=left, right=right, facts=facts)
-
-        return await cls._combine_to_virtual_edge_node(ffc=ffc, left=left, right=right, facts=facts)
-
     async def get_children(
         self, ffc: FactFetchingContext, facts: Optional[BinaryFactDict] = None
     ) -> Tuple["VirtualPatriciaNode", "VirtualPatriciaNode"]:
@@ -198,65 +135,6 @@ class VirtualPatriciaNode(BinaryFactTreeNode, ValidatedDataclass):
         return (
             self.from_hash(hash_value=fact.left_node, height=children_height),
             self.from_hash(hash_value=fact.right_node, height=children_height),
-        )
-
-    # Internal utils.
-
-    @classmethod
-    async def _combine_to_binary_node(
-        cls,
-        ffc: FactFetchingContext,
-        left: "VirtualPatriciaNode",
-        right: "VirtualPatriciaNode",
-        facts: Optional[BinaryFactDict],
-    ) -> "VirtualPatriciaNode":
-        """
-        Combines two non-empty nodes to form a binary node.
-        Writes the constructed node fact to the DB, as well as (up to) two other facts for the
-        children if they were not previously committed.
-        """
-        left_node_hash, right_node_hash = await asyncio.gather(
-            *(node.commit(ffc=ffc, facts=facts) for node in (left, right))
-        )
-        parent_node_fact = BinaryNodeFact(left_node=left_node_hash, right_node=right_node_hash)
-        parent_fact_hash = await write_node_fact(
-            ffc=ffc, inner_node_fact=parent_node_fact, facts=facts
-        )
-
-        return VirtualPatriciaNode(
-            bottom_node=parent_fact_hash, path=0, length=0, height=right.height + 1
-        )
-
-    @classmethod
-    async def _combine_to_virtual_edge_node(
-        cls,
-        ffc: FactFetchingContext,
-        left: "VirtualPatriciaNode",
-        right: "VirtualPatriciaNode",
-        facts: Optional[BinaryFactDict],
-    ) -> "VirtualPatriciaNode":
-        """
-        Combines an empty node and a non-empty node to form a virtual edge node.
-        If the non-empty node is not known to be of canonical form, reads its fact from the DB
-        in order to make it such (or make sure it is).
-        """
-        assert (
-            left.is_empty != right.is_empty
-        ), "_combine_to_virtual_edge_node() must be called on one empty and one non-empty nodes."
-
-        non_empty_child = right if left.is_empty else left
-        non_empty_child = await non_empty_child.decommit(ffc=ffc, facts=facts)
-
-        parent_path = non_empty_child.path
-        if left.is_empty:
-            # Turn on the MSB bit if the non-empty child is on the right.
-            parent_path += 1 << non_empty_child.length
-
-        return VirtualPatriciaNode(
-            bottom_node=non_empty_child.bottom_node,
-            path=parent_path,
-            length=non_empty_child.length + 1,
-            height=non_empty_child.height + 1,
         )
 
     def _get_virtual_edge_node_children(

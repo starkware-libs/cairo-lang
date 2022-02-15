@@ -27,6 +27,26 @@ def calculate_contract_address(
     contract_hash = compute_contract_hash(
         contract_definition=contract_definition, hash_func=hash_function
     )
+    return calculate_contract_address_from_hash(
+        salt=salt,
+        contract_hash=contract_hash,
+        constructor_calldata=constructor_calldata,
+        caller_address=caller_address,
+        hash_function=hash_function,
+    )
+
+
+def calculate_contract_address_from_hash(
+    salt: int,
+    contract_hash: int,
+    constructor_calldata: Sequence[int],
+    caller_address: int,
+    hash_function: Callable[[int, int], int] = pedersen_hash,
+) -> int:
+    """
+    Same as calculate_contract_address(), except that it gets contract_hash instead of
+    contract_definition.
+    """
     constructor_calldata_hash = compute_hash_on_elements(
         data=constructor_calldata, hash_func=hash_function
     )

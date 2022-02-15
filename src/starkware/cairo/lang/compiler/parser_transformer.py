@@ -91,6 +91,8 @@ from starkware.cairo.lang.compiler.error_handling import (
 from starkware.cairo.lang.compiler.instruction import Register
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 
+DEFAULT_SHORT_STRING_MAX_LENGTH = 31
+
 
 @dataclasses.dataclass
 class ParserContext:
@@ -98,7 +100,7 @@ class ParserContext:
     Represents information that affects the parsing process.
     """
 
-    short_string_max_length: int = 31
+    short_string_max_length: int = DEFAULT_SHORT_STRING_MAX_LENGTH
     parent_location: Optional[ParentLocation] = None
 
     # If True, treat type identifiers as resolved.

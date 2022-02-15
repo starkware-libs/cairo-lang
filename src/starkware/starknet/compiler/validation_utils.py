@@ -11,7 +11,7 @@ from starkware.cairo.lang.compiler.preprocessor.identifier_aware_visitor import 
 )
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
 from starkware.starknet.compiler.data_encoder import ArgumentInfo, EncodingType, encode_data
-from starkware.starknet.definitions.constants import STARKNET_LANG_DIRECTIVE
+from starkware.starknet.definitions import constants
 
 TAttr = TypeVar("TAttr")
 
@@ -51,7 +51,7 @@ def verify_starknet_lang(
     """
     Verifies that file_lang equals STARKNET_LANG_DIRECTIVE and raises an exception otherwise.
     """
-    if file_lang != STARKNET_LANG_DIRECTIVE:
+    if file_lang != constants.STARKNET_LANG_DIRECTIVE:
         raise PreprocessorError(
             f"{name_in_error_message} can only be used in source files that contain the "
             '"%lang starknet" directive.',

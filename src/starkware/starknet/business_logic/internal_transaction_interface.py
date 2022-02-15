@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from abc import abstractmethod
 from typing import Iterable, Optional, cast
@@ -6,10 +5,7 @@ from typing import Iterable, Optional, cast
 from services.everest.business_logic.internal_transaction import EverestInternalStateTransaction
 from services.everest.business_logic.state import CarriedStateBase
 from starkware.starknet.business_logic.state import CarriedState, StateSelector
-from starkware.starknet.business_logic.transaction_execution_objects import (
-    TransactionExecutionContext,
-    TransactionExecutionInfo,
-)
+from starkware.starknet.business_logic.transaction_execution_objects import TransactionExecutionInfo
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starkware_utils.config_base import Config
@@ -22,7 +18,7 @@ class InternalStateTransaction(EverestInternalStateTransaction):
     """
     StarkNet internal state transaction.
     This is the API of transactions that update the state,
-    but do not necessarily have an external transaction counterpart.
+    but do not necessarily have an external transaction counterpart.
     See for example, SyntheticTransaction.
     """
 
@@ -72,15 +68,5 @@ class InternalStateTransaction(EverestInternalStateTransaction):
     @abstractmethod
     async def _apply_specific_state_updates(
         self, state: CarriedState, general_config: StarknetGeneralConfig
-    ) -> Optional[TransactionExecutionInfo]:
-        pass
-
-    @abstractmethod
-    def _synchronous_apply_specific_state_updates(
-        self,
-        state: CarriedState,
-        general_config: StarknetGeneralConfig,
-        loop: asyncio.AbstractEventLoop,
-        tx_execution_context: TransactionExecutionContext,
     ) -> Optional[TransactionExecutionInfo]:
         pass

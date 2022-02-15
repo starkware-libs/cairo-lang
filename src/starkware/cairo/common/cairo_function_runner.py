@@ -11,7 +11,6 @@ from starkware.cairo.lang.builtins.range_check.range_check_builtin_runner import
     RangeCheckBuiltinRunner,
 )
 from starkware.cairo.lang.builtins.signature.signature_builtin_runner import SignatureBuiltinRunner
-from starkware.cairo.lang.compiler.identifier_definition import LabelDefinition
 from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.tracer.tracer import trace_runner
@@ -19,9 +18,9 @@ from starkware.cairo.lang.vm.cairo_runner import CairoRunner, process_ecdsa, ver
 from starkware.cairo.lang.vm.crypto import pedersen_hash
 from starkware.cairo.lang.vm.output_builtin_runner import OutputBuiltinRunner
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
-from starkware.cairo.lang.vm.security import SecurityError, verify_secure_runner
+from starkware.cairo.lang.vm.security import verify_secure_runner
 from starkware.cairo.lang.vm.utils import RunResources
-from starkware.cairo.lang.vm.vm_exceptions import VmException
+from starkware.cairo.lang.vm.vm_exceptions import SecurityError, VmException
 
 
 class CairoFunctionRunner(CairoRunner):
@@ -126,25 +125,17 @@ class CairoFunctionRunner(CairoRunner):
         verify_secure - Run verify_secure_runner to do extra verifications.
         trace_on_failure - Run the tracer in case of failure to help debugging.
         apply_modulo_to_args - Apply modulo operation on integer arguments.
-        use_full_name - Treat func_name as a fully qualified identifer name, instance of a relative
-          one.
+        use_full_name - Treat 'func_name' as a fully qualified identifier name, rather than a
+         relative one.
         """
         assert isinstance(self.program, Program)
+        entrypoint = self.program.get_label(func_name, full_name_lookup=use_full_name)
+
         structs_factory = CairoStructFactory.from_program(program=self.program)
         full_args_struct = structs_factory.build_func_args(
             func=ScopedName.from_string(scope=func_name)
         )
         all_args = full_args_struct(*args, **kwargs)
-
-        entrypoint: Union[str, int]
-        if use_full_name:
-            identifier = self.program.identifiers.get_by_full_name(
-                name=ScopedName.from_string(scope=func_name)
-            )
-            assert isinstance(identifier, LabelDefinition)
-            entrypoint = identifier.pc
-        else:
-            entrypoint = func_name
 
         try:
             self.run_from_entrypoint(

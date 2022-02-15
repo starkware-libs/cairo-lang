@@ -1,3 +1,4 @@
+from starkware.cairo.common.registers import get_fp_and_pc
 from starkware.cairo.common.segments import relocate_segment
 from starkware.cairo.common.serialize import serialize_word
 from starkware.starknet.core.os.state import CommitmentTreeUpdateOutput
@@ -36,6 +37,14 @@ struct OsCarriedOutputs:
     member messages_to_l2 : MessageToL2Header*
     # A concatenated list of deployment infos, each consists of DeploymentInfoHeader and calldata.
     member deployment_info : DeploymentInfoHeader*
+end
+
+func os_carried_outputs_new(
+        messages_to_l1 : MessageToL1Header*, messages_to_l2 : MessageToL2Header*,
+        deployment_info : DeploymentInfoHeader*) -> (os_carried_outputs : OsCarriedOutputs*):
+    let (fp_val, pc_val) = get_fp_and_pc()
+    static_assert OsCarriedOutputs.SIZE == Args.SIZE
+    return (os_carried_outputs=cast(fp_val - 2 - OsCarriedOutputs.SIZE, OsCarriedOutputs*))
 end
 
 struct BlockInfo:

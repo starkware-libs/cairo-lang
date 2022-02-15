@@ -138,7 +138,7 @@ class DBObject(Serializable):
         if result is None:
             return None
 
-        return await asyncio.get_event_loop().run_in_executor(None, cls.deserialize, result)
+        return cls.deserialize(result)
 
     @classmethod
     async def get_or_fail(cls: Type[TDBObject], storage: Storage, suffix: bytes) -> TDBObject:
@@ -150,7 +150,7 @@ class DBObject(Serializable):
         result = await storage.get_value(key=db_key)
         assert result is not None, f"Key {db_key!r} does not appear in storage."
 
-        return await asyncio.get_event_loop().run_in_executor(None, cls.deserialize, result)
+        return cls.deserialize(result)
 
     async def set(self, storage: Storage, suffix: bytes):
         serialized = await asyncio.get_event_loop().run_in_executor(None, self.serialize)

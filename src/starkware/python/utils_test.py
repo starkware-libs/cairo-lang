@@ -1,4 +1,6 @@
+import random
 import re
+import string
 
 import pytest
 
@@ -11,6 +13,7 @@ from starkware.python.utils import (
     indent,
     iter_blockify,
     safe_zip,
+    to_ascii_string,
     unique,
 )
 
@@ -132,3 +135,17 @@ def test_all_subclasses():
     all_subclasses_set = set(all_subclass_objects)
     assert len(all_subclass_objects) == len(all_subclasses_set)
     assert all_subclasses_set == {A, C, D, E, F}
+
+
+def test_to_ascii_str():
+    # Should not change printable strings.
+    assert to_ascii_string(value=string.printable) == string.printable
+
+    string_pattern = "Value: {value}."
+    expected_string = string_pattern.format(value="?")
+    non_ascii_character_orders = [128, 1_114_111, random.randint(128, 1_114_111)]
+    # Check that these non-ascii characters are converted as expected (replaced with '?').
+    for order in non_ascii_character_orders:
+        converted_string = to_ascii_string(value=string_pattern.format(value=chr(order)))
+        assert converted_string.isascii()
+        assert converted_string == expected_string

@@ -29,10 +29,10 @@ from starkware.starkware_utils.validated_fields import (
 
 block_number_metadata = sequential_id_metadata(field_name="Block number", allow_previous_id=True)
 default_optional_block_number_metadata = sequential_id_metadata(
-    field_name="Block number", required=False, allow_none=True, load_default=None
+    field_name="Block number", required=False, load_default=None
 )
 default_optional_transaction_index_metadata = sequential_id_metadata(
-    field_name="Transaction index", required=False, allow_none=True, load_default=None
+    field_name="Transaction index", required=False, load_default=None
 )
 
 felt_list_metadata = dict(
@@ -92,6 +92,10 @@ def validate_contract_hash(contract_hash: bytes):
 
 contract_hash_metadata = dict(
     marshmallow_field=BytesAsHex(required=True, validate=validate_contract_hash),
+)
+
+non_required_contract_hash_metadata = dict(
+    marshmallow_field=BytesAsHex(required=False, validate=validate_contract_hash),
 )
 
 contract_storage_commitment_tree_height_metadata = dict(

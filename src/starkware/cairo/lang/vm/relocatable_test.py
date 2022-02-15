@@ -59,6 +59,16 @@ def test_to_tuple_from_tuple():
     assert RelocatableValue.from_tuple((1, 2)) == x
 
 
+def test_to_felt_or_relocatable():
+    assert RelocatableValue.to_felt_or_relocatable(5) == 5
+
+    x = RelocatableValue(1, 2)
+    assert RelocatableValue.to_felt_or_relocatable(x) == x
+
+    assert RelocatableValue.to_felt_or_relocatable(True) == 1
+    assert RelocatableValue.to_felt_or_relocatable(False) == 0
+
+
 def test_relocatable_value_frozen():
     x = RelocatableValue(1, 2)
     with pytest.raises(

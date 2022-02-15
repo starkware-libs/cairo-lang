@@ -11,17 +11,17 @@ import marshmallow_dataclass
 from marshmallow_oneofschema import OneOfSchema
 
 from services.everest.api.gateway.transaction import EverestTransaction
+from starkware.starknet.core.os.transaction_hash import (
+    TransactionHashPrefix,
+    calculate_deploy_transaction_hash,
+    calculate_transaction_hash_common,
+)
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.definitions.transaction_type import TransactionType
 from starkware.starknet.services.api.contract_definition import ContractDefinition
 from starkware.starknet.services.api.gateway.contract_address import calculate_contract_address
-from starkware.starknet.services.api.gateway.transaction_hash import (
-    TransactionHashPrefix,
-    calculate_deploy_transaction_hash,
-    calculate_transaction_hash_common,
-)
 from starkware.starkware_utils.error_handling import wrap_with_stark_exception
 
 

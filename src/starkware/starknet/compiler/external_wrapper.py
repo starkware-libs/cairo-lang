@@ -45,7 +45,7 @@ from starkware.starknet.compiler.data_encoder import (
     decode_data,
     struct_to_argument_info_list,
 )
-from starkware.starknet.definitions.constants import STARKNET_LANG_DIRECTIVE
+from starkware.starknet.definitions import constants
 from starkware.starknet.public.abi import DEFAULT_ENTRY_POINT_NAME, DEFAULT_L1_ENTRY_POINT_NAME
 from starkware.starknet.services.api.contract_definition import SUPPORTED_BUILTINS
 
@@ -142,7 +142,7 @@ class PreExternalWrapperVisitor(Visitor):
         if is_raw_output:
             self.validate_raw_output_signature(elm=elm)
 
-        if self.file_lang != STARKNET_LANG_DIRECTIVE:
+        if self.file_lang != constants.STARKNET_LANG_DIRECTIVE:
             raise PreprocessorError(
                 "External decorators can only be used in source files that contain the "
                 '"%lang starknet" directive.',

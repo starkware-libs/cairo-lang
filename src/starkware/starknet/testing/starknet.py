@@ -1,5 +1,6 @@
 from typing import List, Optional, Union
 
+from starkware.starknet.business_logic.transaction_execution_objects import TransactionExecutionInfo
 from starkware.starknet.compiler.compile import compile_starknet_files
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.services.api.contract_definition import ContractDefinition, EntryPointType
@@ -85,7 +86,7 @@ class Starknet:
         selector: Union[int, str],
         payload: List[int],
         nonce: Optional[int] = None,
-    ):
+    ) -> TransactionExecutionInfo:
         """
         Mocks the L1 contract function sendMessageToL2.
 
@@ -96,7 +97,7 @@ class Starknet:
             nonce = self.l1_to_l2_nonce
             self.l1_to_l2_nonce += 1
 
-        await self.state.invoke_raw(
+        return await self.state.invoke_raw(
             contract_address=to_address,
             selector=selector,
             calldata=[from_address, *payload],

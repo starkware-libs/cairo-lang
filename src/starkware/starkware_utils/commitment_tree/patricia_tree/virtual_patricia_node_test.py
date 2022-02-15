@@ -10,6 +10,7 @@ from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import (
     BinaryNodeFact,
     EdgeNodeFact,
 )
+from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
 from starkware.starkware_utils.commitment_tree.patricia_tree.virtual_calculation_node import (
     VirtualCalculationNode,
 )
@@ -188,3 +189,45 @@ async def test_update_and_get_leaves(ffc: FactFetchingContext):
     sorted_by_index_leaf_values = [updated_leaves[leaf_id].value for leaf_id in leaves_range]
     expected_root_hash = await tree.commit(ffc=ffc, facts=None)  # Root is an edge node.
     verify_root(leaves=sorted_by_index_leaf_values, expected_root_hash=expected_root_hash)
+
+
+@pytest.mark.asyncio
+async def test_binary_fact_tree_node_create_diff(ffc: FactFetchingContext):
+    # All tree values ​​are zero.
+    empty_tree = await PatriciaTree.empty_tree(ffc=ffc, height=251, leaf_fact=LeafFact(value=0))
+    virtual_empty_tree_node = VirtualPatriciaNode.from_hash(
+        hash_value=empty_tree.root, height=empty_tree.height
+    )
+
+    # All tree values ​​are zero except for the fifth leaf, which has a value of 8.
+    one_change_tree = await empty_tree.update(ffc=ffc, modifications=[(5, LeafFact(value=8))])
+    virtual_one_change_node = VirtualPatriciaNode.from_hash(
+        hash_value=one_change_tree.root, height=empty_tree.height
+    )
+
+    # All tree values ​​are zero except for the fifth leaf, which has a value of 8.
+    # and the 58th leaf, which is 81.
+    two_change_tree = await one_change_tree.update(
+        ffc=ffc, modifications=[(58, LeafFact(value=81))]
+    )
+    virtual_two_change_node = VirtualPatriciaNode.from_hash(
+        hash_value=two_change_tree.root, height=empty_tree.height
+    )
+
+    # The difference between the tree whose values are all zero and the tree that has
+    # all values zero except two values is exactly the 2 values.
+    diff_result = await virtual_empty_tree_node.get_diff_between_trees(
+        other=virtual_two_change_node, ffc=ffc, fact_cls=LeafFact
+    )
+    assert diff_result == [
+        (5, LeafFact(value=0), LeafFact(value=8)),
+        (58, LeafFact(value=0), LeafFact(value=81)),
+    ]
+
+    # The difference between the tree whose values are zero except for the fifth leaf
+    # and the tree whose values are all zero except for the fifth leaf (there they are equal)
+    # and for the 58th leaf is exactly the 58th leaf.
+    diff_result = await virtual_one_change_node.get_diff_between_trees(
+        other=virtual_two_change_node, ffc=ffc, fact_cls=LeafFact
+    )
+    assert diff_result == [(58, LeafFact(value=0), LeafFact(value=81))]

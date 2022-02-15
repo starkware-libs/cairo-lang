@@ -3,7 +3,8 @@ import pytest
 from starkware.cairo.lang.vm.cairo_runner import get_runner_from_code
 from starkware.cairo.lang.vm.crypto import get_crypto_lib_context_manager
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
-from starkware.cairo.lang.vm.security import SecurityError, verify_secure_runner
+from starkware.cairo.lang.vm.security import verify_secure_runner
+from starkware.cairo.lang.vm.vm_exceptions import SecurityError
 
 PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
 

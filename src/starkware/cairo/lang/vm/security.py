@@ -1,9 +1,6 @@
 from starkware.cairo.lang.vm.cairo_runner import CairoRunner
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
-
-
-class SecurityError(Exception):
-    pass
+from starkware.cairo.lang.vm.vm_exceptions import SecurityError
 
 
 def verify_secure_runner(runner: CairoRunner, verify_builtins=True):

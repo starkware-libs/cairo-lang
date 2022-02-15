@@ -202,7 +202,7 @@ class TracerData:
         """
         Factory method constructing TracerData from files.
         """
-        program = Program.Schema().load(json.load(open(program_path)))
+        program = Program.load(data=json.load(open(program_path)))
         field_bytes = math.ceil(program.prime.bit_length() / 8)
         memory = read_memory(memory_path, field_bytes)
         trace = read_trace(trace_path)
@@ -215,7 +215,7 @@ class TracerData:
             public_input = None
 
         debug_info = (
-            DebugInfo.Schema().load(json.load(open(debug_info_path)))
+            DebugInfo.load(data=json.load(open(debug_info_path)))
             if debug_info_path is not None
             else None
         )

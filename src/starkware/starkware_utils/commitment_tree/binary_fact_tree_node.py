@@ -1,14 +1,17 @@
 import asyncio
 from abc import ABC, abstractmethod
-from typing import Collection, Dict, Optional, Tuple, Type, TypeVar
+from typing import AsyncIterator, Collection, Dict, List, Optional, Tuple, Type, TypeVar
 
 from starkware.python.utils import from_bytes
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict, TFact
 from starkware.starkware_utils.commitment_tree.inner_node_fact import InnerNodeFact
+from starkware.starkware_utils.commitment_tree.merkle_tree.traverse_tree import traverse_tree
 from starkware.storage.storage import FactFetchingContext
 
 TInnerNodeFact = TypeVar("TInnerNodeFact", bound=InnerNodeFact)
 TBinaryFactTreeNode = TypeVar("TBinaryFactTreeNode", bound="BinaryFactTreeNode")
+_BinaryFactTreeNodePair = Tuple[TBinaryFactTreeNode, TBinaryFactTreeNode]
+_BinaryFactTreeDiff = Tuple[int, _BinaryFactTreeNodePair]
 
 
 class BinaryFactTreeNode(ABC):
@@ -49,22 +52,6 @@ class BinaryFactTreeNode(ABC):
     @abstractmethod
     def create_leaf(cls: Type[TBinaryFactTreeNode], hash_value: bytes) -> TBinaryFactTreeNode:
         pass
-
-    @classmethod
-    @abstractmethod
-    async def combine(
-        cls: Type[TBinaryFactTreeNode],
-        ffc: FactFetchingContext,
-        left: "BinaryFactTreeNode",
-        right: "BinaryFactTreeNode",
-        facts: Optional[BinaryFactDict] = None,
-    ) -> TBinaryFactTreeNode:
-        """
-        Gets two BinaryFactTreeNode objects left and right representing children nodes, and builds
-        their parent node. Returns a new BinaryFactTreeNode.
-
-        If facts argument is not None, this dictionary is filled with facts read from the DB.
-        """
 
     @abstractmethod
     async def get_children(
@@ -113,7 +100,7 @@ class BinaryFactTreeNode(ABC):
             return {}
 
         if self.is_leaf:
-            assert set(indices) == {0}, f"Merkle tree indices out of range: {indices}."
+            assert set(indices) == {0}, f"Commitment tree indices out of range: {indices}."
             leaf = await fact_cls.get_or_fail(storage=ffc.storage, suffix=self.leaf_hash)
 
             return {0: leaf}
@@ -144,6 +131,60 @@ class BinaryFactTreeNode(ABC):
         )
 
         return unify_leaves(left_leaves=left_leaves, right_leaves=right_leaves)
+
+    async def get_diff_between_trees(
+        self,
+        other: TBinaryFactTreeNode,
+        ffc: FactFetchingContext,
+        fact_cls: Type[TFact],
+        facts: Optional[BinaryFactDict] = None,
+    ) -> List[Tuple[int, TFact, TFact]]:
+        """
+        Returns a list of (key, old_fact, new_fact) that are different
+        between this tree and another.
+
+        The height of the two trees must be equel.
+
+        If the 'facts' argument is not None, this dictionary is filled with facts read from the DB.
+        """
+        assert self.get_height_in_tree() == other.get_height_in_tree(), (
+            f"Tree heights must be equal. Got: {other.get_height_in_tree()} for 'other'; "
+            f"expected: {self.get_height_in_tree()}."
+        )
+        result: List[Tuple[int, TFact, TFact]] = []
+
+        async def get_children_callback(
+            node: _BinaryFactTreeDiff,
+        ) -> AsyncIterator[_BinaryFactTreeDiff]:
+            path, (previous, current) = node
+            if previous.is_leaf:
+                result.append(
+                    (
+                        path,
+                        await fact_cls.get_or_fail(suffix=previous.leaf_hash, storage=ffc.storage),
+                        await fact_cls.get_or_fail(suffix=current.leaf_hash, storage=ffc.storage),
+                    )
+                )
+                return
+
+            previous_left, previous_right = await previous.get_children(ffc=ffc, facts=facts)
+            current_left, current_right = await current.get_children(ffc=ffc, facts=facts)
+
+            if previous_left != current_left:
+                # Shift left for the left child.
+                yield (path << 1, (previous_left, current_left))
+
+            if previous_right != current_right:
+                # Shift left and turn on the LSB bit for the right child.
+                yield ((path << 1) + 1, (previous_right, current_right))
+
+        await traverse_tree(
+            get_children_callback=get_children_callback,
+            root=(0, (self, other)),
+            n_workers=ffc.n_workers,
+        )
+
+        return result
 
 
 async def read_node_fact(

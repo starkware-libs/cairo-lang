@@ -5,6 +5,11 @@ from typing_extensions import Literal
 
 from services.everest.api.feeder_gateway.feeder_gateway_client import EverestFeederGatewayClient
 from starkware.starknet.definitions import fields
+from starkware.starknet.services.api.feeder_gateway.response_objects import (
+    StarknetBlock,
+    TransactionInfo,
+    TransactionReceipt,
+)
 from starkware.starknet.services.api.gateway.transaction import InvokeFunction
 from starkware.starkware_utils.validated_fields import RangeValidatedField
 
@@ -42,13 +47,27 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         self,
         block_hash: Optional[CastableToHash] = None,
         block_number: Optional[BlockIdentifier] = None,
-    ) -> JsonObject:
+    ) -> StarknetBlock:
         formatted_block_identifier = get_formatted_block_identifier(
             block_hash=block_hash, block_number=block_number
         )
         raw_response = await self._send_request(
             send_method="GET",
             uri=f"/get_block?{formatted_block_identifier}",
+        )
+        return StarknetBlock.loads(raw_response)
+
+    async def get_state_update(
+        self,
+        block_hash: Optional[CastableToHash] = None,
+        block_number: Optional[BlockIdentifier] = None,
+    ) -> JsonObject:
+        formatted_block_identifier = get_formatted_block_identifier(
+            block_hash=block_hash, block_number=block_number
+        )
+        raw_response = await self._send_request(
+            send_method="GET",
+            uri=f"/get_state_update?{formatted_block_identifier}",
         )
         return json.loads(raw_response)
 
@@ -65,6 +84,26 @@ class FeederGatewayClient(EverestFeederGatewayClient):
             send_method="GET",
             uri=f"/get_code?contractAddress={hex(contract_address)}&{formatted_block_identifier}",
         )
+        return json.loads(raw_response)
+
+    async def get_full_contract(
+        self,
+        contract_address: int,
+        block_hash: Optional[CastableToHash] = None,
+        block_number: Optional[BlockIdentifier] = None,
+    ) -> JsonObject:
+        """
+        Returns the contract definition deployed under the given address.
+        A plain JSON is returned, rather than the Python object, to save loading time.
+        """
+        formatted_block_identifier = get_formatted_block_identifier(
+            block_hash=block_hash, block_number=block_number
+        )
+        uri = (
+            f"/get_full_contract?contractAddress={hex(contract_address)}&"
+            f"{formatted_block_identifier}"
+        )
+        raw_response = await self._send_request(send_method="GET", uri=uri)
         return json.loads(raw_response)
 
     async def get_storage_at(
@@ -95,20 +134,20 @@ class FeederGatewayClient(EverestFeederGatewayClient):
 
     async def get_transaction(
         self, tx_hash: Optional[CastableToHash], tx_id: Optional[int] = None
-    ) -> JsonObject:
+    ) -> TransactionInfo:
         raw_response = await self._send_request(
             send_method="GET", uri=f"/get_transaction?{tx_identifier(tx_hash=tx_hash, tx_id=tx_id)}"
         )
-        return json.loads(raw_response)
+        return TransactionInfo.loads(raw_response)
 
     async def get_transaction_receipt(
         self, tx_hash: Optional[CastableToHash], tx_id: Optional[int] = None
-    ) -> JsonObject:
+    ) -> TransactionReceipt:
         raw_response = await self._send_request(
             send_method="GET",
             uri=f"/get_transaction_receipt?{tx_identifier(tx_hash=tx_hash, tx_id=tx_id)}",
         )
-        return json.loads(raw_response)
+        return TransactionReceipt.loads(raw_response)
 
     async def get_block_hash_by_id(self, block_id: int) -> str:
         raw_response = await self._send_request(

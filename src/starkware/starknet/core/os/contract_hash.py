@@ -1,8 +1,13 @@
+import contextlib
 import dataclasses
 import itertools
 import json
 import os
-from typing import Callable, List
+from contextvars import ContextVar
+from functools import lru_cache
+from typing import Callable, List, Optional
+
+import cachetools
 
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.common.structs import CairoStructFactory, CairoStructProxy
@@ -20,7 +25,28 @@ from starkware.starknet.services.api.contract_definition import ContractDefiniti
 
 CAIRO_FILE = os.path.join(os.path.dirname(__file__), "contracts.cairo")
 
+contract_hash_cache_ctx_var: ContextVar[Optional[cachetools.LRUCache]] = ContextVar(
+    "contract_hash_cache", default=None
+)
 
+
+@contextlib.contextmanager
+def set_contract_hash_cache(cache: cachetools.LRUCache):
+    """
+    Sets a cache to be used by compute_contract_hash().
+    """
+    assert (
+        contract_hash_cache_ctx_var.get() is None
+    ), "Cannot replace an existing contract_hash_cache."
+
+    token = contract_hash_cache_ctx_var.set(cache)
+    try:
+        yield
+    finally:
+        contract_hash_cache_ctx_var.reset(token)
+
+
+@lru_cache()
 def load_program() -> Program:
     return compile_cairo_files(
         [CAIRO_FILE],
@@ -31,6 +57,26 @@ def load_program() -> Program:
 
 def compute_contract_hash(
     contract_definition: ContractDefinition, hash_func: Callable[[int, int], int] = pedersen_hash
+) -> int:
+    cache = contract_hash_cache_ctx_var.get()
+    if cache is None:
+        return compute_contract_hash_inner(
+            contract_definition=contract_definition, hash_func=hash_func
+        )
+
+    contract_definition_bytes = contract_definition.dumps(sort_keys=True).encode()
+    key = (starknet_keccak(data=contract_definition_bytes), hash_func)
+
+    if key not in cache:
+        cache[key] = compute_contract_hash_inner(
+            contract_definition=contract_definition, hash_func=hash_func
+        )
+
+    return cache[key]
+
+
+def compute_contract_hash_inner(
+    contract_definition: ContractDefinition, hash_func: Callable[[int, int], int]
 ) -> int:
     program = load_program()
     contract_definition_struct = get_contract_definition_struct(
@@ -59,9 +105,7 @@ def compute_hinted_contract_definition_hash(contract_definition: ContractDefinit
     """
     Computes the hash of the contract definition, including hints.
     """
-    dumped_program = Program.Schema().dump(
-        obj=dataclasses.replace(contract_definition.program, debug_info=None)
-    )
+    dumped_program = dataclasses.replace(contract_definition.program, debug_info=None).dump()
     if len(dumped_program["attributes"]) == 0:
         # Remove attributes field from raw dictionary, for hash backward compatibility of
         # contracts deployed prior to adding this feature.

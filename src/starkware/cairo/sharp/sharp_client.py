@@ -58,7 +58,7 @@ class SharpClient:
                 ]
                 + used_flags
             )
-            program = Program.Schema().load(json.load(open(compiled_program_file.name, "r")))
+            program = Program.load(data=json.load(open(compiled_program_file.name, "r")))
         return program
 
     def run_program(self, program: Program, program_input_path: Optional[str]) -> CairoPie:
@@ -69,7 +69,7 @@ class SharpClient:
         with tempfile.NamedTemporaryFile("w") as cairo_pie_file, tempfile.NamedTemporaryFile(
             "w"
         ) as program_file:
-            json.dump(Program.Schema().dump(program), program_file, indent=4, sort_keys=True)
+            json.dump(program.dump(), program_file, indent=4, sort_keys=True)
             program_file.flush()
             cairo_run_cmd = list(
                 filter(
@@ -199,7 +199,7 @@ def submit(args, command_args):
         cairo_pie = CairoPie.from_file(args.cairo_pie)
     else:
         if args.program is not None:
-            program = Program.Schema().load(json.load(open(args.program)))
+            program = Program.load(data=json.load(open(args.program)))
         else:
             assert args.source is not None
             print("Compiling...", file=sys.stderr)

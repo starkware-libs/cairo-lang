@@ -372,6 +372,20 @@ class CairoRunner:
             range(pointer - self.execution_base, self.vm.run_context.ap - self.execution_base)
         )
 
+    def mark_as_accessed(self, address: RelocatableValue, size: int):
+        """
+        Marks the memory range [address, address + size) as accessed.
+
+        This is useful when a memory range is not accessed in a partial scenario
+        but is known to be accessed in the real use case.
+
+        For example, a StarkNet contract entry point might not use all the information provided by
+        the StarkNet OS.
+        """
+        assert self.accessed_addresses is not None
+        for i in range(size):
+            self.accessed_addresses.add(address + i)
+
     def check_used_cells(self):
         """
         Returns True if there are enough allocated cells for the builtins.

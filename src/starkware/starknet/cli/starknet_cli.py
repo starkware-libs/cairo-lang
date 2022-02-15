@@ -20,8 +20,8 @@ from starkware.cairo.lang.tracer.tracer_data import field_element_repr
 from starkware.cairo.lang.version import __version__
 from starkware.cairo.lang.vm.crypto import get_crypto_lib_context_manager
 from starkware.starknet.cli.reconstruct_starknet_traceback import reconstruct_starknet_traceback
-from starkware.starknet.compiler.compile import get_selector_from_name
 from starkware.starknet.definitions import fields
+from starkware.starknet.public.abi import get_selector_from_name
 from starkware.starknet.public.abi_structs import identifier_manager_from_abi
 from starkware.starknet.services.api.contract_definition import ContractDefinition
 from starkware.starknet.services.api.feeder_gateway.feeder_gateway_client import FeederGatewayClient
@@ -480,8 +480,8 @@ async def get_transaction(args, command_args):
 
     feeder_gateway_client = get_feeder_gateway_client(args)
 
-    tx_info_as_dict = await feeder_gateway_client.get_transaction(tx_hash=args.hash)
-    print(json.dumps(tx_info_as_dict, indent=4, sort_keys=True))
+    tx_info = await feeder_gateway_client.get_transaction(tx_hash=args.hash)
+    print(tx_info.dumps(indent=4, sort_keys=True))
 
 
 async def get_transaction_receipt(args, command_args):
@@ -493,8 +493,8 @@ async def get_transaction_receipt(args, command_args):
 
     feeder_gateway_client = get_feeder_gateway_client(args)
 
-    tx_receipt_as_dict = await feeder_gateway_client.get_transaction_receipt(tx_hash=args.hash)
-    print(json.dumps(tx_receipt_as_dict, indent=4, sort_keys=True))
+    tx_receipt = await feeder_gateway_client.get_transaction_receipt(tx_hash=args.hash)
+    print(tx_receipt.dumps(indent=4, sort_keys=True))
 
 
 def handle_network_param(args):
@@ -539,10 +539,23 @@ async def get_block(args, command_args):
 
     feeder_gateway_client = get_feeder_gateway_client(args)
 
-    block_as_dict = await feeder_gateway_client.get_block(
-        block_hash=args.hash, block_number=args.number
+    block = await feeder_gateway_client.get_block(block_hash=args.hash, block_number=args.number)
+    print(block.dumps(indent=4, sort_keys=True))
+
+
+async def get_state_update(args, command_args):
+    parser = argparse.ArgumentParser(description=("Outputs the state update of a given block"))
+    add_block_identifier_argument(
+        parser=parser, block_role_description="display", with_block_prefix=True
     )
-    print(json.dumps(block_as_dict, indent=4, sort_keys=True))
+
+    parser.parse_args(command_args, namespace=args)
+    feeder_gateway_client = get_feeder_gateway_client(args)
+
+    block_state_updates = await feeder_gateway_client.get_state_update(
+        block_hash=args.block_hash, block_number=args.block_number
+    )
+    print(json.dumps(block_state_updates, indent=4, sort_keys=True))
 
 
 async def get_code(args, command_args):
@@ -567,6 +580,30 @@ async def get_code(args, command_args):
         block_number=args.block_number,
     )
     print(json.dumps(code, indent=4, sort_keys=True))
+
+
+async def get_full_contract(args, command_args):
+    parser = argparse.ArgumentParser(
+        description=(
+            "Outputs the contract definition of the contract at the given address with respect to "
+            "a specific block. In case no block ID is given, uses the latest block."
+        )
+    )
+    parser.add_argument(
+        "--contract_address", type=str, help="The address of the contract.", required=True
+    )
+    add_block_identifier_argument(parser=parser, block_role_description="extract information from")
+
+    parser.parse_args(command_args, namespace=args)
+
+    feeder_gateway_client = get_feeder_gateway_client(args)
+
+    contract_definition = await feeder_gateway_client.get_full_contract(
+        contract_address=int(args.contract_address, 16),
+        block_hash=args.block_hash,
+        block_number=args.block_number,
+    )
+    print(json.dumps(contract_definition, indent=4, sort_keys=True))
 
 
 async def get_contract_addresses(args, command_args):
@@ -634,8 +671,10 @@ async def main():
         "deploy": deploy,
         "deploy_account": deploy_account,
         "get_block": get_block,
+        "get_state_update": get_state_update,
         "get_code": get_code,
         "get_contract_addresses": get_contract_addresses,
+        "get_full_contract": get_full_contract,
         "get_storage_at": get_storage_at,
         "get_transaction": get_transaction,
         "get_transaction_receipt": get_transaction_receipt,

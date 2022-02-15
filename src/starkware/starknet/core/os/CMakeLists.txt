@@ -18,6 +18,7 @@ python_lib(starknet_os_abi_lib
     starknet_abi_lib
     starknet_contract_definition_lib
     starkware_python_utils_lib
+    pip_cachetools
 )
 
 python_lib(starknet_os_utils_lib
@@ -70,4 +71,35 @@ full_python_test(starknet_os_program_hash_test
     starknet_os_utils_lib
     starkware_python_utils_lib
     pip_pytest
+)
+
+python_lib(starknet_transaction_hash_lib
+    PREFIX starkware/starknet/core/os
+
+    FILES
+    transaction_hash.py
+
+    LIBS
+    cairo_common_lib
+    cairo_vm_crypto_lib
+    starknet_contract_definition_lib
+    starknet_definitions_lib
+    starkware_python_utils_lib
+)
+
+full_python_test(starknet_transaction_hash_test
+    PREFIX starkware/starknet/core/os
+    PYTHON python3.7
+    TESTED_MODULES starkware/starknet/core/os
+
+    FILES
+    transaction_hash_test.py
+
+    LIBS
+    cairo_common_lib
+    starknet_definitions_lib
+    starknet_transaction_hash_lib
+    starkware_crypto_lib
+    pip_pytest
+    pip_pytest_asyncio
 )

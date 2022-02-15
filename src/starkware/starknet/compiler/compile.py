@@ -129,8 +129,7 @@ def compile_starknet_codes(
     )
 
     # Dump and load program, so that it is converted to the canonical form.
-    program_schema = program.Schema()
-    program = program_schema.load(data=program_schema.dump(obj=program))
+    program = Program.load(data=program.dump())
 
     assert isinstance(preprocessed, StarknetPreprocessedProgram)
     return ContractDefinition(

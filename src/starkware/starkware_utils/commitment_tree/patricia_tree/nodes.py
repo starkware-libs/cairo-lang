@@ -4,11 +4,11 @@ from typing import ClassVar, List, Tuple, Type
 
 from starkware.python.utils import blockify, from_bytes, to_bytes
 from starkware.starkware_utils.commitment_tree.inner_node_fact import InnerNodeFact
-from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 from starkware.storage.storage import HASH_BYTES, HashFunctionType
 
 
-class PatriciaNodeFact(InnerNodeFact, ValidatedDataclass):
+# NOTE: We avoid using ValidatedDataclass here for performance.
+class PatriciaNodeFact(InnerNodeFact):
     """
     Base abstract class of Patricia-Merkle tree nodes.
     """
@@ -68,6 +68,7 @@ def verify_path_value(path: int, length: int):
     ), f"Edge path must be at most of length {length}; got: {bin(path)}."
 
 
+# NOTE: We avoid using ValidatedDataclass here for performance.
 @dataclasses.dataclass(frozen=True)
 class BinaryNodeFact(PatriciaNodeFact):
     """
@@ -81,8 +82,6 @@ class BinaryNodeFact(PatriciaNodeFact):
     PREIMAGE_LENGTH: ClassVar[int] = 2 * HASH_BYTES
 
     def __post_init__(self):
-        super().__post_init__()
-
         legal_binary_node = (
             self.left_node != EmptyNodeFact.EMPTY_NODE_HASH
             and self.right_node != EmptyNodeFact.EMPTY_NODE_HASH
@@ -110,6 +109,7 @@ class BinaryNodeFact(PatriciaNodeFact):
         return from_bytes(self.left_node), from_bytes(self.right_node)
 
 
+# NOTE: We avoid using ValidatedDataclass here for performance.
 @dataclasses.dataclass(frozen=True)
 class EdgeNodeFact(PatriciaNodeFact):
     """
@@ -132,8 +132,6 @@ class EdgeNodeFact(PatriciaNodeFact):
     PREIMAGE_LENGTH: ClassVar[int] = 2 * HASH_BYTES + 1
 
     def __post_init__(self):
-        super().__post_init__()
-
         assert (
             self.edge_length > 0
         ), f"The length of an edge node must be positive; got: {self.edge_length}."

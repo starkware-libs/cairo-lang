@@ -30,6 +30,7 @@ setuptools.setup(
         "starkware.starknet": ["common/*.cairo"],
         "starkware.starknet.core.os": ["*.cairo", "*.json"],
         "starkware.starknet.security": ["whitelists/*.json"],
+        "starkware.starknet.testing": ["*.json"],
         "starkware.starknet.third_party.open_zeppelin": ["account.json"],
     },
     scripts=[

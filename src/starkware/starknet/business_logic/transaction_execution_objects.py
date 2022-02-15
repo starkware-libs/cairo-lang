@@ -27,13 +27,21 @@ class TransactionExecutionContext(ValidatedDataclass):
     A context for transaction execution, which is shared between internal calls.
     """
 
+    # The account contract from which this transaction originates.
+    account_contract_address: int = field(
+        metadata=fields.AddressField.metadata(field_name="account_contract_address")
+    )
     run_resources: RunResources
     # Used for tracking global events order.
     n_emitted_events: int = field(metadata=sequential_id_metadata("Number of emitted events"))
 
     @classmethod
-    def create(cls, n_steps: int) -> "TransactionExecutionContext":
-        return cls(run_resources=RunResources(n_steps=n_steps), n_emitted_events=0)
+    def create(cls, account_contract_address: int, n_steps: int) -> "TransactionExecutionContext":
+        return cls(
+            account_contract_address=account_contract_address,
+            run_resources=RunResources(n_steps=n_steps),
+            n_emitted_events=0,
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -159,10 +167,6 @@ class ContractCall(ValidatedDataclass):
             storage_read_values=[],
             storage_accessed_addresses=set(),
         )
-
-    @classmethod
-    def empty_for_tests(cls) -> "ContractCall":
-        return cls.empty(to_address=0)
 
     @property
     def state_selector(self) -> StateSelector:

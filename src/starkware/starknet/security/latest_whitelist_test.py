@@ -19,7 +19,7 @@ def run(fix: bool):
     filename = get_source_dir_path("src/starkware/starknet/security/whitelists/latest.json")
     whitelist = HintsWhitelist.from_program(program)
     if fix:
-        data = HintsWhitelist.Schema().dumps(whitelist, indent=4, sort_keys=True)
+        data = whitelist.dumps(indent=4, sort_keys=True)
         with open(filename, "w") as fp:
             fp.write(data)
             fp.write("\n")

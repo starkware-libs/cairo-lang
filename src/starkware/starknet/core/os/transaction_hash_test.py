@@ -4,7 +4,7 @@ import pytest
 
 from starkware.cairo.common.hash_state import compute_hash_on_elements
 from starkware.crypto.signature.fast_pedersen_hash import pedersen_hash
-from starkware.starknet.services.api.gateway.transaction_hash import (
+from starkware.starknet.core.os.transaction_hash import (
     TransactionHashPrefix,
     calculate_deploy_transaction_hash,
     calculate_transaction_hash_common,

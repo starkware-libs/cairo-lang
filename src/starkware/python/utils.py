@@ -1,9 +1,12 @@
 import asyncio
+import contextlib
 import itertools
+import logging
 import os
 import random
 import re
 import subprocess
+import time
 from collections import UserDict
 from typing import Any, AsyncIterable, Awaitable, Iterable, List, Optional, TypeVar
 
@@ -341,3 +344,26 @@ def _all_subclasses(cls: type) -> List[type]:
 
 def get_exception_repr(exception: Exception) -> str:
     return f"{type(exception).__name__}({exception})"
+
+
+@contextlib.contextmanager
+def log_time(logger: logging.Logger, name: str):
+    """
+    Logs the elapsed time in seconds.
+
+    Example:
+        with log_time(logger=logger, name="Foo"):
+            sleep(1)
+    """
+    start = time.time()
+    try:
+        yield
+    finally:
+        logger.info(f"Ran '{name}'. Elapsed: {time.time() - start}.")
+
+
+def to_ascii_string(value: str) -> str:
+    """
+    Converts the given string to an ascii-encodeable one by replacing non-ascii characters with '?'.
+    """
+    return value.encode("ascii", "replace").decode("ascii")

@@ -10,6 +10,8 @@ from typing import Any, Dict, List, Optional
 import pytest
 import web3.exceptions
 from web3 import HTTPProvider, Web3
+from web3 import types as web3_types
+from web3.contract import Contract
 
 # Max timeout for web3 requests in seconds.
 TIMEOUT_FOR_WEB3_REQUESTS = 120  # Seconds.
@@ -97,14 +99,14 @@ class EthAccount:
     Represents an account in the system.
     """
 
-    def __init__(self, w3, address: str):
+    def __init__(self, w3: Web3, address: str):
         self.address = address
         self.w3 = w3
 
     def __repr__(self):
         return f"{type(self).__name__}({self.address})"
 
-    def deploy(self, contract_json, *constructor_args):
+    def deploy(self, contract_json, *constructor_args) -> "EthContract":
         """
         Deploys a contract.
         contract_json should be the compiled json, including the "abi" and "bytecode" keys.
@@ -128,13 +130,15 @@ class EthAccount:
         return EthContract(
             w3=self.w3,
             address=contract_address,
-            w3_contract=self.w3.eth.contract(abi=abi, address=contract_address),
+            w3_contract=self.w3.eth.contract(address=contract_address, abi=abi),
             abi=abi,
             deployer=self,
         )
 
     def transfer(self, to: "EthAccount", value: int):
-        self.w3.eth.send_transaction({"from": self.address, "to": to.address, "value": value})
+        self.w3.eth.send_transaction(
+            {"from": self.address, "to": to.address, "value": web3_types.Wei(value)}
+        )
 
     @property
     def balance(self) -> int:
@@ -146,22 +150,25 @@ class EthContract:
     Represents an Ethereum contract.
     """
 
-    def __init__(self, w3, address: str, w3_contract, abi: Abi, deployer: EthAccount):
+    def __init__(
+        self, w3: Web3, address: str, w3_contract: Contract, abi: Abi, deployer: EthAccount
+    ):
         self.w3 = w3
         self.address = address
         self.w3_contract = w3_contract
         self.abi = abi
         self.deployer = deployer
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> "EthContractFunction":
         return EthContractFunction(contract=self, name=name)
 
-    def replace_abi(self, abi):
-        w3_contract = self.w3.eth.contract(abi=abi, address=self.address)
+    def replace_abi(self, abi: Abi) -> "EthContract":
+        w3_contract = self.w3.eth.contract(address=Web3.toChecksumAddress(self.address), abi=abi)
+
         return EthContract(
             w3=self.w3,
             address=self.address,
-            w3_contract=w3_contract,
+            w3_contract=w3_contract,  # type: ignore[arg-type]
             abi=abi,
             deployer=self.deployer,
         )
@@ -195,9 +202,9 @@ class EthContractFunction:
     def _func(self):
         return getattr(self.contract.w3_contract.functions, self.name)
 
-    def transact(self, *args, transact_args=None):
+    def transact(self, *args, transact_args: Optional[Dict[str, Any]] = None) -> "EthReceipt":
         transact_args = prepare_transact_args(
-            transact_args, default_from=self.contract.deployer.address
+            transact_args=transact_args, default_from=self.contract.deployer.address
         )
         args = fix_tx_args(args)
 

@@ -25,7 +25,7 @@ func main{output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecds
     %{
         from starkware.starknet.core.os.os_input import StarknetOsInput
 
-        os_input = StarknetOsInput.Schema().load(program_input)
+        os_input = StarknetOsInput.load(data=program_input)
 
         ids.os_output.initial_outputs.messages_to_l1 = segments.add_temp_segment()
         ids.os_output.initial_outputs.messages_to_l2 = segments.add_temp_segment()
@@ -36,14 +36,14 @@ func main{output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecds
         block_timestamp=nondet %{ syscall_handler.block_info.block_timestamp %},
         block_number=nondet %{ syscall_handler.block_info.block_number %})
 
-    tempvar outputs : OsCarriedOutputs = os_output.initial_outputs
+    tempvar outputs : OsCarriedOutputs* = &os_output.initial_outputs
 
     with outputs:
         let (local reserved_range_checks_end, state_changes) = execute_transactions(
             block_info=&os_output.block_info)
     end
 
-    assert os_output.final_outputs = outputs
+    assert os_output.final_outputs = [outputs]
     local ecdsa_ptr = ecdsa_ptr
     local bitwise_ptr = bitwise_ptr
 

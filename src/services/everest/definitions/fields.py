@@ -55,8 +55,8 @@ class EthAddressTypeField(Field[str]):
         )
 
     # Serialization.
-    def get_marshmallow_field(self) -> mfields.Field:
-        return mfields.String(required=True)
+    def get_marshmallow_field(self, required: bool, load_default: Any) -> mfields.Field:
+        return mfields.String(required=required, load_default=load_default)
 
     def convert_valid_to_checksum(self, value: str) -> ChecksumAddress:
         self.validate(value=value)

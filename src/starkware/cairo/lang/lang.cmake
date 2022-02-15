@@ -28,6 +28,7 @@ python_venv(cairo_lang_package_venv
     cairo_bootloader_generate_fact_lib
     cairo_common_lib
     cairo_compile_lib
+    cairo_compile_test_utils_lib
     cairo_hash_program_lib
     cairo_run_lib
     cairo_script_lib
@@ -37,6 +38,7 @@ python_venv(cairo_lang_package_venv
     starknet_block_hash_lib
     starknet_script_lib
     starknet_testing_lib
+    starkware_eth_test_utils_lib
 )
 
 python_lib(cairo_instances_lib

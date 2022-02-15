@@ -220,7 +220,8 @@ tempvar z : (felt, felt) = ([ap - 1], 3)
 tempvar q : T
 assert q.t = 0
 tempvar w
-tempvar h = nondet %{ 5**i %}
+tempvar h1 = nondet %{ 5**i %}
+tempvar h2 : felt* = cast(nondet %{ segments.add_temp_segment() %}, felt*) + 3
 """
     program = preprocess_str(code=code, prime=PRIME)
     assert (
@@ -238,8 +239,11 @@ ap += 5
 ap += 2
 [ap + (-1)] = 0
 ap += 1
-%{ memory[ap] = int(5**i) %}
+%{ memory[ap] = to_felt_or_relocatable(5**i) %}
 ap += 1
+%{ memory[ap] = to_felt_or_relocatable(segments.add_temp_segment()) %}
+ap += 1
+[ap] = [ap + (-1)] + 3; ap++
 """
     )
 
@@ -274,7 +278,7 @@ end
 tempvar a : T = nondet %{ 1 %}
 """,
         """
-file:?:?: Hint tempvars must be of type felt.
+file:?:?: Hint tempvars must be of type felt or a pointer.
 tempvar a : T = nondet %{ 1 %}
                 ^************^
 """,

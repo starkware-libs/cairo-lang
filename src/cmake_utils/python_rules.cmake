@@ -9,6 +9,8 @@ function(get_lib_info_file OUTPUT_VARIABLE LIB)
   set(${OUTPUT_VARIABLE} ${PY_LIB_INFO_GLOBAL_DIR}/${LIB}.info PARENT_SCOPE)
 endfunction()
 
+add_custom_target(all_python_libs_dryrun)
+
 # Creates a python library target.
 # Caller should make this target depend on artifact targets (using add_dependencies())
 # to force correct build order.
@@ -91,21 +93,30 @@ function(python_lib LIB)
 
   get_lib_info_file(INFO_FILE ${LIB})
   file(RELATIVE_PATH CMAKE_DIR ${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
+  set(GEN_PY_LIB_COMMAND
+    ${GEN_PY_LIB_EXECUTABLE}
+    --name ${LIB}
+    --lib_dir ${LIB_DIR_ROOT}
+    --files ${LIB_FILES}
+    --lib_deps ${ARGS_LIBS}
+    --py_exe_deps ${ARGS_PY_EXE_DEPENDENCIES}
+    --cmake_dir ${CMAKE_DIR}
+    --prefix ${ARGS_PREFIX}
+  )
   add_custom_command(
     OUTPUT ${INFO_FILE}
-    COMMAND ${GEN_PY_LIB_EXECUTABLE}
-      --name ${LIB}
-      --lib_dir ${LIB_DIR_ROOT}
-      --files ${LIB_FILES}
-      --lib_deps ${ARGS_LIBS}
-      --output ${INFO_FILE}
-      --py_exe_deps ${ARGS_PY_EXE_DEPENDENCIES}
-      --cmake_dir ${CMAKE_DIR}
-      --prefix ${ARGS_PREFIX}
+    COMMAND ${GEN_PY_LIB_COMMAND} --output ${INFO_FILE}
     DEPENDS ${GEN_PY_LIB_EXECUTABLE} ${DEP_INFO} ${UNITED_LIBS}
       ${ARGS_PY_EXE_DEPENDENCIES} ${ALL_FILE_DEPS} ${LIB}_copy_files
   )
   add_custom_target(${LIB} ALL DEPENDS ${INFO_FILE})
+  add_custom_command(
+    OUTPUT ${INFO_FILE}.dryrun
+    COMMAND ${GEN_PY_LIB_COMMAND} --output ${INFO_FILE}.dryrun
+    DEPENDS ${GEN_PY_LIB_EXECUTABLE}
+  )
+  add_custom_target(${LIB}_dryrun DEPENDS ${INFO_FILE}.dryrun)
+  add_dependencies(all_python_libs_dryrun ${LIB}_dryrun)
 endfunction()
 
 # Creates a virtual environment target.

@@ -24,4 +24,4 @@ from starkware.starknet.common.storage import normalize_address
 from starkware.starknet.common.syscalls import (
     call_contract, delegate_call, delegate_l1_handler, emit_event, get_block_number,
     get_block_timestamp, get_caller_address, get_contract_address, get_sequencer_address,
-    get_tx_signature, storage_read, storage_write)
+    get_tx_info, get_tx_signature, storage_read, storage_write)
