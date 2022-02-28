@@ -61,7 +61,7 @@ class Ganache:
         """
         self.port = random.randrange(1024, 8192)
         self.ganache_proc = subprocess.Popen(
-            f"ganache-cli -p {self.port} --.chain.chainId 32 --networkId 32 --gasLimit 8000000 "
+            f"ganache-cli -p {self.port} --chain.chainId 32 --networkId 32 --gasLimit 8000000 "
             "--chain.allowUnlimitedContractSize",
             shell=True,
             stdout=subprocess.DEVNULL,
