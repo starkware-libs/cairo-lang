@@ -48,6 +48,15 @@ class EthTestUtils:
         finally:
             res.stop()
 
+    def advance_time(self, n_seconds: int):
+        self.w3.provider.make_request(
+            method=web3_types.RPCEndpoint("evm_increaseTime"), params=n_seconds
+        )
+        self.w3.provider.make_request(method=web3_types.RPCEndpoint("evm_mine"), params=[])
+
+    def get_block_by_hash(self, block_hash: str) -> "EthBlock":
+        return EthBlock(w3_block=self.w3.eth.getBlock(block_hash))
+
 
 class Ganache:
     """
@@ -177,7 +186,7 @@ class EthContract:
         event = getattr(self.w3_contract.events, name)
         return [
             {arg_name: handle_w3_value(arg_value) for arg_name, arg_value in event.args.items()}
-            for event in event().processReceipt(tx.tx_receipt)
+            for event in event().processReceipt(tx.w3_tx_receipt)
         ]
 
     def decode_transaction_data(self, data):
@@ -210,8 +219,8 @@ class EthContractFunction:
 
         try:
             tx_hash = self._func(*args).transact(transact_args)
-            tx_receipt = self.contract.w3.eth.waitForTransactionReceipt(tx_hash)
-            return EthReceipt(contract=self.contract, tx_receipt=tx_receipt)
+            w3_tx_receipt = self.contract.w3.eth.waitForTransactionReceipt(tx_hash)
+            return EthReceipt(contract=self.contract, w3_tx_receipt=w3_tx_receipt)
         except web3.exceptions.ContractLogicError as ex:
             raise EthRevertException(str(ex)) from None
 
@@ -230,19 +239,32 @@ class EthContractFunction:
 
 
 class EthReceipt:
-    def __init__(self, contract, tx_receipt):
+    def __init__(self, contract, w3_tx_receipt):
         self.contract = contract
-        self.tx_receipt = tx_receipt
+        self.w3_tx_receipt = w3_tx_receipt
 
     def get_events(self, name: str) -> List[dict]:
         return self.contract.get_events(tx=self, name=name)
 
     def get_cost(self) -> int:
-        tx = self.contract.w3.eth.get_transaction(self.tx_receipt.transactionHash)
+        tx = self.contract.w3.eth.get_transaction(self.w3_tx_receipt.transactionHash)
         gas_price = tx.get("effectiveGasPrice")
         if gas_price is None:
             gas_price = tx["gasPrice"]
-        return self.tx_receipt.gasUsed * gas_price
+        return self.w3_tx_receipt.gasUsed * gas_price
+
+    @property
+    def block_hash(self) -> str:
+        return self.w3_tx_receipt.blockHash.hex()
+
+
+class EthBlock:
+    def __init__(self, w3_block):
+        self.w3_block = w3_block
+
+    @property
+    def timestamp(self) -> int:
+        return self.w3_block.timestamp
 
 
 class EthRevertException(Exception):

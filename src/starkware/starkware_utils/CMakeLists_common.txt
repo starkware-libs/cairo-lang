@@ -61,3 +61,14 @@ python_lib(starkware_config_utils_lib
     pip_marshmallow
     pip_pyyaml
 )
+
+python_lib(starkware_commitment_tree_facts_lib
+    PREFIX starkware/starkware_utils
+
+    FILES
+    commitment_tree/inner_node_fact.py
+    commitment_tree/leaf_fact.py
+
+    LIBS
+    starkware_storage_lib
+)

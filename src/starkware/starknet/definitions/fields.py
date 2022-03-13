@@ -27,43 +27,20 @@ from starkware.starkware_utils.validated_fields import (
 
 # Fields data: validation data, dataclass metadata.
 
-block_number_metadata = sequential_id_metadata(field_name="Block number", allow_previous_id=True)
-default_optional_block_number_metadata = sequential_id_metadata(
-    field_name="Block number", required=False, load_default=None
-)
-default_optional_transaction_index_metadata = sequential_id_metadata(
-    field_name="Transaction index", required=False, load_default=None
+
+# Common.
+
+felt_as_hex_list_metadata = dict(
+    marshmallow_field=mfields.List(
+        everest_fields.FeltField.get_marshmallow_field(
+            required=True, load_default=marshmallow.utils.missing
+        )
+    )
 )
 
 felt_list_metadata = dict(
     marshmallow_field=mfields.List(IntAsStr(validate=everest_fields.FeltField.validate))
 )
-
-call_data_metadata = felt_list_metadata
-signature_metadata = felt_list_metadata
-
-ContractAddressField = RangeValidatedField(
-    lower_bound=constants.CONTRACT_ADDRESS_LOWER_BOUND,
-    upper_bound=constants.CONTRACT_ADDRESS_UPPER_BOUND,
-    name="Contract address",
-    error_code=StarknetErrorCode.OUT_OF_RANGE_CONTRACT_ADDRESS,
-    formatter=hex,
-)
-
-contract_address_metadata = ContractAddressField.metadata()
-
-OptionalContractAddressField = OptionalField(field=ContractAddressField, none_probability=0)
-optional_contract_address_metadata = OptionalContractAddressField.metadata()
-
-ContractAddressSalt = RangeValidatedField(
-    lower_bound=constants.CONTRACT_ADDRESS_SALT_LOWER_BOUND,
-    upper_bound=constants.CONTRACT_ADDRESS_SALT_UPPER_BOUND,
-    name="Contract salt",
-    error_code=StarknetErrorCode.OUT_OF_RANGE_CONTRACT_ADDRESS_SALT,
-    formatter=hex,
-)
-
-contract_address_salt_metadata = ContractAddressSalt.metadata()
 
 
 def bytes_as_hex_dict_keys_metadata(
@@ -80,96 +57,12 @@ def bytes_as_hex_dict_keys_metadata(
     )
 
 
-contract_definitions_metadata = dict(marshmallow_field=mfields.Dict(keys=BytesAsHex))
-
-
-def validate_contract_hash(contract_hash: bytes):
-    if from_bytes(value=contract_hash, byte_order="big") >= constants.CONTRACT_HASH_UPPER_BOUND:
-        raise ValueError(
-            f"Contract hash must represent a field element; got: 0x{contract_hash.hex()}."
-        )
-
-
-contract_hash_metadata = dict(
-    marshmallow_field=BytesAsHex(required=True, validate=validate_contract_hash),
-)
-
-non_required_contract_hash_metadata = dict(
-    marshmallow_field=BytesAsHex(required=False, validate=validate_contract_hash),
-)
-
-contract_storage_commitment_tree_height_metadata = dict(
-    marshmallow_field=StrictRequiredInteger(
-        validate=validate_positive("contract_storage_commitment_tree_height")
-    )
-)
-
-EntryPointSelectorField = RangeValidatedField(
-    lower_bound=constants.ENTRY_POINT_SELECTOR_LOWER_BOUND,
-    upper_bound=constants.ENTRY_POINT_SELECTOR_UPPER_BOUND,
-    name="Entry point selector",
-    error_code=StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_SELECTOR,
-    formatter=hex,
-)
-
-entry_point_selector_metadata = EntryPointSelectorField.metadata()
-
-EntryPointOffsetField = RangeValidatedField(
-    lower_bound=constants.ENTRY_POINT_OFFSET_LOWER_BOUND,
-    upper_bound=constants.ENTRY_POINT_OFFSET_UPPER_BOUND,
-    name="Entry point offset",
-    error_code=StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_OFFSET,
-    formatter=hex,
-)
-
-entry_point_offset_metadata = EntryPointOffsetField.metadata()
-
-global_state_commitment_tree_height_metadata = dict(
-    marshmallow_field=StrictRequiredInteger(
-        validate=validate_non_negative("global_state_commitment_tree_height"),
-    )
-)
-
-
-state_root_metadata = dict(marshmallow_field=BytesAsHex(required=True))
-optional_state_root_metadata = dict(marshmallow_field=BytesAsHex(required=False, allow_none=True))
-
-TransactionHashField = RangeValidatedField(
-    lower_bound=constants.TRANSACTION_HASH_LOWER_BOUND,
-    upper_bound=constants.TRANSACTION_HASH_UPPER_BOUND,
-    name="Transaction hash",
-    error_code=StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_HASH,
-    formatter=hex,
-)
-
-transaction_hash_metadata = TransactionHashField.metadata()
-
-OptionalTransactionHashField = OptionalField(field=TransactionHashField, none_probability=0)
-
-optional_transaction_hash_metadata = OptionalTransactionHashField.metadata()
-
-BlockHashField = RangeValidatedField(
-    lower_bound=0,
-    upper_bound=constants.BLOCK_HASH_UPPER_BOUND,
-    name="Block hash",
-    error_code=StarknetErrorCode.OUT_OF_RANGE_BLOCK_HASH,
-    formatter=hex,
-)
-
-block_hash_metadata = BlockHashField.metadata()
-
-OptionalBlockHashField = OptionalField(field=BlockHashField, none_probability=0)
-
-optional_block_hash_metadata = OptionalBlockHashField.metadata()
-
 timestamp_metadata = dict(
     marshmallow_field=StrictRequiredInteger(validate=validate_non_negative("timestamp"))
 )
 
-invoke_tx_n_steps_metadata = dict(
-    marshmallow_field=StrictRequiredInteger(validate=validate_non_negative("invoke_tx_n_steps"))
-)
 
+# Address.
 
 AddressField = RangeValidatedField(
     lower_bound=constants.ADDRESS_LOWER_BOUND,
@@ -192,5 +85,185 @@ caller_address_metadata = address_metadata(
     name="Caller address", error_code=StarknetErrorCode.OUT_OF_RANGE_CALLER_ADDRESS
 )
 
-OptionalNonceField = OptionalField(field=everest_fields.FeltField, none_probability=0)
+fee_token_address_metadata = address_metadata(
+    name="Fee token address", error_code=StarknetErrorCode.OUT_OF_RANGE_CONTRACT_ADDRESS
+)
+
+
+# Nonce.
+
+NonceField = RangeValidatedField(
+    lower_bound=constants.NONCE_LOWER_BOUND,
+    upper_bound=constants.NONCE_UPPER_BOUND,
+    name="Nonce",
+    error_code=StarknetErrorCode.OUT_OF_RANGE_NONCE,
+    formatter=hex,
+)
+nonce_metadata = NonceField.metadata()
+
+OptionalNonceField = OptionalField(field=NonceField, none_probability=0)
 optional_nonce_metadata = OptionalNonceField.metadata()
+
+
+# Block.
+
+block_number_metadata = sequential_id_metadata(field_name="Block number", allow_previous_id=True)
+default_optional_block_number_metadata = sequential_id_metadata(
+    field_name="Block number", required=False, load_default=None
+)
+
+BlockHashField = RangeValidatedField(
+    lower_bound=0,
+    upper_bound=constants.BLOCK_HASH_UPPER_BOUND,
+    name="Block hash",
+    error_code=StarknetErrorCode.OUT_OF_RANGE_BLOCK_HASH,
+    formatter=hex,
+)
+block_hash_metadata = BlockHashField.metadata()
+
+OptionalBlockHashField = OptionalField(field=BlockHashField, none_probability=0)
+optional_block_hash_metadata = OptionalBlockHashField.metadata()
+
+default_optional_transaction_index_metadata = sequential_id_metadata(
+    field_name="Transaction index", required=False, load_default=None
+)
+
+
+# InvokeFunction.
+
+call_data_metadata = felt_list_metadata
+call_data_as_hex_metadata = felt_as_hex_list_metadata
+signature_metadata = felt_list_metadata
+retdata_as_hex_metadata = felt_as_hex_list_metadata
+
+
+# Contract address.
+
+ContractAddressField = RangeValidatedField(
+    lower_bound=constants.CONTRACT_ADDRESS_LOWER_BOUND,
+    upper_bound=constants.CONTRACT_ADDRESS_UPPER_BOUND,
+    name="Contract address",
+    error_code=StarknetErrorCode.OUT_OF_RANGE_CONTRACT_ADDRESS,
+    formatter=hex,
+)
+contract_address_metadata = ContractAddressField.metadata()
+
+OptionalCodeAddressField = OptionalField(
+    field=dataclasses.replace(ContractAddressField, name="Code address"), none_probability=0
+)
+optional_code_address_metadata = OptionalCodeAddressField.metadata()
+
+ContractAddressSalt = everest_fields.felt(name_in_error_message="Contract salt")
+contract_address_salt_metadata = ContractAddressSalt.metadata()
+
+
+# Contract hash.
+
+
+def validate_contract_hash(contract_hash: bytes):
+    if from_bytes(value=contract_hash, byte_order="big") >= constants.CONTRACT_HASH_UPPER_BOUND:
+        raise ValueError(
+            f"Contract hash must represent a field element; got: 0x{contract_hash.hex()}."
+        )
+
+
+contract_hash_metadata = dict(
+    marshmallow_field=BytesAsHex(required=True, validate=validate_contract_hash),
+)
+
+non_required_contract_hash_metadata = dict(
+    marshmallow_field=BytesAsHex(required=False, validate=validate_contract_hash),
+)
+
+
+# Entry point.
+
+EntryPointSelectorField = RangeValidatedField(
+    lower_bound=constants.ENTRY_POINT_SELECTOR_LOWER_BOUND,
+    upper_bound=constants.ENTRY_POINT_SELECTOR_UPPER_BOUND,
+    name="Entry point selector",
+    error_code=StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_SELECTOR,
+    formatter=hex,
+)
+entry_point_selector_metadata = EntryPointSelectorField.metadata()
+
+OptionalEntryPointSelectorField = OptionalField(field=EntryPointSelectorField, none_probability=0)
+optional_entry_point_selector_metadata = OptionalEntryPointSelectorField.metadata()
+
+EntryPointOffsetField = RangeValidatedField(
+    lower_bound=constants.ENTRY_POINT_OFFSET_LOWER_BOUND,
+    upper_bound=constants.ENTRY_POINT_OFFSET_UPPER_BOUND,
+    name="Entry point offset",
+    error_code=StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_OFFSET,
+    formatter=hex,
+)
+entry_point_offset_metadata = EntryPointOffsetField.metadata()
+
+
+# Fee.
+
+FeeField = RangeValidatedField(
+    lower_bound=constants.FEE_LOWER_BOUND,
+    upper_bound=constants.FEE_UPPER_BOUND,
+    name="Fee",
+    error_code=StarknetErrorCode.OUT_OF_RANGE_FEE,
+    formatter=hex,
+)
+fee_metadata = FeeField.metadata(required=False, load_default=0)
+
+# Transaction version.
+
+TransactionVersionField = RangeValidatedField(
+    lower_bound=constants.TRANSACTION_VERSION_LOWER_BOUND,
+    upper_bound=constants.TRANSACTION_VERSION_UPPER_BOUND,
+    name="Transaction version",
+    error_code=StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_VERSION,
+    formatter=hex,
+)
+tx_version_metadata = TransactionVersionField.metadata(
+    required=False, load_default=constants.TRANSACTION_VERSION
+)
+
+
+# State root.
+
+state_root_metadata = dict(marshmallow_field=BytesAsHex(required=True))
+optional_state_root_metadata = dict(marshmallow_field=BytesAsHex(required=False, allow_none=True))
+
+
+# Transaction hash.
+
+TransactionHashField = RangeValidatedField(
+    lower_bound=constants.TRANSACTION_HASH_LOWER_BOUND,
+    upper_bound=constants.TRANSACTION_HASH_UPPER_BOUND,
+    name="Transaction hash",
+    error_code=StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_HASH,
+    formatter=hex,
+)
+transaction_hash_metadata = TransactionHashField.metadata()
+
+OptionalTransactionHashField = OptionalField(field=TransactionHashField, none_probability=0)
+optional_transaction_hash_metadata = OptionalTransactionHashField.metadata()
+
+
+# General config.
+
+contract_storage_commitment_tree_height_metadata = dict(
+    marshmallow_field=StrictRequiredInteger(
+        validate=validate_positive("contract_storage_commitment_tree_height")
+    )
+)
+
+global_state_commitment_tree_height_metadata = dict(
+    marshmallow_field=StrictRequiredInteger(
+        validate=validate_non_negative("global_state_commitment_tree_height"),
+    )
+)
+
+invoke_tx_n_steps_metadata = dict(
+    marshmallow_field=StrictRequiredInteger(validate=validate_non_negative("invoke_tx_n_steps"))
+)
+
+gas_price = dict(
+    marshmallow_field=StrictRequiredInteger(validate=validate_non_negative("gas_price"))
+)

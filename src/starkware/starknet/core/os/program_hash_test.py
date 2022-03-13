@@ -1,6 +1,6 @@
 import os
 
-from starkware.cairo.bootloader.program_hash_test_utils import (
+from starkware.cairo.bootloaders.program_hash_test_utils import (
     program_hash_test_main,
     run_generate_hash_test,
 )

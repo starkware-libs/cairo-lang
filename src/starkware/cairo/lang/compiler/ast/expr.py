@@ -13,7 +13,7 @@ from starkware.cairo.lang.compiler.ast.notes import Notes, NotesField
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.instruction import Register
 from starkware.python.expression_string import ExpressionString
-from starkware.python.utils import indent
+from starkware.python.utils import indent, safe_zip
 
 
 class Expression(AstNode):
@@ -146,6 +146,9 @@ class ArgList(AstNode):
     has_trailing_comma: bool
     location: Optional[Location] = LocationField
 
+    def __post_init__(self):
+        assert len(self.notes) == len(self.args) + 1
+
     def assert_no_comments(self):
         for note in self.notes:
             note.assert_no_comments()
@@ -157,7 +160,7 @@ class ArgList(AstNode):
 
         code = ""
         assert len(self.args) + 1 == len(self.notes)
-        for notes, arg in zip(self.notes[:-1], self.args):
+        for notes, arg in safe_zip(self.notes[:-1], self.args):
             if code != "":
                 code += ","
                 if notes.empty:
@@ -375,20 +378,39 @@ class ExprTuple(Expression):
         return [self.members]
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class ExprFutureLabel(Expression):
     """
     Represents a future label whose current pc is not known yet.
     """
 
     identifier: ExprIdentifier
+    # True if the label should be considered of type codeoffset (otherwise it is considered felt).
+    is_typed: bool
+    location: Optional[Location] = LocationField
 
     def to_expr_str(self):
         return self.identifier.to_expr_str()
 
-    @property
-    def location(self):
-        return self.identifier.location
-
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.identifier]
+
+
+@dataclasses.dataclass
+class ExprNewOperator(Expression):
+    """
+    Represents an expression of the form "new <struct_name>(<arguments>)".
+    For example, "new MyStruct(1, 2, z=3)".
+    """
+
+    expr: Expression
+    # True if the type of the expression should be a pointer to the type of 'expr'.
+    # False, if the type should be considered as felt.
+    is_typed: bool
+    location: Optional[Location] = LocationField
+
+    def to_expr_str(self):
+        return self.expr.to_expr_str().operator_new()
+
+    def get_children(self) -> Sequence[Optional[AstNode]]:
+        return [self.expr]

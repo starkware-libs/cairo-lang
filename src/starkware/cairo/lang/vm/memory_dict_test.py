@@ -68,7 +68,7 @@ def test_memory_dict_getitem():
 def test_memory_dict_check_element():
     memory = MemoryDict()
     with pytest.raises(KeyError, match="must be an int"):
-        memory["not a number"] = 12
+        memory["not a number"] = 12  # type: ignore
     with pytest.raises(KeyError, match="must be nonnegative"):
         memory[-12] = 13
     with pytest.raises(ValueError, match="The offset of a relocatable value must be nonnegative"):
@@ -78,10 +78,11 @@ def test_memory_dict_check_element():
 
 
 def test_memory_dict_get():
+    DEFAULT = 12345
     memory = MemoryDict({14: 15})
-    assert memory.get(14, "default") == 15
-    assert memory.get(1234, "default") == "default"
-    assert memory.get(-10, "default") == "default"
+    assert memory.get(14, DEFAULT) == 15
+    assert memory.get(1234, DEFAULT) == DEFAULT
+    assert memory.get(-10, DEFAULT) == DEFAULT
     # Attempting to read address with a negative offset is ok, it simply returns None.
     assert memory.get(RelocatableValue(segment_index=10, offset=-2)) is None
 

@@ -91,7 +91,7 @@ class HintException(VmExceptionBase):
             return traceback.FrameSummary(filename=filename, lineno=line_num, name=item.name)
 
         tb_exception.stack = traceback.StackSummary.from_list(
-            map(replace_stack_item, tb_exception.stack)
+            map(replace_stack_item, tb_exception.stack)  # type: ignore
         )
         super().__init__(f"Got an exception while executing a hint.")
         self.exception_str = "".join(tb_exception.format())

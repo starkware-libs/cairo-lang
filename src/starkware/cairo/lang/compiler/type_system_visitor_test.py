@@ -4,14 +4,10 @@ from typing import Optional
 import pytest
 
 from starkware.cairo.lang.compiler.ast.ast_objects_test_utils import remove_parentheses
-from starkware.cairo.lang.compiler.ast.cairo_types import (
-    CairoType,
-    TypeFelt,
-    TypePointer,
-    TypeStruct,
-    TypeTuple,
-)
+from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt, TypePointer, TypeStruct
+from starkware.cairo.lang.compiler.ast.expr import ExprFutureLabel, ExprNewOperator
 from starkware.cairo.lang.compiler.ast_objects_test import remove_parentheses
+from starkware.cairo.lang.compiler.expression_transformer import ExpressionTransformer
 from starkware.cairo.lang.compiler.identifier_definition import MemberDefinition, StructDefinition
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.parser import parse_expr
@@ -22,58 +18,79 @@ from starkware.cairo.lang.compiler.type_system_visitor import CairoTypeError, si
 scope = ScopedName.from_string
 
 
+class FixIsTypedVisitor(ExpressionTransformer):
+    """
+    A utility class the sets expr.is_typed to false.
+
+    This is useful for getting parsed expressions with is_typed = False to compare
+    against type system simplified expressions.
+    """
+
+    def visit_ExprNewOperator(self, expr: ExprNewOperator) -> ExprNewOperator:
+        return ExprNewOperator(
+            expr=self.visit(expr=expr.expr),
+            is_typed=False,
+            location=self.location_modifier(expr.location),
+        )
+
+    def visit_ExprFutureLabel(self, expr: ExprFutureLabel) -> ExprFutureLabel:
+        return ExprFutureLabel(
+            identifier=self.visit(expr.identifier),
+            is_typed=False,
+            location=self.location_modifier(expr.location),
+        )
+
+
 def simplify_type_system_test(
     orig_expr: str,
     simplified_expr: str,
-    simplified_type: CairoType,
+    simplified_type: str,
     identifiers: Optional[IdentifierManager] = None,
 ):
     parsed_expr = mark_types_in_expr_resolved(parse_expr(orig_expr))
-    assert simplify_type_system(parsed_expr, identifiers=identifiers) == (
-        parse_expr(simplified_expr),
-        simplified_type,
+    expr, typ = simplify_type_system(parsed_expr, identifiers=identifiers)
+    expected_expr = FixIsTypedVisitor().visit(
+        expr=remove_parentheses(expr=parse_expr(simplified_expr))
     )
+    assert expr == expected_expr, f"{expr.format()} != {expected_expr.format()}"
+    assert typ.format() == simplified_type
 
 
 def test_type_visitor():
-    t = TypeStruct(scope=scope("T"), is_fully_resolved=True)
-    t_star = TypePointer(pointee=t)
-    t_star2 = TypePointer(pointee=t_star)
-
-    simplify_type_system_test("fp + 3 + [ap]", "fp + 3 + [ap]", TypeFelt())
-    simplify_type_system_test("cast(fp + 3 + [ap], T*)", "fp + 3 + [ap]", t_star)
+    simplify_type_system_test("fp + 3 + [ap]", "fp + 3 + [ap]", "felt")
+    simplify_type_system_test("cast(fp + 3 + [ap], T*)", "fp + 3 + [ap]", "T*")
     # Two casts.
-    simplify_type_system_test("cast(cast(fp, T*), felt)", "fp", TypeFelt())
+    simplify_type_system_test("cast(cast(fp, T*), felt)", "fp", "felt")
     # Cast from T to T.
-    simplify_type_system_test("cast([cast(fp, T*)], T)", "[fp]", t)
+    simplify_type_system_test("cast([cast(fp, T*)], T)", "[fp]", "T")
     # Dereference.
-    simplify_type_system_test("[cast(fp, T**)]", "[fp]", t_star)
-    simplify_type_system_test("[[cast(fp, T**)]]", "[[fp]]", t)
+    simplify_type_system_test("[cast(fp, T**)]", "[fp]", "T*")
+    simplify_type_system_test("[[cast(fp, T**)]]", "[[fp]]", "T")
     # Address of.
-    simplify_type_system_test("&([[cast(fp, T**)]])", "[fp]", t_star)
-    simplify_type_system_test("&&[[cast(fp, T**)]]", "fp", t_star2)
+    simplify_type_system_test("&([[cast(fp, T**)]])", "[fp]", "T*")
+    simplify_type_system_test("&&[[cast(fp, T**)]]", "fp", "T**")
 
 
 def test_type_tuples():
-    t = TypeStruct(scope=scope("T"), is_fully_resolved=True)
-    t_star = TypePointer(pointee=t)
-
     # Simple tuple.
     simplify_type_system_test(
         "(fp, [cast(fp, T*)], cast(fp,T*))",
         "(fp, [fp], fp)",
-        TypeTuple(
-            members=[TypeFelt(), t, t_star],
-        ),
+        "(felt, T, T*)",
+    )
+
+    # Named tuple.
+    simplify_type_system_test(
+        "(a=fp, b=[cast(fp, T*)], c=cast(fp,T*))",
+        "(fp, [fp], fp)",
+        "(a : felt, b : T, c : T*)",
     )
 
     # Nested.
     simplify_type_system_test(
         "(fp, (), ([cast(fp, T*)],))",
         "(fp, (), ([fp],))",
-        TypeTuple(
-            members=[TypeFelt(), TypeTuple(members=[]), TypeTuple(members=[t])],
-        ),
+        "(felt, (), (T))",
     )
 
 
@@ -93,7 +110,7 @@ def test_type_tuples_failures():
     verify_exception(
         "1 + cast((1, 2), T).x",
         """
-file:?:?: Accessing struct members for r-value structs is not supported yet.
+file:?:?: Accessing struct/tuple members for r-value structs is not supported yet.
 1 + cast((1, 2), T).x
     ^***************^
 """,
@@ -102,18 +119,16 @@ file:?:?: Accessing struct members for r-value structs is not supported yet.
 
 
 def test_type_subscript_op():
-    felt_star_star = TypePointer(pointee=TypePointer(pointee=TypeFelt()))
     t = TypeStruct(scope=scope("T"), is_fully_resolved=True)
-    t_star = TypePointer(pointee=t)
 
     identifier_dict = {scope("T"): StructDefinition(full_name=scope("T"), members={}, size=7)}
     identifiers = IdentifierManager.from_dict(identifier_dict)
 
-    simplify_type_system_test("cast(fp, felt*)[3]", "[fp + 3 * 1]", TypeFelt())
-    simplify_type_system_test("cast(fp, felt***)[0]", "[fp + 0 * 1]", felt_star_star)
-    simplify_type_system_test("[cast(fp, T****)][ap][ap]", "[[[fp] + ap * 1] + ap * 1]", t_star)
+    simplify_type_system_test("cast(fp, felt*)[3]", "[fp + 3 * 1]", "felt")
+    simplify_type_system_test("cast(fp, felt***)[0]", "[fp + 0 * 1]", "felt**")
+    simplify_type_system_test("[cast(fp, T****)][ap][ap]", "[[[fp] + ap * 1] + ap * 1]", "T*")
     simplify_type_system_test(
-        "cast(fp, T**)[1][2]", "[[fp + 1 * 1] + 2 * 7]", t, identifiers=identifiers
+        "cast(fp, T**)[1][2]", "[[fp + 1 * 1] + 2 * 7]", "T", identifiers=identifiers
     )
 
     # Test that 'cast(fp, T*)[2 * ap + 3]' simplifies into '[fp + (2 * ap + 3) * 7]', but without
@@ -123,12 +138,12 @@ def test_type_subscript_op():
     ) == (remove_parentheses(parse_expr("[fp + (2 * ap + 3) * 7]")), t)
 
     # Test subscript operator for tuples.
-    simplify_type_system_test("(cast(fp, felt**), fp, cast(fp, T*))[2]", "fp", t_star)
-    simplify_type_system_test("(cast(fp, felt**), fp, cast(fp, T*))[0]", "fp", felt_star_star)
-    simplify_type_system_test("(cast(fp, felt**), ap, cast(fp, T*))[3*4 - 11]", "ap", TypeFelt())
-    simplify_type_system_test("[cast(ap, (felt, felt)*)][0]", "[ap + 0]", TypeFelt())
+    simplify_type_system_test("(cast(fp, felt**), fp, cast(fp, T*))[2]", "fp", "T*")
+    simplify_type_system_test("(cast(fp, felt**), fp, cast(fp, T*))[0]", "fp", "felt**")
+    simplify_type_system_test("(cast(fp, felt**), ap, cast(fp, T*))[3*4 - 11]", "ap", "felt")
+    simplify_type_system_test("[cast(ap, (felt, felt)*)][0]", "[ap + 0]", "felt")
     simplify_type_system_test(
-        "[cast(ap, (T*, T, felt, T*, felt*)*)][3]", "[ap + 9]", t_star, identifiers=identifiers
+        "[cast(ap, (T*, T, felt, T*, felt*)*)][3]", "[ap + 9]", "T*", identifiers=identifiers
     )
 
     # Test failures.
@@ -272,23 +287,23 @@ def test_type_dot_op():
     identifiers = IdentifierManager.from_dict(identifier_dict)
 
     for (orig_expr, simplified_expr, simplified_type) in [
-        ("[cast(fp, T*)].t", "[fp]", TypeFelt()),
-        ("[cast(fp, T*)].s", "[fp + 1]", s),
-        ("[cast(fp, T*)].sp", "[fp + 3]", s_star),
-        ("[cast(fp, T*)].s.x", "[fp + 1]", TypeFelt()),
-        ("[cast(fp, T*)].s.y", "[fp + 1 + 1]", TypeFelt()),
-        ("[[cast(fp, T*)].sp].x", "[[fp + 3]]", TypeFelt()),
-        ("[cast(fp, R*)]", "[fp]", r),
-        ("[cast(fp, R*)].r", "[fp]", r_star),
-        ("[[[cast(fp, R*)].r].r].r", "[[[fp]]]", r_star),
+        ("[cast(fp, T*)].t", "[fp]", "felt"),
+        ("[cast(fp, T*)].s", "[fp + 1]", "S"),
+        ("[cast(fp, T*)].sp", "[fp + 3]", "S*"),
+        ("[cast(fp, T*)].s.x", "[fp + 1]", "felt"),
+        ("[cast(fp, T*)].s.y", "[fp + 1 + 1]", "felt"),
+        ("[[cast(fp, T*)].sp].x", "[[fp + 3]]", "felt"),
+        ("[cast(fp, R*)]", "[fp]", "R"),
+        ("[cast(fp, R*)].r", "[fp]", "R*"),
+        ("[[[cast(fp, R*)].r].r].r", "[[[fp]]]", "R*"),
         # Test . as ->
-        ("cast(fp, T*).t", "[fp]", TypeFelt()),
-        ("cast(fp, T*).sp.y", "[[fp + 3] + 1]", TypeFelt()),
-        ("cast(fp, R*).r.r.r", "[[[fp]]]", r_star),
+        ("cast(fp, T*).t", "[fp]", "felt"),
+        ("cast(fp, T*).sp.y", "[[fp + 3] + 1]", "felt"),
+        ("cast(fp, R*).r.r.r", "[[[fp]]]", "R*"),
         # More tests.
-        ("(cast(fp, T*).s)", "[fp + 1]", s),
-        ("(cast(fp, T*).s).x", "[fp + 1]", TypeFelt()),
-        ("(&(cast(fp, T*).s)).x", "[fp + 1]", TypeFelt()),
+        ("(cast(fp, T*).s)", "[fp + 1]", "S"),
+        ("(cast(fp, T*).s).x", "[fp + 1]", "felt"),
+        ("(&(cast(fp, T*).s)).x", "[fp + 1]", "felt"),
     ]:
         simplify_type_system_test(
             orig_expr, simplified_expr, simplified_type, identifiers=identifiers
@@ -358,6 +373,58 @@ cast(fp, Z*).x
     )
 
 
+def test_type_dot_op_named_tuples():
+    """
+    Tests type_system_visitor for ExprDot-s for named tuples.
+    """
+    identifiers = IdentifierManager()
+    tuple_ref = "[cast(fp, (x : felt, y : (a : felt, b : felt), z : felt)*)]"
+    tuple_ptr = "cast(fp, (x : felt, y : (a : felt, b : felt)*, z : felt)*)"
+    for (orig_expr, simplified_expr, simplified_type) in [
+        (f"{tuple_ref}.x", "[fp]", "felt"),
+        (f"{tuple_ref}.y", "[fp + 1]", "(a : felt, b : felt)"),
+        (f"{tuple_ref}.y.a", "[fp + 1]", "felt"),
+        (f"{tuple_ref}.y.b", "[fp + 1 + 1]", "felt"),
+        (f"{tuple_ref}.z", "[fp + 3]", "felt"),
+        # Test . as ->
+        (f"{tuple_ptr}.y.b", "[[fp + 1] + 1]", "felt"),
+    ]:
+        simplify_type_system_test(
+            orig_expr, simplified_expr, simplified_type, identifiers=identifiers
+        )
+
+    # Test failures.
+
+    verify_exception(
+        "[cast(fp, (felt, felt)*)].x",
+        """
+file:?:?: Cannot apply dot-operator to unnamed tuple type '(felt, felt)'.
+[cast(fp, (felt, felt)*)].x
+^*************************^
+""",
+        identifiers=identifiers,
+    )
+    verify_exception(
+        "[cast(fp, (a : felt, b : felt)*)].x",
+        """
+file:?:?: Member 'x' does not appear in definition of tuple type '(a : felt, b : felt)'.
+[cast(fp, (a : felt, b : felt)*)].x
+^*********************************^
+""",
+        identifiers=identifiers,
+    )
+
+    verify_exception(
+        "(x=1, y=(a=2,b=3), z=4).y.b",
+        """
+file:?:?: Accessing struct/tuple members for r-value structs is not supported yet.
+(x=1, y=(a=2,b=3), z=4).y.b
+^***********************^
+""",
+        identifiers=identifiers,
+    )
+
+
 def test_type_visitor_failures():
     verify_exception(
         "[cast(fp, T*)] + 3",
@@ -394,12 +461,15 @@ file:?:?: Expression has no address.
 
 
 def test_type_visitor_pointer_arithmetic():
-    t = TypeStruct(scope=scope("T"), is_fully_resolved=True)
-    t_star = TypePointer(pointee=t)
+    simplify_type_system_test("cast(fp, T*) + 3", "fp + 3", "T*")
+    simplify_type_system_test("cast(fp, T*) - 3", "fp - 3", "T*")
+    simplify_type_system_test("cast(fp, T*) - cast(3, T*)", "fp - 3", "felt")
 
-    simplify_type_system_test("cast(fp, T*) + 3", "fp + 3", t_star)
-    simplify_type_system_test("cast(fp, T*) - 3", "fp - 3", t_star)
-    simplify_type_system_test("cast(fp, T*) - cast(3, T*)", "fp - 3", TypeFelt())
+
+def test_type_visitor_new_operator():
+    simplify_type_system_test("new (3 + 4)", "new (3 + 4)", "felt*")
+    simplify_type_system_test("new [cast(fp, T*)]", "new [fp]", "T*")
+    simplify_type_system_test("new (ap, cast(fp, felt*))", "new (ap, fp)", "(felt, felt*)*")
 
 
 def test_type_visitor_pointer_arithmetic_failures():

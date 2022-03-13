@@ -175,3 +175,60 @@ const a = 5
            ^
 """,
     )
+
+
+def test_new_operator_error():
+    verify_exception(
+        """
+let a = new
+""",
+        """
+file:?:?: Unexpected token Token('_NEWLINE', '\\n'). Expected: expression.
+let a = new
+           ^
+""",
+    )
+
+    verify_exception(
+        """
+new = 5
+""",
+        """
+file:?:?: Unexpected token Token('EQUAL', '='). Expected: expression.
+new = 5
+    ^
+""",
+    )
+
+    verify_exception(
+        """
+new A()
+""",
+        """
+file:?:?: Unexpected token Token('_NEWLINE', '\\n'). Expected one of: ".", "=", "[", operator.
+new A()
+       ^
+""",
+    )
+
+    verify_exception(
+        """
+new A().f
+""",
+        """
+file:?:?: Unexpected token Token('_NEWLINE', '\\n'). Expected one of: ".", "=", "[", operator.
+new A().f
+         ^
+""",
+    )
+
+    verify_exception(
+        """
+new A() new
+""",
+        """
+file:?:?: Unexpected token Token('NEW', 'new'). Expected one of: ".", "=", "[", operator.
+new A() new
+        ^*^
+""",
+    )

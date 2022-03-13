@@ -13,6 +13,7 @@ from starkware.cairo.lang.compiler.ast.expr import (
     ExprHint,
     ExprIdentifier,
     ExprNeg,
+    ExprNewOperator,
     ExprOperator,
     ExprParentheses,
     ExprPow,
@@ -62,7 +63,11 @@ class ExpressionTransformer:
         return ExprIdentifier(name=expr.name, location=self.location_modifier(expr.location))
 
     def visit_ExprFutureLabel(self, expr: ExprFutureLabel):
-        return ExprFutureLabel(self.visit(expr.identifier))
+        return ExprFutureLabel(
+            identifier=self.visit(expr.identifier),
+            is_typed=expr.is_typed,
+            location=self.location_modifier(expr.location),
+        )
 
     def visit_ExprReg(self, expr: ExprReg):
         return ExprReg(reg=expr.reg, location=self.location_modifier(expr.location))
@@ -155,6 +160,13 @@ class ExpressionTransformer:
     def visit_ExprFuncCall(self, expr: ExprFuncCall):
         return ExprFuncCall(
             rvalue=self.visit_RvalueFuncCall(expr.rvalue),
+            location=self.location_modifier(expr.location),
+        )
+
+    def visit_ExprNewOperator(self, expr: ExprNewOperator):
+        return ExprNewOperator(
+            expr=self.visit(expr.expr),
+            is_typed=expr.is_typed,
             location=self.location_modifier(expr.location),
         )
 

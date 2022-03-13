@@ -109,10 +109,19 @@ class ExpressionString:
         return ExpressionString(f"{self:HIGHEST} ** {other:HIGHEST}", OperatorPrecedence.POW)
 
     def __neg__(self):
+        # Use OperatorPrecedence.LOWEST (even though the actual precedence of the unary minus is
+        # higher) so that parentheses will be added even when lower-precedence operators are used.
+        # For example: `(-x) + y`.
         return ExpressionString(f"-{self:ADDROF}", OperatorPrecedence.LOWEST)
 
     def address_of(self):
         return ExpressionString(f"&{self:ADDROF}", OperatorPrecedence.ADDROF)
+
+    def operator_new(self):
+        # Use OperatorPrecedence.LOWEST (even though the actual precedence of the new operator is
+        # higher) so that parentheses will be added even when lower-precedence operators are used.
+        # For example: `(new x) + y`.
+        return ExpressionString(f"new {self:ADDROF}", OperatorPrecedence.LOWEST)
 
     def prepend(self, txt):
         """

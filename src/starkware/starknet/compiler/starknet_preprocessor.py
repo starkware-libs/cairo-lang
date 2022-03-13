@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from starkware.cairo.lang.compiler.ast.code_elements import (
     BuiltinsDirective,
@@ -27,6 +27,7 @@ from starkware.starknet.compiler.external_wrapper import (
 )
 from starkware.starknet.compiler.validation_utils import get_function_attr
 from starkware.starknet.definitions import constants
+from starkware.starknet.public.abi import AbiType
 from starkware.starknet.public.abi_structs import (
     prepare_type_for_abi,
     struct_definition_to_abi_entry,
@@ -39,7 +40,7 @@ from starkware.starkware_utils.subsequence import is_subsequence
 @dataclasses.dataclass
 class StarknetPreprocessedProgram(PreprocessedProgram):
     # JSON dict that contains information on the callable functions in the contract.
-    abi: Any
+    abi: AbiType
 
 
 class StarknetPreprocessor(Preprocessor):
@@ -54,7 +55,7 @@ class StarknetPreprocessor(Preprocessor):
         super().__init__(supported_decorators=supported_decorators, **kwargs)
 
         # JSON dict for the ABI output.
-        self.abi: List[dict] = []
+        self.abi: AbiType = []
         # A map from external struct (short) name to its ABI entry.
         self.abi_structs: Dict[str, dict] = {}
         # A map from external struct (short) name to the fully qualified name.

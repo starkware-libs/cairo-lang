@@ -14,6 +14,7 @@ python_lib(starknet_business_logic_lib
     starknet_general_config_lib
     starknet_os_abi_lib
     starknet_storage_lib
+    starkware_commitment_tree_facts_lib
     starkware_config_utils_lib
     starkware_dataclasses_utils_lib
     starkware_error_handling_lib
@@ -21,6 +22,21 @@ python_lib(starknet_business_logic_lib
     starkware_storage_lib
     starkware_utils_lib
     pip_marshmallow_dataclass
+)
+
+python_lib(starknet_business_logic_utils_lib
+    PREFIX starkware/starknet/business_logic
+
+    FILES
+    utils.py
+
+    LIBS
+    cairo_function_runner_lib
+    starknet_abi_lib
+    starknet_contract_definition_lib
+    starknet_definitions_lib
+    starknet_transaction_hash_lib
+    starkware_error_handling_lib
 )
 
 python_lib(starknet_internal_transaction_interface_lib
@@ -57,6 +73,7 @@ python_lib(starknet_transaction_execution_objects_lib
     starknet_contract_definition_lib
     starknet_definitions_lib
     starkware_dataclasses_utils_lib
+    pip_marshmallow
     pip_marshmallow_dataclass
 )
 
@@ -67,23 +84,22 @@ python_lib(starknet_internal_transaction_lib
     internal_transaction.py
 
     LIBS
-    cairo_function_runner_lib
-    cairo_relocatable_lib
     cairo_vm_lib
     everest_business_logic_lib
     everest_internal_transaction_lib
     everest_transaction_lib
     starknet_abi_lib
     starknet_business_logic_lib
+    starknet_business_logic_utils_lib
     starknet_contract_address_lib
     starknet_contract_definition_lib
     starknet_definitions_lib
+    starknet_execute_entry_point_lib
     starknet_general_config_lib
     starknet_internal_transaction_interface_lib
     starknet_os_abi_lib
-    starknet_os_utils_lib
-    starknet_storage_lib
     starknet_transaction_execution_objects_lib
+    starknet_transaction_fee_lib
     starknet_transaction_hash_lib
     starknet_transaction_lib
     starkware_config_utils_lib
@@ -95,4 +111,60 @@ python_lib(starknet_internal_transaction_lib
     pip_marshmallow_dataclass
     pip_marshmallow_enum
     pip_marshmallow_oneofschema
+)
+
+python_lib(starknet_execute_entry_point_base_lib
+    PREFIX starkware/starknet/business_logic
+
+    FILES
+    execute_entry_point_base.py
+
+    LIBS
+    starknet_business_logic_lib
+    starknet_contract_definition_lib
+    starknet_definitions_lib
+    starknet_general_config_lib
+    starknet_transaction_execution_objects_lib
+)
+
+python_lib(starknet_execute_entry_point_lib
+    PREFIX starkware/starknet/business_logic
+
+    FILES
+    execute_entry_point.py
+
+    LIBS
+    cairo_function_runner_lib
+    cairo_relocatable_lib
+    cairo_vm_lib
+    starknet_abi_lib
+    starknet_business_logic_lib
+    starknet_business_logic_utils_lib
+    starknet_contract_definition_lib
+    starknet_definitions_lib
+    starknet_execute_entry_point_base_lib
+    starknet_general_config_lib
+    starknet_os_utils_lib
+    starknet_storage_lib
+    starknet_transaction_execution_objects_lib
+    starkware_dataclasses_utils_lib
+    starkware_error_handling_lib
+    pip_marshmallow_dataclass
+)
+
+python_lib(starknet_transaction_fee_lib
+    PREFIX starkware/starknet/business_logic
+
+    FILES
+    transaction_fee.py
+
+    LIBS
+    starknet_abi_lib
+    starknet_business_logic_lib
+    starknet_contract_definition_lib
+    starknet_definitions_lib
+    starknet_execute_entry_point_lib
+    starknet_general_config_lib
+    starknet_transaction_execution_objects_lib
+    starkware_error_handling_lib
 )

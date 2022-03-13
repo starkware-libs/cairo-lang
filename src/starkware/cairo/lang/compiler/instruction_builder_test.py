@@ -596,6 +596,7 @@ def verify_exception(code_with_err):
     code = code_with_err.splitlines()[0]
     with pytest.raises(InstructionBuilderError) as e:
         parse_and_build(code)
+    assert e.value.location is not None
     assert (
         get_location_marks(code, e.value.location) + "\n" + str(e.value.message)
         == code_with_err.rstrip()

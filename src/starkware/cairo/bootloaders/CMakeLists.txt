@@ -1,9 +1,12 @@
 set(PROGRAM_HASH_TEST_UTILS_LIB_ADDITIONAL_LIBS cairo_hash_program_lib)
 
-include(bootloader_test_utils.cmake)
+add_subdirectory(bootloader)
+add_subdirectory(simple_bootloader)
+
+include(program_hash_test_utils.cmake)
 
 python_lib(cairo_hash_program_lib
-    PREFIX starkware/cairo/bootloader
+    PREFIX starkware/cairo/bootloaders
 
     FILES
     hash_program.py
@@ -24,11 +27,11 @@ python_venv(cairo_hash_program_venv
 
 python_exe(cairo_hash_program_exe
     VENV cairo_hash_program_venv
-    MODULE starkware.cairo.bootloader.hash_program
+    MODULE starkware.cairo.bootloaders.hash_program
 )
 
 python_lib(cairo_bootloader_fact_topology_lib
-    PREFIX starkware/cairo/bootloader
+    PREFIX starkware/cairo/bootloaders
     FILES
     fact_topology.py
 
@@ -38,7 +41,7 @@ python_lib(cairo_bootloader_fact_topology_lib
 )
 
 python_lib(cairo_bootloader_generate_fact_lib
-    PREFIX starkware/cairo/bootloader
+    PREFIX starkware/cairo/bootloaders
     FILES
     compute_fact.py
     generate_fact.py

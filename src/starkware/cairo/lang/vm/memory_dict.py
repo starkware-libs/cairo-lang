@@ -1,4 +1,4 @@
-from typing import Callable, Dict, Iterable, List, Optional, Tuple, Type, Union, cast
+from typing import Callable, Dict, Iterable, List, Mapping, Optional, Tuple, Type, Union, cast
 
 from starkware.cairo.lang.vm.memory_dict_backend import MemoryDictBackend
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
@@ -26,7 +26,8 @@ class InconsistentMemoryError(Exception):
 
 MemoryDictInitializer = Optional[
     Union[
-        Dict[MaybeRelocatable, MaybeRelocatable],
+        Mapping[MaybeRelocatable, MaybeRelocatable],
+        Mapping[int, int],
         Iterable[Tuple[MaybeRelocatable, MaybeRelocatable]],
     ]
 ]

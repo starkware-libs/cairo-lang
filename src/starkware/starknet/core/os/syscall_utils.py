@@ -10,19 +10,18 @@ from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypeFelt, T
 from starkware.cairo.lang.compiler.identifier_definition import StructDefinition
 from starkware.cairo.lang.vm.memory_segments import MemorySegmentManager
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
-from starkware.python.utils import camel_to_snake_case, safe_zip
-from starkware.starknet.business_logic.internal_transaction_interface import (
-    InternalStateTransaction,
-)
+from starkware.python.utils import assert_exhausted, camel_to_snake_case, safe_zip
+from starkware.starknet.business_logic.execute_entry_point_base import ExecuteEntryPointBase
 from starkware.starknet.business_logic.state import BlockInfo, CarriedState
 from starkware.starknet.business_logic.transaction_execution_objects import (
-    ContractCall,
-    ContractCallResponse,
-    L2ToL1MessageInfo,
-    OrderedEventContent,
+    CallInfo,
+    OrderedEvent,
+    OrderedL2ToL1Message,
     TransactionExecutionContext,
+    TransactionExecutionInfo,
 )
 from starkware.starknet.core.os.os_program import get_os_program
+from starkware.starknet.definitions import constants
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.services.api.contract_definition import EntryPointType
@@ -499,33 +498,31 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
 
     def __init__(
         self,
+        execute_entry_point_cls: Type[ExecuteEntryPointBase],
         tx_execution_context: TransactionExecutionContext,
         state: CarriedState,
         caller_address: int,
         contract_address: int,
-        signature: List[int],
         starknet_storage: BusinessLogicStarknetStorage,
         general_config: StarknetGeneralConfig,
         initial_syscall_ptr: RelocatableValue,
     ):
         super().__init__(general_config=general_config)
 
+        self.execute_entry_point_cls = execute_entry_point_cls
         self.tx_execution_context = tx_execution_context
         self.state = state
         self.caller_address = caller_address
         self.contract_address = contract_address
-        self.signature = signature
         self.starknet_storage = starknet_storage
         self.loop = starknet_storage.loop
 
-        # Accumulated execution info.
-        self.internal_call_responses: List[ContractCallResponse] = []
-        self.internal_calls: List[ContractCall] = []
+        # Internal calls executed by the current contract call.
+        self.internal_calls: List[CallInfo] = []
         # Events emitted by the current contract call.
-        self.events: List[OrderedEventContent] = []
-
-        # Messages from L2 to L1 including ones sent from internal calls.
-        self.l2_to_l1_messages: List[L2ToL1MessageInfo] = []
+        self.events: List[OrderedEvent] = []
+        # Messages sent by the current contract call to L1.
+        self.l2_to_l1_messages: List[OrderedL2ToL1Message] = []
 
         # Kept for validations during the run.
         self.expected_syscall_ptr = initial_syscall_ptr
@@ -607,25 +604,20 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
         else:
             raise NotImplementedError(f"Unsupported call type {syscall_name}.")
 
-        from starkware.starknet.business_logic.internal_transaction import InternalInvokeFunction
-
-        tx = InternalInvokeFunction(
+        call = self.execute_entry_point_cls(
             contract_address=contract_address,
             code_address=code_address,
             entry_point_selector=cast(int, request.function_selector),
             entry_point_type=entry_point_type,
             calldata=calldata,
-            signature=self.signature,
-            hash_value=0,
             caller_address=caller_address,
-            nonce=None,
         )
 
         with self.contract_call_execution_context(
-            tx=tx, called_contract_address=tx.contract_address
+            call=call, called_contract_address=contract_address
         ):
             # Execute contract call.
-            execution_info = tx.execute_contract_function(
+            call_info = call.sync_execute(
                 state=self.state,
                 general_config=self.general_config,
                 loop=self.loop,
@@ -633,21 +625,16 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
             )
 
         # Update execution info.
-        self.l2_to_l1_messages.extend(execution_info.l2_to_l1_messages)
-        call_response = ContractCallResponse(
-            retdata=execution_info.retdata,
-        )
-        self.internal_call_responses.append(call_response)
-        self.internal_calls.extend(execution_info.contract_calls)
+        self.internal_calls.append(call_info)
 
-        return call_response.retdata
+        return call_info.retdata
 
     @contextlib.contextmanager
     def contract_call_execution_context(
-        self, tx: InternalStateTransaction, called_contract_address: int
+        self, call: ExecuteEntryPointBase, called_contract_address: int
     ):
         # Pre-execution preperation and validations.
-        self._enrich_state(tx=tx)
+        self._enrich_state(call=call)
 
         try:
             yield
@@ -669,19 +656,19 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
         # Post-execution updates.
         self._update_starknet_storage()
 
-    def _enrich_state(self, tx: InternalStateTransaction):
+    def _enrich_state(self, call: ExecuteEntryPointBase):
         """
-        Prepares the state for the execution of the given transaction.
+        Prepares the state for the execution of the given call.
         """
         # Apply current modifications to the origin contract storage, in case there will be
-        # future nested call to this contract.
+        # future nested calls to this contract.
         self.state.update_contract_storage(
             contract_address=self.contract_address,
             modifications=self.starknet_storage.get_modifications(),
         )
 
-        # Fetch required information for the transaction (that is not already cached in the state).
-        state_selector = tx.get_state_selector(general_config=self.general_config)
+        # Fetch required information for the call (that is not already cached in the state).
+        state_selector = call.get_call_state_selector()
         state_selector -= self.state.state_selector
         future_extra_state = asyncio.run_coroutine_threadsafe(
             coro=self.state.shared_state.get_filled_carried_state(
@@ -705,12 +692,10 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
         request = self._read_and_validate_syscall_request(
             syscall_name="emit_event", segments=segments, syscall_ptr=syscall_ptr
         )
-        # Update events count.
-        self.tx_execution_context.n_emitted_events += 1
 
         self.events.append(
-            OrderedEventContent(
-                order=self.tx_execution_context.n_emitted_events - 1,
+            OrderedEvent(
+                order=self.tx_execution_context.n_emitted_events,
                 keys=segments.memory.get_range_as_ints(
                     addr=cast(RelocatableValue, request.keys), size=cast(int, request.keys_len)
                 ),
@@ -720,14 +705,19 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
             )
         )
 
+        # Update events count.
+        self.tx_execution_context.n_emitted_events += 1
+
     def _get_tx_info_ptr(self, segments: MemorySegmentManager) -> RelocatableValue:
         if self.tx_info_ptr is None:
             tx_info = self.structs.TxInfo(
-                version=0,
+                version=constants.TRANSACTION_VERSION,
                 account_contract_address=self.tx_execution_context.account_contract_address,
-                max_fee=0,
-                signature_len=len(self.signature),
-                signature=segments.gen_arg(self.signature),
+                max_fee=self.tx_execution_context.max_fee,
+                transaction_hash=self.tx_execution_context.transaction_hash,
+                signature_len=len(self.tx_execution_context.signature),
+                signature=segments.gen_arg(self.tx_execution_context.signature),
+                chain_id=self.general_config.chain_id.value,
             )
             self.tx_info_ptr = cast(RelocatableValue, segments.gen_arg(arg=tx_info))
 
@@ -740,15 +730,19 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
         payload = segments.memory.get_range_as_ints(
             addr=cast(RelocatableValue, request.payload_ptr), size=cast(int, request.payload_size)
         )
+
         self.l2_to_l1_messages.append(
-            # Note that the constructor of L2ToL1MessageInfo might fail as it is
+            # Note that the constructor of OrderedL2ToL1Message might fail as it is
             # more restrictive than the Cairo code.
-            L2ToL1MessageInfo(
-                from_address=self.contract_address,
+            OrderedL2ToL1Message(
+                order=self.tx_execution_context.n_sent_messages,
                 to_address=cast(int, request.to_address),
                 payload=payload,
             )
         )
+
+        # Update messages count.
+        self.tx_execution_context.n_sent_messages += 1
 
     def _get_block_number(self) -> int:
         return self.state.block_info.block_number
@@ -824,12 +818,14 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
         signature_ptr = tx_info.signature
         stark_assert(
             segments.get_segment_used_size(segment_index=signature_ptr.segment_index)
-            == len(self.signature),
+            == len(self.tx_execution_context.signature),
             code=StarknetErrorCode.SECURITY_ERROR,
             message=f"Out of bounds write to signature segment.",
         )
 
-        runner.mark_as_accessed(address=signature_ptr, size=len(self.signature))
+        runner.mark_as_accessed(
+            address=signature_ptr, size=len(self.tx_execution_context.signature)
+        )
 
     def post_run(self, runner: CairoFunctionRunner, syscall_stop_ptr: MaybeRelocatable):
         """
@@ -852,19 +848,23 @@ class OsSysCallHandler(SysCallHandlerBase):
 
     def __init__(
         self,
-        contract_calls: List[ContractCall],
+        tx_execution_infos: List[TransactionExecutionInfo],
         general_config: StarknetGeneralConfig,
         starknet_storage_by_address: Mapping[int, StarknetStorageInterface],
         block_info: BlockInfo,
     ):
         super().__init__(general_config=general_config)
 
-        self._call_response_iterator: Iterator[ContractCallResponse] = iter([])
-        self._contract_calls_iterator = iter(contract_calls)
+        self.tx_execution_info_iterator: Iterator[TransactionExecutionInfo] = iter(
+            tx_execution_infos
+        )
+        self.call_iterator: Iterator[CallInfo] = iter([])
 
         # The following members are stacks that represent the calls being executed now (the last
         # item is the current execution; the one before it, is the caller function; and so on).
-        self.call_stack: List[ContractCall] = []
+        self.call_stack: List[CallInfo] = []
+        # For each call an iterator to the retdata of its internal calls.
+        self.retdata_iterators: List[Iterator[List[int]]] = []
         # For each call an iterator to the read_values array which is consumed when the transaction
         # code is executed.
         self.execute_code_read_iterators: List[Iterator[int]] = []
@@ -884,6 +884,9 @@ class OsSysCallHandler(SysCallHandlerBase):
         # call validation by the StarkNet OS.
         # Set during enter_tx.
         self.tx_info_ptr: Optional[RelocatableValue] = None
+
+        # The TransactionExecutionInfo for the transaction currently being executed.
+        self.tx_execution_info: Optional[TransactionExecutionInfo] = None
 
     def _read_and_validate_syscall_request(
         self, syscall_name: str, segments: MemorySegmentManager, syscall_ptr: RelocatableValue
@@ -911,8 +914,7 @@ class OsSysCallHandler(SysCallHandlerBase):
         request = self.structs.CallContractRequest.from_ptr(
             memory=segments.memory, addr=syscall_ptr
         )
-        call_response = next(self._call_response_iterator)
-        return call_response.retdata
+        return next(self.retdata_iterators[-1])
 
     def _get_block_number(self) -> int:
         return self.block_info.block_number
@@ -923,12 +925,12 @@ class OsSysCallHandler(SysCallHandlerBase):
     def _get_caller_address(
         self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue
     ) -> int:
-        return self.call_stack[-1].from_address
+        return self.call_stack[-1].caller_address
 
     def _get_contract_address(
         self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue
     ) -> int:
-        return self.call_stack[-1].to_address
+        return self.call_stack[-1].contract_address
 
     def _get_tx_info_ptr(self, segments: MemorySegmentManager) -> RelocatableValue:
         assert self.tx_info_ptr is not None
@@ -963,27 +965,31 @@ class OsSysCallHandler(SysCallHandlerBase):
         assert self.tx_info_ptr is None
         self.tx_info_ptr = tx_info_ptr
 
+        assert self.tx_execution_info is None
+        self.tx_execution_info = next(self.tx_execution_info_iterator)
+        self.call_iterator = self.tx_execution_info.gen_call_iterator()
+
     def end_tx(self):
         """
         Called after the execution of the current transaction complete.
         """
+        assert_exhausted(iterator=self.call_iterator)
         assert self.tx_info_ptr is not None
         self.tx_info_ptr = None
+        assert self.tx_execution_info is not None
+        self.tx_execution_info = None
 
     def enter_call(self):
-        call_info = next(self._contract_calls_iterator)
-        self._call_response_iterator = iter(call_info.internal_call_responses)
+        call_info = next(self.call_iterator)
         self.call_stack.append(call_info)
+        self.retdata_iterators.append(call.retdata for call in call_info.internal_calls)
         # Create two iterators for call_info.storage_read_values.
         self.execute_code_read_iterators.append(iter(call_info.storage_read_values))
         self.execute_syscall_read_iterators.append(iter(call_info.storage_read_values))
 
     def exit_call(self):
-        assert (
-            next(self._call_response_iterator, None) is None
-        ), "internal_call_responses should be consumed before calling exit_call."
         self.call_stack.pop()
-        # Remove the top iterators in execute_code_read_iterators and execute_syscall_read_iterators
-        # and make sure it is empty.
-        assert all(False for x in self.execute_code_read_iterators.pop())
-        assert all(False for x in self.execute_syscall_read_iterators.pop())
+        # Remove the top iterators and make sure they are empty.
+        assert_exhausted(iterator=self.retdata_iterators.pop())
+        assert_exhausted(iterator=self.execute_code_read_iterators.pop())
+        assert_exhausted(iterator=self.execute_syscall_read_iterators.pop())

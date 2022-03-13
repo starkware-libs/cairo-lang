@@ -63,7 +63,7 @@ end
 
     assert isinstance(program.identifiers.get_by_full_name(WRAPPER_SCOPE + "f"), FunctionDefinition)
 
-    expected_result = "%builtins pedersen range_check ecdsa\n" + strip_comments_and_linebreaks(
+    expected_result = "%builtins pedersen range_check ecdsa\n\n" + strip_comments_and_linebreaks(
         """\
 # Implementation of f
 [ap] = [fp + (-6)]; ap++                 # Return ecdsa_ptr.
@@ -129,7 +129,7 @@ end
 
     assert isinstance(program.identifiers.get_by_full_name(WRAPPER_SCOPE + "f"), FunctionDefinition)
 
-    expected_result = "%builtins pedersen range_check ecdsa\n" + strip_comments_and_linebreaks(
+    expected_result = "%builtins pedersen range_check ecdsa\n\n" + strip_comments_and_linebreaks(
         """\
 # A dummy memcpy().
 ap += [ap]

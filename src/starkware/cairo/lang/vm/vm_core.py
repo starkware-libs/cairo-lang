@@ -440,9 +440,35 @@ class VirtualMachine(VirtualMachineBase):
 
         self.current_step += 1
 
-    def check_eq(self, val0, val1):
-        """
-        Called when an instruction encounters an assertion that two values should be equal.
-        This function can be overridden by subclasses.
-        """
-        return val0 == val1
+    def step(self):
+        self.skip_instruction_execution = False
+        # Execute hints.
+        for hint_index, hint in enumerate(self.hints.get(self.run_context.pc, [])):
+            exec_locals = self.exec_scopes[-1]
+            exec_locals["memory"] = memory = self.validated_memory
+            exec_locals["ap"] = ap = self.run_context.ap
+            exec_locals["fp"] = fp = self.run_context.fp
+            exec_locals["pc"] = pc = self.run_context.pc
+            exec_locals["current_step"] = self.current_step
+            exec_locals["ids"] = hint.consts(pc, ap, fp, memory)
+
+            exec_locals["vm_load_program"] = self.load_program
+            exec_locals["vm_enter_scope"] = self.enter_scope
+            exec_locals["vm_exit_scope"] = self.exit_scope
+            exec_locals.update(self.static_locals)
+
+            self.exec_hint(hint.compiled, exec_locals, hint_index=hint_index)
+
+            # Clear ids (which will be rewritten by the next hint anyway) to make the VM instance
+            # smaller and faster to copy.
+            del exec_locals["ids"]
+            del exec_locals["memory"]
+
+            if self.skip_instruction_execution:
+                return
+
+        # Decode.
+        instruction = self.decode_current_instruction()
+
+        # Run.
+        self.run_instruction(instruction)

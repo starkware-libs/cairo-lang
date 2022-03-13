@@ -1,7 +1,15 @@
+from typing import List
+
 import pytest
 
 from starkware.cairo.lang.compiler.ast.aliased_identifier import AliasedIdentifier
-from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt, TypeTuple
+from starkware.cairo.lang.compiler.ast.cairo_types import (
+    CairoType,
+    TypeCodeoffset,
+    TypeFelt,
+    TypePointer,
+    TypeTuple,
+)
 from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeElementImport,
     CodeElementReference,
@@ -31,12 +39,13 @@ from starkware.cairo.lang.compiler.ast.instructions import (
     RetInstruction,
 )
 from starkware.cairo.lang.compiler.ast.types import TypedIdentifier
-from starkware.cairo.lang.compiler.error_handling import LocationError, get_location_marks
+from starkware.cairo.lang.compiler.error_handling import Location, LocationError, get_location_marks
 from starkware.cairo.lang.compiler.expression_simplifier import ExpressionSimplifier
 from starkware.cairo.lang.compiler.instruction import Register
 from starkware.cairo.lang.compiler.parser import (
     parse,
     parse_code_element,
+    parse_const,
     parse_expr,
     parse_instruction,
     parse_type,
@@ -47,13 +56,15 @@ from starkware.python.utils import safe_zip
 
 
 def test_int():
-    expr = parse_expr(" 01234 ")
-    assert expr == ExprConst(val=1234)
-    assert expr.format_str == "01234"
-    assert expr.format() == "01234"
+    expr_const = parse_const(" 01234 ")
+    assert expr_const == ExprConst(val=1234)
+    assert expr_const.format_str == "01234"
+    assert expr_const.format() == "01234"
 
     expr = parse_expr("-01234")
+    assert isinstance(expr, ExprNeg)
     assert expr == ExprNeg(val=ExprConst(val=1234))
+    assert isinstance(expr.val, ExprConst)
     assert expr.val.format_str == "01234"
     assert expr.format() == "-01234"
 
@@ -61,13 +72,15 @@ def test_int():
 
 
 def test_hex_int():
-    expr = parse_expr(" 0x1234 ")
-    assert expr == ExprConst(val=0x1234)
-    assert expr.format_str == "0x1234"
-    assert expr.format() == "0x1234"
+    expr_const = parse_const(" 0x1234 ")
+    assert expr_const == ExprConst(val=0x1234)
+    assert expr_const.format_str == "0x1234"
+    assert expr_const.format() == "0x1234"
 
     expr = parse_expr("-0x01234")
+    assert isinstance(expr, ExprNeg)
     assert expr == ExprNeg(val=ExprConst(val=0x1234))
+    assert isinstance(expr.val, ExprConst)
     assert expr.val.format_str == "0x01234"
     assert expr.format() == "-0x01234"
 
@@ -75,17 +88,24 @@ def test_hex_int():
 
 
 def test_short_string():
-    expr = parse_expr(" 'ab' ")
-    assert expr == ExprConst(val=ord("a") * 256 + ord("b"))
-    assert expr.format_str == "'ab'"
-    assert expr.format() == "'ab'"
+    expr_const = parse_const(" 'ab' ")
+    assert expr_const == ExprConst(val=ord("a") * 256 + ord("b"))
+    assert expr_const.format_str == "'ab'"
+    assert expr_const.format() == "'ab'"
 
     expr = parse_expr("-'abc'")
+    assert isinstance(expr, ExprNeg)
     assert expr == ExprNeg(val=ExprConst(val=int.from_bytes(b"abc", "big")))
+    assert isinstance(expr.val, ExprConst)
     assert expr.val.format_str == "'abc'"
     assert expr.format() == "-'abc'"
 
     assert parse_expr("-'abcd'") == parse_expr("- 'abcd'")
+
+    assert parse_const(r"'a\x00\x12b'").val == int.from_bytes([ord("a"), 0, 18, ord("b")], "big")
+    assert parse_const(r"'\x00\x1'").val == int.from_bytes(
+        [0, ord("\\"), ord("x"), ord("1")], "big"
+    )
 
     verify_exception(
         """let x = '0123456789012345678901234567890123456789'""",
@@ -107,15 +127,69 @@ let x = '\u1234'
 
 def test_types():
     assert isinstance(parse_type("felt"), TypeFelt)
+    assert parse_type("felt").format() == "felt"
+    assert isinstance(parse_type("codeoffset"), TypeCodeoffset)
+    assert parse_type("codeoffset").format() == "codeoffset"
     assert parse_type("my_namespace.MyStruct  *  *").format() == "my_namespace.MyStruct**"
     assert parse_type("my_namespace.MyStruct*****").format() == "my_namespace.MyStruct*****"
 
 
 def test_type_tuple():
     typ = parse_type("(felt)")
-    assert typ == TypeTuple(members=[TypeFelt()])
+    assert typ == TypeTuple.unnamed([TypeFelt()])
     assert typ.format() == "(felt)"
     assert parse_type("( felt, felt* , (felt, T.S,)* )").format() == "(felt, felt*, (felt, T.S)*)"
+
+
+def test_type_named_tuple():
+    typ = parse_type("(a:felt,   b: felt )")
+    assert isinstance(typ, TypeTuple)
+    assert typ.members[0].name == "a"
+    assert typ.members[1].name == "b"
+    assert typ.format() == "(a : felt, b : felt)"
+    assert (
+        parse_type("( a:(felt, felt*) , b:(c:felt,)* )").format()
+        == "(a : (felt, felt*), b : (c : felt)*)"
+    )
+
+    # With new lines.
+    assert parse_type("(\n a:felt\n\n, \n  b: felt \n )").format() == "(a : felt, b : felt)"
+
+    # With comments (parsing, but no auto-formatting).
+    typ2 = parse_type("( # This is a comment.\na:felt\n\n, \n  b: felt \n )")
+    assert typ2 == typ
+    with pytest.raises(
+        FormattingError,
+        match="Comments inside expressions are not supported by the auto-formatter.",
+    ):
+        typ2.format()
+
+
+def test_type_named_tuple_failure():
+    verify_exception(
+        "local x : (a* : felt)",
+        """
+file:?:?: Unexpected token Token('COLON', ':'). Expected one of: ")", "*", ",".
+local x : (a* : felt)
+              ^
+""",
+    )
+    verify_exception(
+        "local x : (a.b : felt)",
+        """
+file:?:?: Unexpected '.' in name.
+local x : (a.b : felt)
+           ^*^
+""",
+    )
+    verify_exception(
+        "local x : (a, b : felt)",
+        """
+file:?:?: All fields in a named tuple must have a name.
+local x : (a, b : felt)
+          ^***********^
+""",
+    )
 
 
 def test_identifier_and_dot():
@@ -245,7 +319,7 @@ def test_tuple_expr():
     assert parse_expr("(  2,)").format() == "(2,)"
     assert parse_expr("( 1  , ap)").format() == "(1, ap)"
     assert parse_expr("( 1  , ap, )").format() == "(1, ap,)"
-    assert parse_expr("( 1 , a=2, b=(c=()))").format() == "(1, a=2, b=(c=()))"
+    assert parse_expr("( a=1 , b=2, c=(d= ()))").format() == "(a=1, b=2, c=(d=()))"
 
     verify_exception(
         "let x = (,)",
@@ -277,6 +351,14 @@ let x = ((a)(b))
 file:?:?: Expected a comma before this expression.
 (b))
 ^*^
+""",
+    )
+    verify_exception(
+        "let x = (1 , a=2, b=(c=()))",
+        """
+file:?:?: All fields in a named tuple must have a name.
+let x = (1 , a=2, b=(c=()))
+        ^*****************^
 """,
     )
 
@@ -616,6 +698,14 @@ let (very_long_prefix, b, c : T) = foo(
         parse_expr("let z = call x; ap++")
 
 
+def test_new_operator():
+    expr = parse_expr("new Struct(a = 1, b= 2  )")
+    assert expr.format() == "new Struct(a=1, b=2)"
+
+    res = parse_code_element("new (    a = 1, b= 2  ) + 5     = 17 + new 7 + 2")
+    assert res.format(allowed_line_length=100) == "(new (a=1, b=2)) + 5 = 17 + (new 7) + 2"
+
+
 def test_return():
     res = parse_code_element("return(  1, \na= 2  )")
     assert res.format(allowed_line_length=100) == "return (1, a=2)"
@@ -759,11 +849,15 @@ def test_func_expr():
 
 
 def test_parent_location():
-    parent_location = (parse_expr("1 + 2").location, "An error ocurred while processing:")
+    location = parse_expr("1 + 2").location
+    assert location is not None
+    parent_location = (location, "An error ocurred while processing:")
 
-    location = parse_code_element(
+    code_element = parse_code_element(
         "let x = 3 + 4", parser_context=ParserContext(parent_location=parent_location)
-    ).expr.location
+    )
+    assert isinstance(code_element, CodeElementReference)
+    location = code_element.expr.location
     location_err = LocationError(message="Error", location=location)
     assert (
         str(location_err)
@@ -793,19 +887,11 @@ def test_locations():
 
     lines = code_with_marks.splitlines()
     code, marks = lines[0], lines[1:]
-    expr = parse_instruction(code)
-    exprs = [
-        expr,
-        expr.body,
-        expr.body.a,
-        expr.body.a.addr,
-        expr.body.b,
-        expr.body.b.addr,
-        expr.body.b.addr.a,
-        expr.body.b.addr.b,
-    ]
-    for expr, mark in safe_zip(exprs, marks):
-        assert get_location_marks(code, expr.location) == code + "\n" + mark
+    expr = parse_instruction(code=code)
+    for inner_expr, mark in safe_zip(expr.get_subtree(), marks):
+        location = getattr(inner_expr, "location")
+        assert isinstance(location, Location)
+        assert get_location_marks(content=code, location=location) == code + "\n" + mark
 
 
 def test_pointer():
@@ -822,10 +908,13 @@ def test_pointer():
     lines = code_with_marks.splitlines()
     code, marks = lines[0], lines[1:]
     typ = parse_type(code)
-    exprs = [
+    types: List[CairoType] = [
         typ,
     ]
-    for i in range(len(marks) - 1):
-        exprs.append(exprs[-1].pointee)
-    for expr, mark in safe_zip(exprs, marks):
-        assert get_location_marks(code, expr.location) == code + "\n" + mark
+    for _ in range(len(marks) - 1):
+        typ = types[-1]
+        assert isinstance(typ, TypePointer)
+        types.append(typ.pointee)
+    for typ, mark in safe_zip(types, marks):
+        assert typ.location is not None
+        assert get_location_marks(code, typ.location) == code + "\n" + mark

@@ -1,16 +1,40 @@
+from typing import List, Union
+
 from starkware.cairo.lang.compiler.ast.formatting_utils import (
     ParticleFormattingConfig,
-    create_particle_sublist,
+    ParticleList,
     particles_in_lines,
+    set_one_item_per_line,
 )
 
 
+def run_test_particles_in_lines(
+    particles, config: ParticleFormattingConfig, expected: str, expected_one_per_line: str
+):
+    with set_one_item_per_line(False):
+        assert (
+            particles_in_lines(
+                particles=particles,
+                config=config,
+            )
+            == expected
+        )
+    with set_one_item_per_line(True):
+        assert (
+            particles_in_lines(
+                particles=particles,
+                config=config,
+            )
+            == expected_one_per_line
+        )
+
+
 def test_particles_in_lines():
-    particles = [
+    particles: List[Union[str, ParticleList]] = [
         "start ",
         "foo ",
         "bar ",
-        create_particle_sublist(["a", "b", "c", "dddd", "e", "f"], "*"),
+        ParticleList(elements=["a", "b", "c", "dddd", "e", "f"], end="*"),
         " asdf",
     ]
     expected = """\
@@ -20,18 +44,28 @@ start foo
   dddd, e,
   f* asdf\
 """
-    assert (
-        particles_in_lines(
-            particles=particles,
-            config=ParticleFormattingConfig(allowed_line_length=12, line_indent=2),
-        )
-        == expected
+    expected_one_per_line = """\
+start foo
+  bar
+  a,
+  b,
+  c,
+  dddd,
+  e,
+  f,
+* asdf\
+"""
+    run_test_particles_in_lines(
+        particles=particles,
+        config=ParticleFormattingConfig(allowed_line_length=12, line_indent=2),
+        expected=expected,
+        expected_one_per_line=expected_one_per_line,
     )
 
     particles = [
         "func f(",
-        create_particle_sublist(["x", "y", "z"], ") -> ("),
-        create_particle_sublist(["a", "b", "c"], "):"),
+        ParticleList(elements=["x", "y", "z"], end=") -> ("),
+        ParticleList(elements=["a", "b", "c"], end="):"),
     ]
     expected = """\
 func f(
@@ -40,12 +74,18 @@ func f(
     a, b,
     c):\
 """
-    assert (
-        particles_in_lines(
-            particles=particles,
-            config=ParticleFormattingConfig(allowed_line_length=12, line_indent=4),
-        )
-        == expected
+    expected_one_per_line = """\
+func f(
+    x, y, z
+) -> (
+    a, b, c
+):\
+"""
+    run_test_particles_in_lines(
+        particles=particles,
+        config=ParticleFormattingConfig(allowed_line_length=12, line_indent=4),
+        expected=expected,
+        expected_one_per_line=expected_one_per_line,
     )
 
     # Same particles, using one_per_line=True.
@@ -86,8 +126,8 @@ func f(
 
     particles = [
         "func f(",
-        create_particle_sublist(["x", "y", "z"], ") -> ("),
-        create_particle_sublist([], "):"),
+        ParticleList(elements=["x", "y", "z"], end=") -> ("),
+        ParticleList(elements=[], end="):"),
     ]
     expected = """\
 func f(
@@ -107,10 +147,10 @@ def test_linebreak_on_particle_space():
     Tests line breaking when the line length is exceeded by the space in the ', ' seperator at the
     end of a particle.
     """
-    particles = [
+    particles: List[Union[str, ParticleList]] = [
         "func f(",
-        create_particle_sublist(["x", "y", "z"], ") -> ("),
-        create_particle_sublist([], "):"),
+        ParticleList(elements=["x", "y", "z"], end=") -> ("),
+        ParticleList(elements=[], end="):"),
     ]
     expected = """\
 func f(
@@ -118,20 +158,25 @@ func f(
     z) -> (
     ):\
 """
-    assert (
-        particles_in_lines(
-            particles=particles,
-            config=ParticleFormattingConfig(allowed_line_length=9, line_indent=4),
-        )
-        == expected
+    expected_one_per_line = """\
+func f(
+    x,
+    y,
+    z,
+) -> ():\
+"""
+    run_test_particles_in_lines(
+        particles=particles,
+        config=ParticleFormattingConfig(allowed_line_length=9, line_indent=4),
+        expected=expected,
+        expected_one_per_line=expected_one_per_line,
     )
 
-    assert (
-        particles_in_lines(
-            particles=particles,
-            config=ParticleFormattingConfig(allowed_line_length=10, line_indent=4),
-        )
-        == expected
+    run_test_particles_in_lines(
+        particles=particles,
+        config=ParticleFormattingConfig(allowed_line_length=10, line_indent=4),
+        expected=expected,
+        expected_one_per_line=expected_one_per_line,
     )
 
     expected = """\
@@ -141,10 +186,9 @@ func f(
     z) -> (
     ):\
 """
-    assert (
-        particles_in_lines(
-            particles=particles,
-            config=ParticleFormattingConfig(allowed_line_length=8, line_indent=4),
-        )
-        == expected
+    run_test_particles_in_lines(
+        particles=particles,
+        config=ParticleFormattingConfig(allowed_line_length=8, line_indent=4),
+        expected=expected,
+        expected_one_per_line=expected_one_per_line,
     )

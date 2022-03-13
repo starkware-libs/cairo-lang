@@ -1,4 +1,4 @@
-from typing import Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.preprocessor.pass_manager import PassManager, PassManagerContext
@@ -10,6 +10,7 @@ def preprocess_codes(
     codes: Sequence[Tuple[str, str]],
     pass_manager: PassManager,
     main_scope: ScopedName = ScopedName(),
+    start_codes: Optional[List[Tuple[str, str]]] = None,
 ) -> PreprocessedProgram:
     """
     Preprocesses a list of Cairo files and returns a PreprocessedProgram instance.
@@ -19,6 +20,7 @@ def preprocess_codes(
         codes=list(codes),
         main_scope=main_scope,
         identifiers=IdentifierManager(),
+        start_codes=[] if start_codes is None else start_codes,
     )
 
     pass_manager.run(context)

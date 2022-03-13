@@ -7,13 +7,15 @@ from starkware.starkware_utils.commitment_tree.binary_fact_tree_node import (
     TBinaryFactTreeNode,
 )
 from starkware.starkware_utils.commitment_tree.calculation import CalculationNode, NodeFactDict
+from starkware.starkware_utils.commitment_tree.inner_node_fact import InnerNodeFact
+from starkware.starkware_utils.commitment_tree.leaf_fact import LeafFact
 from starkware.starkware_utils.commitment_tree.merkle_tree.traverse_tree import traverse_tree
 from starkware.starkware_utils.executor import executor_ctx_var
-from starkware.storage.storage import Fact, FactFetchingContext
+from starkware.storage.storage import FactFetchingContext
 
 # Should be Tuple["UpdateTree", "UpdateTree"], but recursive types are not supported in mypy:
 #   https://github.com/python/mypy/issues/731.
-UpdateTree = Optional[Union[Tuple[Any, Any], Fact]]
+UpdateTree = Optional[Union[Tuple[Any, Any], LeafFact]]
 NodeType = NamedTuple(
     "NodeType", [("index", int), ("tree", BinaryFactTreeNode), ("update", UpdateTree)]
 )
@@ -22,7 +24,7 @@ NodeType = NamedTuple(
 async def update_tree(
     tree: TBinaryFactTreeNode,
     ffc: FactFetchingContext,
-    modifications: Collection[Tuple[int, Fact]],
+    modifications: Collection[Tuple[int, LeafFact]],
     calculation_node_cls: Type[CalculationNode],
     facts: Optional[BinaryFactDict] = None,
 ) -> TBinaryFactTreeNode:
@@ -31,7 +33,8 @@ async def update_tree(
     storage and returns a new BinaryFactTree representing the fact of the root of the new tree.
 
     If facts argument is not None, this dictionary is filled during building the new tree
-    by the facts of their paths from the leaves up.
+    by the facts of the modified nodes (the modified leaves won't enter to this dict as they are
+    already known to the function caller).
 
     This method is to be called by a update() method of a specific tree implementation
     (derived class of BinaryFactTree).
@@ -70,20 +73,15 @@ async def update_tree(
             del updated_nodes[2 * node_index + 1]
 
     async def update_if_possible(node_index: int, binary_fact_tree_node: BinaryFactTreeNode):
-        updated_nodes[node_index] = calculation_node_cls.create(
+        updated_nodes[node_index] = calculation_node_cls.create_from_node(
             node=binary_fact_tree_node,
         )
         await update_necessary(node_index=node_index)
 
-    async def set_fact(
-        new_fact: UpdateTree, node_index: int, binary_fact_tree_node: BinaryFactTreeNode
-    ):
-        assert isinstance(new_fact, Fact)
+    async def set_fact(new_fact: UpdateTree, node_index: int):
+        assert isinstance(new_fact, LeafFact)
 
-        leaf_hash = await new_fact.set_fact(ffc=ffc)
-        updated_nodes[node_index] = calculation_node_cls.create(
-            node=binary_fact_tree_node.create_leaf(hash_value=leaf_hash)
-        )
+        updated_nodes[node_index] = calculation_node_cls.create_from_fact(fact=new_fact)
         await update_necessary(node_index=node_index)
 
     async def traverse_node(node: NodeType) -> AsyncIterator[NodeType]:
@@ -104,11 +102,7 @@ async def update_tree(
 
         if binary_fact_tree_node.is_leaf:
             # Leaf update.
-            await set_fact(
-                new_fact=update_subtree,
-                node_index=node_index,
-                binary_fact_tree_node=binary_fact_tree_node,
-            )
+            await set_fact(new_fact=update_subtree, node_index=node_index)
             return
 
         # Inner node with updates.
@@ -141,12 +135,14 @@ async def update_tree(
 
     if facts is not None:
         for fact_hash, node_fact in new_facts.items():
-            facts[from_bytes(fact_hash)] = node_fact.to_tuple()
+            # The leaves aren't stored in `facts`. Only nodes are stored there.
+            if isinstance(node_fact, InnerNodeFact):
+                facts[from_bytes(fact_hash)] = node_fact.to_tuple()
 
     return root_node
 
 
-def build_update_tree(height: int, modifications: Collection[Tuple[int, Fact]]) -> UpdateTree:
+def build_update_tree(height: int, modifications: Collection[Tuple[int, LeafFact]]) -> UpdateTree:
     """
     Constructs a tree from leaf updates. This is not a full binary tree. It is just the subtree
     induced by the modification leaves.
@@ -165,7 +161,7 @@ def build_update_tree(height: int, modifications: Collection[Tuple[int, Fact]]) 
 
     for _ in range(height):
         parents = set(index // 2 for index in layer.keys())
-        # Note that dictionary.get(key) is None if the the key is not in the dictionary.
+        # Note that dictionary.get(key) is None if the key is not in the dictionary.
         layer = {index: (layer.get(index * 2), layer.get(index * 2 + 1)) for index in parents}
 
     # We reached layer_height=0, the top layer with only the root (with index 0).

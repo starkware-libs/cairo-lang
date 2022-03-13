@@ -1,7 +1,12 @@
 from typing import Dict, List, Optional, Set
 
 from starkware.cairo.lang.compiler.ast.code_elements import CodeElementFunction, CodeElementImport
-from starkware.cairo.lang.compiler.ast.expr import ExprAssignment, ExprDot, ExprIdentifier
+from starkware.cairo.lang.compiler.ast.expr import (
+    ExprAssignment,
+    ExprDot,
+    ExprIdentifier,
+    ExprNewOperator,
+)
 from starkware.cairo.lang.compiler.ast.module import CairoModule
 from starkware.cairo.lang.compiler.ast.visitor import Visitor
 from starkware.cairo.lang.compiler.error_handling import Location
@@ -64,6 +69,22 @@ class DependencyGraphVisitor(Visitor):
     def visit_ExprDot(self, expr: ExprDot):
         # We override the default visitor, since we must not visit expr.member.
         self.visit(expr.expr)
+
+    def visit_ExprNewOperator(self, expr: ExprNewOperator):
+        if self.current_function is None:
+            # The new operator is not supported outside of a function since the 'get_ap' needs to be
+            # added as a dependency of some function.
+            raise PreprocessorError(
+                "The new operator is not supported outside of a function.", location=expr.location
+            )
+
+        super().visit(expr.expr)
+
+        self.add_identifier(
+            name=ScopedName.from_string("starkware.cairo.lang.compiler.lib.registers.get_ap"),
+            location=expr.location,
+            is_resolved=True,
+        )
 
     def visit_CodeElementFunction(self, elm: CodeElementFunction):
         if elm.element_type == "func":

@@ -1,4 +1,4 @@
-starknet_compile(compile_open_zeppelin_account account.json Account.cairo "")
+starknet_compile(compile_open_zeppelin_account account.json Account.cairo "--account_contract")
 
 python_lib(open_zeppelin_contracts_lib
     PREFIX starkware/starknet/third_party/open_zeppelin

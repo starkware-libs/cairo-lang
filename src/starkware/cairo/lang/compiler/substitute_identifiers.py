@@ -118,7 +118,12 @@ class SubstituteIdentifiers(ExpressionTransformer):
         )
 
     def visit_ExprFutureLabel(self, expr: ExprFutureLabel):
-        return self.visit(expr.identifier)
+        res = self.visit(expr.identifier)
+        if isinstance(res, ExprFutureLabel):
+            # If expr.identifier remains unresolved, return the original expression to keep track
+            # of expr.is_typed.
+            return expr
+        return res
 
 
 def substitute_identifiers(

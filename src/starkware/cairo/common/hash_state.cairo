@@ -12,7 +12,7 @@ struct HashState:
     member n_words : felt
 end
 
-# Initializes a new HashState with no items.
+# Initializes a new HashState with no items and returns it.
 func hash_init() -> (hash_state_ptr : HashState*):
     alloc_locals
     let (__fp__, _) = get_fp_and_pc()
@@ -22,14 +22,50 @@ func hash_init() -> (hash_state_ptr : HashState*):
     return (hash_state_ptr=&hash_state)
 end
 
+# Adds each item in an array of items to the HashState.
+# Returns a new HashState with the hash of the items of the input HashState and the array of items.
+# The array is represented by a pointer and a length.
+func hash_update{hash_ptr : HashBuiltin*}(
+        hash_state_ptr : HashState*, data_ptr : felt*, data_length) -> (
+        new_hash_state_ptr : HashState*):
+    alloc_locals
+    let (hash) = hash_update_inner(
+        data_ptr=data_ptr, data_length=data_length, hash=hash_state_ptr.current_hash)
+    let (__fp__, _) = get_fp_and_pc()
+    local new_hash_state : HashState
+    new_hash_state.current_hash = hash
+    assert new_hash_state.n_words = hash_state_ptr.n_words + data_length
+    return (new_hash_state_ptr=&new_hash_state)
+end
+
+# Adds a single item to the HashState.
+# Returns a new HashState with the hash of the items of the input HashState and the item.
+func hash_update_single{hash_ptr : HashBuiltin*}(hash_state_ptr : HashState*, item) -> (
+        new_hash_state_ptr : HashState*):
+    alloc_locals
+    let (hash) = hash2(x=hash_state_ptr.current_hash, y=item)
+    let (__fp__, _) = get_fp_and_pc()
+    local new_hash_state : HashState
+    new_hash_state.current_hash = hash
+    assert new_hash_state.n_words = hash_state_ptr.n_words + 1
+    return (new_hash_state_ptr=&new_hash_state)
+end
+
+# Returns the hash result of the HashState.
+func hash_finalize{hash_ptr : HashBuiltin*}(hash_state_ptr : HashState*) -> (hash):
+    return hash2(x=hash_state_ptr.current_hash, y=hash_state_ptr.n_words)
+end
+
 # A helper function for 'hash_update', see its documentation.
 # Computes the hash of an array of items, not including its length.
+# The hash is: hash(...hash(hash(data[0], data[1]), data[2])..., data[n-1]).
 func hash_update_inner{hash_ptr : HashBuiltin*}(
         data_ptr : felt*, data_length : felt, hash : felt) -> (hash : felt):
     if data_length == 0:
         return (hash=hash)
     end
 
+    # Compute 'data_last_ptr' before entering the loop.
     alloc_locals
     local data_last_ptr : felt* = data_ptr + data_length - 1
     struct LoopLocals:
@@ -66,36 +102,4 @@ func hash_update_inner{hash_ptr : HashBuiltin*}(
     let final_locals : LoopLocals* = cast(ap - LoopLocals.SIZE, LoopLocals*)
     let hash_ptr = final_locals.hash_ptr
     return (hash=final_locals.cur_hash)
-end
-
-# Adds each item in an array of items to the HashState.
-# The array is represented by a pointer and a length.
-func hash_update{hash_ptr : HashBuiltin*}(
-        hash_state_ptr : HashState*, data_ptr : felt*, data_length) -> (
-        new_hash_state_ptr : HashState*):
-    alloc_locals
-    let (hash) = hash_update_inner(
-        data_ptr=data_ptr, data_length=data_length, hash=hash_state_ptr.current_hash)
-    let (__fp__, _) = get_fp_and_pc()
-    local new_hash_state : HashState
-    new_hash_state.current_hash = hash
-    assert new_hash_state.n_words = hash_state_ptr.n_words + data_length
-    return (new_hash_state_ptr=&new_hash_state)
-end
-
-# Adds a single item to the HashState.
-func hash_update_single{hash_ptr : HashBuiltin*}(hash_state_ptr : HashState*, item) -> (
-        new_hash_state_ptr : HashState*):
-    alloc_locals
-    let (hash) = hash2(x=hash_state_ptr.current_hash, y=item)
-    let (__fp__, _) = get_fp_and_pc()
-    local new_hash_state : HashState
-    new_hash_state.current_hash = hash
-    assert new_hash_state.n_words = hash_state_ptr.n_words + 1
-    return (new_hash_state_ptr=&new_hash_state)
-end
-
-# Returns the hash result of the HashState.
-func hash_finalize{hash_ptr : HashBuiltin*}(hash_state_ptr : HashState*) -> (hash):
-    return hash2(x=hash_state_ptr.current_hash, y=hash_state_ptr.n_words)
 end

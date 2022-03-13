@@ -1,5 +1,6 @@
 import dataclasses
-from typing import List, Optional
+import re
+from typing import List, Optional, Tuple
 
 from lark import Transformer, v_args
 
@@ -7,6 +8,8 @@ from starkware.cairo.lang.compiler.ast.aliased_identifier import AliasedIdentifi
 from starkware.cairo.lang.compiler.ast.arguments import IdentifierList
 from starkware.cairo.lang.compiler.ast.bool_expr import BoolExpr
 from starkware.cairo.lang.compiler.ast.cairo_types import (
+    CairoType,
+    TypeCodeoffset,
     TypeFelt,
     TypePointer,
     TypeStruct,
@@ -35,6 +38,7 @@ from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeElementStaticAssert,
     CodeElementTailCall,
     CodeElementTemporaryVariable,
+    CodeElementTypeDef,
     CodeElementUnpackBinding,
     CodeElementWith,
     CodeElementWithAttr,
@@ -52,6 +56,7 @@ from starkware.cairo.lang.compiler.ast.expr import (
     ExprHint,
     ExprIdentifier,
     ExprNeg,
+    ExprNewOperator,
     ExprOperator,
     ExprParentheses,
     ExprPow,
@@ -116,6 +121,17 @@ class Comma:
     location: Optional[Location]
 
 
+@dataclasses.dataclass
+class CommaSeparatedWithNotes:
+    """
+    Represents a list of comma separated values, such as expressions or types.
+    """
+
+    args: list
+    notes: List[Notes]
+    has_trailing_comma: bool
+
+
 class ParserTransformer(Transformer):
     """
     Transforms the lark tree into an AST based on the classes defined in ast/*.py.
@@ -128,11 +144,78 @@ class ParserTransformer(Transformer):
     def __default__(self, data: str, children, meta):
         raise TypeError(f"Unable to parse tree node of type {data}")
 
+    # Comma separated list with notes.
+
+    @v_args(meta=True)
+    def comma(self, value, meta):
+        return Comma(location=self.meta2loc(meta))
+
+    def comma_separated_with_notes(self, value) -> CommaSeparatedWithNotes:
+        saw_comma = True
+        all_notes: List[Notes] = []
+        current_notes: List[Notes] = []
+        args: list = []
+        for v in value:
+            if isinstance(v, Notes):
+                # Join the notes before and after the comma.
+                current_notes.append(v)
+            elif isinstance(v, Comma):
+                if saw_comma:
+                    raise ParserError("Unexpected comma.", location=v.location)
+                saw_comma = True
+            else:
+                if not saw_comma:
+                    raise ParserError(
+                        "Expected a comma before this expression.", location=v.location
+                    )
+                all_notes.append(Notes.merge(current_notes))
+                args.append(v)
+
+                # Reset state.
+                saw_comma = False
+                current_notes = []
+
+        all_notes.append(Notes.merge(current_notes))
+
+        return CommaSeparatedWithNotes(
+            args=args,
+            notes=all_notes,
+            has_trailing_comma=saw_comma,
+        )
+
     # Types.
+
+    @v_args(meta=True)
+    def named_type(self, value, meta) -> TypeTuple.Item:
+        name: Optional[str]
+        if len(value) == 1:
+            # Unnamed type.
+            (typ,) = value
+            name = None
+            if isinstance(typ, ExprIdentifier):
+                typ = self.type_struct([typ])
+        elif len(value) == 2:
+            # Named type.
+            identifier, typ = value
+            assert isinstance(identifier, ExprIdentifier)
+            assert isinstance(typ, CairoType)
+            if ScopedName.SEPARATOR in identifier.name:
+                raise ParserError(
+                    f"Unexpected '{ScopedName.SEPARATOR}' in name.", location=identifier.location
+                )
+            name = identifier.name
+        else:
+            raise NotImplementedError(f"Unexpected number of values. {value}")
+
+        return TypeTuple.Item(name=name, typ=typ, location=self.meta2loc(meta))
 
     @v_args(meta=True)
     def type_felt(self, value, meta):
         return TypeFelt(location=self.meta2loc(meta))
+
+    @v_args(meta=True)
+    def type_codeoffset(self, value, meta):
+        return TypeCodeoffset(location=self.meta2loc(meta))
 
     def type_struct(self, value):
         assert len(value) == 1 and isinstance(value[0], ExprIdentifier)
@@ -155,48 +238,28 @@ class ParserTransformer(Transformer):
         )
 
     @v_args(meta=True)
-    def type_tuple(self, value, meta):
-        return TypeTuple(members=value, location=self.meta2loc(meta))
-
-    @v_args(meta=True)
-    def comma(self, value, meta):
-        return Comma(location=self.meta2loc(meta))
+    def type_tuple(self, value: Tuple[CommaSeparatedWithNotes], meta):
+        (lst,) = value
+        is_named = set((member.name is not None) for member in lst.args)
+        if is_named == {True, False}:
+            raise ParserError(
+                "All fields in a named tuple must have a name.", location=self.meta2loc(meta)
+            )
+        return TypeTuple(
+            members=lst.args,
+            notes=lst.notes,
+            has_trailing_comma=lst.has_trailing_comma,
+            location=self.meta2loc(meta),
+        )
 
     # Expression.
     @v_args(meta=True)
-    def arg_list(self, value, meta):
-        saw_comma = True
-        all_notes: List[Notes] = []
-        current_notes: List[Notes] = []
-        args: List[ExprAssignment] = []
-        for v in value:
-            if isinstance(v, ExprAssignment):
-                if not saw_comma:
-                    raise ParserError(
-                        "Expected a comma before this expression.", location=v.location
-                    )
-                all_notes.append(Notes.merge(current_notes))
-                args.append(v)
-
-                # Reset state.
-                saw_comma = False
-                current_notes = []
-            elif isinstance(v, Notes):
-                # Join the notes before and after the comma.
-                current_notes.append(v)
-            elif isinstance(v, Comma):
-                if saw_comma:
-                    raise ParserError("Unexpected comma.", location=v.location)
-                saw_comma = True
-            else:
-                raise NotImplementedError(f"Unexpected parser item {type(v).__name__}")
-
-        all_notes.append(Notes.merge(current_notes))
-
+    def arg_list(self, value: Tuple[CommaSeparatedWithNotes], meta):
+        (lst,) = value
         return ArgList(
-            args=args,
-            notes=all_notes,
-            has_trailing_comma=saw_comma,
+            args=lst.args,
+            notes=lst.notes,
+            has_trailing_comma=lst.has_trailing_comma,
             location=self.meta2loc(meta),
         )
 
@@ -245,6 +308,8 @@ class ParserTransformer(Transformer):
             text_bytes = text.encode("ascii")
         except UnicodeEncodeError:
             raise ParserError(f"Expected an ascii string. Found: {repr(text)}.", location=location)
+
+        text_bytes = backslash_to_hex(text_bytes)
         return ExprConst(
             val=int.from_bytes(text_bytes, "big"),
             format_str=token_text,
@@ -296,6 +361,10 @@ class ParserTransformer(Transformer):
         return ExprNeg(val=value[0], location=self.meta2loc(meta))
 
     @v_args(meta=True)
+    def unary_new_operator(self, value, meta):
+        return ExprNewOperator(expr=value[0], is_typed=True, location=self.meta2loc(meta))
+
+    @v_args(meta=True)
     def expr_pow(self, value, meta):
         return ExprPow(a=value[0], b=value[2], notes=value[1], location=self.meta2loc(meta))
 
@@ -330,6 +399,12 @@ class ParserTransformer(Transformer):
         if not arg_list.has_trailing_comma and len(args) == 1 and args[0].identifier is None:
             return ExprParentheses(
                 val=args[0].expr, notes=arg_list.notes[0], location=arg_list.location
+            )
+
+        is_named = set((member.identifier is not None) for member in args)
+        if is_named == {True, False}:
+            raise ParserError(
+                "All fields in a named tuple must have a name.", location=self.meta2loc(meta)
             )
 
         return ExprTuple(members=arg_list, location=self.meta2loc(meta))
@@ -541,8 +616,10 @@ class ParserTransformer(Transformer):
 
     def code_element_label(self, value):
         identifier = value[0]
-        if "." in identifier.name:
-            raise ParserError("Unexpected '.' in label name.", location=identifier.location)
+        if ScopedName.SEPARATOR in identifier.name:
+            raise ParserError(
+                f"Unexpected '{ScopedName.SEPARATOR}' in label name.", location=identifier.location
+            )
         return CodeElementLabel(identifier=identifier)
 
     @v_args(meta=True)
@@ -619,6 +696,12 @@ class ParserTransformer(Transformer):
             returns=None,
             code_block=code_block,
             decorators=decorators,
+        )
+
+    @v_args(meta=True)
+    def code_element_typedef(self, value, meta):
+        return CodeElementTypeDef(
+            identifier=value[0], cairo_type=value[1], location=self.meta2loc(meta)
         )
 
     def code_element_with(self, value):
@@ -769,3 +852,12 @@ class ParserTransformer(Transformer):
             input_file=self.input_file,
             parent_location=self.parser_context.parent_location,
         )
+
+
+def backslash_to_hex(value: bytes) -> bytes:
+    r"""
+    Replaces substrings of the form '\x**' with the corresponding byte.
+    """
+    pattern = br"\\x([0-9a-fA-F]{2})"
+    replacer = lambda m: bytes.fromhex(m.group(1).decode("ascii"))
+    return re.sub(pattern, replacer, value)

@@ -322,6 +322,13 @@ struct TxInfo:
     # The signature of the transaction.
     member signature_len : felt
     member signature : felt*
+
+    # The hash of the transaction.
+    member transaction_hash : felt
+
+    # The identifier of the chain.
+    # This field can be used to prevent replay of testnet transactions on mainnet.
+    member chain_id : felt
 end
 
 const GET_TX_INFO_SELECTOR = 'GetTxInfo'

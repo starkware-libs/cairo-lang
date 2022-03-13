@@ -3,10 +3,13 @@ import os
 import shutil
 from typing import List, Optional
 
-from starkware.cairo.common.hash_state import compute_hash_on_elements
 from starkware.crypto.signature.signature import get_random_private_key, private_to_stark_key, sign
-from starkware.starknet.definitions import fields
-from starkware.starknet.public.abi import get_selector_from_name
+from starkware.starknet.core.os.transaction_hash import (
+    TransactionHashPrefix,
+    calculate_transaction_hash_common,
+)
+from starkware.starknet.definitions import constants, fields
+from starkware.starknet.public.abi import EXECUTE_ENTRY_POINT_SELECTOR, get_selector_from_name
 from starkware.starknet.services.api.gateway.transaction import Deploy, InvokeFunction
 from starkware.starknet.third_party.open_zeppelin.starknet_contracts import account_contract
 from starkware.starknet.wallets.account import Account, WrappedMethod
@@ -14,7 +17,6 @@ from starkware.starknet.wallets.starknet_context import StarknetContext
 from starkware.starkware_utils.error_handling import StarkErrorCode
 
 ACCOUNT_FILE_NAME = "starknet_open_zeppelin_accounts.json"
-EXECUTE_SELECTOR = get_selector_from_name("execute")
 GET_NONCE_SELECTOR = get_selector_from_name("get_nonce")
 
 
@@ -84,6 +86,9 @@ class OpenZeppelinAccount(Account):
             f"""\
 Sent deploy account contract transaction.
 
+NOTE: This is a modified version of the OpenZeppelin account contract. The signature is computed
+differently.
+
 Contract address: 0x{contract_address:064x}
 Public key: 0x{public_key:064x}
 Transaction hash: {gateway_response['transaction_hash']}
@@ -95,7 +100,13 @@ Transaction hash: {gateway_response['transaction_hash']}
             f.write("\n")
 
     async def sign_invoke_transaction(
-        self, contract_address: int, selector: int, calldata: List[int], nonce: Optional[int]
+        self,
+        contract_address: int,
+        selector: int,
+        calldata: List[int],
+        chain_id: int,
+        max_fee: Optional[int],
+        nonce: Optional[int],
     ) -> WrappedMethod:
         # Read the account information.
         assert os.path.exists(self.account_file), (
@@ -120,17 +131,31 @@ Transaction hash: {gateway_response['transaction_hash']}
             # previous transaction was accepted.
             nonce = await self.get_current_nonce(account_address=account_address)
 
-        calldata_hash = compute_hash_on_elements(calldata)
-        message_hash = compute_hash_on_elements(
-            [account_address, contract_address, selector, calldata_hash, nonce]
+        data_offset = 0
+        data_len = len(calldata)
+        call_entry = [contract_address, selector, data_offset, data_len]
+        call_array_len = 1
+        wrapped_method_calldata = [call_array_len, *call_entry, len(calldata), *calldata, nonce]
+        max_fee = 0 if max_fee is None else max_fee
+        hash_value = calculate_transaction_hash_common(
+            tx_hash_prefix=TransactionHashPrefix.INVOKE,
+            version=constants.TRANSACTION_VERSION,
+            contract_address=account_address,
+            entry_point_selector=EXECUTE_ENTRY_POINT_SELECTOR,
+            calldata=wrapped_method_calldata,
+            max_fee=max_fee,
+            chain_id=chain_id,
+            additional_data=[],
         )
-        signature = sign(msg_hash=message_hash, priv_key=private_key)
+
+        signature = list(sign(msg_hash=hash_value, priv_key=private_key))
 
         return WrappedMethod(
             address=account_address,
-            selector=EXECUTE_SELECTOR,
-            calldata=[contract_address, selector, len(calldata), *calldata, nonce],
-            signature=list(signature),
+            selector=EXECUTE_ENTRY_POINT_SELECTOR,
+            calldata=wrapped_method_calldata,
+            max_fee=max_fee,
+            signature=signature,
         )
 
     async def get_current_nonce(self, account_address: int) -> int:
@@ -138,6 +163,8 @@ Transaction hash: {gateway_response['transaction_hash']}
             contract_address=account_address,
             entry_point_selector=GET_NONCE_SELECTOR,
             calldata=[],
+            max_fee=0,
+            version=0,
             signature=[],
         )
         res = await self.starknet_context.feeder_gateway_client.call_contract(

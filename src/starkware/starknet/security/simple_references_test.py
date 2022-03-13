@@ -21,6 +21,7 @@ from starkware.starknet.security.simple_references import is_simple_reference
         ["&ap", None],
         ["3 ** 2", None],
         ["3 / 2", None],
+        ["nondet %{ 5 %}", None],
     ],
 )
 def test_is_simple_reference(expr_str: str, simplicity: Optional[int]):

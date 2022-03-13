@@ -1,7 +1,3 @@
-add_subdirectory(libraries)
+include(utils.cmake)
 
-python_lib(starkware_contracts_utils_lib
-    PREFIX starkware/contracts
-    FILES
-    utils.py
-)
+add_subdirectory(libraries)

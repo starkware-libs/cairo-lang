@@ -12,10 +12,13 @@ function(python_pip TARGET)
   cmake_parse_arguments(ARGS "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
   # Create a list of all dependencies regardless of python's version.
-  execute_process(
-    COMMAND ${UNITE_LIBS_EXECUTABLE} ${ARGS_LIBS}
-    OUTPUT_VARIABLE UNITED_LIBS
-  )
+  set(UNITED_LIBS ${ARGS_LIBS})
+  if("${UNITED_LIBS}" MATCHES ":")
+    execute_process(
+      COMMAND ${UNITE_LIBS_EXECUTABLE} ${UNITED_LIBS}
+      OUTPUT_VARIABLE UNITED_LIBS
+    )
+  endif()
   separate_arguments(UNITED_LIBS)
 
   set(ALL_STAMPS)
@@ -32,7 +35,7 @@ function(python_pip TARGET)
     set(STAMP_FILE ${CMAKE_BINARY_DIR}/python_pip/${TARGET}_${INTERPRETER}_${REQ}.stamp)
 
     # Creating library directory.
-    if (${REQ} MATCHES "==local$")
+    if (${REQ} MATCHES "\\+local$")
         string(REPLACE "==" "-" PACKAGE_NAME ${REQ})
         set(ZIP_FILE "${PROJECT_SOURCE_DIR}/${PACKAGE_NAME}.zip")
         add_custom_command(
@@ -40,9 +43,7 @@ function(python_pip TARGET)
           COMMENT "Building ${REQ} from a local copy."
           COMMAND rm -rf ${LIB_DIR}/*
           COMMAND unzip ${ZIP_FILE} -d ${LIB_DIR} > /dev/null
-          # We don't know if the directory in the zip has the same name as the package.
-          COMMAND ls ${LIB_DIR} | grep -v -x ${PACKAGE_NAME} | xargs -r -I {} mv ${LIB_DIR}/{} ${LIB_DIR}/${PACKAGE_NAME}
-          COMMAND mv ${LIB_DIR}/${PACKAGE_NAME}/* ${LIB_DIR}
+          COMMAND mv ${LIB_DIR}/${PACKAGE_NAME}/* ${LIB_DIR}/
           COMMAND rm -rf ${LIB_DIR}/${PACKAGE_NAME}/
           COMMAND ${CMAKE_COMMAND} -E touch ${STAMP_FILE}
           DEPENDS ${ZIP_FILE}
@@ -70,8 +71,8 @@ function(python_pip TARGET)
         )
     endif()
 
-    set(ALL_STAMPS ${ALL_STAMPS} ${STAMP_FILE})
-    set(ALL_LIB_DIRS ${ALL_LIB_DIRS} "${INTERPRETER}:${LIB_DIR}")
+    list(APPEND ALL_STAMPS ${STAMP_FILE})
+    list(APPEND ALL_LIB_DIRS "${INTERPRETER}:${LIB_DIR}")
   endforeach()
 
   # Info target.
@@ -108,10 +109,13 @@ function(python_get_pip_deps TARGET)
   set(CMAKE_FILE "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}_generated_rules.cmake")
 
   # Create a list of all dependency files.
-  execute_process(
-    COMMAND ${UNITE_LIBS_EXECUTABLE} ${ARGN}
-    OUTPUT_VARIABLE UNITED_DEP_FILES
-  )
+  set(UNITED_DEP_FILES ${ARGN})
+  if("${UNITED_DEP_FILES}" MATCHES ":")
+    execute_process(
+      COMMAND ${UNITE_LIBS_EXECUTABLE} ${UNITED_DEP_FILES}
+      OUTPUT_VARIABLE UNITED_DEP_FILES
+    )
+  endif()
   separate_arguments(UNITED_DEP_FILES)
 
   # Add as a reconfigure dependency, so that CMake will reconfigure on change.

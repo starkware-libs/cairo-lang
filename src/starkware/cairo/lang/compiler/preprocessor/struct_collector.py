@@ -9,10 +9,15 @@ from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeElementEmptyLine,
     CodeElementFunction,
     CodeElementMember,
+    CodeElementTypeDef,
 )
 from starkware.cairo.lang.compiler.ast.formatting_utils import LocationField
 from starkware.cairo.lang.compiler.error_handling import Location
-from starkware.cairo.lang.compiler.identifier_definition import MemberDefinition, StructDefinition
+from starkware.cairo.lang.compiler.identifier_definition import (
+    MemberDefinition,
+    StructDefinition,
+    TypeDefinition,
+)
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.preprocessor.identifier_aware_visitor import (
     IdentifierAwareVisitor,
@@ -49,7 +54,6 @@ class StructCollector(IdentifierAwareVisitor):
     def add_struct_definition(
         self, members_list: List[MemberInfo], struct_name: ScopedName, location: Optional[Location]
     ):
-
         offset = 0
         members: Dict[str, MemberDefinition] = {}
         for member_info in members_list:
@@ -170,3 +174,10 @@ class StructCollector(IdentifierAwareVisitor):
             )
 
             self.visit(elm.code_block)
+
+    def visit_CodeElementTypeDef(self, elm: CodeElementTypeDef):
+        self.add_name_definition(
+            self.current_scope + elm.name,
+            identifier_definition=TypeDefinition(cairo_type=self.resolve_type(elm.cairo_type)),
+            location=elm.location,
+        )

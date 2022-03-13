@@ -6,7 +6,7 @@ from starkware.cairo.common.dict_access import DictAccess
 from starkware.cairo.common.hash import hash2
 from starkware.cairo.common.math import assert_nn_le, unsigned_div_rem
 from starkware.cairo.common.registers import get_fp_and_pc
-from starkware.cairo.common.small_merkle_tree import small_merkle_tree
+from starkware.cairo.common.small_merkle_tree import small_merkle_tree_update
 
 struct Account:
     member public_key : felt
@@ -213,7 +213,7 @@ func compute_merkle_roots{pedersen_ptr : HashBuiltin*, range_check_ptr}(state : 
         hash_dict_start=hash_dict_start)
 
     # Compute the two Merkle roots.
-    let (root_before, root_after) = small_merkle_tree{hash_ptr=pedersen_ptr}(
+    let (root_before, root_after) = small_merkle_tree_update{hash_ptr=pedersen_ptr}(
         squashed_dict_start=hash_dict_start,
         squashed_dict_end=hash_dict_end,
         height=LOG_N_ACCOUNTS)

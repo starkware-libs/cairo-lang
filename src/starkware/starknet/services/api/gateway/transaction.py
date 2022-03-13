@@ -118,9 +118,14 @@ class InvokeFunction(Transaction):
     """
 
     contract_address: int = field(metadata=fields.contract_address_metadata)
-    # A field element that encodes the signature of the called function.
+    # A field element that encodes the signature of the invoked function.
     entry_point_selector: int = field(metadata=fields.entry_point_selector_metadata)
     calldata: List[int] = field(metadata=fields.call_data_metadata)
+    # The maximal fee to be paid in Wei for executing invoked function.
+    max_fee: int = field(metadata=fields.fee_metadata)
+    # The transaction is not valid if its version is lower than current version,
+    # defined by the SN OS.
+    version: int = field(metadata=fields.tx_version_metadata)
     # Additional information given by the caller that represents the signature of the transaction.
     # The exact way this field is handled is defined by the called contract's function, like
     # calldata.
@@ -135,9 +140,11 @@ class InvokeFunction(Transaction):
         """
         return calculate_transaction_hash_common(
             tx_hash_prefix=TransactionHashPrefix.INVOKE,
+            version=self.version,
             contract_address=self.contract_address,
             entry_point_selector=self.entry_point_selector,
             calldata=self.calldata,
+            max_fee=self.max_fee,
             chain_id=general_config.chain_id.value,
             additional_data=[],
         )

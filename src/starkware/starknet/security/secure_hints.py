@@ -22,6 +22,7 @@ class SetField(mfields.List):
         if value is None:
             return None
         res = super()._serialize(value, attr, obj, **kwargs)
+        assert res is not None
         return sorted(res, key=lambda x: (x["name"], x["expr"]))
 
     def _deserialize(self, *args, **kwargs):

@@ -61,6 +61,15 @@ class Config(ValidatedMarshmallowDataclass):
     def remove_none_values(self, data, many=False):
         return {key: value for key, value in data.items() if value is not None}
 
+    @classmethod
+    def from_file(
+        cls: Type[TConfig], config_file_path: str, load_logging_config: Optional[bool] = True
+    ) -> TConfig:
+        raw_config = load_config(
+            config_file_path=config_file_path, load_logging_config=load_logging_config
+        )
+        return cls.load(data=raw_config)
+
 
 def log_fields(config: Config):
     for field in dataclasses.fields(config):

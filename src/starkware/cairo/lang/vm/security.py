@@ -18,7 +18,7 @@ def verify_secure_runner(runner: CairoRunner, verify_builtins=True):
     builtin_segments = runner.get_builtin_segments_info() if verify_builtins else {}
     builtin_segment_names = {seg.index: name for name, seg in builtin_segments.items()}
     builtin_segment_sizes = {seg.index: seg.size for seg in builtin_segments.values()}
-    for addr in runner.vm_memory:
+    for addr, value in runner.vm_memory.items():
         # Check pure addresses.
         if not isinstance(addr, RelocatableValue):
             raise SecurityError(f"Accessed address {addr} is not relocatable.")
@@ -37,6 +37,10 @@ def verify_secure_runner(runner: CairoRunner, verify_builtins=True):
         if addr.segment_index == runner.program_base.segment_index:
             if not addr.offset < len(runner.program.data):
                 raise SecurityError(f"Out of bounds access to program segment at {addr}.")
+
+        # Check memory value, to be consistent with the CairoPie validation done by SHARP.
+        if not runner.segments.is_valid_memory_value(value=value):
+            raise SecurityError(f"Invalid memory value at address {addr}: {value}.")
 
     # Builtin specific checks.
     try:

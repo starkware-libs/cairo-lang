@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from enum import Enum, auto
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Union
 
 from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt
 from starkware.cairo.lang.compiler.ast.code_elements import (
@@ -15,17 +15,20 @@ from starkware.cairo.lang.compiler.ast.expr import (
     ExprHint,
     ExprIdentifier,
     ExprNeg,
+    ExprNewOperator,
     ExprOperator,
     ExprReg,
 )
 from starkware.cairo.lang.compiler.ast.types import TypedIdentifier
 from starkware.cairo.lang.compiler.error_handling import Location
+from starkware.cairo.lang.compiler.expression_simplifier import ExpressionSimplifier
 from starkware.cairo.lang.compiler.instruction import Register
 from starkware.cairo.lang.compiler.instruction_builder import (
     InstructionBuilderError,
     _parse_offset,
     _parse_register_offset,
 )
+from starkware.cairo.lang.compiler.preprocessor.flow import RegTrackingData
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
 from starkware.cairo.lang.compiler.references import translate_ap
 
@@ -55,8 +58,20 @@ class CompoundExpressionContext(ABC):
         Usually, this should resolve the expression "__fp__".
         """
 
+    @abstractmethod
+    def visit(self, elm: CodeElement):
+        """
+        Visits the given code element.
+        """
 
-def is_simple_deref(expr: Expression):
+    @abstractmethod
+    def get_ap_tracking(self) -> RegTrackingData:
+        """
+        Returns the current ap tracking data.
+        """
+
+
+def is_simple_deref(expr: Expression) -> bool:
     """
     Returns True if expr is of the form [reg + offset].
     """
@@ -81,10 +96,9 @@ class CompoundExpressionVisitor:
         """
         Constructs a CompoundExpressionVisitor.
         """
-        self.code_elements: List[CodeElement] = []
         self.context = context
-        # Number of variables created so far.
-        self.n_vars: int = 0
+        # Ap tracking information at the start of the processing.
+        self.ap_tracking = context.get_ap_tracking()
 
     def rewrite(self, expr: Expression, sim: SimplicityLevel):
         """
@@ -108,7 +122,12 @@ class CompoundExpressionVisitor:
                 location=expr.location,
             )
         elif expr.reg is Register.FP:
-            return self.rewrite(expr=self.context.get_fp_val(expr.location), sim=sim)
+            # Note that self.context.get_fp_val returns the value of the __fp__ reference translated
+            # according to the change in ap (caused by previous calls to rewrite() and wrap()).
+            # Since rewrite expects to get the expression untranslated, we call untranslate_ap.
+            return self.rewrite(
+                expr=self.untranslate_ap(self.context.get_fp_val(expr.location)), sim=sim
+            )
         else:
             raise NotImplementedError(f"Unknown register {expr.reg}.")
 
@@ -163,6 +182,9 @@ class CompoundExpressionVisitor:
         return expr if sim is SimplicityLevel.OPERATION else self.wrap(expr)
 
     def rewrite_ExprFutureLabel(self, expr: ExprFutureLabel, sim: SimplicityLevel):
+        assert (
+            not expr.is_typed
+        ), "The CompoundExpressionVisitor expects ExprFutureLabel expressions to be untyped."
         # Treat this as a constant.
         if sim in [SimplicityLevel.DEREF_CONST, SimplicityLevel.OPERATION]:
             return expr
@@ -171,13 +193,18 @@ class CompoundExpressionVisitor:
     def rewrite_ExprHint(self, expr: ExprHint, sim: SimplicityLevel):
         return self.wrap(expr)
 
+    def rewrite_ExprNewOperator(self, expr: ExprNewOperator, sim: SimplicityLevel):
+        assert (
+            not expr.is_typed
+        ), "The CompoundExpressionVisitor expects ExprNewOperator expressions to be untyped."
+        return self.wrap(expr)
+
     def wrap(self, expr: Expression) -> ExprIdentifier:
         identifier = ExprIdentifier(name=self.context.new_tempvar_name(), location=expr.location)
 
         expr = self.translate_ap(expr)
-        self.n_vars += 1
 
-        self.code_elements.append(
+        self.context.visit(
             CodeElementTemporaryVariable(
                 typed_identifier=TypedIdentifier(
                     identifier=identifier, expr_type=TypeFelt(location=expr.location)
@@ -188,15 +215,32 @@ class CompoundExpressionVisitor:
         )
         return identifier
 
-    def translate_ap(self, expr):
-        return translate_ap(expr, self.n_vars)
+    def translate_ap(self, expr: Expression) -> Expression:
+        """
+        Translates ap according to the change in the ap register from the beginning of the use
+        of the class.
+        """
+        return translate_ap(expr, self.context.get_ap_tracking() - self.ap_tracking)
+
+    def untranslate_ap(self, expr: Expression) -> Expression:
+        """
+        Gets an expression whose ap was translated (according to the change in the ap register
+        from the beginning of the use of the class) and reverts the translation.
+        This function is the inverse of translate_ap.
+        """
+        # Use the simplifier to convert (ap + offset_1) + offset_2 to ap + (offset_1 + offset_2),
+        # since the expressions are assumed to be simplified.
+        simplifier = ExpressionSimplifier()
+        return simplifier.visit(
+            translate_ap(expr, self.ap_tracking - self.context.get_ap_tracking())
+        )
 
 
 def process_compound_expressions(
     exprs: List[Expression],
     simplicity: Union[SimplicityLevel, List[SimplicityLevel]],
     context: CompoundExpressionContext,
-) -> Tuple[List[CodeElement], List[Expression]]:
+) -> List[Expression]:
     """
     Rewrites the given list of expressions, by adding temporary variables, in the required
     simiplicity levels.
@@ -206,8 +250,7 @@ def process_compound_expressions(
 
     'simplicity' may be one SimplicityLevel for all the expressions or a list of SimplicityLevel
     for each expression separately.
-    Returns a list of code elements with the temporary variables and the list of simplified
-    expressions.
+    Returns the list of simplified expressions.
     """
     if isinstance(simplicity, SimplicityLevel):
         simplicity = [simplicity] * len(exprs)
@@ -221,12 +264,12 @@ def process_compound_expressions(
 
     # Second, translate ap according to the total number of instructions.
     simplified_exprs = [visitor.translate_ap(expr) for expr in simplified_exprs]
-    return visitor.code_elements, simplified_exprs
+    return simplified_exprs
 
 
 def process_compound_assert(
     expr_a: Expression, expr_b: Expression, context: CompoundExpressionContext
-):
+) -> List[Expression]:
     """
     A version of process_compound_expressions() for assert instructions. Takes two expressions
     and returns them simplified to levels [DEREF, OPERATION] or [OPERATION, DEREF],
@@ -246,7 +289,6 @@ def process_compound_assert(
         # Left-hand side is already too complicated for DEREF.
         simplicity = [SimplicityLevel.OPERATION, SimplicityLevel.DEREF]
 
-    code_elements, exprs = process_compound_expressions(
+    return process_compound_expressions(
         exprs=[expr_a, expr_b], simplicity=simplicity, context=context
     )
-    return code_elements, exprs

@@ -45,6 +45,7 @@ python_lib(cairo_vm_lib
     cairo_compile_lib
     cairo_relocatable_lib
     cairo_vm_crypto_lib
+    starknet_security_lib
     starkware_python_utils_lib
 )
 
@@ -104,10 +105,13 @@ full_python_test(cairo_vm_test
     vm_test.py
 
     LIBS
+    cairo_common_lib
+    cairo_compile_lib
     cairo_constants_lib
     cairo_run_lib
     cairo_vm_lib
     cairo_vm_utils_lib
+    starkware_dataclasses_utils_lib
     starkware_python_utils_lib
     starkware_python_test_utils_lib
     pip_marshmallow_dataclass

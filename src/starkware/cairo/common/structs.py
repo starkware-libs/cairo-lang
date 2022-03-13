@@ -1,5 +1,4 @@
-from collections import namedtuple
-from typing import List, MutableMapping, Optional
+from typing import List, MutableMapping, NamedTuple, Optional
 
 from starkware.cairo.lang.compiler.ast.code_elements import CodeElementFunction
 from starkware.cairo.lang.compiler.identifier_definition import StructDefinition
@@ -63,8 +62,14 @@ class CairoStructFactory:
         """
         Builds and returns namedtuple from a Cairo struct.
         """
-        sturct_def = self.get_struct_definition(name=name)
-        return namedtuple(sturct_def.full_name.path[-1], list(sturct_def.members.keys()))
+        struct_def = self.get_struct_definition(name=name)
+
+        typed_fields = [
+            (member_name, type(member_def.cairo_type))
+            for member_name, member_def in struct_def.members.items()
+        ]
+
+        return NamedTuple(struct_def.full_name.path[-1], typed_fields)
 
     def build_func_args(self, func: ScopedName):
         """
@@ -78,7 +83,13 @@ class CairoStructFactory:
         args = get_struct_definition(
             full_name + CodeElementFunction.ARGUMENT_SCOPE, self.identifiers
         ).members
-        return namedtuple(f"{func[-1:]}_full_args", list({**implict_args, **args}))
+
+        typed_fields = [
+            (member_name, type(member_def.cairo_type))
+            for member_name, member_def in {**implict_args, **args}.items()
+        ]
+
+        return NamedTuple(f"{func[-1:]}_full_args", typed_fields)
 
     @property
     def structs(self):

@@ -10,6 +10,7 @@ from starkware.starkware_utils.commitment_tree.binary_fact_tree_node import (
     TBinaryFactTreeNode,
     TInnerNodeFact,
 )
+from starkware.starkware_utils.commitment_tree.leaf_fact import LeafFact
 from starkware.storage.storage import FactFetchingContext, HashFunctionType
 
 T = TypeVar("T")
@@ -167,6 +168,31 @@ class ConstantCalculation(Calculation[T]):
 HashCalculation = Calculation[bytes]
 
 
+# NOTE: We avoid using ValidatedDataclass here for performance.
+@dataclasses.dataclass(frozen=True)
+class LeafFactCalculation(HashCalculation):
+    """
+    A calculation that contains a LeafFact and produces its hash. It doesn't depend on any other
+    calculations.
+    """
+
+    fact: LeafFact
+
+    def calculate(
+        self,
+        dependency_results: list,
+        hash_func: HashFunctionType,
+        fact_nodes: NodeFactDict,
+    ) -> bytes:
+        assert len(dependency_results) == 0, "LeafFactCalculation has no dependencies."
+        hash_result = self.fact._hash(hash_func=hash_func)
+        fact_nodes[hash_result] = self.fact
+        return hash_result
+
+    def get_dependency_calculations(self) -> List[Calculation[bytes]]:
+        return []
+
+
 class CalculationNode(Calculation[TBinaryFactTreeNode], ABC):
     """
     A calculation that produces a BinaryFactTreeNode. The calculation can be created from either a
@@ -190,8 +216,20 @@ class CalculationNode(Calculation[TBinaryFactTreeNode], ABC):
 
     @classmethod
     @abstractmethod
-    def create(cls: Type[TCalculationNode], node: TBinaryFactTreeNode) -> TCalculationNode:
+    def create_from_node(
+        cls: Type[TCalculationNode], node: TBinaryFactTreeNode
+    ) -> TCalculationNode:
         """
         Creates a Calculation object from a node. It will produce the node and will have no
         dependencies.
+        This will be used in order to create calculations that represent unchanged subtrees.
+        """
+
+    @classmethod
+    @abstractmethod
+    def create_from_fact(cls: Type[TCalculationNode], fact: LeafFact) -> TCalculationNode:
+        """
+        Creates a Calculation object from a fact. It will calculate the fact's hash and produce a
+        node with the hash result. It will have no dependencies.
+        This will be used in order to create calculations that represent changed leaves.
         """

@@ -175,10 +175,9 @@ call rel ???                   # Call storage_write().
 [ap] = [ap + (-12)]; ap++      # Return (updated) range_check_ptr.
 ret
 """
-    assert (
-        re.sub("call rel -?[0-9]+", "call rel ???", strip_comments_and_linebreaks(program.format()))
-        == strip_comments_and_linebreaks(expected_result).lstrip()
-    )
+    assert re.sub(
+        "call rel -?[0-9]+", "call rel ???", strip_comments_and_linebreaks(program.format())
+    ) == strip_comments_and_linebreaks(expected_result)
 
 
 def test_storage_var_failures():

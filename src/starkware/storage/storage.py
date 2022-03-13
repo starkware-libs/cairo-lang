@@ -5,6 +5,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Type, TypeVar
 
+from starkware.python.object_utils import generic_object_repr
 from starkware.python.utils import from_bytes, get_exception_repr, to_bytes
 from starkware.starkware_utils.config_base import get_object_by_path
 from starkware.starkware_utils.serializable import Serializable
@@ -50,60 +51,78 @@ class Storage(ABC):
         pass
 
     async def mset(self, updates: Dict[bytes, bytes]):
-        await asyncio.gather(*(self.set_value(*item) for item in updates.items()))
+        await asyncio.gather(
+            *(self.set_value(key=key, value=value) for key, value in updates.items())
+        )
 
     async def mget(self, keys: Sequence[bytes]) -> Tuple[Optional[bytes], ...]:
-        return tuple(await asyncio.gather(*(self.get_value(key) for key in keys)))
+        return tuple(await asyncio.gather(*(self.get_value(key=key) for key in keys)))
+
+    async def get_value_or_fail(self, key: bytes) -> bytes:
+        assert isinstance(key, bytes)
+        result = await self.get_value(key=key)
+        assert result is not None, f"Key {key!r} unexpectedly does not appear in storage."
+        return result
 
     async def set_int(self, key: bytes, value: int):
         assert isinstance(key, bytes)
         assert isinstance(value, int)
         value_bytes = str(value).encode("ascii")
-        await self.set_value(key, value_bytes)
+        await self.set_value(key=key, value=value_bytes)
 
     async def setnx_int(self, key: bytes, value: int) -> bool:
         assert isinstance(key, bytes)
         assert isinstance(value, int)
         value_bytes = str(value).encode("ascii")
-        return await self.setnx_value(key, value_bytes)
+        return await self.setnx_value(key=key, value=value_bytes)
 
-    async def get_int(self, key: bytes, default=None) -> Optional[int]:
+    async def get_int(self, key: bytes) -> Optional[int]:
         assert isinstance(key, bytes)
-        result = await self.get_value(key)
+        result = await self.get_value(key=key)
+        return None if result is None else int(result)
+
+    async def get_int_or_default(self, key: bytes, default: int) -> int:
+        assert isinstance(key, bytes)
+        result = await self.get_value(key=key)
         return default if result is None else int(result)
+
+    async def get_int_or_fail(self, key: bytes) -> int:
+        assert isinstance(key, bytes)
+        result = await self.get_value_or_fail(key=key)
+        return int(result)
 
     async def set_float(self, key: bytes, value: float):
         assert isinstance(key, bytes)
         assert isinstance(value, float)
         value_bytes = str(value).encode("ascii")
-        await self.set_value(key, value_bytes)
+        await self.set_value(key=key, value=value_bytes)
 
     async def setnx_float(self, key: bytes, value: float) -> bool:
         assert isinstance(key, bytes)
         assert isinstance(value, float)
         value_bytes = str(value).encode("ascii")
-        return await self.setnx_value(key, value_bytes)
+        return await self.setnx_value(key=key, value=value_bytes)
 
     async def get_float(self, key: bytes, default=None) -> Optional[float]:
         assert isinstance(key, bytes)
-        result = await self.get_value(key)
+        result = await self.get_value(key=key)
         return default if result is None else float(result)
 
     async def set_str(self, key: bytes, value: str):
         assert isinstance(key, bytes)
         assert isinstance(value, str)
         value_bytes = value.encode("ascii")
-        await self.set_value(key, value_bytes)
+        await self.set_value(key=key, value=value_bytes)
 
     async def setnx_str(self, key: bytes, value: str) -> bool:
         assert isinstance(key, bytes)
         assert isinstance(value, str)
         value_bytes = value.encode("ascii")
-        return await self.setnx_value(key, value_bytes)
+        return await self.setnx_value(key=key, value=value_bytes)
 
     async def get_str(self, key: bytes, default=None) -> Optional[str]:
         assert isinstance(key, bytes)
-        result = await self.get_value(key)
+        result = await self.get_value(key=key)
         return default if result is None else result.decode("ascii")
 
     async def setnx_value(self, key: bytes, value: bytes) -> bool:
@@ -112,11 +131,11 @@ class Storage(ABC):
     async def setnx_time(self, key: bytes, time: float):
         assert isinstance(key, bytes)
         assert isinstance(time, float)
-        await self.setnx_float(key, time)
+        await self.setnx_float(key=key, value=time)
 
     async def get_time(self, key: bytes) -> Optional[float]:
         assert isinstance(key, bytes)
-        return await self.get_float(key)
+        return await self.get_float(key=key)
 
 
 TDBObject = TypeVar("TDBObject", bound="DBObject")
@@ -147,10 +166,9 @@ class DBObject(Serializable):
         If key does not exist, raises an exception.
         """
         db_key = cls.db_key(suffix=suffix)
-        result = await storage.get_value(key=db_key)
-        assert result is not None, f"Key {db_key!r} does not appear in storage."
+        result = await storage.get_value_or_fail(key=db_key)
 
-        return cls.deserialize(result)
+        return cls.deserialize(data=result)
 
     async def set(self, storage: Storage, suffix: bytes):
         serialized = await asyncio.get_event_loop().run_in_executor(None, self.serialize)
@@ -158,7 +176,7 @@ class DBObject(Serializable):
 
     async def setnx(self, storage: Storage, suffix: bytes) -> bool:
         serialized = await asyncio.get_event_loop().run_in_executor(None, self.serialize)
-        return await storage.setnx_value(self.db_key(suffix), serialized)
+        return await storage.setnx_value(self.db_key(suffix=suffix), value=serialized)
 
     def get_update_for_mset(self, suffix: bytes) -> Tuple[bytes, bytes]:
         """
@@ -169,7 +187,7 @@ class DBObject(Serializable):
                 *[obj.get_indexed_update_for_mset(suffix) for key, obj in obj_updates.items()],
             ))
         """
-        return (self.db_key(suffix), self.serialize())
+        return (self.db_key(suffix=suffix), self.serialize())
 
 
 TIndexedDBObject = TypeVar("TIndexedDBObject", bound="IndexedDBObject")
@@ -182,19 +200,30 @@ class IndexedDBObject(DBObject):
 
     @classmethod
     def key(cls, index: int) -> bytes:
-        return cls.db_key(str(index).encode("ascii"))
+        return cls.db_key(suffix=str(index).encode("ascii"))
 
     @classmethod
     async def get_obj(
         cls: Type[TIndexedDBObject], storage: Storage, index: int
     ) -> Optional[TIndexedDBObject]:
-        return await cls.get(storage, str(index).encode("ascii"))
+        return await cls.get(storage=storage, suffix=str(index).encode("ascii"))
+
+    @classmethod
+    async def get_obj_or_fail(
+        cls: Type[TIndexedDBObject], storage: Storage, index: int
+    ) -> TIndexedDBObject:
+        db_object_or_aborted = await cls.get_obj(storage=storage, index=index)
+        assert (
+            db_object_or_aborted is not None
+        ), f"{cls.__name__} at index {index} does not exist in storage."
+
+        return db_object_or_aborted
 
     async def set_obj(self, storage: Storage, index: int):
-        await self.set(storage, str(index).encode("ascii"))
+        await self.set(storage=storage, suffix=str(index).encode("ascii"))
 
     async def setnx_obj(self, storage: Storage, index: int) -> bool:
-        return await self.setnx(storage, str(index).encode("ascii"))
+        return await self.setnx(storage=storage, suffix=str(index).encode("ascii"))
 
     def get_indexed_update_for_mset(self, index: int) -> Tuple[bytes, bytes]:
         """
@@ -256,10 +285,7 @@ class FactFetchingContext:
         self.n_workers = n_workers
 
     def __repr__(self) -> str:
-        return (
-            f"{type(self)}(storage={self.storage!r}, hash_func={self.hash_func!r}, "
-            f"n_workers={self.n_workers!r})"
-        )
+        return generic_object_repr(obj=self)
 
 
 class Fact(DBObject):

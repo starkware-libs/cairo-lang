@@ -103,7 +103,7 @@ def test_abi_basic():
 
 namespace MyNamespace:
     struct ExternalStruct:
-        member y: (felt, felt)
+        member y: (x : felt, y : felt)
     end
 end
 
@@ -124,7 +124,7 @@ func constructor{syscall_ptr}():
 end
 
 @external
-func f(a : felt, arr_len : felt, arr : felt*) -> (b : felt, c : felt):
+func f(a : (x : felt, y : felt), arr_len : felt, arr : felt*) -> (b : felt, c : felt):
     return (0, 1)
 end
 
@@ -163,7 +163,7 @@ end
         {
             "type": "struct",
             "name": "ExternalStruct",
-            "members": [{"name": "y", "offset": 0, "type": "(felt, felt)"}],
+            "members": [{"name": "y", "offset": 0, "type": "(x : felt, y : felt)"}],
             "size": 2,
         },
         {
@@ -180,7 +180,7 @@ end
         },
         {
             "inputs": [
-                {"name": "a", "type": "felt"},
+                {"name": "a", "type": "(x : felt, y : felt)"},
                 {"name": "arr_len", "type": "felt"},
                 {"name": "arr", "type": "felt*"},
             ],

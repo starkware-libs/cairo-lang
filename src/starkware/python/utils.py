@@ -8,9 +8,26 @@ import re
 import subprocess
 import time
 from collections import UserDict
-from typing import Any, AsyncIterable, Awaitable, Iterable, List, Optional, TypeVar
+from typing import (
+    Any,
+    AsyncIterable,
+    Awaitable,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    TypeVar,
+)
+
+import yaml
+
+# All functions with stubs are imported from this module.
+from starkware.python.utils_stub_module import *  # noqa
 
 T = TypeVar("T")
+NumType = TypeVar("NumType", int, float)
 HASH_BYTES = 32
 
 
@@ -52,6 +69,13 @@ def assert_same_and_get(*args):
     return args[0]
 
 
+def assert_exhausted(iterator: Iterator):
+    """
+    Verifies that given iterator is empty.
+    """
+    assert all(False for _ in iterator), "Iterator is not empty."
+
+
 def unique(x):
     """
     Removes duplicates while preserving order.
@@ -66,7 +90,7 @@ def unique_ordered_union(x, y):
     return list(dict.fromkeys(list(x) + list(y)).keys())
 
 
-def add_counters(x, y):
+def add_counters(x: Mapping[T, NumType], y: Mapping[T, NumType]) -> Dict[T, NumType]:
     """
     Given two dicts x, y, returns a dict d s.t.
       d[a] = d[x] + d[y]
@@ -74,7 +98,7 @@ def add_counters(x, y):
     return {k: x.get(k, 0) + y.get(k, 0) for k in unique_ordered_union(x.keys(), y.keys())}
 
 
-def sub_counters(x, y):
+def sub_counters(x: Mapping[T, NumType], y: Mapping[T, NumType]) -> Dict[T, NumType]:
     """
     Given two dicts x, y, returns a dict d s.t.
       d[a] = d[x] - d[y]
@@ -204,16 +228,6 @@ async def cancel_futures(*futures: asyncio.Future):
             await future
         except asyncio.CancelledError:
             pass
-
-
-def safe_zip(*iterables: Iterable[Any]) -> Iterable:
-    """
-    Zips iterables. Makes sure the lengths of all iterables are equal.
-    """
-    sentinel = object()
-    for combo in itertools.zip_longest(*iterables, fillvalue=sentinel):
-        assert sentinel not in combo, "Iterables to safe_zip are not equal in length."
-        yield combo
 
 
 def composite(*funcs):
@@ -367,3 +381,12 @@ def to_ascii_string(value: str) -> str:
     Converts the given string to an ascii-encodeable one by replacing non-ascii characters with '?'.
     """
     return value.encode("ascii", "replace").decode("ascii")
+
+
+def update_yaml_file(file_path: str, data: Dict[str, Any]):
+    """
+    Updates yaml file in given path with given data.
+    """
+    with open(file_path, "w") as fp:
+        fp.write(yaml.dump(data=data, default_flow_style=False, width=400))
+        fp.flush()

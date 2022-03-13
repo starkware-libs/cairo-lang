@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Any, List, Set, Tuple
+from typing import Set, Tuple
 
 from starkware.cairo.lang.compiler.ast.cairo_types import (
     CairoType,
@@ -13,6 +13,7 @@ from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.parser import parse_type
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.compiler.type_system import mark_type_resolved
+from starkware.starknet.public.abi import AbiType
 
 
 @dataclasses.dataclass
@@ -31,9 +32,9 @@ def prepare_type_for_abi(cairo_type: CairoType) -> AbiTypeInfo:
         new_members = []
         structs = set()
         for inner_type in cairo_type.members:
-            res = prepare_type_for_abi(inner_type)
+            res = prepare_type_for_abi(inner_type.typ)
             structs |= res.structs
-            new_members.append(res.modified_type)
+            new_members.append(dataclasses.replace(inner_type, typ=res.modified_type))
 
         return AbiTypeInfo(
             modified_type=dataclasses.replace(cairo_type, members=new_members),
@@ -110,7 +111,7 @@ def struct_definition_from_abi_entry(abi_entry: dict) -> StructDefinition:
     )
 
 
-def identifier_manager_from_abi(abi: List[Any]) -> IdentifierManager:
+def identifier_manager_from_abi(abi: AbiType) -> IdentifierManager:
     """
     Returns an IdentifierManager object which contains all struct definitions found in the ABI.
     """

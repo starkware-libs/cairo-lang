@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Optional, Tuple
+from typing import Collection, Dict, Optional, Tuple, Type
 
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
 from starkware.starkware_utils.commitment_tree.binary_fact_tree_node import (
@@ -7,6 +7,7 @@ from starkware.starkware_utils.commitment_tree.binary_fact_tree_node import (
     read_node_fact,
     write_node_fact,
 )
+from starkware.starkware_utils.commitment_tree.leaf_fact import TLeafFact
 from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import (
     BinaryNodeFact,
     EdgeNodeFact,
@@ -172,3 +173,81 @@ class VirtualPatriciaNode(BinaryFactTreeNode):
             and self.length == other.length
             and self.height == other.height
         )
+
+    async def _get_leaves(
+        self,
+        ffc: FactFetchingContext,
+        indices: Collection[int],
+        fact_cls: Type[TLeafFact],
+        facts: Optional[BinaryFactDict] = None,
+    ) -> Dict[int, TLeafFact]:
+        """
+        See base class for documentation.
+        """
+        if len(indices) == 0:
+            return {}
+
+        if self.is_leaf:
+            return await self._get_leaf(ffc=ffc, indices=indices, fact_cls=fact_cls)
+
+        if self.is_virtual_edge:
+            return await self._get_edge_node_leaves(
+                ffc=ffc, indices=indices, fact_cls=fact_cls, facts=facts
+            )
+
+        return await self._get_binary_node_leaves(
+            ffc=ffc, indices=indices, fact_cls=fact_cls, facts=facts
+        )
+
+    async def _get_edge_node_leaves(
+        self,
+        ffc: FactFetchingContext,
+        indices: Collection[int],
+        fact_cls: Type[TLeafFact],
+        facts: Optional[BinaryFactDict] = None,
+    ) -> Dict[int, TLeafFact]:
+        """
+        Returns the values of the leaves whose indices are given.
+        """
+        # Partition indices.
+        path_suffix_width = self.height - self.length
+        path_prefix = self.path << path_suffix_width
+        bottom_subtree_indices = [
+            index - path_prefix for index in indices if (index >> path_suffix_width) == self.path
+        ]
+        empty_indices = [index for index in indices if (index >> path_suffix_width) != self.path]
+
+        # Get bottom subtree root.
+        bottom_subtree_root = self.from_hash(hash_value=self.bottom_node, height=path_suffix_width)
+        bottom_subtree_leaves = await bottom_subtree_root._get_leaves(
+            ffc=ffc, indices=bottom_subtree_indices, fact_cls=fact_cls, facts=facts
+        )
+        empty_leaves = await get_empty_leaves(ffc=ffc, indices=empty_indices, fact_cls=fact_cls)
+        return unify_edge_leaves(
+            path_prefix=path_prefix,
+            bottom_subtree_leaves=bottom_subtree_leaves,
+            empty_leaves=empty_leaves,
+        )
+
+
+# Utilities.
+
+
+async def get_empty_leaves(
+    ffc: FactFetchingContext, indices: Collection[int], fact_cls: Type[TLeafFact]
+) -> Dict[int, TLeafFact]:
+    if len(indices) == 0:
+        return {}
+
+    empty_leaf = await fact_cls.get_or_fail(
+        storage=ffc.storage, suffix=EmptyNodeFact.EMPTY_NODE_HASH
+    )
+    return {index: empty_leaf for index in indices}
+
+
+def unify_edge_leaves(
+    path_prefix: int,
+    bottom_subtree_leaves: Dict[int, TLeafFact],
+    empty_leaves: Dict[int, TLeafFact],
+) -> Dict[int, TLeafFact]:
+    return {**empty_leaves, **{x + path_prefix: y for x, y in bottom_subtree_leaves.items()}}

@@ -2,7 +2,7 @@ import os
 
 import cachetools
 
-from starkware.cairo.bootloader.hash_program import compute_program_hash_chain
+from starkware.cairo.bootloaders.hash_program import compute_program_hash_chain
 from starkware.cairo.lang.compiler.program import Program
 
 STARKNET_OS_COMPILED_PATH = os.path.join(os.path.dirname(__file__), "starknet_os_compiled.json")

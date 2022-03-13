@@ -11,7 +11,9 @@ from starkware.cairo.lang.compiler.scoped_name import ScopedName
 
 @dataclasses.dataclass
 class PassManagerContext:
-    # A list of pairs (code, filename).
+    # A list of pairs (code, filename) that should be compiled before any module is imported.
+    start_codes: List[Tuple[str, str]]
+    # A list of pairs (code, filename) codes to compile.
     codes: List[Tuple[str, str]]
     main_scope: ScopedName
     identifiers: IdentifierManager

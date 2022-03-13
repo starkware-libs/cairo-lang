@@ -355,10 +355,9 @@ class ExternalWrapperVisitor(IdentifierAwareVisitor):
         arg_struct_members: Dict[str, MemberDefinition],
         func_location: Location,
     ) -> ArgList:
-
         call_args = ArgList(
             args=[
-                ExprAssignment(identifier=arg_name, expr=expr)
+                ExprAssignment(identifier=ExprIdentifier(name=arg_name), expr=expr)
                 for arg_name, expr in safe_zip(
                     arg_struct_members, [selector, calldata_size, calldata_ptr]
                 )

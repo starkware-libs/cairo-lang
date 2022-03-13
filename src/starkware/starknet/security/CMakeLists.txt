@@ -6,7 +6,6 @@ python_lib(starknet_security_lib
 
     LIBS
     cairo_compile_lib
-    cairo_run_lib
     starkware_dataclasses_utils_lib
     pip_marshmallow
     pip_marshmallow_dataclass
@@ -47,6 +46,7 @@ python_lib(starknet_hints_whitelist_lib
     whitelists/cairo_keccak.json
     whitelists/cairo_secp.json
     whitelists/cairo_sha256.json
+    whitelists/ec_recover.json
     whitelists/latest.json
 
     LIBS

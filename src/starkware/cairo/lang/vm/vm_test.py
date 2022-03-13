@@ -1,5 +1,5 @@
 import tempfile
-from typing import Dict
+from typing import Optional, cast
 
 import pytest
 
@@ -9,7 +9,12 @@ from starkware.cairo.lang.vm.memory_dict import (
     MemoryDict,
     UnknownMemoryError,
 )
-from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
+from starkware.cairo.lang.vm.relocatable import (
+    MaybeRelocatable,
+    MaybeRelocatableDict,
+    RelocatableValue,
+)
+from starkware.cairo.lang.vm.virtual_machine_base import Rule, VirtualMachineBase
 from starkware.cairo.lang.vm.vm import RunContext, VirtualMachine
 from starkware.cairo.lang.vm.vm_exceptions import InconsistentAutoDeductionError, VmException
 from starkware.python.test_utils import maybe_raises
@@ -21,7 +26,7 @@ def run_single(code: str, steps: int, *, pc=RelocatableValue(0, 10), ap=100, fp=
     program = compile_cairo(code, PRIME, debug_info=True)
 
     # Set memory[fp - 1] to an arbitrary value, since [fp - 1] is assumed to be set.
-    memory: Dict[MaybeRelocatable, MaybeRelocatable] = {
+    memory: MaybeRelocatableDict = {
         **{pc + i: v for i, v in enumerate(program.data)},
         fp - 1: 1234,
         **extra_mem,
@@ -41,7 +46,7 @@ def run_single(code: str, steps: int, *, pc=RelocatableValue(0, 10), ap=100, fp=
 
 
 def test_memory_dict():
-    d = {1: 2}
+    d: MaybeRelocatableDict = {1: 2}
     mem = MemoryDict(d)
     d[2] = 3
     assert 2 not in mem
@@ -176,7 +181,7 @@ def test_addap():
     vm = run_single(code, 3)
 
     mem = [vm.run_context.memory.get(100 + i) for i in range(32)]
-    assert mem == [3] + [None] * 30 + [4]
+    assert mem == [3, *[None] * 30, 4]
     assert vm.run_context.ap == 131
 
 
@@ -299,7 +304,7 @@ f()
     cairo_file.flush()
     program = compile_cairo(code=[(code, cairo_file.name)], prime=PRIME, debug_info=True)
     program_base = 10
-    memory = {program_base + i: v for i, v in enumerate(program.data)}
+    memory: MaybeRelocatableDict = {program_base + i: v for i, v in enumerate(program.data)}
 
     # Set memory[fp - 1] to an arbitrary value, since [fp - 1] is assumed to be set.
     memory[99] = 1234
@@ -353,7 +358,7 @@ def f():
     cairo_file.flush()
     program = compile_cairo(code=[(code, cairo_file.name)], prime=PRIME, debug_info=True)
     program_base = 10
-    memory = {program_base + i: v for i, v in enumerate(program.data)}
+    memory: MaybeRelocatableDict = {program_base + i: v for i, v in enumerate(program.data)}
 
     # Set memory[fp - 1] to an arbitrary value, since [fp - 1] is assumed to be set.
     memory[99] = 1234
@@ -401,7 +406,7 @@ def f():
     cairo_file.flush()
     program = compile_cairo(code=[(code, cairo_file.name)], prime=PRIME, debug_info=True)
     program_base = 10
-    memory = {program_base + i: v for i, v in enumerate(program.data)}
+    memory: MaybeRelocatableDict = {program_base + i: v for i, v in enumerate(program.data)}
 
     # Set memory[fp - 1] to an arbitrary value, since [fp - 1] is assumed to be set.
     memory[99] = 1234
@@ -488,7 +493,7 @@ def test_skip_instruction_execution():
     program = compile_cairo(code, PRIME, debug_info=True)
 
     initial_ap = 100
-    memory: Dict[MaybeRelocatable, MaybeRelocatable] = {
+    memory: MaybeRelocatableDict = {
         **{i: v for i, v in enumerate(program.data)},
         initial_ap - 1: 1234,
     }
@@ -523,7 +528,7 @@ def test_auto_deduction_rules():
 """
 
     program = compile_cairo(code=code, prime=PRIME, debug_info=True)
-    memory = {i: v for i, v in enumerate(program.data)}
+    memory: MaybeRelocatableDict = {i: v for i, v in enumerate(program.data)}
     initial_ap = RelocatableValue(segment_index=1, offset=200)
     initial_fp = RelocatableValue(segment_index=2, offset=100)
 
@@ -537,13 +542,15 @@ def test_auto_deduction_rules():
 
     vm = VirtualMachine(program, context, {})
 
-    def rule_ap_segment(vm, addr, val):
+    def rule_ap_segment(
+        vm: VirtualMachineBase, addr: MaybeRelocatable, val: MaybeRelocatable
+    ) -> Optional[MaybeRelocatable]:
         return val
 
-    vm.add_auto_deduction_rule(1, rule_ap_segment, 100)
-    vm.add_auto_deduction_rule(2, lambda vm, addr: None)
-    vm.add_auto_deduction_rule(2, lambda vm, addr: 200 if addr == initial_fp else None)
-    vm.add_auto_deduction_rule(2, lambda vm, addr: 456)
+    vm.add_auto_deduction_rule(1, cast(Rule, rule_ap_segment), 100)
+    vm.add_auto_deduction_rule(2, cast(Rule, lambda vm, addr: None))
+    vm.add_auto_deduction_rule(2, cast(Rule, lambda vm, addr: 200 if addr == initial_fp else None))
+    vm.add_auto_deduction_rule(2, cast(Rule, lambda vm, addr: 456))
 
     vm.step()
 
@@ -565,7 +572,7 @@ def test_memory_validation_in_hints():
 
     program = compile_cairo(code=code, prime=PRIME, debug_info=True)
     initial_ap_and_fp = RelocatableValue(segment_index=1, offset=200)
-    memory = {i: v for i, v in enumerate(program.data)}
+    memory: MaybeRelocatableDict = {i: v for i, v in enumerate(program.data)}
     # Set memory[fp - 1] to an arbitrary value, since [fp - 1] is assumed to be set.
     memory[initial_ap_and_fp - 1] = 1234
 
@@ -619,7 +626,7 @@ def test_jmp_segment():
     program_base_a = RelocatableValue(0, 10)
     program_base_b = RelocatableValue(1, 20)
 
-    memory = {
+    memory: MaybeRelocatableDict = {
         **{program_base_a + i: v for i, v in enumerate(program.data)},
         **{program_base_b + i: v for i, v in enumerate(program.data)},
         99: 0,
@@ -777,12 +784,12 @@ def test_traceback_with_attr():
     call main
 
     func foo(x):
-        with_attr error_message("Error in foo."):
+        with_attr error_message("Error in foo (x={x})."):
             with_attr error_message("Should not appear in trace."):
                 assert 0 = 0
             end
             with_attr attr_name("Should not appear in trace (attr_name instead of error_message)."):
-                %{ assert ids.x != 0 %}
+                %{ assert ids.x != 1 %}
                 [ap] = 1; ap++
             end
         end
@@ -790,8 +797,9 @@ def test_traceback_with_attr():
     end
 
     func bar(x):
-        with_attr error_message("Error in bar."):
-            foo(x * x * x)
+        tempvar y = x + 2
+        with_attr error_message("Error in bar (x={x}, y={y})."):
+            foo(y * y * y)
         end
         return ()
     end
@@ -802,7 +810,7 @@ def test_traceback_with_attr():
                 bar(x=1)
             end
             with_attr error_message("Running bar(x=0)."):
-                bar(x=0)  # This line will cause an error.
+                bar(x=-1)  # This line will cause an error.
             end
         end
         return ()
@@ -815,10 +823,10 @@ def test_traceback_with_attr():
     assert (
         str(exc_info.value)
         == """\
-Error message: Error in foo.
+Error message: Error in foo (x=1).
 :10:17: Error at pc=0:16:
 Got an exception while executing a hint.
-                %{ assert ids.x != 0 %}
+                %{ assert ids.x != 1 %}
                 ^*********************^
 Cairo traceback (most recent call last):
 :2:5: (pc=0:10)
@@ -826,12 +834,12 @@ Cairo traceback (most recent call last):
     ^*******^
 Error message: Running bar(x=0).
 Error message: Error in main.
-:30:17: (pc=0:30)
-                bar(x=0)  # This line will cause an error.
-                ^******^
-Error message: Error in bar.
-:19:13: (pc=0:21)
-            foo(x * x * x)
+:31:17: (pc=0:32)
+                bar(x=-1)  # This line will cause an error.
+                ^*******^
+Error message: Error in bar (x=-1, y={y}). (Cannot evaluate ap-based or complex references: ['y'])
+:20:13: (pc=0:23)
+            foo(y * y * y)
             ^************^
 
 Traceback (most recent call last):

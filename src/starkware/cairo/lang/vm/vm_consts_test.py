@@ -1,5 +1,5 @@
 import re
-from typing import ClassVar
+from typing import ClassVar, MutableMapping, Optional
 
 import pytest
 
@@ -26,6 +26,7 @@ from starkware.cairo.lang.compiler.preprocessor.reg_tracking import RegTrackingD
 from starkware.cairo.lang.compiler.references import FlowTrackingError, Reference
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.compiler.type_system import mark_types_in_expr_resolved
+from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, MaybeRelocatableDict
 from starkware.cairo.lang.vm.vm_consts import VmConsts, VmConstsContext
 
 scope = ScopedName.from_string
@@ -185,7 +186,7 @@ def test_references():
     prime = 2 ** 64 + 13
     ap = 100
     fp = 200
-    memory = {
+    memory: MaybeRelocatableDict = {
         (ap - 2) + 1: 1234,
         (ap - 1) + 1: 1000,
         (ap - 1) + 1 + 2: 13,
@@ -236,20 +237,21 @@ def test_references():
     assert memory == {(ap - 2) + 1: 1234}
 
     memory.clear()
-    consts.x.typeref.member = 1001
+    # Use "type: ignore" since mypy is unable to deduce the type of members of VmConsts.
+    consts.x.typeref.member = 1001  # type: ignore
     assert memory == {(ap - 1) + 1 + 10: 1001}
 
     memory.clear()
     consts.x.typeref2 = 4321
     assert memory == {(ap - 1) + 1: 4321}
 
-    consts.x.typeref2.member = 1
+    consts.x.typeref2.member = 1  # type: ignore
     assert memory == {
         (ap - 1) + 1: 4321,
         4321 + 10: 1,
     }
 
-    consts.x.typeref2.struct.member = 2
+    consts.x.typeref2.struct.member = 2  # type: ignore
     assert memory == {
         (ap - 1) + 1: 4321,
         4321 + 10: 1,
@@ -270,14 +272,22 @@ def test_references():
         consts.x.typeref = 1000
 
 
-def get_vm_consts(identifier_values, reference_manager, flow_tracking_data, memory={}):
+def get_vm_consts(
+    identifier_values,
+    reference_manager,
+    flow_tracking_data,
+    memory: Optional[MutableMapping[MaybeRelocatable, MaybeRelocatable]] = None,
+):
     """
     Creates a simple VmConsts object.
     """
+    memory = {} if memory is None else memory
     identifiers = IdentifierManager.from_dict(identifier_values)
     context = VmConstsContext(
         identifiers=identifiers,
-        evaluator=ExpressionEvaluator(2 ** 64 + 13, 0, 0, memory, identifiers).eval,
+        evaluator=ExpressionEvaluator[MaybeRelocatable](
+            2 ** 64 + 13, 0, 0, memory, identifiers
+        ).eval,
         reference_manager=reference_manager,
         flow_tracking_data=flow_tracking_data,
         memory=memory,
@@ -301,7 +311,7 @@ def test_reference_rebinding():
     with pytest.raises(FlowTrackingError, match="Reference 'ref' is revoked."):
         consts.ref
 
-    flow_tracking_data = flow_tracking_data.add_reference(
+    flow_tracking_data2 = flow_tracking_data.add_reference(
         reference_manager=reference_manager,
         name=scope("ref"),
         ref=Reference(
@@ -310,7 +320,7 @@ def test_reference_rebinding():
             ap_tracking_data=RegTrackingData(group=0, offset=2),
         ),
     )
-    consts = get_vm_consts(identifier_values, reference_manager, flow_tracking_data)
+    consts = get_vm_consts(identifier_values, reference_manager, flow_tracking_data2)
     assert consts.ref == 10
 
 
@@ -329,7 +339,7 @@ def test_reference_to_structs():
     }
     reference_manager = ReferenceManager()
     flow_tracking_data = FlowTrackingDataActual(ap_tracking=RegTrackingData())
-    flow_tracking_data = flow_tracking_data.add_reference(
+    flow_tracking_data2 = flow_tracking_data.add_reference(
         reference_manager=reference_manager,
         name=scope("ref"),
         ref=Reference(
@@ -338,15 +348,16 @@ def test_reference_to_structs():
             ap_tracking_data=RegTrackingData(group=0, offset=2),
         ),
     )
-    memory = {103: 200}
-    consts = get_vm_consts(identifier_values, reference_manager, flow_tracking_data, memory=memory)
+    memory: MaybeRelocatableDict = {103: 200}
+    consts = get_vm_consts(identifier_values, reference_manager, flow_tracking_data2, memory=memory)
 
     assert consts.ref.address_ == 100
     assert consts.ref.x.address_ == 200
     # Set the pointer ref.x.x to 300.
     consts.ref.x.x = 300
     assert memory[203] == 300
-    assert consts.ref.x.x.address_ == 300
+    # Use "type: ignore" since mypy is unable to deduce the type of members of VmConsts.
+    assert consts.ref.x.x.address_ == 300  # type: ignore
 
     assert consts.ref.type_ == consts.T
 
@@ -474,7 +485,7 @@ def test_revoked_reference():
     prime = 2 ** 64 + 13
     ap = 100
     fp = 200
-    memory = {}
+    memory: MaybeRelocatableDict = {}
 
     flow_tracking_data = FlowTrackingDataActual(
         ap_tracking=RegTrackingData(group=1, offset=4),

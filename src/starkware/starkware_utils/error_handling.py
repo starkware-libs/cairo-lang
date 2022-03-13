@@ -28,6 +28,8 @@ class StarkErrorCode(ErrorCode):
     BATCH_ABORTED = auto()
     #: Connection error with the node (for example, Infura too many requests).
     CONNECTION_ERROR = auto()
+    #: Duplicate order.
+    DUPLICATE_ORDER = auto()
     #: Fact not registered in fact registry.
     FACT_NOT_REGISTERED = auto()
     #: Multi-Transaction with zero transactions.
@@ -80,8 +82,12 @@ class StarkErrorCode(ErrorCode):
     MALFORMED_REQUEST = auto()
     #: Pipeline object is missing because it was migrated from an older version object.
     MIGRATED_PIPELINE_OBJECT_MISSING = auto()
+    #: The chain ID does not exist in storage.
+    MISSING_BLOCKCHAIN_ID = auto()
     #: One of the fee objects is missing while the other exists.
     MISSING_FEE_OBJECT = auto()
+    #: Nested multi-transaction (multi-transaction inside multi-transaction)
+    NESTED_MULTI_TRANSACTION = auto()
     #: The order is expired.
     ORDER_OVERDUE = auto()
     #: Positive amount value is out of range.

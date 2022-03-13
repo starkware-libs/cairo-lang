@@ -94,10 +94,6 @@ def cairo_compile_common(
 
     try:
         codes = get_codes(args.files)
-        file_contents_for_debug_info = {}
-        if getattr(args, "proof_mode", False):
-            codes = add_start_code(codes)
-            file_contents_for_debug_info[START_FILE_NAME] = codes[0][0]
         out = args.output if args.output is not None else sys.stdout
 
         cairo_path: List[str] = list(
@@ -107,8 +103,17 @@ def cairo_compile_common(
 
         pass_manager = pass_manager_factory(args, module_reader)
 
+        start_codes = []
+        file_contents_for_debug_info = {}
+        if getattr(args, "proof_mode", False):
+            start_codes = [(get_start_code(), START_FILE_NAME)]
+            file_contents_for_debug_info[START_FILE_NAME] = start_codes[0][0]
+
         preprocessed = preprocess_codes(
-            codes=codes, pass_manager=pass_manager, main_scope=MAIN_SCOPE
+            codes=codes,
+            pass_manager=pass_manager,
+            main_scope=MAIN_SCOPE,
+            start_codes=start_codes,
         )
 
         if args.preprocess:
@@ -160,10 +165,6 @@ def get_codes(file_names: List[str]) -> List[Tuple[str, str]]:
     return codes_with_filenames
 
 
-def add_start_code(codes_with_filenames: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
-    return [(get_start_code(), START_FILE_NAME)] + codes_with_filenames
-
-
 def compile_cairo_files(
     files: List[str],
     prime: Optional[int] = None,
@@ -207,12 +208,10 @@ def compile_cairo_ex(
     if isinstance(code, list):
         codes_with_filenames = code
 
+    start_codes = []
     if add_start:
-        codes_with_filenames = add_start_code(codes_with_filenames)
-
-    # Add the start code to the debug info if exists.
-    if START_FILE_NAME == codes_with_filenames[0][1]:
-        file_contents_for_debug_info[START_FILE_NAME] = codes_with_filenames[0][0]
+        start_codes = [(get_start_code(), START_FILE_NAME)]
+        file_contents_for_debug_info[START_FILE_NAME] = start_codes[0][0]
 
     if pass_manager is None:
         assert prime is not None, "Exactly one of prime and pass_manager must be given."
@@ -227,7 +226,10 @@ def compile_cairo_ex(
     if main_scope is None:
         main_scope = MAIN_SCOPE
     preprocessed_program = preprocess_codes(
-        codes=codes_with_filenames, pass_manager=pass_manager, main_scope=main_scope
+        codes=codes_with_filenames,
+        pass_manager=pass_manager,
+        main_scope=main_scope,
+        start_codes=start_codes,
     )
     program = cairo_assemble_program(
         preprocessed_program,

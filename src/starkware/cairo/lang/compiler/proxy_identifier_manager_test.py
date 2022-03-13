@@ -5,7 +5,10 @@ from starkware.cairo.lang.compiler.identifier_manager import (
     IdentifierManager,
     MissingIdentifierError,
 )
-from starkware.cairo.lang.compiler.proxy_identifier_manager import ProxyIdentifierManager
+from starkware.cairo.lang.compiler.proxy_identifier_manager import (
+    ProxyIdentifierManager,
+    ProxyIdentifierScope,
+)
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 
 scope = ScopedName.from_string
@@ -18,7 +21,9 @@ def test_identifier_manager_get():
     manager = IdentifierManager.from_dict(identifier_dict)
     proxy = ProxyIdentifierManager(manager)
     for full_name in ["a", "a.b"]:
-        assert proxy.get_scope(scope(full_name)).parent == manager.get_scope(scope(full_name))
+        proxy_scope = proxy.get_scope(scope(full_name))
+        assert isinstance(proxy_scope, ProxyIdentifierScope)
+        assert proxy_scope.parent == manager.get_scope(scope(full_name))
     assert proxy.get(scope("a.b.c")) == manager.get(scope("a.b.c"))
 
     proxy.add_identifier(scope("a.d"), ConstDefinition(value=8))

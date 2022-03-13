@@ -2,15 +2,16 @@ from abc import abstractmethod
 from dataclasses import field
 from importlib import import_module
 from logging import Logger
-from typing import Collection, Dict, Optional, Tuple, Type, TypeVar
+from typing import Collection, Dict, Optional, Tuple, Type
 
 import marshmallow_dataclass
 
+from starkware.starkware_utils.commitment_tree.inner_node_fact import InnerNodeFact
+from starkware.starkware_utils.commitment_tree.leaf_fact import LeafFact, TLeafFact
 from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
 from starkware.starkware_utils.validated_fields import bytes_as_hex_metadata
-from starkware.storage.storage import Fact, FactFetchingContext
+from starkware.storage.storage import FactFetchingContext
 
-TFact = TypeVar("TFact", bound=Fact)
 BinaryFactDict = Dict[int, Tuple[int, ...]]
 
 
@@ -29,29 +30,47 @@ class BinaryFactTree(ValidatedMarshmallowDataclass):
     @classmethod
     @abstractmethod
     async def empty_tree(
-        cls, ffc: FactFetchingContext, height: int, leaf_fact: Fact
+        cls, ffc: FactFetchingContext, height: int, leaf_fact: LeafFact
     ) -> "BinaryFactTree":
         """
         Initializes an empty BinaryFactTree of the given height.
         """
 
-    @abstractmethod
     async def get_leaves(
         self,
         ffc: FactFetchingContext,
         indices: Collection[int],
-        fact_cls: Type[TFact],
+        fact_cls: Type[TLeafFact],
         facts: Optional[BinaryFactDict] = None,
-    ) -> Dict[int, TFact]:
+    ) -> Dict[int, TLeafFact]:
         """
         Returns the values of the leaves whose indices are given.
+        """
+        assert not issubclass(fact_cls, InnerNodeFact), (
+            f"Leaf fact class object {fact_cls.__name__} must not inherit from "
+            f"{InnerNodeFact.__name__}."
+        )
+
+        return await self._get_leaves(ffc=ffc, indices=indices, fact_cls=fact_cls, facts=facts)
+
+    @abstractmethod
+    async def _get_leaves(
+        self,
+        ffc: FactFetchingContext,
+        indices: Collection[int],
+        fact_cls: Type[TLeafFact],
+        facts: Optional[BinaryFactDict] = None,
+    ) -> Dict[int, TLeafFact]:
+        """
+        Returns the values of the leaves whose indices are given.
+        This is the implementation of the specific virtual node.
         """
 
     @abstractmethod
     async def update(
         self,
         ffc: FactFetchingContext,
-        modifications: Collection[Tuple[int, Fact]],
+        modifications: Collection[Tuple[int, LeafFact]],
         facts: Optional[BinaryFactDict] = None,
     ) -> "BinaryFactTree":
         """
@@ -62,7 +81,9 @@ class BinaryFactTree(ValidatedMarshmallowDataclass):
         by the facts of their paths from the leaves up.
         """
 
-    async def get_leaf(self, ffc: FactFetchingContext, index: int, fact_cls: Type[TFact]) -> TFact:
+    async def get_leaf(
+        self, ffc: FactFetchingContext, index: int, fact_cls: Type[TLeafFact]
+    ) -> TLeafFact:
         """
         Returns the value of a single leaf whose index is given.
         """

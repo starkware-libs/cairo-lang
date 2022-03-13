@@ -4,7 +4,7 @@ from typing import List
 
 from eth_hash.auto import keccak
 
-from starkware.cairo.bootloader.fact_topology import FactTopology
+from starkware.cairo.bootloaders.fact_topology import FactTopology
 from starkware.python.utils import to_bytes
 
 

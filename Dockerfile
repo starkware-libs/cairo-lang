@@ -1,7 +1,9 @@
 FROM ciimage/python:3.7
 
 RUN apt update
-RUN apt install -y cmake libgmp3-dev g++ python3-pip python3.7-dev python3.7-venv npm
+RUN apt install -y make libgmp3-dev g++ python3-pip python3.7-dev python3.7-venv npm
+# Installing cmake via apt doesn't bring the most up-to-date version.
+RUN pip install cmake==3.22
 
 # Install solc and ganache
 RUN curl https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v0.6.12+commit.27d51765 -o /usr/local/bin/solc-0.6.12
@@ -19,7 +21,7 @@ WORKDIR /app/build/Release
 RUN make all -j8
 
 # Run tests.
-RUN ctest -V
+RUN ctest -V -j8
 
 WORKDIR /app/
 RUN src/starkware/cairo/lang/package_test/run_test.sh

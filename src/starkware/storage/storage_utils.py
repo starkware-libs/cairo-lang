@@ -1,11 +1,12 @@
 import dataclasses
 
 from starkware.python.utils import from_bytes, to_bytes
-from starkware.storage.storage import Fact, HashFunctionType
+from starkware.starkware_utils.commitment_tree.leaf_fact import LeafFact
+from starkware.storage.storage import HashFunctionType
 
 
 @dataclasses.dataclass(frozen=True)
-class LeafFact(Fact):
+class SimpleLeafFact(LeafFact):
     value: int
 
     @classmethod
@@ -19,9 +20,13 @@ class LeafFact(Fact):
         return self.serialize()
 
     @classmethod
-    def deserialize(cls, data: bytes) -> "LeafFact":
+    def deserialize(cls, data: bytes) -> "SimpleLeafFact":
         return cls(from_bytes(data))
 
     @classmethod
-    def empty(cls) -> "LeafFact":
+    def empty(cls) -> "SimpleLeafFact":
         return cls(value=0)
+
+    @property
+    def is_empty(self) -> bool:
+        return self.value == 0

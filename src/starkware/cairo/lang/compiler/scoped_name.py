@@ -14,7 +14,7 @@ class ScopedName:
         assert all([self.SEPARATOR not in part for part in self.path])
 
     @classmethod
-    def from_string(cls, scope: str):
+    def from_string(cls, scope: str) -> "ScopedName":
         if scope == "":
             # Handle the special case of an empty tuple.
             return cls()

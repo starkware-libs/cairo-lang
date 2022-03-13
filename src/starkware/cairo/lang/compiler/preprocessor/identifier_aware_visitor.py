@@ -1,8 +1,9 @@
 import dataclasses
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple, Type
 
 from starkware.cairo.lang.compiler.ast.cairo_types import (
     CairoType,
+    TypeCodeoffset,
     TypeFelt,
     TypePointer,
     TypeStruct,
@@ -16,6 +17,7 @@ from starkware.cairo.lang.compiler.identifier_definition import (
     FutureIdentifierDefinition,
     IdentifierDefinition,
     StructDefinition,
+    TypeDefinition,
 )
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierError, IdentifierManager
 from starkware.cairo.lang.compiler.identifier_utils import get_struct_definition
@@ -71,11 +73,15 @@ class IdentifierAwareVisitor(Visitor):
         self.identifiers.add_identifier(name, identifier_definition)
         self.identifier_locations[name] = location
 
-    def get_struct_definition(
-        self, name: ScopedName, location: Optional[Location]
-    ) -> StructDefinition:
+    def get_identifier_definition(
+        self,
+        name: ScopedName,
+        supported_types: Tuple[Type[IdentifierDefinition], ...],
+        location: Optional[Location],
+    ) -> IdentifierDefinition:
         """
-        Returns the struct definition that corresponds to the given identifier.
+        Returns the definition that corresponds to the given identifier.
+        Verifies that it's one of the given types.
         location is used if there is an error.
         """
 
@@ -85,15 +91,33 @@ class IdentifierAwareVisitor(Visitor):
         except IdentifierError as exc:
             raise PreprocessorError(str(exc), location=location)
 
-        struct_def = res.identifier_definition
-        if not isinstance(struct_def, StructDefinition):
+        identifier_definition = res.identifier_definition
+        if not isinstance(identifier_definition, supported_types):
+            possible_types = " or ".join(
+                supported_type.TYPE for supported_type in supported_types  # type: ignore
+            )
             raise PreprocessorError(
                 f"""\
-Expected '{res.canonical_name}' to be a {StructDefinition.TYPE}. Found: '{struct_def.TYPE}'.""",
+Expected '{res.canonical_name}' to be {possible_types}. Found: '{identifier_definition.TYPE}'.""",
                 location=location,
             )
 
-        return struct_def
+        return identifier_definition
+
+    def get_struct_definition(
+        self,
+        name: ScopedName,
+        location: Optional[Location],
+    ) -> StructDefinition:
+        """
+        Returns the struct definition that corresponds to the given identifier.
+        location is used if there is an error.
+        """
+        res = self.get_identifier_definition(
+            name=name, supported_types=(StructDefinition,), location=location
+        )
+        assert isinstance(res, StructDefinition)
+        return res
 
     def try_get_struct_definition(self, name: ScopedName) -> Optional[StructDefinition]:
         """
@@ -104,11 +128,16 @@ Expected '{res.canonical_name}' to be a {StructDefinition.TYPE}. Found: '{struct
         except PreprocessorError:
             return None
 
-    def get_canonical_struct_name(self, scoped_name: ScopedName, location: Optional[Location]):
+    def verify_possibly_future_struct(
+        self,
+        identifier_definition: IdentifierDefinition,
+        scoped_name: ScopedName,
+        location: Optional[Location],
+    ):
         """
-        Returns the canonical name for the struct given by scoped_name in the current
-        accessible_scopes.
-        This function also works for structs that do not have a StructDefinition yet.
+        Checks that the given IdentifierSearchResult represents a struct.
+        This function also works for structs that do not have a StructDefinition yet
+        (FutureDefinition).
 
         For example when parsing:
             struct S:
@@ -116,15 +145,11 @@ Expected '{res.canonical_name}' to be a {StructDefinition.TYPE}. Found: '{struct
             end
         We have to lookup S before S is defined in the identifier manager.
 
-        location is used if there is an error.
+        scoped_name and location are used if there is an error.
         """
-        result = self.identifiers.search(self.accessible_scopes, scoped_name)
-        canonical_name = result.get_canonical_name()
-        identifier_def = result.identifier_definition
-
-        identifier_type = identifier_def.TYPE
-        if isinstance(identifier_def, FutureIdentifierDefinition):
-            identifier_type = identifier_def.identifier_type.TYPE  # type: ignore
+        identifier_type = identifier_definition.TYPE
+        if isinstance(identifier_definition, FutureIdentifierDefinition):
+            identifier_type = identifier_definition.identifier_type.TYPE  # type: ignore
 
         if identifier_type != StructDefinition.TYPE:
             raise PreprocessorError(
@@ -133,13 +158,11 @@ Expected '{scoped_name}' to be a {StructDefinition.TYPE}. Found: '{identifier_ty
                 location=location,
             )
 
-        return canonical_name
-
     def resolve_type(self, cairo_type: CairoType) -> CairoType:
         """
         Resolves a CairoType instance to fully qualified name.
         """
-        if isinstance(cairo_type, TypeFelt):
+        if isinstance(cairo_type, (TypeFelt, TypeCodeoffset)):
             return cairo_type
         elif isinstance(cairo_type, TypePointer):
             return dataclasses.replace(cairo_type, pointee=self.resolve_type(cairo_type.pointee))
@@ -147,30 +170,59 @@ Expected '{scoped_name}' to be a {StructDefinition.TYPE}. Found: '{identifier_ty
             if cairo_type.is_fully_resolved:
                 return cairo_type
             try:
+                result = self.identifiers.search(self.accessible_scopes, cairo_type.scope)
+                result.assert_fully_parsed()
+                if isinstance(result.identifier_definition, TypeDefinition):
+                    return self.resolve_type(result.identifier_definition.cairo_type)
+
+                if (
+                    isinstance(result.identifier_definition, FutureIdentifierDefinition)
+                    and result.identifier_definition.identifier_type is TypeDefinition
+                ):
+                    raise PreprocessorError(
+                        "Cannot use a type before its definition.", location=cairo_type.location
+                    )
+
+                self.verify_possibly_future_struct(
+                    identifier_definition=result.identifier_definition,
+                    scoped_name=cairo_type.scope,
+                    location=cairo_type.location,
+                )
+
                 return dataclasses.replace(
                     cairo_type,
-                    scope=self.get_canonical_struct_name(
-                        scoped_name=cairo_type.scope, location=cairo_type.location
-                    ),
+                    scope=result.get_canonical_name(),
                     is_fully_resolved=True,
                 )
             except IdentifierError as exc:
                 raise PreprocessorError(str(exc), location=cairo_type.location)
         elif isinstance(cairo_type, TypeTuple):
+            check_no_duplicate_names(cairo_type)
             return dataclasses.replace(
-                cairo_type, members=[self.resolve_type(subtype) for subtype in cairo_type.members]
+                cairo_type,
+                members=[
+                    dataclasses.replace(member, typ=self.resolve_type(member.typ))
+                    for member in cairo_type.members
+                ],
             )
         else:
             raise NotImplementedError(f"Type {type(cairo_type).__name__} is not supported.")
 
-    def get_struct_size(self, struct_name: ScopedName, location: Optional[Location]):
-        return self.get_struct_definition(name=struct_name, location=location).size
+    def get_size_by_type_name(self, struct_name: ScopedName, location: Optional[Location]):
+        res = self.get_identifier_definition(
+            name=struct_name, supported_types=(StructDefinition, TypeDefinition), location=location
+        )
+        assert isinstance(res, (StructDefinition, TypeDefinition))
+        if isinstance(res, StructDefinition):
+            return res.size
+        else:
+            return self.get_size(res.cairo_type)
 
     def get_size(self, cairo_type: CairoType):
         """
         Returns the size of the given type.
         """
-        if isinstance(cairo_type, (TypeFelt, TypePointer)):
+        if isinstance(cairo_type, (TypeFelt, TypePointer, TypeCodeoffset)):
             return 1
         elif isinstance(cairo_type, TypeStruct):
             if cairo_type.is_fully_resolved:
@@ -181,11 +233,11 @@ Expected '{scoped_name}' to be a {StructDefinition.TYPE}. Found: '{identifier_ty
                 except DefinitionError as exc:
                     raise PreprocessorError(str(exc), location=cairo_type.location)
             else:
-                return self.get_struct_size(
+                return self.get_size_by_type_name(
                     struct_name=cairo_type.scope, location=cairo_type.location
                 )
         elif isinstance(cairo_type, TypeTuple):
-            return sum(self.get_size(member_type) for member_type in cairo_type.members)
+            return sum(self.get_size(member_type) for member_type in cairo_type.types)
         else:
             raise NotImplementedError(f"Type {type(cairo_type).__name__} is not supported.")
 
@@ -198,3 +250,22 @@ Expected '{scoped_name}' to be a {StructDefinition.TYPE}. Found: '{identifier_ty
             return False
 
         return parent.element_type == "struct"
+
+
+def check_no_duplicate_names(cairo_type: TypeTuple):
+    """
+    Verifies that there are no duplicate names in a tuple type. Raises a PreprocessorError
+    otherwise.
+    Does not check the inner types.
+    """
+    names = set()
+    for member in cairo_type.members:
+        member_name = member.name
+        if member_name is None:
+            continue
+        if member_name in names:
+            raise PreprocessorError(
+                "Named tuple cannot have two entries with the same name.",
+                location=member.location,
+            )
+        names.add(member_name)

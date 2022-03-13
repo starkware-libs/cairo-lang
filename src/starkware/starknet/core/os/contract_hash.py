@@ -110,6 +110,14 @@ def compute_hinted_contract_definition_hash(contract_definition: ContractDefinit
         # Remove attributes field from raw dictionary, for hash backward compatibility of
         # contracts deployed prior to adding this feature.
         del dumped_program["attributes"]
+    else:
+        # Remove accessible_scopes and flow_tracking_data fields from raw dictionary, for hash
+        # backward compatibility of contracts deployed prior to adding this feature.
+        for attr in dumped_program["attributes"]:
+            if len(attr["accessible_scopes"]) == 0:
+                del attr["accessible_scopes"]
+            if attr["flow_tracking_data"] is None:
+                del attr["flow_tracking_data"]
 
     input_to_hash = dict(program=dumped_program, abi=contract_definition.abi)
     return starknet_keccak(data=json.dumps(input_to_hash, sort_keys=True).encode())

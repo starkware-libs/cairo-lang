@@ -425,7 +425,7 @@ class SharedState(SharedStateBase):
                 for contract_state in current_carried_state.contract_states.values()
             )
         )
-        contract_states = ChainMap(
+        contract_states: typing.ChainMap[int, ContractCarriedState] = ChainMap(
             dict(safe_zip(current_carried_state.contract_states.keys(), updated_contract_states))
         )
 

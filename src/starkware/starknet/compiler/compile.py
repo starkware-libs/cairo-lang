@@ -17,6 +17,7 @@ from starkware.cairo.lang.compiler.identifier_definition import FunctionDefiniti
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierScope, MissingIdentifierError
 from starkware.cairo.lang.compiler.module_reader import ModuleReader
 from starkware.cairo.lang.compiler.preprocessor.pass_manager import PassManager
+from starkware.cairo.lang.compiler.preprocessor.preprocessor import PreprocessedProgram
 from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.starknet.compiler.external_wrapper import (
@@ -28,7 +29,8 @@ from starkware.starknet.compiler.external_wrapper import (
 )
 from starkware.starknet.compiler.starknet_pass_manager import starknet_pass_manager
 from starkware.starknet.compiler.starknet_preprocessor import StarknetPreprocessedProgram
-from starkware.starknet.public.abi import get_selector_from_name
+from starkware.starknet.compiler.validation_utils import verify_account_contract
+from starkware.starknet.public.abi import AbiType, get_selector_from_name
 from starkware.starknet.services.api.contract_definition import (
     ContractDefinition,
     ContractEntryPoint,
@@ -94,6 +96,11 @@ def get_entry_points_by_decorators(
     )
 
 
+def get_abi(preprocessed: PreprocessedProgram) -> AbiType:
+    assert isinstance(preprocessed, StarknetPreprocessedProgram)
+    return preprocessed.abi
+
+
 def compile_starknet_files(
     files,
     debug_info: bool = False,
@@ -131,11 +138,10 @@ def compile_starknet_codes(
     # Dump and load program, so that it is converted to the canonical form.
     program = Program.load(data=program.dump())
 
-    assert isinstance(preprocessed, StarknetPreprocessedProgram)
     return ContractDefinition(
         program=program,
         entry_points_by_type=get_entry_points_by_type(program=program),
-        abi=preprocessed.abi,
+        abi=get_abi(preprocessed=preprocessed),
     )
 
 
@@ -145,7 +151,7 @@ def assemble_starknet_contract(
     add_debug_info: bool,
     file_contents_for_debug_info: Dict[str, str],
 ) -> ContractDefinition:
-    assert isinstance(preprocessed_program, StarknetPreprocessedProgram)
+    abi = get_abi(preprocessed=preprocessed_program)
     program = assemble(
         preprocessed_program,
         main_scope=main_scope,
@@ -156,7 +162,7 @@ def assemble_starknet_contract(
     return ContractDefinition(
         program=program,
         entry_points_by_type=get_entry_points_by_type(program=program),
-        abi=preprocessed_program.abi,
+        abi=abi,
     )
 
 
@@ -165,6 +171,9 @@ def main():
     parser.add_argument("--abi", type=argparse.FileType("w"), help="Output the contract's ABI.")
     parser.add_argument(
         "--disable_hint_validation", action="store_true", help="Disable the hint validation."
+    )
+    parser.add_argument(
+        "--account_contract", action="store_true", help="Compile as account contract."
     )
 
     def pass_manager_factory(args: argparse.Namespace, module_reader: ModuleReader) -> PassManager:
@@ -182,9 +191,10 @@ def main():
             pass_manager_factory=pass_manager_factory,
             assemble_func=assemble_starknet_contract,
         )
-        assert isinstance(preprocessed, StarknetPreprocessedProgram)
+        abi = get_abi(preprocessed=preprocessed)
+        verify_account_contract(contract_abi=abi, is_account_contract=args.account_contract)
         if args.abi is not None:
-            json.dump(preprocessed.abi, args.abi, indent=4, sort_keys=True)
+            json.dump(abi, args.abi, indent=4, sort_keys=True)
             args.abi.write("\n")
     except LocationError as err:
         print(err, file=sys.stderr)

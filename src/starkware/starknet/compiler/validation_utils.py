@@ -12,6 +12,7 @@ from starkware.cairo.lang.compiler.preprocessor.identifier_aware_visitor import 
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
 from starkware.starknet.compiler.data_encoder import ArgumentInfo, EncodingType, encode_data
 from starkware.starknet.definitions import constants
+from starkware.starknet.public.abi import EXECUTE_ENTRY_POINT_NAME, AbiType
 
 TAttr = TypeVar("TAttr")
 
@@ -68,6 +69,27 @@ def verify_no_return_values(elm: CodeElementFunction, name_in_error_message: str
         raise PreprocessorError(
             message=f"{name_in_error_message} must have no return values.",
             location=elm.returns.location,
+        )
+
+
+def verify_account_contract(contract_abi: AbiType, is_account_contract: bool):
+    """
+    Verifies that the given abi is that of a StarkNet account contract if and only if it
+    has an entry point named "__execute__" and raises an exception otherwise.
+    """
+    contains_execute_entry_point = any(
+        entry_point["type"] == "function" and entry_point["name"] == EXECUTE_ENTRY_POINT_NAME
+        for entry_point in contract_abi
+    )
+    if contains_execute_entry_point and (not is_account_contract):
+        raise PreprocessorError(
+            message=f"Only account contracts may have a function named "
+            f'"{EXECUTE_ENTRY_POINT_NAME}". Use --account_contract flag.'
+        )
+
+    if (not contains_execute_entry_point) and is_account_contract:
+        raise PreprocessorError(
+            message=f'Account contracts must have a function named "{EXECUTE_ENTRY_POINT_NAME}".'
         )
 
 

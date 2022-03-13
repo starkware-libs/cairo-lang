@@ -19,7 +19,7 @@ def test_from_expr():
     assert RegChange.from_expr(ExprIdentifier("asd")) == RegChangeUnknown()
 
     with pytest.raises(TypeError):
-        RegChange.from_expr("wrong type")
+        RegChange.from_expr("wrong type")  # type: ignore
 
 
 def test_reg_change_add():
@@ -28,7 +28,7 @@ def test_reg_change_add():
     assert RegChangeUnknown() + RegChangeKnown(2) == RegChangeUnknown()
 
     with pytest.raises(TypeError):
-        RegChangeKnown(3) + "asd"
+        RegChangeKnown(3) + "asd"  # type: ignore
 
     with pytest.raises(TypeError):
         RegChangeUnconstrained() + RegChangeKnown(0)

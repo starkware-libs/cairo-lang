@@ -13,9 +13,13 @@ class TransactionFailureReason(ValidatedMarshmallowDataclass):
     transaction.
     """
 
-    tx_id: int
     code: str
     error_message: Optional[str]
+
+    @marshmallow.decorators.pre_load
+    def remove_tx_id(self, data: Dict[str, Any], many: bool, **kwargs) -> Dict[str, Any]:
+        data.pop("tx_id", None)
+        return data
 
     @marshmallow.decorators.post_dump
     def truncate_error_message(self, data: Dict[str, Any], many: bool, **kwargs) -> Dict[str, Any]:

@@ -58,7 +58,7 @@ function(python_lib LIB)
   # Copy files.
   copy_files(${LIB}_copy_files ${CMAKE_CURRENT_SOURCE_DIR} ${LIB_DIR} ${ARGS_FILES})
   get_target_property(COPY_STAMP ${LIB}_copy_files STAMP_FILE)
-  set(ALL_FILE_DEPS ${ALL_FILE_DEPS} ${COPY_STAMP})
+  list(APPEND ALL_FILE_DEPS ${COPY_STAMP})
 
   # Copy artifacts.
   foreach(ARTIFACT ${ARGS_ARTIFACTS})
@@ -73,22 +73,25 @@ function(python_lib LIB)
       DEPENDS ${ARTIFACT_SRC}
       COMMENT "Copying artifact ${ARTIFACT_SRC} to ${LIB_DIR}/${ARTIFACT_DEST}"
     )
-    set(ALL_FILE_DEPS ${ALL_FILE_DEPS} ${LIB_DIR}/${ARTIFACT_DEST})
-    set(LIB_FILES ${LIB_FILES} ${ARGS_PREFIX}${ARTIFACT_DEST})
+    list(APPEND ALL_FILE_DEPS ${LIB_DIR}/${ARTIFACT_DEST})
+    list(APPEND LIB_FILES ${ARGS_PREFIX}${ARTIFACT_DEST})
   endforeach()
 
   # Create a list of all dependencies regardless of python's version.
-  execute_process(
-    COMMAND ${UNITE_LIBS_EXECUTABLE} ${ARGS_LIBS}
-    OUTPUT_VARIABLE UNITED_LIBS
-  )
+  set(UNITED_LIBS ${ARGS_LIBS})
+  if("${UNITED_LIBS}" MATCHES ":")
+    execute_process(
+      COMMAND ${UNITE_LIBS_EXECUTABLE} ${UNITED_LIBS}
+      OUTPUT_VARIABLE UNITED_LIBS
+    )
+  endif()
   separate_arguments(UNITED_LIBS)
 
   # Info target.
   set(DEP_INFO)
   foreach(DEP_LIB ${UNITED_LIBS} ${ARGS_PY_EXE_DEPENDENCIES})
     get_lib_info_file(DEP_INFO_FILE ${DEP_LIB})
-    set(DEP_INFO ${DEP_INFO} ${DEP_INFO_FILE})
+    LIST(APPEND DEP_INFO ${DEP_INFO_FILE})
   endforeach()
 
   get_lib_info_file(INFO_FILE ${LIB})
@@ -140,7 +143,7 @@ function(python_venv VENV_NAME)
   set(DEP_INFO)
   foreach(DEP_LIB ${ARGS_LIBS})
     get_lib_info_file(DEP_INFO_FILE ${DEP_LIB})
-    set(DEP_INFO ${DEP_INFO} ${DEP_INFO_FILE})
+    list(APPEND DEP_INFO ${DEP_INFO_FILE})
   endforeach()
 
   add_custom_command(

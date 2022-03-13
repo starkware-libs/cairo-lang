@@ -1,27 +1,32 @@
 import pytest
 
+from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.cairo.lang.compiler.ast.code_elements import CodeElementFunction
-from starkware.cairo.lang.compiler.ast.module import CairoModule
+from starkware.cairo.lang.compiler.cairo_compile import compile_cairo
 from starkware.cairo.lang.compiler.error_handling import LocationError
 from starkware.cairo.lang.compiler.identifier_definition import (
     ConstDefinition,
     FunctionDefinition,
     LabelDefinition,
     ReferenceDefinition,
+    TypeDefinition,
 )
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierError
 from starkware.cairo.lang.compiler.instruction_builder import InstructionBuilderError
 from starkware.cairo.lang.compiler.parser import parse_type
 from starkware.cairo.lang.compiler.preprocessor.default_pass_manager import default_pass_manager
+from starkware.cairo.lang.compiler.preprocessor.flow import FlowTrackingDataActual
 from starkware.cairo.lang.compiler.preprocessor.preprocess_codes import preprocess_codes
 from starkware.cairo.lang.compiler.preprocessor.preprocessor import AttributeScope
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_test_utils import (
+    CAIRO_TEST_MODULES,
     PRIME,
     TEST_SCOPE,
     preprocess_str,
     strip_comments_and_linebreaks,
     verify_exception,
 )
+from starkware.cairo.lang.compiler.preprocessor.reg_tracking import RegTrackingData
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.compiler.test_utils import read_file_from_dict
 from starkware.cairo.lang.compiler.type_casts import CairoTypeError
@@ -173,8 +178,9 @@ future_label2:
 
 def test_assign_future_function_label():
     code = """\
-g(f)
-g((f + 1) * 2 + 3)
+start:
+g(f - start)
+g((f - start + 1) * 2 + 3)
 
 func f() -> ():
     ret
@@ -825,25 +831,71 @@ with x as y:
 
 def test_with_attr_statement():
     code = """
-[ap] = 0
-with_attr attr_name("attribute value"):
-    [ap] = 1
+func a():
+    alloc_locals
+    local x = 0
+    ap += 7
+    with_attr attr_name("attribute value"):
+        [ap] = 1
+    end
+    [ap] = 2
+    ret
 end
-[ap] = 2
 """
     program = preprocess_str(code=code, prime=PRIME)
     assert (
         program.format()
         == """\
-[ap] = 0
+ap += 1
+[fp] = 0
+ap += 7
 [ap] = 1
 [ap] = 2
+ret
 """
     )
+    expected_flow_tracking_data = FlowTrackingDataActual(
+        ap_tracking=RegTrackingData(group=0, offset=8),
+        reference_ids={ScopedName.from_string("test_scope.a.x"): 0},
+    )
+    expected_accessible_scopes = [
+        ScopedName.from_string("test_scope"),
+        ScopedName.from_string("test_scope.a"),
+    ]
     expected_attributes = [
-        AttributeScope(name="attr_name", value="attribute value", start_pc=2, end_pc=4)
+        AttributeScope(
+            name="attr_name",
+            value="attribute value",
+            start_pc=6,
+            end_pc=8,
+            flow_tracking_data=expected_flow_tracking_data,
+            accessible_scopes=expected_accessible_scopes,
+        )
     ]
     assert program.attributes == expected_attributes
+
+
+def test_attribute_scope_deserialization_with_missing_fields():
+    """
+    Check that AttributeScope can be deserialized even if accessible_scopes or flow_tracking_data
+    are missing from the serialization.
+    """
+    code = """
+with_attr attr_name("attribute value"):
+    [ap] = 1
+end
+"""
+    program = compile_cairo(code, prime=DEFAULT_PRIME)
+    assert len(program.attributes) == 1
+
+    serialized_program = program.dump()
+    serialized_attribute = serialized_program["attributes"][0]
+    del serialized_attribute["accessible_scopes"]
+    del serialized_attribute["flow_tracking_data"]
+
+    deserialized_attribute = program.load(data=serialized_program).attributes[0]
+    assert deserialized_attribute.accessible_scopes == []
+    assert deserialized_attribute.flow_tracking_data is None
 
 
 def test_implicit_args():
@@ -1217,9 +1269,10 @@ struct T:
     member s : felt
     member t : S
 end
-func f(x, y : T, z : T):
+func f(w : S, x, y : T, z : T):
+    let s = S(a=13, b=17)
     let t : T = [cast(ap, T*)]
-    let res = f(x=2, y=z, z=t)
+    let res = f(w=s, x=2, y=z, z=t)
     return()
 end
 """
@@ -1227,14 +1280,16 @@ end
     assert (
         program.format()
         == """\
+[ap] = 13; ap++
+[ap] = 17; ap++
 [ap] = 2; ap++
 [ap] = [fp + (-5)]; ap++
 [ap] = [fp + (-4)]; ap++
 [ap] = [fp + (-3)]; ap++
-[ap] = [ap + (-4)]; ap++
-[ap] = [ap + (-4)]; ap++
-[ap] = [ap + (-4)]; ap++
-call rel -8
+[ap] = [ap + (-6)]; ap++
+[ap] = [ap + (-6)]; ap++
+[ap] = [ap + (-6)]; ap++
+call rel -12
 ret
 """
     )
@@ -1390,7 +1445,9 @@ end
     }
     program = preprocess_codes(
         codes=[(files["."], ".")],
-        pass_manager=default_pass_manager(prime=PRIME, read_module=read_file_from_dict(files)),
+        pass_manager=default_pass_manager(
+            prime=PRIME, read_module=read_file_from_dict(dct={**files, **CAIRO_TEST_MODULES})
+        ),
     )
 
     assert (
@@ -1437,7 +1494,9 @@ const xi = 42
     # Preprocess program.
     program = preprocess_codes(
         codes=[(files["."], ".")],
-        pass_manager=default_pass_manager(prime=PRIME, read_module=read_file_from_dict(files)),
+        pass_manager=default_pass_manager(
+            prime=PRIME, read_module=read_file_from_dict(dct={**files, **CAIRO_TEST_MODULES})
+        ),
         main_scope=scope("__main__"),
     )
 
@@ -1648,7 +1707,6 @@ def test_process_file_scope():
     valid_scope = ScopedName.from_string("some.valid.scope")
     program = preprocess_str("const x = 4", prime=PRIME, main_scope=valid_scope)
 
-    module = CairoModule(cairo_file=program, module_name=valid_scope)
     assert program.identifiers.as_dict() == {valid_scope + "x": ConstDefinition(4)}
 
 
@@ -2207,6 +2265,47 @@ new type: 'felt**'.
 let x = cast(ap, felt**)
     ^
 """,
+    )
+
+
+def test_invalid_references():
+    verify_exception(
+        """
+let x = 3 * cast(nondet %{ rnadom.randrange(10) %}, felt) + 5
+""",
+        """
+file:?:?: The use of hints in reference expressions is not allowed.
+let x = 3 * cast(nondet %{ rnadom.randrange(10) %}, felt) + 5
+            ^*******************************************^
+""",
+    )
+
+
+def test_rvalue_func_call_reference_with_nondet():
+    """
+    Tests that nondet hints are computed exactly once when used as arguments to function calls
+    in a reference expression.
+    """
+    program = preprocess_str(
+        code="""
+func foo(val) -> (res):
+    return (res=val)
+end
+let x = foo(nondet %{ 5 %})
+assert x = x
+""",
+        prime=PRIME,
+    )
+    assert (
+        program.format()
+        == """\
+[ap] = [fp + (-3)]; ap++
+ret
+%{ memory[ap] = to_felt_or_relocatable(5) %}
+ap += 1
+call rel -4
+[ap + (-1)] = [ap + (-1)]
+"""
     )
 
 
@@ -3064,7 +3163,7 @@ func foo():
 end
 """,
         """
-file:?:?: Expected 'test_scope.foo' to be a struct. Found: 'function'.
+file:?:?: Expected 'test_scope.foo' to be struct or type_definition. Found: 'function'.
     local a : foo
               ^*^
 """,
@@ -3621,6 +3720,63 @@ assert (1, 1) = 1
     )
 
 
+def test_named_tuple_types():
+    code = """
+func foo(a : (felt, (x : felt, y : felt))):
+    tempvar tmp0 = a[0]
+    tempvar tmp1 = a[1].y
+    tempvar tmp2 = a[1][1]
+    ret
+end
+
+foo((0, (x=1, y=2)))
+# You can pass named to unnamed and vice versa.
+foo((a=0, b=(1, 2)))
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert (
+        program.format()
+        == """\
+[ap] = [fp + (-5)]; ap++
+[ap] = [fp + (-3)]; ap++
+[ap] = [fp + (-3)]; ap++
+ret
+[ap] = 0; ap++
+[ap] = 1; ap++
+[ap] = 2; ap++
+call rel -10
+[ap] = 0; ap++
+[ap] = 1; ap++
+[ap] = 2; ap++
+call rel -18
+"""
+    )
+
+
+def test_named_tuple_types_failure():
+    verify_exception(
+        """
+func foo(arg : (a : (b : felt, b : felt), c : felt)):
+end
+""",
+        """
+file:?:?: Named tuple cannot have two entries with the same name.
+func foo(arg : (a : (b : felt, b : felt), c : felt)):
+                               ^******^
+""",
+    )
+    verify_exception(
+        """
+let x = (a=(b=1, b=2), c=0)
+""",
+        """
+file:?:?: Named tuple cannot have two entries with the same name.
+let x = (a=(b=1, b=2), c=0)
+                 ^*^
+""",
+    )
+
+
 def test_struct_constructor():
     code = """\
 struct M:
@@ -3744,7 +3900,7 @@ end
     verify_exception_for_expr(
         "T(x=5, y=6, z=7)",
         """
-file:?:?: Cannot cast an expression of type '(felt, felt, felt)' to 'test_scope.T'.
+file:?:?: Cannot cast an expression of type '(x : felt, y : felt, z : felt)' to 'test_scope.T'.
 The former has 3 members while the latter has 2 members.
     local a : T = T(x=5, y=6, z=7)
                   ^**************^
@@ -3754,7 +3910,7 @@ The former has 3 members while the latter has 2 members.
     verify_exception_for_expr(
         "T(x=5)",
         """
-file:?:?: Cannot cast an expression of type '(felt)' to 'test_scope.T'.
+file:?:?: Cannot cast an expression of type '(x : felt)' to 'test_scope.T'.
 The former has 1 members while the latter has 2 members.
     local a : T = T(x=5)
                   ^****^
@@ -3791,7 +3947,7 @@ file:?:?: Argument name mismatch for 'test_scope.T': expected 'y', found 'x'.
     verify_exception_for_expr(
         "T(5, 6).x",
         """
-file:?:?: Accessing struct members for r-value structs is not supported yet.
+file:?:?: Accessing struct/tuple members for r-value structs is not supported yet.
     local a : T = T(5, 6).x
                   ^*******^
 """,
@@ -3846,7 +4002,9 @@ func2()
     }
     program = preprocess_codes(
         codes=[(files["."], ".")],
-        pass_manager=default_pass_manager(prime=PRIME, read_module=read_file_from_dict(files)),
+        pass_manager=default_pass_manager(
+            prime=PRIME, read_module=read_file_from_dict(dct={**files, **CAIRO_TEST_MODULES})
+        ),
     )
     assert (
         program.format()
@@ -3863,13 +4021,13 @@ call rel -5
         codes=[(files["."], ".")],
         pass_manager=default_pass_manager(
             prime=PRIME,
-            read_module=read_file_from_dict(files),
+            read_module=read_file_from_dict(dct={**files, **CAIRO_TEST_MODULES}),
             opt_unused_functions=False,
         ),
     )
-    assert (
-        program.format()
-        == """\
+    assert program.format() == strip_comments_and_linebreaks(
+        """\
+ret  # get_ap is here because opt_unused_functions is false.
 [ap] = 0; ap++
 ret
 [ap] = 1; ap++
@@ -3936,4 +4094,335 @@ Preprocessed instruction:
 dw [ap + (-1)]
 """,
         exc_type=InstructionBuilderError,
+    )
+
+
+def test_label_arithmetic_flow():
+    code = """
+label1:
+assert 4 = label2 - label1
+label2:
+assert 4 = label2 - label1
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert (
+        program.format()
+        == """\
+[ap] = 4; ap++
+4 = [ap + (-1)]
+[ap] = 4; ap++
+4 = [ap + (-1)]
+"""
+    )
+
+
+def test_label_arithmetic_failure():
+    verify_exception(
+        """
+tempvar code_offset : codeoffset
+assert 0 = code_offset - 5
+""",
+        """
+file:?:?: Operator '-' is not implemented for types 'codeoffset' and 'felt'.
+assert 0 = code_offset - 5
+           ^*************^
+""",
+        exc_type=CairoTypeError,
+    )
+
+    verify_exception(
+        """
+func foo():
+    assert foo = 5
+    return()
+end
+
+""",
+        """
+file:?:?: Cannot compare 'codeoffset' and 'felt'.
+    assert foo = 5
+    ^************^
+""",
+    )
+
+
+def test_future_label_substraction_failure():
+    """
+    Subtracting two future labels doesn't work at the moment.
+    The test is here to check the error message.
+    """
+
+    verify_exception(
+        """
+assert 0 = label2 - label1
+label1:
+label2:
+""",
+        """
+file:?:?: Expected a constant expression or a dereference expression.
+assert 0 = label2 - label1
+                    ^****^
+Preprocessed instruction:
+[ap] = [ap + (-1)] - label1; ap++
+""",
+        exc_type=InstructionBuilderError,
+    )
+
+
+def test_future_label_minus_tempvar():
+    code = """
+tempvar a = cast(0, codeoffset)
+assert 0 = label1 - a
+label1:
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert (
+        program.format()
+        == """\
+[ap] = 0; ap++
+[ap] = 7; ap++
+[ap] = [ap + (-1)] - [ap + (-2)]; ap++
+0 = [ap + (-1)]
+"""
+    )
+
+
+def test_new_operator_flow():
+    code = """
+struct MyStruct:
+    member a : felt
+    member b : felt
+end
+
+func test() -> (my_struct: MyStruct*):
+    tempvar t = 37
+    tempvar my_struct = new MyStruct(a=1, b=2)
+
+    # Check that 't' wasn't revoked and that the type of a is MyStruct*.
+    assert cast(t, MyStruct*) = my_struct
+    assert cast(t, MyStruct*) = new MyStruct(a=3, b=[new 4])
+    return (my_struct=my_struct)
+end
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert program.format() == strip_comments_and_linebreaks(
+        """\
+# A dummy get_ap().
+ret
+
+[ap] = 37; ap++
+
+# tempvar my_struct = new MyStruct(a=1, b=2).
+[ap] = 1; ap++
+[ap] = 2; ap++
+call rel -7  # call get_ap()
+[ap] = [ap + (-1)] + (-2); ap++  # [ap] = get_ap() - MyStruct.SIZE
+# assert cast(t, MyStruct*) = my_struct.
+[ap + (-6)] = [ap + (-1)]
+
+# new 4.
+[ap] = 4; ap++
+call rel -14
+[ap] = [ap + (-1)] + (-1); ap++
+
+# new MyStruct(a=3, b=[new 4]).
+[ap] = 3; ap++
+[ap] = [[ap + (-2)]]; ap++
+call rel -21
+[ap] = [ap + (-1)] + (-2); ap++
+
+# assert cast(t, MyStruct*) = new MyStruct(a=3, b=[new 4]).
+[ap + (-15)] = [ap + (-1)]
+# return (my_struct=my_struct).
+[ap] = [ap + (-10)]; ap++
+ret
+"""
+    )
+
+    code = """
+func test() -> (felt_ptr : felt*):
+    return (felt_ptr=new ([fp] + 5))
+end
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert program.format() == strip_comments_and_linebreaks(
+        """\
+# A dummy get_ap().
+ret
+
+[ap] = [fp] + 5; ap++
+call rel -3  # call get_ap()
+[ap] = [ap + (-1)] + (-1); ap++
+ret
+"""
+    )
+
+    code = """
+func test() -> (tuple_ptr : (felt, felt)*):
+    return (tuple_ptr=new (7, 8))
+end
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert program.format() == strip_comments_and_linebreaks(
+        """\
+# A dummy get_ap().
+ret
+
+[ap] = 7; ap++
+[ap] = 8; ap++
+call rel -5  # call get_ap()
+[ap] = [ap + (-1)] + (-2); ap++
+ret
+"""
+    )
+
+
+def test_new_operator_failure():
+    verify_exception(
+        """
+new MyStruct(a=1, b=2) = 13
+""",
+        """
+file:?:?: The new operator is not supported outside of a function.
+new MyStruct(a=1, b=2) = 13
+^********************^
+""",
+    )
+
+    verify_exception(
+        """
+struct MyStruct:
+    member a : felt
+    member b : felt
+end
+func test():
+    new MyStruct(a=1, b=2) = 13
+    return()
+end
+""",
+        """
+file:?:?: Expected a dereference expression.
+    new MyStruct(a=1, b=2) = 13
+    ^********************^
+Preprocessed instruction:
+new (1, 2) = 13
+""",
+        exc_type=InstructionBuilderError,
+    )
+
+    verify_exception(
+        """
+new MyStruct(a=1, b=2) = 13
+""",
+        """
+file:?:?: The new operator is not supported outside of a function.
+new MyStruct(a=1, b=2) = 13
+^********************^
+""",
+    )
+    verify_exception(
+        """
+func test():
+    alloc_locals
+    local x = new 5
+    return()
+end
+
+""",
+        """
+file:?:?: Cannot cast 'felt*' to 'felt'.
+    local x = new 5
+              ^***^
+""",
+        exc_type=CairoTypeError,
+    )
+
+    verify_exception(
+        """
+func test():
+    let x = new 5
+    return()
+end
+
+""",
+        """
+file:?:?: The use of 'new' in reference expressions is not allowed.
+    let x = new 5
+            ^***^
+""",
+    )
+
+
+def test_type_definition():
+    code = """
+namespace a:
+    namespace b:
+        using Point = (felt, felt)
+    end
+    namespace c:
+        using TwoPoints = (b.Point, b.Point)
+    end
+end
+
+func foo(z : a.b.Point):
+    alloc_locals
+    tempvar x : a.c.TwoPoints = ((0, 1), [cast(fp, a.b.Point*)])
+    local y : a.c.TwoPoints
+    assert x[0] = z
+    return ()
+end
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert (
+        program.format()
+        == """\
+ap += 4
+[ap] = 0; ap++
+[ap] = 1; ap++
+[ap] = [fp]; ap++
+[ap] = [fp + 1]; ap++
+[ap + (-4)] = [fp + (-4)]
+[ap + (-3)] = [fp + (-3)]
+ret
+"""
+    )
+    two_points = program.identifiers.get_by_full_name(TEST_SCOPE + "a.c.TwoPoints")
+    assert (
+        isinstance(two_points, TypeDefinition)
+        and two_points.cairo_type.format() == "((felt, felt), (felt, felt))"
+    )
+
+
+def test_type_definition_failure():
+    verify_exception(
+        """
+using Point = Point
+""",
+        """
+file:?:?: Cannot use a type before its definition.
+using Point = Point
+              ^***^
+""",
+    )
+    verify_exception(
+        """
+using Point2 = (Point, Point)
+using Point = (felt, felt)
+""",
+        """
+file:?:?: Cannot use a type before its definition.
+using Point2 = (Point, Point)
+                ^***^
+""",
+    )
+    verify_exception(
+        """
+%{ %}
+using Point = (felt, felt)
+""",
+        """
+file:?:?: Hints before "using" statements are not allowed.
+%{ %}
+^***^
+""",
     )

@@ -49,6 +49,7 @@ python_lib(starknet_testing_lib
     starknet_compile_lib
     starknet_contract_definition_lib
     starknet_definitions_lib
+    starknet_feeder_gateway_response_objects_lib
     starknet_general_config_lib
     starknet_internal_transaction_interface_lib
     starknet_internal_transaction_lib
@@ -79,6 +80,7 @@ full_python_test(starknet_testing_test
     LIBS
     cairo_common_lib
     starknet_mock_messaging_contracts_lib
+    starknet_test_external_contract_test_utils_lib
     starknet_testing_lib
     starkware_eth_test_utils_lib
     pip_pytest

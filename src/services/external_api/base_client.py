@@ -117,15 +117,18 @@ class BaseClient(HasUriPrefix):
 
                             return text
             except aiohttp.ClientError as exception:
-                error_message = f"Got {type(exception).__name__}"
+                error_message = f"Got {type(exception).__name__} while trying to access {url}."
 
                 if limited_retries and n_retries_left == 0:
                     logger.error(error_message, exc_info=True)
                     raise
 
-                logger.debug(f"{error_message}, retrying...", exc_info=True)
+                logger.debug(f"{error_message}, retrying...")
             except BadRequest as exception:
-                error_message = f"Got {type(exception).__name__}"
+                error_message = (
+                    f"Got {type(exception).__name__} while trying to access {url}. "
+                    f"Status code: {exception.status_code}; text: {exception.text}."
+                )
 
                 if limited_retries and (
                     n_retries_left == 0
@@ -134,12 +137,7 @@ class BaseClient(HasUriPrefix):
                     logger.error(error_message, exc_info=True)
                     raise
 
-                logger.debug(
-                    f"{error_message} while trying to access {url}. "
-                    f"status_code: {exception.status_code}. text: {exception.text}, "
-                    "retrying...",
-                    exc_info=True,
-                )
+                logger.debug(f"{error_message}, retrying...")
 
             await asyncio.sleep(1)
 

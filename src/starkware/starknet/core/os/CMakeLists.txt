@@ -1,3 +1,5 @@
+add_subdirectory(os_config)
+
 cairo_compile(starknet_os_program
     starknet_os_compiled.json os.cairo "--debug_info_with_source")
 
@@ -45,6 +47,7 @@ python_lib(starknet_os_utils_lib
     starknet_business_logic_lib
     starknet_contract_definition_lib
     starknet_definitions_lib
+    starknet_execute_entry_point_base_lib
     starknet_general_config_lib
     starknet_internal_transaction_interface_lib
     starknet_storage_lib
@@ -97,7 +100,10 @@ full_python_test(starknet_transaction_hash_test
 
     LIBS
     cairo_common_lib
+    cairo_function_runner_lib
+    starknet_contract_definition_lib
     starknet_definitions_lib
+    starknet_os_utils_lib
     starknet_transaction_hash_lib
     starkware_crypto_lib
     pip_pytest

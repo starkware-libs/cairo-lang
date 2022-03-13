@@ -13,7 +13,7 @@ func select_builtins(
         n_builtins=n_builtins)
     %{ vm_exit_scope() %}
     # Assert that the correct number of builtins was selected.
-    n_selected_builtins = selected_encodings_end - selected_encodings
+    assert n_selected_builtins = selected_encodings_end - selected_encodings
 
     return ()
 end

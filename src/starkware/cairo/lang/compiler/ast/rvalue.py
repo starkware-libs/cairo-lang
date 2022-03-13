@@ -7,7 +7,7 @@ from starkware.cairo.lang.compiler.ast.formatting_utils import (
     INDENTATION,
     LocationField,
     ParticleFormattingConfig,
-    create_particle_sublist,
+    ParticleList,
     particles_in_lines,
 )
 from starkware.cairo.lang.compiler.ast.instructions import CallInstruction
@@ -123,12 +123,12 @@ class RvalueFuncCall(RvalueCall):
         if self.implicit_arguments is not None:
             particles[-1] += "{"
             particles.append(
-                create_particle_sublist([x.format() for x in self.implicit_arguments.args], "}(")
+                ParticleList(elements=[x.format() for x in self.implicit_arguments.args], end="}(")
             )
         else:
             particles[-1] += "("
 
-        particles.append(create_particle_sublist([x.format() for x in self.arguments.args], ")"))
+        particles.append(ParticleList(elements=[x.format() for x in self.arguments.args], end=")"))
         return particles
 
     def format(self, allowed_line_length):

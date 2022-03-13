@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Tuple
 
 from starkware.cairo.lang.vm.builtin_runner import BuiltinRunner, BuiltinVerifier
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
-from starkware.cairo.lang.vm.utils import MemorySegmentAddresses
+from starkware.cairo.lang.vm.utils import MemorySegmentRelocatableAddresses
 
 
 @dataclasses.dataclass
@@ -21,13 +21,18 @@ class OutputBuiltinRunner(BuiltinRunner):
         # A map from attribute name to its value. Serialized as part of the additional data of the
         # builtin.
         self.attributes: Dict[str, dict] = {}
+        self._base: Optional[RelocatableValue] = None
 
     def initialize_segments(self, runner):
-        self.base = runner.segments.add()
+        self._base = runner.segments.add()
         self.stop_ptr: Optional[RelocatableValue] = None
 
+    @property
+    def base(self) -> RelocatableValue:
+        assert self._base is not None, "Uninitialized self.base."
+        return self._base
+
     def initial_stack(self) -> List[MaybeRelocatable]:
-        assert self.base is not None, "Uninitialized self.base."
         return [self.base] if self.included else []
 
     def final_stack(self, runner, pointer):
@@ -63,7 +68,7 @@ class OutputBuiltinRunner(BuiltinRunner):
         _, size = self.get_used_cells_and_allocated_size(runner)
 
         # A map from an offset to its page id.
-        offset_to_page = {}
+        offset_to_page: Dict[int, int] = {}
         for page_id, page in self.pages.items():
             assert page.start + page.size <= size, f"Page {page_id} is out of bounds."
             for i in range(page.start, page.start + page.size):
@@ -79,7 +84,7 @@ class OutputBuiltinRunner(BuiltinRunner):
 
     def get_memory_segment_addresses(self, runner):
         return {
-            "output": MemorySegmentAddresses(
+            "output": MemorySegmentRelocatableAddresses(
                 begin_addr=self.base,
                 stop_ptr=self.stop_ptr,
             )
@@ -98,6 +103,7 @@ class OutputBuiltinRunner(BuiltinRunner):
             and page_start.segment_index == self.base.segment_index
         ), "page_start must be in the output segment."
         start = page_start - self.base
+        assert isinstance(start, int)
         self.pages[page_id] = PublicMemoryPage(start=start, size=page_size)
 
     def add_attribute(self, attribute_name: str, attribute_value: dict):
@@ -154,16 +160,16 @@ class OutputBuiltinRunner(BuiltinRunner):
 
           output_builtin_runner.set_state(old_state)
         """
-        self.base = state.base
+        self._base = state.base
         self.pages = state.pages
         self.attributes = state.attributes
 
-    def new_state(self, base):
+    def new_state(self, base: RelocatableValue):
         """
         Clears the state of the output builtin and sets self.base to the given value.
         See set_state().
         """
-        self.base = base
+        self._base = base
         self.pages = {}
         self.attributes = {}
 

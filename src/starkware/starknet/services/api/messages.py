@@ -4,7 +4,7 @@ from dataclasses import field
 from typing import List
 
 from services.everest.definitions import fields as everest_fields
-from starkware.cairo.bootloader.compute_fact import keccak_ints
+from starkware.cairo.bootloaders.compute_fact import keccak_ints
 from starkware.starknet.business_logic.internal_transaction import InternalInvokeFunction
 from starkware.starknet.definitions import fields
 from starkware.starknet.services.api.contract_definition import EntryPointType
@@ -56,7 +56,7 @@ class StarknetMessageToL2(StarknetMessage):
     to_address: int = field(metadata=fields.ContractAddressField.metadata(field_name="to_address"))
     l1_handler_selector: int
     payload: List[int] = field(metadata=fields.felt_list_metadata)
-    nonce: int = field(metadata=everest_fields.felt_metadata(name_in_error_message="nonce"))
+    nonce: int = field(metadata=fields.nonce_metadata)
 
     def encode(self) -> List[int]:
         return [

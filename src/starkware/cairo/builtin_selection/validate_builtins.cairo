@@ -20,13 +20,16 @@ func validate_builtin{range_check_ptr}(
 end
 
 # Validates that the builtin pointers were advanced correctly.
+#
 # The inputs are:
 #   The previous list of builtin pointers.
 #   The new list of builtin pointers.
 #   The sizes of the builtin instances.
 #   The number of builtins.
-# For each builtin the function validates that difference between the new builtin pointer and
-# the old builtin pointer is positive integer divisible by the corresponding builtin instance size.
+#
+# For each builtin the function validates that the difference between the new builtin pointer and
+# the old builtin pointer is a nonnegative integer divisible by the corresponding builtin
+# instance size.
 #
 # The function consumes n_builtins range check instances starting at range_check_ptr and returns the
 # updated range check pointer.

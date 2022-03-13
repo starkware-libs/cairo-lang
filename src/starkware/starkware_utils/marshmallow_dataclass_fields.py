@@ -29,6 +29,9 @@ StrictOptionalInteger: Callable[[VarArg(), KwArg()], mfields.Integer] = functool
 )
 
 
+# Class definitions.
+
+
 class IntAsStr(mfields.Field):
     """
     A field that behaves like an integer, but serializes to a string. Some amount fields are
@@ -89,6 +92,7 @@ class IntAsHex(mfields.Field):
         if value is None:
             return None
         assert isinstance(value, int)
+        assert value >= 0, "IntAsHex does not support negative values."
         return hex(value)
 
     def _deserialize(self, value, attr, data, **kwargs):
@@ -191,3 +195,10 @@ def enum_field_metadata(
 
 boolean_field_metadata: Dict[str, Any] = dict(marshmallow_field=RequiredBoolean())
 optional_field_metadata: Dict[str, Any] = dict(allow_none=True, load_default=None)
+
+
+# Utilities.
+
+
+def load_int_value(field_metadata: Dict[str, Any], value: str) -> int:
+    return field_metadata["marshmallow_field"]._deserialize(value=value, attr=None, data=None)

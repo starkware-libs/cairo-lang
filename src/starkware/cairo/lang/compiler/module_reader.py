@@ -19,7 +19,7 @@ class ModuleReader:
     def __init__(self, paths: List[str], cairo_suffix: str):
         self.paths: List[str] = paths
         self.cairo_suffix: str = cairo_suffix
-        self.source_files_with_scopes: Set[Tuple[str, str]] = set()
+        self.source_files_with_scopes: Set[Tuple[str, ScopedName]] = set()
 
     @property
     def source_files(self):

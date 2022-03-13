@@ -116,6 +116,9 @@ class CallLabelInstruction(InstructionBody):
 
     label: ExprIdentifier
     location: Optional[Location] = LocationField
+    # Indicates the 'label' is a fully qualified identifier, rather then a relative one.
+    # This field is typically set for compiler-generated calls.
+    fully_qualified_label: bool = False
 
     def format(self):
         return f"call {self.label.format()}"

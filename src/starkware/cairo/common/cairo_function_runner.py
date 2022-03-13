@@ -32,7 +32,7 @@ class CairoFunctionRunner(CairoRunner):
         )
         self.builtin_runners["pedersen_builtin"] = pedersen_builtin
         range_check_builtin = RangeCheckBuiltinRunner(
-            included=True, ratio=None, inner_rc_bound=2 ** 16, n_parts=8
+            included=True, ratio=1, inner_rc_bound=2 ** 16, n_parts=8
         )
         self.builtin_runners["range_check_builtin"] = range_check_builtin
         output_builtin = OutputBuiltinRunner(included=True)
@@ -40,19 +40,19 @@ class CairoFunctionRunner(CairoRunner):
         signature_builtin = SignatureBuiltinRunner(
             name="ecdsa",
             included=True,
-            ratio=None,
+            ratio=1,
             process_signature=process_ecdsa,
             verify_signature=verify_ecdsa_sig,
         )
         self.builtin_runners["ecdsa_builtin"] = signature_builtin
         bitwise_builtin = BitwiseBuiltinRunner(
-            included=True, bitwise_builtin=BitwiseInstanceDef(ratio=None, total_n_bits=251)
+            included=True, bitwise_builtin=BitwiseInstanceDef(ratio=1, total_n_bits=251)
         )
         self.builtin_runners["bitwise_builtin"] = bitwise_builtin
         ec_op_builtin = EcOpBuiltinRunner(
             included=True,
             ec_op_builtin=EcOpInstanceDef(
-                ratio=None,
+                ratio=1,
                 scalar_height=256,
                 scalar_bits=252,
                 scalar_limit=None,
@@ -140,7 +140,8 @@ class CairoFunctionRunner(CairoRunner):
         try:
             self.run_from_entrypoint(
                 entrypoint,
-                *all_args,
+                all_args,
+                typed_args=True,
                 hint_locals=hint_locals,
                 static_locals=static_locals,
                 verify_secure=verify_secure,
@@ -161,6 +162,7 @@ Got {type(ex).__name__} exception during the execution of {func_name}:
         self,
         entrypoint: Union[str, int],
         *args,
+        typed_args: Optional[bool] = False,
         hint_locals: Optional[Dict[str, Any]] = None,
         static_locals: Optional[Dict[str, Any]] = None,
         run_resources: Optional[RunResources] = None,
@@ -171,6 +173,8 @@ Got {type(ex).__name__} exception during the execution of {func_name}:
         Runs the program from the given entrypoint.
 
         Additional params:
+        typed_args - If true, the arguments are given as Cairo typed NamedTuple generated
+          with CairoStructFactory.
         verify_secure - Run verify_secure_runner to do extra verifications.
         apply_modulo_to_args - Apply modulo operation on integer arguments.
         """
@@ -183,7 +187,13 @@ Got {type(ex).__name__} exception during the execution of {func_name}:
         if apply_modulo_to_args is None:
             apply_modulo_to_args = True
 
-        real_args = [self.gen_arg(arg=x, apply_modulo_to_args=apply_modulo_to_args) for x in args]
+        if typed_args:
+            assert len(args) == 1, "len(args) must be 1 when using typed args."
+            real_args = self.segments.gen_typed_args(args=args[0])
+        else:
+            real_args = [
+                self.gen_arg(arg=x, apply_modulo_to_args=apply_modulo_to_args) for x in args
+            ]
         end = self.initialize_function_entrypoint(entrypoint=entrypoint, args=real_args)
         self.initialize_vm(hint_locals=hint_locals, static_locals=static_locals)
 

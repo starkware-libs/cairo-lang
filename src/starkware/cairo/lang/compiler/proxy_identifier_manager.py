@@ -1,9 +1,10 @@
 import dataclasses
-from typing import ChainMap, Dict, Optional, Tuple
+from typing import ChainMap, Optional, Tuple
 
 from starkware.cairo.lang.compiler.identifier_definition import IdentifierDefinition
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager, IdentifierScope
 from starkware.cairo.lang.compiler.preprocessor.memento import Memento
+from starkware.cairo.lang.compiler.scoped_name import ScopedName
 
 
 class ProxyIdentifierManager(IdentifierManager):
@@ -15,8 +16,8 @@ class ProxyIdentifierManager(IdentifierManager):
 
     def __init__(self, parent: IdentifierManager):
         self.parent = parent
-        self.root = ProxyIdentifierScope(manager=self, parent=parent.root)
-        self.dict: ChainMap[str, IdentifierDefinition] = ChainMap({}, parent.dict)
+        self.root: ProxyIdentifierScope = ProxyIdentifierScope(manager=self, parent=parent.root)
+        self.dict: ChainMap[ScopedName, IdentifierDefinition] = ChainMap({}, parent.dict)
 
     def apply(self):
         """
@@ -30,7 +31,6 @@ class ProxyIdentifierScope(IdentifierScope):
     def __init__(self, manager: IdentifierManager, parent: IdentifierScope):
         super().__init__(manager=manager, fullname=parent.fullname)
         self.parent = parent
-        self.subscopes: Dict[str, IdentifierScope] = {}
         self.identifiers: ChainMap[str, IdentifierDefinition] = ChainMap({}, parent.identifiers)
 
     def get_single_scope(self, name: str) -> Optional["IdentifierScope"]:
@@ -55,6 +55,7 @@ class ProxyIdentifierScope(IdentifierScope):
     def _apply(self):
         self.parent.identifiers.update(self.identifiers.maps[0])
         for name, subscope in self.subscopes.items():
+            assert isinstance(subscope, ProxyIdentifierScope)
             if name not in self.parent.subscopes:
                 self.parent.subscopes[name] = subscope.parent
             subscope._apply()

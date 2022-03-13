@@ -32,7 +32,7 @@ def encode_instruction(element: BytecodeElement, prime: int) -> List[int]:
     Given an Instruction, returns a list of 1 or 2 integers representing the instruction.
     """
     if isinstance(element, BytecodeData):
-        return [element.data]
+        return [element.data % prime]
     assert isinstance(element, Instruction)
     inst = element
     assert prime > 2 ** (3 * OFFSET_BITS + 16)

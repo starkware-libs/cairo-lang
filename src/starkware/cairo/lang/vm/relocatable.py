@@ -1,8 +1,5 @@
 import dataclasses
-from typing import Dict, Tuple, TypeVar, Union
-
-MaybeRelocatable = Union[int, "RelocatableValue"]
-T = TypeVar("T", int, MaybeRelocatable)
+from typing import Dict, Mapping, SupportsInt, Tuple, Union
 
 RELOCATABLE_OFFSET_LOWER_BOUND = -(2 ** 63)
 RELOCATABLE_OFFSET_UPPER_BOUND = 2 ** 63
@@ -21,7 +18,7 @@ class RelocatableValue:
     SEGMENT_BITS = 16
     OFFSET_BITS = 47
 
-    def __add__(self, other: MaybeRelocatable) -> "RelocatableValue":
+    def __add__(self, other: "MaybeRelocatable") -> "RelocatableValue":
         if isinstance(other, int):
             return RelocatableValue(self.segment_index, self.offset + other)
         assert not isinstance(
@@ -29,10 +26,10 @@ class RelocatableValue:
         ), f"Cannot add two relocatable values: {self} + {other}."
         return NotImplemented
 
-    def __radd__(self, other: MaybeRelocatable) -> "RelocatableValue":
+    def __radd__(self, other: "MaybeRelocatable") -> "RelocatableValue":
         return self + other
 
-    def __sub__(self, other: MaybeRelocatable) -> MaybeRelocatable:
+    def __sub__(self, other: "MaybeRelocatable") -> "MaybeRelocatable":
         if isinstance(other, int):
             return RelocatableValue(self.segment_index, self.offset - other)
         assert self.segment_index == other.segment_index, (
@@ -44,7 +41,7 @@ class RelocatableValue:
     def __mod__(self, other: int):
         return RelocatableValue(self.segment_index, self.offset % other)
 
-    def __lt__(self, other: MaybeRelocatable):
+    def __lt__(self, other: "MaybeRelocatable"):
         if isinstance(other, int):
             # Integers are considered smaller than all relocatable values.
             return False
@@ -52,13 +49,13 @@ class RelocatableValue:
             return NotImplemented
         return (self.segment_index, self.offset) < (other.segment_index, other.offset)
 
-    def __le__(self, other: MaybeRelocatable):
+    def __le__(self, other: "MaybeRelocatable"):
         return self < other or self == other
 
-    def __ge__(self, other: MaybeRelocatable):
+    def __ge__(self, other: "MaybeRelocatable"):
         return not (self < other)
 
-    def __gt__(self, other: MaybeRelocatable):
+    def __gt__(self, other: "MaybeRelocatable"):
         return not (self <= other)
 
     def __hash__(self):
@@ -70,7 +67,8 @@ class RelocatableValue:
     def __str__(self):
         return f"{self.segment_index}:{self.offset}"
 
-    def to_bytes(self, n_bytes: int, byte_order: str) -> bytes:
+    @staticmethod
+    def to_bytes(value: "MaybeRelocatable", n_bytes: int, byte_order: str) -> bytes:
         """
         Serializes RelocatableValue as:
         1bit |   SEGMENT_BITS |   OFFSET_BITS
@@ -79,15 +77,15 @@ class RelocatableValue:
         1bit | num
         0    | num
         """
-        if isinstance(self, int):
-            assert self < 2 ** (8 * n_bytes - 1)
-            return self.to_bytes(n_bytes, byte_order)
-        assert n_bytes * 8 > self.SEGMENT_BITS + self.OFFSET_BITS
-        num = 2 ** (8 * n_bytes - 1) + self.segment_index * 2 ** self.OFFSET_BITS + self.offset
+        if isinstance(value, int):
+            assert value < 2 ** (8 * n_bytes - 1)
+            return value.to_bytes(n_bytes, byte_order)
+        assert n_bytes * 8 > value.SEGMENT_BITS + value.OFFSET_BITS
+        num = 2 ** (8 * n_bytes - 1) + value.segment_index * 2 ** value.OFFSET_BITS + value.offset
         return num.to_bytes(n_bytes, byte_order)
 
     @classmethod
-    def from_bytes(cls, data: bytes, byte_order: str) -> MaybeRelocatable:
+    def from_bytes(cls, data: bytes, byte_order: str) -> "MaybeRelocatable":
         n_bytes = len(data)
         num = int.from_bytes(data, byte_order)
         if num & (2 ** (8 * n_bytes - 1)):
@@ -97,7 +95,7 @@ class RelocatableValue:
         return num
 
     @staticmethod
-    def to_tuple(value: MaybeRelocatable) -> Tuple[int, ...]:
+    def to_tuple(value: "MaybeRelocatable") -> Tuple[int, ...]:
         """
         Converts a MaybeRelocatable to a tuple (which can be used to serialize the value in JSON).
         """
@@ -109,7 +107,7 @@ class RelocatableValue:
             raise NotImplementedError(f"Expected MaybeRelocatable, got: {type(value).__name__}.")
 
     @staticmethod
-    def to_felt_or_relocatable(value: T):
+    def to_felt_or_relocatable(value: Union["RelocatableValue", SupportsInt]) -> "MaybeRelocatable":
         """
         Converts to int unless value is RelocatableValue, otherwise return value as is.
         """
@@ -118,7 +116,7 @@ class RelocatableValue:
         return int(value)
 
     @classmethod
-    def from_tuple(cls, value: Tuple[int, ...]) -> MaybeRelocatable:
+    def from_tuple(cls, value: Tuple[int, ...]) -> "MaybeRelocatable":
         """
         Converts a tuple to a MaybeRelocatable. See to_tuple().
         """
@@ -130,12 +128,16 @@ class RelocatableValue:
             raise NotImplementedError(f"Expected a tuple of size 1 or 2, got: {value}.")
 
 
+MaybeRelocatable = Union[int, RelocatableValue]
+MaybeRelocatableDict = Dict[MaybeRelocatable, MaybeRelocatable]
+
+
 def relocate_value(
     value: MaybeRelocatable,
-    segment_offsets: Dict[int, T],
+    segment_offsets: Mapping[int, MaybeRelocatable],
     prime: int,
     allow_missing_segments: bool = False,
-) -> T:
+) -> MaybeRelocatable:
     if isinstance(value, int):
         return value
     elif isinstance(value, RelocatableValue):

@@ -1,18 +1,22 @@
 from collections import namedtuple
+from dataclasses import make_dataclass
 from typing import Any, Dict, Iterable, List, Tuple, Union
 
 from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypeFelt, TypePointer
 from starkware.cairo.lang.compiler.identifier_definition import StructDefinition
 from starkware.cairo.lang.compiler.parser import parse_type
 from starkware.cairo.lang.compiler.type_system import mark_type_resolved
-from starkware.starknet.public.abi import get_selector_from_name
+from starkware.starknet.public.abi import AbiType, get_selector_from_name
 from starkware.starknet.public.abi_structs import struct_definition_from_abi_entry
+from starkware.starknet.services.api.contract_definition import ContractDefinition
+from starkware.starknet.testing.objects import Dataclass
 
 EventIdentifier = Union[str, int]
+RAW_OUTPUT_ARG_LIST = ["retdata_size", "retdata"]
 
 
 class StructManager:
-    def __init__(self, abi: List[Any]):
+    def __init__(self, abi: AbiType):
         self._struct_definition_mapping = {
             abi_entry["name"]: struct_definition_from_abi_entry(abi_entry=abi_entry)
             for abi_entry in abi
@@ -47,7 +51,7 @@ class StructManager:
 
 
 class EventManager:
-    def __init__(self, abi: List[Any]):
+    def __init__(self, abi: AbiType):
         self._abi_event_mapping = {
             abi_entry["name"]: abi_entry for abi_entry in abi if abi_entry["type"] == "event"
         }
@@ -58,7 +62,7 @@ class EventManager:
         }
 
         # Cached contract events and argument types.
-        self._contract_events: Dict[str, type] = {}
+        self._contract_events: Dict[str, Dataclass] = {}
         self._event_name_to_argument_types: Dict[str, List[CairoType]] = {}
 
     def __contains__(self, identifier: EventIdentifier) -> bool:
@@ -67,7 +71,7 @@ class EventManager:
 
         return identifier in self._selector_to_name
 
-    def get_contract_event(self, identifier: EventIdentifier) -> type:
+    def get_contract_event(self, identifier: EventIdentifier) -> Dataclass:
         """
         Returns a named tuple representing the event whose name is given.
         """
@@ -97,13 +101,13 @@ class EventManager:
         names, types = parse_arguments(arguments_abi=event_abi["keys"] + event_abi["data"])
 
         self._event_name_to_argument_types[name] = types
-        self._contract_events[name] = namedtuple(typename=name, field_names=names)
+        self._contract_events[name] = make_dataclass(cls_name=name, fields=names)
 
     def _get_event_name(self, identifier: EventIdentifier) -> str:
         return identifier if isinstance(identifier, str) else self._selector_to_name[identifier]
 
 
-def parse_arguments(arguments_abi: dict) -> Tuple[List[str], List[CairoType]]:
+def parse_arguments(arguments_abi: List) -> Tuple[List[str], List[CairoType]]:
     """
     Given the input or output field of a StarkNet contract function ABI,
     computes the arguments that the python proxy function should accept.
@@ -118,16 +122,26 @@ def parse_arguments(arguments_abi: dict) -> Tuple[List[str], List[CairoType]]:
         name = arg_entry["name"]
         arg_type = mark_type_resolved(parse_type(code=arg_entry["type"]))
         if isinstance(arg_type, TypePointer):
+            # Remove last argument.
             size_arg_actual_name = arg_names.pop()
             actual_type = arg_types.pop()
-            # Make sure the last argument was {name}_len, and remove it.
-            size_arg_name = f"{name}_len"
-            assert (
-                size_arg_actual_name == size_arg_name
-            ), f"Array size argument {size_arg_name} must appear right before {name}."
+            # Allow _size suffix (instead of _len) for @raw_output functions.
+            if size_arg_actual_name == f"{name}_size":
+                assert name != "calldata", "Direct raw_input function calls are not supported."
+                assert [size_arg_actual_name, name] == RAW_OUTPUT_ARG_LIST
+                assert len(arguments_abi) == 2
+                # In case of @raw_output keep retdata_size argument.
+                arg_names.append(size_arg_actual_name)
+                arg_types.append(actual_type)
+            else:
+                # Make sure the removed last argument was {name}_len.
+                size_arg_expected_name = f"{name}_len"
+                assert (
+                    size_arg_actual_name == size_arg_expected_name
+                ), f"Array size argument {size_arg_expected_name} must appear right before {name}."
 
             assert isinstance(actual_type, TypeFelt), (
-                f"Array size entry {size_arg_name} expected to be type felt. Got: "
+                f"Array size entry {size_arg_actual_name} expected to be type felt. Got: "
                 f"{actual_type.format()}."
             )
 
@@ -148,3 +162,8 @@ def flatten(name: str, value: Union[Any, Iterable], max_depth: int = 30) -> List
         res.extend(flatten(name=name, value=elm, max_depth=max_depth - 1))
 
     return res
+
+
+def get_abi(contract_definition: ContractDefinition) -> AbiType:
+    assert contract_definition.abi is not None, "Missing ABI."
+    return contract_definition.abi

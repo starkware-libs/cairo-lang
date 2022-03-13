@@ -78,12 +78,12 @@ class EcOpBuiltinRunner(SimpleBuiltinRunner):
             # Assert that if the current address is part of a point which is all set in the
             # memory, the point is on the curve.
             for pair in EC_POINT_INDICES[:2]:
-                ec_point = [memory[instance + i] for i in pair]
+                ec_point_x, ec_point_y = [memory[instance + i] for i in pair]
                 assert point_on_curve(
-                    *ec_point, ALPHA, BETA, FIELD_PRIME
+                    ec_point_x, ec_point_y, ALPHA, BETA, FIELD_PRIME
                 ), f"{self.name} builtin: point {pair} is not on the curve."
 
-            res = ec_op_impl(
+            res = ec_op_impl(  # type: ignore
                 *[memory[instance + i] for i in range(INPUT_CELLS_PER_EC_OP)], ALPHA, FIELD_PRIME
             )
             # The result cannot be the point at infinity.

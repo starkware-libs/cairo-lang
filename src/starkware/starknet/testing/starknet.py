@@ -6,6 +6,7 @@ from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.services.api.contract_definition import ContractDefinition, EntryPointType
 from starkware.starknet.services.api.messages import StarknetMessageToL1
 from starkware.starknet.testing.contract import StarknetContract
+from starkware.starknet.testing.contract_utils import get_abi
 from starkware.starknet.testing.objects import StarknetTransactionExecutionInfo
 from starkware.starknet.testing.state import CastableToAddress, CastableToAddressSalt, StarknetState
 
@@ -56,14 +57,13 @@ class Starknet:
             contract_address_salt=contract_address_salt,
             constructor_calldata=[] if constructor_calldata is None else constructor_calldata,
         )
-        assert contract_def.abi is not None, "Missing ABI."
 
         deploy_execution_info = StarknetTransactionExecutionInfo.from_internal(
             tx_execution_info=execution_info, result=(), main_call_events=[]
         )
         return StarknetContract(
             state=self.state,
-            abi=contract_def.abi,
+            abi=get_abi(contract_definition=contract_def),
             contract_address=address,
             deploy_execution_info=deploy_execution_info,
         )
@@ -85,6 +85,7 @@ class Starknet:
         to_address: CastableToAddress,
         selector: Union[int, str],
         payload: List[int],
+        max_fee: int = 0,
         nonce: Optional[int] = None,
     ) -> TransactionExecutionInfo:
         """
@@ -102,6 +103,7 @@ class Starknet:
             selector=selector,
             calldata=[from_address, *payload],
             caller_address=0,
+            max_fee=max_fee,
             entry_point_type=EntryPointType.L1_HANDLER,
             nonce=nonce,
         )

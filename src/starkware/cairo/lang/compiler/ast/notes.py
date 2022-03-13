@@ -9,7 +9,7 @@ from starkware.cairo.lang.compiler.ast.node import AstNode
 from starkware.cairo.lang.compiler.error_handling import Location
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class Notes(AstNode):
     """
     Represents new-lines and comments that appear inside an expression or other code element.

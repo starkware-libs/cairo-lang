@@ -1,8 +1,12 @@
 import itertools
-from typing import Optional
+from typing import List, Optional
 
 import pytest
 
+from starkware.cairo.lang.compiler.ast.code_elements import (
+    CodeElement,
+    CodeElementTemporaryVariable,
+)
 from starkware.cairo.lang.compiler.ast.expr import Expression
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.parser import parse_expr
@@ -18,17 +22,31 @@ from starkware.cairo.lang.compiler.preprocessor.preprocessor_test_utils import (
     strip_comments_and_linebreaks,
     verify_exception,
 )
+from starkware.cairo.lang.compiler.preprocessor.reg_tracking import RegTrackingData
 
 
 class CompoundExpressionTestContext(CompoundExpressionContext):
     def __init__(self):
         self.tempvar_name_counter = itertools.count(0)
+        self.code_elements: List[CodeElement] = []
+        self.ap_tracking = RegTrackingData()
 
     def new_tempvar_name(self) -> str:
         return f"x{next(self.tempvar_name_counter)}"
 
     def get_fp_val(self, location: Optional[Location]) -> Expression:
         raise NotImplementedError("fp is not supported in the test.")
+
+    def visit(self, elm: CodeElement):
+        def group_alloc():
+            raise NotImplementedError("group_alloc() is not expected to be called.")
+
+        assert isinstance(elm, CodeElementTemporaryVariable)
+        self.ap_tracking = self.ap_tracking.add(1, group_alloc=group_alloc)
+        self.code_elements.append(elm)
+
+    def get_ap_tracking(self) -> RegTrackingData:
+        return self.ap_tracking
 
 
 @pytest.mark.parametrize(
@@ -106,12 +124,13 @@ def test_compound_expression_visitor(
         (SimplicityLevel.DEREF_OFFSET, to_deref_offset),
         (SimplicityLevel.DEREF, to_deref),
     ]:
-        visitor = CompoundExpressionVisitor(context=CompoundExpressionTestContext())
+        context = CompoundExpressionTestContext()
+        visitor = CompoundExpressionVisitor(context=context)
         res = visitor.rewrite(expr, sim)
         assert (
             "".join(
                 code_element.format(allowed_line_length=100) + "; "
-                for code_element in visitor.code_elements
+                for code_element in context.code_elements
             )
             + res.format()
             == expected_result
@@ -119,7 +138,8 @@ def test_compound_expression_visitor(
 
 
 def test_compound_expression_visitor_long():
-    visitor = CompoundExpressionVisitor(context=CompoundExpressionTestContext())
+    context = CompoundExpressionTestContext()
+    visitor = CompoundExpressionVisitor(context=context)
     res = visitor.rewrite(
         parse_expr("[ap + 100] - [fp] * [[-[ap + 200] / [ap + 300]]] + [ap] * [ap]"),
         SimplicityLevel.OPERATION,
@@ -127,7 +147,7 @@ def test_compound_expression_visitor_long():
     assert (
         "".join(
             code_element.format(allowed_line_length=100) + "\n"
-            for code_element in visitor.code_elements
+            for code_element in context.code_elements
         )
         == """\
 tempvar x0 : felt = [ap - 0 + 200] * (-1)
@@ -143,12 +163,13 @@ tempvar x6 : felt = [ap - 6] * [ap - 6]
 
 
 def test_compound_expression_visitor_inverses():
-    visitor = CompoundExpressionVisitor(context=CompoundExpressionTestContext())
+    context = CompoundExpressionTestContext()
+    visitor = CompoundExpressionVisitor(context=context)
     res = visitor.rewrite(parse_expr("2 - 1 / [ap] + [ap] / 3"), SimplicityLevel.DEREF)
     assert (
         "".join(
             code_element.format(allowed_line_length=100) + "\n"
-            for code_element in visitor.code_elements
+            for code_element in context.code_elements
         )
         == """\
 tempvar x0 : felt = 2
@@ -163,7 +184,8 @@ tempvar x5 : felt = x3 + x4
 
 
 def test_process_compound_expressions():
-    code_elements, res = process_compound_expressions(
+    context = CompoundExpressionTestContext()
+    res = process_compound_expressions(
         list(
             map(
                 parse_expr,
@@ -183,11 +205,12 @@ def test_process_compound_expressions():
             SimplicityLevel.OPERATION,
             SimplicityLevel.OPERATION,
         ],
-        context=CompoundExpressionTestContext(),
+        context=context,
     )
     assert (
         "".join(
-            code_element.format(allowed_line_length=100) + "\n" for code_element in code_elements
+            code_element.format(allowed_line_length=100) + "\n"
+            for code_element in context.code_elements
         )
         == """\
 tempvar x0 : felt = [ap - 0 - 1] * [ap - 0 - 1]

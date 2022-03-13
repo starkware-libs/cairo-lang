@@ -2,8 +2,10 @@ from typing import Dict, List, Optional
 
 from starkware.cairo.lang.compiler.debug_info import DebugInfo, HintLocation, InstructionLocation
 from starkware.cairo.lang.compiler.encode import encode_instruction
+from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.instruction_builder import build_instruction
 from starkware.cairo.lang.compiler.preprocessor.preprocessor import PreprocessedProgram
+from starkware.cairo.lang.compiler.preprocessor.unique_labels import is_anonymous_label
 from starkware.cairo.lang.compiler.program import CairoHint, Program
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 
@@ -59,12 +61,21 @@ def assemble(
     if debug_info is not None:
         debug_info.add_autogen_file_contents()
 
+    # Filter anonymous labels.
+    identifiers = IdentifierManager.from_dict(
+        {
+            name: identifier_definition
+            for name, identifier_definition in preprocessed_program.identifiers.as_dict().items()
+            if not is_anonymous_label(name.path[-1])
+        }
+    )
+
     return Program(
         prime=preprocessed_program.prime,
         data=data,
         hints=hints,
         main_scope=main_scope,
-        identifiers=preprocessed_program.identifiers,
+        identifiers=identifiers,
         attributes=preprocessed_program.attributes,
         builtins=preprocessed_program.builtins,
         reference_manager=preprocessed_program.reference_manager,

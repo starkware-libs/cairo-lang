@@ -18,6 +18,14 @@ contract StarknetMessaging is IStarknetMessaging {
 
     string constant L1L2_MESSAGE_NONCE_TAG = "STARKNET_1.0_MSGING_L1TOL2_NONCE";
 
+    string constant L1L2_MESSAGE_CANCELLATION_MAP_TAG = (
+        "STARKNET_1.0_MSGING_L1TOL2_CANCELLATION_MAPPPING"
+    );
+
+    string constant L1L2_MESSAGE_CANCELLATION_DELAY_TAG = (
+        "STARKNET_1.0_MSGING_L1TOL2_CANCELLATION_DELAY"
+    );
+
     function l1ToL2Messages(bytes32 msgHash) external view returns (uint256) {
         return l1ToL2Messages()[msgHash];
     }
@@ -38,27 +46,66 @@ contract StarknetMessaging is IStarknetMessaging {
         return NamedStorage.getUintValue(L1L2_MESSAGE_NONCE_TAG);
     }
 
+    function messageCancellationDelay() public view returns (uint256) {
+        return NamedStorage.getUintValue(L1L2_MESSAGE_CANCELLATION_DELAY_TAG);
+    }
+
+    function messageCancellationDelay(uint256 delayInSeconds) internal {
+        NamedStorage.setUintValue(L1L2_MESSAGE_CANCELLATION_DELAY_TAG, delayInSeconds);
+    }
+
+    /**
+      Returns the timestamp at the time cancelL1ToL2Message was called with a message
+      matching 'msgHash'.
+
+      The function returns 0 if cancelL1ToL2Message was never called.
+    */
+    function l1ToL2MessageCancellations(bytes32 msgHash) external view returns (uint256) {
+        return l1ToL2MessageCancellations()[msgHash];
+    }
+
+    function l1ToL2MessageCancellations()
+        internal
+        pure
+        returns (mapping(bytes32 => uint256) storage)
+    {
+        return NamedStorage.bytes32ToUint256Mapping(L1L2_MESSAGE_CANCELLATION_MAP_TAG);
+    }
+
+    /**
+      Returns the hash of an L1 -> L2 message from msg.sender.
+    */
+    function getL1ToL2MsgHash(
+        uint256 toAddress,
+        uint256 selector,
+        uint256[] calldata payload,
+        uint256 nonce
+    ) internal returns (bytes32) {
+        return
+            keccak256(
+                abi.encodePacked(
+                    uint256(msg.sender),
+                    toAddress,
+                    nonce,
+                    selector,
+                    payload.length,
+                    payload
+                )
+            );
+    }
+
     /**
       Sends a message to an L2 contract.
     */
     function sendMessageToL2(
-        uint256 to_address,
+        uint256 toAddress,
         uint256 selector,
         uint256[] calldata payload
     ) external override returns (bytes32) {
         uint256 nonce = l1ToL2MessageNonce();
         NamedStorage.setUintValue(L1L2_MESSAGE_NONCE_TAG, nonce + 1);
-        emit LogMessageToL2(msg.sender, to_address, selector, payload, nonce);
-        bytes32 msgHash = keccak256(
-            abi.encodePacked(
-                uint256(msg.sender),
-                to_address,
-                nonce,
-                selector,
-                payload.length,
-                payload
-            )
-        );
+        emit LogMessageToL2(msg.sender, toAddress, selector, payload, nonce);
+        bytes32 msgHash = getL1ToL2MsgHash(toAddress, selector, payload, nonce);
         l1ToL2Messages()[msgHash] += 1;
 
         return msgHash;
@@ -69,18 +116,52 @@ contract StarknetMessaging is IStarknetMessaging {
 
       Returns the hash of the message.
     */
-    function consumeMessageFromL2(uint256 from_address, uint256[] calldata payload)
+    function consumeMessageFromL2(uint256 fromAddress, uint256[] calldata payload)
         external
         override
         returns (bytes32)
     {
         bytes32 msgHash = keccak256(
-            abi.encodePacked(from_address, uint256(msg.sender), payload.length, payload)
+            abi.encodePacked(fromAddress, uint256(msg.sender), payload.length, payload)
         );
 
         require(l2ToL1Messages()[msgHash] > 0, "INVALID_MESSAGE_TO_CONSUME");
-        emit ConsumedMessageToL1(from_address, msg.sender, payload);
+        emit ConsumedMessageToL1(fromAddress, msg.sender, payload);
         l2ToL1Messages()[msgHash] -= 1;
         return msgHash;
+    }
+
+    function startL1ToL2MessageCancellation(
+        uint256 toAddress,
+        uint256 selector,
+        uint256[] calldata payload,
+        uint256 nonce
+    ) external override {
+        emit MessageToL2CancellationStarted(msg.sender, toAddress, selector, payload, nonce);
+        bytes32 msgHash = getL1ToL2MsgHash(toAddress, selector, payload, nonce);
+        uint256 msgCount = l1ToL2Messages()[msgHash];
+        require(msgCount > 0, "NO_MESSAGE_TO_CANCEL");
+        l1ToL2MessageCancellations()[msgHash] = block.timestamp;
+    }
+
+    function cancelL1ToL2Message(
+        uint256 toAddress,
+        uint256 selector,
+        uint256[] calldata payload,
+        uint256 nonce
+    ) external override {
+        emit MessageToL2Canceled(msg.sender, toAddress, selector, payload, nonce);
+        bytes32 msgHash = getL1ToL2MsgHash(toAddress, selector, payload, nonce);
+        uint256 msgCount = l1ToL2Messages()[msgHash];
+        require(msgCount > 0, "NO_MESSAGE_TO_CANCEL");
+
+        uint256 requestTime = l1ToL2MessageCancellations()[msgHash];
+        require(requestTime != 0, "MESSAGE_CANCELLATION_NOT_REQUESTED");
+
+        uint256 cancelAllowedTime = requestTime + messageCancellationDelay();
+        require(cancelAllowedTime >= requestTime, "CANCEL_ALLOWED_TIME_OVERFLOW");
+        require(block.timestamp >= cancelAllowedTime, "MESSAGE_CANCELLATION_NOT_ALLOWED_YET");
+
+        l1ToL2Messages()[msgHash] = msgCount - 1;
     }
 }

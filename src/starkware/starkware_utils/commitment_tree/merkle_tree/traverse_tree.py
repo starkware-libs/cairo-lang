@@ -49,7 +49,7 @@ async def traverse_tree(
             finally:
                 queue.task_done()
 
-    async def closer():
+    async def closer(n_workers: int):
         # Wait for all tasks to be marked with task_done. This guarantees that all tasks were
         # completed, and no new task will be created.
         await queue.join()
@@ -57,5 +57,6 @@ async def traverse_tree(
         for _ in range(n_workers):
             await queue.put(AbortWorker())
 
-    await asyncio.gather(closer(), *(worker_func() for _ in range(n_workers)))
+    assert n_workers is not None
+    await asyncio.gather(closer(n_workers=n_workers), *(worker_func() for _ in range(n_workers)))
     assert queue.empty()

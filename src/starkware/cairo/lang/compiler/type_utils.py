@@ -31,7 +31,7 @@ def check_felts_only_type(
         return size
     elif isinstance(cairo_type, TypeTuple):
         size = 0
-        for item_type in cairo_type.members:
+        for item_type in cairo_type.types:
             res = check_felts_only_type(item_type, identifier_manager=identifier_manager)
             if res is None:
                 return None

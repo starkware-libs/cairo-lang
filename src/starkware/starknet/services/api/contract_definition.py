@@ -1,7 +1,7 @@
 import dataclasses
 from dataclasses import field
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import marshmallow_dataclass
 
@@ -9,7 +9,7 @@ from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.cairo.lang.compiler.program import Program
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
-from starkware.starknet.public.abi import get_selector_from_name
+from starkware.starknet.public.abi import AbiType, get_selector_from_name
 from starkware.starkware_utils.error_handling import stark_assert
 from starkware.starkware_utils.subsequence import is_subsequence
 from starkware.starkware_utils.validated_dataclass import (
@@ -44,7 +44,7 @@ class ContractDefinition(ValidatedMarshmallowDataclass):
 
     program: Program
     entry_points_by_type: Dict[EntryPointType, List[ContractEntryPoint]]
-    abi: Optional[List[Any]] = None
+    abi: Optional[AbiType] = None
 
     def __post_init__(self):
         super().__post_init__()
@@ -67,7 +67,7 @@ class ContractDefinition(ValidatedMarshmallowDataclass):
         )
 
         stark_assert(
-            len(constructor_eps) <= 1,
+            len(constructor_eps) <= 1,  # type: ignore
             code=StarknetErrorCode.INVALID_CONTRACT_DEFINITION,
             message="A contract may have at most 1 constructor.",
         )

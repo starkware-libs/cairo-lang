@@ -21,7 +21,9 @@ class Postman:
 
     @classmethod
     async def create(cls, eth_test_utils: EthTestUtils):
-        mock_starknet_messaging_contract = eth_test_utils.accounts[0].deploy(MockStarknetMessaging)
+        mock_starknet_messaging_contract = eth_test_utils.accounts[0].deploy(
+            MockStarknetMessaging, 0
+        )
         starknet = await Starknet.empty()
         return cls(
             mock_starknet_messaging_contract=mock_starknet_messaging_contract, starknet=starknet
@@ -32,16 +34,16 @@ class Postman:
             args = event.args
 
             await self.starknet.send_message_to_l2(
-                from_address=int(args["from_address"], 16),
-                to_address=args["to_address"],
+                from_address=int(args["fromAddress"], 16),
+                to_address=args["toAddress"],
                 selector=args["selector"],
                 payload=args["payload"],
                 nonce=args["nonce"],
             )
 
             self.mock_starknet_messaging_contract.mockConsumeMessageToL2.transact(
-                int(args["from_address"], 16),
-                args["to_address"],
+                int(args["fromAddress"], 16),
+                args["toAddress"],
                 args["selector"],
                 args["payload"],
                 args["nonce"],

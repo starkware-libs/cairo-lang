@@ -3,8 +3,11 @@ python_lib(cairo_common_lib
     FILES
     alloc.cairo
     bitwise.cairo
-    cairo_builtins.cairo
+    bool.cairo
+    cairo_blake2s/blake2s.cairo
     cairo_blake2s/blake2s_utils.py
+    cairo_blake2s/packed_blake2s.cairo
+    cairo_builtins.cairo
     cairo_keccak/keccak_utils.py
     cairo_secp/secp_utils.py
     cairo_sha256/sha256_utils.py
@@ -41,6 +44,7 @@ python_lib(cairo_common_lib
     squash_dict.cairo
     structs.py
     uint256.cairo
+    usort.cairo
     ${CAIRO_COMMON_LIB_ADDITIONAL_FILES}
 
     LIBS
@@ -64,4 +68,21 @@ python_lib(cairo_function_runner_lib
     cairo_tracer_lib
     cairo_vm_crypto_lib
     cairo_vm_lib
+)
+
+full_python_test(cairo_common_test
+    PREFIX starkware/cairo/common
+    PYTHON python3.7
+    TESTED_MODULES starkware/cairo/common
+
+    FILES
+    cairo_blake2s/blake2s_test.cairo
+    cairo_blake2s/blake2s_test.py
+
+    LIBS
+    cairo_common_lib
+    cairo_constants_lib
+    cairo_function_runner_lib
+    pip_pytest
+    pip_pytest_asyncio
 )

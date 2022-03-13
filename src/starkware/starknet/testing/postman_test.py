@@ -92,7 +92,7 @@ async def test_postman_l1_to_l2_positive_flow(
 async def test_postman_l1_to_l2_another_mock_starknet_messaging_contract(
     postman: Postman, eth_test_utils: EthTestUtils
 ):
-    other_messaging_contract = eth_test_utils.accounts[0].deploy(MockStarknetMessaging)
+    other_messaging_contract = eth_test_utils.accounts[0].deploy(MockStarknetMessaging, 0)
     INVALID_L2_ADDRESS = 0
     INVALID_SELECTOR = 2
     # This message is sent into another StarknetMessaging contract and therefore shouldn't be

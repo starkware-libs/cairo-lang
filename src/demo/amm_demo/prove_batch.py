@@ -3,7 +3,7 @@ import json
 import tempfile
 from typing import Any, Dict, List, Tuple
 
-from starkware.cairo.bootloader.generate_fact import get_program_output
+from starkware.cairo.bootloaders.generate_fact import get_program_output
 from starkware.cairo.sharp.sharp_client import Program, SharpClient
 
 

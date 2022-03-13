@@ -97,6 +97,19 @@ class StructDefinition(IdentifierDefinition):
 
 
 @marshmallow_dataclass.dataclass
+class TypeDefinition(IdentifierDefinition):
+    """
+    Represents a type alias for another type.
+    """
+
+    TYPE: ClassVar[str] = "type_definition"
+    Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
+
+    cairo_type: CairoType = field(metadata=dict(marshmallow_field=CairoTypeAsStr(required=True)))
+    location: Optional[Location] = LocationField
+
+
+@marshmallow_dataclass.dataclass
 class LabelDefinition(IdentifierDefinition):
     TYPE: ClassVar[str] = "label"
     Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
@@ -157,6 +170,7 @@ class IdentifierDefinitionSchema(OneOfSchema):
         ReferenceDefinition.TYPE: ReferenceDefinition.Schema,
         ScopeDefinition.TYPE: ScopeDefinition.Schema,
         StructDefinition.TYPE: StructDefinition.Schema,
+        TypeDefinition.TYPE: TypeDefinition.Schema,
     }
 
     def get_obj_type(self, obj):

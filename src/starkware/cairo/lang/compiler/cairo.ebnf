@@ -15,19 +15,24 @@ _NEQ: "!="
 _ARROW: "->"
 _AT: "@"
 
+// Comma separated list with notes.
+comma: ","
+_expr_sep: (comma | nonempty_notes)+
+comma_separated_with_notes{item}: notes item? (_expr_sep item)* _expr_sep?
+
 // Types.
-type: "felt"                           -> type_felt
-    | identifier                       -> type_struct
-    | type "*"                         -> type_pointer
-    | type _DBL_STAR                   -> type_pointer2
-    | "(" ((type ",")* type ","?)? ")" -> type_tuple
+named_type: identifier (":" type)? | non_identifier_type
+non_identifier_type: "felt"                                         -> type_felt
+                   | "codeoffset"                                   -> type_codeoffset
+                   | type "*"                                       -> type_pointer
+                   | type _DBL_STAR                                 -> type_pointer2
+                   | "(" comma_separated_with_notes{named_type} ")" -> type_tuple
+?type: non_identifier_type
+     | identifier             -> type_struct
 
 // Expressions.
 expr_assignment: expr | identifier_def "=" expr
-?arg_list_item: expr_assignment
-comma: ","
-_expr_sep: (comma | nonempty_notes)+
-arg_list: (notes arg_list_item? (_expr_sep arg_list_item)* _expr_sep?)
+arg_list: comma_separated_with_notes{expr_assignment}
 
 decorator: _AT identifier_def
 decorator_list: (decorator _NEWLINE*)*
@@ -42,6 +47,7 @@ decorator_list: (decorator _NEWLINE*)*
 ?unary: pow
       | "&" unary                             -> unary_addressof
       | "-" unary                             -> unary_neg
+      | "new" unary                           -> unary_new_operator
 ?pow: atom
     | atom _DBL_STAR notes pow -> expr_pow
 identifier: IDENTIFIER ("." IDENTIFIER)*
@@ -148,6 +154,7 @@ code_element: instruction                                       -> code_element_
             | identifier ":"                                    -> code_element_label
             | _func                                             -> code_element_function
             | _struct                                           -> code_element_struct
+            | "using" identifier_def "=" type                   -> code_element_typedef
             | _with_attr_statement                              -> code_element_with_attr
             | _with_statement                                   -> code_element_with
             | HINT                                              -> code_element_hint

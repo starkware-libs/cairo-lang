@@ -1,11 +1,13 @@
 import asyncio
-from typing import Collection
+import random
+from typing import Collection, Dict
 
 import pytest
 
 from starkware.cairo.common.patricia_utils import compute_patricia_from_leaves_for_test
 from starkware.crypto.signature.fast_pedersen_hash import pedersen_hash, pedersen_hash_func
-from starkware.python.utils import to_bytes
+from starkware.python.random_test import random_test
+from starkware.python.utils import safe_zip, to_bytes
 from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import (
     BinaryNodeFact,
     EdgeNodeFact,
@@ -19,13 +21,18 @@ from starkware.starkware_utils.commitment_tree.patricia_tree.virtual_patricia_no
 )
 from starkware.starkware_utils.commitment_tree.update_tree import update_tree
 from starkware.storage.storage import FactFetchingContext
-from starkware.storage.storage_utils import LeafFact
+from starkware.storage.storage_utils import SimpleLeafFact
 from starkware.storage.test_utils import MockStorage
+
+# Fixtures.
 
 
 @pytest.fixture
 def ffc() -> FactFetchingContext:
     return FactFetchingContext(storage=MockStorage(), hash_func=pedersen_hash_func)
+
+
+# Utilities.
 
 
 async def make_virtual_edge_non_canonical(
@@ -47,6 +54,42 @@ def verify_root(leaves: Collection[int], expected_root_hash: bytes):
     assert expected_root_hash == to_bytes(root_hash)
 
 
+async def build_empty_patricia_virtual_node(
+    ffc: FactFetchingContext, height: int
+) -> VirtualPatriciaNode:
+    # Done manually, since PatriciaTree.empty() is in charge of that and is not used here.
+    await SimpleLeafFact.empty().set_fact(ffc=ffc)
+
+    # Build empty tree.
+    return VirtualPatriciaNode.empty_node(height=height)
+
+
+async def build_patricia_virtual_node(
+    ffc: FactFetchingContext, height: int, leaves: Dict[int, SimpleLeafFact]
+) -> VirtualPatriciaNode:
+    # Build empty tree.
+    tree = await build_empty_patricia_virtual_node(ffc=ffc, height=height)
+    return await update_tree(
+        tree=tree,
+        ffc=ffc,
+        modifications=leaves.items(),
+        calculation_node_cls=VirtualCalculationNode,
+    )
+
+
+async def sample_and_verify_leaf_values(
+    ffc: FactFetchingContext, tree: VirtualPatriciaNode, expected_leaves: Dict[int, SimpleLeafFact]
+):
+    sampled_indices = list(expected_leaves.keys())
+    actual_leaves = await tree._get_leaves(
+        ffc=ffc, indices=sampled_indices, fact_cls=SimpleLeafFact
+    )
+    assert actual_leaves == expected_leaves
+
+
+# Tests.
+
+
 @pytest.mark.asyncio
 async def test_get_children(ffc: FactFetchingContext):
     """
@@ -58,14 +101,16 @@ async def test_get_children(ffc: FactFetchingContext):
     #   0  12 0   0 0   0 30  0
     """
     # Create empty trees and write their facts to DB.
-    await LeafFact(value=0).set_fact(ffc=ffc)
-    empty_tree_0 = VirtualPatriciaNode.empty_node(height=0)
-    empty_tree_1 = VirtualPatriciaNode.empty_node(height=1)
+    empty_tree_0 = await build_empty_patricia_virtual_node(ffc=ffc, height=0)
+    empty_tree_1 = await build_empty_patricia_virtual_node(ffc=ffc, height=1)
     assert await empty_tree_1.get_children(ffc=ffc) == (empty_tree_0, empty_tree_0)
 
     # Create leaves and write their facts to DB.
     leaf_hash_12, leaf_hash_30 = await asyncio.gather(
-        *(leaf_fact.set_fact(ffc=ffc) for leaf_fact in (LeafFact(value=12), LeafFact(value=30)))
+        *(
+            leaf_fact.set_fact(ffc=ffc)
+            for leaf_fact in (SimpleLeafFact(value=12), SimpleLeafFact(value=30))
+        )
     )
     leaf_12 = VirtualPatriciaNode(bottom_node=leaf_hash_12, path=0, length=0, height=0)
     leaf_30 = VirtualPatriciaNode(bottom_node=leaf_hash_30, path=0, length=0, height=0)
@@ -131,18 +176,19 @@ async def test_update_and_get_leaves(ffc: FactFetchingContext):
     Builds a Patricia tree of length 3 with the following values in the leaves: 1 -> 12, 6 -> 30.
     This is the same tree as in the test above, but in this test built using _update().
     """
-    # Done manually, since PatriciaTree.empty() is in charge of that and is not used here.
-    await LeafFact(value=0).set_fact(ffc=ffc)
-
     # Build empty tree.
-    tree = VirtualPatriciaNode.empty_node(height=3)
+    tree = await build_empty_patricia_virtual_node(ffc=ffc, height=3)
 
     # Compare empty root to test util result.
     leaves_range = range(8)
     verify_root(leaves=[0 for _ in leaves_range], expected_root_hash=tree.bottom_node)
 
     # Update leaf values.
-    leaves = {1: LeafFact(value=12), 4: LeafFact(value=1000), 6: LeafFact(value=30)}
+    leaves = {
+        1: SimpleLeafFact(value=12),
+        4: SimpleLeafFact(value=1000),
+        6: SimpleLeafFact(value=30),
+    }
     tree = await update_tree(
         tree=tree,
         ffc=ffc,
@@ -152,12 +198,10 @@ async def test_update_and_get_leaves(ffc: FactFetchingContext):
 
     # Check get_leaves().
     expected_leaves = {
-        leaf_id: leaves[leaf_id] if leaf_id in leaves else LeafFact(value=0)
+        leaf_id: leaves[leaf_id] if leaf_id in leaves else SimpleLeafFact.empty()
         for leaf_id in leaves_range
     }
-    assert (
-        await tree._get_leaves(ffc=ffc, indices=leaves_range, fact_cls=LeafFact) == expected_leaves
-    )
+    await sample_and_verify_leaf_values(ffc=ffc, tree=tree, expected_leaves=expected_leaves)
 
     # Compare to test util result.
     verify_root(
@@ -167,10 +211,10 @@ async def test_update_and_get_leaves(ffc: FactFetchingContext):
 
     # Update leaf values again: new leaves contain addition, deletion and updating a key.
     updated_leaves = {
-        0: LeafFact(value=2),
-        1: LeafFact(value=20),
-        3: LeafFact(value=6),
-        6: LeafFact(value=0),
+        0: SimpleLeafFact(value=2),
+        1: SimpleLeafFact(value=20),
+        3: SimpleLeafFact(value=6),
+        6: SimpleLeafFact.empty(),
     }
     tree = await update_tree(
         tree=tree,
@@ -181,9 +225,7 @@ async def test_update_and_get_leaves(ffc: FactFetchingContext):
 
     # Check get_leaves().
     updated_leaves = {**expected_leaves, **updated_leaves}
-    assert (
-        await tree._get_leaves(ffc=ffc, indices=leaves_range, fact_cls=LeafFact) == updated_leaves
-    )
+    await sample_and_verify_leaf_values(ffc=ffc, tree=tree, expected_leaves=updated_leaves)
 
     # Compare to test util result.
     sorted_by_index_leaf_values = [updated_leaves[leaf_id].value for leaf_id in leaves_range]
@@ -194,13 +236,15 @@ async def test_update_and_get_leaves(ffc: FactFetchingContext):
 @pytest.mark.asyncio
 async def test_binary_fact_tree_node_create_diff(ffc: FactFetchingContext):
     # All tree values ​​are zero.
-    empty_tree = await PatriciaTree.empty_tree(ffc=ffc, height=251, leaf_fact=LeafFact(value=0))
+    empty_tree = await PatriciaTree.empty_tree(
+        ffc=ffc, height=251, leaf_fact=SimpleLeafFact.empty()
+    )
     virtual_empty_tree_node = VirtualPatriciaNode.from_hash(
         hash_value=empty_tree.root, height=empty_tree.height
     )
 
     # All tree values ​​are zero except for the fifth leaf, which has a value of 8.
-    one_change_tree = await empty_tree.update(ffc=ffc, modifications=[(5, LeafFact(value=8))])
+    one_change_tree = await empty_tree.update(ffc=ffc, modifications=[(5, SimpleLeafFact(value=8))])
     virtual_one_change_node = VirtualPatriciaNode.from_hash(
         hash_value=one_change_tree.root, height=empty_tree.height
     )
@@ -208,7 +252,7 @@ async def test_binary_fact_tree_node_create_diff(ffc: FactFetchingContext):
     # All tree values ​​are zero except for the fifth leaf, which has a value of 8.
     # and the 58th leaf, which is 81.
     two_change_tree = await one_change_tree.update(
-        ffc=ffc, modifications=[(58, LeafFact(value=81))]
+        ffc=ffc, modifications=[(58, SimpleLeafFact(value=81))]
     )
     virtual_two_change_node = VirtualPatriciaNode.from_hash(
         hash_value=two_change_tree.root, height=empty_tree.height
@@ -217,17 +261,45 @@ async def test_binary_fact_tree_node_create_diff(ffc: FactFetchingContext):
     # The difference between the tree whose values are all zero and the tree that has
     # all values zero except two values is exactly the 2 values.
     diff_result = await virtual_empty_tree_node.get_diff_between_trees(
-        other=virtual_two_change_node, ffc=ffc, fact_cls=LeafFact
+        other=virtual_two_change_node, ffc=ffc, fact_cls=SimpleLeafFact
     )
     assert diff_result == [
-        (5, LeafFact(value=0), LeafFact(value=8)),
-        (58, LeafFact(value=0), LeafFact(value=81)),
+        (5, SimpleLeafFact.empty(), SimpleLeafFact(value=8)),
+        (58, SimpleLeafFact.empty(), SimpleLeafFact(value=81)),
     ]
 
     # The difference between the tree whose values are zero except for the fifth leaf
     # and the tree whose values are all zero except for the fifth leaf (there they are equal)
     # and for the 58th leaf is exactly the 58th leaf.
     diff_result = await virtual_one_change_node.get_diff_between_trees(
-        other=virtual_two_change_node, ffc=ffc, fact_cls=LeafFact
+        other=virtual_two_change_node, ffc=ffc, fact_cls=SimpleLeafFact
     )
-    assert diff_result == [(58, LeafFact(value=0), LeafFact(value=81))]
+    assert diff_result == [(58, SimpleLeafFact.empty(), SimpleLeafFact(value=81))]
+
+
+@random_test()
+@pytest.mark.asyncio
+async def test_get_leaves(seed: int, ffc: FactFetchingContext):
+    # Build random tree.
+    height = 100
+    n_leaves = random.randint(1, 5) * 100
+    leaf_values = random.choices(range(1, 1000), k=n_leaves)
+    leaf_indices = [random.getrandbits(height) for _ in range(n_leaves)]
+    leaves = dict(safe_zip(leaf_indices, (SimpleLeafFact(value=value) for value in leaf_values)))
+    tree = await build_patricia_virtual_node(ffc=ffc, height=height, leaves=leaves)
+
+    # Sample random subset of initialized leaves.
+    n_sampled_leaves = random.randint(1, n_leaves)
+    sampled_indices = random.sample(leaf_indices, k=n_sampled_leaves)
+    await sample_and_verify_leaf_values(
+        ffc=ffc,
+        tree=tree,
+        expected_leaves={index: leaf for index, leaf in leaves.items() if index in sampled_indices},
+    )
+
+    # Sample random subset of empty leaves (almost zero prob. they will land on initialize ones).
+    empty_leaf = SimpleLeafFact.empty()
+    sampled_indices = [random.getrandbits(height) for _ in range(10)]
+    await sample_and_verify_leaf_values(
+        ffc=ffc, tree=tree, expected_leaves={index: empty_leaf for index in sampled_indices}
+    )

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Dict, Optional, Type
 
 from starkware.cairo.lang.compiler.ast.arguments import IdentifierList
 from starkware.cairo.lang.compiler.ast.code_elements import (
@@ -13,6 +13,7 @@ from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeElementReference,
     CodeElementReturnValueReference,
     CodeElementTemporaryVariable,
+    CodeElementTypeDef,
     CodeElementUnpackBinding,
     CodeElementWith,
 )
@@ -28,6 +29,7 @@ from starkware.cairo.lang.compiler.identifier_definition import (
     NamespaceDefinition,
     ReferenceDefinition,
     StructDefinition,
+    TypeDefinition,
 )
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierError, IdentifierManager
 from starkware.cairo.lang.compiler.preprocessor.local_variables import N_LOCALS_CONSTANT
@@ -56,13 +58,14 @@ class IdentifierCollector(Visitor):
     """
 
     # A dict from code element types to the identifier type they define.
-    IDENTIFIER_DEFINERS = {
+    IDENTIFIER_DEFINERS: Dict[Type[CodeElement], Type[IdentifierDefinition]] = {
         CodeElementConst: ConstDefinition,
         CodeElementLabel: LabelDefinition,
         CodeElementReference: ReferenceDefinition,
         CodeElementLocalVariable: ReferenceDefinition,
         CodeElementTemporaryVariable: ReferenceDefinition,
         CodeElementReturnValueReference: ReferenceDefinition,
+        CodeElementTypeDef: TypeDefinition,
     }
 
     def __init__(self, identifiers: Optional[IdentifierManager] = None):

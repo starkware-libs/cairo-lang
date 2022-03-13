@@ -93,5 +93,9 @@ FeltField = RangeValidatedField(
 )
 
 
+def felt(name_in_error_message: str) -> RangeValidatedField:
+    return dataclasses.replace(FeltField, name=name_in_error_message)
+
+
 def felt_metadata(name_in_error_message: str) -> Dict[str, Any]:
-    return dataclasses.replace(FeltField, name=name_in_error_message).metadata()
+    return felt(name_in_error_message=name_in_error_message).metadata()

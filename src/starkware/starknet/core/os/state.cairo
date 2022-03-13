@@ -2,7 +2,9 @@ from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.dict import DictAccess, squash_dict
 from starkware.cairo.common.hash import hash2
-from starkware.cairo.common.patricia import patricia_update
+from starkware.cairo.common.patricia import (
+    ParticiaGlobals, PatriciaUpdateConstants, patricia_update_constants_new,
+    patricia_update_using_update_constants)
 from starkware.cairo.common.segments import relocate_segment
 
 const MERKLE_HEIGHT = 251  # PRIME.bit_length() - 1.
@@ -60,11 +62,17 @@ func state_update{hash_ptr : HashBuiltin*, range_check_ptr, storage_updates_ptr 
     let output_n_updates = [storage_updates_ptr]
     let storage_updates_ptr = storage_updates_ptr + 1
     let n_actual_state_changes = 0
+    # Creates PatriciaUpdateConstants struct for patricia update.
+    let (
+        local patricia_update_constants : PatriciaUpdateConstants*) = patricia_update_constants_new(
+        )
+
     with n_actual_state_changes:
         hash_state_changes(
             n_state_changes=n_state_changes,
             state_changes=squashed_dict,
-            hashed_state_changes=hashed_state_changes)
+            hashed_state_changes=hashed_state_changes,
+            patricia_update_constants=patricia_update_constants)
     end
     # Write number of state updates.
     assert output_n_updates = n_actual_state_changes
@@ -86,7 +94,10 @@ func state_update{hash_ptr : HashBuiltin*, range_check_ptr, storage_updates_ptr 
         assert global_state_storage.commitment_tree.height == ids.MERKLE_HEIGHT
     %}
 
-    patricia_update(
+    # Call patricia_update_using_update_constants() instead of patricia_update()
+    # in order not to repeat globals_pow2 calculation.
+    patricia_update_using_update_constants(
+        patricia_update_constants=patricia_update_constants,
         update_ptr=hashed_state_changes,
         n_updates=n_state_changes,
         height=MERKLE_HEIGHT,
@@ -125,7 +136,8 @@ end
 func hash_state_changes{
         hash_ptr : HashBuiltin*, range_check_ptr, storage_updates_ptr : felt*,
         n_actual_state_changes}(
-        n_state_changes, state_changes : DictAccess*, hashed_state_changes : DictAccess*):
+        n_state_changes, state_changes : DictAccess*, hashed_state_changes : DictAccess*,
+        patricia_update_constants : PatriciaUpdateConstants*):
     if n_state_changes == 0:
         return ()
     end
@@ -156,7 +168,10 @@ func hash_state_changes{
         squashed_dict=squashed_storage_dict)
 
     local n_updates = (squashed_storage_dict_end - squashed_storage_dict) / DictAccess.SIZE
-    let vault_merkle_multi_update_ret = patricia_update(
+    # Call patricia_update_using_update_constants() instead of patricia_update()
+    # in order not to repeat globals_pow2 calculation.
+    patricia_update_using_update_constants(
+        patricia_update_constants=patricia_update_constants,
         update_ptr=squashed_storage_dict,
         n_updates=n_updates,
         height=MERKLE_HEIGHT,
@@ -197,7 +212,8 @@ func hash_state_changes{
         return hash_state_changes(
             n_state_changes=n_state_changes - 1,
             state_changes=state_changes + DictAccess.SIZE,
-            hashed_state_changes=hashed_state_changes)
+            hashed_state_changes=hashed_state_changes,
+            patricia_update_constants=patricia_update_constants)
     end
 
     # Write contract address and number of updates.
@@ -214,5 +230,6 @@ func hash_state_changes{
     return hash_state_changes(
         n_state_changes=n_state_changes - 1,
         state_changes=state_changes + DictAccess.SIZE,
-        hashed_state_changes=hashed_state_changes)
+        hashed_state_changes=hashed_state_changes,
+        patricia_update_constants=patricia_update_constants)
 end

@@ -2,9 +2,11 @@ import json
 import os
 import tempfile
 
+from pytest import MonkeyPatch
+
 import starkware.cairo.sharp.sharp_client as sharp_client
-from starkware.cairo.bootloader.fact_topology import FactInfo
-from starkware.cairo.bootloader.generate_fact import get_program_output
+from starkware.cairo.bootloaders.fact_topology import FactInfo
+from starkware.cairo.bootloaders.generate_fact import get_program_output
 from starkware.cairo.sharp.sharp_client import SharpClient
 
 DIR = os.path.dirname(__file__)
@@ -49,7 +51,7 @@ end
     assert get_program_output(cairo_pie) == [3 ** 2]
 
 
-def test_get_fact(monkeypatch):
+def test_get_fact(monkeypatch: MonkeyPatch):
     """
     Tests that get_fact() command computes the fact correctly.
     """

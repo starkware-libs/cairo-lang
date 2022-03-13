@@ -17,7 +17,6 @@ python_lib(starkware_storage_lib
     dict_storage.py
     gated_storage.py
     imm_storage.py
-    internal_proxy_storage.py
     names.py
     storage.py
 
@@ -38,6 +37,7 @@ python_lib(starkware_storage_utils_lib
     storage_utils.py
 
     LIBS
+    starkware_commitment_tree_facts_lib
     starkware_python_utils_lib
     starkware_storage_lib
 )
@@ -60,7 +60,6 @@ full_python_test(starkware_storage_test
     FILES
     batch_store_test.py
     gated_storage_test.py
-    internal_proxy_storage_test.py
     storage_test.py
 
     LIBS

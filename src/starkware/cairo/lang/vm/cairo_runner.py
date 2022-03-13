@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type, TypeVar, Union
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Type, TypeVar, Union
 
 from starkware.cairo.lang.builtins.bitwise.bitwise_builtin_runner import BitwiseBuiltinRunner
 from starkware.cairo.lang.builtins.hash.hash_builtin_runner import HashBuiltinRunner
@@ -30,7 +30,12 @@ from starkware.cairo.lang.vm.memory_segments import MemorySegmentManager
 from starkware.cairo.lang.vm.output_builtin_runner import OutputBuiltinRunner
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue, relocate_value
 from starkware.cairo.lang.vm.trace_entry import relocate_trace
-from starkware.cairo.lang.vm.utils import MemorySegmentAddresses, ResourcesError, RunResources
+from starkware.cairo.lang.vm.utils import (
+    MemorySegmentAddresses,
+    MemorySegmentRelocatableAddresses,
+    ResourcesError,
+    RunResources,
+)
 from starkware.cairo.lang.vm.vm import RunContext, VirtualMachine, get_perm_range_check_limits
 from starkware.crypto.signature.signature import inv_mod_curve_size
 from starkware.python.math_utils import next_power_of_2, safe_div
@@ -200,7 +205,8 @@ class CairoRunner:
         if self.proof_mode:
             # Add the dummy last fp and pc to the public memory, so that the verifier can enforce
             # [fp - 2] = fp.
-            stack = [self.execution_base + 2, 0] + stack
+            stack_prefix: List[MaybeRelocatable] = [self.execution_base + 2, 0]
+            stack = stack_prefix + stack
             self.execution_public_memory = list(range(len(stack)))
 
             assert isinstance(
@@ -288,14 +294,14 @@ class CairoRunner:
 
         if self.vm.run_context.pc != addr:
             raise self.vm.as_vm_exception(
-                ResourcesError("Error: End of program was not reached"), self.vm.run_context.pc
+                ResourcesError("Error: End of program was not reached"), with_traceback=False
             )
 
     def vm_step(self):
         if self.vm.run_context.pc == self.final_pc:
             raise self.vm.as_vm_exception(
                 Exception("Error: Execution reached the end of the program."),
-                self.vm.run_context.pc,
+                with_traceback=False,
             )
         self.vm.step()
 
@@ -523,7 +529,7 @@ class CairoRunner:
             )
             * safe_div(
                 self.vm.current_step,
-                builtin_runner.ratio if hasattr(builtin_runner, "ratio") else 1,
+                getattr(builtin_runner, "ratio", 1),
             )
             for builtin_runner in self.builtin_runners.values()
         )
@@ -572,8 +578,13 @@ class CairoRunner:
         """
         return self.segments.gen_arg(arg=arg, apply_modulo_to_args=apply_modulo_to_args)
 
-    def relocate_value(self, value):
-        return relocate_value(value, self.segment_offsets, self.program.prime)
+    def relocate_value(self, value: MaybeRelocatable) -> int:
+        assert self.segment_offsets is not None, "segment_offsets is not initialized."
+        relocated = relocate_value(
+            value=value, segment_offsets=self.segment_offsets, prime=self.program.prime
+        )
+        assert isinstance(relocated, int)
+        return relocated
 
     def get_segment_offsets(self) -> Dict[int, int]:
         assert self.segment_offsets is not None, "segment_offsets is not initialized."
@@ -582,12 +593,11 @@ class CairoRunner:
     def relocate(self):
         self.segment_offsets = self.segments.relocate_segments()
 
-        self.relocated_memory = MemoryDict(
-            {
-                self.relocate_value(addr): self.relocate_value(value)
-                for addr, value in self.vm_memory.items()
-            }
-        )
+        initializer: Mapping[MaybeRelocatable, MaybeRelocatable] = {
+            self.relocate_value(addr): self.relocate_value(value)
+            for addr, value in self.vm_memory.items()
+        }
+        self.relocated_memory = MemoryDict(initializer)
         self.relocated_trace = relocate_trace(
             self.vm.trace, self.segment_offsets, self.program.prime
         )
@@ -605,7 +615,7 @@ class CairoRunner:
 
     def get_memory_segment_addresses(self) -> Dict[str, MemorySegmentAddresses]:
         def get_segment_addresses(
-            name: str, segment_addresses: MemorySegmentAddresses
+            name: str, segment_addresses: MemorySegmentRelocatableAddresses
         ) -> MemorySegmentAddresses:
             stop_ptr = (
                 segment_addresses.stop_ptr
@@ -634,7 +644,9 @@ class CairoRunner:
             val = memory[addr]
             if addr != old_addr + 1:
                 print("\u22ee")
-            print(f"{addr:<5} {to_field_element(val=val, prime=self.program.prime)}")
+            if isinstance(val, int):
+                val = to_field_element(val=val, prime=self.program.prime)
+            print(f"{addr:<5} {val}")
             old_addr = addr
         print()
 
@@ -643,6 +655,7 @@ class CairoRunner:
             return
 
         output_runner = self.builtin_runners["output_builtin"]
+        assert isinstance(output_runner, OutputBuiltinRunner)
         print("Program output:")
         _, size = output_runner.get_used_cells_and_allocated_size(self)
         for i in range(size):
@@ -710,6 +723,7 @@ fp = {fp}
                 assert segment_addresses.stop_ptr is not None, f"{name} segment stop ptr is None."
                 segment_index = begin_addr.segment_index
                 segment_size = segment_addresses.stop_ptr - begin_addr
+                assert isinstance(segment_size, int)
                 assert name not in builtin_segments, f"Builtin segment name collision: {name}."
                 builtin_segments[name] = SegmentInfo(index=segment_index, size=segment_size)
         return builtin_segments

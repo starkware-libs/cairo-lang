@@ -9,6 +9,7 @@ from starkware.starknet.services.api.feeder_gateway.response_objects import (
     StarknetBlock,
     TransactionInfo,
     TransactionReceipt,
+    TransactionTrace,
 )
 from starkware.starknet.services.api.gateway.transaction import InvokeFunction
 from starkware.starkware_utils.validated_fields import RangeValidatedField
@@ -39,6 +40,22 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         raw_response = await self._send_request(
             send_method="POST",
             uri=(f"/call_contract?{formatted_block_identifier}"),
+            data=invoke_tx.dumps(),
+        )
+        return json.loads(raw_response)
+
+    async def estimate_fee(
+        self,
+        invoke_tx: InvokeFunction,
+        block_hash: Optional[CastableToHash] = None,
+        block_number: Optional[BlockIdentifier] = None,
+    ) -> JsonObject:
+        formatted_block_identifier = get_formatted_block_identifier(
+            block_hash=block_hash, block_number=block_number
+        )
+        raw_response = await self._send_request(
+            send_method="POST",
+            uri=(f"/estimate_fee?{formatted_block_identifier}"),
             data=invoke_tx.dumps(),
         )
         return json.loads(raw_response)
@@ -123,31 +140,32 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         raw_response = await self._send_request(send_method="GET", uri=uri)
         return json.loads(raw_response)
 
-    async def get_transaction_status(
-        self, tx_hash: Optional[CastableToHash], tx_id: Optional[int] = None
-    ) -> JsonObject:
+    async def get_transaction_status(self, tx_hash: CastableToHash) -> JsonObject:
         raw_response = await self._send_request(
             send_method="GET",
-            uri=f"/get_transaction_status?{tx_identifier(tx_hash=tx_hash, tx_id=tx_id)}",
+            uri=f"/get_transaction_status?{tx_identifier(tx_hash=tx_hash)}",
         )
         return json.loads(raw_response)
 
-    async def get_transaction(
-        self, tx_hash: Optional[CastableToHash], tx_id: Optional[int] = None
-    ) -> TransactionInfo:
+    async def get_transaction(self, tx_hash: CastableToHash) -> TransactionInfo:
         raw_response = await self._send_request(
-            send_method="GET", uri=f"/get_transaction?{tx_identifier(tx_hash=tx_hash, tx_id=tx_id)}"
+            send_method="GET", uri=f"/get_transaction?{tx_identifier(tx_hash=tx_hash)}"
         )
         return TransactionInfo.loads(raw_response)
 
-    async def get_transaction_receipt(
-        self, tx_hash: Optional[CastableToHash], tx_id: Optional[int] = None
-    ) -> TransactionReceipt:
+    async def get_transaction_receipt(self, tx_hash: CastableToHash) -> TransactionReceipt:
         raw_response = await self._send_request(
             send_method="GET",
-            uri=f"/get_transaction_receipt?{tx_identifier(tx_hash=tx_hash, tx_id=tx_id)}",
+            uri=f"/get_transaction_receipt?{tx_identifier(tx_hash=tx_hash)}",
         )
         return TransactionReceipt.loads(raw_response)
+
+    async def get_transaction_trace(self, tx_hash: CastableToHash) -> TransactionTrace:
+        raw_response = await self._send_request(
+            send_method="GET",
+            uri=f"/get_transaction_trace?{tx_identifier(tx_hash=tx_hash)}",
+        )
+        return TransactionTrace.loads(raw_response)
 
     async def get_block_hash_by_id(self, block_id: int) -> str:
         raw_response = await self._send_request(
@@ -192,12 +210,9 @@ def format_hash(hash_value: CastableToHash, hash_field: RangeValidatedField) -> 
     return hash_value
 
 
-def tx_identifier(tx_hash: Optional[CastableToHash], tx_id: Optional[int]) -> str:
-    if tx_hash is None:
-        return f"transactionId={json.dumps(tx_id)}"
-    else:
-        hash_str = format_hash(hash_value=tx_hash, hash_field=fields.TransactionHashField)
-        return f"transactionHash={hash_str}"
+def tx_identifier(tx_hash: CastableToHash) -> str:
+    hash_str = format_hash(hash_value=tx_hash, hash_field=fields.TransactionHashField)
+    return f"transactionHash={hash_str}"
 
 
 def get_formatted_block_identifier(

@@ -8,8 +8,10 @@ from starkware.starkware_utils.commitment_tree.calculation import (
     CalculationNode,
     ConstantCalculation,
     HashCalculation,
+    LeafFactCalculation,
     NodeFactDict,
 )
+from starkware.starkware_utils.commitment_tree.leaf_fact import LeafFact
 from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import (
     BinaryNodeFact,
     EdgeNodeFact,
@@ -94,7 +96,7 @@ class VirtualCalculationNode(CalculationNode[VirtualPatriciaNode]):
         verify_path_value(path=self.path, length=self.length)
 
     @classmethod
-    def create(cls, node: VirtualPatriciaNode):
+    def create_from_node(cls, node: VirtualPatriciaNode):
         if node.is_empty:
             return cls.empty_node(height=node.height)
 
@@ -104,6 +106,10 @@ class VirtualCalculationNode(CalculationNode[VirtualPatriciaNode]):
             length=node.length,
             height=node.height,
         )
+
+    @classmethod
+    def create_from_fact(cls, fact: LeafFact):
+        return cls(bottom_calculation=LeafFactCalculation(fact=fact), path=0, length=0, height=0)
 
     @classmethod
     def empty_node(cls, height: int) -> "VirtualCalculationNode":
@@ -119,6 +125,9 @@ class VirtualCalculationNode(CalculationNode[VirtualPatriciaNode]):
         # NOTE: we compare directly the values (instead of comparing objects) for performance.
         if isinstance(self.bottom_calculation, ConstantCalculation):
             return self.bottom_calculation.value == EmptyNodeFact.EMPTY_NODE_HASH
+
+        if isinstance(self.bottom_calculation, LeafFactCalculation):
+            return self.bottom_calculation.fact.is_empty
 
         return False
 

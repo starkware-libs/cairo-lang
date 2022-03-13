@@ -12,3 +12,14 @@ python_lib(everest_definitions_lib
     pip_marshmallow
     pip_web3
 )
+
+python_lib(everest_general_config_lib
+    PREFIX services/everest/definitions
+
+    FILES
+    general_config.py
+
+    LIBS
+    starkware_config_utils_lib
+    pip_marshmallow_dataclass
+)

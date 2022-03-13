@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
-from starkware.cairo.lang.vm.utils import MemorySegmentAddresses
+from starkware.cairo.lang.vm.utils import MemorySegmentRelocatableAddresses
 from starkware.python.math_utils import div_ceil, safe_div
 
 
@@ -63,10 +63,10 @@ class BuiltinRunner(ABC):
         """
 
     @abstractmethod
-    def get_memory_segment_addresses(self, runner) -> Dict[str, MemorySegmentAddresses]:
+    def get_memory_segment_addresses(self, runner) -> Dict[str, MemorySegmentRelocatableAddresses]:
         """
-        Returns a dict from segment name to MemorySegmentAddresses (begin_addr and stop_ptr of the
-        corresponding segment).
+        Returns a dict from segment name to MemorySegmentRelocatableAddresses
+        (begin_addr and stop_ptr of the corresponding segment).
         """
 
     @abstractmethod
@@ -179,16 +179,20 @@ class SimpleBuiltinRunner(BuiltinRunner):
         self.name = name
         self.included = included
         self.ratio = ratio
-        self.base: Optional[RelocatableValue] = None
+        self._base: Optional[RelocatableValue] = None
         self.stop_ptr: Optional[RelocatableValue] = None
         self.cells_per_instance = cells_per_instance
         self.n_input_cells = n_input_cells
 
     def initialize_segments(self, runner):
-        self.base = runner.segments.add()
+        self._base = runner.segments.add()
+
+    @property
+    def base(self) -> RelocatableValue:
+        assert self._base is not None, "Uninitialized self.base."
+        return self._base
 
     def initial_stack(self) -> List[MaybeRelocatable]:
-        assert self.base is not None, "Uninitialized self.base."
         return [self.base] if self.included else []
 
     def final_stack(self, runner, pointer):
@@ -234,7 +238,7 @@ class SimpleBuiltinRunner(BuiltinRunner):
 
     def get_memory_segment_addresses(self, runner):
         return {
-            self.name: MemorySegmentAddresses(
+            self.name: MemorySegmentRelocatableAddresses(
                 begin_addr=self.base,
                 stop_ptr=self.stop_ptr,
             )

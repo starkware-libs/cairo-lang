@@ -45,9 +45,11 @@ python_lib(starknet_feeder_gateway_response_objects_lib
     starknet_internal_transaction_lib
     starknet_transaction_execution_objects_lib
     starkware_dataclasses_utils_lib
+    starkware_python_utils_lib
     pip_marshmallow
     pip_marshmallow_dataclass
     pip_marshmallow_enum
     pip_marshmallow_oneofschema
     pip_typing_extensions
+    pip_web3
 )

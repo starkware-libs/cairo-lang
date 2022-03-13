@@ -10,22 +10,34 @@ import marshmallow.utils
 import marshmallow_dataclass
 from marshmallow_oneofschema import OneOfSchema
 from typing_extensions import Literal
+from web3 import Web3
 
 from services.everest.api.feeder_gateway.response_objects import BaseResponseObject
 from services.everest.business_logic.transaction_execution_objects import TransactionFailureReason
 from services.everest.definitions import fields as everest_fields
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
+from starkware.python.utils import to_bytes
 from starkware.starknet.business_logic.internal_transaction import (
     InternalDeploy,
     InternalInvokeFunction,
     InternalTransaction,
 )
-from starkware.starknet.business_logic.transaction_execution_objects import Event
+from starkware.starknet.business_logic.transaction_execution_objects import (
+    CallInfo,
+    Event,
+    OrderedEvent,
+    OrderedL2ToL1Message,
+)
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.transaction_type import TransactionType
 from starkware.starknet.services.api.contract_definition import EntryPointType
 from starkware.starkware_utils.marshmallow_dataclass_fields import VariadicLengthTupleField
-from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
+from starkware.starkware_utils.serializable_dataclass import SerializableMarshmallowDataclass
+from starkware.starkware_utils.validated_dataclass import (
+    ValidatedDataclass,
+    ValidatedMarshmallowDataclass,
+)
+from starkware.starkware_utils.validated_fields import sequential_id_metadata
 
 BlockIdentifier = Union[int, Literal["pending"]]
 OptionalBlockIdentifier = Optional[BlockIdentifier]
@@ -60,10 +72,9 @@ class TransactionStatus(Enum):
     ACCEPTED_ON_L1 = auto()
 
     @property
-    def has_receipt(self) -> bool:
+    def was_executed(self) -> bool:
         """
-        Returns whether a transaction with that status has a receipt (i.e., has been executed
-        successfully).
+        Returns whether a transaction with that status has been executed successfully.
         """
         return self in (
             TransactionStatus.PENDING,
@@ -215,7 +226,7 @@ class TransactionSpecificInfo(ValidatedMarshmallowDataclass):
 class DeploySpecificInfo(TransactionSpecificInfo):
     contract_address: int = field(metadata=fields.contract_address_metadata)
     contract_address_salt: int = field(metadata=fields.contract_address_salt_metadata)
-    constructor_calldata: List[int] = field(metadata=fields.call_data_metadata)
+    constructor_calldata: List[int] = field(metadata=fields.call_data_as_hex_metadata)
     transaction_hash: int = field(metadata=fields.transaction_hash_metadata)
     tx_type: ClassVar[TransactionType] = TransactionType.DEPLOY
 
@@ -234,9 +245,10 @@ class InvokeSpecificInfo(TransactionSpecificInfo):
     contract_address: int = field(metadata=fields.contract_address_metadata)
     entry_point_selector: int = field(metadata=fields.entry_point_selector_metadata)
     entry_point_type: EntryPointType
-    calldata: List[int] = field(metadata=fields.call_data_metadata)
+    calldata: List[int] = field(metadata=fields.call_data_as_hex_metadata)
     signature: List[int] = field(metadata=fields.signature_metadata)
     transaction_hash: int = field(metadata=fields.transaction_hash_metadata)
+    max_fee: int = field(metadata=fields.fee_metadata)
     tx_type: ClassVar[TransactionType] = TransactionType.INVOKE_FUNCTION
 
     @classmethod
@@ -248,6 +260,7 @@ class InvokeSpecificInfo(TransactionSpecificInfo):
             calldata=internal_tx.calldata,
             signature=internal_tx.signature,
             transaction_hash=internal_tx.hash_value,
+            max_fee=internal_tx.max_fee,
         )
 
 
@@ -311,7 +324,7 @@ class L1ToL2Message(BaseResponseObject):
     from_address: str = field(metadata=everest_fields.EthAddressField.metadata("from_address"))
     to_address: int = field(metadata=fields.contract_address_metadata)
     selector: int = field(metadata=fields.entry_point_selector_metadata)
-    payload: List[int] = field(metadata=fields.felt_list_metadata)
+    payload: List[int] = field(metadata=fields.felt_as_hex_list_metadata)
     nonce: Optional[int] = field(metadata=fields.optional_nonce_metadata)
 
 
@@ -323,7 +336,7 @@ class L2ToL1Message(BaseResponseObject):
 
     from_address: int = field(metadata=fields.contract_address_metadata)
     to_address: str = field(metadata=everest_fields.EthAddressField.metadata("to_address"))
-    payload: List[int] = field(metadata=fields.felt_list_metadata)
+    payload: List[int] = field(metadata=fields.felt_as_hex_list_metadata)
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -452,6 +465,105 @@ class BlockStateUpdate(BaseResponseObject):
     state_diff: StateDiff
 
 
+@dataclasses.dataclass(frozen=True)
+class OrderedL2ToL1MessageResponse(ValidatedDataclass):
+    """
+    See datails in OrderedL2ToL1Message's documentation.
+    """
+
+    order: int = field(metadata=sequential_id_metadata("L2-to-L1 message order"))
+    to_address: str = field(metadata=everest_fields.EthAddressField.metadata("to_address"))
+    payload: List[int] = field(metadata=fields.felt_as_hex_list_metadata)
+
+    @classmethod
+    def from_internal(
+        cls, messages: List[OrderedL2ToL1Message]
+    ) -> List["OrderedL2ToL1MessageResponse"]:
+        return [
+            cls(
+                order=message.order,
+                to_address=Web3.toChecksumAddress(to_bytes(message.to_address, 20)),
+                payload=message.payload,
+            )
+            for message in messages
+        ]
+
+
+@dataclasses.dataclass(frozen=True)
+class OrderedEventResponse(ValidatedDataclass):
+    """
+    See datails in OrderedEvent's documentation.
+    """
+
+    order: int = field(metadata=sequential_id_metadata("Event order"))
+    keys: List[int] = field(metadata=fields.felt_as_hex_list_metadata)
+    data: List[int] = field(metadata=fields.felt_as_hex_list_metadata)
+
+    @classmethod
+    def from_internal(cls, events: List[OrderedEvent]) -> List["OrderedEventResponse"]:
+        return [cls(order=event.order, keys=event.keys, data=event.data) for event in events]
+
+
+# NOTE: This dataclass isn't validated due to a forward-declaration issue.
+@marshmallow_dataclass.dataclass(frozen=True)
+class FunctionInvocation(SerializableMarshmallowDataclass):
+    """
+    A lean version of CallInfo class, containing merely the information relevant for the user.
+    """
+
+    # Static info.
+    caller_address: int = field(metadata=fields.contract_address_metadata)
+    contract_address: int = field(metadata=fields.contract_address_metadata)
+    code_address: Optional[int] = field(metadata=fields.optional_code_address_metadata)
+    selector: Optional[int] = field(metadata=fields.optional_entry_point_selector_metadata)
+    entry_point_type: Optional[EntryPointType]
+    calldata: List[int] = field(metadata=fields.call_data_as_hex_metadata)
+
+    # Execution info.
+    result: List[int] = field(metadata=fields.retdata_as_hex_metadata)
+    execution_resources: ExecutionResources
+    internal_calls: List["FunctionInvocation"] = field(
+        metadata=dict(
+            marshmallow_field=mfields.List(mfields.Nested(lambda: FunctionInvocation.Schema()))
+        )
+    )
+    events: List[OrderedEventResponse]
+    messages: List[OrderedL2ToL1MessageResponse]
+
+    @classmethod
+    def from_internal_version(cls, call_info: CallInfo) -> "FunctionInvocation":
+        return cls(
+            caller_address=call_info.caller_address,
+            contract_address=call_info.contract_address,
+            code_address=call_info.code_address,
+            selector=call_info.entry_point_selector,
+            entry_point_type=call_info.entry_point_type,
+            calldata=call_info.calldata,
+            result=call_info.retdata,
+            execution_resources=call_info.execution_resources,
+            internal_calls=[
+                cls.from_internal_version(call_info=internal_call)
+                for internal_call in call_info.internal_calls
+            ],
+            events=OrderedEventResponse.from_internal(events=call_info.events),
+            messages=OrderedL2ToL1MessageResponse.from_internal(
+                messages=call_info.l2_to_l1_messages
+            ),
+        )
+
+
+@marshmallow_dataclass.dataclass(frozen=True)
+class TransactionTrace(BaseResponseObject):
+    """
+    Represents the trace of a StarkNet transaction execution,
+    including internal calls.
+    """
+
+    # An object describing the invocation of a specific function.
+    function_invocation: FunctionInvocation
+    signature: List[int] = field(metadata=fields.signature_metadata)
+
+
 @marshmallow_dataclass.dataclass(frozen=True)
 class StarknetBlock(BaseResponseObject):
     """
@@ -471,9 +583,11 @@ class StarknetBlock(BaseResponseObject):
         )
     )
     timestamp: int = field(metadata=fields.timestamp_metadata)
-    transaction_receipts: Tuple[TransactionExecution, ...] = field(
+    transaction_receipts: Optional[Tuple[TransactionExecution, ...]] = field(
         metadata=dict(
-            marshmallow_field=VariadicLengthTupleField(mfields.Nested(TransactionExecution.Schema))
+            marshmallow_field=VariadicLengthTupleField(
+                mfields.Nested(TransactionExecution.Schema), allow_none=True
+            )
         )
     )
 
@@ -486,7 +600,7 @@ class StarknetBlock(BaseResponseObject):
         state_root: Optional[bytes],
         transactions: Iterable[InternalTransaction],
         timestamp: int,
-        transaction_receipts: Tuple[TransactionExecution, ...],
+        transaction_receipts: Optional[Tuple[TransactionExecution, ...]],
         status: Optional[BlockStatus],
     ) -> "StarknetBlock":
         return cls(
@@ -505,13 +619,10 @@ class StarknetBlock(BaseResponseObject):
     def __post_init__(self):
         super().__post_init__()
 
-        tx_status_error_message = (
-            "Transactions' status in block must match the status of the block."
-        )
-        if self.status is None:
-            assert all(
-                tx_receipt.status is None for tx_receipt in self.transaction_receipts
-            ), tx_status_error_message
+        if self.status in (BlockStatus.ABORTED, BlockStatus.REVERTED):
+            assert (
+                self.transaction_receipts is None
+            ), "Aborted and reverted blocks must not have transaction receipts."
 
             return
 

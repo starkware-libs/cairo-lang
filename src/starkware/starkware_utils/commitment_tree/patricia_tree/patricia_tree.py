@@ -5,8 +5,9 @@ import marshmallow_dataclass
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import (
     BinaryFactDict,
     BinaryFactTree,
-    TFact,
+    TLeafFact,
 )
+from starkware.starkware_utils.commitment_tree.leaf_fact import LeafFact
 from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import EmptyNodeFact
 from starkware.starkware_utils.commitment_tree.patricia_tree.virtual_calculation_node import (
     VirtualCalculationNode,
@@ -15,7 +16,7 @@ from starkware.starkware_utils.commitment_tree.patricia_tree.virtual_patricia_no
     VirtualPatriciaNode,
 )
 from starkware.starkware_utils.commitment_tree.update_tree import update_tree
-from starkware.storage.storage import Fact, FactFetchingContext
+from starkware.storage.storage import FactFetchingContext
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -26,7 +27,7 @@ class PatriciaTree(BinaryFactTree):
 
     @classmethod
     async def empty_tree(
-        cls, ffc: FactFetchingContext, height: int, leaf_fact: Fact
+        cls, ffc: FactFetchingContext, height: int, leaf_fact: LeafFact
     ) -> "PatriciaTree":
         """
         Initializes an empty PatriciaTree of the given height.
@@ -39,13 +40,13 @@ class PatriciaTree(BinaryFactTree):
 
         return PatriciaTree(root=EmptyNodeFact.EMPTY_NODE_HASH, height=height)
 
-    async def get_leaves(
+    async def _get_leaves(
         self,
         ffc: FactFetchingContext,
         indices: Collection[int],
-        fact_cls: Type[TFact],
+        fact_cls: Type[TLeafFact],
         facts: Optional[BinaryFactDict] = None,
-    ) -> Dict[int, TFact]:
+    ) -> Dict[int, TLeafFact]:
         """
         Returns the values of the leaves whose indices are given.
         """
@@ -57,7 +58,7 @@ class PatriciaTree(BinaryFactTree):
     async def update(
         self,
         ffc: FactFetchingContext,
-        modifications: Collection[Tuple[int, Fact]],
+        modifications: Collection[Tuple[int, LeafFact]],
         facts: Optional[BinaryFactDict] = None,
     ) -> "PatriciaTree":
         """

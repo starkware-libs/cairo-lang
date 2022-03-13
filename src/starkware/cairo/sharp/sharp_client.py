@@ -8,8 +8,8 @@ import sys
 import tempfile
 from typing import List, Optional
 
-from starkware.cairo.bootloader.generate_fact import get_cairo_pie_fact_info
-from starkware.cairo.bootloader.hash_program import compute_program_hash_chain
+from starkware.cairo.bootloaders.generate_fact import get_cairo_pie_fact_info
+from starkware.cairo.bootloaders.hash_program import compute_program_hash_chain
 from starkware.cairo.lang.compiler.assembler import Program
 from starkware.cairo.lang.vm.crypto import get_crypto_lib_context_manager
 from starkware.cairo.sharp.client_lib import CairoPie, ClientLib

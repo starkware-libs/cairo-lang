@@ -38,8 +38,10 @@ func is_le{range_check_ptr}(a, b) -> (res):
     return is_nn(b - a)
 end
 
-# Returns 1 of 0 <= a <= b < RANGE_CHECK_BOUND.
+# Returns 1 if 0 <= a <= b < RANGE_CHECK_BOUND.
 # Returns 0 otherwise.
+#
+# Assumption: b < RANGE_CHECK_BOUND.
 func is_nn_le{range_check_ptr}(a, b) -> (res):
     let (res) = is_nn(a)
     if res == 0:
@@ -51,7 +53,7 @@ end
 # Returns 1 if value is in the range [lower, upper).
 # Returns 0 otherwise.
 # Assumptions:
-# upper - lower <= RC_BOUND
+# upper - lower <= RANGE_CHECK_BOUND
 func is_in_range{range_check_ptr}(value, lower, upper) -> (res):
     let (res) = is_le(lower, value)
     if res == 0:

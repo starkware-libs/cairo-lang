@@ -1,12 +1,14 @@
 import random
 import re
 import string
+from itertools import count
 
 import pytest
 
 from starkware.python.utils import (
     WriteOnceDict,
     all_subclasses,
+    assert_exhausted,
     blockify,
     composite,
     gather_in_chunks,
@@ -149,3 +151,22 @@ def test_to_ascii_str():
         converted_string = to_ascii_string(value=string_pattern.format(value=chr(order)))
         assert converted_string.isascii()
         assert converted_string == expected_string
+
+
+def test_assert_exhausted():
+    # Positive flow.
+    assert_exhausted(iterator=iter([]))
+
+    # Negative flow.
+    with pytest.raises(
+        AssertionError,
+        match=re.escape("Iterator is not empty."),
+    ):
+        assert_exhausted(iterator=iter([1]))
+
+    # Check that infinite iterator fails assertion.
+    with pytest.raises(
+        AssertionError,
+        match=re.escape("Iterator is not empty."),
+    ):
+        assert_exhausted(iterator=count(start=0, step=1))

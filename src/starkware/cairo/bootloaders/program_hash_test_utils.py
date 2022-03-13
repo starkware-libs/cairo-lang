@@ -1,6 +1,6 @@
 import json
 
-from starkware.cairo.bootloader.hash_program import compute_program_hash_chain
+from starkware.cairo.bootloaders.hash_program import compute_program_hash_chain
 from starkware.cairo.lang.compiler.program import Program
 
 

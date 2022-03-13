@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Dict, List, MutableMapping, Optional, Set, Union
+from typing import Dict, List, Mapping, MutableMapping, Optional, Set, Union
 
 from starkware.cairo.lang.compiler.identifier_definition import (
     AliasDefinition,
@@ -76,7 +76,7 @@ class IdentifierManager:
 
     def __init__(self):
         self.root = IdentifierScope(self, ScopedName())
-        self.dict = {}
+        self.dict: MutableMapping[ScopedName, IdentifierDefinition] = {}
 
     def add_identifier(self, name: ScopedName, definition: IdentifierDefinition):
         """
@@ -87,7 +87,7 @@ class IdentifierManager:
 
     @classmethod
     def from_dict(
-        cls, identifier_dict: Dict[ScopedName, IdentifierDefinition]
+        cls, identifier_dict: Mapping[ScopedName, IdentifierDefinition]
     ) -> "IdentifierManager":
         identifier_manager = cls()
         for name, identifier_definition in identifier_dict.items():

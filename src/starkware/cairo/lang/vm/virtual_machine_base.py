@@ -1,18 +1,26 @@
 import dataclasses
+import re
 import sys
 from abc import ABC
 from typing import Any, Callable, Dict, List, Optional, Tuple
+
+from typing_extensions import Protocol
 
 from starkware.cairo.lang.compiler.debug_info import DebugInfo, InstructionLocation
 from starkware.cairo.lang.compiler.encode import is_call_instruction
 from starkware.cairo.lang.compiler.expression_evaluator import ExpressionEvaluator
 from starkware.cairo.lang.compiler.instruction import decode_instruction_values
+from starkware.cairo.lang.compiler.preprocessor.flow import FlowTrackingDataActual
 from starkware.cairo.lang.compiler.preprocessor.preprocessor import AttributeBase, AttributeScope
+from starkware.cairo.lang.compiler.preprocessor.reg_tracking import RegTrackingData
 from starkware.cairo.lang.compiler.program import Program, ProgramBase
+from starkware.cairo.lang.compiler.references import ApDeductionError
+from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.vm.builtin_runner import BuiltinRunner
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 from starkware.cairo.lang.vm.trace_entry import TraceEntry
+from starkware.cairo.lang.vm.utils import decimal_repr
 from starkware.cairo.lang.vm.validated_memory_dict import ValidatedMemoryDict, ValidationRule
 from starkware.cairo.lang.vm.vm_consts import VmConsts, VmConstsContext
 from starkware.cairo.lang.vm.vm_exceptions import (
@@ -21,17 +29,29 @@ from starkware.cairo.lang.vm.vm_exceptions import (
     VmException,
     VmExceptionBase,
 )
+from starkware.starknet.security.simple_references import (
+    InvalidReferenceExpressionError,
+    is_simple_reference,
+)
 
-Rule = Callable[["VirtualMachineBase", RelocatableValue], Optional[int]]
+
+class Rule(Protocol):
+    def __call__(
+        self, vm: "VirtualMachineBase", addr: RelocatableValue, *args: Any
+    ) -> Optional[MaybeRelocatable]:
+        pass
+
 
 MAX_TRACEBACK_ENTRIES = 20
 ERROR_MESSAGE_ATTRIBUTE = "error_message"
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class VmAttributeScope(AttributeBase):
     start_pc: MaybeRelocatable
     end_pc: MaybeRelocatable
+    flow_tracking_data: Optional[FlowTrackingDataActual]
+    accessible_scopes: List[ScopedName]
 
     @classmethod
     def from_attribute_scope(cls, attr: AttributeScope, program_base: MaybeRelocatable):
@@ -40,6 +60,8 @@ class VmAttributeScope(AttributeBase):
             value=attr.value,
             start_pc=program_base + attr.start_pc,
             end_pc=program_base + attr.end_pc,
+            flow_tracking_data=attr.flow_tracking_data,
+            accessible_scopes=attr.accessible_scopes,
         )
 
 
@@ -60,9 +82,9 @@ class RunContextBase(ABC):
     fp: MaybeRelocatable
     prime: int
 
-    def get_traceback_entries(self):
+    def get_traceback_entries(self) -> List[Tuple[MaybeRelocatable, MaybeRelocatable]]:
         """
-        Returns the values of pc of the call instructions in the traceback.
+        Returns the values (fp, pc) corresponding to each call instruction in the traceback.
         Returns the most recent call last.
         """
         entries = []
@@ -72,11 +94,13 @@ class RunContextBase(ABC):
                 break
 
             # Get the previous fp and the return pc.
-            fp, ret_pc = self.memory.get(fp - 2), self.memory.get(fp - 1)
+            opt_fp, opt_ret_pc = self.memory.get(fp - 2), self.memory.get(fp - 1)
 
             # If one of them is not in memory, abort.
-            if fp is None or ret_pc is None:
+            if opt_fp is None or opt_ret_pc is None:
                 break
+
+            fp, ret_pc = opt_fp, opt_ret_pc
 
             # Get the two memory cells before ret_pc.
             instruction0, instruction1 = self.memory.get(ret_pc - 2), self.memory.get(ret_pc - 1)
@@ -84,13 +108,13 @@ class RunContextBase(ABC):
             # Try to check if the call instruction is (instruction0, instruction1) or just
             # instruction1 (with no immediate).
             # In rare cases this may be ambiguous.
-            if instruction1 is not None and is_call_instruction(
+            if isinstance(instruction1, int) and is_call_instruction(
                 encoded_instruction=instruction1, imm=None
             ):
                 call_pc = ret_pc - 1
             elif (
-                instruction0 is not None
-                and instruction1 is not None
+                isinstance(instruction0, int)
+                and isinstance(instruction1, int)
                 and is_call_instruction(encoded_instruction=instruction0, imm=instruction1)
             ):
                 call_pc = ret_pc - 2
@@ -98,7 +122,7 @@ class RunContextBase(ABC):
                 # If none of them seems like the calling instruction, abort.
                 break
 
-            entries.append(call_pc)
+            entries.append((fp, call_pc))
 
         return entries[::-1]
 
@@ -245,39 +269,6 @@ class VirtualMachineBase(ABC):
         assert len(self.exec_scopes) > 1, "Cannot exit main scope."
         self.exec_scopes.pop()
 
-    def step(self):
-        self.skip_instruction_execution = False
-        # Execute hints.
-        for hint_index, hint in enumerate(self.hints.get(self.run_context.pc, [])):
-            exec_locals = self.exec_scopes[-1]
-            exec_locals["memory"] = memory = self.validated_memory
-            exec_locals["ap"] = ap = self.run_context.ap
-            exec_locals["fp"] = fp = self.run_context.fp
-            exec_locals["pc"] = pc = self.run_context.pc
-            exec_locals["current_step"] = self.current_step
-            exec_locals["ids"] = hint.consts(pc, ap, fp, memory)
-
-            exec_locals["vm_load_program"] = self.load_program
-            exec_locals["vm_enter_scope"] = self.enter_scope
-            exec_locals["vm_exit_scope"] = self.exit_scope
-            exec_locals.update(self.static_locals)
-
-            self.exec_hint(hint.compiled, exec_locals, hint_index=hint_index)
-
-            # Clear ids (which will be rewritten by the next hint anyway) to make the VM instance
-            # smaller and faster to copy.
-            del exec_locals["ids"]
-            del exec_locals["memory"]
-
-            if self.skip_instruction_execution:
-                return
-
-        # Decode.
-        instruction = self.decode_current_instruction()
-
-        # Run.
-        self.run_instruction(instruction)
-
     def compile_hint(self, source, filename, hint_index: int):
         """
         Compiles the given python source code.
@@ -304,32 +295,25 @@ class VirtualMachineBase(ABC):
                 hint_exception, notes=[hint_exception.exception_str], hint_index=hint_index
             ) from None
 
-    @property
-    def last_pc(self):
-        """
-        Returns the value of the program counter for the last instruction that was execute.
-        Note that this is different from self.run_context.pc which contains the value of the
-        next instruction to be executed.
-        """
-        return self.trace[-1].pc
-
     def as_vm_exception(
-        self, exc, pc=None, notes: Optional[List[str]] = None, hint_index: Optional[int] = None
+        self,
+        exc,
+        with_traceback: bool = True,
+        notes: Optional[List[str]] = None,
+        hint_index: Optional[int] = None,
     ):
         """
-        Wraps the exception with a VmException, adding to it location information. If pc is not
-        given the current pc is used.
+        Wraps the exception with a VmException, adding to it location information.
+        The current pc is used.
         """
-        traceback = None
-        if pc is None:
-            pc = self.run_context.pc
-            traceback = self.get_traceback()
+        pc = self.run_context.pc
+        traceback = self.get_traceback() if with_traceback else None
 
         return VmException(
             pc=pc,
             inst_location=self.get_location(pc=pc),
             inner_exc=exc,
-            error_attr_value=self.get_error_attr_value(pc),
+            error_attr_value=self.get_error_attr_value(pc=pc, fp=self.run_context.fp),
             traceback=traceback,
             notes=notes,
             hint_index=hint_index,
@@ -338,24 +322,94 @@ class VirtualMachineBase(ABC):
     def get_location(self, pc) -> Optional[InstructionLocation]:
         return self.instruction_debug_info.get(pc)
 
-    def get_error_attr_value(self, pc) -> str:
+    def evaluate_reference(
+        self,
+        name: str,
+        accessible_scopes: List[ScopedName],
+        flow_tracking_data: FlowTrackingDataActual,
+        fp: MaybeRelocatable,
+    ) -> MaybeRelocatable:
+        """
+        Returns the value of the given reference with respect to the given fp.
+        If the reference is ap-based, ApDeductionError is thrown.
+        """
+        assert isinstance(self.program, Program)
+        identifier = self.program.identifiers.search(
+            accessible_scopes=accessible_scopes, name=ScopedName.from_string(name)
+        )
+        reference = flow_tracking_data.resolve_reference(
+            reference_manager=self.program.reference_manager,
+            name=identifier.get_canonical_name(),
+        )
+
+        # A security check that the reference is not too complicated, doesn't rely on other
+        # references, doesn't contain nondet-hints, etc.
+        if not is_simple_reference(reference.value, simplicity_bound=20):
+            raise InvalidReferenceExpressionError()
+
+        # Evaluate the reference using an invalid ap_tracking, which will throw an ApDeductionError
+        # exception if the reference is ap-based.
+        expr = reference.eval(RegTrackingData(-1, 0))
+        return ExpressionEvaluator[MaybeRelocatable](
+            prime=self.prime,
+            ap=None,
+            fp=fp,
+            memory=self.validated_memory,  # type: ignore
+        ).eval(expr)
+
+    def substitute_error_message_references(self, error_message_attr: VmAttributeScope, fp) -> str:
+        """
+        Substitutes references in the given error_message attribute with their actual value.
+        References are defined with '{}'. E.g., 'x must be positive. Got: {x}'.
+        """
+        error_message = error_message_attr.value
+        if error_message_attr.flow_tracking_data is None:
+            return error_message
+        flow_tracking_data = error_message_attr.flow_tracking_data
+
+        invalid_references = []
+
+        def substitute_ref(match):
+            reference = match.group("name")
+            try:
+                val = self.evaluate_reference(
+                    name=reference,
+                    accessible_scopes=error_message_attr.accessible_scopes,
+                    flow_tracking_data=flow_tracking_data,
+                    fp=fp,
+                )
+                return decimal_repr(val, self.prime)
+            except (ApDeductionError, InvalidReferenceExpressionError):
+                invalid_references.append(reference)
+                return match.group(0)
+
+        error_message = re.sub(r"{(?P<name>[a-zA-Z0-9.]+)}", substitute_ref, error_message)
+        if len(invalid_references) > 0:
+            error_message += (
+                f" (Cannot evaluate ap-based or complex references: {invalid_references})"
+            )
+
+        return error_message
+
+    def get_error_attr_value(self, pc, fp) -> str:
         """
         Returns the error messages that correspond to the error_message attribute scopes surrounding
         the given pc.
         """
-        error_value = ""
+        errors = ""
         for error_message_attr in self.error_message_attributes:
             if error_message_attr.start_pc <= pc < error_message_attr.end_pc:
-                error_value += f"Error message: {error_message_attr.value}\n"
-        return error_value
+                error_message = self.substitute_error_message_references(error_message_attr, fp)
+                errors += f"Error message: {error_message}\n"
+        return errors
 
     def get_traceback(self) -> Optional[str]:
         """
         Returns the traceback at the current pc.
         """
         traceback = ""
-        for traceback_pc in self.run_context.get_traceback_entries():
-            traceback += self.get_error_attr_value(traceback_pc)
+        for fp, traceback_pc in self.run_context.get_traceback_entries():
+            traceback += self.get_error_attr_value(pc=traceback_pc, fp=fp)
             location = self.get_location(pc=traceback_pc)
             if location is None:
                 traceback += f"Unknown location (pc={traceback_pc})\n"
@@ -416,6 +470,13 @@ class VirtualMachineBase(ABC):
         self.verify_auto_deductions()
         if len(self.exec_scopes) != 1:
             raise VmExceptionBase("Every enter_scope() requires a corresponding exit_scope().")
+
+    def check_eq(self, val0: MaybeRelocatable, val1: MaybeRelocatable) -> bool:
+        """
+        Called when an instruction encounters an assertion that two values should be equal.
+        This function can be overridden by subclasses.
+        """
+        return val0 == val1
 
 
 def get_perm_range_check_limits(

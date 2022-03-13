@@ -3,6 +3,7 @@ from typing import Optional, Tuple
 
 from starkware.cairo.lang.compiler.ast.cairo_types import (
     CairoType,
+    TypeCodeoffset,
     TypeFelt,
     TypePointer,
     TypeStruct,
@@ -19,6 +20,7 @@ from starkware.cairo.lang.compiler.ast.expr import (
     ExprHint,
     ExprIdentifier,
     ExprNeg,
+    ExprNewOperator,
     ExprOperator,
     ExprParentheses,
     ExprReg,
@@ -33,6 +35,7 @@ from starkware.cairo.lang.compiler.preprocessor.identifier_aware_visitor import 
     IdentifierAwareVisitor,
 )
 from starkware.cairo.lang.compiler.type_casts import CairoTypeError, check_cast
+from starkware.python.utils import safe_zip
 
 
 def get_expr_addr(expr: Expression):
@@ -56,8 +59,9 @@ class TypeSystemVisitor(IdentifierAwareVisitor):
     def visit_ExprHint(self, expr: ExprHint) -> Tuple[ExprHint, TypeFelt]:
         return expr, TypeFelt(location=expr.location)
 
-    def visit_ExprFutureLabel(self, expr: ExprFutureLabel) -> Tuple[ExprFutureLabel, TypeFelt]:
-        return expr, TypeFelt(location=expr.identifier.location)
+    def visit_ExprFutureLabel(self, expr: ExprFutureLabel) -> Tuple[ExprFutureLabel, CairoType]:
+        type_cls = TypeCodeoffset if expr.is_typed else TypeFelt
+        return (dataclasses.replace(expr, is_typed=False), type_cls(location=expr.location))
 
     def visit_ExprIdentifier(self, expr: ExprIdentifier) -> Tuple[Expression, CairoType]:
         raise CairoTypeError(
@@ -79,7 +83,7 @@ class TypeSystemVisitor(IdentifierAwareVisitor):
             result_type = a_type
         elif isinstance(a_type, TypeFelt) and isinstance(b_type, TypePointer) and op == "+":
             result_type = b_type
-        elif isinstance(a_type, TypePointer) and a_type == b_type and op == "-":
+        elif isinstance(a_type, (TypePointer, TypeCodeoffset)) and a_type == b_type and op == "-":
             result_type = TypeFelt(location=expr.location)
         else:
             raise CairoTypeError(
@@ -160,7 +164,7 @@ class TypeSystemVisitor(IdentifierAwareVisitor):
                     location=expr.location,
                 )
 
-            item_type = inner_type.members[offset_value]
+            item_type = inner_type.members[offset_value].typ
 
             if isinstance(inner_expr, ExprTuple):
                 assert len(inner_expr.members.args) == tuple_len
@@ -175,7 +179,7 @@ class TypeSystemVisitor(IdentifierAwareVisitor):
                 # Handles pointers cast as tuples*, e.g. `[cast(ap, (felt, felt)*][0]`.
                 addr = inner_expr.addr
                 offset_in_felts = ExprConst(
-                    val=sum(map(self.get_size, inner_type.members[:offset_value])),
+                    val=sum(map(self.get_size, inner_type.types[:offset_value])),
                     location=offset_expr.location,
                 )
                 addr_with_offset = ExprOperator(
@@ -230,7 +234,7 @@ class TypeSystemVisitor(IdentifierAwareVisitor):
 
         inner_expr, inner_type = self.visit(expr.expr)
         if isinstance(inner_type, TypePointer):
-            if not isinstance(inner_type.pointee, TypeStruct):
+            if not isinstance(inner_type.pointee, (TypeStruct, TypeTuple)):
                 raise CairoTypeError(
                     f"Cannot apply dot-operator to pointer-to-non-struct type "
                     f"'{inner_type.format()}'.",
@@ -238,10 +242,10 @@ class TypeSystemVisitor(IdentifierAwareVisitor):
                 )
             # Allow for . as ->, once.
             inner_type = inner_type.pointee
-        elif isinstance(inner_type, TypeStruct):
+        elif isinstance(inner_type, (TypeStruct, TypeTuple)):
             if isinstance(inner_expr, ExprTuple):
                 raise CairoTypeError(
-                    "Accessing struct members for r-value structs is not supported yet.",
+                    "Accessing struct/tuple members for r-value structs is not supported yet.",
                     location=expr.location,
                 )
             # Get the address, to evaluate . as ->.
@@ -252,22 +256,45 @@ class TypeSystemVisitor(IdentifierAwareVisitor):
                 location=expr.location,
             )
 
-        try:
-            struct_def = get_struct_definition(
-                struct_name=inner_type.resolved_scope, identifier_manager=self.identifiers
-            )
-        except Exception as exc:
-            raise CairoTypeError(str(exc), location=expr.location)
+        if isinstance(inner_type, TypeStruct):
+            try:
+                struct_def = get_struct_definition(
+                    struct_name=inner_type.resolved_scope, identifier_manager=self.identifiers
+                )
+            except Exception as exc:
+                raise CairoTypeError(str(exc), location=expr.location)
 
-        if expr.member.name not in struct_def.members:
-            raise CairoTypeError(
-                f"Member '{expr.member.name}' does not appear in definition of struct "
-                f"'{inner_type.format()}'.",
-                location=expr.location,
-            )
-        member_definition = struct_def.members[expr.member.name]
-        member_type = member_definition.cairo_type
-        member_offset = member_definition.offset
+            if expr.member.name not in struct_def.members:
+                raise CairoTypeError(
+                    f"Member '{expr.member.name}' does not appear in definition of struct "
+                    f"'{inner_type.format()}'.",
+                    location=expr.location,
+                )
+
+            member_definition = struct_def.members[expr.member.name]
+            member_type = member_definition.cairo_type
+            member_offset = member_definition.offset
+        else:
+            if isinstance(inner_type, TypeTuple) and not inner_type.is_named:
+                raise CairoTypeError(
+                    f"Cannot apply dot-operator to unnamed tuple type '{inner_type.format()}'.",
+                    location=expr.location,
+                )
+
+            assert isinstance(inner_type, TypeTuple)
+            member_offset = 0
+            for i, member in enumerate(inner_type.members):
+                if member.name == expr.member.name:
+                    member_type = member.typ
+                    break
+
+                member_offset += self.get_size(member.typ)
+            else:
+                raise CairoTypeError(
+                    f"Member '{expr.member.name}' does not appear in definition of tuple type "
+                    f"'{inner_type.format()}'.",
+                    location=expr.location,
+                )
 
         if member_offset == 0:
             simplified_expr = ExprDeref(addr=inner_expr, location=expr.location)
@@ -288,8 +315,9 @@ class TypeSystemVisitor(IdentifierAwareVisitor):
             src_type=src_type,
             dest_type=dest_type,
             identifier_manager=self.identifiers,
-            expr=inner_expr,
             cast_type=expr.cast_type,
+            location=expr.location,
+            expr=inner_expr,
         ):
             raise CairoTypeError(
                 f"Cannot cast '{src_type.format()}' to '{dest_type.format()}'.",
@@ -303,16 +331,39 @@ class TypeSystemVisitor(IdentifierAwareVisitor):
         args = expr.members.args
         # Call visit on each member to obtain a list of the form (expr, type).
         member_expr_types = [self.visit(arg.expr) for arg in args]
+        # Replace each tuple item with the corresponding type-simplified expression from
+        # member_expr_types, and remove the name (as the name is part of the type rather than
+        # the type-simplified expression).
         result_members = [
-            dataclasses.replace(arg, expr=expr) for arg, (expr, _) in zip(args, member_expr_types)
+            dataclasses.replace(arg, identifier=None, expr=expr)
+            for arg, (expr, _) in zip(args, member_expr_types)
         ]
         result_expr = dataclasses.replace(
             expr, members=dataclasses.replace(expr.members, args=result_members)
         )
-        cairo_type = TypeTuple(
-            members=[expr_type for expr, expr_type in member_expr_types], location=expr.location
+        # Construct the resulting type. Include the names of the tuple items in the returned
+        # named tuple type.
+        cairo_type = TypeTuple.from_members(
+            members=[
+                TypeTuple.Item(
+                    name=(None if arg.identifier is None else arg.identifier.name),
+                    typ=expr_type,
+                    location=arg.location,
+                )
+                for arg, (expr, expr_type) in safe_zip(args, member_expr_types)
+            ],
+            location=expr.location,
         )
         return result_expr, cairo_type
+
+    def visit_ExprNewOperator(self, expr: ExprNewOperator) -> Tuple[ExprNewOperator, CairoType]:
+        inner_expr, inner_expr_type = self.visit(expr.expr)
+        expr_type = (
+            TypePointer(pointee=inner_expr_type, location=expr.location)
+            if expr.is_typed
+            else TypeFelt(location=expr.location)
+        )
+        return ExprNewOperator(expr=inner_expr, is_typed=False, location=expr.location), expr_type
 
 
 def simplify_type_system(

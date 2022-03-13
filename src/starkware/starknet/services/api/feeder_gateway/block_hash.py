@@ -9,7 +9,7 @@ from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
 from starkware.storage.dict_storage import DictStorage
 from starkware.storage.storage import FactFetchingContext
-from starkware.storage.storage_utils import LeafFact
+from starkware.storage.storage_utils import SimpleLeafFact
 
 
 async def calculate_block_hash(
@@ -119,8 +119,10 @@ async def calculate_patricia_root(
     """
     Calculates and returns the patricia root whose (leftmost) leaves are given.
     """
-    empty_tree = await PatriciaTree.empty_tree(ffc=ffc, height=height, leaf_fact=LeafFact.empty())
-    modifications = [(index, LeafFact(value=value)) for index, value in enumerate(leaves)]
+    empty_tree = await PatriciaTree.empty_tree(
+        ffc=ffc, height=height, leaf_fact=SimpleLeafFact.empty()
+    )
+    modifications = [(index, SimpleLeafFact(value=value)) for index, value in enumerate(leaves)]
     final_tree = await empty_tree.update(ffc=ffc, modifications=modifications)
 
     return from_bytes(final_tree.root)

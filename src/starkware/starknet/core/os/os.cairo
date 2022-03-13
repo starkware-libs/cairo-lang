@@ -2,12 +2,10 @@
 
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.cairo_builtins import HashBuiltin
-from starkware.cairo.common.dict import DictAccess
 from starkware.cairo.common.math import assert_not_equal
-from starkware.cairo.common.segments import relocate_segment
-from starkware.cairo.common.serialize import serialize_word
-from starkware.starknet.core.os.output import (
-    BlockInfo, OsCarriedOutputs, OsOutput, os_output_serialize)
+from starkware.starknet.core.os.block_context import BlockContext, get_block_context
+from starkware.starknet.core.os.os_config.os_config import get_starknet_os_config_hash
+from starkware.starknet.core.os.output import OsCarriedOutputs, os_output_serialize
 from starkware.starknet.core.os.state import state_update
 from starkware.starknet.core.os.transactions import execute_transactions
 
@@ -21,29 +19,26 @@ func main{output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecds
     let initial_range_check_ptr = range_check_ptr
     let range_check_ptr = range_check_ptr + 1
 
-    let (local os_output : OsOutput*) = alloc()
+    let (initial_carried_outputs : OsCarriedOutputs*) = alloc()
     %{
         from starkware.starknet.core.os.os_input import StarknetOsInput
 
         os_input = StarknetOsInput.load(data=program_input)
 
-        ids.os_output.initial_outputs.messages_to_l1 = segments.add_temp_segment()
-        ids.os_output.initial_outputs.messages_to_l2 = segments.add_temp_segment()
-        ids.os_output.initial_outputs.deployment_info = segments.add_temp_segment()
+        ids.initial_carried_outputs.messages_to_l1 = segments.add_temp_segment()
+        ids.initial_carried_outputs.messages_to_l2 = segments.add_temp_segment()
+        ids.initial_carried_outputs.deployment_info = segments.add_temp_segment()
     %}
 
-    assert os_output.block_info = BlockInfo(
-        block_timestamp=nondet %{ syscall_handler.block_info.block_timestamp %},
-        block_number=nondet %{ syscall_handler.block_info.block_number %})
+    let (block_context : BlockContext*) = get_block_context()
 
-    tempvar outputs : OsCarriedOutputs* = &os_output.initial_outputs
-
+    let outputs = initial_carried_outputs
     with outputs:
         let (local reserved_range_checks_end, state_changes) = execute_transactions(
-            block_info=&os_output.block_info)
+            block_context=block_context)
     end
+    let final_carried_outputs = outputs
 
-    assert os_output.final_outputs = [outputs]
     local ecdsa_ptr = ecdsa_ptr
     local bitwise_ptr = bitwise_ptr
 
@@ -56,19 +51,32 @@ func main{output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecds
         ids.initial_storage_updates_ptr = segments.add_temp_segment()
     %}
     let storage_updates_ptr = initial_storage_updates_ptr
+
     with storage_updates_ptr:
         let (commitment_tree_update_output) = state_update{hash_ptr=pedersen_ptr}(
             state_changes_dict=state_changes.changes_start,
             state_changes_dict_end=state_changes.changes_end)
     end
-    assert os_output.commitment_tree_update_output = commitment_tree_update_output
 
     %{ vm_exit_scope() %}
 
+    # Compute the general config hash.
+    # This is done here to avoid passing pedersen_ptr to os_output_serialize.
+    let hash_ptr = pedersen_ptr
+    with hash_ptr:
+        let (starknet_os_config_hash) = get_starknet_os_config_hash(
+            starknet_os_config=&block_context.starknet_os_config)
+    end
+    let pedersen_ptr = hash_ptr
+
     os_output_serialize(
-        os_output=os_output,
+        block_context=block_context,
+        commitment_tree_update_output=commitment_tree_update_output,
+        initial_carried_outputs=initial_carried_outputs,
+        final_carried_outputs=final_carried_outputs,
         storage_updates_ptr_start=initial_storage_updates_ptr,
-        storage_updates_ptr_end=storage_updates_ptr)
+        storage_updates_ptr_end=storage_updates_ptr,
+        starknet_os_config_hash=starknet_os_config_hash)
 
     # Make sure that we report using at least 1 range check to guarantee that
     # initial_range_check_ptr points to a valid range check instance.

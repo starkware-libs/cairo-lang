@@ -15,15 +15,17 @@ from starkware.cairo.lang.compiler.ast.cairo_types import (
 )
 from starkware.cairo.lang.compiler.parser import parse_type
 from starkware.cairo.lang.compiler.type_system import mark_type_resolved
-from starkware.python.utils import safe_zip
-from starkware.starknet.business_logic.transaction_execution_objects import OrderedEventContent
+from starkware.python.utils import assert_exhausted, safe_zip
+from starkware.starknet.business_logic.transaction_execution_objects import OrderedEvent
+from starkware.starknet.public.abi import AbiType
 from starkware.starknet.testing.contract_utils import (
+    RAW_OUTPUT_ARG_LIST,
     EventManager,
     StructManager,
     flatten,
     parse_arguments,
 )
-from starkware.starknet.testing.objects import StarknetTransactionExecutionInfo
+from starkware.starknet.testing.objects import Dataclass, StarknetTransactionExecutionInfo
 from starkware.starknet.testing.state import CastableToAddress, StarknetState
 from starkware.starknet.utils.api_utils import cast_to_felts
 
@@ -48,11 +50,12 @@ class StarknetContract:
     def __init__(
         self,
         state: StarknetState,
-        abi: List[Any],
+        abi: AbiType,
         contract_address: CastableToAddress,
         deploy_execution_info: StarknetTransactionExecutionInfo,
     ):
         self.state = state
+        self.abi = abi
         self.deploy_execution_info = deploy_execution_info
 
         self.struct_manager = StructManager(abi=abi)
@@ -71,7 +74,7 @@ class StarknetContract:
         self.contract_address = contract_address
 
     def __dir__(self):
-        return object.__dir__(self) + list(self._abi_function_mapping.keys())
+        return list(object.__dir__(self)) + list(self._abi_function_mapping.keys())
 
     def __getattr__(self, name: str):
         if name in self._abi_function_mapping:
@@ -170,8 +173,8 @@ class StarknetContract:
         if isinstance(arg_type, TypeTuple):
             return Tuple[
                 tuple(
-                    self._get_annotation(arg_type=member, is_nested=True)
-                    for member in arg_type.members
+                    self._get_annotation(arg_type=cairo_type, is_nested=True)
+                    for cairo_type in arg_type.types
                 )
             ]
         if isinstance(arg_type, TypeStruct):
@@ -227,6 +230,23 @@ class StarknetContract:
             calldata=cast_to_felts(values=calldata),
             retdata_arg_types=retdata_arg_types,
             retdata_tuple=namedtuple(f"{function_name}_return_type", retdata_arg_names),
+            has_raw_output=(retdata_arg_names == RAW_OUTPUT_ARG_LIST),
+        )
+
+    def replace_abi(
+        self,
+        impl_contract_abi: AbiType,
+    ) -> "StarknetContract":
+        """
+        Replaces the contract's ABI.
+        Typically used to replace the ABI of a proxy contract with the ABI of the
+        implementation contract.
+        """
+        return StarknetContract(
+            state=self.state,
+            abi=impl_contract_abi,
+            contract_address=self.contract_address,
+            deploy_execution_info=self.deploy_execution_info,
         )
 
 
@@ -248,6 +268,7 @@ class StarknetContractFunctionInvocation:
     calldata: List[int]
     retdata_arg_types: List[CairoType]
     retdata_tuple: type
+    has_raw_output: bool
 
     async def call(
         self, caller_address: int = 0, signature: List[int] = None
@@ -260,17 +281,21 @@ class StarknetContractFunctionInvocation:
         )
 
     async def invoke(
-        self, caller_address: int = 0, signature: List[int] = None
+        self, caller_address: int = 0, max_fee: int = 0, signature: List[int] = None
     ) -> StarknetTransactionExecutionInfo:
         """
         Executes the function call and apply changes on the state.
         """
         return await self._invoke_on_given_state(
-            state=self.state, caller_address=caller_address, signature=signature
+            state=self.state, caller_address=caller_address, max_fee=max_fee, signature=signature
         )
 
     async def _invoke_on_given_state(
-        self, state: StarknetState, caller_address: int = 0, signature: List[int] = None
+        self,
+        state: StarknetState,
+        caller_address: int = 0,
+        max_fee: int = 0,
+        signature: List[int] = None,
     ) -> StarknetTransactionExecutionInfo:
         """
         Executes the function call and apply changes on the given state.
@@ -280,26 +305,34 @@ class StarknetContractFunctionInvocation:
             selector=self.name,
             calldata=self.calldata,
             caller_address=caller_address,
+            max_fee=max_fee,
             signature=None if signature is None else cast_to_felts(values=signature),
         )
+        # Check if function has @raw_output.
+        if self.has_raw_output:
+            # Return the result as a raw tuple.
+            result = tuple(execution_info.call_info.retdata)
+        else:
+            args = self._build_arguments(
+                arg_values=execution_info.call_info.retdata,
+                arg_types=self.retdata_arg_types,
+            )
+            result = self.retdata_tuple(*args)
+
         main_call_raw_events = execution_info.call_info.events
 
         return StarknetTransactionExecutionInfo.from_internal(
             tx_execution_info=execution_info,
-            result=self._build_arguments(
-                arg_values=execution_info.retdata,
-                arg_types=self.retdata_arg_types,
-                args_tuple=self.retdata_tuple,
-            ),
+            result=result,
             main_call_events=self._build_events(raw_events=main_call_raw_events),
         )
 
-    def _build_events(self, raw_events: List[OrderedEventContent]) -> List[tuple]:
+    def _build_events(self, raw_events: List[OrderedEvent]) -> List[Dataclass]:
         """
-        Given a list of low-level events, builds contract events (i.e., a named tuple) from those
-        corresponding to high-level ones.
+        Given a list of low-level events, builds contract events (i.e., a dynamic dataclass) from
+        those corresponding to high-level ones.
         """
-        events: List[tuple] = []
+        events: List[Dataclass] = []
         for raw_event in raw_events:
             if len(raw_event.keys) == 0 or raw_event.keys[0] not in self.event_manager:
                 # It is a low-level event emitted using directly the emit_event syscall.
@@ -312,21 +345,18 @@ class StarknetContractFunctionInvocation:
             # low-level event to contain a valid selector in its keys without being a valid high
             # level event - i.e., without the exact amount of data).
             try:
-                events.append(
-                    self._build_arguments(
-                        arg_values=arg_values,
-                        arg_types=self.event_manager.get_event_argument_types(identifier=selector),
-                        args_tuple=self.event_manager.get_contract_event(identifier=selector),
-                    )
+                args = self._build_arguments(
+                    arg_values=arg_values,
+                    arg_types=self.event_manager.get_event_argument_types(identifier=selector),
                 )
+                args_dataclass = self.event_manager.get_contract_event(identifier=selector)
+                events.append(args_dataclass(*args))
             except ArgumentParsingFailed:
                 pass
 
         return events
 
-    def _build_arguments(
-        self, arg_values: List[int], arg_types: List[CairoType], args_tuple: type
-    ) -> tuple:
+    def _build_arguments(self, arg_values: List[int], arg_types: List[CairoType]) -> List[Any]:
         """
         Reconstructs a Pythonic variant of the original Cairo structure of the arguments, deduced by
         their Cairo types, and fills it with the given (flat list of) values.
@@ -342,8 +372,8 @@ class StarknetContractFunctionInvocation:
                 return next(arg_value_iterator)
             if isinstance(arg_type, TypeTuple):
                 return tuple(
-                    build_arg(arg_type=member, arg_value_iterator=arg_value_iterator)
-                    for member in arg_type.members
+                    build_arg(arg_type=cairo_type, arg_value_iterator=arg_value_iterator)
+                    for cairo_type in arg_type.types
                 )
             if isinstance(arg_type, TypeStruct):
                 struct_name = arg_type.scope.path[-1]
@@ -375,7 +405,9 @@ class StarknetContractFunctionInvocation:
             raise ArgumentParsingFailed("Too few argument values.")
 
         # Make sure the iterator is empty.
-        if next(arg_value_iterator, None) is not None:
+        try:
+            assert_exhausted(iterator=arg_value_iterator)
+        except AssertionError:
             raise ArgumentParsingFailed("Too many argument values.")
 
-        return args_tuple(*res)
+        return res

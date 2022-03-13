@@ -1,5 +1,6 @@
 import io
 import random
+from typing import Dict
 
 import pytest
 
@@ -13,7 +14,8 @@ from starkware.cairo.lang.vm.cairo_pie import (
 )
 from starkware.cairo.lang.vm.cairo_runner import get_runner_from_code
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
-from starkware.cairo.lang.vm.relocatable import RelocatableValue
+from starkware.cairo.lang.vm.memory_segments import SEGMENT_SIZE_UPPER_BOUND
+from starkware.cairo.lang.vm.relocatable import MaybeRelocatableDict, RelocatableValue
 from starkware.python.utils import add_counters
 
 
@@ -33,12 +35,11 @@ def test_cairo_pie_serialize_deserialize():
         },
         extra_segments=[],
     )
-    memory = MemoryDict(
-        {
-            1: 2,
-            RelocatableValue(3, 4): RelocatableValue(6, 7),
-        }
-    )
+    memory: MaybeRelocatableDict = {
+        1: 2,
+        RelocatableValue(3, 4): RelocatableValue(6, 7),
+    }
+
     additional_data = {"c": ["d", 3]}
     execution_resources = ExecutionResources(
         n_steps=10,
@@ -50,7 +51,7 @@ def test_cairo_pie_serialize_deserialize():
     )
     cairo_pie = CairoPie(
         metadata=metadata,
-        memory=memory,
+        memory=MemoryDict(memory),
         additional_data=additional_data,
         execution_resources=execution_resources,
     )
@@ -133,7 +134,7 @@ def test_cairo_pie_memory_invalid_value(cairo_pie: CairoPie):
         offset=cairo_pie.metadata.execution_segment.size,
     )
     cairo_pie.memory.unfreeze_for_testing()
-    cairo_pie.memory[output_end] = output_end + 2
+    cairo_pie.memory[output_end] = output_end + SEGMENT_SIZE_UPPER_BOUND
     # It should fail because the address is outside the segment expected size.
     with pytest.raises(AssertionError, match="Invalid memory cell address."):
         cairo_pie.run_validity_checks()
@@ -151,7 +152,7 @@ def test_add_execution_resources():
     dummy_builtins = ["builtin1", "builtin2", "builtin3", "builtin4"]
 
     total_execution_resources = ExecutionResources.empty()
-    total_builtin_instance_counter = {}
+    total_builtin_instance_counter: Dict[str, int] = {}
     total_steps = 0
 
     # Create multiple random ExecutionResources objects, sum them using __ add __() and validate
@@ -160,7 +161,7 @@ def test_add_execution_resources():
     for _ in range(random_n_execution_resources):
         # Create an ExecutionResources object with random values (random builtin_instance_counter
         # and random n_steps).
-        random_builtin_instance_counter = {}
+        random_builtin_instance_counter: Dict[str, int] = {}
         random_n_counters = random.randint(0, 3)
         for _ in range(random_n_counters):
             random_builtin_type = random.choice(dummy_builtins)

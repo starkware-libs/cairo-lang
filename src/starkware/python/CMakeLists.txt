@@ -6,8 +6,11 @@ python_lib(starkware_python_utils_lib
     object_utils.py
     python_dependencies.py
     utils.py
+    utils_stub_module.py
+    utils_stub_module.pyi
 
     LIBS
+    pip_pyyaml
     pip_sympy
 )
 

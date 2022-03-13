@@ -236,6 +236,7 @@ def cairo_run(args):
     ret_code = 0
     cairo_pie_input = None
     if args.program is not None:
+        assert args.run_from_cairo_pie is None
         program: ProgramBase = load_program(args.program)
         initial_memory = MemoryDict()
         steps_input = args.steps
@@ -270,6 +271,7 @@ def cairo_run(args):
     end = runner.initialize_main_entrypoint()
 
     if args.run_from_cairo_pie is not None:
+        assert cairo_pie_input is not None
         # Add extra_segments.
         for segment_info in cairo_pie_input.metadata.extra_segments:
             runner.segments.add(size=segment_info.size)

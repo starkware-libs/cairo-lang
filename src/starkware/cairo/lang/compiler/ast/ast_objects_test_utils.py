@@ -3,6 +3,7 @@ from starkware.cairo.lang.compiler.ast.expr import (
     ExprDeref,
     ExprDot,
     ExprNeg,
+    ExprNewOperator,
     ExprOperator,
     ExprParentheses,
     ExprSubscript,
@@ -25,6 +26,8 @@ def remove_parentheses(expr):
         return ExprDeref(addr=remove_parentheses(expr.addr))
     if isinstance(expr, ExprDot):
         return ExprDot(expr=remove_parentheses(expr.expr), member=expr.member)
+    if isinstance(expr, ExprNewOperator):
+        return ExprNewOperator(expr=remove_parentheses(expr.expr), is_typed=expr.is_typed)
     if isinstance(expr, ExprSubscript):
         return ExprSubscript(
             expr=remove_parentheses(expr.expr), offset=remove_parentheses(expr.offset)

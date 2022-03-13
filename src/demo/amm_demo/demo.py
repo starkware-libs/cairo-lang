@@ -13,7 +13,7 @@ from eth_account.signers.base import BaseAccount
 from web3 import HTTPProvider, Web3, eth
 
 from demo.amm_demo.prove_batch import Account, Balance, BatchProver, SwapTransaction
-from starkware.cairo.bootloader.hash_program import compute_program_hash_chain
+from starkware.cairo.bootloaders.hash_program import compute_program_hash_chain
 from starkware.cairo.common.small_merkle_tree import MerkleTree
 from starkware.cairo.lang.vm.crypto import get_crypto_lib_context_manager, pedersen_hash
 from starkware.cairo.sharp.sharp_client import init_client

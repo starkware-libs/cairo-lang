@@ -6,7 +6,7 @@ from starkware.cairo.common.find_element import find_element, search_sorted, sea
 from starkware.cairo.common.keccak import unsafe_keccak
 from starkware.cairo.common.math import (
     abs_value, assert_250_bit, assert_in_range, assert_le, assert_le_felt, assert_lt,
-    assert_lt_felt, assert_nn, assert_nn_le, assert_not_equal, assert_not_zero, sign,
+    assert_lt_felt, assert_nn, assert_nn_le, assert_not_equal, assert_not_zero, horner_eval, sign,
     signed_div_rem, split_felt, split_int, sqrt, unsigned_div_rem)
 from starkware.cairo.common.math_cmp import (
     is_in_range, is_le, is_le_felt, is_nn, is_nn_le, is_not_zero)
@@ -19,6 +19,7 @@ from starkware.cairo.common.uint256 import (
     uint256_neg, uint256_not, uint256_or, uint256_shl, uint256_shr, uint256_signed_div_rem,
     uint256_signed_le, uint256_signed_lt, uint256_signed_nn, uint256_signed_nn_le, uint256_sqrt,
     uint256_sub, uint256_unsigned_div_rem, uint256_xor)
+from starkware.cairo.common.usort import usort
 from starkware.starknet.common.messages import send_message_to_l1
 from starkware.starknet.common.storage import normalize_address
 from starkware.starknet.common.syscalls import (

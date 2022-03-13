@@ -7,7 +7,7 @@ from lark.exceptions import LarkError, UnexpectedCharacters, UnexpectedToken, Vi
 
 from starkware.cairo.lang.compiler.ast.cairo_types import CairoType
 from starkware.cairo.lang.compiler.ast.code_elements import CodeBlock, CodeElement
-from starkware.cairo.lang.compiler.ast.expr import Expression
+from starkware.cairo.lang.compiler.ast.expr import ExprConst, Expression
 from starkware.cairo.lang.compiler.ast.instructions import InstructionAst
 from starkware.cairo.lang.compiler.ast.module import CairoFile
 from starkware.cairo.lang.compiler.error_handling import InputFile, Location, LocationError
@@ -69,6 +69,7 @@ def wrap_lark_error(err: LarkError, input_file: InputFile) -> Exception:
                 "LPAR",
                 "LSQB",
                 "NONDET",
+                "NEW",
                 "PYCONST",
                 "SHORT_STRING",
                 "register",
@@ -122,6 +123,7 @@ def wrap_lark_error(err: LarkError, input_file: InputFile) -> Exception:
             "MEMBER": '"member"',
             "MINUS": '"-"',
             "NAMESPACE": '"namespace"',
+            "NEW": '"new"',
             "PLUS": '"+"',
             "RBRACE": '"}"',
             "RET": '"ret"',
@@ -252,6 +254,16 @@ def parse_expr(code: str) -> Expression:
     Parses the given string and returns an Expression instance.
     """
     return parse(None, code, "expr", Expression)
+
+
+def parse_const(code: str) -> ExprConst:
+    """
+    Parses the given string and returns an ExprConst instance.
+    """
+    # Use parse_expr to share the lru cache.
+    expr_const = parse_expr(code=code)
+    assert isinstance(expr_const, ExprConst)
+    return expr_const
 
 
 def parse_type(code: str) -> CairoType:

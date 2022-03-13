@@ -22,7 +22,7 @@ const FIND_ELEMENT_RANGE_CHECK_USAGE = 2
 #
 # Optional hint variables:
 # __find_element_index - the index that should be returned. If not specified, the function will
-#   search for it.
+#   return the first index that has the key.
 func find_element{range_check_ptr}(array_ptr : felt*, elm_size, n_elms, key) -> (elm_ptr : felt*):
     alloc_locals
     local index

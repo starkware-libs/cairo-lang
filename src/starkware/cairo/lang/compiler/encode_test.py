@@ -1,5 +1,9 @@
 import dataclasses
 
+import pytest
+
+from starkware.cairo.lang.compiler.ast.expr import ExprConst
+from starkware.cairo.lang.compiler.ast.instructions import DefineWordInstruction, InstructionAst
 from starkware.cairo.lang.compiler.encode import (
     decode_instruction,
     encode_instruction,
@@ -154,3 +158,17 @@ def test_addap():
     assert encode_instruction(instruction, prime=PRIME) == encoded
     assert decode_instruction(*encoded) == instruction
     assert is_call_instruction(*encoded) is False
+
+
+@pytest.mark.parametrize("value", [-2, 2 * PRIME + 3])
+def test_out_of_range_dw(value):
+    """
+    Tests that encode_instruction handles out of range words correctly.
+    """
+    # Build the instruction explicitly as parse_instruction might return an instruction
+    # that needs simplification before encoding.
+    instruction = InstructionAst(
+        body=DefineWordInstruction(expr=ExprConst(val=value)),
+        inc_ap=False,
+    )
+    assert encode_instruction(build_instruction(instruction), prime=PRIME) == [value % PRIME]

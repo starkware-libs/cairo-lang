@@ -1,8 +1,10 @@
+from typing import cast
+
 import pytest
 
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
-from starkware.cairo.lang.vm.validated_memory_dict import ValidatedMemoryDict
+from starkware.cairo.lang.vm.validated_memory_dict import ValidatedMemoryDict, ValidationRule
 
 
 def test_validated_memory_dict():
@@ -29,7 +31,7 @@ def test_validated_memory_dict():
     memory_validator.add_validation_rule(1, lambda memory, addr: set())
     memory_validator.add_validation_rule(2, lambda memory, addr: {addr})
     memory_validator.add_validation_rule(3, rule_identical_pairs)
-    memory_validator.add_validation_rule(4, rule_constant_value, 0)
+    memory_validator.add_validation_rule(4, cast(ValidationRule, rule_constant_value), 0)
 
     addr0 = RelocatableValue.from_tuple((1, 0))
     addr1 = RelocatableValue.from_tuple((2, 0))

@@ -2,6 +2,7 @@ python_lib(starknet_messaging_sol
     PREFIX starkware/starknet/eth
     FILES
     IStarknetMessaging.sol
+    IStarknetMessagingEvents.sol
     StarknetMessaging.sol
 
     LIBS

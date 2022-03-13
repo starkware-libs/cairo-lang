@@ -1,11 +1,13 @@
 from collections import defaultdict
-from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Dict, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple
 
+from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt, TypePointer, TypeStruct
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 from starkware.cairo.lang.vm.vm_exceptions import SecurityError
 
 FIRST_MEMORY_ADDR = 1
+SEGMENT_SIZE_UPPER_BOUND = 2 ** 64
 
 
 class MemorySegmentManager:
@@ -158,6 +160,24 @@ class MemorySegmentManager:
             return arg % self.prime
         return arg
 
+    def gen_typed_args(self, args: NamedTuple) -> List[MaybeRelocatable]:
+        """
+        Takes a Cairo typed NamedTuple generated with CairoStructFactory and
+        returns a Cairo-friendly argument list.
+        """
+        cairo_args = []
+        for value, field_type in zip(args, args._field_types.values()):
+            if field_type is TypePointer or field_type is TypeFelt:
+                # Pointer or felt.
+                cairo_args.append(self.gen_arg(arg=value))
+            elif field_type is TypeStruct:
+                # Struct.
+                cairo_args += self.gen_typed_args(args=value)
+            else:
+                raise NotImplementedError(f"{field_type.__name__} is not supported.")
+
+        return cairo_args
+
     def write_arg(self, ptr, arg, apply_modulo_to_args=True):
         assert isinstance(arg, Iterable)
         data = [self.gen_arg(arg=x, apply_modulo_to_args=apply_modulo_to_args) for x in arg]
@@ -206,3 +226,35 @@ class MemorySegmentManager:
             if segment_index in self._segment_sizes
             else self.get_segment_used_size(segment_index=segment_index)
         )
+
+    def is_valid_memory_value(self, value: MaybeRelocatable) -> bool:
+        assert (
+            self._segment_used_sizes is not None
+        ), "compute_effective_sizes must be called before is_valid_memory_value."
+
+        return is_valid_memory_value(value=value, segment_sizes=self._segment_used_sizes)
+
+
+def is_valid_memory_addr(
+    addr: MaybeRelocatable, segment_sizes: Dict[int, int], is_concrete_address: bool = True
+):
+    """
+    Returns True if addr is a relocatable value, such that its segment index appears in
+    segment_sizes and its offset is in the valid range (if is_concrete_address=False, offset
+    may exceed the segment size).
+    """
+    return (
+        isinstance(addr, RelocatableValue)
+        and isinstance(addr.segment_index, int)
+        and isinstance(addr.offset, int)
+        and addr.segment_index in segment_sizes
+        and 0
+        <= addr.offset
+        < (segment_sizes[addr.segment_index] if is_concrete_address else SEGMENT_SIZE_UPPER_BOUND)
+    )
+
+
+def is_valid_memory_value(value: MaybeRelocatable, segment_sizes: Dict[int, int]):
+    return isinstance(value, int) or is_valid_memory_addr(
+        addr=value, segment_sizes=segment_sizes, is_concrete_address=False
+    )

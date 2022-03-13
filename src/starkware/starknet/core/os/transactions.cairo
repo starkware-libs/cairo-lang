@@ -4,10 +4,11 @@ from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.dict import dict_new, dict_read, dict_update, dict_write
 from starkware.cairo.common.dict_access import DictAccess
 from starkware.cairo.common.find_element import find_element, search_sorted
-from starkware.cairo.common.math import assert_nn, assert_not_zero
+from starkware.cairo.common.math import assert_nn, assert_nn_le, assert_not_zero
 from starkware.cairo.common.memcpy import memcpy
 from starkware.cairo.common.registers import get_ap, get_fp_and_pc
 from starkware.cairo.common.segments import relocate_segment
+from starkware.cairo.common.uint256 import Uint256
 from starkware.starknet.common.syscalls import (
     CALL_CONTRACT_SELECTOR, DELEGATE_CALL_SELECTOR, DELEGATE_L1_HANDLER_SELECTOR,
     EMIT_EVENT_SELECTOR, GET_BLOCK_NUMBER_SELECTOR, GET_BLOCK_TIMESTAMP_SELECTOR,
@@ -18,14 +19,16 @@ from starkware.starknet.common.syscalls import (
     GetCallerAddress, GetCallerAddressResponse, GetContractAddress, GetContractAddressResponse,
     GetSequencerAddress, GetSequencerAddressResponse, GetTxInfo, GetTxInfoResponse, GetTxSignature,
     GetTxSignatureResponse, SendMessageToL1SysCall, StorageRead, StorageWrite, TxInfo)
-from starkware.starknet.core.os.builtins import (
-    BuiltinEncodings, BuiltinParams, BuiltinPointers, get_builtin_params)
+from starkware.starknet.core.os.block_context import BlockContext
+from starkware.starknet.core.os.builtins import BuiltinEncodings, BuiltinParams, BuiltinPointers
 from starkware.starknet.core.os.contracts import (
-    ContractDefinition, ContractDefinitionFact, ContractEntryPoint, load_contract_definition_facts)
+    ContractDefinition, ContractDefinitionFact, ContractEntryPoint)
+from starkware.starknet.core.os.os_config.os_config import StarknetOsConfig
 from starkware.starknet.core.os.output import (
     BlockInfo, DeploymentInfoHeader, MessageToL1Header, MessageToL2Header, OsCarriedOutputs,
     os_carried_outputs_new)
 from starkware.starknet.core.os.state import StateEntry
+from starkware.starknet.core.os.transaction_hash import get_transaction_hash
 
 const UNINITIALIZED_CONTRACT_HASH = 0
 
@@ -40,9 +43,19 @@ const ENTRY_POINT_TYPE_EXTERNAL = 0
 const ENTRY_POINT_TYPE_L1_HANDLER = 1
 const ENTRY_POINT_TYPE_CONSTRUCTOR = 2
 
+const TRANSACTION_VERSION = 0
+
 # get_selector_from_name('constructor').
 const CONSTRUCTOR_SELECTOR = (
     0x28ffe4ff0f226a9107253e17a904099aa4f63a02a5621de0576e5aa71bc5194)
+
+# get_selector_from_name('__execute__').
+const EXECUTE_ENTRY_POINT_SELECTOR = (
+    0x15d40a3d6ca2ac30f4031e42be28da9b056fef9bb7357ac5e85627ee876e5ad)
+
+# get_selector_from_name('transfer').
+const TRANSFER_SELECTOR = (
+    0x83afd3f4caedc6eebf44246fe54e38c95e3179a5ec9ea81740eca5b482d12e)
 
 const DEFAULT_ENTRY_POINT_SELECTOR = 0
 
@@ -69,15 +82,6 @@ struct StateChanges:
     member changes_end : DictAccess*
 end
 
-# Context that remains fixed throughout the block.
-struct BlockContext:
-    member builtin_params : BuiltinParams*
-    member n_contract_definition_facts : felt
-    member contract_definition_facts : ContractDefinitionFact*
-    member sequencer_address : felt
-    member block_info : BlockInfo*
-end
-
 # Executes the transactions in the hint variable os_input.transactions.
 #
 # Returns:
@@ -92,7 +96,7 @@ end
 #   the returned range_check_ptr is smaller then reserved_range_checks_end.
 func execute_transactions{
         pedersen_ptr : HashBuiltin*, range_check_ptr, ecdsa_ptr, bitwise_ptr,
-        outputs : OsCarriedOutputs*}(block_info : BlockInfo*) -> (
+        outputs : OsCarriedOutputs*}(block_context : BlockContext*) -> (
         reserved_range_checks_end, state_changes : StateChanges):
     alloc_locals
     local n_txs
@@ -110,23 +114,12 @@ func execute_transactions{
     # A dict from contract address to a dict of storage changes.
     let (local global_state_changes : DictAccess*) = dict_new()
 
-    let (n_contract_definition_facts, contract_definition_facts) = load_contract_definition_facts()
-
-    let (local __fp__, _) = get_fp_and_pc()
+    let (__fp__, _) = get_fp_and_pc()
     local local_builtin_ptrs : BuiltinPointers = BuiltinPointers(
         pedersen=pedersen_ptr,
         range_check=nondet %{ segments.add_temp_segment() %},
         ecdsa=ecdsa_ptr,
         bitwise=bitwise_ptr)
-
-    let (builtin_params) = get_builtin_params()
-
-    local block_context : BlockContext = BlockContext(
-        builtin_params=builtin_params,
-        n_contract_definition_facts=n_contract_definition_facts,
-        contract_definition_facts=contract_definition_facts,
-        sequencer_address=nondet %{ os_input.sequencer_address %},
-        block_info=block_info)
 
     let builtin_ptrs = &local_builtin_ptrs
     %{
@@ -141,7 +134,7 @@ func execute_transactions{
     let global_state_changes_start = global_state_changes
     execute_transactions_inner{
         builtin_ptrs=builtin_ptrs, global_state_changes=global_state_changes}(
-        block_context=&block_context, n_txs=n_txs)
+        block_context=block_context, n_txs=n_txs)
     %{ vm_exit_scope() %}
 
     let reserved_range_checks_end = range_check_ptr
@@ -199,7 +192,59 @@ func execute_transactions_inner{
     return execute_transactions_inner(block_context=block_context, n_txs=n_txs - 1)
 end
 
-# Executes an externally called invoke transaction.
+# Represents the calldata of an ERC20 transfer.
+struct TransferCallData:
+    member recipient : felt
+    member amount : Uint256
+end
+
+# Charges a fee from the user.
+# If max_fee is not 0, validates that the selector matches the entry point of an account contract
+# and executes an ERC20 transfer on the behalf of that account contract.
+#
+# Arguments:
+# block_context - a global context that is fixed throughout the block.
+# tx_execution_context - The execution context of the transaction that pays the fee.
+func charge_fee{
+        range_check_ptr, builtin_ptrs : BuiltinPointers*, global_state_changes : DictAccess*,
+        outputs : OsCarriedOutputs*}(
+        block_context : BlockContext*, tx_execution_context : ExecutionContext*):
+    alloc_locals
+    if tx_execution_context.original_tx_info.max_fee == 0:
+        return ()
+    end
+
+    # Transactions with fee should go through the EXECUTE_ENTRY_POINT_SELECTOR.
+    assert tx_execution_context.selector = EXECUTE_ENTRY_POINT_SELECTOR
+
+    local calldata : TransferCallData = TransferCallData(
+        recipient=block_context.sequencer_address,
+        amount=Uint256(low=nondet %{ syscall_handler.tx_execution_info.actual_fee %}, high=0))
+
+    tempvar original_tx_info = tx_execution_context.original_tx_info
+
+    # Verify that the charged amount is not larger than the transaction's max_fee field.
+    assert_nn_le(calldata.amount.low, original_tx_info.max_fee)
+
+    let (__fp__, _) = get_fp_and_pc()
+    tempvar fee_token_address = block_context.starknet_os_config.fee_token_address
+    local execution_context : ExecutionContext = ExecutionContext(
+        entry_point_type=ENTRY_POINT_TYPE_EXTERNAL,
+        caller_address=original_tx_info.account_contract_address,
+        contract_address=fee_token_address,
+        code_address=fee_token_address,
+        selector=TRANSFER_SELECTOR,
+        calldata_size=TransferCallData.SIZE,
+        calldata=&calldata,
+        original_tx_info=original_tx_info,
+        )
+
+    execute_entry_point(block_context=block_context, execution_context=&execution_context)
+
+    return ()
+end
+
+# Executes an externally called transaction (external invoke or l1 handler).
 #
 # The transaction should be passed in the hint variable 'tx'.
 # If the transaction is an L1 handler, it is appended to the list of consumed L1->L2 messages.
@@ -244,34 +289,65 @@ func execute_externally_called_invoke_transaction{
         )
     %}
 
+    local nonce
+    local max_fee = nondet %{ tx.max_fee %}
+    %{ assert tx.version == ids.TRANSACTION_VERSION, 'Wrong transaction version.' %}
+    if execution_context.entry_point_type == ENTRY_POINT_TYPE_L1_HANDLER:
+        %{ ids.nonce = tx.nonce %}
+        let (__fp__, _) = get_fp_and_pc()
+        tempvar tx_hash_prefix = 'l1_handler'
+        tempvar additional_data_size = 1
+        tempvar additional_data = &nonce
+        with_attr error_message("An L1 handler transaction must have max_fee==0."):
+            assert max_fee = 0
+        end
+    else:
+        # If execution_context.entry_point_type is not ENTRY_POINT_TYPE_L1_HANDLER,
+        # it must be ENTRY_POINT_TYPE_EXTERNAL.
+        assert execution_context.entry_point_type = ENTRY_POINT_TYPE_EXTERNAL
+        tempvar tx_hash_prefix = 'invoke'
+        tempvar additional_data_size = 0
+        tempvar additional_data = cast(0, felt*)
+    end
+
+    local chain_id = block_context.starknet_os_config.chain_id
+    let (transaction_hash) = compute_transaction_hash(
+        tx_hash_prefix=tx_hash_prefix,
+        execution_context=execution_context,
+        max_fee=max_fee,
+        chain_id=chain_id,
+        additional_data_size=additional_data_size,
+        additional_data=additional_data)
+
     assert [execution_context.original_tx_info] = TxInfo(
-        version=0,
+        version=TRANSACTION_VERSION,
         account_contract_address=execution_context.contract_address,
-        max_fee=0,
+        max_fee=max_fee,
         signature_len=nondet %{ len(tx.signature) %},
         signature=cast(nondet %{ segments.gen_arg(arg=tx.signature) %}, felt*),
+        transaction_hash=transaction_hash,
+        chain_id=chain_id,
         )
 
     # External calls originate from ORIGIN_ADDRESS.
     assert execution_context.caller_address = ORIGIN_ADDRESS
 
-    if execution_context.entry_point_type == ENTRY_POINT_TYPE_L1_HANDLER:
-        # Consume L1-to-L2 message.
-        consume_l1_to_l2_message(execution_context=execution_context, nonce=nondet %{ tx.nonce %})
-    else:
-        # If execution_context.entry_point_type is not ENTRY_POINT_TYPE_L1_HANDLER,
-        # it must be ENTRY_POINT_TYPE_EXTERNAL.
-        assert execution_context.entry_point_type = ENTRY_POINT_TYPE_EXTERNAL
-        tempvar outputs = outputs
-    end
-
     # In external calls and l1 handlers, the code_address must match the contract_address.
     assert execution_context.code_address = execution_context.contract_address
+
+    if execution_context.entry_point_type == ENTRY_POINT_TYPE_L1_HANDLER:
+        # Consume L1-to-L2 message.
+        consume_l1_to_l2_message(execution_context=execution_context, nonce=nonce)
+    else:
+        tempvar outputs = outputs
+    end
 
     %{ syscall_handler.start_tx(tx_info_ptr=ids.execution_context.original_tx_info.address_) %}
     execute_entry_point(block_context=block_context, execution_context=execution_context)
 
+    charge_fee(block_context=block_context, tx_execution_context=execution_context)
     %{ syscall_handler.end_tx() %}
+
     return ()
 end
 
@@ -841,12 +917,24 @@ func execute_deploy_transaction{
         original_tx_info=cast(nondet %{ segments.add() %}, TxInfo*),
         )
 
+    let nullptr = cast(0, felt*)
+    local chain_id = block_context.starknet_os_config.chain_id
+    let (transaction_hash) = compute_transaction_hash(
+        tx_hash_prefix='deploy',
+        execution_context=execution_context,
+        max_fee=0,
+        chain_id=chain_id,
+        additional_data_size=0,
+        additional_data=nullptr)
+
     assert [execution_context.original_tx_info] = TxInfo(
-        version=0,
+        version=TRANSACTION_VERSION,
         account_contract_address=ORIGIN_ADDRESS,
         max_fee=0,
         signature_len=0,
-        signature=cast(0, felt*),
+        signature=nullptr,
+        transaction_hash=transaction_hash,
+        chain_id=chain_id,
         )
 
     %{ syscall_handler.start_tx(tx_info_ptr=ids.execution_context.original_tx_info.address_) %}
@@ -854,4 +942,42 @@ func execute_deploy_transaction{
     %{ syscall_handler.end_tx() %}
 
     return ()
+end
+
+# Computes the hash of the transaction.
+#
+# Note that execution_context.original_tx_info is uninitialized when this function is called.
+# In particular, this field is not used in this function.
+func compute_transaction_hash{builtin_ptrs : BuiltinPointers*}(
+        tx_hash_prefix : felt, execution_context : ExecutionContext*, max_fee : felt,
+        chain_id : felt, additional_data_size : felt, additional_data : felt*) -> (
+        transaction_hash : felt):
+    let hash_ptr = builtin_ptrs.pedersen
+    with hash_ptr:
+        let (transaction_hash) = get_transaction_hash(
+            tx_hash_prefix=tx_hash_prefix,
+            version=TRANSACTION_VERSION,
+            contract_address=execution_context.contract_address,
+            entry_point_selector=execution_context.selector,
+            calldata_size=execution_context.calldata_size,
+            calldata=execution_context.calldata,
+            max_fee=max_fee,
+            chain_id=chain_id,
+            additional_data_size=additional_data_size,
+            additional_data=additional_data)
+    end
+
+    %{
+        assert ids.transaction_hash == tx.hash_value, (
+            "Computed transaction_hash is inconsistent with the hash in the transaction. "
+            f"Computed hash = {ids.transaction_hash}, Expected hash = {tx.hash_value}.")
+    %}
+
+    tempvar builtin_ptrs = new BuiltinPointers(
+        pedersen=hash_ptr,
+        range_check=builtin_ptrs.range_check,
+        ecdsa=builtin_ptrs.ecdsa,
+        bitwise=builtin_ptrs.bitwise)
+
+    return (transaction_hash=transaction_hash)
 end

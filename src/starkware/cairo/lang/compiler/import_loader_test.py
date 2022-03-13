@@ -1,6 +1,6 @@
 import re
 from random import sample
-from typing import Dict
+from typing import Dict, List
 
 import pytest
 
@@ -47,6 +47,7 @@ from bar import bb
     # Failed to parse internal module.
     with pytest.raises(ImportLoaderError) as e:
         collect_imports("root.file", read_file_from_dict(files))
+    assert e.value.location is not None
     assert f"""
 {get_location_marks(files['root.file'], e.value.location)}
 {e.value.message}
@@ -137,7 +138,7 @@ def test_topologycal_order():
 
     # Initialize the dependencies DAG. A list of int lists.
     # j is in the i-th list iff i->j in the dependencies DAG.
-    dependencies = [[]] * N_VERTICES
+    dependencies: List[List[int]] = [[] for _ in range(N_VERTICES)]
     for i in range(N_VERTICES - N_NEIGHBORS):
         dependencies[i] = sample(range(i + 1, N_VERTICES), N_NEIGHBORS)
 

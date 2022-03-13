@@ -39,6 +39,7 @@ python_lib(cairo_compile_lib
     injector.py
     instruction_builder.py
     instruction.py
+    lib/registers.cairo
     location_utils.py
     module_reader.py
     offset_reference.py
@@ -167,6 +168,7 @@ full_python_test(cairo_compile_test
     LIBS
     cairo_compile_lib
     cairo_compile_test_utils_lib
+    starkware_python_test_utils_lib
     starkware_python_utils_lib
     pip_pytest
 )

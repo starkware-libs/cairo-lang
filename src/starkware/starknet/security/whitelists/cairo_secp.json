@@ -129,6 +129,12 @@
             ]
         },
         {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "memory[ap] = to_felt_or_relocatable(x == 0)"
+            ]
+        },
+        {
             "allowed_expressions": [
                 {
                     "expr": "cast((10428087374290690730508609, 77371252455330678278691517, 19342813113834066795298815), secp_defs.BigInt3)",

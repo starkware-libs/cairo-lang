@@ -2,6 +2,9 @@ from starkware.cairo.common.dict_access import DictAccess
 from starkware.cairo.common.squash_dict import squash_dict
 
 # Creates a new dict.
+#
+# Hint argument:
+# initial_dict - A python dict containing the initial values of the new dict.
 func dict_new() -> (res : DictAccess*):
     %{
         if '__dict_manager' not in globals():
@@ -24,9 +27,9 @@ func dict_read{dict_ptr : DictAccess*}(key : felt) -> (value : felt):
         dict_tracker.current_ptr += ids.DictAccess.SIZE
         ids.value = dict_tracker.data[ids.key]
     %}
-    assert dict_ptr.key = key
-    assert dict_ptr.prev_value = value
-    assert dict_ptr.new_value = value
+    dict_ptr.key = key
+    dict_ptr.prev_value = value
+    dict_ptr.new_value = value
     let dict_ptr = dict_ptr + DictAccess.SIZE
     return (value=value)
 end
@@ -39,8 +42,8 @@ func dict_write{dict_ptr : DictAccess*}(key : felt, new_value : felt):
         ids.dict_ptr.prev_value = dict_tracker.data[ids.key]
         dict_tracker.data[ids.key] = ids.new_value
     %}
-    assert dict_ptr.key = key
-    assert dict_ptr.new_value = new_value
+    dict_ptr.key = key
+    dict_ptr.new_value = new_value
     let dict_ptr = dict_ptr + DictAccess.SIZE
     return ()
 end

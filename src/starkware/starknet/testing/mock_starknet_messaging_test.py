@@ -6,7 +6,7 @@ from starkware.starknet.testing.contracts import MockStarknetMessaging
 
 @pytest.fixture
 def mock_starknet_contract(eth_test_utils):
-    return eth_test_utils.accounts[0].deploy(MockStarknetMessaging)
+    return eth_test_utils.accounts[0].deploy(MockStarknetMessaging, 0)
 
 
 def test_mock_send_message_from_l2(eth_test_utils, mock_starknet_contract):

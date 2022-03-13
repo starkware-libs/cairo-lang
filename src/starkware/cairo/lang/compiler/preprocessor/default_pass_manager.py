@@ -30,7 +30,15 @@ def default_pass_manager(
     additional_scopes_to_compile: Optional[Set[ScopedName]] = None,
 ) -> PassManager:
     manager = PassManager()
-    manager.add_stage("module_collector", ModuleCollector(read_module=read_module))
+    manager.add_stage(
+        "module_collector",
+        ModuleCollector(
+            read_module=read_module,
+            additional_modules=[
+                "starkware.cairo.lang.compiler.lib.registers",
+            ],
+        ),
+    )
     manager.add_stage(
         "unique_label_creator", VisitorStage(lambda context: UniqueLabelCreator(), modify_ast=True)
     )
@@ -100,8 +108,38 @@ class ModuleCollector(Stage):
         self.read_module = read_module
         self.additional_modules = [] if additional_modules is None else list(additional_modules)
 
+    def collect_module(
+        self, code: str, filename: str, context: PassManagerContext, visited_modules: Set[str]
+    ):
+        """
+        Collects the module with the given code and filename.
+        Updates 'context' and 'visited_modules'.
+        """
+
+        # Function used to read files given module names.
+        # The root module (filename) is handled separately, for this module code is returned.
+        def read_file_fixed(name):
+            return (code, filename) if name == filename else self.read_module(name)
+
+        files = collect_imports(filename, read_file=read_file_fixed)
+        for module_name, ast in files.items():
+            # Check if the module is one of the files given in 'context.codes'.
+            is_main_scope = module_name == filename
+            if is_main_scope:
+                scope = context.main_scope
+            else:
+                scope = ScopedName.from_string(module_name)
+                if module_name in visited_modules:
+                    continue
+                visited_modules.add(module_name)
+            context.modules.append(CairoModule(cairo_file=ast, module_name=scope))
+
     def run(self, context: PassManagerContext):
-        visited_modules = set()
+        visited_modules: Set[str] = set()
+        for code, filename in context.start_codes:
+            self.collect_module(
+                code=code, filename=filename, context=context, visited_modules=visited_modules
+            )
 
         for additional_module in self.additional_modules:
             files = collect_imports(additional_module, read_file=self.read_module)
@@ -113,20 +151,6 @@ class ModuleCollector(Stage):
                 context.modules.append(CairoModule(cairo_file=ast, module_name=scope))
 
         for code, filename in context.codes:
-            # Function used to read files given module names.
-            # The root module (filename) is handled separately, for this module code is returned.
-            def read_file_fixed(name):
-                return (code, filename) if name == filename else self.read_module(name)
-
-            files = collect_imports(filename, read_file=read_file_fixed)
-            for module_name, ast in files.items():
-                # Check if the module is one of the files given in 'context.codes'.
-                is_main_scope = module_name == filename
-                if is_main_scope:
-                    scope = context.main_scope
-                else:
-                    scope = ScopedName.from_string(module_name)
-                    if module_name in visited_modules:
-                        continue
-                    visited_modules.add(module_name)
-                context.modules.append(CairoModule(cairo_file=ast, module_name=scope))
+            self.collect_module(
+                code=code, filename=filename, context=context, visited_modules=visited_modules
+            )

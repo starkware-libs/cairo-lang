@@ -1,6 +1,6 @@
 import dataclasses
 from abc import ABC, abstractmethod
-from typing import Any, Callable, List, Optional, Union
+from typing import Any, Callable, List, MutableMapping, Optional, Union
 
 from starkware.cairo.lang.compiler.ast.cairo_types import (
     CairoType,
@@ -30,7 +30,6 @@ from starkware.cairo.lang.compiler.preprocessor.flow import FlowTrackingData, Re
 from starkware.cairo.lang.compiler.references import FlowTrackingError, Reference
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.compiler.type_system_visitor import simplify_type_system
-from starkware.cairo.lang.vm.memory_dict import MemoryDict
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable
 
 
@@ -40,7 +39,7 @@ class VmConstsContext:
     evaluator: Callable[[Expression], Any]
     reference_manager: ReferenceManager
     flow_tracking_data: FlowTrackingData
-    memory: MemoryDict
+    memory: MutableMapping[MaybeRelocatable, MaybeRelocatable]
     pc: int
 
 

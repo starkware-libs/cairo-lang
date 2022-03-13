@@ -20,12 +20,22 @@ PRIME = 3 * 2 ** 30 + 1
 TEST_SCOPE = ScopedName.from_string("test_scope")
 
 
+CAIRO_TEST_MODULES = {
+    "starkware.cairo.lang.compiler.lib.registers": """
+@known_ap_change
+func get_ap() -> (ap_val):
+    ret
+end
+""",
+}
+
+
 def strip_comments_and_linebreaks(program: str):
     """
     Removes all comments and empty lines from the given program.
     """
     program = re.sub(r"\s*#.*\n", "\n", program)
-    return re.sub("\n+", "\n", program)
+    return re.sub("\n+", "\n", program).lstrip()
 
 
 def default_read_module(module_name: str):
@@ -41,7 +51,9 @@ def preprocess_str(
     return preprocess_str_ex(
         code=code,
         pass_manager=default_pass_manager(
-            prime=prime, read_module=default_read_module, preprocessor_cls=preprocessor_cls
+            prime=prime,
+            read_module=read_file_from_dict(CAIRO_TEST_MODULES),
+            preprocessor_cls=preprocessor_cls,
         ),
         main_scope=main_scope,
     )
@@ -70,7 +82,9 @@ def verify_exception(
         main_scope = TEST_SCOPE
 
     if pass_manager is None:
-        pass_manager = default_pass_manager(prime=PRIME, read_module=read_file_from_dict(files))
+        pass_manager = default_pass_manager(
+            prime=PRIME, read_module=read_file_from_dict({**files, **CAIRO_TEST_MODULES})
+        )
 
     with pytest.raises(exc_type) as e:
         preprocess_codes(codes=[(code, "")], pass_manager=pass_manager, main_scope=main_scope)

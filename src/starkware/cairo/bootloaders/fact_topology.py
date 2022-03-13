@@ -1,48 +1,35 @@
-from typing import Any, Dict, List, Optional
+import dataclasses
+import json
+from typing import Any, ClassVar, Dict, List, Type
 
-from starkware.cairo.bootloader.compute_fact import generate_program_fact
-from starkware.cairo.bootloader.fact_topology import GPS_FACT_TOPOLOGY, FactInfo, FactTopology
-from starkware.cairo.bootloader.hash_program import compute_program_hash_chain
-from starkware.cairo.lang.vm.cairo_pie import CairoPie
-from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
+import marshmallow
+import marshmallow_dataclass
 
-
-def get_program_output(cairo_pie: CairoPie) -> List[int]:
-    """
-    Returns the program output.
-    """
-    assert "output" in cairo_pie.metadata.builtin_segments, "The output builtin must be used."
-    output = cairo_pie.metadata.builtin_segments["output"]
-
-    def verify_int(x: MaybeRelocatable) -> int:
-        assert isinstance(
-            x, int
-        ), f"Expected program output to contain absolute values, found: {x}."
-        return x
-
-    return [
-        verify_int(cairo_pie.memory[RelocatableValue(segment_index=output.index, offset=i)])
-        for i in range(output.size)
-    ]
+GPS_FACT_TOPOLOGY = "gps_fact_topology"
 
 
-def get_cairo_pie_fact_info(cairo_pie: CairoPie, program_hash: Optional[int] = None) -> FactInfo:
-    """
-    Generates the fact of the Cairo program of cairo_pie. Returns the cairo-pie fact info.
-    """
-    program_output = get_program_output(cairo_pie=cairo_pie)
-    fact_topology = get_fact_topology_from_additional_data(
-        output_size=len(program_output),
-        output_builtin_additional_data=cairo_pie.additional_data["output_builtin"],
-    )
-    if program_hash is None:
-        program_hash = get_program_hash(cairo_pie)
-    fact = generate_program_fact(program_hash, program_output, fact_topology=fact_topology)
-    return FactInfo(program_output=program_output, fact_topology=fact_topology, fact=fact)
+@dataclasses.dataclass(frozen=True)
+class FactTopology:
+    tree_structure: List[int]
+    # List of page sizes, in words.
+    page_sizes: List[int]
 
 
-def get_program_hash(cairo_pie: CairoPie) -> int:
-    return compute_program_hash_chain(cairo_pie.metadata.program)
+@marshmallow_dataclass.dataclass(frozen=True)
+class FactTopologiesFile:
+    fact_topologies: List[FactTopology]
+    Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
+
+
+def load_fact_topologies(path) -> List[FactTopology]:
+    return FactTopologiesFile.Schema().load(json.load(open(path))).fact_topologies
+
+
+@dataclasses.dataclass(frozen=True)
+class FactInfo:
+    program_output: List[int]
+    fact_topology: FactTopology
+    fact: str
 
 
 def get_page_sizes_from_page_dict(output_size: int, pages: dict) -> List[int]:

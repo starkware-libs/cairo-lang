@@ -72,6 +72,11 @@ class DebugInfo(ValidatedMarshmallowDataclass):
                 )
                 if not is_autogen:
                     continue
+
+                # The following asserts are for mypy.
+                assert input_file.filename is not None
+                assert input_file.content is not None
+
                 if input_file.filename in self.file_contents:
                     assert self.file_contents[input_file.filename] == input_file.content, (
                         f'Found two versions of auto-generated file "{input_file.filename}":\n'

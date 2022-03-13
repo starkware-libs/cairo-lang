@@ -112,6 +112,7 @@ class StarknetState:
         selector: Union[int, str],
         calldata: List[int],
         caller_address: int,
+        max_fee: int,
         signature: Optional[List[int]] = None,
         entry_point_type: EntryPointType = EntryPointType.EXTERNAL,
         nonce: Optional[int] = None,
@@ -138,14 +139,15 @@ class StarknetState:
             signature = []
 
         tx = InternalInvokeFunction.create(
-            general_config=self.general_config,
             contract_address=contract_address,
             entry_point_selector=selector,
             entry_point_type=entry_point_type,
             calldata=calldata,
+            max_fee=max_fee,
             signature=signature,
             caller_address=caller_address,
             nonce=nonce,
+            chain_id=self.general_config.chain_id.value,
         )
 
         with self.state.copy_and_apply() as state_copy:
@@ -154,7 +156,7 @@ class StarknetState:
             )
 
         # Add messages.
-        for message in tx_execution_info.l2_to_l1_messages:
+        for message in tx_execution_info.get_sorted_l2_to_l1_messages():
             starknet_message = StarknetMessageToL1(
                 from_address=message.from_address,
                 to_address=message.to_address,

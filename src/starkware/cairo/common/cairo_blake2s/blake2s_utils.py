@@ -1,5 +1,8 @@
 from typing import List, Tuple
 
+from starkware.cairo.lang.vm.memory_segments import MemorySegmentManager
+from starkware.cairo.lang.vm.relocatable import RelocatableValue
+
 IV = [
     0x6A09E667,
     0xBB67AE85,
@@ -27,6 +30,27 @@ SIGMA = [
 
 def right_rot(value, n):
     return (value >> n) | ((value & (2 ** n - 1)) << (32 - n))
+
+
+# Helper function for the Cairo blake2s() implementation.
+# Computes the blake2s compress function and fills the value in the right position.
+# output_ptr should point to the middle of an instance, right after initial_state, message, t, f,
+# which should all have a value at this point, and right before the output portion which will be
+# written by this function.
+def compute_blake2s_func(segments: MemorySegmentManager, output_ptr: RelocatableValue):
+    h = segments.memory.get_range(output_ptr - 26, 8)
+    message = segments.memory.get_range(output_ptr - 18, 16)
+    t = segments.memory[output_ptr - 2]
+    f = segments.memory[output_ptr - 1]
+    new_state = blake2s_compress(
+        message=message,
+        h=h,
+        t0=t,
+        t1=0,
+        f0=f,
+        f1=0,
+    )
+    segments.write_arg(output_ptr, new_state)
 
 
 def blake2s_compress(

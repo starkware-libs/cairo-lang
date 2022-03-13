@@ -162,7 +162,9 @@ func merkle_multi_update_inner{hash_ptr : HashBuiltin*, update_ptr : DictAccess*
     return ()
 
     update_both:
-    # Locals 0 and 1 are taken by non deterministic jumps.
+    # When the function starts we have fp=ap.
+    # The two nondeterministic jumps, write to [fp] and [fp + 1] and advance ap by 2.
+    # Thus, the next free memory cell is [fp + 2] and we need to increment ap by 1.
     let local_left_index = [fp + 2]
     %{ assert case == 'both' %}
     local_left_index = index * 2; ap++
@@ -180,12 +182,10 @@ func merkle_multi_update_inner{hash_ptr : HashBuiltin*, update_ptr : DictAccess*
         )
     %}
     merkle_multi_update_inner(
-        height=height - 1, prev_root=hash0.x, new_root=hash1.x, index=index * 2)
+        height=height - 1, prev_root=hash0.x, new_root=hash1.x, index=local_left_index)
     %{ vm_exit_scope() %}
 
     # Update right.
-    # Push height to workaround one hint per line limitation.
-    tempvar height_minus_1 = height - 1
     %{
         vm_enter_scope(dict(
             node=right_child, preimage=preimage,
@@ -194,7 +194,7 @@ func merkle_multi_update_inner{hash_ptr : HashBuiltin*, update_ptr : DictAccess*
         )
     %}
     merkle_multi_update_inner(
-        height=height_minus_1, prev_root=hash0.y, new_root=hash1.y, index=local_left_index + 1)
+        height=height - 1, prev_root=hash0.y, new_root=hash1.y, index=local_left_index + 1)
     %{ vm_exit_scope() %}
     return ()
 end

@@ -10,6 +10,7 @@ from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.services.api.contract_definition import ContractDefinition
 from starkware.starknet.storage.starknet_storage import StorageLeaf
+from starkware.starkware_utils.commitment_tree.leaf_fact import LeafFact
 from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import EmptyNodeFact
 from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
 from starkware.starkware_utils.error_handling import stark_assert
@@ -34,7 +35,7 @@ class ContractDefinitionFact(ValidatedMarshmallowDataclass, Fact):
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
-class ContractState(ValidatedMarshmallowDataclass, Fact):
+class ContractState(ValidatedMarshmallowDataclass, LeafFact):
     """
     Represents the state of a single contract (sub-commitment tree) in the full StarkNet state
     commitment tree.
@@ -67,20 +68,18 @@ class ContractState(ValidatedMarshmallowDataclass, Fact):
 
     @property
     def is_empty(self) -> bool:
-        return (
-            self.contract_hash == self.UNINITIALIZED_CONTRACT_HASH
-            and self.storage_commitment_tree.root == EmptyNodeFact.EMPTY_NODE_HASH
-        )
+        return not self.initialized
 
     def _hash(self, hash_func: HashFunctionType) -> bytes:
         """
         Computes the hash of the node containing the contract's information, including the contract
         definition and storage.
         """
-        CONTRACT_STATE_HASH_VERSION = 0
-        RESERVED = 0
         if self.is_empty:
             return EmptyNodeFact.EMPTY_NODE_HASH
+
+        CONTRACT_STATE_HASH_VERSION = 0
+        RESERVED = 0
 
         # Set hash_value = H(H(contract_hash, storage_root), RESERVED).
         hash_value = hash_func(self.contract_hash, self.storage_commitment_tree.root)
@@ -115,7 +114,13 @@ class ContractState(ValidatedMarshmallowDataclass, Fact):
 
     @property
     def initialized(self) -> bool:
-        return self.contract_hash != ContractState.UNINITIALIZED_CONTRACT_HASH
+        uninitialized = self.contract_hash == self.UNINITIALIZED_CONTRACT_HASH
+        if uninitialized:
+            assert (
+                self.storage_commitment_tree.root == EmptyNodeFact.EMPTY_NODE_HASH
+            ), "Contract storage commitment root must be empty if contract hash is uninitialized."
+
+        return not uninitialized
 
     def assert_initialized(self, contract_address: int):
         """

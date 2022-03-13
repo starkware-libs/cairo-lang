@@ -12,6 +12,7 @@ class WrappedMethod:
     address: int
     selector: int
     calldata: List[int]
+    max_fee: int
     signature: List[int]
 
 
@@ -32,7 +33,13 @@ class Account(ABC):
 
     @abstractmethod
     async def sign_invoke_transaction(
-        self, contract_address: int, selector: int, calldata: List[int], nonce: Optional[int]
+        self,
+        contract_address: int,
+        selector: int,
+        calldata: List[int],
+        chain_id: int,
+        max_fee: int,
+        nonce: Optional[int],
     ) -> WrappedMethod:
         """
         Given a transaction to execute (or call) within the context of the account,
