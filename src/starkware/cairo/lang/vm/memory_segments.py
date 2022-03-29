@@ -166,13 +166,13 @@ class MemorySegmentManager:
         returns a Cairo-friendly argument list.
         """
         cairo_args = []
-        for value, field_type in zip(args, args._field_types.values()):
+        for value, field_type in zip(args, args.__annotations__.values()):
             if field_type is TypePointer or field_type is TypeFelt:
                 # Pointer or felt.
                 cairo_args.append(self.gen_arg(arg=value))
             elif field_type is TypeStruct:
                 # Struct.
-                cairo_args += self.gen_typed_args(args=value)
+                cairo_args.extend(self.gen_typed_args(args=value))
             else:
                 raise NotImplementedError(f"{field_type.__name__} is not supported.")
 
