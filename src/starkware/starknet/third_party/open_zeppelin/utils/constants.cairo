@@ -21,3 +21,14 @@ const PREFIX_TRANSACTION = 'StarkNet Transaction'
 #
 
 const UINT8_MAX = 256
+
+#
+# Interface Ids
+#
+
+# ERC165
+const IERC165_ID = 0x01ffc9a7
+const INVALID_ID = 0xffffffff
+
+# Account
+const IACCOUNT_ID = 0xf10dbd44
