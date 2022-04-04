@@ -9,6 +9,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from argparse import ArgumentParser
 from typing import Dict, List
 
@@ -101,18 +102,15 @@ def main():
     shutil.rmtree(args.site_dir, ignore_errors=True)
     os.makedirs(args.site_dir)
 
-    # Find python.
-    lookup_paths = [
-        "/usr/bin",
-        "/usr/local/bin",
-    ]
-    python_exec = shutil.which(args.python, path=":".join(lookup_paths))
+    if sys.executable is None:
+        raise "Unable to determine Python executable path."
+
     # Prepare an empty virtual environment in the background.
     # --symlinks prefers symlinks of copying.
     # --without-pip installs a completely empty venv, with no pip.
     # --clear clears the old venv if exists.
     venv_proc = subprocess.Popen(
-        [python_exec, "-m", "venv", "--symlinks", "--without-pip", "--clear", args.venv_dir]
+        [sys.executable, "-m", "venv", "--symlinks", "--without-pip", "--clear", args.venv_dir]
     )
 
     # Find all libraries.
