@@ -102,15 +102,21 @@ def main():
     shutil.rmtree(args.site_dir, ignore_errors=True)
     os.makedirs(args.site_dir)
 
-    if sys.executable is None:
-        raise "Unable to determine Python executable path."
+    python_exec = sys.executable
+    if python_exec is None:
+        # Find python.
+        lookup_paths = [
+            "/usr/bin",
+            "/usr/local/bin",
+        ]
+        python_exec = shutil.which(args.python, path=":".join(lookup_paths))
 
     # Prepare an empty virtual environment in the background.
     # --symlinks prefers symlinks of copying.
     # --without-pip installs a completely empty venv, with no pip.
     # --clear clears the old venv if exists.
     venv_proc = subprocess.Popen(
-        [sys.executable, "-m", "venv", "--symlinks", "--without-pip", "--clear", args.venv_dir]
+        [python_exec, "-m", "venv", "--symlinks", "--without-pip", "--clear", args.venv_dir]
     )
 
     # Find all libraries.
