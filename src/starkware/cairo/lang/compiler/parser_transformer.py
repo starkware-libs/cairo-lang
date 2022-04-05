@@ -23,6 +23,7 @@ from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeElementConst,
     CodeElementDirective,
     CodeElementEmptyLine,
+    CodeElementFor,
     CodeElementFuncCall,
     CodeElementFunction,
     CodeElementHint,
@@ -45,6 +46,7 @@ from starkware.cairo.lang.compiler.ast.code_elements import (
     CommentedCodeElement,
     LangDirective,
 )
+from starkware.cairo.lang.compiler.ast.for_loop import ForClauseIn, ForGeneratorRange
 from starkware.cairo.lang.compiler.ast.expr import (
     ArgList,
     ExprAddressOf,
@@ -755,6 +757,51 @@ class ParserTransformer(Transformer):
             else_code_block=else_code_block,
             location=location,
         )
+
+    @v_args(meta=True)
+    def code_element_for(self, value, meta):
+        assert len(value) == 2
+        clause = value[0]
+        code_block = value[-1]
+
+        # Create a location for the for keyword.
+        location: Optional[Location] = None
+        if not meta.empty:
+            location = Location(
+                start_line=meta.line,
+                start_col=meta.column,
+                end_line=meta.line,
+                end_col=meta.column + len("for"),
+                input_file=self.input_file,
+            )
+
+        return CodeElementFor(
+            clause=clause,
+            code_block=code_block,
+            location=location,
+        )
+
+    def for_clause_in(self, value):
+        assert len(value) == 2
+        identifier = value[0]
+        generator = value[1]
+        return ForClauseIn(identifier=identifier, generator=generator)
+
+    def for_generator_range(self, value):
+        assert len(value) == 1 and isinstance(value[0], CommaSeparatedWithNotes)
+        args = value[0].args
+
+        start, end, step = None, None, None
+        if len(args) == 1:
+            [end] = args
+        elif len(args) == 2:
+            [start, end] = args
+        elif len(args) == 3:
+            [start, end, step] = args
+        else:
+            raise NotImplementedError(f"Unexpected argument: value={value}")
+
+        return ForGeneratorRange(start=start, end=end, step=step)
 
     @v_args(meta=True)
     def code_element_directive(self, value, meta):

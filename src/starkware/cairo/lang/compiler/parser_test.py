@@ -1,3 +1,4 @@
+from textwrap import dedent
 from typing import List
 
 import pytest
@@ -11,6 +12,7 @@ from starkware.cairo.lang.compiler.ast.cairo_types import (
     TypeTuple,
 )
 from starkware.cairo.lang.compiler.ast.code_elements import (
+    CodeElementFor,
     CodeElementImport,
     CodeElementReference,
     CodeElementReturnValueReference,
@@ -918,3 +920,18 @@ def test_pointer():
     for typ, mark in safe_zip(types, marks):
         assert typ.location is not None
         assert get_location_marks(code, typ.location) == code + "\n" + mark
+
+
+def test_for():
+    source = dedent("""
+    for i in range(5):
+        f()
+    end
+    """).strip()
+
+    res = parse_code_element(source)
+    assert isinstance(res, CodeElementFor)
+    assert res.format(allowed_line_length=100) == source
+
+# TODO: Tests with start & step arguments
+# TODO: Test with expressions as arguments

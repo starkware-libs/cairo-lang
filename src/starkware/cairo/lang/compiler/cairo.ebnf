@@ -125,6 +125,11 @@ _funcdecl: "func" identifier_def implicit_arguments _arguments _NEWLINE* _return
 _func: decorator_list _funcdecl _NEWLINE code_block "end"
 _if: "if" bool_expr ":" _NEWLINE code_block ("else" ":" _NEWLINE code_block)? "end"
 
+// For loops
+for_generator: "range" "(" comma_separated_with_notes{expr} ")" -> for_generator_range
+for_clause: identifier_def "in" for_generator -> for_clause_in
+_for: "for" for_clause ":" _NEWLINE code_block "end"
+
 !_some_namespace: "struct" | "namespace"
 _struct: decorator_list _some_namespace identifier_def ":"_NEWLINE code_block "end"
 
@@ -150,6 +155,7 @@ code_element: instruction                                       -> code_element_
             | "return" "(" arg_list ")"                         -> code_element_return
             | "return" function_call                            -> code_element_tail_call
             | _if                                               -> code_element_if
+            | _for                                              -> code_element_for
             | function_call                                     -> code_element_func_call
             | identifier ":"                                    -> code_element_label
             | _func                                             -> code_element_function
