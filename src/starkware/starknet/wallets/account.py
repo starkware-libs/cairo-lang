@@ -39,6 +39,7 @@ class Account(ABC):
         calldata: List[int],
         chain_id: int,
         max_fee: int,
+        version: int,
         nonce: Optional[int],
     ) -> WrappedMethod:
         """

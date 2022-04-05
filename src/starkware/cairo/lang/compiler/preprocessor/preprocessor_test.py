@@ -3719,6 +3719,17 @@ assert (1, 1) = 1
 """,
     )
 
+    verify_exception(
+        """
+let x = (1 , a=2, b=(c=()))
+""",
+        """
+file:?:?: All fields in a named tuple must have a name.
+let x = (1 , a=2, b=(c=()))
+        ^*****************^
+""",
+    )
+
 
 def test_named_tuple_types():
     code = """
@@ -3773,6 +3784,18 @@ let x = (a=(b=1, b=2), c=0)
 file:?:?: Named tuple cannot have two entries with the same name.
 let x = (a=(b=1, b=2), c=0)
                  ^*^
+""",
+    )
+    verify_exception(
+        """
+func foo(x : (felt, b : felt)):
+    ret
+end
+""",
+        """
+file:?:?: All fields in a named tuple must have a name.
+func foo(x : (felt, b : felt)):
+             ^**************^
 """,
     )
 

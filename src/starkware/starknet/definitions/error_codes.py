@@ -17,8 +17,9 @@ class StarknetErrorCode(ErrorCode):
     INVALID_PROGRAM = auto()
     INVALID_RETURN_DATA = auto()
     INVALID_STATUS_MODE = auto()
-    INVALID_TRANSACTION_ID = auto()
     INVALID_TRANSACTION_HASH = auto()
+    INVALID_TRANSACTION_ID = auto()
+    INVALID_TRANSACTION_QUERYING_VERSION = auto()
     INVALID_TRANSACTION_VERSION = auto()
     L1_TO_L2_MESSAGE_CANCELLED = auto()
     L1_TO_L2_MESSAGE_ZEROED_COUNTER = auto()
@@ -35,6 +36,7 @@ class StarknetErrorCode(ErrorCode):
     OUT_OF_RANGE_ENTRY_POINT_OFFSET = auto()
     OUT_OF_RANGE_ENTRY_POINT_SELECTOR = auto()
     OUT_OF_RANGE_FEE = auto()
+    OUT_OF_RANGE_GAS_PRICE = auto()
     OUT_OF_RANGE_NONCE = auto()
     OUT_OF_RANGE_SEQUENCER_ADDRESS = auto()
     OUT_OF_RANGE_TRANSACTION_HASH = auto()
@@ -57,9 +59,13 @@ external_txs_loading_common_error_codes: List[ErrorCode] = [
     StarkErrorCode.MALFORMED_REQUEST,
     StarkErrorCode.OUT_OF_RANGE_FIELD_ELEMENT,
     StarkErrorCode.SCHEMA_VALIDATION_ERROR,
+    StarknetErrorCode.OUT_OF_RANGE_CONTRACT_ADDRESS,
     StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_OFFSET,
     StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_SELECTOR,
+    StarknetErrorCode.OUT_OF_RANGE_FEE,
+    StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_VERSION,
     # External-to-internal conversion errors.
+    StarknetErrorCode.INVALID_TRANSACTION_QUERYING_VERSION,
     StarknetErrorCode.INVALID_TRANSACTION_VERSION,
     StarknetErrorCode.UNSUPPORTED_SELECTOR_FOR_FEE,
 ]
@@ -94,6 +100,7 @@ feeder_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
         StarknetErrorCode.ENTRY_POINT_NOT_FOUND_IN_CONTRACT,
         StarknetErrorCode.FEE_TRANSFER_FAILURE,
         StarknetErrorCode.INVALID_RETURN_DATA,
+        StarknetErrorCode.INVALID_TRANSACTION_VERSION,
         StarknetErrorCode.OUT_OF_RESOURCES,
         StarknetErrorCode.SECURITY_ERROR,
         StarknetErrorCode.TRANSACTION_FAILED,
@@ -107,5 +114,14 @@ feeder_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
         StarknetErrorCode.OUT_OF_RANGE_CONTRACT_STORAGE_KEY,
         StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_HASH,
         StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_ID,
+    ]
+)
+
+internal_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
+    [
+        *external_txs_loading_common_error_codes,
+        StarkErrorCode.INVALID_REQUEST,
+        StarkErrorCode.INVALID_REQUEST_PARAMETERS,
+        StarkErrorCode.OUT_OF_RANGE_BATCH_ID,
     ]
 )

@@ -26,11 +26,12 @@ end
 # Returns a new HashState with the hash of the items of the input HashState and the array of items.
 # The array is represented by a pointer and a length.
 func hash_update{hash_ptr : HashBuiltin*}(
-        hash_state_ptr : HashState*, data_ptr : felt*, data_length) -> (
-        new_hash_state_ptr : HashState*):
+    hash_state_ptr : HashState*, data_ptr : felt*, data_length
+) -> (new_hash_state_ptr : HashState*):
     alloc_locals
     let (hash) = hash_update_inner(
-        data_ptr=data_ptr, data_length=data_length, hash=hash_state_ptr.current_hash)
+        data_ptr=data_ptr, data_length=data_length, hash=hash_state_ptr.current_hash
+    )
     let (__fp__, _) = get_fp_and_pc()
     local new_hash_state : HashState
     new_hash_state.current_hash = hash
@@ -41,7 +42,8 @@ end
 # Adds a single item to the HashState.
 # Returns a new HashState with the hash of the items of the input HashState and the item.
 func hash_update_single{hash_ptr : HashBuiltin*}(hash_state_ptr : HashState*, item) -> (
-        new_hash_state_ptr : HashState*):
+    new_hash_state_ptr : HashState*
+):
     alloc_locals
     let (hash) = hash2(x=hash_state_ptr.current_hash, y=item)
     let (__fp__, _) = get_fp_and_pc()
@@ -60,7 +62,8 @@ end
 # Computes the hash of an array of items, not including its length.
 # The hash is: hash(...hash(hash(data[0], data[1]), data[2])..., data[n-1]).
 func hash_update_inner{hash_ptr : HashBuiltin*}(
-        data_ptr : felt*, data_length : felt, hash : felt) -> (hash : felt):
+    data_ptr : felt*, data_length : felt, hash : felt
+) -> (hash : felt):
     if data_length == 0:
         return (hash=hash)
     end

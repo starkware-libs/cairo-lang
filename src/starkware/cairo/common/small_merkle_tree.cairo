@@ -47,8 +47,8 @@ from starkware.cairo.common.merkle_multi_update import merkle_multi_update
 # * This function can be used for (relatively) small Merkle trees whose leaves can be loaded
 #   to the memory.
 func small_merkle_tree_update{hash_ptr : HashBuiltin*}(
-        squashed_dict_start : DictAccess*, squashed_dict_end : DictAccess*, height : felt) -> (
-        prev_root : felt, new_root : felt):
+    squashed_dict_start : DictAccess*, squashed_dict_end : DictAccess*, height : felt
+) -> (prev_root : felt, new_root : felt):
     %{ vm_enter_scope({'__dict_manager': __dict_manager}) %}
     alloc_locals
     # Allocate memory cells for the roots.
@@ -95,7 +95,8 @@ func small_merkle_tree_update{hash_ptr : HashBuiltin*}(
         n_updates=(squashed_dict_end - squashed_dict_start) / DictAccess.SIZE,
         height=height,
         prev_root=prev_root,
-        new_root=new_root)
+        new_root=new_root,
+    )
     %{ vm_exit_scope() %}
     return (prev_root=prev_root, new_root=new_root)
 end

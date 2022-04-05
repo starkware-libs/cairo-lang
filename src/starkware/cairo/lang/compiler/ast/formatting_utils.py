@@ -3,6 +3,7 @@ Contains utils that help with formatting of Cairo code.
 """
 
 import dataclasses
+from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import field
@@ -20,7 +21,7 @@ LocationField = field(
     metadata=dict(marshmallow_field=marshmallow.fields.Field(load_only=True, dump_only=True)),
 )
 max_line_length_ctx_var: ContextVar[int] = ContextVar("max_line_length", default=100)
-one_item_per_line_ctx_var: ContextVar[bool] = ContextVar("one_item_per_line", default=False)
+one_item_per_line_ctx_var: ContextVar[bool] = ContextVar("one_item_per_line", default=True)
 
 
 def get_max_line_length():
@@ -69,34 +70,13 @@ class ParticleFormattingConfig:
     # Note: if the one_item_per_line ContextVar is True, this field is ignored (it has a slightly
     # different formatting).
     one_per_line: bool = False
+    # Force one item per line, even if the entire list fits into a single new line.
+    # If the list fits into the current line, it will still be concatenated to it.
+    # Note: if the one_item_per_line ContextVar is False, this field is ignored.
+    force_one_per_line: bool = False
     # If True, line_indent is doubled.
     # Note: if the one_item_per_line ContextVar is True, this field is ignored.
     double_indentation: bool = False
-
-
-@dataclasses.dataclass(frozen=True)
-class ParticleList:
-    """
-    A list of particles, which is a part of a larger list of particles that constructs one or
-    more lines.
-    """
-
-    elements: List[str]
-    separator: str = ", "
-    end: str = ""
-
-    def to_strings(self) -> List[str]:
-        if len(self.elements) == 0:
-            # If the list is empty, return the single element 'end'.
-            return [self.end]
-        # Concatenate the 'separator' to all elements and 'end' to the last one.
-        return [elm + self.separator for elm in self.elements[:-1]] + [self.elements[-1] + self.end]
-
-    def elements_to_string(self) -> str:
-        """
-        Returns a concatenation of the strings in self.elements, separated with self.separator.
-        """
-        return self.separator.join(self.elements)
 
 
 class ParticleLineBuilder:
@@ -108,8 +88,26 @@ class ParticleLineBuilder:
         self.lines: List[str] = []
         self.line = config.first_line_prefix
         self.line_is_new = True
+        self.line_indent_stack = [0]
+        self.current_line_indent = 0
 
         self.config = config
+
+    def push_indentation(self):
+        """
+        Saves the current line indentation into self.line_indent stack.
+        New indented lines will be indented relatively to the current line indentation.
+        """
+        self.line_indent_stack.append(self.current_line_indent)
+
+    def pop_indentation(self):
+        """
+        Pops the latest line indentation from self.line_indent_stack.
+        New indented lines will be indented relatively to the previous line indentation in the
+        stack.
+        """
+        assert len(self.line_indent_stack) > 1
+        self.line_indent_stack.pop()
 
     def newline(self, indent: bool = True):
         """
@@ -119,14 +117,18 @@ class ParticleLineBuilder:
             return
         self.lines.append(self.line)
         self.line_is_new = True
-        self.line = (" " * self.config.line_indent) if indent else ""
+        self.current_line_indent = self.line_indent_stack[-1] + (
+            self.config.line_indent if indent else 0
+        )
+        self.line = " " * self.current_line_indent
 
     def add_to_line(self, string):
         """
         Adds to current line, opening a new one if needed.
         """
-        expected_line_length = len(self.line) + len(string.rstrip())
-        if expected_line_length > self.config.allowed_line_length and not self.line_is_new:
+        if string == "":
+            return
+        if not self.can_fit_in_line(string) and not self.line_is_new:
             self.newline()
         self.line += string
         self.line_is_new = False
@@ -135,7 +137,7 @@ class ParticleLineBuilder:
         """
         Returns True if the given string can fit in the current line.
         """
-        return len(self.line) + len(string) <= self.config.allowed_line_length
+        return len(self.line) + len(string.rstrip()) <= self.config.allowed_line_length
 
     def finalize(self):
         """
@@ -146,89 +148,216 @@ class ParticleLineBuilder:
         return "\n".join(line.rstrip() for line in self.lines)
 
 
-def add_list_new_format(builder: ParticleLineBuilder, particle_list: ParticleList):
+class Particle(ABC):
     """
-    Adds a particle list to the current line.
-    If the list cannot be fully concatenated to the current line opens a new line, and puts each
-    element of the list in a separate line, indented by 'INDENTATION' charactes.
-
-    For example, using this function to format a list of arguments may result in the following
-    formatting:
-        func f(
-            x,
-            y,
-            z,
-        ) -> (
-            a,
-            b,
-            c
-        ):
-
-    With a longer line length we will get the lists on the same line:
-        func f(x, y, z) -> (a, b, c):
+    An interface for particles.
     """
-    elements_string = particle_list.elements_to_string()
 
-    # If the entire list fits in the current line, or the list is empty, add everything to the
-    # current line.
-    if (
-        builder.can_fit_in_line(elements_string + particle_list.end)
-        or len(particle_list.elements) == 0
+    @abstractmethod
+    def __str__(self):
+        pass
+
+    @abstractmethod
+    def is_splitable(self) -> bool:
+        """
+        Returns True if and only if the particle can be split into multiple lines.
+        """
+
+    @abstractmethod
+    def add_to_builder(self, builder: ParticleLineBuilder, suffix: str = ""):
+        """
+        Adds the particle to a builder, according to the formatting configuration of the builder.
+        suffix is concatanated to the end of the particle.
+        """
+
+
+@dataclasses.dataclass()
+class SingleParticle(Particle):
+    """
+    A particle of a single expression, that cannot be split into multiple lines.
+    """
+
+    text: str
+
+    def __str__(self):
+        return self.text
+
+    def is_splitable(self) -> bool:
+        return False
+
+    def add_to_builder(self, builder: ParticleLineBuilder, suffix: str = ""):
+        builder.add_to_line(f"{self.text}{suffix}")
+
+
+@dataclasses.dataclass()
+class ParticleList(Particle):
+    """
+    A list of particles, that should be concatenated one after the other.
+    """
+
+    def __init__(
+        self,
+        elements: List[Union[Particle, str]],
     ):
-        builder.add_to_line(elements_string + particle_list.end)
-        return
+        self.elements = []
+        for elm in elements:
+            self.elements.append(SingleParticle(text=elm) if isinstance(elm, str) else elm)
 
-    # If the entire list fits in a new line, add it.
-    # Else, add each element of the list in a separate line.
-    builder.newline()
-    if builder.can_fit_in_line(elements_string):
-        builder.add_to_line(elements_string)
-    else:
-        for elm in particle_list.elements:
-            builder.newline()
-            builder.add_to_line(elm + particle_list.separator)
+    def __str__(self):
+        return "".join([str(elm) for elm in self.elements])
 
-    builder.newline(indent=False)
-    builder.add_to_line(particle_list.end)
+    def is_splitable(self) -> bool:
+        return len(self.elements) > 0
+
+    def add_to_builder(self, builder: ParticleLineBuilder, suffix: str = ""):
+        for i, particle in enumerate(self.elements):
+            particle.add_to_builder(
+                builder=builder, suffix=suffix if i == len(self.elements) - 1 else ""
+            )
 
 
-def add_list_old_format(
-    builder: ParticleLineBuilder, particle_list: ParticleList, config: ParticleFormattingConfig
-):
+@dataclasses.dataclass()
+class SeparatedParticleList(Particle):
     """
-    Adds a particle list to the current line.
-    If the list cannot be fully concatenated to the current line opens a new line.
-
-    For example, using this function to format a list of arguments may result in the following
-    formatting:
-        func f(
-            x, y,
-            z) -> (
-            a, b,
-            c):
-
-    With a longer line length we will get the lists on the same line:
-        func f(x, y, z) -> (a, b, c):
+    A list of particles, separated by separator (e.g. comma separated argument list).
     """
-    list_particles = particle_list.to_strings()
 
-    # If the entire list fits in a single line, add it.
-    if sum(map(len, list_particles), config.line_indent) < config.allowed_line_length:
-        builder.add_to_line("".join(list_particles))
-        return
-    builder.newline()
-    for member in list_particles:
-        if config.one_per_line:
-            builder.newline()
-        builder.add_to_line(member)
+    def __init__(
+        self,
+        elements: List[Union[Particle, str]],
+        separator: str = ", ",
+        start: str = "",
+        end: str = "",
+    ):
+        self.elements = []
+        for elm in elements:
+            self.elements.append(SingleParticle(text=elm) if isinstance(elm, str) else elm)
+        self.separator = separator
+        self.start = start
+        self.end = end
+
+    def __str__(self):
+        return self.start + self.elements_to_string() + self.end
+
+    def is_splitable(self) -> bool:
+        return len(self.elements) > 0
+
+    def to_strings(self) -> List[str]:
+        if len(self.elements) == 0:
+            # If the list is empty, return the single element 'end'.
+            return [self.end]
+        # Concatenate the 'separator' to all elements and 'end' to the last one.
+        return [str(elm) + self.separator for elm in self.elements[:-1]] + [
+            str(self.elements[-1]) + self.end
+        ]
+
+    def elements_to_string(self) -> str:
+        """
+        Returns a concatenation of the strings in self.elements, separated with self.separator.
+        """
+        return self.separator.join(str(elm) for elm in self.elements)
+
+    def add_to_builder(self, builder: ParticleLineBuilder, suffix: str = ""):
+        """
+        Adds a particle list to the current line builder.
+        If the list cannot be fully concatenated to the current line opens a new line, and puts the
+        elements as described in self.add_elements_*().
+        """
+
+        # If the entire list fits in the current line, or the list is empty, add everything to the
+        # current line.
+        particle_list_str = f"{self}{suffix}"
+        if builder.can_fit_in_line(particle_list_str) or len(self.elements) == 0:
+            builder.add_to_line(particle_list_str)
+            return
+
+        builder.newline()
+        builder.add_to_line(self.start)
+
+        if one_item_per_line_ctx_var.get():
+            self.add_elements_one_per_line(builder=builder, suffix=suffix)
+        else:
+            self.add_elements_indent_new_lines(
+                builder=builder, suffix=suffix, one_per_line=builder.config.one_per_line
+            )
+
+    def add_elements_one_per_line(self, builder: ParticleLineBuilder, suffix: str):
+        """
+        Adds each element in a separate line, indented by 'INDENTATION' characters.
+
+        For example, using this function to format a list of arguments may result in the following
+        formatting:
+            func f(
+                x,
+                y,
+                z,
+            ) -> (
+                a,
+                b,
+                c,
+            ):
+        """
+        # If the entire list fits in a new line, add it.
+        # Else, add each element of the list in a separate line.
+        builder.newline()
+        elements_string = self.elements_to_string()
+        if not builder.config.force_one_per_line and builder.can_fit_in_line(elements_string):
+            builder.add_to_line(elements_string)
+        else:
+            for particle in self.elements:
+                builder.newline()
+                builder.push_indentation()
+                particle.add_to_builder(builder=builder, suffix=self.separator)
+                builder.pop_indentation()
+
+        builder.newline(indent=False)
+        builder.add_to_line(f"{self.end}{suffix}")
+
+    def add_elements_indent_new_lines(
+        self, builder: ParticleLineBuilder, suffix: str, one_per_line: bool
+    ):
+        """
+        Adds each element to the current line if possible, otherwise opens a new line.
+        If one_per_line is True put each element in a separate line, without trailing separator
+        (unlike add_elements_one_per_line).
+
+        For example, using this function to format a list of arguments may result in the following
+        formatting:
+            func f(
+                x, y,
+                z) -> (
+                a, b,
+                c):
+
+        With a longer line length we will get the lists on the same line:
+            func f(x, y, z) -> (a, b, c):
+        """
+        # If the entire list fits in the current line, add it.
+        elements_string = f"{self.elements_to_string()}{self.end}{suffix}"
+        if len(elements_string) + len(builder.line) < builder.config.allowed_line_length:
+            builder.add_to_line(elements_string)
+            return
+
+        for i, particle in enumerate(self.elements):
+            if one_per_line:
+                builder.newline()
+            particle_suffix = (
+                f"{self.end}{suffix}" if i == len(self.elements) - 1 else self.separator
+            )
+            start_new_line = particle.is_splitable() and not builder.can_fit_in_line(
+                f"{particle}{particle_suffix}"
+            )
+            if start_new_line:
+                builder.newline()
+                builder.push_indentation()
+            particle.add_to_builder(builder=builder, suffix=particle_suffix)
+            if start_new_line:
+                builder.pop_indentation()
 
 
-def particles_in_lines(
-    particles: List[Union[str, ParticleList]], config: ParticleFormattingConfig
-) -> str:
+def particles_in_lines(particles: Particle, config: ParticleFormattingConfig) -> str:
     """
-    Receives a list 'particles' that contains strings and particle sublists and generates lines
-    according to the following rules:
+    Receives a Particle and generates lines according to the following rules:
 
     When one_item_per_line ContextVar is False:
         - The first line is not indented. All other lines start with 'line_indent' spaces.
@@ -238,16 +367,17 @@ def particles_in_lines(
 
     When one_item_per_line ContextVar is True:
         - The first line is not indented. Other lines start with 'line_indent' spaces. Lines
-        that contruct sublists are indented as described in add_list_new_format.
+        that construct sublists are indented as described in add_list_new_format.
         - A line containing more than one particle can be no longer than 'allowed_line_length'.
         - A sublist that cannot be fully concatenated to the current line opens a new line (see
         add_list_new_format).
 
     Usage example:
         particles_in_lines(
-            ['func f(',
-            ParticleList(elements=['x', 'y', 'z'], end=') -> ('),
-            ParticleList(elements=['a', 'b', 'c'], end='):')],
+            ParticleList(elements=[
+                'func f(',
+                SeparatedParticleList(elements=['x', 'y', 'z'], end=') -> ('),
+                SeparatedParticleList(elements=['a', 'b', 'c'], end='):')]),
             12, 4)
     """
 
@@ -257,15 +387,5 @@ def particles_in_lines(
         )
 
     builder = ParticleLineBuilder(config=config)
-
-    for particle in particles:
-        if isinstance(particle, str):
-            builder.add_to_line(particle)
-
-        if isinstance(particle, ParticleList):
-            if one_item_per_line_ctx_var.get():
-                add_list_new_format(builder, particle)
-            else:
-                add_list_old_format(builder, particle, config)
-
+    particles.add_to_builder(builder)
     return builder.finalize()

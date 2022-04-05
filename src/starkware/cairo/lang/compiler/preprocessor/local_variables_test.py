@@ -131,6 +131,39 @@ ret
     )
 
 
+def test_inner_scopes_local_variables():
+    code = """\
+func main():
+    alloc_locals
+
+    if 1 == 1:
+        local a
+    end
+
+    with_attr error_message("test"):
+        local b
+    end
+
+    let x = 0
+    with x:
+        local c
+    end
+
+    return ()
+end
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert (
+        program.format()
+        == """\
+ap += 3
+[ap] = 0; ap++
+jmp rel 2 if [ap + (-1)] != 0
+ret
+"""
+    )
+
+
 def test_local_variable_failures():
     verify_exception(
         """

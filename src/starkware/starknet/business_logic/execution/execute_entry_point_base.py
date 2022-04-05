@@ -4,11 +4,11 @@ from abc import ABC, abstractmethod
 from dataclasses import field
 from typing import List, TypeVar
 
-from starkware.starknet.business_logic.state import CarriedState, StateSelector
-from starkware.starknet.business_logic.transaction_execution_objects import (
+from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
     TransactionExecutionContext,
 )
+from starkware.starknet.business_logic.state.state import CarriedState, StateSelector
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.services.api.contract_definition import EntryPointType
@@ -25,16 +25,15 @@ class ExecuteEntryPointBase(ABC):
     with the BusinessLogicSyscallHandler.
     """
 
+    # For fields that are shared with InternalInvokeFunction, see documentation there.
     contract_address: int = field(metadata=fields.contract_address_metadata)
     # The address that holds the code to execute.
     # It may differ from contract_address in the case of delegate call.
-    code_address: int = field(metadata=fields.contract_address_metadata)
+    code_address: int = field(metadata=fields.L2AddressField.metadata(field_name="code_address"))
     entry_point_selector: int = field(metadata=fields.entry_point_selector_metadata)
-    # The decorator type of the called function. Note that a single function may be decorated with
-    # multiple decorators and this member specifies which one.
     entry_point_type: EntryPointType
     calldata: List[int] = field(metadata=fields.call_data_metadata)
-    # Caller address is zero for external calls and the caller (contract) address for composed ones.
+    # The caller contract address.
     caller_address: int = field(metadata=fields.caller_address_metadata)
 
     def get_call_state_selector(self) -> StateSelector:

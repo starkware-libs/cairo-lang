@@ -3,8 +3,11 @@ from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.dict import DictAccess, squash_dict
 from starkware.cairo.common.hash import hash2
 from starkware.cairo.common.patricia import (
-    ParticiaGlobals, PatriciaUpdateConstants, patricia_update_constants_new,
-    patricia_update_using_update_constants)
+    ParticiaGlobals,
+    PatriciaUpdateConstants,
+    patricia_update_constants_new,
+    patricia_update_using_update_constants,
+)
 from starkware.cairo.common.segments import relocate_segment
 
 const MERKLE_HEIGHT = 251  # PRIME.bit_length() - 1.
@@ -25,7 +28,8 @@ struct StorageUpdateEntry:
 end
 
 func serialize_da_changes{storage_updates : StorageUpdateEntry*}(
-        update_ptr : DictAccess*, n_updates : felt):
+    update_ptr : DictAccess*, n_updates : felt
+):
     if n_updates == 0:
         return ()
     end
@@ -43,8 +47,8 @@ end
 # Returns a CommitmentTreeUpdateOutput struct.
 # Checks that [state_changes_dict, state_changes_dict_end) is a valid according to squash_dict.
 func state_update{hash_ptr : HashBuiltin*, range_check_ptr, storage_updates_ptr : felt*}(
-        state_changes_dict : DictAccess*, state_changes_dict_end : DictAccess*) -> (
-        commitment_tree_update_output : CommitmentTreeUpdateOutput*):
+    state_changes_dict : DictAccess*, state_changes_dict_end : DictAccess*
+) -> (commitment_tree_update_output : CommitmentTreeUpdateOutput*):
     alloc_locals
     let (local squashed_dict : DictAccess*) = alloc()
 
@@ -52,7 +56,8 @@ func state_update{hash_ptr : HashBuiltin*, range_check_ptr, storage_updates_ptr 
     let (squashed_dict_end) = squash_dict(
         dict_accesses=state_changes_dict,
         dict_accesses_end=state_changes_dict_end,
-        squashed_dict=squashed_dict)
+        squashed_dict=squashed_dict,
+    )
 
     # Hash the entries of state_changes_dict to prepare the input for the commitment tree
     # multi-update.
@@ -72,7 +77,8 @@ func state_update{hash_ptr : HashBuiltin*, range_check_ptr, storage_updates_ptr 
             n_state_changes=n_state_changes,
             state_changes=squashed_dict,
             hashed_state_changes=hashed_state_changes,
-            patricia_update_constants=patricia_update_constants)
+            patricia_update_constants=patricia_update_constants,
+        )
     end
     # Write number of state updates.
     assert output_n_updates = n_actual_state_changes
@@ -102,13 +108,15 @@ func state_update{hash_ptr : HashBuiltin*, range_check_ptr, storage_updates_ptr 
         n_updates=n_state_changes,
         height=MERKLE_HEIGHT,
         prev_root=commitment_tree_update_output.initial_storage_root,
-        new_root=commitment_tree_update_output.final_storage_root)
+        new_root=commitment_tree_update_output.final_storage_root,
+    )
 
     return (commitment_tree_update_output=commitment_tree_update_output)
 end
 
 func get_contract_state_hash{hash_ptr : HashBuiltin*}(
-        contract_hash : felt, storage_root : felt) -> (hash : felt):
+    contract_hash : felt, storage_root : felt
+) -> (hash : felt):
     const CONTRACT_STATE_HASH_VERSION = 0
     const RESERVED = 0
     if contract_hash == 0:
@@ -134,10 +142,13 @@ end
 # Writes all storage changes to output (storage_updates_ptr), 'n_actual_state_changes'
 # will hold the number of contracts with storage changes.
 func hash_state_changes{
-        hash_ptr : HashBuiltin*, range_check_ptr, storage_updates_ptr : felt*,
-        n_actual_state_changes}(
-        n_state_changes, state_changes : DictAccess*, hashed_state_changes : DictAccess*,
-        patricia_update_constants : PatriciaUpdateConstants*):
+    hash_ptr : HashBuiltin*, range_check_ptr, storage_updates_ptr : felt*, n_actual_state_changes
+}(
+    n_state_changes,
+    state_changes : DictAccess*,
+    hashed_state_changes : DictAccess*,
+    patricia_update_constants : PatriciaUpdateConstants*,
+):
     if n_state_changes == 0:
         return ()
     end
@@ -165,7 +176,8 @@ func hash_state_changes{
     let (local squashed_storage_dict_end) = squash_dict(
         dict_accesses=prev_state.storage_ptr,
         dict_accesses_end=new_state.storage_ptr,
-        squashed_dict=squashed_storage_dict)
+        squashed_dict=squashed_storage_dict,
+    )
 
     local n_updates = (squashed_storage_dict_end - squashed_storage_dict) / DictAccess.SIZE
     # Call patricia_update_using_update_constants() instead of patricia_update()
@@ -176,13 +188,16 @@ func hash_state_changes{
         n_updates=n_updates,
         height=MERKLE_HEIGHT,
         prev_root=initial_storage_root,
-        new_root=final_storage_root)
+        new_root=final_storage_root,
+    )
 
     let (prev_value) = get_contract_state_hash(
-        contract_hash=prev_state.contract_hash, storage_root=initial_storage_root)
+        contract_hash=prev_state.contract_hash, storage_root=initial_storage_root
+    )
     assert hashed_state_changes.prev_value = prev_value
     let (new_value) = get_contract_state_hash(
-        contract_hash=new_state.contract_hash, storage_root=final_storage_root)
+        contract_hash=new_state.contract_hash, storage_root=final_storage_root
+    )
     assert hashed_state_changes.new_value = new_value
     assert hashed_state_changes.key = state_changes.key
 
@@ -213,7 +228,8 @@ func hash_state_changes{
             n_state_changes=n_state_changes - 1,
             state_changes=state_changes + DictAccess.SIZE,
             hashed_state_changes=hashed_state_changes,
-            patricia_update_constants=patricia_update_constants)
+            patricia_update_constants=patricia_update_constants,
+        )
     end
 
     # Write contract address and number of updates.
@@ -231,5 +247,6 @@ func hash_state_changes{
         n_state_changes=n_state_changes - 1,
         state_changes=state_changes + DictAccess.SIZE,
         hashed_state_changes=hashed_state_changes,
-        patricia_update_constants=patricia_update_constants)
+        patricia_update_constants=patricia_update_constants,
+    )
 end

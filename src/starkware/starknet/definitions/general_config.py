@@ -44,6 +44,14 @@ TOKEN_DECIMALS = 18
 # In order to be able to use Keccak builtin, which uses bitwise, which is sparse.
 DEFAULT_MAX_STEPS = 10 ** 6
 DEFAULT_CHAIN_ID = StarknetChainId.TESTNET
+DEFAULT_FEE_TOKEN_ADDRESS = load_int_value(
+    field_metadata=fields.fee_token_address_metadata,
+    value=default_general_config["starknet_os_config"]["fee_token_address"],
+)
+DEFAULT_SEQUENCER_ADDRESS = load_int_value(
+    field_metadata=fields.fee_token_address_metadata,
+    value=default_general_config["sequencer_address"],
+)
 
 # Given in units of wei.
 DEFAULT_GAS_PRICE = 100 * 10 ** 9
@@ -80,10 +88,7 @@ class StarknetOsConfig(Config):
         metadata=dict(
             **fields.fee_token_address_metadata, description="StarkNet fee token L2 address."
         ),
-        default=load_int_value(
-            field_metadata=fields.fee_token_address_metadata,
-            value=default_general_config["starknet_os_config"]["fee_token_address"],
-        ),
+        default=DEFAULT_FEE_TOKEN_ADDRESS,
     )
 
 
@@ -105,16 +110,13 @@ class StarknetGeneralConfig(EverestGeneralConfig):
         metadata=fields.invoke_tx_n_steps_metadata, default=DEFAULT_MAX_STEPS
     )
 
-    gas_price: int = field(metadata=fields.gas_price, default=DEFAULT_GAS_PRICE)
+    min_gas_price: int = field(metadata=fields.gas_price, default=DEFAULT_GAS_PRICE)
 
     sequencer_address: int = field(
         metadata=dict(
             **fields.sequencer_address_metadata, description="StarkNet sequencer address."
         ),
-        default=load_int_value(
-            field_metadata=fields.fee_token_address_metadata,
-            value=default_general_config["sequencer_address"],
-        ),
+        default=DEFAULT_SEQUENCER_ADDRESS,
     )
 
     tx_commitment_tree_height: int = field(

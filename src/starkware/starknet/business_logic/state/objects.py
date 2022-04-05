@@ -128,7 +128,7 @@ class ContractState(ValidatedMarshmallowDataclass, LeafFact):
 
         Takes contract_address as input to improve the error message.
         """
-        address_formatter = fields.ContractAddressField.format
+        address_formatter = fields.L2AddressField.format
         stark_assert(
             self.initialized,
             code=StarknetErrorCode.UNINITIALIZED_CONTRACT,

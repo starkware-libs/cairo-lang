@@ -11,7 +11,8 @@ from starkware.cairo.common.registers import get_fp_and_pc
 # Updated builtin pointers after executing all programs.
 # fact_topologies - that corresponds to the tasks (hint variable).
 func run_simple_bootloader{
-        output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecdsa_ptr, bitwise_ptr}():
+    output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecdsa_ptr, bitwise_ptr
+}():
     alloc_locals
     local task_range_check_ptr
 
@@ -60,7 +61,8 @@ func run_simple_bootloader{
         execute_tasks(
             builtin_encodings=&builtin_encodings,
             builtin_instance_sizes=&builtin_instance_sizes,
-            n_tasks=n_tasks)
+            n_tasks=n_tasks,
+        )
     end
 
     # Verify that the task range checks appear after the self range checks of execute_task.
@@ -110,7 +112,8 @@ end
 # Hint arguments:
 # tasks - A list of tasks to execute.
 func execute_tasks{builtin_ptrs : BuiltinData*, self_range_check_ptr}(
-        builtin_encodings : BuiltinData*, builtin_instance_sizes : BuiltinData*, n_tasks):
+    builtin_encodings : BuiltinData*, builtin_instance_sizes : BuiltinData*, n_tasks
+):
     if n_tasks == 0:
         return ()
     end
@@ -128,5 +131,6 @@ func execute_tasks{builtin_ptrs : BuiltinData*, self_range_check_ptr}(
     return execute_tasks(
         builtin_encodings=builtin_encodings,
         builtin_instance_sizes=builtin_instance_sizes,
-        n_tasks=n_tasks - 1)
+        n_tasks=n_tasks - 1,
+    )
 end

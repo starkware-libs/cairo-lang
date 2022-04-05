@@ -3,18 +3,17 @@ import functools
 import logging
 import operator
 from dataclasses import field
-from typing import Any, Dict, Iterator, List, Optional, Set, cast
+from typing import Iterator, List, Optional, Set, cast
 
 import marshmallow.fields as mfields
 import marshmallow_dataclass
-from marshmallow.decorators import pre_load
 
 from services.everest.business_logic.internal_transaction import EverestTransactionExecutionInfo
 from services.everest.definitions import fields as everest_fields
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
 from starkware.cairo.lang.vm.utils import RunResources
-from starkware.starknet.business_logic.state import StateSelector
-from starkware.starknet.definitions import fields
+from starkware.starknet.business_logic.state.state import StateSelector
+from starkware.starknet.definitions import constants, fields
 from starkware.starknet.services.api.contract_definition import EntryPointType
 from starkware.starkware_utils.marshmallow_dataclass_fields import SetField
 from starkware.starkware_utils.serializable_dataclass import SerializableMarshmallowDataclass
@@ -42,6 +41,7 @@ class TransactionExecutionContext(ValidatedDataclass):
     # The signature of the transaction.
     signature: List[int] = field(metadata=fields.signature_metadata)
     max_fee: int = field(metadata=fields.fee_metadata)
+    version: int = field(metadata=fields.tx_version_metadata)
     run_resources: RunResources
     # Used for tracking global events order.
     n_emitted_events: int = field(metadata=sequential_id_metadata("Number of emitted events"))
@@ -56,12 +56,14 @@ class TransactionExecutionContext(ValidatedDataclass):
         signature: List[int],
         max_fee: int,
         n_steps: int,
+        version: int,
     ) -> "TransactionExecutionContext":
         return cls(
             account_contract_address=account_contract_address,
             transaction_hash=transaction_hash,
             signature=signature,
             max_fee=max_fee,
+            version=version,
             run_resources=RunResources(n_steps=n_steps),
             n_emitted_events=0,
             n_sent_messages=0,
@@ -81,6 +83,7 @@ class TransactionExecutionContext(ValidatedDataclass):
             signature=[],
             transaction_hash=0,
             max_fee=0,
+            version=constants.TRANSACTION_VERSION,
         )
 
 
@@ -106,7 +109,7 @@ class Event(ValidatedDataclass):
     """
 
     # Emitting contract address.
-    from_address: int = field(metadata=fields.contract_address_metadata)
+    from_address: int = field(metadata=fields.L2AddressField.metadata(field_name="from_address"))
     # The keys by which the event will be indexed.
     keys: List[int] = field(metadata=fields.felt_as_hex_list_metadata)
     # The data of the event.
@@ -139,7 +142,7 @@ class L2ToL1MessageInfo(ValidatedDataclass):
     Represents a StarkNet L2-to-L1 message.
     """
 
-    from_address: int = field(metadata=fields.contract_address_metadata)
+    from_address: int = field(metadata=fields.L2AddressField.metadata(field_name="from_address"))
     to_address: int = field(metadata=everest_fields.EthAddressIntField.metadata("to_address"))
     payload: List[int] = field(metadata=fields.felt_list_metadata)
 
@@ -233,6 +236,54 @@ class CallInfo(SerializableMarshmallowDataclass):
             internal_calls=[],
         )
 
+    def get_sorted_events(self) -> List[Event]:
+        """
+        Returns a list of StarkNet Event objects collected during the execution, sorted by the order
+        in which they were emitted.
+        """
+        n_events = sum(len(call.events) for call in self.gen_call_topology())
+        starknet_events: List[Optional[Event]] = [None] * n_events
+
+        for call in self.gen_call_topology():
+            for ordered_event_content in call.events:
+                # Convert OrderedEvent -> Event. I.e., add emitting contract address
+                # and remove the order.
+                starknet_events[ordered_event_content.order] = Event.create(
+                    emitting_contract_address=call.contract_address,
+                    event_content=ordered_event_content,
+                )
+
+        assert all(
+            starknet_event is not None for starknet_event in starknet_events
+        ), "Unexpected holes in the event order."
+
+        return cast(List[Event], starknet_events)
+
+    def get_sorted_l2_to_l1_messages(self) -> List[L2ToL1MessageInfo]:
+        """
+        Returns a list of StarkNet L2ToL1MessageInfo objects collected during the execution, sorted
+        by the order in which they were sent.
+        """
+        n_messages = sum(len(call.l2_to_l1_messages) for call in self.gen_call_topology())
+        starknet_l2_to_l1_messages: List[Optional[L2ToL1MessageInfo]] = [None] * n_messages
+
+        for call in self.gen_call_topology():
+            for ordered_message_content in call.l2_to_l1_messages:
+                # Convert OrderedL2ToL1Message -> L2ToL1MessageInfo. I.e., add sending
+                # contract address and remove the order.
+                starknet_l2_to_l1_messages[
+                    ordered_message_content.order
+                ] = L2ToL1MessageInfo.create(
+                    sending_contract_address=call.contract_address,
+                    message_content=ordered_message_content,
+                )
+
+        assert all(
+            message is not None for message in starknet_l2_to_l1_messages
+        ), "Unexpected holes in the L2-to-L1 message order."
+
+        return cast(List[L2ToL1MessageInfo], starknet_l2_to_l1_messages)
+
 
 @marshmallow_dataclass.dataclass(frozen=True)
 class TransactionExecutionInfo(EverestTransactionExecutionInfo):
@@ -267,54 +318,6 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
 
         yield from self.fee_transfer_info.gen_call_topology()
 
-    def get_sorted_events(self) -> List[Event]:
-        """
-        Returns a list of StarkNet Event objects collected during the execution, sorted by the order
-        in which they were emitted.
-        """
-        n_events = sum(len(call.events) for call in self.call_info.gen_call_topology())
-        starknet_events: List[Optional[Event]] = [None] * n_events
-
-        for call in self.call_info.gen_call_topology():
-            for ordered_event_content in call.events:
-                # Convert OrderedEvent -> Event. I.e., add emitting contract address
-                # and remove the order.
-                starknet_events[ordered_event_content.order] = Event.create(
-                    emitting_contract_address=call.contract_address,
-                    event_content=ordered_event_content,
-                )
-
-        assert all(
-            starknet_event is not None for starknet_event in starknet_events
-        ), "Unexpected holes in the event order."
-
-        return cast(List[Event], starknet_events)
-
-    def get_sorted_l2_to_l1_messages(self) -> List[L2ToL1MessageInfo]:
-        """
-        Returns a list of StarkNet L2ToL1MessageInfo objects collected during the execution, sorted
-        by the order in which they were sent.
-        """
-        n_messages = sum(len(call.l2_to_l1_messages) for call in self.call_info.gen_call_topology())
-        starknet_l2_to_l1_messages: List[Optional[L2ToL1MessageInfo]] = [None] * n_messages
-
-        for call in self.call_info.gen_call_topology():
-            for ordered_message_content in call.l2_to_l1_messages:
-                # Convert OrderedL2ToL1Message -> L2ToL1MessageInfo. I.e., add sending
-                # contract address and remove the order.
-                starknet_l2_to_l1_messages[
-                    ordered_message_content.order
-                ] = L2ToL1MessageInfo.create(
-                    sending_contract_address=call.contract_address,
-                    message_content=ordered_message_content,
-                )
-
-        assert all(
-            message is not None for message in starknet_l2_to_l1_messages
-        ), "Unexpected holes in the L2-to-L1 message order."
-
-        return cast(List[L2ToL1MessageInfo], starknet_l2_to_l1_messages)
-
     @staticmethod
     def get_state_selector_of_many(
         execution_infos: List["TransactionExecutionInfo"],
@@ -324,6 +327,12 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
             (execution_info.get_state_selector() for execution_info in execution_infos),
             StateSelector.empty(),
         )
+
+    def get_sorted_events(self) -> List[Event]:
+        return self.call_info.get_sorted_events()
+
+    def get_sorted_l2_to_l1_messages(self) -> List[L2ToL1MessageInfo]:
+        return self.call_info.get_sorted_l2_to_l1_messages()
 
 
 # Deprecated classes.
@@ -365,7 +374,7 @@ class ContractCall(ValidatedMarshmallowDataclass):
     cairo_usage: ExecutionResources
     # Note that the order starts from a transaction-global offset.
     events: List[OrderedEvent] = field(metadata=dict(load_default=list, required=False))
-    l2_to_l1_messages: List[OrderedL2ToL1Message] = field(
+    l2_to_l1_messages: List[L2ToL1MessageInfo] = field(
         metadata=dict(load_default=list, required=False)
     )
 
@@ -418,26 +427,25 @@ class TransactionExecutionInfoDeprecated(EverestTransactionExecutionInfo):
     2. Stores useful information for users; e.g., L2-to-L1 messages it sent and emitted events.
     """
 
-    call_info: ContractCall
+    l2_to_l1_messages: List[L2ToL1MessageInfo]
     # The retdata of the main transaction.
     retdata: List[int]
+    call_info: ContractCall
     # The internal contract calls; arranged in DFS order, which is the order they are invoked by the
     # OS.
     internal_calls: List[ContractCall]
-    actual_fee: int = field(metadata=fields.fee_metadata)
 
     @classmethod
     def create(
         cls,
         call_info: ContractCall,
         internal_calls: Optional[List[ContractCall]] = None,
-        actual_fee: int = 0,
     ) -> "TransactionExecutionInfoDeprecated":
         return cls(
+            l2_to_l1_messages=[],
             retdata=[],
             call_info=call_info,
             internal_calls=[] if internal_calls is None else internal_calls,
-            actual_fee=actual_fee,
         )
 
     @property
@@ -450,13 +458,6 @@ class TransactionExecutionInfoDeprecated(EverestTransactionExecutionInfo):
             (contract_call.state_selector for contract_call in self.contract_calls),
             StateSelector.empty(),
         )
-
-    @pre_load
-    def remove_l2_to_l1_messages(
-        self, data: Dict[str, Any], many: bool, **kwargs
-    ) -> Dict[str, Any]:
-        data.pop("l2_to_l1_messages", None)
-        return data
 
     def get_sorted_events(self) -> List[Event]:
         """
@@ -480,33 +481,6 @@ class TransactionExecutionInfoDeprecated(EverestTransactionExecutionInfo):
         ), "Unexpected holes in the event order."
 
         return cast(List[Event], starknet_events)
-
-    def get_sorted_l2_to_l1_messages(self) -> List[L2ToL1MessageInfo]:
-        """
-        Returns a list of StarkNet L2ToL1MessageInfo objects collected during the execution, sorted
-        by the order in which they were sent.
-        """
-        n_messages = sum(
-            len(contract_call.l2_to_l1_messages) for contract_call in self.contract_calls
-        )
-        starknet_l2_to_l1_messages: List[Optional[L2ToL1MessageInfo]] = [None] * n_messages
-
-        for contract_call in self.contract_calls:
-            for ordered_message_content in contract_call.l2_to_l1_messages:
-                # Convert OrderedL2ToL1Message -> L2ToL1MessageInfo. I.e., add sending
-                # contract address and remove the order.
-                starknet_l2_to_l1_messages[
-                    ordered_message_content.order
-                ] = L2ToL1MessageInfo.create(
-                    sending_contract_address=contract_call.to_address,
-                    message_content=ordered_message_content,
-                )
-
-        assert all(
-            message is not None for message in starknet_l2_to_l1_messages
-        ), "Unexpected holes in the L2-to-L1 message order."
-
-        return cast(List[L2ToL1MessageInfo], starknet_l2_to_l1_messages)
 
     @staticmethod
     def get_state_selector_of_many(

@@ -14,7 +14,8 @@ const ALL_ONES = 2 ** 251 - 1
 #   x_xor_y = x ^ y (bitwise xor).
 #   x_or_y = x | y (bitwise or).
 func bitwise_operations{bitwise_ptr : BitwiseBuiltin*}(x : felt, y : felt) -> (
-        x_and_y : felt, x_xor_y : felt, x_or_y : felt):
+    x_and_y : felt, x_xor_y : felt, x_or_y : felt
+):
     bitwise_ptr.x = x
     bitwise_ptr.y = y
     let x_and_y = bitwise_ptr.x_and_y

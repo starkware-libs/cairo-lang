@@ -80,8 +80,8 @@ end
 #
 # This is a wrapper of squash_dict for dictionaries created by dict_new().
 func dict_squash{range_check_ptr}(
-        dict_accesses_start : DictAccess*, dict_accesses_end : DictAccess*) -> (
-        squashed_dict_start : DictAccess*, squashed_dict_end : DictAccess*):
+    dict_accesses_start : DictAccess*, dict_accesses_end : DictAccess*
+) -> (squashed_dict_start : DictAccess*, squashed_dict_end : DictAccess*):
     alloc_locals
 
     %{
@@ -100,7 +100,8 @@ func dict_squash{range_check_ptr}(
     let (squashed_dict_end) = squash_dict(
         dict_accesses=dict_accesses_start,
         dict_accesses_end=dict_accesses_end,
-        squashed_dict=squashed_dict_start)
+        squashed_dict=squashed_dict_start,
+    )
 
     %{
         # Update the DictTracker's current_ptr to point to the end of the squashed dict.

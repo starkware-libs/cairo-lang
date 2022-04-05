@@ -5,7 +5,11 @@ from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.registers import get_fp_and_pc
 from starkware.starknet.common.messages import send_message_to_l1
 from starkware.starknet.common.syscalls import (
-    get_caller_address, get_tx_info, storage_read, storage_write)
+    get_caller_address,
+    get_tx_info,
+    storage_read,
+    storage_write,
+)
 
 @contract_interface
 namespace MyContract:
@@ -21,7 +25,8 @@ end
 
 @external
 func call_increase_value{syscall_ptr : felt*, range_check_ptr}(
-        contract_address : felt, address : felt, value : felt):
+    contract_address : felt, address : felt, value : felt
+):
     MyContract.increase_value(contract_address=contract_address, address=address, value=value)
     return ()
 end
@@ -45,7 +50,8 @@ end
 
 @external
 func get_signature{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*}() -> (
-        res_len : felt, res : felt*):
+    res_len : felt, res : felt*
+):
     let (tx_info) = get_tx_info()
     return (res_len=tx_info.signature_len, res=tx_info.signature)
 end
@@ -85,7 +91,8 @@ end
 
 @view
 func sum_and_mult_points{syscall_ptr : felt*, range_check_ptr}(points : (Point, Point)) -> (
-        sum_res : Point, mult_res : felt):
+    sum_res : Point, mult_res : felt
+):
     let sum_res : Point = sum_points(points=points)
     let mult_res : felt = (points[0].x * points[1].x) + (points[0].y * points[1].y)
     return (sum_res=sum_res, mult_res=mult_res)

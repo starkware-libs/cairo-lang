@@ -340,7 +340,8 @@ func split_int{range_check_ptr}(value, n, base, bound, output : felt*):
     assert_nn_le(low_part, bound - 1)
 
     return split_int(
-        value=(value - low_part) / base, n=n - 1, base=base, bound=bound, output=output + 1)
+        value=(value - low_part) / base, n=n - 1, base=base, bound=bound, output=output + 1
+    )
 end
 
 # Returns the floor value of the square root of the given value.
@@ -371,6 +372,7 @@ func horner_eval(n_coefficients : felt, coefficients : felt*, point : felt) -> (
     end
 
     let (n_minus_one_res) = horner_eval(
-        n_coefficients=n_coefficients - 1, coefficients=&coefficients[1], point=point)
+        n_coefficients=n_coefficients - 1, coefficients=&coefficients[1], point=point
+    )
     return (res=n_minus_one_res * point + [coefficients])
 end

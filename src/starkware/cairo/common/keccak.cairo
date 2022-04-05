@@ -63,7 +63,8 @@ func unsafe_keccak_add_uint256{keccak_state : KeccakState, range_check_ptr}(num 
 end
 
 func unsafe_keccak_add_felts{keccak_state : KeccakState, range_check_ptr}(
-        n_elements : felt, elements : felt*) -> ():
+    n_elements : felt, elements : felt*
+) -> ():
     if n_elements == 0:
         return ()
     end

@@ -4,7 +4,7 @@ from typing import Tuple
 
 import pytest
 
-from starkware.starknet.business_logic.transaction_execution_objects import Event
+from starkware.starknet.business_logic.execution.objects import Event
 from starkware.starknet.core.test_contract.test_utils import get_contract_definition
 from starkware.starknet.public.abi import get_selector_from_name
 from starkware.starknet.testing.contract import StarknetContract

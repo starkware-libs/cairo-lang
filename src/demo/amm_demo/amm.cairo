@@ -28,7 +28,8 @@ struct AmmState:
 end
 
 func modify_account{range_check_ptr}(state : AmmState, account_id, diff_a, diff_b) -> (
-        state : AmmState, key):
+    state : AmmState, key
+):
     alloc_locals
 
     # Define a reference to state.account_dict_end so that we
@@ -93,7 +94,8 @@ func swap{range_check_ptr}(state : AmmState, transaction : SwapTransaction*) -> 
 
     # Update the user's account.
     let (state, key) = modify_account(
-        state=state, account_id=transaction.account_id, diff_a=-a, diff_b=b)
+        state=state, account_id=transaction.account_id, diff_a=-a, diff_b=b
+    )
 
     # Here you should verify the user has signed on a message
     # specifying that they would like to sell 'a' tokens of
@@ -128,7 +130,8 @@ func swap{range_check_ptr}(state : AmmState, transaction : SwapTransaction*) -> 
 end
 
 func transaction_loop{range_check_ptr}(
-        state : AmmState, transactions : SwapTransaction**, n_transactions) -> (state : AmmState):
+    state : AmmState, transactions : SwapTransaction**, n_transactions
+) -> (state : AmmState):
     if n_transactions == 0:
         return (state=state)
     end
@@ -137,7 +140,8 @@ func transaction_loop{range_check_ptr}(
     let (state) = swap(state=state, transaction=first_transaction)
 
     return transaction_loop(
-        state=state, transactions=transactions + 1, n_transactions=n_transactions - 1)
+        state=state, transactions=transactions + 1, n_transactions=n_transactions - 1
+    )
 end
 
 # Returns a hash committing to the account's state using the
@@ -156,8 +160,8 @@ end
 # hash_dict_start and hash_dict_end) after applying hash_account
 # on prev_value and new_value and keeping the same key.
 func hash_dict_values{pedersen_ptr : HashBuiltin*}(
-        dict_start : DictAccess*, dict_end : DictAccess*, hash_dict_start : DictAccess*) -> (
-        hash_dict_end : DictAccess*):
+    dict_start : DictAccess*, dict_end : DictAccess*, hash_dict_start : DictAccess*
+) -> (hash_dict_end : DictAccess*):
     if dict_start == dict_end:
         return (hash_dict_end=hash_dict_start)
     end
@@ -169,11 +173,11 @@ func hash_dict_values{pedersen_ptr : HashBuiltin*}(
 
     # Add an entry to the output dict.
     dict_update{dict_ptr=hash_dict_start}(
-        key=dict_start.key, prev_value=prev_hash, new_value=new_hash)
+        key=dict_start.key, prev_value=prev_hash, new_value=new_hash
+    )
     return hash_dict_values(
-        dict_start=dict_start + DictAccess.SIZE,
-        dict_end=dict_end,
-        hash_dict_start=hash_dict_start)
+        dict_start=dict_start + DictAccess.SIZE, dict_end=dict_end, hash_dict_start=hash_dict_start
+    )
 end
 
 const LOG_N_ACCOUNTS = 10
@@ -182,12 +186,14 @@ const LOG_N_ACCOUNTS = 10
 # Hint argument: initial_account_dict should be a dictionary
 # from account_id to an address in memory of the Account struct.
 func compute_merkle_roots{pedersen_ptr : HashBuiltin*, range_check_ptr}(state : AmmState) -> (
-        root_before, root_after):
+    root_before, root_after
+):
     alloc_locals
 
     # Squash the account dictionary.
     let (squashed_dict_start, squashed_dict_end) = dict_squash(
-        dict_accesses_start=state.account_dict_start, dict_accesses_end=state.account_dict_end)
+        dict_accesses_start=state.account_dict_start, dict_accesses_end=state.account_dict_end
+    )
     local range_check_ptr = range_check_ptr
 
     # Hash the dict values.
@@ -208,15 +214,13 @@ func compute_merkle_roots{pedersen_ptr : HashBuiltin*, range_check_ptr}(state : 
     %}
     let (local hash_dict_start : DictAccess*) = dict_new()
     let (hash_dict_end) = hash_dict_values(
-        dict_start=squashed_dict_start,
-        dict_end=squashed_dict_end,
-        hash_dict_start=hash_dict_start)
+        dict_start=squashed_dict_start, dict_end=squashed_dict_end, hash_dict_start=hash_dict_start
+    )
 
     # Compute the two Merkle roots.
     let (root_before, root_after) = small_merkle_tree_update{hash_ptr=pedersen_ptr}(
-        squashed_dict_start=hash_dict_start,
-        squashed_dict_end=hash_dict_end,
-        height=LOG_N_ACCOUNTS)
+        squashed_dict_start=hash_dict_start, squashed_dict_end=hash_dict_end, height=LOG_N_ACCOUNTS
+    )
 
     return (root_before=root_before, root_after=root_after)
 end
@@ -306,7 +310,8 @@ func main{output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}():
     # Execute the transactions.
     let (transactions, n_transactions) = get_transactions()
     let (state : AmmState) = transaction_loop(
-        state=state, transactions=transactions, n_transactions=n_transactions)
+        state=state, transactions=transactions, n_transactions=n_transactions
+    )
 
     # Output the AMM's balances after applying the batch.
     assert output.token_a_after = state.token_a_balance

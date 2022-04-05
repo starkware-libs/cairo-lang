@@ -72,7 +72,7 @@ class FeederGatewayClient(EverestFeederGatewayClient):
             send_method="GET",
             uri=f"/get_block?{formatted_block_identifier}",
         )
-        return StarknetBlock.loads(raw_response)
+        return StarknetBlock.loads(data=raw_response)
 
     async def get_state_update(
         self,
@@ -151,21 +151,21 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         raw_response = await self._send_request(
             send_method="GET", uri=f"/get_transaction?{tx_identifier(tx_hash=tx_hash)}"
         )
-        return TransactionInfo.loads(raw_response)
+        return TransactionInfo.loads(data=raw_response)
 
     async def get_transaction_receipt(self, tx_hash: CastableToHash) -> TransactionReceipt:
         raw_response = await self._send_request(
             send_method="GET",
             uri=f"/get_transaction_receipt?{tx_identifier(tx_hash=tx_hash)}",
         )
-        return TransactionReceipt.loads(raw_response)
+        return TransactionReceipt.loads(data=raw_response)
 
     async def get_transaction_trace(self, tx_hash: CastableToHash) -> TransactionTrace:
         raw_response = await self._send_request(
             send_method="GET",
             uri=f"/get_transaction_trace?{tx_identifier(tx_hash=tx_hash)}",
         )
-        return TransactionTrace.loads(raw_response)
+        return TransactionTrace.loads(data=raw_response)
 
     async def get_block_hash_by_id(self, block_id: int) -> str:
         raw_response = await self._send_request(

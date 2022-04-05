@@ -8,8 +8,8 @@ const SHIFTS = 1 + 2 ** 35 + 2 ** (35 * 2) + 2 ** (35 * 3) + 2 ** (35 * 4) + 2 *
     2 ** (35 * 6)
 
 func mix{bitwise_ptr : BitwiseBuiltin*}(
-        a : felt, b : felt, c : felt, d : felt, m0 : felt, m1 : felt) -> (
-        a : felt, b : felt, c : felt, d : felt):
+    a : felt, b : felt, c : felt, d : felt, m0 : felt, m1 : felt
+) -> (a : felt, b : felt, c : felt, d : felt):
     alloc_locals
 
     # Defining the following constant as local variables saves some instructions.
@@ -79,7 +79,8 @@ func mix{bitwise_ptr : BitwiseBuiltin*}(
 end
 
 func blake_round{bitwise_ptr : BitwiseBuiltin*}(state : felt*, message : felt*, sigma : felt*) -> (
-        new_state : felt*):
+    new_state : felt*
+):
     let state0 = state[0]
     let state1 = state[1]
     let state2 = state[2]
@@ -98,22 +99,30 @@ func blake_round{bitwise_ptr : BitwiseBuiltin*}(state : felt*, message : felt*, 
     let state15 = state[15]
 
     let (state0, state4, state8, state12) = mix(
-        state0, state4, state8, state12, message[sigma[0]], message[sigma[1]])
+        state0, state4, state8, state12, message[sigma[0]], message[sigma[1]]
+    )
     let (state1, state5, state9, state13) = mix(
-        state1, state5, state9, state13, message[sigma[2]], message[sigma[3]])
+        state1, state5, state9, state13, message[sigma[2]], message[sigma[3]]
+    )
     let (state2, state6, state10, state14) = mix(
-        state2, state6, state10, state14, message[sigma[4]], message[sigma[5]])
+        state2, state6, state10, state14, message[sigma[4]], message[sigma[5]]
+    )
     let (state3, state7, state11, state15) = mix(
-        state3, state7, state11, state15, message[sigma[6]], message[sigma[7]])
+        state3, state7, state11, state15, message[sigma[6]], message[sigma[7]]
+    )
 
     let (state0, state5, state10, state15) = mix(
-        state0, state5, state10, state15, message[sigma[8]], message[sigma[9]])
+        state0, state5, state10, state15, message[sigma[8]], message[sigma[9]]
+    )
     let (state1, state6, state11, state12) = mix(
-        state1, state6, state11, state12, message[sigma[10]], message[sigma[11]])
+        state1, state6, state11, state12, message[sigma[10]], message[sigma[11]]
+    )
     let (state2, state7, state8, state13) = mix(
-        state2, state7, state8, state13, message[sigma[12]], message[sigma[13]])
+        state2, state7, state8, state13, message[sigma[12]], message[sigma[13]]
+    )
     let (state3, state4, state9, state14) = mix(
-        state3, state4, state9, state14, message[sigma[14]], message[sigma[15]])
+        state3, state4, state9, state14, message[sigma[14]], message[sigma[15]]
+    )
 
     let (new_state : felt*) = alloc()
     assert new_state[0] = state0
@@ -142,7 +151,8 @@ end
 # message is a list of 16 32-bit words.
 # t1 and f1 are assumed to be 0.
 func blake2s_compress{bitwise_ptr : BitwiseBuiltin*}(
-        h : felt*, message : felt*, t0 : felt, f0 : felt, sigma : felt*, output : felt*):
+    h : felt*, message : felt*, t0 : felt, f0 : felt, sigma : felt*, output : felt*
+):
     alloc_locals
     let (__fp__, _) = get_fp_and_pc()
 

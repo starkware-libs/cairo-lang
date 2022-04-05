@@ -240,11 +240,6 @@ class ParserTransformer(Transformer):
     @v_args(meta=True)
     def type_tuple(self, value: Tuple[CommaSeparatedWithNotes], meta):
         (lst,) = value
-        is_named = set((member.name is not None) for member in lst.args)
-        if is_named == {True, False}:
-            raise ParserError(
-                "All fields in a named tuple must have a name.", location=self.meta2loc(meta)
-            )
         return TypeTuple(
             members=lst.args,
             notes=lst.notes,
@@ -399,12 +394,6 @@ class ParserTransformer(Transformer):
         if not arg_list.has_trailing_comma and len(args) == 1 and args[0].identifier is None:
             return ExprParentheses(
                 val=args[0].expr, notes=arg_list.notes[0], location=arg_list.location
-            )
-
-        is_named = set((member.identifier is not None) for member in args)
-        if is_named == {True, False}:
-            raise ParserError(
-                "All fields in a named tuple must have a name.", location=self.meta2loc(meta)
             )
 
         return ExprTuple(members=arg_list, location=self.meta2loc(meta))

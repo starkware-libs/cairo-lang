@@ -5,7 +5,7 @@ import pytest
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.crypto.signature.fast_pedersen_hash import pedersen_hash
 from starkware.starknet.core.os.os_program import get_os_program
-from starkware.starknet.core.os.transaction_hash import (
+from starkware.starknet.core.os.transaction_hash.transaction_hash import (
     TransactionHashPrefix,
     calculate_deploy_transaction_hash,
     calculate_transaction_hash_common,
@@ -29,7 +29,7 @@ def run_cairo_transaction_hash(
     runner = CairoFunctionRunner(program, layout="all")
 
     runner.run(
-        "starkware.starknet.core.os.transaction_hash.get_transaction_hash",
+        "starkware.starknet.core.os.transaction_hash.transaction_hash.get_transaction_hash",
         hash_ptr=runner.pedersen_builtin.base,
         tx_hash_prefix=tx_hash_prefix.value,
         version=version,

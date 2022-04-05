@@ -74,6 +74,17 @@ class CarriedStateBase(ABC):
 
     @property
     def parent_state(self: TCarriedState) -> Optional[TCarriedState]:
+        """
+        Meant for mypy to deduce the application-specific type of the parent state.
+        """
+        return self._parent_state
+
+    @property
+    def non_optional_parent_state(self: TCarriedState) -> TCarriedState:
+        """
+        Asserts that the parent state is not None and returns it.
+        """
+        assert self._parent_state is not None, "Parent state expected to be initialized."
         return self._parent_state
 
     def __repr__(self) -> str:

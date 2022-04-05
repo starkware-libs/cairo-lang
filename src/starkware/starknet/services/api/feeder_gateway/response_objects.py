@@ -1,7 +1,7 @@
 import dataclasses
 from dataclasses import field
 from enum import Enum, auto
-from typing import ClassVar, Dict, Iterable, List, Optional, Tuple, Type, Union
+from typing import ClassVar, Dict, Iterable, List, Optional, Tuple, Type, TypeVar, Union
 
 import marshmallow
 import marshmallow.exceptions
@@ -16,31 +16,29 @@ from services.everest.api.feeder_gateway.response_objects import BaseResponseObj
 from services.everest.business_logic.transaction_execution_objects import TransactionFailureReason
 from services.everest.definitions import fields as everest_fields
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
-from starkware.python.utils import to_bytes
-from starkware.starknet.business_logic.internal_transaction import (
-    InternalDeploy,
-    InternalInvokeFunction,
-    InternalTransaction,
-)
-from starkware.starknet.business_logic.transaction_execution_objects import (
+from starkware.python.utils import from_bytes, to_bytes
+from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
     Event,
     OrderedEvent,
     OrderedL2ToL1Message,
+)
+from starkware.starknet.business_logic.internal_transaction import (
+    InternalDeploy,
+    InternalInvokeFunction,
+    InternalTransaction,
 )
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.transaction_type import TransactionType
 from starkware.starknet.services.api.contract_definition import EntryPointType
 from starkware.starkware_utils.marshmallow_dataclass_fields import VariadicLengthTupleField
 from starkware.starkware_utils.serializable_dataclass import SerializableMarshmallowDataclass
-from starkware.starkware_utils.validated_dataclass import (
-    ValidatedDataclass,
-    ValidatedMarshmallowDataclass,
-)
+from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 from starkware.starkware_utils.validated_fields import sequential_id_metadata
 
 BlockIdentifier = Union[int, Literal["pending"]]
 OptionalBlockIdentifier = Optional[BlockIdentifier]
+TBlockInfo = TypeVar("TBlockInfo", bound="StarknetBlock")
 
 
 class BlockStatus(Enum):
@@ -209,7 +207,7 @@ class TransactionInBlockInfo(BaseResponseObject):
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
-class TransactionSpecificInfo(ValidatedMarshmallowDataclass):
+class TransactionSpecificInfo(BaseResponseObject):
     tx_type: ClassVar[TransactionType]
 
     @classmethod
@@ -226,6 +224,7 @@ class TransactionSpecificInfo(ValidatedMarshmallowDataclass):
 class DeploySpecificInfo(TransactionSpecificInfo):
     contract_address: int = field(metadata=fields.contract_address_metadata)
     contract_address_salt: int = field(metadata=fields.contract_address_salt_metadata)
+    class_hash: Optional[int] = field(metadata=fields.OptionalClassHashField.metadata())
     constructor_calldata: List[int] = field(metadata=fields.call_data_as_hex_metadata)
     transaction_hash: int = field(metadata=fields.transaction_hash_metadata)
     tx_type: ClassVar[TransactionType] = TransactionType.DEPLOY
@@ -235,6 +234,7 @@ class DeploySpecificInfo(TransactionSpecificInfo):
         return cls(
             contract_address=internal_tx.contract_address,
             contract_address_salt=internal_tx.contract_address_salt,
+            class_hash=from_bytes(internal_tx.contract_hash),
             constructor_calldata=internal_tx.constructor_calldata,
             transaction_hash=internal_tx.hash_value,
         )
@@ -246,7 +246,7 @@ class InvokeSpecificInfo(TransactionSpecificInfo):
     entry_point_selector: int = field(metadata=fields.entry_point_selector_metadata)
     entry_point_type: EntryPointType
     calldata: List[int] = field(metadata=fields.call_data_as_hex_metadata)
-    signature: List[int] = field(metadata=fields.signature_metadata)
+    signature: List[int] = field(metadata=fields.signature_as_hex_metadata)
     transaction_hash: int = field(metadata=fields.transaction_hash_metadata)
     max_fee: int = field(metadata=fields.fee_metadata)
     tx_type: ClassVar[TransactionType] = TransactionType.INVOKE_FUNCTION
@@ -321,8 +321,10 @@ class L1ToL2Message(BaseResponseObject):
     Represents a StarkNet L1-to-L2 message.
     """
 
-    from_address: str = field(metadata=everest_fields.EthAddressField.metadata("from_address"))
-    to_address: int = field(metadata=fields.contract_address_metadata)
+    from_address: str = field(
+        metadata=everest_fields.EthAddressField.metadata(field_name="from_address")
+    )
+    to_address: int = field(metadata=fields.L2AddressField.metadata(field_name="to_address"))
     selector: int = field(metadata=fields.entry_point_selector_metadata)
     payload: List[int] = field(metadata=fields.felt_as_hex_list_metadata)
     nonce: Optional[int] = field(metadata=fields.optional_nonce_metadata)
@@ -334,8 +336,10 @@ class L2ToL1Message(BaseResponseObject):
     Represents a StarkNet L2-to-L1 message.
     """
 
-    from_address: int = field(metadata=fields.contract_address_metadata)
-    to_address: str = field(metadata=everest_fields.EthAddressField.metadata("to_address"))
+    from_address: int = field(metadata=fields.L2AddressField.metadata(field_name="from_address"))
+    to_address: str = field(
+        metadata=everest_fields.EthAddressField.metadata(field_name="to_address")
+    )
     payload: List[int] = field(metadata=fields.felt_as_hex_list_metadata)
 
 
@@ -359,6 +363,8 @@ class TransactionExecution(BaseResponseObject):
     events: List[Event]
     # The resources needed by the transaction.
     execution_resources: Optional[ExecutionResources]
+    # The actual fee that was charged.
+    actual_fee: Optional[int] = field(metadata=fields.optional_fee_metadata)
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -393,6 +399,7 @@ class TransactionReceipt(TransactionExecution, TransactionInBlockInfo):
         cls,
         transaction_hash: int,
         tx_info: TransactionInBlockInfo,
+        actual_fee: Optional[int],
         l1_to_l2_consumed_message: Optional[L1ToL2Message] = None,
         l2_to_l1_messages: Optional[List[L2ToL1Message]] = None,
         events: Optional[List[Event]] = None,
@@ -403,6 +410,7 @@ class TransactionReceipt(TransactionExecution, TransactionInBlockInfo):
             l2_to_l1_messages=[] if l2_to_l1_messages is None else l2_to_l1_messages,
             events=[] if events is None else events,
             execution_resources=execution_resources,
+            actual_fee=actual_fee,
             transaction_hash=transaction_hash,
             status=tx_info.status,
             transaction_failure_reason=tx_info.transaction_failure_reason,
@@ -428,7 +436,7 @@ class DeployedContract(BaseResponseObject):
     Represents a newly deployed contract in a block state update.
     """
 
-    address: int = field(metadata=fields.contract_address_metadata)
+    address: int = field(metadata=fields.L2AddressField.metadata(field_name="address"))
     contract_hash: bytes = field(metadata=fields.contract_hash_metadata)
 
 
@@ -441,7 +449,7 @@ class StateDiff(BaseResponseObject):
     storage_diffs: Dict[int, List[StorageEntry]] = field(
         metadata=dict(
             marshmallow_field=mfields.Dict(
-                keys=fields.ContractAddressField.get_marshmallow_field(
+                keys=fields.L2AddressField.get_marshmallow_field(
                     required=True,
                     load_default=marshmallow.utils.missing,
                 ),
@@ -512,7 +520,9 @@ class FunctionInvocation(SerializableMarshmallowDataclass):
     """
 
     # Static info.
-    caller_address: int = field(metadata=fields.contract_address_metadata)
+    caller_address: int = field(
+        metadata=fields.L2AddressField.metadata(field_name="caller_address")
+    )
     contract_address: int = field(metadata=fields.contract_address_metadata)
     code_address: Optional[int] = field(metadata=fields.optional_code_address_metadata)
     selector: Optional[int] = field(metadata=fields.optional_entry_point_selector_metadata)
@@ -561,7 +571,7 @@ class TransactionTrace(BaseResponseObject):
 
     # An object describing the invocation of a specific function.
     function_invocation: FunctionInvocation
-    signature: List[int] = field(metadata=fields.signature_metadata)
+    signature: List[int] = field(metadata=fields.signature_as_hex_metadata)
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -593,7 +603,7 @@ class StarknetBlock(BaseResponseObject):
 
     @classmethod
     def create(
-        cls,
+        cls: Type[TBlockInfo],
         block_hash: Optional[int],
         parent_block_hash: int,
         block_number: Optional[int],
@@ -602,7 +612,7 @@ class StarknetBlock(BaseResponseObject):
         timestamp: int,
         transaction_receipts: Optional[Tuple[TransactionExecution, ...]],
         status: Optional[BlockStatus],
-    ) -> "StarknetBlock":
+    ) -> TBlockInfo:
         return cls(
             block_hash=block_hash,
             parent_block_hash=parent_block_hash,

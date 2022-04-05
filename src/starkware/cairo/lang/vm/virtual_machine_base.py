@@ -383,7 +383,7 @@ class VirtualMachineBase(ABC):
                 invalid_references.append(reference)
                 return match.group(0)
 
-        error_message = re.sub(r"{(?P<name>[a-zA-Z0-9.]+)}", substitute_ref, error_message)
+        error_message = re.sub(r"{(?P<name>[a-zA-Z_0-9.]+)}", substitute_ref, error_message)
         if len(invalid_references) > 0:
             error_message += (
                 f" (Cannot evaluate ap-based or complex references: {invalid_references})"

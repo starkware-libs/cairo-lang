@@ -89,11 +89,23 @@ class Field(ABC, Generic[T]):
         """
 
     # Serialization.
+
     @abstractmethod
     def get_marshmallow_field(self, required: bool, load_default: Any) -> mfields.Field:
         """
         Returns a marshmallow field that serializes and deserializes values of this field.
         """
+
+    # Deserialization.
+
+    def load_value(self, value: str) -> T:
+        """
+        Loads a field instance from the given string.
+        """
+        marshmallow_field = self.get_marshmallow_field(
+            required=True, load_default=marshmallow.utils.missing
+        )
+        return marshmallow_field.deserialize(value=value)
 
     # Metadata.
 

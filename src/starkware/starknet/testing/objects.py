@@ -1,7 +1,7 @@
 import dataclasses
 from typing import Any, List
 
-from starkware.starknet.business_logic.transaction_execution_objects import (
+from starkware.starknet.business_logic.execution.objects import (
     Event,
     L2ToL1MessageInfo,
     TransactionExecutionInfo,

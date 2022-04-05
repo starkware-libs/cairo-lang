@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 import pytest
 import web3.exceptions
 from web3 import HTTPProvider, Web3
+from web3 import logs as web3_logs
 from web3 import types as web3_types
 from web3.contract import Contract
 
@@ -129,9 +130,10 @@ class EthAccount:
         logger.info(f"Submitted {tx_hash.hex()}.")
 
         # Get tx receipt to get contract address.
-        tx_receipt = self.w3.eth.waitForTransactionReceipt(tx_hash, timeout=60)
+        tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
 
         contract_address = tx_receipt["contractAddress"]
+        assert contract_address is not None
         assert (
             tx_receipt["status"] == 1
         ), f"Failed to deploy contract. Transaction hash: {tx_hash.hex()}."
@@ -186,7 +188,7 @@ class EthContract:
         event = getattr(self.w3_contract.events, name)
         return [
             {arg_name: handle_w3_value(arg_value) for arg_name, arg_value in event.args.items()}
-            for event in event().processReceipt(tx.w3_tx_receipt)
+            for event in event().processReceipt(tx.w3_tx_receipt, errors=web3_logs.DISCARD)
         ]
 
     def decode_transaction_data(self, data):
@@ -219,7 +221,7 @@ class EthContractFunction:
 
         try:
             tx_hash = self._func(*args).transact(transact_args)
-            w3_tx_receipt = self.contract.w3.eth.waitForTransactionReceipt(tx_hash)
+            w3_tx_receipt = self.contract.w3.eth.wait_for_transaction_receipt(tx_hash)
             return EthReceipt(contract=self.contract, w3_tx_receipt=w3_tx_receipt)
         except web3.exceptions.ContractLogicError as ex:
             raise EthRevertException(str(ex)) from None

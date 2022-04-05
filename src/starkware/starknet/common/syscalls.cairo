@@ -40,8 +40,8 @@ struct CallContract:
 end
 
 func call_contract{syscall_ptr : felt*}(
-        contract_address : felt, function_selector : felt, calldata_size : felt,
-        calldata : felt*) -> (retdata_size : felt, retdata : felt*):
+    contract_address : felt, function_selector : felt, calldata_size : felt, calldata : felt*
+) -> (retdata_size : felt, retdata : felt*):
     let syscall = [cast(syscall_ptr, CallContract*)]
     assert syscall.request = CallContractRequest(
         selector=CALL_CONTRACT_SELECTOR,
@@ -57,8 +57,8 @@ func call_contract{syscall_ptr : felt*}(
 end
 
 func delegate_call{syscall_ptr : felt*}(
-        contract_address : felt, function_selector : felt, calldata_size : felt,
-        calldata : felt*) -> (retdata_size : felt, retdata : felt*):
+    contract_address : felt, function_selector : felt, calldata_size : felt, calldata : felt*
+) -> (retdata_size : felt, retdata : felt*):
     let syscall = [cast(syscall_ptr, CallContract*)]
     assert syscall.request = CallContractRequest(
         selector=DELEGATE_CALL_SELECTOR,
@@ -74,8 +74,8 @@ func delegate_call{syscall_ptr : felt*}(
 end
 
 func delegate_l1_handler{syscall_ptr : felt*}(
-        contract_address : felt, function_selector : felt, calldata_size : felt,
-        calldata : felt*) -> (retdata_size : felt, retdata : felt*):
+    contract_address : felt, function_selector : felt, calldata_size : felt, calldata : felt*
+) -> (retdata_size : felt, retdata : felt*):
     let syscall = [cast(syscall_ptr, CallContract*)]
     assert syscall.request = CallContractRequest(
         selector=DELEGATE_L1_HANDLER_SELECTOR,

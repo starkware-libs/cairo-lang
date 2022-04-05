@@ -4,7 +4,7 @@ import shutil
 from typing import List, Optional
 
 from starkware.crypto.signature.signature import get_random_private_key, private_to_stark_key, sign
-from starkware.starknet.core.os.transaction_hash import (
+from starkware.starknet.core.os.transaction_hash.transaction_hash import (
     TransactionHashPrefix,
     calculate_transaction_hash_common,
 )
@@ -106,6 +106,7 @@ Transaction hash: {gateway_response['transaction_hash']}
         calldata: List[int],
         chain_id: int,
         max_fee: Optional[int],
+        version: int,
         nonce: Optional[int],
     ) -> WrappedMethod:
         # Read the account information.
@@ -131,31 +132,16 @@ Transaction hash: {gateway_response['transaction_hash']}
             # previous transaction was accepted.
             nonce = await self.get_current_nonce(account_address=account_address)
 
-        data_offset = 0
-        data_len = len(calldata)
-        call_entry = [contract_address, selector, data_offset, data_len]
-        call_array_len = 1
-        wrapped_method_calldata = [call_array_len, *call_entry, len(calldata), *calldata, nonce]
-        max_fee = 0 if max_fee is None else max_fee
-        hash_value = calculate_transaction_hash_common(
-            tx_hash_prefix=TransactionHashPrefix.INVOKE,
-            version=constants.TRANSACTION_VERSION,
-            contract_address=account_address,
-            entry_point_selector=EXECUTE_ENTRY_POINT_SELECTOR,
-            calldata=wrapped_method_calldata,
-            max_fee=max_fee,
+        return sign_invoke_transaction(
+            signer_address=account_address,
+            private_key=private_key,
+            contract_address=contract_address,
+            selector=selector,
+            calldata=calldata,
             chain_id=chain_id,
-            additional_data=[],
-        )
-
-        signature = list(sign(msg_hash=hash_value, priv_key=private_key))
-
-        return WrappedMethod(
-            address=account_address,
-            selector=EXECUTE_ENTRY_POINT_SELECTOR,
-            calldata=wrapped_method_calldata,
             max_fee=max_fee,
-            signature=signature,
+            version=version,
+            nonce=nonce,
         )
 
     async def get_current_nonce(self, account_address: int) -> int:
@@ -164,7 +150,7 @@ Transaction hash: {gateway_response['transaction_hash']}
             entry_point_selector=GET_NONCE_SELECTOR,
             calldata=[],
             max_fee=0,
-            version=0,
+            version=constants.QUERY_VERSION,
             signature=[],
         )
         res = await self.starknet_context.feeder_gateway_client.call_contract(
@@ -172,3 +158,44 @@ Transaction hash: {gateway_response['transaction_hash']}
         )
         (nonce_hex,) = res["result"]
         return int(nonce_hex, 16)
+
+
+def sign_invoke_transaction(
+    signer_address: int,
+    private_key: int,
+    contract_address: int,
+    selector: int,
+    calldata: List[int],
+    chain_id: int,
+    max_fee: Optional[int],
+    version: int,
+    nonce: int,
+) -> WrappedMethod:
+    """
+    Calculates the transaction's hash and then computes the signature using the private key.
+    Returns a WrappedMethod with the signature of the sender.
+    """
+    data_offset = 0
+    data_len = len(calldata)
+    call_entry = [contract_address, selector, data_offset, data_len]
+    call_array_len = 1
+    wrapped_method_calldata = [call_array_len, *call_entry, len(calldata), *calldata, nonce]
+    max_fee = 0 if max_fee is None else max_fee
+    hash_value = calculate_transaction_hash_common(
+        tx_hash_prefix=TransactionHashPrefix.INVOKE,
+        version=version,
+        contract_address=signer_address,
+        entry_point_selector=EXECUTE_ENTRY_POINT_SELECTOR,
+        calldata=wrapped_method_calldata,
+        max_fee=max_fee,
+        chain_id=chain_id,
+        additional_data=[],
+    )
+    signature = list(sign(msg_hash=hash_value, priv_key=private_key))
+    return WrappedMethod(
+        address=signer_address,
+        selector=EXECUTE_ENTRY_POINT_SELECTOR,
+        calldata=wrapped_method_calldata,
+        max_fee=max_fee,
+        signature=signature,
+    )

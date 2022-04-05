@@ -11,7 +11,7 @@ from starkware.starknet.core.os.transactions import execute_transactions
 
 # Executes transactions on StarkNet.
 func main{output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecdsa_ptr, bitwise_ptr}(
-        ):
+    ):
     alloc_locals
 
     # Reserve the initial range check for self validation.
@@ -35,7 +35,8 @@ func main{output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecds
     let outputs = initial_carried_outputs
     with outputs:
         let (local reserved_range_checks_end, state_changes) = execute_transactions(
-            block_context=block_context)
+            block_context=block_context
+        )
     end
     let final_carried_outputs = outputs
 
@@ -55,7 +56,8 @@ func main{output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecds
     with storage_updates_ptr:
         let (commitment_tree_update_output) = state_update{hash_ptr=pedersen_ptr}(
             state_changes_dict=state_changes.changes_start,
-            state_changes_dict_end=state_changes.changes_end)
+            state_changes_dict_end=state_changes.changes_end,
+        )
     end
 
     %{ vm_exit_scope() %}
@@ -65,7 +67,8 @@ func main{output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecds
     let hash_ptr = pedersen_ptr
     with hash_ptr:
         let (starknet_os_config_hash) = get_starknet_os_config_hash(
-            starknet_os_config=&block_context.starknet_os_config)
+            starknet_os_config=&block_context.starknet_os_config
+        )
     end
     let pedersen_ptr = hash_ptr
 
@@ -76,7 +79,8 @@ func main{output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecds
         final_carried_outputs=final_carried_outputs,
         storage_updates_ptr_start=initial_storage_updates_ptr,
         storage_updates_ptr_end=storage_updates_ptr,
-        starknet_os_config_hash=starknet_os_config_hash)
+        starknet_os_config_hash=starknet_os_config_hash,
+    )
 
     # Make sure that we report using at least 1 range check to guarantee that
     # initial_range_check_ptr points to a valid range check instance.

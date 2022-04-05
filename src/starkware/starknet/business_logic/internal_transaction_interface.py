@@ -4,8 +4,8 @@ from typing import Iterable, Optional, cast
 
 from services.everest.business_logic.internal_transaction import EverestInternalStateTransaction
 from services.everest.business_logic.state import CarriedStateBase
-from starkware.starknet.business_logic.state import CarriedState, StateSelector
-from starkware.starknet.business_logic.transaction_execution_objects import TransactionExecutionInfo
+from starkware.starknet.business_logic.execution.objects import TransactionExecutionInfo
+from starkware.starknet.business_logic.state.state import CarriedState, StateSelector
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starkware_utils.config_base import Config

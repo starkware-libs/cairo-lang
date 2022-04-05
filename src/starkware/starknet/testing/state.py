@@ -2,16 +2,13 @@ import copy
 from typing import Dict, List, Optional, Tuple, Union
 
 from starkware.cairo.lang.vm.crypto import pedersen_hash_func
+from starkware.starknet.business_logic.execution.objects import Event, TransactionExecutionInfo
 from starkware.starknet.business_logic.internal_transaction import (
     InternalDeploy,
     InternalInvokeFunction,
 )
-from starkware.starknet.business_logic.state import CarriedState
-from starkware.starknet.business_logic.transaction_execution_objects import (
-    Event,
-    TransactionExecutionInfo,
-)
-from starkware.starknet.definitions import fields
+from starkware.starknet.business_logic.state.state import CarriedState
+from starkware.starknet.definitions import constants, fields
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public.abi import get_selector_from_name
 from starkware.starknet.services.api.contract_definition import ContractDefinition, EntryPointType
@@ -148,6 +145,7 @@ class StarknetState:
             caller_address=caller_address,
             nonce=nonce,
             chain_id=self.general_config.chain_id.value,
+            version=constants.TRANSACTION_VERSION,
         )
 
         with self.state.copy_and_apply() as state_copy:

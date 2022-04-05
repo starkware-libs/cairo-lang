@@ -2,7 +2,8 @@ from starkware.starknet.common.syscalls import SEND_MESSAGE_TO_L1_SELECTOR, Send
 
 # Sends a message to an L1 contract at 'l1_address' with given payload.
 func send_message_to_l1{syscall_ptr : felt*}(
-        to_address : felt, payload_size : felt, payload : felt*):
+    to_address : felt, payload_size : felt, payload : felt*
+):
     assert [cast(syscall_ptr, SendMessageToL1SysCall*)] = SendMessageToL1SysCall(
         selector=SEND_MESSAGE_TO_L1_SELECTOR,
         to_address=to_address,

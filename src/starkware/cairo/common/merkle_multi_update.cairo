@@ -26,7 +26,8 @@ from starkware.cairo.common.dict_access import DictAccess
 #   return diff(prev.left, new.left, height - 1) + \
 #          diff(prev.right, new.right, height - 1)
 func merkle_multi_update{hash_ptr : HashBuiltin*}(
-        update_ptr : DictAccess*, n_updates, height, prev_root, new_root):
+    update_ptr : DictAccess*, n_updates, height, prev_root, new_root
+):
     if n_updates == 0:
         prev_root = new_root
         return ()
@@ -64,7 +65,8 @@ end
 
 # Helper function for merkle_multi_update().
 func merkle_multi_update_inner{hash_ptr : HashBuiltin*, update_ptr : DictAccess*}(
-        height, prev_root, new_root, index):
+    height, prev_root, new_root, index
+):
     let hash0 : HashBuiltin* = hash_ptr
     let hash1 : HashBuiltin* = hash_ptr + HashBuiltin.SIZE
     %{
@@ -115,7 +117,8 @@ func merkle_multi_update_inner{hash_ptr : HashBuiltin*, update_ptr : DictAccess*
     %}
 
     merkle_multi_update_inner(
-        height=height - 1, prev_root=hash0.y, new_root=hash1.y, index=index * 2 + 1)
+        height=height - 1, prev_root=hash0.y, new_root=hash1.y, index=index * 2 + 1
+    )
     %{ vm_exit_scope() %}
     return ()
 
@@ -140,7 +143,8 @@ func merkle_multi_update_inner{hash_ptr : HashBuiltin*, update_ptr : DictAccess*
         )
     %}
     merkle_multi_update_inner(
-        height=height - 1, prev_root=hash0.x, new_root=hash1.x, index=index * 2)
+        height=height - 1, prev_root=hash0.x, new_root=hash1.x, index=index * 2
+    )
     %{ vm_exit_scope() %}
     return ()
 
@@ -182,7 +186,8 @@ func merkle_multi_update_inner{hash_ptr : HashBuiltin*, update_ptr : DictAccess*
         )
     %}
     merkle_multi_update_inner(
-        height=height - 1, prev_root=hash0.x, new_root=hash1.x, index=local_left_index)
+        height=height - 1, prev_root=hash0.x, new_root=hash1.x, index=local_left_index
+    )
     %{ vm_exit_scope() %}
 
     # Update right.
@@ -194,7 +199,8 @@ func merkle_multi_update_inner{hash_ptr : HashBuiltin*, update_ptr : DictAccess*
         )
     %}
     merkle_multi_update_inner(
-        height=height - 1, prev_root=hash0.y, new_root=hash1.y, index=local_left_index + 1)
+        height=height - 1, prev_root=hash0.y, new_root=hash1.y, index=local_left_index + 1
+    )
     %{ vm_exit_scope() %}
     return ()
 end

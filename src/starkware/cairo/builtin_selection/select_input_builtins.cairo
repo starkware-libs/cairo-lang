@@ -6,7 +6,8 @@ from starkware.cairo.common.registers import get_fp_and_pc
 # Note that the function assumes that the total number of builtins is 4, and so the length of
 # all_encodings, all_ptrs must be 4.
 func select_input_builtins(
-        all_encodings : felt*, all_ptrs : felt*, selected_encodings : felt*, n_selected_builtins):
+    all_encodings : felt*, all_ptrs : felt*, selected_encodings : felt*, n_selected_builtins
+):
     # Total number of optional builtins.
     const N_BUILTINS = 5
     # Number of memory cells used, without taking the inner function memory into account.
@@ -28,7 +29,8 @@ func select_input_builtins(
         all_ptrs=all_ptrs,
         selected_encodings=selected_encodings,
         selected_ptrs=selected_ptrs,
-        n_builtins=N_BUILTINS)
+        n_builtins=N_BUILTINS,
+    )
     %{ vm_exit_scope() %}
     # Assert that the correct number of builtins was selected.
     n_selected_builtins = inner_ret.selected_encodings_end - selected_encodings

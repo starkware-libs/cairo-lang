@@ -1,6 +1,6 @@
 from typing import List, Optional, Union
 
-from starkware.starknet.business_logic.transaction_execution_objects import TransactionExecutionInfo
+from starkware.starknet.business_logic.execution.objects import TransactionExecutionInfo
 from starkware.starknet.compiler.compile import compile_starknet_files
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.services.api.contract_definition import ContractDefinition, EntryPointType

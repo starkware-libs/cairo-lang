@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 pragma solidity ^0.6.12;
 
-import "contracts/starkware/starknet/eth/StarknetMessaging.sol";
+import "contracts/starkware/starknet/solidity/StarknetMessaging.sol";
 
 contract MockStarknetMessaging is StarknetMessaging {
     constructor(uint256 MessageCancellationDelay) public {

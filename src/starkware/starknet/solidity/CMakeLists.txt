@@ -1,5 +1,5 @@
 python_lib(starknet_messaging_sol
-    PREFIX starkware/starknet/eth
+    PREFIX starkware/starknet/solidity
     FILES
     IStarknetMessaging.sol
     IStarknetMessagingEvents.sol

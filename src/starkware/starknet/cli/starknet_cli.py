@@ -318,39 +318,22 @@ def parse_invoke_tx_args(args: argparse.Namespace) -> InvokeFunctionArgs:
 
 
 async def create_invoke_tx(
-    args: argparse.Namespace, invoke_tx_args: InvokeFunctionArgs, max_fee: int, has_wallet: bool
+    args: argparse.Namespace,
+    invoke_tx_args: InvokeFunctionArgs,
+    max_fee: int,
+    has_wallet: bool,
+    call: bool,
 ) -> InvokeFunction:
     """
     Creates and returns an InvokeFunction transaction with the given parameters.
     If a wallet provider was provided in args, that transaction will be wrapped and signed.
     """
-    version = constants.TRANSACTION_VERSION
+    assert max_fee >= 0, f"The 'max_fee' argument, --max_fee, must be non-negative, got {max_fee}."
 
-    if has_wallet:
-        account = await load_account_from_args(args=args)
-        assert invoke_tx_args.signature == [], (
-            "Signature cannot be passed explicitly when using an account contract. "
-            "Consider making a direct contract call using --no_wallet."
-        )
-        wrapped_method = await account.sign_invoke_transaction(
-            contract_address=invoke_tx_args.address,
-            selector=invoke_tx_args.selector,
-            calldata=invoke_tx_args.calldata,
-            chain_id=get_chain_id(args),
-            max_fee=max_fee,
-            nonce=args.nonce,
-        )
-        tx = InvokeFunction(
-            contract_address=wrapped_method.address,
-            entry_point_selector=wrapped_method.selector,
-            calldata=wrapped_method.calldata,
-            max_fee=wrapped_method.max_fee,
-            version=version,
-            signature=wrapped_method.signature,
-        )
-    else:
+    version = constants.QUERY_VERSION if call else constants.TRANSACTION_VERSION
+    if not has_wallet:
         assert args.nonce is None, "--nonce cannot be used in direct calls."
-        tx = InvokeFunction(
+        return InvokeFunction(
             contract_address=invoke_tx_args.address,
             entry_point_selector=invoke_tx_args.selector,
             calldata=invoke_tx_args.calldata,
@@ -358,7 +341,29 @@ async def create_invoke_tx(
             version=version,
             signature=invoke_tx_args.signature,
         )
-    return tx
+
+    account = await load_account_from_args(args=args)
+    assert invoke_tx_args.signature == [], (
+        "Signature cannot be passed explicitly when using an account contract. "
+        "Consider making a direct contract call using --no_wallet."
+    )
+    wrapped_method = await account.sign_invoke_transaction(
+        contract_address=invoke_tx_args.address,
+        selector=invoke_tx_args.selector,
+        calldata=invoke_tx_args.calldata,
+        chain_id=get_chain_id(args),
+        max_fee=max_fee,
+        version=version,
+        nonce=args.nonce,
+    )
+    return InvokeFunction(
+        contract_address=wrapped_method.address,
+        entry_point_selector=wrapped_method.selector,
+        calldata=wrapped_method.calldata,
+        max_fee=wrapped_method.max_fee,
+        version=version,
+        signature=wrapped_method.signature,
+    )
 
 
 async def estimate_fee_inner(
@@ -372,16 +377,15 @@ async def estimate_fee_inner(
     Returns a response of the form:
         {"amount": <int>, "unit": "wei"}
     """
-    tx = await create_invoke_tx(
-        args=args, invoke_tx_args=invoke_tx_args, max_fee=0, has_wallet=has_wallet
+    invoke_tx = await create_invoke_tx(
+        args=args, invoke_tx_args=invoke_tx_args, max_fee=0, has_wallet=has_wallet, call=True
     )
     feeder_client = get_feeder_gateway_client(args=args)
-    block_hash = args.block_hash if has_block_info else None
-    block_number = args.block_number if has_block_info else None
-    response = await feeder_client.estimate_fee(
-        invoke_tx=tx, block_hash=block_hash, block_number=block_number
+    return await feeder_client.estimate_fee(
+        invoke_tx=invoke_tx,
+        block_hash=args.block_hash if has_block_info else None,
+        block_number=args.block_number if has_block_info else None,
     )
-    return response
 
 
 # Subparsers.
@@ -499,7 +503,7 @@ async def invoke_or_call(args: argparse.Namespace, command_args: List[str], call
             max_fee = 0
 
     tx = await create_invoke_tx(
-        args=args, invoke_tx_args=invoke_tx_args, max_fee=max_fee, has_wallet=has_wallet
+        args=args, invoke_tx_args=invoke_tx_args, max_fee=max_fee, has_wallet=has_wallet, call=call
     )
 
     gateway_response: dict

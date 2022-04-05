@@ -10,7 +10,7 @@ class GatewayClient(EverestGatewayClient):
     A client class for the StarkNet Gateway.
     """
 
-    async def add_transaction(self, tx: Transaction, token: Optional[str] = None) -> Dict[str, int]:
+    async def add_transaction(self, tx: Transaction, token: Optional[str] = None) -> Dict[str, str]:
         uri_suffix = "" if token is None else f"?token={token}"
 
         raw_response = await self._send_request(

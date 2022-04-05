@@ -13,25 +13,31 @@ from services.everest.business_logic.internal_transaction import EverestInternal
 from services.everest.business_logic.state import CarriedStateBase
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
 from starkware.python.utils import to_bytes
-from starkware.starknet.business_logic.execute_entry_point import ExecuteEntryPoint
-from starkware.starknet.business_logic.internal_transaction_interface import (
-    InternalStateTransaction,
-)
-from starkware.starknet.business_logic.state import BlockInfo, CarriedState, StateSelector
-from starkware.starknet.business_logic.state_objects import (
-    ContractCarriedState,
-    ContractDefinitionFact,
-    ContractState,
-)
-from starkware.starknet.business_logic.transaction_execution_objects import (
+from starkware.starknet.business_logic.execution.execute_entry_point import ExecuteEntryPoint
+from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
     TransactionExecutionContext,
     TransactionExecutionInfo,
 )
-from starkware.starknet.business_logic.transaction_fee import charge_fee
-from starkware.starknet.business_logic.utils import preprocess_invoke_function_fields
+from starkware.starknet.business_logic.internal_transaction_interface import (
+    InternalStateTransaction,
+)
+from starkware.starknet.business_logic.state.objects import (
+    ContractCarriedState,
+    ContractDefinitionFact,
+    ContractState,
+)
+from starkware.starknet.business_logic.state.state import BlockInfo, CarriedState, StateSelector
+from starkware.starknet.business_logic.transaction_fee import (
+    calculate_tx_fee_by_cairo_usage,
+    charge_fee,
+)
+from starkware.starknet.business_logic.utils import (
+    get_invoke_tx_total_resources,
+    preprocess_invoke_function_fields,
+)
 from starkware.starknet.core.os.contract_hash import compute_contract_hash
-from starkware.starknet.core.os.transaction_hash import (
+from starkware.starknet.core.os.transaction_hash.transaction_hash import (
     calculate_deploy_transaction_hash,
     calculate_transaction_hash_common,
 )
@@ -204,11 +210,10 @@ class InitializeBlockInfo(SyntheticTransaction):
         assert isinstance(state, CarriedState)
 
         # Validate progress is legal.
-        next_block_info = self.block_info
-        state.block_info.validate_legal_progress(next_block_info=next_block_info)
+        state.block_info.validate_legal_progress(next_block_info=self.block_info)
 
         # Update entire block-related information.
-        state.block_info = next_block_info
+        state.block_info = self.block_info
 
         return None
 
@@ -236,8 +241,6 @@ class InternalDeploy(InternalTransaction):
     tx_type: ClassVar[TransactionType] = TransactionType.DEPLOY
     related_external_cls: ClassVar[Type[Transaction]] = Deploy
     n_cairo_steps_estimation: ClassVar[int] = 100
-    # The size of the header of the deployment information that is outputted by the StarkNet OS.
-    deployment_info_header_size: ClassVar[int] = 3
 
     @marshmallow.decorators.pre_load
     def replace_contract_definition_with_contract_hash(
@@ -408,13 +411,18 @@ class InternalDeploy(InternalTransaction):
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
-class InternalInvokeFunction(InternalTransaction, ExecuteEntryPoint):
+class InternalInvokeFunction(InternalTransaction):
     """
     Represents an internal transaction in the StarkNet network that is an invocation of a Cairo
     contract function.
     """
 
-    # For fields that are shared with InvokeFunction, see documentation there.
+    contract_address: int = field(metadata=fields.contract_address_metadata)
+    entry_point_selector: int = field(metadata=fields.entry_point_selector_metadata)
+    # The decorator type of the called function. Note that a single function may be decorated with
+    # multiple decorators and this member specifies which one.
+    entry_point_type: EntryPointType
+    calldata: List[int] = field(metadata=fields.call_data_metadata)
     max_fee: int = field(metadata=fields.fee_metadata)
     version: int = field(metadata=fields.tx_version_metadata)
     # A unique identifier of the transaction in the StarkNet network.
@@ -424,6 +432,8 @@ class InternalInvokeFunction(InternalTransaction, ExecuteEntryPoint):
     # This nonce is used to make the hash_value of transactions that service L1 messages unique.
     # This field may be set only when entry_point_type is EntryPointType.L1_HANDLER.
     nonce: Optional[int] = field(metadata=fields.optional_nonce_metadata)
+    code_address: int = field(metadata=fields.L2AddressField.metadata(field_name="code_address"))
+    caller_address: int = field(metadata=fields.caller_address_metadata)
 
     # Class variables.
     tx_type: ClassVar[TransactionType] = TransactionType.INVOKE_FUNCTION
@@ -455,6 +465,7 @@ class InternalInvokeFunction(InternalTransaction, ExecuteEntryPoint):
             caller_address=0 if caller_address is None else caller_address,
             nonce=nonce,
             chain_id=0 if chain_id is None else chain_id,
+            only_query=False,
         )
 
     @classmethod
@@ -475,6 +486,25 @@ class InternalInvokeFunction(InternalTransaction, ExecuteEntryPoint):
         )
 
     @classmethod
+    def from_external_query_tx(
+        cls,
+        tx: InvokeFunction,
+        general_config: StarknetGeneralConfig,
+    ) -> "InternalInvokeFunction":
+        return cls.create(
+            contract_address=tx.contract_address,
+            entry_point_selector=tx.entry_point_selector,
+            max_fee=tx.max_fee,
+            entry_point_type=EntryPointType.EXTERNAL,
+            calldata=tx.calldata,
+            signature=tx.signature,
+            nonce=None,
+            chain_id=general_config.chain_id.value,
+            version=tx.version,
+            only_query=True,
+        )
+
+    @classmethod
     def create(
         cls,
         contract_address: int,
@@ -485,21 +515,21 @@ class InternalInvokeFunction(InternalTransaction, ExecuteEntryPoint):
         signature: List[int],
         nonce: Optional[int],
         chain_id: int,
-        version: Optional[int] = None,
+        version: int,
         # The caller_address of an external transaction or L1 handler is always 0.
         # The caller_address is passed as paramater to allow the testing framework to initiate
         # transactions with a user specified caller_address.
         caller_address: int = 0,
+        # Used to distinguish between query and other transactions.
+        only_query: bool = False,
     ) -> "InternalInvokeFunction":
-        if version is None:
-            version = constants.TRANSACTION_VERSION
-
         tx_hash_prefix, additional_data = preprocess_invoke_function_fields(
             entry_point_type=entry_point_type,
             entry_point_selector=entry_point_selector,
             message_from_l1_nonce=nonce,
             max_fee=max_fee,
             version=version,
+            only_query=only_query,
         )
 
         hash_value = calculate_transaction_hash_common(
@@ -551,7 +581,7 @@ class InternalInvokeFunction(InternalTransaction, ExecuteEntryPoint):
         Returns the state selector of the transaction (i.e., subset of state commitment tree leaves
         it affects).
         """
-        call_selector = self.get_call_state_selector()
+        call_selector = StateSelector(contract_addresses={self.contract_address, self.code_address})
         if self.max_fee == 0:
             return call_selector
 
@@ -565,7 +595,7 @@ class InternalInvokeFunction(InternalTransaction, ExecuteEntryPoint):
         """
         Applies self to 'state' by executing the entry point and charging fee for it (if needed).
         """
-        call_info = await self.execute_tx(state=state, general_config=general_config)
+        call_info = await self.execute(state=state, general_config=general_config)
 
         fee_transfer_info: Optional[CallInfo] = None
         actual_fee = 0
@@ -573,11 +603,22 @@ class InternalInvokeFunction(InternalTransaction, ExecuteEntryPoint):
         if self.max_fee > 0:
             # Should always pass on regular flows (verified in the create() method).
             assert self.entry_point_selector == starknet_abi.EXECUTE_ENTRY_POINT_SELECTOR
-            fee_transfer_info, actual_fee = await charge_fee(
+            l1_gas_usage, cairo_resource_usage = get_invoke_tx_total_resources(
+                state=state,
+                call_info=call_info,
+                l1_handler_payload_size=self.get_l1_handler_payload_size(),
+            )
+            actual_fee = calculate_tx_fee_by_cairo_usage(
+                general_config=general_config,
+                cairo_resource_usage=cairo_resource_usage,
+                l1_gas_usage=l1_gas_usage,
+                gas_price=state.block_info.gas_price,
+            )
+            fee_transfer_info = await charge_fee(
                 general_config=general_config,
                 state=state,
                 account_contract_address=self.contract_address,
-                execution_resources=call_info.execution_resources.to_dict(),
+                actual_fee=actual_fee,
                 max_fee=self.max_fee,
             )
 
@@ -585,23 +626,53 @@ class InternalInvokeFunction(InternalTransaction, ExecuteEntryPoint):
             call_info=call_info, fee_transfer_info=fee_transfer_info, actual_fee=actual_fee
         )
 
-    async def execute_tx(
-        self, state: CarriedState, general_config: StarknetGeneralConfig
+    async def execute(
+        self, state: CarriedState, general_config: StarknetGeneralConfig, only_query: bool = False
     ) -> CallInfo:
         """
         Builds the transaction execution context and executes the entry point.
         Returns the CallInfo.
         """
+        # Sanity check for query mode.
+        if only_query:
+            error_message = "Illegal version for querying"
+            allowed_versions = [constants.QUERY_VERSION, constants.TRANSACTION_VERSION]
+        else:
+            error_message = "Illegal transaction version"
+            allowed_versions = [constants.TRANSACTION_VERSION]
+        assert self.version in allowed_versions, f"{error_message}: {self.version}."
+
         tx_execution_context = TransactionExecutionContext.create(
             account_contract_address=self.contract_address,
             transaction_hash=self.hash_value,
             signature=self.signature,
             max_fee=self.max_fee,
             n_steps=general_config.invoke_tx_max_n_steps,
+            version=self.version,
         )
-        return await self.execute(
+        call = ExecuteEntryPoint(
+            contract_address=self.contract_address,
+            code_address=self.code_address,
+            entry_point_selector=self.entry_point_selector,
+            entry_point_type=self.entry_point_type,
+            calldata=self.calldata,
+            caller_address=self.caller_address,
+        )
+
+        return await call.execute(
             state=state, general_config=general_config, tx_execution_context=tx_execution_context
         )
+
+    def get_l1_handler_payload_size(self) -> Optional[int]:
+        """
+        Returns the payload size of the corresponding L1-to-L2 message if the transaction is an L1
+        handler. Otherwise returns None.
+        """
+        if self.entry_point_type is not EntryPointType.L1_HANDLER:
+            return None
+        # The calldata includes the "from" field, which is not a part of the payload.
+        # We thus subtract 1.
+        return len(self.calldata) - 1
 
 
 class InternalTransactionSchema(OneOfSchema):

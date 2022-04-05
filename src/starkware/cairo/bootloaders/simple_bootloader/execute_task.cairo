@@ -38,7 +38,8 @@ end
 #   b. hash_chain(ProgramHeader || task.program.data) where ProgramHeader is defined below.
 # The function returns a pointer to the updated builtin pointers after executing the task.
 func execute_task{builtin_ptrs : BuiltinData*, self_range_check_ptr}(
-        builtin_encodings : BuiltinData*, builtin_instance_sizes : BuiltinData*):
+    builtin_encodings : BuiltinData*, builtin_instance_sizes : BuiltinData*
+):
     # Allocate memory for local variables.
     alloc_locals
 
@@ -106,14 +107,20 @@ func execute_task{builtin_ptrs : BuiltinData*, self_range_check_ptr}(
         all_encodings=builtin_encodings,
         all_ptrs=&pre_execution_builtin_ptrs,
         selected_encodings=builtin_list,
-        n_selected_builtins=n_builtins)
+        n_selected_builtins=n_builtins,
+    )
 
     call_task:
     %{
         from starkware.cairo.bootloaders.simple_bootloader.objects import (
-            CairoPieTask, RunProgramTask, Task)
+            CairoPieTask,
+            RunProgramTask,
+            Task,
+        )
         from starkware.cairo.bootloaders.simple_bootloader.utils import (
-            load_cairo_pie, prepare_output_runner)
+            load_cairo_pie,
+            prepare_output_runner,
+        )
 
         assert isinstance(task, Task)
         n_builtins = len(task.get_program().builtins)
@@ -175,7 +182,8 @@ func execute_task{builtin_ptrs : BuiltinData*, self_range_check_ptr}(
         all_ptrs=&return_builtin_ptrs,
         selected_encodings=builtin_list,
         selected_ptrs=used_builtins_addr,
-        n_builtins=BuiltinData.SIZE)
+        n_builtins=BuiltinData.SIZE,
+    )
     %{ vm_exit_scope() %}
 
     # Assert that the correct number of builtins was selected.
@@ -187,7 +195,8 @@ func execute_task{builtin_ptrs : BuiltinData*, self_range_check_ptr}(
         prev_builtin_ptrs=&pre_execution_builtin_ptrs,
         new_builtin_ptrs=&return_builtin_ptrs,
         builtin_instance_sizes=builtin_instance_sizes,
-        n_builtins=BuiltinData.SIZE)
+        n_builtins=BuiltinData.SIZE,
+    )
 
     # Verify that [output_ptr] = return_builtin_ptrs.output - output_ptr.
     # Output size should be 2 + the number of output slots that were consumed by the task.

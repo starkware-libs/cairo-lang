@@ -102,26 +102,43 @@ class EcInfinity:
 EC_INFINITY = EcInfinity()
 
 
-def ec_add(point1, point2, p):
+def line_slope(point1: Tuple[int, int], point2: Tuple[int, int], p: int) -> int:
+    """
+    Computes the slope of the line connecting the two given EC points over the field GF(p).
+    Assumes the points are given in affine form (x, y) and have different x coordinates.
+    """
+    assert (point1[0] - point2[0]) % p != 0
+    return div_mod(point1[1] - point2[1], point1[0] - point2[0], p)
+
+
+def ec_add(point1: Tuple[int, int], point2: Tuple[int, int], p: int) -> Tuple[int, int]:
     """
     Gets two points on an elliptic curve mod p and returns their sum.
     Assumes the points are given in affine form (x, y) and have different x coordinates.
     """
-    assert (point1[0] - point2[0]) % p != 0
-    m = div_mod(point1[1] - point2[1], point1[0] - point2[0], p)
+    m = line_slope(point1=point1, point2=point2, p=p)
     x = (m * m - point1[0] - point2[0]) % p
     y = (m * (point1[0] - x) - point1[1]) % p
     return x, y
 
 
 
-def ec_double(point, alpha, p):
+def ec_double_slope(point: Tuple[int, int], alpha: int, p: int) -> int:
+    """
+    Computes the slope of an elliptic curve with the equation y^2 = x^3 + alpha*x + beta mod p, at
+    the given point.
+    Assumes the point is given in affine form (x, y) and has y != 0.
+    """
+    assert point[1] % p != 0
+    return div_mod(3 * point[0] * point[0] + alpha, 2 * point[1], p)
+
+
+def ec_double(point: Tuple[int, int], alpha: int, p: int) -> Tuple[int, int]:
     """
     Doubles a point on an elliptic curve with the equation y^2 = x^3 + alpha*x + beta mod p.
     Assumes the point is given in affine form (x, y) and has y != 0.
     """
-    assert point[1] % p != 0
-    m = div_mod(3 * point[0] * point[0] + alpha, 2 * point[1], p)
+    m = ec_double_slope(point=point, alpha=alpha, p=p)
     x = (m * m - 2 * point[0]) % p
     y = (m * (point[0] - x) - point[1]) % p
     return x, y

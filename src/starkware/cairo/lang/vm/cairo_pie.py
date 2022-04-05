@@ -19,7 +19,7 @@ from starkware.cairo.lang.compiler.program import StrippedProgram, is_valid_buil
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
 from starkware.cairo.lang.vm.memory_segments import is_valid_memory_addr, is_valid_memory_value
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
-from starkware.python.utils import add_counters, sub_counters
+from starkware.python.utils import add_counters, multiply_counter_by_scalar, sub_counters
 
 DEFAULT_CAIRO_PIE_VERSION = "1.0"
 CURRENT_CAIRO_PIE_VERSION = "1.1"
@@ -157,13 +157,28 @@ class ExecutionResources:
         diff_builtin_instance_counter = sub_counters(
             self.builtin_instance_counter, other.builtin_instance_counter
         )
-        diff_execution_resources = ExecutionResources(
+        return ExecutionResources(
             n_steps=self.n_steps - other.n_steps,
             builtin_instance_counter=diff_builtin_instance_counter,
             n_memory_holes=self.n_memory_holes - other.n_memory_holes,
         )
 
-        return diff_execution_resources
+    def __mul__(self, other: int) -> "ExecutionResources":
+        if not isinstance(other, int):
+            return NotImplemented
+
+        total_builtin_instance_counter = multiply_counter_by_scalar(
+            scalar=other, counter=self.builtin_instance_counter
+        )
+
+        return ExecutionResources(
+            n_steps=other * self.n_steps,
+            builtin_instance_counter=total_builtin_instance_counter,
+            n_memory_holes=other * self.n_memory_holes,
+        )
+
+    def __rmul__(self, other: int) -> "ExecutionResources":
+        return self * other
 
     @classmethod
     def empty(cls):

@@ -45,7 +45,7 @@ python_lib(starknet_testing_lib
     cairo_vm_lib
     starknet_abi_lib
     starknet_api_utils_lib
-    starknet_business_logic_lib
+    starknet_business_logic_state_lib
     starknet_compile_lib
     starknet_contract_definition_lib
     starknet_definitions_lib

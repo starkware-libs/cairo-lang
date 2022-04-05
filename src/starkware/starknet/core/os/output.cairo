@@ -41,18 +41,24 @@ struct OsCarriedOutputs:
 end
 
 func os_carried_outputs_new(
-        messages_to_l1 : MessageToL1Header*, messages_to_l2 : MessageToL2Header*,
-        deployment_info : DeploymentInfoHeader*) -> (os_carried_outputs : OsCarriedOutputs*):
+    messages_to_l1 : MessageToL1Header*,
+    messages_to_l2 : MessageToL2Header*,
+    deployment_info : DeploymentInfoHeader*,
+) -> (os_carried_outputs : OsCarriedOutputs*):
     let (fp_val, pc_val) = get_fp_and_pc()
     static_assert OsCarriedOutputs.SIZE == Args.SIZE
     return (os_carried_outputs=cast(fp_val - 2 - OsCarriedOutputs.SIZE, OsCarriedOutputs*))
 end
 
 func os_output_serialize{output_ptr : felt*}(
-        block_context : BlockContext*, commitment_tree_update_output : CommitmentTreeUpdateOutput*,
-        initial_carried_outputs : OsCarriedOutputs*, final_carried_outputs : OsCarriedOutputs*,
-        storage_updates_ptr_start : felt*, storage_updates_ptr_end : felt*,
-        starknet_os_config_hash : felt):
+    block_context : BlockContext*,
+    commitment_tree_update_output : CommitmentTreeUpdateOutput*,
+    initial_carried_outputs : OsCarriedOutputs*,
+    final_carried_outputs : OsCarriedOutputs*,
+    storage_updates_ptr_start : felt*,
+    storage_updates_ptr_end : felt*,
+    starknet_os_config_hash : felt,
+):
     # Serialize program output.
 
     # Serialize roots.

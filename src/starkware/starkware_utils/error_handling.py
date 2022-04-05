@@ -18,26 +18,28 @@ class ErrorCode(Enum):
 class StarkErrorCode(ErrorCode):
     #: Api function temporarily disabled.
     API_FUNCTION_TEMPORARILY_DISABLED = 0
+    #: Bach was aborted.
+    BATCH_ABORTED = auto()
     #: Batch creation failure; batch currently cannot be created.
     BATCH_CREATION_FAILURE = auto()
     #: Batch is full; there will be no additional attempt to insert any transactions.
     BATCH_FULL = auto()
     #: Batch not ready to be created; does not indicate an error.
     BATCH_NOT_READY = auto()
-    #: Bach was aborted.
-    BATCH_ABORTED = auto()
     #: Connection error with the node (for example, Infura too many requests).
     CONNECTION_ERROR = auto()
     #: Duplicate order.
     DUPLICATE_ORDER = auto()
-    #: Fact not registered in fact registry.
-    FACT_NOT_REGISTERED = auto()
     #: Multi-Transaction with zero transactions.
     EMPTY_TRANSACTIONS_LIST_IN_MULTI_TRANSACTION = auto()
+    #: Fact not registered in fact registry.
+    FACT_NOT_REGISTERED = auto()
     #: Not enough onchain balance to complete deposit.
     INSUFFICIENT_ONCHAIN_BALANCE = auto()
     #: Invalid batch ID.
     INVALID_BATCH_ID = auto()
+    #: Batch migration information is invalid.
+    INVALID_BATCH_MIGRATION_INFO = auto()
     #: Invalid committee claim hash.
     INVALID_CLAIM_HASH = auto()
     #: Invalid committee member key.
@@ -52,8 +54,6 @@ class StarkErrorCode(ErrorCode):
     INVALID_FACT = auto()
     #: Fee taken is too high.
     INVALID_FEE_TAKEN = auto()
-    #: Batch migration information is invalid.
-    INVALID_BATCH_MIGRATION_INFO = auto()
     #: Invalid order ID.
     INVALID_ORDER_ID = auto()
     #: Invalid order type.
@@ -90,8 +90,6 @@ class StarkErrorCode(ErrorCode):
     NESTED_MULTI_TRANSACTION = auto()
     #: The order is expired.
     ORDER_OVERDUE = auto()
-    #: Positive amount value is out of range.
-    OUT_OF_RANGE_POSITIVE_AMOUNT = auto()
     #: Amount value is out of range.
     OUT_OF_RANGE_AMOUNT = auto()
     #: Vault balance is out of range.
@@ -100,16 +98,18 @@ class StarkErrorCode(ErrorCode):
     OUT_OF_RANGE_BATCH_ID = auto()
     #: Ethereum address value is out of range.
     OUT_OF_RANGE_ETH_ADDRESS = auto()
-    #: Field element value is out of range.
-    OUT_OF_RANGE_FIELD_ELEMENT = auto()
     #: Expiration timestamp value is out of range.
     OUT_OF_RANGE_EXPIRATION_TIMESTAMP = auto()
+    #: Field element value is out of range.
+    OUT_OF_RANGE_FIELD_ELEMENT = auto()
     #: Nonce value is out of range.
     OUT_OF_RANGE_NONCE = auto()
     #: Oracle price quorum value is out of range.
     OUT_OF_RANGE_ORACLE_PRICE_QUORUM = auto()
     #: Order ID value is out of range.
     OUT_OF_RANGE_ORDER_ID = auto()
+    #: Positive amount value is out of range.
+    OUT_OF_RANGE_POSITIVE_AMOUNT = auto()
     #: Public key (Stark key) value is out of range.
     OUT_OF_RANGE_PUBLIC_KEY = auto()
     #: Signature subfield is out of range.

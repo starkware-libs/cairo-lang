@@ -164,6 +164,9 @@ def test_type_named_tuple():
     ):
         typ2.format()
 
+    # Partially named tuple types can be parsed, but they won't pass the other compilation stages.
+    assert parse_type("( felt  , a:felt, )").format() == "(felt, a : felt)"
+
 
 def test_type_named_tuple_failure():
     verify_exception(
@@ -180,14 +183,6 @@ local x : (a* : felt)
 file:?:?: Unexpected '.' in name.
 local x : (a.b : felt)
            ^*^
-""",
-    )
-    verify_exception(
-        "local x : (a, b : felt)",
-        """
-file:?:?: All fields in a named tuple must have a name.
-local x : (a, b : felt)
-          ^***********^
 """,
     )
 
@@ -321,6 +316,9 @@ def test_tuple_expr():
     assert parse_expr("( 1  , ap, )").format() == "(1, ap,)"
     assert parse_expr("( a=1 , b=2, c=(d= ()))").format() == "(a=1, b=2, c=(d=()))"
 
+    # Partially named tuples can be parsed, but they won't pass the other compilation stages.
+    assert parse_expr("( 1  , a = ap, )").format() == "(1, a=ap,)"
+
     verify_exception(
         "let x = (,)",
         """
@@ -351,14 +349,6 @@ let x = ((a)(b))
 file:?:?: Expected a comma before this expression.
 (b))
 ^*^
-""",
-    )
-    verify_exception(
-        "let x = (1 , a=2, b=(c=()))",
-        """
-file:?:?: All fields in a named tuple must have a name.
-let x = (1 , a=2, b=(c=()))
-        ^*****************^
 """,
     )
 
@@ -636,7 +626,15 @@ def test_import():
         ],
     )
     assert res.format(allowed_line_length=100) == "from lib import a, b as b2, c"
-    assert res.format(allowed_line_length=20) == "from lib import (\n    a, b as b2, c)"
+    assert (
+        res.format(allowed_line_length=20)
+        == """\
+from lib import (
+    a,
+    b as b2,
+    c,
+)"""
+    )
 
     assert res == parse_code_element("from lib import (\n    a, b as b2, c)")
 
@@ -669,7 +667,8 @@ let very_long_prefix = foo(
     a=1,
     b=1,
     very_long_arg_1=1,
-    very_long_arg_2=1)"""
+    very_long_arg_2=1,
+)"""
     )
 
     res = parse_code_element(
@@ -682,7 +681,8 @@ let (very_long_prefix, b, c : T) = foo(
     a=1,
     b=1,
     very_long_arg_1=1,
-    very_long_arg_2=1)"""
+    very_long_arg_2=1,
+)"""
     )
 
     with pytest.raises(ParserError):
@@ -717,8 +717,8 @@ def test_func_call():
 
     res = parse_code_element("fibonacci  {a=b,c = d}(  1, \na= 2  )")
     assert res.format(allowed_line_length=100) == "fibonacci{a=b, c=d}(1, a=2)"
-    assert res.format(allowed_line_length=20) == "fibonacci{a=b, c=d}(\n    1, a=2)"
-    assert res.format(allowed_line_length=15) == "fibonacci{\n    a=b, c=d}(\n    1, a=2)"
+    assert res.format(allowed_line_length=20) == "fibonacci{a=b, c=d}(\n    1, a=2\n)"
+    assert res.format(allowed_line_length=15) == "fibonacci{\n    a=b, c=d\n}(1, a=2)"
 
 
 def test_tail_call():

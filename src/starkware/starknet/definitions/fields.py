@@ -133,23 +133,24 @@ default_optional_transaction_index_metadata = sequential_id_metadata(
 
 call_data_metadata = felt_list_metadata
 call_data_as_hex_metadata = felt_as_hex_list_metadata
+signature_as_hex_metadata = felt_as_hex_list_metadata
 signature_metadata = felt_list_metadata
 retdata_as_hex_metadata = felt_as_hex_list_metadata
 
 
 # Contract address.
 
-ContractAddressField = RangeValidatedField(
-    lower_bound=constants.CONTRACT_ADDRESS_LOWER_BOUND,
-    upper_bound=constants.CONTRACT_ADDRESS_UPPER_BOUND,
+L2AddressField = RangeValidatedField(
+    lower_bound=constants.L2_ADDRESS_LOWER_BOUND,
+    upper_bound=constants.L2_ADDRESS_UPPER_BOUND,
     name="Contract address",
     error_code=StarknetErrorCode.OUT_OF_RANGE_CONTRACT_ADDRESS,
     formatter=hex,
 )
-contract_address_metadata = ContractAddressField.metadata()
+contract_address_metadata = L2AddressField.metadata(field_name="contract address")
 
 OptionalCodeAddressField = OptionalField(
-    field=dataclasses.replace(ContractAddressField, name="Code address"), none_probability=0
+    field=dataclasses.replace(L2AddressField, name="Code address"), none_probability=0
 )
 optional_code_address_metadata = OptionalCodeAddressField.metadata()
 
@@ -174,6 +175,17 @@ contract_hash_metadata = dict(
 non_required_contract_hash_metadata = dict(
     marshmallow_field=BytesAsHex(required=False, validate=validate_contract_hash),
 )
+
+
+ClassHashField = RangeValidatedField(
+    lower_bound=0,
+    upper_bound=constants.CONTRACT_HASH_UPPER_BOUND,
+    name="class_hash",
+    error_code=StarknetErrorCode.OUT_OF_RANGE_CONTRACT_HASH,
+    formatter=hex,
+)
+
+OptionalClassHashField = OptionalField(field=ClassHashField, none_probability=0)
 
 
 # Entry point.
@@ -210,6 +222,21 @@ FeeField = RangeValidatedField(
     formatter=hex,
 )
 fee_metadata = FeeField.metadata(required=False, load_default=0)
+
+OptionalFeeField = OptionalField(field=FeeField, none_probability=0)
+optional_fee_metadata = OptionalFeeField.metadata()
+
+# Gas price.
+
+GasPriceField = RangeValidatedField(
+    lower_bound=constants.GAS_PRICE_LOWER_BOUND,
+    upper_bound=constants.GAS_PRICE_UPPER_BOUND,
+    name="Gas price",
+    error_code=StarknetErrorCode.OUT_OF_RANGE_GAS_PRICE,
+    formatter=hex,
+)
+gas_price_metadata = GasPriceField.metadata(required=False, load_default=0)
+
 
 # Transaction version.
 

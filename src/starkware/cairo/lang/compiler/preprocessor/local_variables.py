@@ -15,6 +15,7 @@ from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeElementStaticAssert,
     CodeElementUnpackBinding,
     CodeElementWith,
+    CodeElementWithAttr,
     CommentedCodeElement,
 )
 from starkware.cairo.lang.compiler.ast.expr import ExprCast, ExprConst, ExprIdentifier
@@ -81,6 +82,10 @@ class LocalVariableHandler:
         obj = dataclasses.replace(obj, main_code_block=self.visit(obj.main_code_block))
         if obj.else_code_block is not None:
             obj = dataclasses.replace(obj, else_code_block=self.visit(obj.else_code_block))
+        return [obj]
+
+    def visit_CodeElementWithAttr(self, obj: CodeElementWithAttr):
+        obj = dataclasses.replace(obj, code_block=self.visit(obj.code_block))
         return [obj]
 
     def visit_CodeBlock(self, obj: CodeBlock):

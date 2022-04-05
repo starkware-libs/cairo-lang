@@ -86,7 +86,8 @@ func uint256_mul{range_check_ptr}(a : Uint256, b : Uint256) -> (low : Uint256, h
 
     return (
         low=Uint256(low=res0 + HALF_SHIFT * res1, high=res2 + HALF_SHIFT * res3),
-        high=Uint256(low=res4 + HALF_SHIFT * res5, high=res6 + HALF_SHIFT * carry))
+        high=Uint256(low=res4 + HALF_SHIFT * res5, high=res6 + HALF_SHIFT * carry),
+    )
 end
 
 # Returns the floor value of the square root of a uint256 integer.
@@ -184,7 +185,8 @@ end
 # Unsigned integer division between two integers. Returns the quotient and the remainder.
 # Conforms to EVM specifications: division by 0 yields 0.
 func uint256_unsigned_div_rem{range_check_ptr}(a : Uint256, div : Uint256) -> (
-        quotient : Uint256, remainder : Uint256):
+    quotient : Uint256, remainder : Uint256
+):
     alloc_locals
     local quotient : Uint256
     local remainder : Uint256
@@ -244,7 +246,8 @@ end
 # Note that the remainder may be negative if one of the inputs is negative and that
 # (-2**255) / (-1) = -2**255 because 2*255 is out of range.
 func uint256_signed_div_rem{range_check_ptr}(a : Uint256, div : Uint256) -> (
-        quot : Uint256, rem : Uint256):
+    quot : Uint256, rem : Uint256
+):
     alloc_locals
 
     # When div=-1, simply return -a.
@@ -303,7 +306,8 @@ end
 
 # Computes the bitwise XOR of 2 uint256 integers.
 func uint256_xor{range_check_ptr, bitwise_ptr : BitwiseBuiltin*}(a : Uint256, b : Uint256) -> (
-        res : Uint256):
+    res : Uint256
+):
     let (low) = bitwise_xor(a.low, b.low)
     let (high) = bitwise_xor(a.high, b.high)
     return (Uint256(low, high))
@@ -311,7 +315,8 @@ end
 
 # Computes the bitwise AND of 2 uint256 integers.
 func uint256_and{range_check_ptr, bitwise_ptr : BitwiseBuiltin*}(a : Uint256, b : Uint256) -> (
-        res : Uint256):
+    res : Uint256
+):
     let (low) = bitwise_and(a.low, b.low)
     let (high) = bitwise_and(a.high, b.high)
     return (Uint256(low, high))
@@ -319,7 +324,8 @@ end
 
 # Computes the bitwise OR of 2 uint256 integers.
 func uint256_or{range_check_ptr, bitwise_ptr : BitwiseBuiltin*}(a : Uint256, b : Uint256) -> (
-        res : Uint256):
+    res : Uint256
+):
     let (low) = bitwise_or(a.low, b.low)
     let (high) = bitwise_or(a.high, b.high)
     return (Uint256(low, high))

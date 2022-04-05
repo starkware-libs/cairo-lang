@@ -93,7 +93,7 @@ def unique_ordered_union(x, y):
 def add_counters(x: Mapping[T, NumType], y: Mapping[T, NumType]) -> Dict[T, NumType]:
     """
     Given two dicts x, y, returns a dict d s.t.
-      d[a] = d[x] + d[y]
+      d[k] = x[k] + y[k]
     """
     return {k: x.get(k, 0) + y.get(k, 0) for k in unique_ordered_union(x.keys(), y.keys())}
 
@@ -101,9 +101,17 @@ def add_counters(x: Mapping[T, NumType], y: Mapping[T, NumType]) -> Dict[T, NumT
 def sub_counters(x: Mapping[T, NumType], y: Mapping[T, NumType]) -> Dict[T, NumType]:
     """
     Given two dicts x, y, returns a dict d s.t.
-      d[a] = d[x] - d[y]
+      d[k] = x[k] - y[k]
     """
     return {k: x.get(k, 0) - y.get(k, 0) for k in unique_ordered_union(x.keys(), y.keys())}
+
+
+def multiply_counter_by_scalar(scalar: NumType, counter: Mapping[T, NumType]) -> Dict[T, NumType]:
+    """
+    Given a non-negative scalar and a counter, returns a dict d s.t.
+      d[k] = scalar * counter[k]
+    """
+    return {k: scalar * v for k, v in counter.items()}
 
 
 def indent(code, indentation):

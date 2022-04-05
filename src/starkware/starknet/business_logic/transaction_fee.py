@@ -1,12 +1,12 @@
 import math
-from typing import Dict, Tuple
+from typing import Mapping
 
-from starkware.starknet.business_logic.execute_entry_point import ExecuteEntryPoint
-from starkware.starknet.business_logic.state import CarriedState
-from starkware.starknet.business_logic.transaction_execution_objects import (
+from starkware.starknet.business_logic.execution.execute_entry_point import ExecuteEntryPoint
+from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
     TransactionExecutionContext,
 )
+from starkware.starknet.business_logic.state.state import CarriedState
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public import abi as starknet_abi
@@ -18,20 +18,13 @@ async def charge_fee(
     general_config: StarknetGeneralConfig,
     state: CarriedState,
     account_contract_address: int,
-    execution_resources: Dict[str, int],
+    actual_fee: int,
     max_fee: int,
-) -> Tuple[CallInfo, int]:
+) -> CallInfo:
     """
-    Calculates the actual fee from the given execution resources and transfers the amount from the
-    caller account to the sequencer. Returns the resulting CallInfo of the transfer call and the
-    actual fee.
+    Transfers the amount actual_fee from the caller account to the sequencer.
+    Returns the resulting CallInfo of the transfer call.
     """
-    actual_fee = calculate_tx_fee_by_cairo_usage(
-        general_config=general_config,
-        cairo_resource_usage=execution_resources,
-        l1_gas_usage=0,
-    )
-
     stark_assert_le(
         actual_fee,
         max_fee,
@@ -60,11 +53,14 @@ async def charge_fee(
     except StarkException as exception:
         raise StarkException(code=StarknetErrorCode.FEE_TRANSFER_FAILURE, message=str(exception))
 
-    return fee_transfer_info, actual_fee
+    return fee_transfer_info
 
 
 def calculate_tx_fee_by_cairo_usage(
-    general_config: StarknetGeneralConfig, cairo_resource_usage: Dict[str, int], l1_gas_usage: int
+    general_config: StarknetGeneralConfig,
+    cairo_resource_usage: Mapping[str, int],
+    l1_gas_usage: int,
+    gas_price: int,
 ) -> int:
     """
     Calculates the transaction fee by considering the heaviest Cairo resource (in terms of L1 gas),
@@ -85,4 +81,4 @@ def calculate_tx_fee_by_cairo_usage(
     )
 
     total_l1_gas_usage = cairo_l1_gas_usage + l1_gas_usage
-    return math.ceil(total_l1_gas_usage * general_config.gas_price)
+    return math.ceil(total_l1_gas_usage * gas_price)

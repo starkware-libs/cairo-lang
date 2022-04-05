@@ -10,6 +10,7 @@ from urllib.parse import urljoin
 import aiohttp
 
 from services.external_api.has_uri_prefix import HasUriPrefix
+from starkware.python.object_utils import generic_object_repr
 from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 
 logger = logging.getLogger(__name__)
@@ -85,6 +86,9 @@ class BaseClient(HasUriPrefix):
                     os.path.join(certificates_path, "server.crt")
                 )
 
+    def __repr__(self) -> str:
+        return generic_object_repr(obj=self)
+
     async def _send_request(
         self, send_method: str, uri: str, data: Optional[Union[str, Dict[str, Any]]] = None
     ) -> str:
@@ -125,16 +129,17 @@ class BaseClient(HasUriPrefix):
 
                 logger.debug(f"{error_message}, retrying...")
             except BadRequest as exception:
-                error_message = (
-                    f"Got {type(exception).__name__} while trying to access {url}. "
-                    f"Status code: {exception.status_code}; text: {exception.text}."
-                )
+                error_message = f"Got {type(exception).__name__} while trying to access {url}."
 
                 if limited_retries and (
                     n_retries_left == 0
                     or exception.status_code not in self.retry_config.retry_codes
                 ):
-                    logger.error(error_message, exc_info=True)
+                    full_error_message = (
+                        f"{error_message} "
+                        f"Status code: {exception.status_code}; text: {exception.text}."
+                    )
+                    logger.error(full_error_message, exc_info=True)
                     raise
 
                 logger.debug(f"{error_message}, retrying...")

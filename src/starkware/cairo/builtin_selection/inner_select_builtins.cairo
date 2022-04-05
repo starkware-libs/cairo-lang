@@ -16,8 +16,12 @@
 # * All lists are sorted according to the order of builtins input in Cairo programs.
 # * len(selected_encodings) <= len(all_encodings) == len(all_ptrs).
 func inner_select_builtins(
-        all_encodings : felt*, all_ptrs : felt*, selected_encodings : felt*, selected_ptrs : felt*,
-        n_builtins) -> (selected_encodings_end : felt*):
+    all_encodings : felt*,
+    all_ptrs : felt*,
+    selected_encodings : felt*,
+    selected_ptrs : felt*,
+    n_builtins,
+) -> (selected_encodings_end : felt*):
     # Number of memory cells used when n_builtins = 0.
     const FUNC_MEMORY_NO_BUILTINS = 1
     # Number of memory cells used *in a single iteration* when n_builtins > 0.
@@ -62,5 +66,6 @@ func inner_select_builtins(
         all_ptrs=all_ptrs + 1,
         selected_encodings=selected_encodings + select_builtin,
         selected_ptrs=selected_ptrs + select_builtin,
-        n_builtins=n_builtins - 1)
+        n_builtins=n_builtins - 1,
+    )
 end

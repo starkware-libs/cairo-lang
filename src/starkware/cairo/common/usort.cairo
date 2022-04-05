@@ -6,7 +6,8 @@ from starkware.cairo.common.math import assert_lt, assert_nn
 # multiplicities[i] is the number of times that output[i] appeared in input.
 # Completeness assumption: All numbers are in [0, RANGE_CHECK_BOUND).
 func usort{range_check_ptr}(input_len : felt, input : felt*) -> (
-        output_len : felt, output : felt*, multiplicities : felt*):
+    output_len : felt, output : felt*, multiplicities : felt*
+):
     alloc_locals
     local output_len
     local output : felt*
@@ -36,7 +37,8 @@ func usort{range_check_ptr}(input_len : felt, input : felt*) -> (
 
     let output_start = output
     verify_usort{output=output}(
-        input_len=input_len, input=input, total_visited=0, multiplicities=multiplicities, prev=-1)
+        input_len=input_len, input=input, total_visited=0, multiplicities=multiplicities, prev=-1
+    )
 
     %{ vm_exit_scope() %}
     return (output_len=output - output_start, output=output_start, multiplicities=multiplicities)
@@ -44,7 +46,8 @@ end
 
 # Verifies that usort of input is (output, multiplicities). See usort().
 func verify_usort{range_check_ptr, output : felt*}(
-        input_len : felt, input : felt*, total_visited : felt, multiplicities : felt*, prev : felt):
+    input_len : felt, input : felt*, total_visited : felt, multiplicities : felt*, prev : felt
+):
     alloc_locals
 
     if total_visited == input_len:
@@ -69,12 +72,14 @@ func verify_usort{range_check_ptr, output : felt*}(
         input=input,
         total_visited=total_visited + multiplicity,
         multiplicities=&multiplicities[1],
-        prev=value)
+        prev=value,
+    )
 end
 
 # Verifies that value appears at least multiplicity times in input.
 func verify_multiplicity{range_check_ptr}(
-        multiplicity : felt, input_len : felt, input : felt*, value : felt):
+    multiplicity : felt, input_len : felt, input : felt*, value : felt
+):
     if multiplicity == 0:
         %{ assert len(positions) == 0 %}
         assert_nn(input_len)
@@ -95,5 +100,6 @@ func verify_multiplicity{range_check_ptr}(
         multiplicity=multiplicity - 1,
         input_len=input_len - next_item_index - 1,
         input=&input[next_item_index + 1],
-        value=value)
+        value=value,
+    )
 end

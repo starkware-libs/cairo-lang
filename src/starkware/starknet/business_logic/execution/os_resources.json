@@ -1,0 +1,172 @@
+{
+    "execute_syscalls": {
+        "call_contract": {
+            "builtin_instance_counter": {
+                "bitwise_builtin": 0,
+                "ec_op_builtin": 0,
+                "ecdsa_builtin": 0,
+                "output_builtin": 0,
+                "pedersen_builtin": 0,
+                "range_check_builtin": 15
+            },
+            "n_memory_holes": 0,
+            "n_steps": 519
+        },
+        "delegate_call": {
+            "builtin_instance_counter": {
+                "bitwise_builtin": 0,
+                "ec_op_builtin": 0,
+                "ecdsa_builtin": 0,
+                "output_builtin": 0,
+                "pedersen_builtin": 0,
+                "range_check_builtin": 15
+            },
+            "n_memory_holes": 0,
+            "n_steps": 522
+        },
+        "delegate_l1_handler": {
+            "builtin_instance_counter": {
+                "bitwise_builtin": 0,
+                "ec_op_builtin": 0,
+                "ecdsa_builtin": 0,
+                "output_builtin": 0,
+                "pedersen_builtin": 0,
+                "range_check_builtin": 15
+            },
+            "n_memory_holes": 0,
+            "n_steps": 524
+        },
+        "emit_event": {
+            "builtin_instance_counter": {
+                "bitwise_builtin": 0,
+                "ec_op_builtin": 0,
+                "ecdsa_builtin": 0,
+                "output_builtin": 0,
+                "pedersen_builtin": 0,
+                "range_check_builtin": 0
+            },
+            "n_memory_holes": 0,
+            "n_steps": 20
+        },
+        "get_block_number": {
+            "builtin_instance_counter": {
+                "bitwise_builtin": 0,
+                "ec_op_builtin": 0,
+                "ecdsa_builtin": 0,
+                "output_builtin": 0,
+                "pedersen_builtin": 0,
+                "range_check_builtin": 0
+            },
+            "n_memory_holes": 0,
+            "n_steps": 49
+        },
+        "get_block_timestamp": {
+            "builtin_instance_counter": {
+                "bitwise_builtin": 0,
+                "ec_op_builtin": 0,
+                "ecdsa_builtin": 0,
+                "output_builtin": 0,
+                "pedersen_builtin": 0,
+                "range_check_builtin": 0
+            },
+            "n_memory_holes": 0,
+            "n_steps": 46
+        },
+        "get_caller_address": {
+            "builtin_instance_counter": {
+                "bitwise_builtin": 0,
+                "ec_op_builtin": 0,
+                "ecdsa_builtin": 0,
+                "output_builtin": 0,
+                "pedersen_builtin": 0,
+                "range_check_builtin": 0
+            },
+            "n_memory_holes": 0,
+            "n_steps": 37
+        },
+        "get_contract_address": {
+            "builtin_instance_counter": {
+                "bitwise_builtin": 0,
+                "ec_op_builtin": 0,
+                "ecdsa_builtin": 0,
+                "output_builtin": 0,
+                "pedersen_builtin": 0,
+                "range_check_builtin": 0
+            },
+            "n_memory_holes": 0,
+            "n_steps": 43
+        },
+        "get_sequencer_address": {
+            "builtin_instance_counter": {
+                "bitwise_builtin": 0,
+                "ec_op_builtin": 0,
+                "ecdsa_builtin": 0,
+                "output_builtin": 0,
+                "pedersen_builtin": 0,
+                "range_check_builtin": 0
+            },
+            "n_memory_holes": 0,
+            "n_steps": 40
+        },
+        "get_tx_info": {
+            "builtin_instance_counter": {
+                "bitwise_builtin": 0,
+                "ec_op_builtin": 0,
+                "ecdsa_builtin": 0,
+                "output_builtin": 0,
+                "pedersen_builtin": 0,
+                "range_check_builtin": 0
+            },
+            "n_memory_holes": 0,
+            "n_steps": 34
+        },
+        "get_tx_signature": {
+            "builtin_instance_counter": {
+                "bitwise_builtin": 0,
+                "ec_op_builtin": 0,
+                "ecdsa_builtin": 0,
+                "output_builtin": 0,
+                "pedersen_builtin": 0,
+                "range_check_builtin": 0
+            },
+            "n_memory_holes": 0,
+            "n_steps": 55
+        },
+        "send_message_to_l1": {
+            "builtin_instance_counter": {
+                "bitwise_builtin": 0,
+                "ec_op_builtin": 0,
+                "ecdsa_builtin": 0,
+                "output_builtin": 0,
+                "pedersen_builtin": 0,
+                "range_check_builtin": 0
+            },
+            "n_memory_holes": 0,
+            "n_steps": 88
+        },
+        "storage_read": {
+            "builtin_instance_counter": {
+                "bitwise_builtin": 0,
+                "ec_op_builtin": 0,
+                "ecdsa_builtin": 0,
+                "output_builtin": 0,
+                "pedersen_builtin": 0,
+                "range_check_builtin": 0
+            },
+            "n_memory_holes": 0,
+            "n_steps": 40
+        },
+        "storage_write": {
+            "builtin_instance_counter": {
+                "bitwise_builtin": 0,
+                "ec_op_builtin": 0,
+                "ecdsa_builtin": 0,
+                "output_builtin": 0,
+                "pedersen_builtin": 0,
+                "range_check_builtin": 0
+            },
+            "n_memory_holes": 0,
+            "n_steps": 43
+        }
+    }
+}

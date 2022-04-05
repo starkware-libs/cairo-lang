@@ -14,6 +14,7 @@ from starkware.python.utils import (
     gather_in_chunks,
     indent,
     iter_blockify,
+    multiply_counter_by_scalar,
     safe_zip,
     to_ascii_string,
     unique,
@@ -170,3 +171,10 @@ def test_assert_exhausted():
         match=re.escape("Iterator is not empty."),
     ):
         assert_exhausted(iterator=count(start=0, step=1))
+
+
+def test_multiply_counter_by_scalar():
+    assert multiply_counter_by_scalar(scalar=5, counter={}) == {}
+    assert multiply_counter_by_scalar(scalar=5, counter=dict(a=1, b=2)) == dict(a=5, b=10)
+    assert multiply_counter_by_scalar(scalar=0, counter=dict(a=1, b=2)) == dict(a=0, b=0)
+    assert multiply_counter_by_scalar(scalar=-2, counter=dict(a=7, b=-1)) == dict(a=-14, b=2)

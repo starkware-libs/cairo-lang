@@ -2,7 +2,9 @@ from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.registers import get_fp_and_pc
 from starkware.starknet.core.os.builtins import BuiltinParams, get_builtin_params
 from starkware.starknet.core.os.contracts import (
-    ContractDefinitionFact, load_contract_definition_facts)
+    ContractDefinitionFact,
+    load_contract_definition_facts,
+)
 from starkware.starknet.core.os.os_config.os_config import StarknetOsConfig
 
 struct BlockInfo:
@@ -32,7 +34,8 @@ end
 #
 # 'syscall_handler' and 'os_input' should be passed as hint variables.
 func get_block_context{pedersen_ptr : HashBuiltin*, range_check_ptr}() -> (
-        block_context : BlockContext*):
+    block_context : BlockContext*
+):
     alloc_locals
     let (n_contract_definition_facts, contract_definition_facts) = load_contract_definition_facts()
     let (builtin_params) = get_builtin_params()

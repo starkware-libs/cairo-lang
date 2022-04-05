@@ -1,6 +1,11 @@
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.hash_state import (
-    HashState, hash_finalize, hash_init, hash_update, hash_update_single)
+    HashState,
+    hash_finalize,
+    hash_init,
+    hash_update,
+    hash_update_single,
+)
 from starkware.cairo.common.math import assert_lt_felt
 from starkware.cairo.common.registers import get_fp_and_pc
 
@@ -47,7 +52,8 @@ end
 
 # Checks that the list of selectors is sorted.
 func validate_entry_points{range_check_ptr}(
-        n_entry_points : felt, entry_points : ContractEntryPoint*):
+    n_entry_points : felt, entry_points : ContractEntryPoint*
+):
     if n_entry_points == 0:
         return ()
     end
@@ -55,12 +61,14 @@ func validate_entry_points{range_check_ptr}(
     return validate_entry_points_inner(
         n_entry_points=n_entry_points - 1,
         entry_points=&entry_points[1],
-        prev_selector=entry_points[0].selector)
+        prev_selector=entry_points[0].selector,
+    )
 end
 
 # Inner function for validate_entry_points.
 func validate_entry_points_inner{range_check_ptr}(
-        n_entry_points : felt, entry_points : ContractEntryPoint*, prev_selector):
+    n_entry_points : felt, entry_points : ContractEntryPoint*, prev_selector
+):
     if n_entry_points == 0:
         return ()
     end
@@ -70,59 +78,70 @@ func validate_entry_points_inner{range_check_ptr}(
     return validate_entry_points_inner(
         n_entry_points=n_entry_points - 1,
         entry_points=&entry_points[1],
-        prev_selector=entry_points[0].selector)
+        prev_selector=entry_points[0].selector,
+    )
 end
 
 func contract_hash{hash_ptr : HashBuiltin*}(contract_definition : ContractDefinition*) -> (
-        hash : felt):
+    hash : felt
+):
     let (hash_state : HashState*) = hash_init()
     let (hash_state) = hash_update_single(
-        hash_state_ptr=hash_state, item=contract_definition.api_version)
+        hash_state_ptr=hash_state, item=contract_definition.api_version
+    )
 
     # Hash external entry points.
     let (hash_state) = hash_update_with_hashchain(
         hash_state=hash_state,
         data_ptr=contract_definition.external_functions,
-        data_length=contract_definition.n_external_functions * ContractEntryPoint.SIZE)
+        data_length=contract_definition.n_external_functions * ContractEntryPoint.SIZE,
+    )
 
     # Hash L1 handler entry points.
     let (hash_state) = hash_update_with_hashchain(
         hash_state=hash_state,
         data_ptr=contract_definition.l1_handlers,
-        data_length=contract_definition.n_l1_handlers * ContractEntryPoint.SIZE)
+        data_length=contract_definition.n_l1_handlers * ContractEntryPoint.SIZE,
+    )
 
     # Hash constructor entry points.
     let (hash_state) = hash_update_with_hashchain(
         hash_state=hash_state,
         data_ptr=contract_definition.constructors,
-        data_length=contract_definition.n_constructors * ContractEntryPoint.SIZE)
+        data_length=contract_definition.n_constructors * ContractEntryPoint.SIZE,
+    )
 
     # Hash builtins.
     let (hash_state) = hash_update_with_hashchain(
         hash_state=hash_state,
         data_ptr=contract_definition.builtin_list,
-        data_length=contract_definition.n_builtins)
+        data_length=contract_definition.n_builtins,
+    )
 
     # Hash hinted_contract_definition_hash.
     let (hash_state) = hash_update_single(
-        hash_state_ptr=hash_state, item=contract_definition.hinted_contract_definition_hash)
+        hash_state_ptr=hash_state, item=contract_definition.hinted_contract_definition_hash
+    )
 
     # Hash bytecode.
     let (hash_state) = hash_update_with_hashchain(
         hash_state=hash_state,
         data_ptr=contract_definition.bytecode_ptr,
-        data_length=contract_definition.bytecode_length)
+        data_length=contract_definition.bytecode_length,
+    )
 
     let (hash : felt) = hash_finalize(hash_state_ptr=hash_state)
     return (hash=hash)
 end
 
 func hash_update_with_hashchain{hash_ptr : HashBuiltin*}(
-        hash_state : HashState*, data_ptr : felt*, data_length : felt) -> (hash_state : HashState*):
+    hash_state : HashState*, data_ptr : felt*, data_length : felt
+) -> (hash_state : HashState*):
     # Hash data.
     let (list_hash_state : HashState*) = hash_init()
     let (list_hash_state) = hash_update(
-        hash_state_ptr=list_hash_state, data_ptr=data_ptr, data_length=data_length)
+        hash_state_ptr=list_hash_state, data_ptr=data_ptr, data_length=data_length
+    )
     let (hash : felt) = hash_finalize(hash_state_ptr=list_hash_state)
 
     # Update contract hash state with the resulting hash of the data.
@@ -141,7 +160,8 @@ end
 # Loads the contract definitions from the 'os_input' hint variable.
 # Returns ContractDefinitionFact list that maps a hash to a ContractDefinition.
 func load_contract_definition_facts{pedersen_ptr : HashBuiltin*, range_check_ptr}() -> (
-        n_contract_definition_facts, contract_definition_facts : ContractDefinitionFact*):
+    n_contract_definition_facts, contract_definition_facts : ContractDefinitionFact*
+):
     alloc_locals
     local n_contract_definition_facts
     local contract_definition_facts : ContractDefinitionFact*
@@ -155,18 +175,21 @@ func load_contract_definition_facts{pedersen_ptr : HashBuiltin*, range_check_ptr
 
     load_contract_definition_facts_inner(
         n_contract_definition_facts=n_contract_definition_facts,
-        contract_definition_facts=contract_definition_facts)
+        contract_definition_facts=contract_definition_facts,
+    )
     %{ vm_exit_scope() %}
 
     return (
         n_contract_definition_facts=n_contract_definition_facts,
-        contract_definition_facts=contract_definition_facts)
+        contract_definition_facts=contract_definition_facts,
+    )
 end
 
 # Loads 'n_contract_definition_facts' from the hint 'contract_definitions_facts' and appends the
 # corresponding ContractDefinitionFact to contract_definition_facts.
 func load_contract_definition_facts_inner{pedersen_ptr : HashBuiltin*, range_check_ptr}(
-        n_contract_definition_facts, contract_definition_facts : ContractDefinitionFact*):
+    n_contract_definition_facts, contract_definition_facts : ContractDefinitionFact*
+):
     if n_contract_definition_facts == 0:
         return ()
     end
@@ -190,11 +213,13 @@ func load_contract_definition_facts_inner{pedersen_ptr : HashBuiltin*, range_che
 
     validate_entry_points(
         n_entry_points=contract_definition.n_external_functions,
-        entry_points=contract_definition.external_functions)
+        entry_points=contract_definition.external_functions,
+    )
 
     validate_entry_points(
         n_entry_points=contract_definition.n_l1_handlers,
-        entry_points=contract_definition.l1_handlers)
+        entry_points=contract_definition.l1_handlers,
+    )
 
     let (hash) = contract_hash{hash_ptr=pedersen_ptr}(contract_definition)
     contract_definition_fact.hash = hash
@@ -213,5 +238,6 @@ func load_contract_definition_facts_inner{pedersen_ptr : HashBuiltin*, range_che
 
     return load_contract_definition_facts_inner(
         n_contract_definition_facts=n_contract_definition_facts - 1,
-        contract_definition_facts=contract_definition_facts + ContractDefinitionFact.SIZE)
+        contract_definition_facts=contract_definition_facts + ContractDefinitionFact.SIZE,
+    )
 end

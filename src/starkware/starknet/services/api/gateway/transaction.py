@@ -11,7 +11,7 @@ import marshmallow_dataclass
 from marshmallow_oneofschema import OneOfSchema
 
 from services.everest.api.gateway.transaction import EverestTransaction
-from starkware.starknet.core.os.transaction_hash import (
+from starkware.starknet.core.os.transaction_hash.transaction_hash import (
     TransactionHashPrefix,
     calculate_deploy_transaction_hash,
     calculate_transaction_hash_common,

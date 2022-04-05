@@ -2,7 +2,19 @@ import asyncio
 import contextlib
 import dataclasses
 from abc import ABC, abstractmethod
-from typing import Callable, Iterator, List, Mapping, Optional, Type, TypeVar, Union, cast
+from typing import (
+    Callable,
+    Iterable,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+    cast,
+)
 
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.common.structs import CairoStructFactory, CairoStructProxy
@@ -11,17 +23,18 @@ from starkware.cairo.lang.compiler.identifier_definition import StructDefinition
 from starkware.cairo.lang.vm.memory_segments import MemorySegmentManager
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 from starkware.python.utils import assert_exhausted, camel_to_snake_case, safe_zip
-from starkware.starknet.business_logic.execute_entry_point_base import ExecuteEntryPointBase
-from starkware.starknet.business_logic.state import BlockInfo, CarriedState
-from starkware.starknet.business_logic.transaction_execution_objects import (
+from starkware.starknet.business_logic.execution.execute_entry_point_base import (
+    ExecuteEntryPointBase,
+)
+from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
     OrderedEvent,
     OrderedL2ToL1Message,
     TransactionExecutionContext,
     TransactionExecutionInfo,
 )
+from starkware.starknet.business_logic.state.state import BlockInfo, CarriedState
 from starkware.starknet.core.os.os_program import get_os_program
-from starkware.starknet.definitions import constants
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.services.api.contract_definition import EntryPointType
@@ -423,7 +436,7 @@ class SysCallHandlerBase(ABC):
         )
         response = self.structs.CallContractResponse(
             retdata_size=len(retdata),
-            retdata=self._allocate_segment(segments=segments),
+            retdata=self._allocate_segment(segments=segments, data=retdata),
         )
         self._write_syscall_response(
             syscall_name="CallContract",
@@ -431,7 +444,6 @@ class SysCallHandlerBase(ABC):
             segments=segments,
             syscall_ptr=syscall_ptr,
         )
-        segments.write_arg(ptr=response.retdata, arg=retdata)
 
     @abstractmethod
     def _get_block_number(self) -> int:
@@ -472,9 +484,13 @@ class SysCallHandlerBase(ABC):
         """
 
     @abstractmethod
-    def _allocate_segment(self, segments: MemorySegmentManager) -> RelocatableValue:
+    def _allocate_segment(
+        self, segments: MemorySegmentManager, data: Iterable[MaybeRelocatable]
+    ) -> RelocatableValue:
         """
-        Allocates and returns a new segment.
+        Allocates and returns a new (read-only) segment with the given data.
+        Note that unlike MemorySegmentManager.write_arg, this function doesn't work well with
+        recursive input - call _allocate_segment for the inner items if needed.
         """
 
 
@@ -530,8 +546,16 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
         # A pointer to the Cairo TxInfo struct.
         self.tx_info_ptr: Optional[RelocatableValue] = None
 
-    def _allocate_segment(self, segments: MemorySegmentManager) -> RelocatableValue:
-        return segments.add()
+        # A list of dynamically allocated segments that are expected to be read-only.
+        self.read_only_segments: List[Tuple[RelocatableValue, int]] = []
+
+    def _allocate_segment(
+        self, segments: MemorySegmentManager, data: Iterable[MaybeRelocatable]
+    ) -> RelocatableValue:
+        segment_start = segments.add()
+        segment_end = segments.write_arg(ptr=segment_start, arg=data)
+        self.read_only_segments.append((segment_start, segment_end - segment_start))
+        return segment_start
 
     def _count_syscall(self, syscall_name: str):
         previous_syscall_count = self.state.syscall_counter.get(syscall_name, 0)
@@ -711,15 +735,17 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
     def _get_tx_info_ptr(self, segments: MemorySegmentManager) -> RelocatableValue:
         if self.tx_info_ptr is None:
             tx_info = self.structs.TxInfo(
-                version=constants.TRANSACTION_VERSION,
+                version=self.tx_execution_context.version,
                 account_contract_address=self.tx_execution_context.account_contract_address,
                 max_fee=self.tx_execution_context.max_fee,
                 transaction_hash=self.tx_execution_context.transaction_hash,
                 signature_len=len(self.tx_execution_context.signature),
-                signature=segments.gen_arg(self.tx_execution_context.signature),
+                signature=self._allocate_segment(
+                    segments=segments, data=self.tx_execution_context.signature
+                ),
                 chain_id=self.general_config.chain_id.value,
             )
-            self.tx_info_ptr = cast(RelocatableValue, segments.gen_arg(arg=tx_info))
+            self.tx_info_ptr = self._allocate_segment(segments=segments, data=tx_info)
 
         return self.tx_info_ptr
 
@@ -778,54 +804,31 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
         self.starknet_storage.read(address=address)
         self.starknet_storage.write(address=address, value=value)
 
-        # Update the number of writing operations done in this contract (for the bouncer).
-        # Note that this is a simplified calculation - we are considering every write
+        # Update modified contracts (for the bouncer).
+        # Note that this is a simplified update - we are considering every write
         # as a new change in storage (w.r.t. the state of the previous batch), but it could be that
-        # a write actually decreases the number of changes. E.g., consider these two writings to the
-        # same storage cell: 0 -> 5, 5 -> 0.
-        previous_n_writings = self.state.contract_address_to_n_storage_writings.get(
-            self.contract_address, 0
-        )
-        self.state.contract_address_to_n_storage_writings[self.contract_address] = (
-            previous_n_writings + 1
-        )
+        # a write actually cancles a change; e.g., 0 -> 5, 5 -> 0.
+        self.state.modified_contracts[self.contract_address] = None
 
     def get_sequencer_address(self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue):
         return super().get_sequencer_address(segments=segments, syscall_ptr=syscall_ptr)
 
-    def post_run_tx_info_related_logic(self, runner: CairoFunctionRunner):
+    def validate_read_only_segments(self, runner: CairoFunctionRunner):
         """
-        Validates that there were no out of bounds writes to the tx_info related segments and marks
-        tx_info as accessed.
+        Validates that there were no out of bounds writes to read-only segments and marks
+        them as accessed.
         """
-        tx_info_ptr = self.tx_info_ptr
-        if tx_info_ptr is None:
-            # tx_info_ptr was never used.
-            return
-
         segments = runner.segments
 
-        tx_info_size = self.structs.TxInfo.size
-        stark_assert(
-            segments.get_segment_used_size(segment_index=tx_info_ptr.segment_index) == tx_info_size,
-            code=StarknetErrorCode.SECURITY_ERROR,
-            message=f"Out of bounds write to tx_info segment.",
-        )
+        for segment_ptr, segment_size in self.read_only_segments:
+            used_size = segments.get_segment_used_size(segment_index=segment_ptr.segment_index)
+            stark_assert(
+                used_size == segment_size,
+                code=StarknetErrorCode.SECURITY_ERROR,
+                message="Out of bounds write to a read-only segment.",
+            )
 
-        runner.mark_as_accessed(address=tx_info_ptr, size=tx_info_size)
-
-        tx_info = self.structs.TxInfo.from_ptr(memory=segments.memory, addr=tx_info_ptr)
-        signature_ptr = tx_info.signature
-        stark_assert(
-            segments.get_segment_used_size(segment_index=signature_ptr.segment_index)
-            == len(self.tx_execution_context.signature),
-            code=StarknetErrorCode.SECURITY_ERROR,
-            message=f"Out of bounds write to signature segment.",
-        )
-
-        runner.mark_as_accessed(
-            address=signature_ptr, size=len(self.tx_execution_context.signature)
-        )
+            runner.mark_as_accessed(address=segment_ptr, size=segment_size)
 
     def post_run(self, runner: CairoFunctionRunner, syscall_stop_ptr: MaybeRelocatable):
         """
@@ -838,7 +841,7 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
             message=f"Bad syscall_stop_ptr, Expected {expected_stop_ptr}, got {syscall_stop_ptr}.",
         )
 
-        self.post_run_tx_info_related_logic(runner=runner)
+        self.validate_read_only_segments(runner=runner)
 
 
 class OsSysCallHandler(SysCallHandlerBase):
@@ -899,11 +902,15 @@ class OsSysCallHandler(SysCallHandlerBase):
             syscall_name=syscall_name, segments=segments, syscall_ptr=syscall_ptr
         )
 
-    def _allocate_segment(self, segments: MemorySegmentManager) -> RelocatableValue:
+    def _allocate_segment(
+        self, segments: MemorySegmentManager, data: Iterable[MaybeRelocatable]
+    ) -> RelocatableValue:
         """
         Allocates and returns a new temporary segment.
         """
-        return segments.add_temp_segment()
+        segment_start = segments.add_temp_segment()
+        segments.write_arg(ptr=segment_start, arg=data)
+        return segment_start
 
     def _call_contract(
         self,
@@ -911,9 +918,6 @@ class OsSysCallHandler(SysCallHandlerBase):
         syscall_ptr: RelocatableValue,
         syscall_name: str,
     ) -> List[int]:
-        request = self.structs.CallContractRequest.from_ptr(
-            memory=segments.memory, addr=syscall_ptr
-        )
         return next(self.retdata_iterators[-1])
 
     def _get_block_number(self) -> int:

@@ -197,7 +197,7 @@ Expected '{scoped_name}' to be a {StructDefinition.TYPE}. Found: '{identifier_ty
             except IdentifierError as exc:
                 raise PreprocessorError(str(exc), location=cairo_type.location)
         elif isinstance(cairo_type, TypeTuple):
-            check_no_duplicate_names(cairo_type)
+            verify_tuple_type(cairo_type=cairo_type)
             return dataclasses.replace(
                 cairo_type,
                 members=[
@@ -252,12 +252,20 @@ Expected '{scoped_name}' to be a {StructDefinition.TYPE}. Found: '{identifier_ty
         return parent.element_type == "struct"
 
 
-def check_no_duplicate_names(cairo_type: TypeTuple):
+def verify_tuple_type(cairo_type: TypeTuple):
     """
-    Verifies that there are no duplicate names in a tuple type. Raises a PreprocessorError
-    otherwise.
+    Verifies that:
+    1. Either all or none of the members are named.
+    2. There are no duplicate names in a tuple type.
+    Raises a PreprocessorError otherwise.
     Does not check the inner types.
     """
+    is_named = set((member.name is not None) for member in cairo_type.members)
+    if is_named == {True, False}:
+        raise PreprocessorError(
+            "All fields in a named tuple must have a name.", location=cairo_type.location
+        )
+
     names = set()
     for member in cairo_type.members:
         member_name = member.name

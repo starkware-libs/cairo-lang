@@ -28,6 +28,7 @@ setuptools.setup(
         "starkware.cairo.sharp": ["config.json"],
         "starkware.crypto.signature": ["pedersen_params.json"],
         "starkware.starknet": ["common/*.cairo", "definitions/*.yml"],
+        "starkware.starknet.business_logic.execution": ["os_resources.json"],
         "starkware.starknet.core.os": ["*.cairo", "*.json"],
         "starkware.starknet.security": ["whitelists/*.json"],
         "starkware.starknet.testing": ["*.json"],

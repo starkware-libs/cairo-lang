@@ -1,7 +1,8 @@
 %builtins output pedersen range_check ecdsa bitwise
 
 from starkware.cairo.bootloaders.simple_bootloader.run_simple_bootloader import (
-    run_simple_bootloader)
+    run_simple_bootloader,
+)
 from starkware.cairo.cairo_verifier.objects import CairoVerifierOutput
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.cairo_builtins import HashBuiltin
@@ -25,7 +26,7 @@ end
 # Hint arguments:
 # program_input - Contains the inputs for the bootloader.
 func main{output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecdsa_ptr, bitwise_ptr}(
-        ):
+    ):
     alloc_locals
     local simple_bootloader_output_start : felt*
     %{
@@ -84,7 +85,8 @@ func main{output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecds
     %{ packed_outputs = bootloader_input.packed_outputs %}
     with simple_bootloader_output_ptr, n_total_tasks:
         parse_tasks{subtasks_output=simple_bootloader_output_ptr}(
-            bootloader_config=bootloader_config, n_subtasks=n_subtasks)
+            bootloader_config=bootloader_config, n_subtasks=n_subtasks
+        )
     end
 
     # Assert that parse_tasks used the entire output of the simple bootloader.
@@ -100,7 +102,9 @@ func main{output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecds
         from starkware.cairo.bootloaders.bootloader.utils import compute_fact_topologies
         from starkware.cairo.bootloaders.fact_topology import FactTopology
         from starkware.cairo.bootloaders.simple_bootloader.utils import (
-            configure_fact_topologies, write_to_fact_topologies_file)
+            configure_fact_topologies,
+            write_to_fact_topologies_file,
+        )
 
         # Compute the fact topologies of the plain packed outputs based on packed_outputs and
         # fact_topologies of the inner tasks.
@@ -140,8 +144,8 @@ end
 # subtasks_output - Contains direct subtasks outputs which is used for unpacking. This is an input
 # to this function and is returned for validation purposes.
 func parse_tasks{
-        output_ptr : felt*, pedersen_ptr : HashBuiltin*, n_total_tasks : felt,
-        subtasks_output : felt*}(bootloader_config : BootloaderConfig*, n_subtasks : felt):
+    output_ptr : felt*, pedersen_ptr : HashBuiltin*, n_total_tasks : felt, subtasks_output : felt*
+}(bootloader_config : BootloaderConfig*, n_subtasks : felt):
     if n_subtasks == 0:
         return ()
     end
@@ -159,7 +163,9 @@ func parse_tasks{
 
     %{
         from starkware.cairo.bootloaders.bootloader.objects import (
-            CompositePackedOutput, PlainPackedOutput)
+            CompositePackedOutput,
+            PlainPackedOutput,
+        )
     %}
 
     if nondet %{ isinstance(packed_output, PlainPackedOutput) %} != 0:
@@ -169,7 +175,8 @@ func parse_tasks{
         # Handle composite packed task.
         %{ assert isinstance(packed_output, CompositePackedOutput) %}
         unpack_composite_packed_task{task_output=subtasks_output}(
-            bootloader_config=bootloader_config)
+            bootloader_config=bootloader_config
+        )
     end
 
     %{ vm_exit_scope() %}
@@ -203,8 +210,8 @@ end
 # Hint arguments:
 # packed_output - CompositePackedOutput object which uses for unpacking the task.
 func unpack_composite_packed_task{
-        output_ptr : felt*, pedersen_ptr : HashBuiltin*, n_total_tasks : felt, task_output : felt*}(
-        bootloader_config : BootloaderConfig*):
+    output_ptr : felt*, pedersen_ptr : HashBuiltin*, n_total_tasks : felt, task_output : felt*
+}(bootloader_config : BootloaderConfig*):
     alloc_locals
 
     # Guess the pre-image of subtasks_output_hash (subtasks_output_hash appears in task_output).
@@ -221,7 +228,8 @@ func unpack_composite_packed_task{
     let (hash_state_ptr) = hash_update{hash_ptr=pedersen_ptr}(
         hash_state_ptr=hash_state_ptr,
         data_ptr=nested_subtasks_output,
-        data_length=nested_subtasks_output_len)
+        data_length=nested_subtasks_output_len,
+    )
     let (subtasks_output_hash) = hash_finalize{hash_ptr=pedersen_ptr}(hash_state_ptr=hash_state_ptr)
 
     # Verify task output header.
@@ -243,7 +251,8 @@ func unpack_composite_packed_task{
     %{ packed_outputs = packed_output.subtasks %}
     with nested_subtasks_output:
         parse_tasks{subtasks_output=nested_subtasks_output}(
-            bootloader_config=bootloader_config, n_subtasks=n_subtasks)
+            bootloader_config=bootloader_config, n_subtasks=n_subtasks
+        )
     end
 
     # Assert that the entire subtask output was used.
@@ -262,8 +271,8 @@ end
 # n_total_tasks - Number of PlainPackedOutput that were unpacked. This function increments this
 # value by 1.
 func unpack_plain_packed_task{
-        output_ptr : felt*, pedersen_ptr : HashBuiltin*, n_total_tasks : felt, task_output : felt*}(
-        bootloader_config : BootloaderConfig*):
+    output_ptr : felt*, pedersen_ptr : HashBuiltin*, n_total_tasks : felt, task_output : felt*
+}(bootloader_config : BootloaderConfig*):
     alloc_locals
 
     # Parse task output header.

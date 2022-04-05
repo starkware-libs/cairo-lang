@@ -14,7 +14,8 @@ func run_blake2s{range_check_ptr, blake2s_ptr : felt*}(inputs : felt**, lengths 
 end
 
 func run_blake2s_and_finalize{range_check_ptr, bitwise_ptr : BitwiseBuiltin*}(
-        inputs : felt**, lengths : felt*, n : felt):
+    inputs : felt**, lengths : felt*, n : felt
+):
     alloc_locals
     let (local blake2s_ptr_start) = alloc()
     let blake2s_ptr = blake2s_ptr_start

@@ -1,5 +1,5 @@
 python_lib(starkware_contracts_utils_lib
-    PREFIX starkware/contracts
+    PREFIX starkware/solidity
     FILES
     utils.py
 )

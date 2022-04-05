@@ -15,10 +15,10 @@ from services.everest.business_logic.state import (
 )
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
 from starkware.python.utils import gather_in_chunks, safe_zip
-from starkware.starknet.business_logic.state_objects import ContractCarriedState, ContractState
+from starkware.starknet.business_logic.state.objects import ContractCarriedState, ContractState
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
-from starkware.starknet.definitions.general_config import StarknetGeneralConfig
+from starkware.starknet.definitions.general_config import DEFAULT_GAS_PRICE, StarknetGeneralConfig
 from starkware.starknet.services.api.contract_definition import ContractDefinition
 from starkware.starknet.storage.starknet_storage import StorageLeaf
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
@@ -37,18 +37,32 @@ ContractCarriedStateChainMapping = typing.ChainMap[int, ContractCarriedState]
 
 @marshmallow_dataclass.dataclass(frozen=True)
 class BlockInfo(ValidatedMarshmallowDataclass):
-    # The sequence number of the last batch created.
+    # The sequence number of the last block created.
     block_number: int = field(metadata=fields.block_number_metadata)
 
-    # Timestamp of the beginning of the last batch creation attempt.
+    # Timestamp of the beginning of the last block creation attempt.
     block_timestamp: int = field(metadata=fields.timestamp_metadata)
+
+    # L1 gas price (in Wei) measured at the beginning of the last block creation attempt.
+    gas_price: int = field(metadata=fields.gas_price_metadata)
 
     @classmethod
     def empty(cls) -> "BlockInfo":
         """
         Returns an empty BlockInfo object; i.e., the one before the first in the chain.
         """
-        return cls(block_number=-1, block_timestamp=0)
+        return cls(block_number=-1, block_timestamp=0, gas_price=0)
+
+    @classmethod
+    def create_for_testing(cls, block_number: int, block_timestamp: int) -> "BlockInfo":
+        """
+        Returns a BlockInfo object with default gas_price.
+        """
+        return cls(
+            block_number=block_number,
+            block_timestamp=block_timestamp,
+            gas_price=DEFAULT_GAS_PRICE,
+        )
 
     def validate_legal_progress(self, next_block_info: "BlockInfo"):
         """
@@ -105,7 +119,7 @@ class CarriedState(CarriedStateBase):
 
     This will be a sub-state of the total state (SharedState). It is carried and maintained by
     the Batcher, as each pending transaction is applied to it during the attempt to include it in
-    a batch. After a batch is created the carried state is applied to the shared state.
+    a block. After a block is created the carried state is applied to the shared state.
     """
 
     def __init__(
@@ -116,7 +130,7 @@ class CarriedState(CarriedStateBase):
         contract_definitions: typing.ChainMap[bytes, ContractDefinition],
         contract_states: ContractCarriedStateChainMapping,
         cairo_usage: ExecutionResources,
-        contract_address_to_n_storage_writings: typing.ChainMap[int, int],
+        modified_contracts: typing.ChainMap[int, None],
         block_info: BlockInfo,
         syscall_counter: typing.ChainMap[str, int],
     ):
@@ -142,8 +156,8 @@ class CarriedState(CarriedStateBase):
         # Carried state fetches commitment tree leaves from storage during transaction processing.
         self.ffc = ffc
 
-        # A mapping from contract address to the cumulative number of storage writing operations.
-        self.contract_address_to_n_storage_writings = contract_address_to_n_storage_writings
+        # Addresses of contracts whose storage has changed.
+        self.modified_contracts = modified_contracts
 
         self.block_info = block_info
 
@@ -162,9 +176,7 @@ class CarriedState(CarriedStateBase):
             contract_definitions=parent_state.contract_definitions.new_child(),
             contract_states=parent_state.contract_states.new_child(),
             cairo_usage=parent_state.cairo_usage,
-            contract_address_to_n_storage_writings=(
-                parent_state.contract_address_to_n_storage_writings.new_child()
-            ),
+            modified_contracts=(parent_state.modified_contracts.new_child()),
             block_info=parent_state.block_info,
             syscall_counter=parent_state.syscall_counter.new_child(),
         )
@@ -186,7 +198,7 @@ class CarriedState(CarriedStateBase):
             contract_definitions=ChainMap(),
             contract_states=ChainMap(),
             cairo_usage=ExecutionResources.empty(),
-            contract_address_to_n_storage_writings=ChainMap(),
+            modified_contracts=ChainMap(),
             block_info=shared_state.block_info,
             syscall_counter=ChainMap(),
         )
@@ -241,7 +253,7 @@ class CarriedState(CarriedStateBase):
             contract_definitions=ChainMap(contract_definitions),
             contract_states=ChainMap(contract_states),
             cairo_usage=ExecutionResources.empty(),
-            contract_address_to_n_storage_writings=ChainMap(),
+            modified_contracts=ChainMap(),
             block_info=shared_state.block_info,
             syscall_counter=ChainMap(),
         )
@@ -287,7 +299,7 @@ class CarriedState(CarriedStateBase):
     def subtract_merkle_facts(self, previous_state: "CarriedState") -> "CarriedState":
         """
         Subtraction of contract states from current carried state to previous one is unnecessary,
-        since it is very unlikely contract state will not change throughout a batch.
+        since it is very unlikely contract state will not change throughout a block.
         """
         raise NotImplementedError
 
@@ -296,7 +308,7 @@ class CarriedState(CarriedStateBase):
         return (
             self.contract_states,
             self.contract_definitions,
-            self.contract_address_to_n_storage_writings,
+            self.modified_contracts,
             self.syscall_counter,
         )
 
@@ -341,7 +353,7 @@ class SharedState(SharedStateBase):
     @classmethod
     async def empty(cls, ffc: FactFetchingContext, general_config: Config) -> "SharedState":
         """
-        Returns an empty state. This is called before creating very first batch.
+        Returns an empty state. This is called before creating very first block.
         """
         # Downcast arguments to application-specific types.
         assert isinstance(general_config, StarknetGeneralConfig)

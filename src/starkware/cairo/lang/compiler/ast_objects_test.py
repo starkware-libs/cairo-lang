@@ -456,7 +456,8 @@ func myfunc{
     ret
 end
 """
-    assert parse_file(before).format(allowed_line_length=25) == after
+    with set_one_item_per_line(False):
+        assert parse_file(before).format(allowed_line_length=25) == after
 
 
 def test_return_splitting():
@@ -474,7 +475,8 @@ return (
     variable_name_which_is_way_too_long_but_has_to_be_supported,
     g)
 """
-    assert parse_file(before).format(allowed_line_length=20) == after
+    with set_one_item_per_line(False):
+        assert parse_file(before).format(allowed_line_length=20) == after
 
 
 def test_func_arg_ret_splitting():
@@ -497,7 +499,8 @@ func myfunc(
     ret
 end
 """
-    assert parse_file(before).format(allowed_line_length=25) == after
+    with set_one_item_per_line(False):
+        assert parse_file(before).format(allowed_line_length=25) == after
     before = """\
 func myfunc(a, b, c, foo, bar,
     variable_name_which_is_way_too_long_but_has_to_be_supported, g) ->
@@ -514,7 +517,8 @@ func myfunc(
     ret
 end
 """
-    assert parse_file(before).format(allowed_line_length=25) == after
+    with set_one_item_per_line(False):
+        assert parse_file(before).format(allowed_line_length=25) == after
     before = """\
 func myfunc(ab, cd, ef) -> (x, y, z, a_return_arg_which_is_also_waaaaaaay_too_long, w):
   ret
@@ -529,7 +533,8 @@ func myfunc(
     ret
 end
 """
-    assert parse_file(before).format(allowed_line_length=25) == after
+    with set_one_item_per_line(False):
+        assert parse_file(before).format(allowed_line_length=25) == after
 
 
 def test_func_one_per_line_splitting():
@@ -658,13 +663,14 @@ return foo(
 
 def test_import_one_per_line_splitting():
     before = """\
-from a.b.c import (import1, import2, import3)
+from a.b.c import (import1)
+from d import (import1, import2)
 """
     after = """\
-from a.b.c import (
+from a.b.c import import1
+from d import (
     import1,
     import2,
-    import3,
 )
 """
     with set_one_item_per_line(True):
@@ -733,4 +739,5 @@ from a.b.c import (
     import1, import2, import3, import4, import5, import6, import6, import8, import8, aaaaaaaaaaaaaa,
     import9)
 """
-    assert parse_file(code).format() == code
+    with set_one_item_per_line(False):
+        assert parse_file(code).format() == code

@@ -10,25 +10,60 @@ from starkware.cairo.common.registers import get_ap, get_fp_and_pc
 from starkware.cairo.common.segments import relocate_segment
 from starkware.cairo.common.uint256 import Uint256
 from starkware.starknet.common.syscalls import (
-    CALL_CONTRACT_SELECTOR, DELEGATE_CALL_SELECTOR, DELEGATE_L1_HANDLER_SELECTOR,
-    EMIT_EVENT_SELECTOR, GET_BLOCK_NUMBER_SELECTOR, GET_BLOCK_TIMESTAMP_SELECTOR,
-    GET_CALLER_ADDRESS_SELECTOR, GET_CONTRACT_ADDRESS_SELECTOR, GET_SEQUENCER_ADDRESS_SELECTOR,
-    GET_TX_INFO_SELECTOR, GET_TX_SIGNATURE_SELECTOR, SEND_MESSAGE_TO_L1_SELECTOR,
-    STORAGE_READ_SELECTOR, STORAGE_WRITE_SELECTOR, CallContract, CallContractResponse, EmitEvent,
-    GetBlockNumber, GetBlockNumberResponse, GetBlockTimestamp, GetBlockTimestampResponse,
-    GetCallerAddress, GetCallerAddressResponse, GetContractAddress, GetContractAddressResponse,
-    GetSequencerAddress, GetSequencerAddressResponse, GetTxInfo, GetTxInfoResponse, GetTxSignature,
-    GetTxSignatureResponse, SendMessageToL1SysCall, StorageRead, StorageWrite, TxInfo)
+    CALL_CONTRACT_SELECTOR,
+    DELEGATE_CALL_SELECTOR,
+    DELEGATE_L1_HANDLER_SELECTOR,
+    EMIT_EVENT_SELECTOR,
+    GET_BLOCK_NUMBER_SELECTOR,
+    GET_BLOCK_TIMESTAMP_SELECTOR,
+    GET_CALLER_ADDRESS_SELECTOR,
+    GET_CONTRACT_ADDRESS_SELECTOR,
+    GET_SEQUENCER_ADDRESS_SELECTOR,
+    GET_TX_INFO_SELECTOR,
+    GET_TX_SIGNATURE_SELECTOR,
+    SEND_MESSAGE_TO_L1_SELECTOR,
+    STORAGE_READ_SELECTOR,
+    STORAGE_WRITE_SELECTOR,
+    CallContract,
+    CallContractResponse,
+    EmitEvent,
+    GetBlockNumber,
+    GetBlockNumberResponse,
+    GetBlockTimestamp,
+    GetBlockTimestampResponse,
+    GetCallerAddress,
+    GetCallerAddressResponse,
+    GetContractAddress,
+    GetContractAddressResponse,
+    GetSequencerAddress,
+    GetSequencerAddressResponse,
+    GetTxInfo,
+    GetTxInfoResponse,
+    GetTxSignature,
+    GetTxSignatureResponse,
+    SendMessageToL1SysCall,
+    StorageRead,
+    StorageWrite,
+    TxInfo,
+)
 from starkware.starknet.core.os.block_context import BlockContext
 from starkware.starknet.core.os.builtins import BuiltinEncodings, BuiltinParams, BuiltinPointers
 from starkware.starknet.core.os.contracts import (
-    ContractDefinition, ContractDefinitionFact, ContractEntryPoint)
+    ContractDefinition,
+    ContractDefinitionFact,
+    ContractEntryPoint,
+)
 from starkware.starknet.core.os.os_config.os_config import StarknetOsConfig
 from starkware.starknet.core.os.output import (
-    BlockInfo, DeploymentInfoHeader, MessageToL1Header, MessageToL2Header, OsCarriedOutputs,
-    os_carried_outputs_new)
+    BlockInfo,
+    DeploymentInfoHeader,
+    MessageToL1Header,
+    MessageToL2Header,
+    OsCarriedOutputs,
+    os_carried_outputs_new,
+)
 from starkware.starknet.core.os.state import StateEntry
-from starkware.starknet.core.os.transaction_hash import get_transaction_hash
+from starkware.starknet.core.os.transaction_hash.transaction_hash import get_transaction_hash
 
 const UNINITIALIZED_CONTRACT_HASH = 0
 
@@ -95,9 +130,12 @@ end
 #   Note that if the assumption above does not hold it might be the case that
 #   the returned range_check_ptr is smaller then reserved_range_checks_end.
 func execute_transactions{
-        pedersen_ptr : HashBuiltin*, range_check_ptr, ecdsa_ptr, bitwise_ptr,
-        outputs : OsCarriedOutputs*}(block_context : BlockContext*) -> (
-        reserved_range_checks_end, state_changes : StateChanges):
+    pedersen_ptr : HashBuiltin*,
+    range_check_ptr,
+    ecdsa_ptr,
+    bitwise_ptr,
+    outputs : OsCarriedOutputs*,
+}(block_context : BlockContext*) -> (reserved_range_checks_end, state_changes : StateChanges):
     alloc_locals
     local n_txs
     %{
@@ -133,15 +171,16 @@ func execute_transactions{
     # Keep a reference to the start of global_state_changes.
     let global_state_changes_start = global_state_changes
     execute_transactions_inner{
-        builtin_ptrs=builtin_ptrs, global_state_changes=global_state_changes}(
-        block_context=block_context, n_txs=n_txs)
+        builtin_ptrs=builtin_ptrs, global_state_changes=global_state_changes
+    }(block_context=block_context, n_txs=n_txs)
     %{ vm_exit_scope() %}
 
     let reserved_range_checks_end = range_check_ptr
     # Relocate the range checks used by the transactions to reserved_range_checks_end.
     relocate_segment(
         src_ptr=cast(local_builtin_ptrs.range_check, felt*),
-        dest_ptr=cast(reserved_range_checks_end, felt*))
+        dest_ptr=cast(reserved_range_checks_end, felt*),
+    )
 
     let pedersen_ptr = builtin_ptrs.pedersen
     let range_check_ptr = builtin_ptrs.range_check
@@ -149,7 +188,8 @@ func execute_transactions{
     let bitwise_ptr = builtin_ptrs.bitwise
     return (
         reserved_range_checks_end=reserved_range_checks_end,
-        state_changes=StateChanges(global_state_changes_start, global_state_changes))
+        state_changes=StateChanges(global_state_changes_start, global_state_changes),
+    )
 end
 
 # Inner function for execute_transactions.
@@ -164,8 +204,11 @@ end
 # The range-checks used internally by the transactions do not affect range_check_ptr.
 # They are accounted for in builtin_ptrs.
 func execute_transactions_inner{
-        range_check_ptr, builtin_ptrs : BuiltinPointers*, global_state_changes : DictAccess*,
-        outputs : OsCarriedOutputs*}(block_context : BlockContext*, n_txs):
+    range_check_ptr,
+    builtin_ptrs : BuiltinPointers*,
+    global_state_changes : DictAccess*,
+    outputs : OsCarriedOutputs*,
+}(block_context : BlockContext*, n_txs):
     if n_txs == 0:
         return ()
     end
@@ -206,9 +249,11 @@ end
 # block_context - a global context that is fixed throughout the block.
 # tx_execution_context - The execution context of the transaction that pays the fee.
 func charge_fee{
-        range_check_ptr, builtin_ptrs : BuiltinPointers*, global_state_changes : DictAccess*,
-        outputs : OsCarriedOutputs*}(
-        block_context : BlockContext*, tx_execution_context : ExecutionContext*):
+    range_check_ptr,
+    builtin_ptrs : BuiltinPointers*,
+    global_state_changes : DictAccess*,
+    outputs : OsCarriedOutputs*,
+}(block_context : BlockContext*, tx_execution_context : ExecutionContext*):
     alloc_locals
     if tx_execution_context.original_tx_info.max_fee == 0:
         return ()
@@ -252,8 +297,11 @@ end
 # Arguments:
 # block_context - a global context that is fixed throughout the block.
 func execute_externally_called_invoke_transaction{
-        range_check_ptr, builtin_ptrs : BuiltinPointers*, global_state_changes : DictAccess*,
-        outputs : OsCarriedOutputs*}(block_context : BlockContext*):
+    range_check_ptr,
+    builtin_ptrs : BuiltinPointers*,
+    global_state_changes : DictAccess*,
+    outputs : OsCarriedOutputs*,
+}(block_context : BlockContext*):
     alloc_locals
 
     # Loads the execution context based on the current transaction.
@@ -317,7 +365,8 @@ func execute_externally_called_invoke_transaction{
         max_fee=max_fee,
         chain_id=chain_id,
         additional_data_size=additional_data_size,
-        additional_data=additional_data)
+        additional_data=additional_data,
+    )
 
     assert [execution_context.original_tx_info] = TxInfo(
         version=TRANSACTION_VERSION,
@@ -353,10 +402,18 @@ end
 
 # Executes a syscall that calls another contract, or invokes a delegate call.
 func execute_contract_call{
-        range_check_ptr, builtin_ptrs : BuiltinPointers*, global_state_changes : DictAccess*,
-        outputs : OsCarriedOutputs*}(
-        block_context : BlockContext*, contract_address : felt, caller_address : felt,
-        entry_point_type : felt, original_tx_info : TxInfo*, syscall_ptr : CallContract*):
+    range_check_ptr,
+    builtin_ptrs : BuiltinPointers*,
+    global_state_changes : DictAccess*,
+    outputs : OsCarriedOutputs*,
+}(
+    block_context : BlockContext*,
+    contract_address : felt,
+    caller_address : felt,
+    entry_point_type : felt,
+    original_tx_info : TxInfo*,
+    syscall_ptr : CallContract*,
+):
     alloc_locals
 
     let call_req = syscall_ptr.request
@@ -375,7 +432,8 @@ func execute_contract_call{
         )
 
     let (retdata_size, retdata) = execute_entry_point(
-        block_context=block_context, execution_context=execution_context)
+        block_context=block_context, execution_context=execution_context
+    )
 
     let call_resp = syscall_ptr.response
     %{
@@ -394,7 +452,8 @@ end
 
 # Reads a value from the current contract's storage.
 func execute_storage_read{global_state_changes : DictAccess*}(
-        contract_address, syscall_ptr : StorageRead*):
+    contract_address, syscall_ptr : StorageRead*
+):
     alloc_locals
     local state_entry : StateEntry*
     local new_state_entry : StateEntry*
@@ -422,14 +481,16 @@ func execute_storage_read{global_state_changes : DictAccess*}(
     dict_update{dict_ptr=global_state_changes}(
         key=contract_address,
         prev_value=cast(state_entry, felt),
-        new_value=cast(new_state_entry, felt))
+        new_value=cast(new_state_entry, felt),
+    )
 
     return ()
 end
 
 # Write a value to the current contract's storage.
 func execute_storage_write{global_state_changes : DictAccess*}(
-        contract_address, syscall_ptr : StorageWrite*):
+    contract_address, syscall_ptr : StorageWrite*
+):
     alloc_locals
     local prev_value : felt
     local state_entry : StateEntry*
@@ -456,7 +517,8 @@ func execute_storage_write{global_state_changes : DictAccess*}(
     dict_update{dict_ptr=global_state_changes}(
         key=contract_address,
         prev_value=cast(state_entry, felt),
-        new_value=cast(new_state_entry, felt))
+        new_value=cast(new_state_entry, felt),
+    )
 
     return ()
 end
@@ -469,10 +531,16 @@ end
 # syscall_ptr - a pointer to the syscall segment that needs to be executed.
 # syscall_size - The size of the system call segment to be executed.
 func execute_syscalls{
-        range_check_ptr, builtin_ptrs : BuiltinPointers*, global_state_changes : DictAccess*,
-        outputs : OsCarriedOutputs*}(
-        block_context : BlockContext*, execution_context : ExecutionContext*, syscall_size,
-        syscall_ptr : felt*):
+    range_check_ptr,
+    builtin_ptrs : BuiltinPointers*,
+    global_state_changes : DictAccess*,
+    outputs : OsCarriedOutputs*,
+}(
+    block_context : BlockContext*,
+    execution_context : ExecutionContext*,
+    syscall_size,
+    syscall_ptr : felt*,
+):
     if syscall_size == 0:
         return ()
     end
@@ -480,23 +548,27 @@ func execute_syscalls{
     if [syscall_ptr] == STORAGE_READ_SELECTOR:
         execute_storage_read(
             contract_address=execution_context.contract_address,
-            syscall_ptr=cast(syscall_ptr, StorageRead*))
+            syscall_ptr=cast(syscall_ptr, StorageRead*),
+        )
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
             syscall_size=syscall_size - StorageRead.SIZE,
-            syscall_ptr=syscall_ptr + StorageRead.SIZE)
+            syscall_ptr=syscall_ptr + StorageRead.SIZE,
+        )
     end
 
     if [syscall_ptr] == STORAGE_WRITE_SELECTOR:
         execute_storage_write(
             contract_address=execution_context.contract_address,
-            syscall_ptr=cast(syscall_ptr, StorageWrite*))
+            syscall_ptr=cast(syscall_ptr, StorageWrite*),
+        )
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
             syscall_size=syscall_size - StorageWrite.SIZE,
-            syscall_ptr=syscall_ptr + StorageWrite.SIZE)
+            syscall_ptr=syscall_ptr + StorageWrite.SIZE,
+        )
     end
 
     if [syscall_ptr] == EMIT_EVENT_SELECTOR:
@@ -505,7 +577,8 @@ func execute_syscalls{
             block_context=block_context,
             execution_context=execution_context,
             syscall_size=syscall_size - EmitEvent.SIZE,
-            syscall_ptr=syscall_ptr + EmitEvent.SIZE)
+            syscall_ptr=syscall_ptr + EmitEvent.SIZE,
+        )
     end
 
     if [syscall_ptr] == CALL_CONTRACT_SELECTOR:
@@ -516,12 +589,14 @@ func execute_syscalls{
             caller_address=execution_context.contract_address,
             entry_point_type=ENTRY_POINT_TYPE_EXTERNAL,
             original_tx_info=execution_context.original_tx_info,
-            syscall_ptr=call_contract_syscall)
+            syscall_ptr=call_contract_syscall,
+        )
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
             syscall_size=syscall_size - CallContract.SIZE,
-            syscall_ptr=syscall_ptr + CallContract.SIZE)
+            syscall_ptr=syscall_ptr + CallContract.SIZE,
+        )
     end
 
     if [syscall_ptr] == DELEGATE_CALL_SELECTOR:
@@ -531,12 +606,14 @@ func execute_syscalls{
             caller_address=execution_context.caller_address,
             entry_point_type=ENTRY_POINT_TYPE_EXTERNAL,
             original_tx_info=execution_context.original_tx_info,
-            syscall_ptr=cast(syscall_ptr, CallContract*))
+            syscall_ptr=cast(syscall_ptr, CallContract*),
+        )
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
             syscall_size=syscall_size - CallContract.SIZE,
-            syscall_ptr=syscall_ptr + CallContract.SIZE)
+            syscall_ptr=syscall_ptr + CallContract.SIZE,
+        )
     end
 
     if [syscall_ptr] == DELEGATE_L1_HANDLER_SELECTOR:
@@ -546,12 +623,14 @@ func execute_syscalls{
             caller_address=execution_context.caller_address,
             entry_point_type=ENTRY_POINT_TYPE_L1_HANDLER,
             original_tx_info=execution_context.original_tx_info,
-            syscall_ptr=cast(syscall_ptr, CallContract*))
+            syscall_ptr=cast(syscall_ptr, CallContract*),
+        )
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
             syscall_size=syscall_size - CallContract.SIZE,
-            syscall_ptr=syscall_ptr + CallContract.SIZE)
+            syscall_ptr=syscall_ptr + CallContract.SIZE,
+        )
     end
 
     if [syscall_ptr] == GET_TX_INFO_SELECTOR:
@@ -561,7 +640,8 @@ func execute_syscalls{
             block_context=block_context,
             execution_context=execution_context,
             syscall_size=syscall_size - GetTxInfo.SIZE,
-            syscall_ptr=syscall_ptr + GetTxInfo.SIZE)
+            syscall_ptr=syscall_ptr + GetTxInfo.SIZE,
+        )
     end
 
     if [syscall_ptr] == GET_CALLER_ADDRESS_SELECTOR:
@@ -571,7 +651,8 @@ func execute_syscalls{
             block_context=block_context,
             execution_context=execution_context,
             syscall_size=syscall_size - GetCallerAddress.SIZE,
-            syscall_ptr=syscall_ptr + GetCallerAddress.SIZE)
+            syscall_ptr=syscall_ptr + GetCallerAddress.SIZE,
+        )
     end
 
     if [syscall_ptr] == GET_SEQUENCER_ADDRESS_SELECTOR:
@@ -581,7 +662,8 @@ func execute_syscalls{
             block_context=block_context,
             execution_context=execution_context,
             syscall_size=syscall_size - GetSequencerAddress.SIZE,
-            syscall_ptr=syscall_ptr + GetSequencerAddress.SIZE)
+            syscall_ptr=syscall_ptr + GetSequencerAddress.SIZE,
+        )
     end
 
     if [syscall_ptr] == GET_CONTRACT_ADDRESS_SELECTOR:
@@ -591,7 +673,8 @@ func execute_syscalls{
             block_context=block_context,
             execution_context=execution_context,
             syscall_size=syscall_size - GetContractAddress.SIZE,
-            syscall_ptr=syscall_ptr + GetContractAddress.SIZE)
+            syscall_ptr=syscall_ptr + GetContractAddress.SIZE,
+        )
     end
 
     if [syscall_ptr] == GET_BLOCK_TIMESTAMP_SELECTOR:
@@ -601,7 +684,8 @@ func execute_syscalls{
             block_context=block_context,
             execution_context=execution_context,
             syscall_size=syscall_size - GetBlockTimestamp.SIZE,
-            syscall_ptr=syscall_ptr + GetBlockTimestamp.SIZE)
+            syscall_ptr=syscall_ptr + GetBlockTimestamp.SIZE,
+        )
     end
 
     if [syscall_ptr] == GET_BLOCK_NUMBER_SELECTOR:
@@ -611,7 +695,8 @@ func execute_syscalls{
             block_context=block_context,
             execution_context=execution_context,
             syscall_size=syscall_size - GetBlockNumber.SIZE,
-            syscall_ptr=syscall_ptr + GetBlockNumber.SIZE)
+            syscall_ptr=syscall_ptr + GetBlockNumber.SIZE,
+        )
     end
 
     if [syscall_ptr] == GET_TX_SIGNATURE_SELECTOR:
@@ -624,7 +709,8 @@ func execute_syscalls{
             block_context=block_context,
             execution_context=execution_context,
             syscall_size=syscall_size - GetTxSignature.SIZE,
-            syscall_ptr=syscall_ptr + GetTxSignature.SIZE)
+            syscall_ptr=syscall_ptr + GetTxSignature.SIZE,
+        )
     end
 
     # Here the system call must be 'SendMessageToL1'.
@@ -639,22 +725,26 @@ func execute_syscalls{
     memcpy(
         dst=outputs.messages_to_l1 + MessageToL1Header.SIZE,
         src=syscall.payload_ptr,
-        len=syscall.payload_size)
+        len=syscall.payload_size,
+    )
     let (outputs) = os_carried_outputs_new(
         messages_to_l1=outputs.messages_to_l1 + MessageToL1Header.SIZE +
         outputs.messages_to_l1.payload_size,
         messages_to_l2=outputs.messages_to_l2,
-        deployment_info=outputs.deployment_info)
+        deployment_info=outputs.deployment_info,
+    )
     return execute_syscalls(
         block_context=block_context,
         execution_context=execution_context,
         syscall_size=syscall_size - SendMessageToL1SysCall.SIZE,
-        syscall_ptr=syscall_ptr + SendMessageToL1SysCall.SIZE)
+        syscall_ptr=syscall_ptr + SendMessageToL1SysCall.SIZE,
+    )
 end
 
 # Adds 'tx' with the given 'nonce' to 'outputs.messages_to_l2'.
 func consume_l1_to_l2_message{outputs : OsCarriedOutputs*}(
-        execution_context : ExecutionContext*, nonce : felt):
+    execution_context : ExecutionContext*, nonce : felt
+):
     assert_not_zero(execution_context.calldata_size)
     # The payload is the calldata without the from_address argument (which is the first).
     let payload : felt* = execution_context.calldata + 1
@@ -675,15 +765,16 @@ func consume_l1_to_l2_message{outputs : OsCarriedOutputs*}(
         messages_to_l1=outputs.messages_to_l1,
         messages_to_l2=outputs.messages_to_l2 + MessageToL2Header.SIZE +
         outputs.messages_to_l2.payload_size,
-        deployment_info=outputs.deployment_info)
+        deployment_info=outputs.deployment_info,
+    )
     return ()
 end
 
 # Returns the entry point's offset in the program based on 'contract_definition' and
 # 'execution_context'.
 func get_entry_point_offset{range_check_ptr}(
-        contract_definition : ContractDefinition*, execution_context : ExecutionContext*) -> (
-        entry_point_offset : felt):
+    contract_definition : ContractDefinition*, execution_context : ExecutionContext*
+) -> (entry_point_offset : felt):
     alloc_locals
     # Get the entry points corresponding to the transaction's type.
     local entry_points : ContractEntryPoint*
@@ -714,7 +805,8 @@ func get_entry_point_offset{range_check_ptr}(
         array_ptr=cast(entry_points, felt*),
         elm_size=ContractEntryPoint.SIZE,
         n_elms=n_entry_points,
-        key=execution_context.selector)
+        key=execution_context.selector,
+    )
     if success != 0:
         return (entry_point_offset=entry_point_desc.offset)
     end
@@ -733,14 +825,18 @@ end
 # block_context - a global context that is fixed throughout the block.
 # execution_context - The context for the current execution.
 func execute_entry_point{
-        range_check_ptr, builtin_ptrs : BuiltinPointers*, global_state_changes : DictAccess*,
-        outputs : OsCarriedOutputs*}(
-        block_context : BlockContext*, execution_context : ExecutionContext*) -> (
-        retdata_size, retdata : felt*):
+    range_check_ptr,
+    builtin_ptrs : BuiltinPointers*,
+    global_state_changes : DictAccess*,
+    outputs : OsCarriedOutputs*,
+}(block_context : BlockContext*, execution_context : ExecutionContext*) -> (
+    retdata_size, retdata : felt*
+):
     alloc_locals
 
     let (local state_entry : StateEntry*) = dict_read{dict_ptr=global_state_changes}(
-        key=execution_context.code_address)
+        key=execution_context.code_address
+    )
     local global_state_changes : DictAccess* = global_state_changes
 
     # The key must be at offset 0.
@@ -749,11 +845,13 @@ func execute_entry_point{
         array_ptr=block_context.contract_definition_facts,
         elm_size=ContractDefinitionFact.SIZE,
         n_elms=block_context.n_contract_definition_facts,
-        key=state_entry.contract_hash)
+        key=state_entry.contract_hash,
+    )
     local contract_definition : ContractDefinition* = contract_definition_fact.contract_definition
 
     let (entry_point_offset) = get_entry_point_offset(
-        contract_definition=contract_definition, execution_context=execution_context)
+        contract_definition=contract_definition, execution_context=execution_context
+    )
 
     %{ syscall_handler.enter_call() %}
     if entry_point_offset == NOP_ENTRY_POINT_OFFSET:
@@ -783,7 +881,8 @@ func execute_entry_point{
         all_ptrs=builtin_ptrs,
         n_selected_builtins=contract_definition.n_builtins,
         selected_encodings=contract_definition.builtin_list,
-        selected_ptrs=os_context + 1)
+        selected_ptrs=os_context + 1,
+    )
 
     # Use tempvar to pass arguments to contract_entry_point().
     tempvar selector = execution_context.selector
@@ -830,14 +929,16 @@ func execute_entry_point{
         all_ptrs=return_builtin_ptrs,
         n_selected_builtins=contract_definition.n_builtins,
         selected_encodings=contract_definition.builtin_list,
-        selected_ptrs=returned_builtin_ptrs_subset)
+        selected_ptrs=returned_builtin_ptrs_subset,
+    )
 
     # Call validate_builtins to validate that the builtin pointers have advanced correctly.
     validate_builtins(
         prev_builtin_ptrs=builtin_ptrs,
         new_builtin_ptrs=return_builtin_ptrs,
         builtin_instance_sizes=builtin_params.builtin_instance_sizes,
-        n_builtins=n_builtins)
+        n_builtins=n_builtins,
+    )
 
     let syscall_end = cast([returned_builtin_ptrs_subset - 1], felt*)
 
@@ -846,15 +947,19 @@ func execute_entry_point{
         block_context=block_context,
         execution_context=execution_context,
         syscall_size=syscall_end - syscall_ptr,
-        syscall_ptr=syscall_ptr)
+        syscall_ptr=syscall_ptr,
+    )
 
     %{ syscall_handler.exit_call() %}
     return (retdata_size=retdata_size, retdata=retdata)
 end
 
 func execute_deploy_transaction{
-        range_check_ptr, builtin_ptrs : BuiltinPointers*, global_state_changes : DictAccess*,
-        outputs : OsCarriedOutputs*}(block_context : BlockContext*):
+    range_check_ptr,
+    builtin_ptrs : BuiltinPointers*,
+    global_state_changes : DictAccess*,
+    outputs : OsCarriedOutputs*,
+}(block_context : BlockContext*):
     alloc_locals
     local contract_address
     local state_entry : StateEntry*
@@ -884,7 +989,8 @@ func execute_deploy_transaction{
     dict_update{dict_ptr=global_state_changes}(
         key=contract_address,
         prev_value=cast(state_entry, felt),
-        new_value=cast(new_state_entry, felt))
+        new_value=cast(new_state_entry, felt),
+    )
 
     local calldata_size
     local calldata : felt* = outputs.deployment_info + DeploymentInfoHeader.SIZE
@@ -901,7 +1007,8 @@ func execute_deploy_transaction{
     let (outputs) = os_carried_outputs_new(
         messages_to_l1=outputs.messages_to_l1,
         messages_to_l2=outputs.messages_to_l2,
-        deployment_info=cast(calldata + calldata_size, DeploymentInfoHeader*))
+        deployment_info=cast(calldata + calldata_size, DeploymentInfoHeader*),
+    )
 
     # Invoke the contract constructor.
     local execution_context : ExecutionContext* = cast(
@@ -925,7 +1032,8 @@ func execute_deploy_transaction{
         max_fee=0,
         chain_id=chain_id,
         additional_data_size=0,
-        additional_data=nullptr)
+        additional_data=nullptr,
+    )
 
     assert [execution_context.original_tx_info] = TxInfo(
         version=TRANSACTION_VERSION,
@@ -949,9 +1057,13 @@ end
 # Note that execution_context.original_tx_info is uninitialized when this function is called.
 # In particular, this field is not used in this function.
 func compute_transaction_hash{builtin_ptrs : BuiltinPointers*}(
-        tx_hash_prefix : felt, execution_context : ExecutionContext*, max_fee : felt,
-        chain_id : felt, additional_data_size : felt, additional_data : felt*) -> (
-        transaction_hash : felt):
+    tx_hash_prefix : felt,
+    execution_context : ExecutionContext*,
+    max_fee : felt,
+    chain_id : felt,
+    additional_data_size : felt,
+    additional_data : felt*,
+) -> (transaction_hash : felt):
     let hash_ptr = builtin_ptrs.pedersen
     with hash_ptr:
         let (transaction_hash) = get_transaction_hash(
@@ -964,7 +1076,8 @@ func compute_transaction_hash{builtin_ptrs : BuiltinPointers*}(
             max_fee=max_fee,
             chain_id=chain_id,
             additional_data_size=additional_data_size,
-            additional_data=additional_data)
+            additional_data=additional_data,
+        )
     end
 
     %{

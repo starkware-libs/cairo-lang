@@ -21,23 +21,25 @@ end
 # were indeed 'default_value'.
 # Returns the squashed dictionary.
 func default_dict_finalize{range_check_ptr}(
-        dict_accesses_start : DictAccess*, dict_accesses_end : DictAccess*,
-        default_value : felt) -> (
-        squashed_dict_start : DictAccess*, squashed_dict_end : DictAccess*):
+    dict_accesses_start : DictAccess*, dict_accesses_end : DictAccess*, default_value : felt
+) -> (squashed_dict_start : DictAccess*, squashed_dict_end : DictAccess*):
     alloc_locals
     let (local squashed_dict_start, local squashed_dict_end) = dict_squash(
-        dict_accesses_start, dict_accesses_end)
+        dict_accesses_start, dict_accesses_end
+    )
     local range_check_ptr = range_check_ptr
 
     default_dict_finalize_inner(
         dict_accesses_start=squashed_dict_start,
         n_accesses=(squashed_dict_end - squashed_dict_start) / DictAccess.SIZE,
-        default_value=default_value)
+        default_value=default_value,
+    )
     return (squashed_dict_start=squashed_dict_start, squashed_dict_end=squashed_dict_end)
 end
 
 func default_dict_finalize_inner(
-        dict_accesses_start : DictAccess*, n_accesses : felt, default_value : felt):
+    dict_accesses_start : DictAccess*, n_accesses : felt, default_value : felt
+):
     if n_accesses == 0:
         return ()
     end
@@ -46,5 +48,6 @@ func default_dict_finalize_inner(
     return default_dict_finalize_inner(
         dict_accesses_start + DictAccess.SIZE,
         n_accesses=n_accesses - 1,
-        default_value=default_value)
+        default_value=default_value,
+    )
 end

@@ -22,8 +22,8 @@ from starkware.cairo.common.math import assert_lt_felt
 # Implicit arguments:
 # range_check_ptr - range check builtin pointer.
 func squash_dict{range_check_ptr}(
-        dict_accesses : DictAccess*, dict_accesses_end : DictAccess*,
-        squashed_dict : DictAccess*) -> (squashed_dict : DictAccess*):
+    dict_accesses : DictAccess*, dict_accesses_end : DictAccess*, squashed_dict : DictAccess*
+) -> (squashed_dict : DictAccess*):
     alloc_locals
     %{ vm_enter_scope() %}
     local ptr_diff = dict_accesses_end - dict_accesses
@@ -72,7 +72,8 @@ func squash_dict{range_check_ptr}(
         key=first_key,
         remaining_accesses=n_accesses,
         squashed_dict=squashed_dict,
-        big_keys=big_keys)
+        big_keys=big_keys,
+    )
     %{ vm_exit_scope() %}
     return (squashed_dict=squashed_dict)
 end
@@ -98,9 +99,14 @@ end
 # range_check_ptr - updated range check builtin pointer.
 # squashed_dict - end pointer to squashed_dict.
 func squash_dict_inner(
-        range_check_ptr, dict_accesses : DictAccess*, dict_accesses_end_minus1 : felt*, key,
-        remaining_accesses, squashed_dict : DictAccess*, big_keys) -> (
-        range_check_ptr, squashed_dict : DictAccess*):
+    range_check_ptr,
+    dict_accesses : DictAccess*,
+    dict_accesses_end_minus1 : felt*,
+    key,
+    remaining_accesses,
+    squashed_dict : DictAccess*,
+    big_keys,
+) -> (range_check_ptr, squashed_dict : DictAccess*):
     alloc_locals
 
     let dict_diff : DictAccess* = squashed_dict
@@ -242,5 +248,6 @@ func squash_dict_inner(
         key=next_key,
         remaining_accesses=remaining_accesses,
         squashed_dict=squashed_dict + DictAccess.SIZE,
-        big_keys=big_keys)
+        big_keys=big_keys,
+    )
 end

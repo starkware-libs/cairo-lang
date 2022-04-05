@@ -9,7 +9,8 @@
 # The function consumes 1 range check instance starting at range_check_ptr and returns the
 # updated range check pointer.
 func validate_builtin{range_check_ptr}(
-        prev_builtin_ptr : felt*, new_builtin_ptr : felt*, builtin_instance_size : felt):
+    prev_builtin_ptr : felt*, new_builtin_ptr : felt*, builtin_instance_size : felt
+):
     # Check that the difference is positive and divisible by builtin_instance_size by checking that
     # 0 <= div_res < RANGE_CHECK_BOUND and diff = div_res * builtin_instance_size.
     tempvar diff = new_builtin_ptr - prev_builtin_ptr
@@ -34,8 +35,8 @@ end
 # The function consumes n_builtins range check instances starting at range_check_ptr and returns the
 # updated range check pointer.
 func validate_builtins{range_check_ptr}(
-        prev_builtin_ptrs : felt*, new_builtin_ptrs : felt*, builtin_instance_sizes : felt*,
-        n_builtins):
+    prev_builtin_ptrs : felt*, new_builtin_ptrs : felt*, builtin_instance_sizes : felt*, n_builtins
+):
     if n_builtins == 0:
         return ()
     end
@@ -43,11 +44,13 @@ func validate_builtins{range_check_ptr}(
     validate_builtin(
         prev_builtin_ptr=cast([prev_builtin_ptrs], felt*),
         new_builtin_ptr=cast([new_builtin_ptrs], felt*),
-        builtin_instance_size=[builtin_instance_sizes])
+        builtin_instance_size=[builtin_instance_sizes],
+    )
 
     return validate_builtins(
         prev_builtin_ptrs=prev_builtin_ptrs + 1,
         new_builtin_ptrs=new_builtin_ptrs + 1,
         builtin_instance_sizes=builtin_instance_sizes + 1,
-        n_builtins=n_builtins - 1)
+        n_builtins=n_builtins - 1,
+    )
 end

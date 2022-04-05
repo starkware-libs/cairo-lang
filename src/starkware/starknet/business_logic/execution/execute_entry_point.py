@@ -11,12 +11,14 @@ from starkware.cairo.lang.vm.relocatable import RelocatableValue
 from starkware.cairo.lang.vm.security import SecurityError
 from starkware.cairo.lang.vm.utils import ResourcesError
 from starkware.cairo.lang.vm.vm_exceptions import HintException, VmException, VmExceptionBase
-from starkware.starknet.business_logic.execute_entry_point_base import ExecuteEntryPointBase
-from starkware.starknet.business_logic.state import CarriedState
-from starkware.starknet.business_logic.transaction_execution_objects import (
+from starkware.starknet.business_logic.execution.execute_entry_point_base import (
+    ExecuteEntryPointBase,
+)
+from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
     TransactionExecutionContext,
 )
+from starkware.starknet.business_logic.state.state import CarriedState
 from starkware.starknet.business_logic.utils import get_return_values
 from starkware.starknet.core.os import os_utils, syscall_utils
 from starkware.starknet.definitions import fields
@@ -257,7 +259,7 @@ class ExecuteEntryPoint(ValidatedMarshmallowDataclass, ExecuteEntryPointBase):
                 return first_entry_point
 
         selector_formatter = fields.EntryPointSelectorField.format
-        address_formatter = fields.ContractAddressField.format
+        address_formatter = fields.L2AddressField.format
         # Non-unique entry points are not possible in a ContractDefinition object, thus
         # len(filtered_entry_points) <= 1.
         stark_assert(

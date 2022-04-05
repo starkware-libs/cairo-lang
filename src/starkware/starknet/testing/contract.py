@@ -16,7 +16,7 @@ from starkware.cairo.lang.compiler.ast.cairo_types import (
 from starkware.cairo.lang.compiler.parser import parse_type
 from starkware.cairo.lang.compiler.type_system import mark_type_resolved
 from starkware.python.utils import assert_exhausted, safe_zip
-from starkware.starknet.business_logic.transaction_execution_objects import OrderedEvent
+from starkware.starknet.business_logic.execution.objects import OrderedEvent
 from starkware.starknet.public.abi import AbiType
 from starkware.starknet.testing.contract_utils import (
     RAW_OUTPUT_ARG_LIST,

@@ -29,9 +29,7 @@ class StarknetMessageToL1(StarknetMessage):
     A StarkNet Message from L2 to L1.
     """
 
-    from_address: int = field(
-        metadata=fields.ContractAddressField.metadata(field_name="from_address")
-    )
+    from_address: int = field(metadata=fields.L2AddressField.metadata(field_name="from_address"))
     to_address: int = field(
         metadata=everest_fields.EthAddressIntField.metadata(field_name="to_address")
     )
@@ -53,7 +51,7 @@ class StarknetMessageToL2(StarknetMessage):
     from_address: int = field(
         metadata=everest_fields.EthAddressIntField.metadata(field_name="from_address")
     )
-    to_address: int = field(metadata=fields.ContractAddressField.metadata(field_name="to_address"))
+    to_address: int = field(metadata=fields.L2AddressField.metadata(field_name="to_address"))
     l1_handler_selector: int
     payload: List[int] = field(metadata=fields.felt_list_metadata)
     nonce: int = field(metadata=fields.nonce_metadata)

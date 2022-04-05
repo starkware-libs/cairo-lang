@@ -30,7 +30,8 @@ func array_rfold(value, array : felt*, n_elms, elm_size, callback) -> (res):
         array=array + elm_size,
         n_elms=n_elms - 1,
         elm_size=elm_size,
-        callback=callback)
+        callback=callback,
+    )
 end
 
 # Serializes an array of objects to output_ptr, and returns the pointer to the next output cell.
@@ -51,6 +52,7 @@ func serialize_array{output_ptr : felt*}(array : felt*, n_elms, elm_size, callba
         array=array,
         n_elms=n_elms,
         elm_size=elm_size,
-        callback=callback)
+        callback=callback,
+    )
     return ()
 end

@@ -30,7 +30,8 @@ const INSTANCE_SIZE = STATE_SIZE_FELTS + INPUT_BLOCK_FELTS + 2 + STATE_SIZE_FELT
 # is not sound and a malicious prover may return a wrong result.
 # Note: the interface of this function may change in the future.
 func blake2s{range_check_ptr, blake2s_ptr : felt*}(data : felt*, n_bytes : felt) -> (
-        output : felt*):
+    output : felt*
+):
     # Set the initial state to IV (IV[0] is modified).
     assert blake2s_ptr[0] = 0x6B08E647  # IV[0] ^ 0x01010020 (config: no key, 32 bytes output).
     assert blake2s_ptr[1] = 0xBB67AE85
@@ -50,7 +51,8 @@ end
 # Inner loop for blake2s. blake2s_ptr points to the middle of an instance: after the initial state,
 # before the message.
 func blake2s_inner{range_check_ptr, blake2s_ptr : felt*}(
-        data : felt*, n_bytes : felt, counter : felt) -> (output : felt*):
+    data : felt*, n_bytes : felt, counter : felt
+) -> (output : felt*):
     alloc_locals
     let (is_last_block) = is_le(n_bytes, INPUT_BLOCK_BYTES)
     if is_last_block != 0:
@@ -78,11 +80,13 @@ func blake2s_inner{range_check_ptr, blake2s_ptr : felt*}(
     return blake2s_inner(
         data=data + INPUT_BLOCK_FELTS,
         n_bytes=n_bytes - INPUT_BLOCK_BYTES,
-        counter=counter + INPUT_BLOCK_BYTES)
+        counter=counter + INPUT_BLOCK_BYTES,
+    )
 end
 
 func blake2s_last_block{range_check_ptr, blake2s_ptr : felt*}(
-        data : felt*, n_bytes : felt, counter : felt) -> (output : felt*):
+    data : felt*, n_bytes : felt, counter : felt
+) -> (output : felt*):
     alloc_locals
     let (n_felts, _) = unsigned_div_rem(n_bytes + 3, 4)
     memcpy(blake2s_ptr, data, n_felts)
@@ -106,7 +110,8 @@ end
 
 # Verifies that the results of blake2s() are valid.
 func finalize_blake2s{range_check_ptr, bitwise_ptr : BitwiseBuiltin*}(
-        blake2s_ptr_start : felt*, blake2s_ptr_end : felt*):
+    blake2s_ptr_start : felt*, blake2s_ptr_end : felt*
+):
     alloc_locals
 
     let (__fp__, _) = get_fp_and_pc()
@@ -318,7 +323,8 @@ end
 
 # Handles n chunks of N_PACKED_INSTANCES blake2s instances.
 func _finalize_blake2s_inner{range_check_ptr, bitwise_ptr : BitwiseBuiltin*, blake2s_ptr : felt*}(
-        n : felt, sigma : felt*):
+    n : felt, sigma : felt*
+):
     if n == 0:
         return ()
     end
@@ -342,7 +348,8 @@ func _finalize_blake2s_inner{range_check_ptr, bitwise_ptr : BitwiseBuiltin*, bla
         t0=t0_and_f0[0],
         f0=t0_and_f0[1],
         sigma=sigma,
-        output=output_state)
+        output=output_state,
+    )
     let blake2s_ptr = blake2s_start + INSTANCE_SIZE * N_PACKED_INSTANCES
 
     return _finalize_blake2s_inner(n=n - 1, sigma=sigma)

@@ -13,10 +13,17 @@ def main():
     parser.add_argument(
         "--one_item_per_line",
         action="store_true",
+        default=True,
         help=(
             "Put each list item (e.g., function arguments) in a separate line, "
             "if the list doesn't fit into a single line."
         ),
+    )
+    parser.add_argument(
+        "--no_one_item_per_line",
+        dest="one_item_per_line",
+        action="store_false",
+        help="Don't use one per line formatting (see --one_item_per_line).",
     )
     action = parser.add_mutually_exclusive_group(required=False)
     action.add_argument("-i", dest="inplace", action="store_true", help="Edit files inplace.")
