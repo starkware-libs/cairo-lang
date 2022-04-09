@@ -5,15 +5,16 @@ from starkware.cairo.common.hash import hash2
 from starkware.cairo.common.math import assert_le, assert_nn_le, unsigned_div_rem
 from starkware.starknet.common.syscalls import storage_read, storage_write
 
-# The maximum amount of each token that belongs to the AMM.
-const BALANCE_UPPER_BOUND = 2 ** 64
-
 const TOKEN_TYPE_A = 1
 const TOKEN_TYPE_B = 2
 
-# Ensure the user's balances are much smaller than the pool's balance.
-const POOL_UPPER_BOUND = 2 ** 30
-const ACCOUNT_BALANCE_BOUND = 1073741  # 2**30 // 1000.
+# Maximum amount of each token in a given pool or account.
+const BALANCE_UPPER_BOUND = 2 ** 64
+
+# Ensure the users' initial balances are much smaller than the pool's initial balance,
+# so that they are able to swap against the pool.
+const POOL_INIT_BALANCE_BOUND = 2 ** 30
+const ACCOUNT_INIT_BALANCE_BOUND = 1073741  # 2**30 // 1000.
 
 # A map from account and token type to the corresponding balance of that account.
 @storage_var
@@ -126,9 +127,9 @@ end
 func add_demo_token{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     account_id : felt, token_a_amount : felt, token_b_amount : felt
 ):
-    # Make sure the account's balance is much smaller then pool init balance.
-    assert_nn_le(token_a_amount, ACCOUNT_BALANCE_BOUND - 1)
-    assert_nn_le(token_b_amount, ACCOUNT_BALANCE_BOUND - 1)
+    # Make sure the account's balance is much smaller than pool init balance.
+    assert_nn_le(token_a_amount, ACCOUNT_INIT_BALANCE_BOUND - 1)
+    assert_nn_le(token_b_amount, ACCOUNT_INIT_BALANCE_BOUND - 1)
 
     modify_account_balance(account_id=account_id, token_type=TOKEN_TYPE_A, amount=token_a_amount)
     modify_account_balance(account_id=account_id, token_type=TOKEN_TYPE_B, amount=token_b_amount)
@@ -140,8 +141,8 @@ end
 func init_pool{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     token_a : felt, token_b : felt
 ):
-    assert_nn_le(token_a, POOL_UPPER_BOUND - 1)
-    assert_nn_le(token_b, POOL_UPPER_BOUND - 1)
+    assert_nn_le(token_a, POOL_INIT_BALANCE_BOUND - 1)
+    assert_nn_le(token_b, POOL_INIT_BALANCE_BOUND - 1)
 
     set_pool_token_balance(token_type=TOKEN_TYPE_A, balance=token_a)
     set_pool_token_balance(token_type=TOKEN_TYPE_B, balance=token_b)
