@@ -293,7 +293,7 @@ end
 
 # Bitwise.
 
-# Return true if both integers are equal.
+# Return 1 if both integers are equal.
 func uint256_eq{range_check_ptr}(a : Uint256, b : Uint256) -> (res):
     if a.high != b.high:
         return (0)
