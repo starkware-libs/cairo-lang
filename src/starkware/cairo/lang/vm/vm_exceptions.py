@@ -76,6 +76,11 @@ class HintException(VmExceptionBase):
                     exc_value.msg, (filename, line_num, exc_value.offset, exc_value.text)
                 )
 
+            exc_string = "Got an exception while compiling a hint."
+        else:
+            exc_string = "Got an exception while executing a hint."
+        super().__init__(exc_string)
+
         tb_exception = traceback.TracebackException(exc_type, exc_value, exc_tb)
         # First item in the traceback is the call to exec, remove it.
         assert tb_exception.stack[0].filename.endswith("virtual_machine_base.py")
@@ -93,7 +98,7 @@ class HintException(VmExceptionBase):
         tb_exception.stack = traceback.StackSummary.from_list(
             map(replace_stack_item, tb_exception.stack)  # type: ignore
         )
-        super().__init__(f"Got an exception while executing a hint.")
+
         self.exception_str = "".join(tb_exception.format())
         self.inner_exc = exc_value
 

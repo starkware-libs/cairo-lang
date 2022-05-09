@@ -204,11 +204,12 @@ class VirtualMachineBase(ABC):
             compiled_hints = []
             for hint_index, hint in enumerate(hints):
                 hint_id = len(self.hint_pc_and_index)
-                self.hint_pc_and_index[hint_id] = (pc + program_base, hint_index)
+                relocated_pc = pc + program_base
+                self.hint_pc_and_index[hint_id] = (relocated_pc, hint_index)
                 compiled_hints.append(
                     CompiledHint(
                         compiled=self.compile_hint(
-                            hint.code, f"<hint{hint_id}>", hint_index=hint_index
+                            hint.code, f"<hint{hint_id}>", hint_index=hint_index, pc=relocated_pc
                         ),
                         # Use hint=hint in the lambda's arguments to capture this value (otherwise,
                         # it will use the same hint object for all iterations).
@@ -269,7 +270,7 @@ class VirtualMachineBase(ABC):
         assert len(self.exec_scopes) > 1, "Cannot exit main scope."
         self.exec_scopes.pop()
 
-    def compile_hint(self, source, filename, hint_index: int):
+    def compile_hint(self, source, filename, hint_index: int, pc: MaybeRelocatable):
         """
         Compiles the given python source code.
         This function can be overridden by subclasses.
@@ -278,8 +279,15 @@ class VirtualMachineBase(ABC):
             return compile(source, filename, mode="exec")
         except (IndentationError, SyntaxError):
             hint_exception = HintException(self, *sys.exc_info())
-            raise self.as_vm_exception(
-                hint_exception, notes=[hint_exception.exception_str], hint_index=hint_index
+
+            raise VmException(
+                pc=pc,
+                inst_location=self.get_location(pc=pc),
+                inner_exc=hint_exception,
+                error_attr_value=None,
+                traceback=None,
+                notes=[hint_exception.exception_str],
+                hint_index=hint_index,
             ) from None
 
     def exec_hint(self, code, globals_, hint_index):

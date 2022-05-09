@@ -1,5 +1,27 @@
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.bitwise import bitwise_and, bitwise_operations, bitwise_or, bitwise_xor
+from starkware.cairo.common.cairo_keccak.keccak import (
+    finalize_keccak,
+    keccak_add_uint256,
+    keccak_as_words,
+)
+from starkware.cairo.common.cairo_secp.bigint import bigint_to_uint256
+from starkware.cairo.common.cairo_secp.ec import (
+    compute_doubling_slope,
+    compute_slope,
+    ec_add,
+    ec_double,
+    ec_mul,
+    ec_negate,
+)
+from starkware.cairo.common.cairo_secp.field import is_zero, reduce, verify_zero
+from starkware.cairo.common.cairo_secp.signature import (
+    div_mod_n,
+    get_point_from_x,
+    public_key_point_to_eth_address,
+    recover_public_key,
+    verify_eth_signature,
+)
 from starkware.cairo.common.default_dict import default_dict_finalize, default_dict_new
 from starkware.cairo.common.dict import dict_read, dict_squash, dict_update, dict_write
 from starkware.cairo.common.find_element import find_element, search_sorted, search_sorted_lower

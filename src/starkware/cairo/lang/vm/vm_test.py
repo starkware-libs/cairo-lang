@@ -375,7 +375,7 @@ def f():
         VirtualMachine(program, context, {})
     expected_error = f"""\
 {cairo_file.name}:4:1: Error at pc=10:
-Got an exception while executing a hint.
+Got an exception while compiling a hint.
 %{{
 ^^
 Traceback (most recent call last):
@@ -389,7 +389,8 @@ IndentationError: unexpected indent\
 
 def test_hint_syntax_error():
     code = """
-# Some comment.
+# Make sure the hint is not located at the start of the program.
+[ap] = 1
 
 %{
 def f():
@@ -422,12 +423,12 @@ def f():
     with pytest.raises(VmException) as excinfo:
         VirtualMachine(program, context, {})
     expected_error = f"""\
-{cairo_file.name}:4:1: Error at pc=10:
-Got an exception while executing a hint.
+{cairo_file.name}:5:1: Error at pc=12:
+Got an exception while compiling a hint.
 %{{
 ^^
 Traceback (most recent call last):
-  File "{cairo_file.name}", line 6
+  File "{cairo_file.name}", line 7
     b = # Wrong syntax.
                       ^
 SyntaxError: invalid syntax\

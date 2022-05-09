@@ -46,6 +46,7 @@ python_lib(starknet_hints_whitelist_lib
     whitelists/cairo_keccak.json
     whitelists/cairo_secp.json
     whitelists/cairo_sha256.json
+    whitelists/ec_bigint.json
     whitelists/ec_recover.json
     whitelists/latest.json
 

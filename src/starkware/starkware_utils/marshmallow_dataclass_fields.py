@@ -88,6 +88,10 @@ class IntAsHex(mfields.Field):
 
     default_error_messages = {"invalid": 'Expected hex string, got: "{input}".'}
 
+    def __init__(self, support_decimal_loading: bool = False, **kwargs):
+        super().__init__(**kwargs)
+        self.support_decimal_loading = support_decimal_loading
+
     def _serialize(self, value, attr, obj, **kwargs):
         if value is None:
             return None
@@ -96,10 +100,13 @@ class IntAsHex(mfields.Field):
         return hex(value)
 
     def _deserialize(self, value, attr, data, **kwargs):
-        if re.match("^0x[0-9a-f]+$", value) is None:
-            self.fail("invalid", input=value)
+        if re.match("^0x[0-9a-f]+$", value) is not None:
+            return int(value, 16)
 
-        return int(value, 16)
+        if self.support_decimal_loading and re.match("^[0-9]+$", value) is not None:
+            return int(value)
+
+        self.fail("invalid", input=value)
 
 
 class BytesAsHex(mfields.Field):

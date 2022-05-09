@@ -362,3 +362,59 @@ func uint256_shr{range_check_ptr}(a : Uint256, b : Uint256) -> (res : Uint256):
     let (res, _) = uint256_unsigned_div_rem(a, c)
     return (res)
 end
+
+# Reverses byte endianness of a 128-bit word.
+#
+# The algorithm works in steps. Generally speaking, on the i-th step,
+# we switch between every two consecutive sequences of 2 ** i bytes.
+# To illustrate how it works, here are the steps when running
+# on a 64-bit word = [b0, b1, b2, b3, b4, b5, b6, b7] (3 steps instead of 4):
+#
+# step 1:
+# [b0, b1, b2, b3, b4, b5, b6, b7] -
+# [b0, 0,  b2, 0,  b4, 0,  b6, 0 ] +
+# [0,  0,  b0, 0,  b2, 0,  b4, 0,  b6] =
+# [0,  b1, b0, b3, b2, b5, b4, b7, b6]
+#
+# step 2:
+# [0, b1, b0, b3, b2, b5, b4, b7, b6] -
+# [0, b1, b0, 0,  0,  b5, b4, 0,  0 ] +
+# [0, 0,  0,  0,  0,  b1, b0, 0,  0,  b5, b4] =
+# [0, 0,  0,  b3, b2, b1, b0, b7, b6, b5, b4]
+#
+# step 3:
+# [0, 0, 0, b3, b2, b1, b0, b7, b6, b5, b4] -
+# [0, 0, 0, b3, b2, b1, b0, 0,  0,  0,  0 ] +
+# [0, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  b3, b2, b1, b0] =
+# [0, 0, 0, 0,  0,  0,  0,  b7, b6, b5, b4, b3, b2, b1, b0]
+#
+# Next, we divide by 2 ** (8 + 16 + 32) and get [b7, b6, b5, b4, b3, b2, b1, b0].
+func word_reverse_endian{bitwise_ptr : BitwiseBuiltin*}(word : felt) -> (res : felt):
+    # Step 1.
+    assert bitwise_ptr[0].x = word
+    assert bitwise_ptr[0].y = 0x00ff00ff00ff00ff00ff00ff00ff00ff
+    tempvar word = word + (2 ** 16 - 1) * bitwise_ptr[0].x_and_y
+    # Step 2.
+    assert bitwise_ptr[1].x = word
+    assert bitwise_ptr[1].y = 0x00ffff0000ffff0000ffff0000ffff00
+    tempvar word = word + (2 ** 32 - 1) * bitwise_ptr[1].x_and_y
+    # Step 3.
+    assert bitwise_ptr[2].x = word
+    assert bitwise_ptr[2].y = 0x00ffffffff00000000ffffffff000000
+    tempvar word = word + (2 ** 64 - 1) * bitwise_ptr[2].x_and_y
+    # Step 4.
+    assert bitwise_ptr[3].x = word
+    assert bitwise_ptr[3].y = 0x00ffffffffffffffff00000000000000
+    tempvar word = word + (2 ** 128 - 1) * bitwise_ptr[3].x_and_y
+
+    let bitwise_ptr = bitwise_ptr + 4 * BitwiseBuiltin.SIZE
+    return (res=word / 2 ** (8 + 16 + 32 + 64))
+end
+
+# Reverses byte endianness of a uint256 integer.
+func uint256_reverse_endian{bitwise_ptr : BitwiseBuiltin*}(num : Uint256) -> (res : Uint256):
+    let (high) = word_reverse_endian(num.high)
+    let (low) = word_reverse_endian(num.low)
+
+    return (res=Uint256(low=high, high=low))
+end

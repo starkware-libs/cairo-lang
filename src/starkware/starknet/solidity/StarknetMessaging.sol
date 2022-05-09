@@ -10,7 +10,7 @@ import "contracts/starkware/solidity/libraries/NamedStorage.sol";
   to the latter pipe while interacting with L2.
 */
 contract StarknetMessaging is IStarknetMessaging {
-    /**
+    /*
       Random slot storage elements and accessors.
     */
     string constant L1L2_MESSAGE_MAP_TAG = "STARKNET_1.0_MSGING_L1TOL2_MAPPPING_V2";
@@ -80,7 +80,7 @@ contract StarknetMessaging is IStarknetMessaging {
         uint256 selector,
         uint256[] calldata payload,
         uint256 nonce
-    ) internal returns (bytes32) {
+    ) internal view returns (bytes32) {
         return
             keccak256(
                 abi.encodePacked(

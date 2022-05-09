@@ -70,11 +70,11 @@ class SysCallHandlerBase(ABC):
     base class for execution of system calls in the StarkNet OS.
     """
 
-    def __init__(self, general_config: StarknetGeneralConfig):
+    def __init__(self, block_info: BlockInfo):
         os_program = get_os_program()
 
-        # StarkNet general configuration.
-        self.general_config = general_config
+        assert block_info.sequencer_address is not None
+        self.block_info = block_info
 
         self.structs = CairoStructFactory.from_program(
             program=os_program,
@@ -270,7 +270,7 @@ class SysCallHandlerBase(ABC):
         )
 
         response = self.structs.GetSequencerAddressResponse(
-            sequencer_address=self.general_config.sequencer_address
+            sequencer_address=self.block_info.sequencer_address
         )
         self._write_syscall_response(
             syscall_name="GetSequencerAddress",
@@ -523,15 +523,21 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
         general_config: StarknetGeneralConfig,
         initial_syscall_ptr: RelocatableValue,
     ):
-        super().__init__(general_config=general_config)
+        super().__init__(block_info=state.block_info)
 
+        # Configuration objects.
+        self.general_config = general_config
+
+        # Storage-related members.
+        self.starknet_storage = starknet_storage
+        self.loop = starknet_storage.loop
+
+        # Execution-related objects.
         self.execute_entry_point_cls = execute_entry_point_cls
         self.tx_execution_context = tx_execution_context
         self.state = state
         self.caller_address = caller_address
         self.contract_address = contract_address
-        self.starknet_storage = starknet_storage
-        self.loop = starknet_storage.loop
 
         # Internal calls executed by the current contract call.
         self.internal_calls: List[CallInfo] = []
@@ -852,11 +858,10 @@ class OsSysCallHandler(SysCallHandlerBase):
     def __init__(
         self,
         tx_execution_infos: List[TransactionExecutionInfo],
-        general_config: StarknetGeneralConfig,
         starknet_storage_by_address: Mapping[int, StarknetStorageInterface],
         block_info: BlockInfo,
     ):
-        super().__init__(general_config=general_config)
+        super().__init__(block_info=block_info)
 
         self.tx_execution_info_iterator: Iterator[TransactionExecutionInfo] = iter(
             tx_execution_infos
@@ -879,8 +884,6 @@ class OsSysCallHandler(SysCallHandlerBase):
 
         # StarkNet storage members.
         self.starknet_storage_by_address = starknet_storage_by_address
-
-        self.block_info = block_info
 
         # A pointer to the Cairo TxInfo struct.
         # This pointer needs to match the TxInfo pointer that is going to be used during the system

@@ -29,14 +29,15 @@ class GatedStorage(Storage):
 
     async def _compress_value(self, key: bytes, value: bytes) -> Tuple[bytes, bytes]:
         """
-        In case that the length of the value is greater than the limit, stores the value in the
-        second storage, with a unique key and returns the new value that will be stored to the first
-        storage which indicates that the original value is stored in storage1.
+        In case that the length of the key + the length of the value is greater than the limit,
+        stores the value in the second storage, with a unique key and returns the new value that
+        will be stored to the first storage which indicates that the original value is stored in
+        storage1.
         """
         if value[: len(MAGIC_HEADER)] != MAGIC_HEADER:
             # If the value starts with MAGIC_HEADER, treat the value as a large value; Hence, it
             # will be stored in the second storage.
-            if len(value) <= self.limit:
+            if len(key) + len(value) <= self.limit:
                 return key, value
 
         ukey = generate_unique_key(

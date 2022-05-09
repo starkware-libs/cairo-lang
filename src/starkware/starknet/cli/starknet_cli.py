@@ -489,11 +489,15 @@ async def invoke_or_call(args: argparse.Namespace, command_args: List[str], call
     address = invoke_tx_args.address
 
     has_wallet = get_wallet_provider(args=args) is not None
+    is_account_contract_invocation = has_wallet and not call
     max_fee = args.max_fee
     if max_fee is None:
-        if has_wallet:
+        if is_account_contract_invocation:
             fee_info = await estimate_fee_inner(
-                args=args, invoke_tx_args=invoke_tx_args, has_wallet=has_wallet, has_block_info=call
+                args=args,
+                invoke_tx_args=invoke_tx_args,
+                has_wallet=has_wallet,
+                has_block_info=False,
             )
             max_fee = math.ceil(fee_info["amount"] * FEE_MARGIN_OF_ESTIMATION)
             max_fee_eth = float(Web3.fromWei(max_fee, "ether"))
@@ -646,8 +650,8 @@ async def get_transaction_receipt(args, command_args):
 async def get_block(args, command_args):
     parser = argparse.ArgumentParser(
         description=(
-            "Outputs the block corresponding to the given ID. "
-            "In case no ID is given, outputs the latest block."
+            "Outputs the block corresponding to the given identifier (hash or number). "
+            "In case no identifer is given, outputs the pending block."
         )
     )
     add_block_identifier_arguments(
@@ -681,7 +685,7 @@ async def get_code(args, command_args):
     parser = argparse.ArgumentParser(
         description=(
             "Outputs the bytecode of the contract at the given address with respect to "
-            "a specific block. In case no block ID is given, uses the latest block."
+            "a specific block. In case no block identifier is given, uses the pending block."
         )
     )
     parser.add_argument(
@@ -705,7 +709,7 @@ async def get_full_contract(args, command_args):
     parser = argparse.ArgumentParser(
         description=(
             "Outputs the contract definition of the contract at the given address with respect to "
-            "a specific block. In case no block ID is given, uses the latest block."
+            "a specific block. In case no block identifier is given, uses the pending block."
         )
     )
     parser.add_argument(
@@ -737,7 +741,7 @@ async def get_storage_at(args, command_args):
     parser = argparse.ArgumentParser(
         description=(
             "Outputs the storage value of a contract in a specific key with respect to "
-            "a specific block. In case no block ID is given, uses the latest block."
+            "a specific block. In case no block identifier is given, uses the pending block."
         )
     )
     parser.add_argument(
@@ -813,15 +817,15 @@ def add_block_identifier_arguments(
         type=str,
         help=(
             f"The hash of the block to {block_role_description}. "
-            "In case this argument and block_number are not given, uses the latest block."
+            "In case this argument and block_number are not given, uses the pending block."
         ),
     )
     parser.add_argument(
         f"--{identifier_prefix}number",
         help=(
             f"The number of the block to {block_role_description}; "
-            "Additional supported keywords: 'pending';"
-            "In case this argument and block_hash are not given, uses the latest block."
+            "Additional supported keywords: 'pending', 'latest';"
+            "In case this argument and block_hash are not given, uses the pending block."
         ),
     )
 

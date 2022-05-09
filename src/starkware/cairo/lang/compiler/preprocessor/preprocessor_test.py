@@ -3889,6 +3889,20 @@ foo(3) = foo(4)
     )
     verify_exception(
         """
+using A = (felt, felt)
+using B = A
+
+assert B(1, 2) = 0
+""",
+        """
+file:?:?: Struct constructor cannot be used for type '(felt, felt)'.
+assert B(1, 2) = 0
+       ^*****^
+""",
+        exc_type=CairoTypeError,
+    )
+    verify_exception(
+        """
 struct A:
     member next: A*
 end

@@ -17,7 +17,7 @@ class IdentifierList(AstNode):
     def get_particles(self):
         for note in self.notes:
             note.assert_no_comments()
-        return [x.format() for x in self.identifiers]
+        return [x.to_particle() for x in self.identifiers]
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return self.identifiers

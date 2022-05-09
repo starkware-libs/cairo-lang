@@ -36,7 +36,10 @@ from starkware.starkware_utils.serializable_dataclass import SerializableMarshma
 from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 from starkware.starkware_utils.validated_fields import sequential_id_metadata
 
-BlockIdentifier = Union[int, Literal["pending"]]
+BlockNumber = int
+LatestBlock = Literal["latest"]
+PendingBlock = Literal["pending"]
+BlockIdentifier = Union[BlockNumber, LatestBlock, PendingBlock]
 OptionalBlockIdentifier = Optional[BlockIdentifier]
 TBlockInfo = TypeVar("TBlockInfo", bound="StarknetBlock")
 
@@ -585,6 +588,7 @@ class StarknetBlock(BaseResponseObject):
     block_number: Optional[int] = field(metadata=fields.default_optional_block_number_metadata)
     state_root: Optional[bytes] = field(metadata=fields.optional_state_root_metadata)
     status: Optional[BlockStatus]
+    gas_price: int = field(metadata=fields.gas_price_metadata)
     transactions: Tuple[TransactionSpecificInfo, ...] = field(
         metadata=dict(
             marshmallow_field=VariadicLengthTupleField(
@@ -593,6 +597,7 @@ class StarknetBlock(BaseResponseObject):
         )
     )
     timestamp: int = field(metadata=fields.timestamp_metadata)
+    sequencer_address: Optional[int] = field(metadata=fields.optional_sequencer_address_metadata)
     transaction_receipts: Optional[Tuple[TransactionExecution, ...]] = field(
         metadata=dict(
             marshmallow_field=VariadicLengthTupleField(
@@ -610,8 +615,10 @@ class StarknetBlock(BaseResponseObject):
         state_root: Optional[bytes],
         transactions: Iterable[InternalTransaction],
         timestamp: int,
+        sequencer_address: Optional[int],
         transaction_receipts: Optional[Tuple[TransactionExecution, ...]],
         status: Optional[BlockStatus],
+        gas_price: int,
     ) -> TBlockInfo:
         return cls(
             block_hash=block_hash,
@@ -622,8 +629,10 @@ class StarknetBlock(BaseResponseObject):
                 TransactionSpecificInfo.from_internal(internal_tx=tx) for tx in transactions
             ),
             timestamp=timestamp,
+            sequencer_address=sequencer_address,
             transaction_receipts=transaction_receipts,
             status=status,
+            gas_price=gas_price,
         )
 
     def __post_init__(self):

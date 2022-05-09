@@ -17,6 +17,7 @@ async def calculate_block_hash(
     parent_hash: int,
     block_number: int,
     global_state_root: bytes,
+    sequencer_address: int,
     block_timestamp: int,
     tx_hashes: Sequence[int],
     tx_signatures: Sequence[List[int]],
@@ -70,7 +71,7 @@ async def calculate_block_hash(
         data=[
             block_number,
             from_bytes(global_state_root),
-            general_config.sequencer_address,
+            sequencer_address,
             block_timestamp,
             len(tx_hashes),  # Number of transactions.
             tx_commitment,  # Transaction commitment.

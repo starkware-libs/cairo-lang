@@ -3,7 +3,11 @@ from typing import Optional, Sequence
 
 from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypeFelt
 from starkware.cairo.lang.compiler.ast.expr import ExprIdentifier
-from starkware.cairo.lang.compiler.ast.formatting_utils import LocationField
+from starkware.cairo.lang.compiler.ast.formatting_utils import (
+    LocationField,
+    Particle,
+    SingleParticle,
+)
 from starkware.cairo.lang.compiler.ast.node import AstNode
 from starkware.cairo.lang.compiler.error_handling import Location
 
@@ -31,10 +35,17 @@ class TypedIdentifier(AstNode):
     location: Optional[Location] = LocationField
     modifier: Optional[Modifier] = None
 
-    def format(self):
+    def to_particle(self) -> Particle:
         modifier_str = "" if self.modifier is None else self.modifier.format() + " "
-        type_str = "" if self.expr_type is None else f" : {self.expr_type.format()}"
-        return modifier_str + self.identifier.format() + type_str
+        if self.expr_type is None:
+            return SingleParticle(text=modifier_str + self.identifier.format())
+        else:
+            particle = self.expr_type.to_particle()
+            particle.add_prefix(modifier_str + self.identifier.format() + " : ")
+            return particle
+
+    def format(self):
+        return str(self.to_particle())
 
     def override_type(self, expr_type):
         return dataclasses.replace(self, expr_type=expr_type)

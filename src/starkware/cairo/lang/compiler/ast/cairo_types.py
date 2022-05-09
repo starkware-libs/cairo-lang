@@ -3,7 +3,12 @@ from abc import abstractmethod
 from enum import Enum, auto
 from typing import List, Optional, Sequence
 
-from starkware.cairo.lang.compiler.ast.formatting_utils import LocationField
+from starkware.cairo.lang.compiler.ast.formatting_utils import (
+    LocationField,
+    Particle,
+    SeparatedParticleList,
+    SingleParticle,
+)
 from starkware.cairo.lang.compiler.ast.node import AstNode
 from starkware.cairo.lang.compiler.ast.notes import Notes
 from starkware.cairo.lang.compiler.error_handling import Location
@@ -14,10 +19,16 @@ class CairoType(AstNode):
     location: Optional[Location]
 
     @abstractmethod
+    def to_particle(self) -> Particle:
+        """
+        Returns a representation of the type as a Particle.
+        """
+
     def format(self) -> str:
         """
         Returns a representation of the type as a string.
         """
+        return str(self.to_particle())
 
     def get_pointer_type(self) -> "CairoType":
         """
@@ -30,8 +41,8 @@ class CairoType(AstNode):
 class TypeFelt(CairoType):
     location: Optional[Location] = LocationField
 
-    def format(self):
-        return "felt"
+    def to_particle(self) -> Particle:
+        return SingleParticle(text="felt")
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return []
@@ -41,8 +52,8 @@ class TypeFelt(CairoType):
 class TypeCodeoffset(CairoType):
     location: Optional[Location] = LocationField
 
-    def format(self):
-        return "codeoffset"
+    def to_particle(self) -> Particle:
+        return SingleParticle(text="codeoffset")
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return []
@@ -53,8 +64,8 @@ class TypePointer(CairoType):
     pointee: CairoType
     location: Optional[Location] = LocationField
 
-    def format(self):
-        return f"{self.pointee.format()}*"
+    def to_particle(self) -> Particle:
+        return SingleParticle(text=f"{self.pointee.format()}*")
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.pointee]
@@ -67,8 +78,8 @@ class TypeStruct(CairoType):
     is_fully_resolved: bool
     location: Optional[Location] = LocationField
 
-    def format(self):
-        return str(self.scope)
+    def to_particle(self) -> Particle:
+        return SingleParticle(text=str(self.scope))
 
     @property
     def resolved_scope(self):
@@ -100,10 +111,11 @@ class TypeTuple(CairoType):
         typ: CairoType
         location: Optional[Location] = LocationField
 
-        def format(self):
-            if self.name is None:
-                return self.typ.format()
-            return f"{self.name} : {self.typ.format()}"
+        def to_particle(self) -> Particle:
+            particle = self.typ.to_particle()
+            if self.name is not None:
+                particle.add_prefix(f"{self.name} : ")
+            return particle
 
         def get_children(self) -> Sequence[Optional[AstNode]]:
             return [self.typ]
@@ -120,10 +132,10 @@ class TypeTuple(CairoType):
         for note in self.notes:
             note.assert_no_comments()
 
-    def format(self):
+    def to_particle(self) -> Particle:
         self.assert_no_comments()
-        member_formats = [member.format() for member in self.members]
-        return f"({', '.join(member_formats)})"
+        member_particles = [member.to_particle() for member in self.members]
+        return SeparatedParticleList(elements=member_particles, start="(", end=")")
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return self.members

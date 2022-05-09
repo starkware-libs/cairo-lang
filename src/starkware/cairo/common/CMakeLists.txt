@@ -8,8 +8,15 @@ python_lib(cairo_common_lib
     cairo_blake2s/blake2s_utils.py
     cairo_blake2s/packed_blake2s.cairo
     cairo_builtins.cairo
+    cairo_keccak/keccak.cairo
     cairo_keccak/keccak_utils.py
+    cairo_keccak/packed_keccak.cairo
+    cairo_secp/bigint.cairo
+    cairo_secp/constants.cairo
+    cairo_secp/ec.cairo
+    cairo_secp/field.cairo
     cairo_secp/secp_utils.py
+    cairo_secp/signature.cairo
     cairo_sha256/sha256_utils.py
     default_dict.cairo
     dict_access.cairo

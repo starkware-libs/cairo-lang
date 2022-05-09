@@ -3,6 +3,19 @@
         {
             "allowed_expressions": [],
             "hint_lines": [
+                "# Add dummy pairs of input and output.",
+                "_keccak_state_size_felts = int(ids.KECCAK_STATE_SIZE_FELTS)",
+                "_block_size = int(ids.BLOCK_SIZE)",
+                "assert 0 <= _keccak_state_size_felts < 100",
+                "assert 0 <= _block_size < 10",
+                "inp = [0] * _keccak_state_size_felts",
+                "padding = (inp + keccak_func(inp)) * _block_size",
+                "segments.write_arg(ids.keccak_ptr_end, padding)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
                 "# Prepare arguments for dict_new. In particular, the same dictionary values should be copied",
                 "# to the new (squashed) dictionary.",
                 "vm_enter_scope({",
@@ -268,6 +281,149 @@
         {
             "allowed_expressions": [],
             "hint_lines": [
+                "from starkware.cairo.common.cairo_keccak.keccak_utils import keccak_func",
+                "_keccak_state_size_felts = int(ids.KECCAK_STATE_SIZE_FELTS)",
+                "assert 0 <= _keccak_state_size_felts < 100",
+                "",
+                "output_values = keccak_func(memory.get_range(",
+                "    ids.keccak_ptr - _keccak_state_size_felts, _keccak_state_size_felts))",
+                "segments.write_arg(ids.keccak_ptr, output_values)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "from starkware.cairo.common.cairo_secp.secp_utils import N, pack",
+                "from starkware.python.math_utils import div_mod, safe_div",
+                "",
+                "a = pack(ids.a, PRIME)",
+                "b = pack(ids.b, PRIME)",
+                "value = res = div_mod(a, b, N)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "from starkware.cairo.common.cairo_secp.secp_utils import SECP_P",
+                "from starkware.python.math_utils import div_mod",
+                "",
+                "value = x_inv = div_mod(1, x, SECP_P)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "from starkware.cairo.common.cairo_secp.secp_utils import SECP_P, pack",
+                "",
+                "q, r = divmod(pack(ids.val, PRIME), SECP_P)",
+                "assert r == 0, f\"verify_zero: Invalid input {ids.val.d0, ids.val.d1, ids.val.d2}.\"",
+                "ids.q = q % PRIME"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "from starkware.cairo.common.cairo_secp.secp_utils import SECP_P, pack",
+                "",
+                "slope = pack(ids.slope, PRIME)",
+                "x = pack(ids.point.x, PRIME)",
+                "y = pack(ids.point.y, PRIME)",
+                "",
+                "value = new_x = (pow(slope, 2, SECP_P) - 2 * x) % SECP_P"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "from starkware.cairo.common.cairo_secp.secp_utils import SECP_P, pack",
+                "",
+                "slope = pack(ids.slope, PRIME)",
+                "x0 = pack(ids.point0.x, PRIME)",
+                "x1 = pack(ids.point1.x, PRIME)",
+                "y0 = pack(ids.point0.y, PRIME)",
+                "",
+                "value = new_x = (pow(slope, 2, SECP_P) - x0 - x1) % SECP_P"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "from starkware.cairo.common.cairo_secp.secp_utils import SECP_P, pack",
+                "",
+                "value = pack(ids.x, PRIME) % SECP_P"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "from starkware.cairo.common.cairo_secp.secp_utils import SECP_P, pack",
+                "",
+                "x = pack(ids.x, PRIME) % SECP_P"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "from starkware.cairo.common.cairo_secp.secp_utils import SECP_P, pack",
+                "",
+                "x_cube_int = pack(ids.x_cube, PRIME) % SECP_P",
+                "y_square_int = (x_cube_int + ids.BETA) % SECP_P",
+                "y = pow(y_square_int, (SECP_P + 1) // 4, SECP_P)",
+                "",
+                "# We need to decide whether to take y or SECP_P - y.",
+                "if ids.v % 2 == y % 2:",
+                "    value = y",
+                "else:",
+                "    value = (-y) % SECP_P"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "from starkware.cairo.common.cairo_secp.secp_utils import SECP_P, pack",
+                "",
+                "y = pack(ids.point.y, PRIME) % SECP_P",
+                "# The modulo operation in python always returns a nonnegative number.",
+                "value = (-y) % SECP_P"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "from starkware.cairo.common.cairo_secp.secp_utils import SECP_P, pack",
+                "from starkware.python.math_utils import ec_double_slope",
+                "",
+                "# Compute the slope.",
+                "x = pack(ids.point.x, PRIME)",
+                "y = pack(ids.point.y, PRIME)",
+                "value = slope = ec_double_slope(point=(x, y), alpha=0, p=SECP_P)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "from starkware.cairo.common.cairo_secp.secp_utils import SECP_P, pack",
+                "from starkware.python.math_utils import line_slope",
+                "",
+                "# Compute the slope.",
+                "x0 = pack(ids.point0.x, PRIME)",
+                "y0 = pack(ids.point0.y, PRIME)",
+                "x1 = pack(ids.point1.x, PRIME)",
+                "y1 = pack(ids.point1.y, PRIME)",
+                "value = slope = line_slope(point1=(x0, y0), point2=(x1, y1), p=SECP_P)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "from starkware.cairo.common.cairo_secp.secp_utils import split",
+                "",
+                "segments.write_arg(ids.res.address_, split(value))"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
                 "from starkware.cairo.common.math_utils import as_int",
                 "",
                 "# Correctness check.",
@@ -424,6 +580,12 @@
         {
             "allowed_expressions": [],
             "hint_lines": [
+                "ids.low = (ids.x.d0 + ids.x.d1 * ids.BASE) & ((1 << 128) - 1)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
                 "ids.low = ids.a & ((1<<64) - 1)",
                 "ids.high = ids.a >> 64"
             ]
@@ -465,6 +627,12 @@
         {
             "allowed_expressions": [],
             "hint_lines": [
+                "memory[ap] = (ids.scalar % PRIME) % 2"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
                 "memory[ap] = 0 if (ids.a % PRIME) <= (ids.b % PRIME) else 1"
             ]
         },
@@ -495,6 +663,24 @@
         {
             "allowed_expressions": [],
             "hint_lines": [
+                "memory[ap] = to_felt_or_relocatable(ids.n_bytes < ids.BYTES_IN_WORD)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "memory[ap] = to_felt_or_relocatable(ids.n_bytes >= ids.KECCAK_FULL_RATE_IN_BYTES)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "memory[ap] = to_felt_or_relocatable(x == 0)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
                 "memory[ids.output] = res = (int(ids.value) % PRIME) % ids.base",
                 "assert res < ids.bound, f'split_int(): Limb {res} is out of range.'"
             ]
@@ -519,6 +705,13 @@
                 "new_access_index = current_access_indices.pop()",
                 "ids.loop_temps.index_delta_minus1 = new_access_index - current_access_index - 1",
                 "current_access_index = new_access_index"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "segments.write_arg(ids.inputs, [ids.low % 2 ** 64, ids.low // 2 ** 64])",
+                "segments.write_arg(ids.inputs + 2, [ids.high % 2 ** 64, ids.high // 2 ** 64])"
             ]
         },
         {
@@ -612,6 +805,24 @@
             "allowed_expressions": [],
             "hint_lines": [
                 "syscall_handler.storage_write(segments=segments, syscall_ptr=ids.syscall_ptr)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "value = k = safe_div(res * b - a, N)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "value = new_y = (slope * (x - new_x) - y) % SECP_P"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "value = new_y = (slope * (x0 - new_x) - y0) % SECP_P"
             ]
         },
         {

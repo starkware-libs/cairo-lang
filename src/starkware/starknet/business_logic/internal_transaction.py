@@ -28,14 +28,8 @@ from starkware.starknet.business_logic.state.objects import (
     ContractState,
 )
 from starkware.starknet.business_logic.state.state import BlockInfo, CarriedState, StateSelector
-from starkware.starknet.business_logic.transaction_fee import (
-    calculate_tx_fee_by_cairo_usage,
-    charge_fee,
-)
-from starkware.starknet.business_logic.utils import (
-    get_invoke_tx_total_resources,
-    preprocess_invoke_function_fields,
-)
+from starkware.starknet.business_logic.transaction_fee import calculate_tx_fee, charge_fee
+from starkware.starknet.business_logic.utils import preprocess_invoke_function_fields
 from starkware.starknet.core.os.contract_hash import compute_contract_hash
 from starkware.starknet.core.os.transaction_hash.transaction_hash import (
     calculate_deploy_transaction_hash,
@@ -400,9 +394,13 @@ class InternalDeploy(InternalTransaction):
             caller_address=0,
         )
 
-        tx_execution_context = TransactionExecutionContext.create_for_call(
+        tx_execution_context = TransactionExecutionContext.create(
             account_contract_address=0,
+            transaction_hash=self.hash_value,
+            signature=[],
+            max_fee=0,
             n_steps=general_config.invoke_tx_max_n_steps,
+            version=constants.TRANSACTION_VERSION,
         )
         call_info = await call.execute(
             state=state, general_config=general_config, tx_execution_context=tx_execution_context
@@ -603,16 +601,11 @@ class InternalInvokeFunction(InternalTransaction):
         if self.max_fee > 0:
             # Should always pass on regular flows (verified in the create() method).
             assert self.entry_point_selector == starknet_abi.EXECUTE_ENTRY_POINT_SELECTOR
-            l1_gas_usage, cairo_resource_usage = get_invoke_tx_total_resources(
+            assert self.entry_point_type is EntryPointType.EXTERNAL
+            actual_fee = calculate_tx_fee(
                 state=state,
                 call_info=call_info,
-                l1_handler_payload_size=self.get_l1_handler_payload_size(),
-            )
-            actual_fee = calculate_tx_fee_by_cairo_usage(
                 general_config=general_config,
-                cairo_resource_usage=cairo_resource_usage,
-                l1_gas_usage=l1_gas_usage,
-                gas_price=state.block_info.gas_price,
             )
             fee_transfer_info = await charge_fee(
                 general_config=general_config,

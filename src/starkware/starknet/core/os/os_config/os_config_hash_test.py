@@ -14,7 +14,7 @@ from starkware.starknet.definitions.general_config import StarknetChainId, Stark
 
 HASH_PATH = get_source_dir_path("src/starkware/starknet/core/os/os_config/os_config_hash.json")
 FEE_TOKEN_ADDRESS = 0x49D36570D4E46F48E99674BD3FCC84644DDD6B96F7C741B1562B82F9E004DC7
-FIX_COMMAND = "fix_starknet_os_config_hash"
+FIX_COMMAND = "starknet_os_config_hash_fix"
 
 
 @random_test()

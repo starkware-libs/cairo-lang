@@ -1,4 +1,4 @@
-from typing import Collection, Dict, Optional, Tuple, Type
+from typing import Collection, Dict, List, Optional, Tuple, Type
 
 import marshmallow_dataclass
 
@@ -77,3 +77,24 @@ class PatriciaTree(BinaryFactTree):
         # In case root is an edge node, its fact must be explicitly written to DB.
         root_hash = await updated_virtual_root_node.commit(ffc=ffc, facts=facts)
         return PatriciaTree(root=root_hash, height=updated_virtual_root_node.height)
+
+    async def get_diff_between_patricia_trees(
+        self,
+        other: "PatriciaTree",
+        ffc: FactFetchingContext,
+        storage_tree_height: int,
+        fact_cls: Type[TLeafFact],
+    ) -> List[Tuple[int, TLeafFact, TLeafFact]]:
+        """
+        Returns a list of (key, old_fact, new_fact) that are different
+        between this tree and another.
+
+        The height of the two trees must be equal.
+
+        If the 'facts' argument is not None, this dictionary is filled with facts read from the DB.
+        """
+        self_node, other_node = [
+            VirtualPatriciaNode.from_hash(hash_value=hash_value, height=storage_tree_height)
+            for hash_value in (self.root, other.root)
+        ]
+        return await self_node.get_diff_between_trees(other=other_node, ffc=ffc, fact_cls=fact_cls)

@@ -16,6 +16,7 @@ from starkware.starkware_utils.field_validators import (
 )
 from starkware.starkware_utils.marshmallow_dataclass_fields import (
     BytesAsHex,
+    IntAsHex,
     IntAsStr,
     StrictRequiredInteger,
 )
@@ -31,10 +32,12 @@ from starkware.starkware_utils.validated_fields import (
 # Common.
 
 felt_as_hex_list_metadata = dict(
+    marshmallow_field=mfields.List(IntAsHex(validate=everest_fields.FeltField.validate))
+)
+
+felt_as_hex_or_str_list_metadata = dict(
     marshmallow_field=mfields.List(
-        everest_fields.FeltField.get_marshmallow_field(
-            required=True, load_default=marshmallow.utils.missing
-        )
+        IntAsHex(support_decimal_loading=True, validate=everest_fields.FeltField.validate)
     )
 )
 
@@ -80,6 +83,16 @@ def address_metadata(name: str, error_code: StarknetErrorCode) -> Dict[str, Any]
 sequencer_address_metadata = address_metadata(
     name="Sequencer address", error_code=StarknetErrorCode.OUT_OF_RANGE_SEQUENCER_ADDRESS
 )
+
+OptionalSequencerAddressField = OptionalField(
+    field=dataclasses.replace(
+        AddressField,
+        name="Sequencer address",
+        error_code=StarknetErrorCode.OUT_OF_RANGE_SEQUENCER_ADDRESS,
+    ),
+    none_probability=0,
+)
+optional_sequencer_address_metadata = OptionalSequencerAddressField.metadata()
 
 caller_address_metadata = address_metadata(
     name="Caller address", error_code=StarknetErrorCode.OUT_OF_RANGE_CALLER_ADDRESS
@@ -133,7 +146,7 @@ default_optional_transaction_index_metadata = sequential_id_metadata(
 
 call_data_metadata = felt_list_metadata
 call_data_as_hex_metadata = felt_as_hex_list_metadata
-signature_as_hex_metadata = felt_as_hex_list_metadata
+signature_as_hex_metadata = felt_as_hex_or_str_list_metadata
 signature_metadata = felt_list_metadata
 retdata_as_hex_metadata = felt_as_hex_list_metadata
 

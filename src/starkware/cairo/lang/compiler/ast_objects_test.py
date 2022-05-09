@@ -741,3 +741,39 @@ from a.b.c import (
 """
     with set_one_item_per_line(False):
         assert parse_file(code).format() == code
+
+
+def test_tuples():
+    code = """\
+local x : (
+    a : felt,
+    b : (c : felt,
+        d : (felt, (felt, felt)),
+        e : (f : felt, g : felt),
+        h : (felt, felt, felt)))
+"""
+    with set_one_item_per_line(True):
+        assert (
+            parse_file(code).format()
+            == """\
+local x : (
+    a : felt,
+    b : (c : felt, d : (felt, (felt, felt)), e : (f : felt, g : felt), h : (felt, felt, felt)),
+)
+"""
+        )
+
+        assert (
+            parse_file(code).format(allowed_line_length=50)
+            == """\
+local x : (
+    a : felt,
+    b : (
+        c : felt,
+        d : (felt, (felt, felt)),
+        e : (f : felt, g : felt),
+        h : (felt, felt, felt),
+    ),
+)
+"""
+        )

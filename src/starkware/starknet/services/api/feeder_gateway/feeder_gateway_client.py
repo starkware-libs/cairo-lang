@@ -1,11 +1,10 @@
 import json
 from typing import Any, Dict, List, Optional, Union
 
-from typing_extensions import Literal
-
 from services.everest.api.feeder_gateway.feeder_gateway_client import EverestFeederGatewayClient
 from starkware.starknet.definitions import fields
 from starkware.starknet.services.api.feeder_gateway.response_objects import (
+    BlockIdentifier,
     StarknetBlock,
     TransactionInfo,
     TransactionReceipt,
@@ -16,7 +15,6 @@ from starkware.starkware_utils.validated_fields import RangeValidatedField
 
 CastableToHash = Union[int, str]
 JsonObject = Dict[str, Any]
-BlockIdentifier = Union[int, Literal["pending"]]
 
 
 class FeederGatewayClient(EverestFeederGatewayClient):

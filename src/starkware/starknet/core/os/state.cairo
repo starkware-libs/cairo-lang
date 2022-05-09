@@ -69,8 +69,8 @@ func state_update{hash_ptr : HashBuiltin*, range_check_ptr, storage_updates_ptr 
     let n_actual_state_changes = 0
     # Creates PatriciaUpdateConstants struct for patricia update.
     let (
-        local patricia_update_constants : PatriciaUpdateConstants*) = patricia_update_constants_new(
-        )
+        local patricia_update_constants : PatriciaUpdateConstants*
+    ) = patricia_update_constants_new()
 
     with n_actual_state_changes:
         hash_state_changes(

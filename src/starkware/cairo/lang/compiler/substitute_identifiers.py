@@ -90,9 +90,14 @@ class SubstituteIdentifiers(ExpressionTransformer):
             )
         )
 
+        if not isinstance(struct_type, TypeStruct):
+            raise CairoTypeError(
+                f"Struct constructor cannot be used for type '{struct_type.format()}'.",
+                location=expr.location,
+            )
+
         # Verify named arguments in struct constructor.
         if self.get_struct_members_callback is not None:
-            assert isinstance(struct_type, TypeStruct)
             struct_members = self.get_struct_members_callback(struct_type)
             # Note that it's OK if len(struct_members) != len(rvalue.arguments.args) as
             # length compatibility of cast is checked later on.

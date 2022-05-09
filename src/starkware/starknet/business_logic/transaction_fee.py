@@ -7,6 +7,7 @@ from starkware.starknet.business_logic.execution.objects import (
     TransactionExecutionContext,
 )
 from starkware.starknet.business_logic.state.state import CarriedState
+from starkware.starknet.business_logic.utils import get_invoke_tx_total_resources
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public import abi as starknet_abi
@@ -82,3 +83,24 @@ def calculate_tx_fee_by_cairo_usage(
 
     total_l1_gas_usage = cairo_l1_gas_usage + l1_gas_usage
     return math.ceil(total_l1_gas_usage * gas_price)
+
+
+def calculate_tx_fee(
+    state: CarriedState,
+    call_info: CallInfo,
+    general_config: StarknetGeneralConfig,
+) -> int:
+    """
+    Calculates the fee of the most recent
+    InvokeFunction transaction (recent w.r.t. application on the given state).
+    Assumes entry point of type EXTERNAL, since only those may be charged.
+    """
+    l1_gas_usage, cairo_resource_usage = get_invoke_tx_total_resources(
+        state=state, call_info=call_info
+    )
+    return calculate_tx_fee_by_cairo_usage(
+        general_config=general_config,
+        cairo_resource_usage=cairo_resource_usage,
+        l1_gas_usage=l1_gas_usage,
+        gas_price=state.block_info.gas_price,
+    )

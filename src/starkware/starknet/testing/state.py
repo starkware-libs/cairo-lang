@@ -2,7 +2,11 @@ import copy
 from typing import Dict, List, Optional, Tuple, Union
 
 from starkware.cairo.lang.vm.crypto import pedersen_hash_func
-from starkware.starknet.business_logic.execution.objects import Event, TransactionExecutionInfo
+from starkware.starknet.business_logic.execution.objects import (
+    CallInfo,
+    Event,
+    TransactionExecutionInfo,
+)
 from starkware.starknet.business_logic.internal_transaction import (
     InternalDeploy,
     InternalInvokeFunction,
@@ -103,6 +107,41 @@ class StarknetState:
 
         return tx.contract_address, tx_execution_info
 
+    async def call_raw(
+        self,
+        contract_address: CastableToAddress,
+        selector: Union[int, str],
+        calldata: List[int],
+        caller_address: int,
+        max_fee: int,
+        signature: Optional[List[int]] = None,
+        entry_point_type: EntryPointType = EntryPointType.EXTERNAL,
+        nonce: Optional[int] = None,
+        version: int = constants.QUERY_VERSION,
+    ) -> CallInfo:
+        """
+        Calls a function on a contract and returns its CallInfo without modifying the state.
+        """
+        tx = create_invoke_function(
+            contract_address=contract_address,
+            selector=selector,
+            calldata=calldata,
+            caller_address=caller_address,
+            max_fee=max_fee,
+            version=version,
+            signature=signature,
+            entry_point_type=entry_point_type,
+            nonce=nonce,
+            chain_id=self.general_config.chain_id.value,
+            only_query=True,
+        )
+
+        return await tx.execute(
+            state=copy.deepcopy(self.state),
+            general_config=self.general_config,
+            only_query=True,
+        )
+
     async def invoke_raw(
         self,
         contract_address: CastableToAddress,
@@ -124,28 +163,17 @@ class StarknetState:
         signature - a list of integers to pass as signature to the invoked function.
         """
 
-        if isinstance(contract_address, str):
-            contract_address = int(contract_address, 16)
-        assert isinstance(contract_address, int)
-
-        if isinstance(selector, str):
-            selector = get_selector_from_name(selector)
-        assert isinstance(selector, int)
-
-        if signature is None:
-            signature = []
-
-        tx = InternalInvokeFunction.create(
+        tx = create_invoke_function(
             contract_address=contract_address,
-            entry_point_selector=selector,
-            entry_point_type=entry_point_type,
+            selector=selector,
             calldata=calldata,
-            max_fee=max_fee,
-            signature=signature,
             caller_address=caller_address,
+            max_fee=max_fee,
+            version=constants.TRANSACTION_VERSION,
+            signature=signature,
+            entry_point_type=entry_point_type,
             nonce=nonce,
             chain_id=self.general_config.chain_id.value,
-            version=constants.TRANSACTION_VERSION,
         )
 
         with self.state.copy_and_apply() as state_copy:
@@ -178,3 +206,42 @@ class StarknetState:
         ), f"Message of hash {message_hash} is fully consumed."
 
         self._l2_to_l1_messages[message_hash] -= 1
+
+
+def create_invoke_function(
+    contract_address: CastableToAddress,
+    selector: Union[int, str],
+    calldata: List[int],
+    caller_address: int,
+    max_fee: int,
+    version: int,
+    signature: Optional[List[int]],
+    entry_point_type: EntryPointType,
+    nonce: Optional[int],
+    chain_id: int,
+    only_query: bool = False,
+) -> InternalInvokeFunction:
+
+    if isinstance(contract_address, str):
+        contract_address = int(contract_address, 16)
+    assert isinstance(contract_address, int)
+
+    if isinstance(selector, str):
+        selector = get_selector_from_name(selector)
+    assert isinstance(selector, int)
+
+    signature = [] if signature is None else signature
+
+    return InternalInvokeFunction.create(
+        contract_address=contract_address,
+        entry_point_selector=selector,
+        entry_point_type=entry_point_type,
+        calldata=calldata,
+        max_fee=max_fee,
+        signature=signature,
+        caller_address=caller_address,
+        nonce=nonce,
+        chain_id=chain_id,
+        version=version,
+        only_query=only_query,
+    )

@@ -70,7 +70,14 @@ class CodeElementMember(CodeElement):
     typed_identifier: TypedIdentifier
 
     def format(self, allowed_line_length):
-        return f"member {self.typed_identifier.format()}"
+        particle = self.typed_identifier.to_particle()
+        particle.add_prefix("member ")
+        return particles_in_lines(
+            particles=particle,
+            config=ParticleFormattingConfig(
+                allowed_line_length=allowed_line_length, line_indent=INDENTATION
+            ),
+        )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.typed_identifier]
@@ -82,7 +89,15 @@ class CodeElementReference(CodeElement):
     expr: Expression
 
     def format(self, allowed_line_length):
-        return f"let {self.typed_identifier.format()} = {self.expr.format()}"
+        particle = self.typed_identifier.to_particle()
+        particle.add_prefix("let ")
+        particle.add_suffix(f" = {self.expr.format()}")
+        return particles_in_lines(
+            particles=particle,
+            config=ParticleFormattingConfig(
+                allowed_line_length=allowed_line_length, line_indent=INDENTATION
+            ),
+        )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.typed_identifier, self.expr]
@@ -102,8 +117,16 @@ class CodeElementLocalVariable(CodeElement):
     location: Optional[Location] = LocationField
 
     def format(self, allowed_line_length):
-        assignment = "" if self.expr is None else f" = {self.expr.format()}"
-        return f"local {self.typed_identifier.format()}{assignment}"
+        particle = self.typed_identifier.to_particle()
+        particle.add_prefix("local ")
+        if self.expr is not None:
+            particle.add_suffix(f" = {self.expr.format()}")
+        return particles_in_lines(
+            particles=particle,
+            config=ParticleFormattingConfig(
+                allowed_line_length=allowed_line_length, line_indent=INDENTATION
+            ),
+        )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.typed_identifier, self.expr]
@@ -121,8 +144,16 @@ class CodeElementTemporaryVariable(CodeElement):
     location: Optional[Location] = LocationField
 
     def format(self, allowed_line_length):
-        assignment = "" if self.expr is None else f" = {self.expr.format()}"
-        return f"tempvar {self.typed_identifier.format()}{assignment}"
+        particle = self.typed_identifier.to_particle()
+        particle.add_prefix("tempvar ")
+        if self.expr is not None:
+            particle.add_suffix(f" = {self.expr.format()}")
+        return particles_in_lines(
+            particles=particle,
+            config=ParticleFormattingConfig(
+                allowed_line_length=allowed_line_length, line_indent=INDENTATION
+            ),
+        )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.typed_identifier, self.expr]
@@ -251,7 +282,9 @@ class CodeElementReturnValueReference(CodeElement):
 
     def format(self, allowed_line_length):
         call_particles = self.func_call.get_particles()
-        first_particle = f"let {self.typed_identifier.format()} = " + call_particles[0]
+        first_particle = self.typed_identifier.to_particle()
+        first_particle.add_prefix("let ")
+        first_particle.add_suffix(f" = {call_particles[0]}")
 
         return particles_in_lines(
             particles=ParticleList(elements=[first_particle] + call_particles[1:]),
@@ -284,7 +317,7 @@ class CodeElementUnpackBinding(CodeElement):
         unpacking_list_particles = SeparatedParticleList(
             elements=self.unpacking_list.get_particles(), end=end_particle
         )
-        particles = ["let ("] + unpacking_list_particles.to_strings() + particles[1:]
+        particles = ["let (", unpacking_list_particles] + particles[1:]
 
         return particles_in_lines(
             particles=ParticleList(elements=particles),

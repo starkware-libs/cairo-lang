@@ -176,12 +176,16 @@ def ec_mult(m, point, alpha, p):
     return ec_add(ec_mult(m - 1, point, alpha, p), point, p)
 
 
-def ec_safe_mult(m: int, point: Tuple[int, int], alpha: int, p: int) -> Union[Tuple[int, int], str]:
+def ec_safe_mult(
+    m: int, point: Tuple[int, int], alpha: int, p: int
+) -> Union[Tuple[int, int], EcInfinity]:
     """
     Multiplies by m a point on the elliptic curve with equation y^2 = x^3 + alpha*x + beta mod p.
     Assumes the point is given in affine form (x, y).
     Safe to use always. May get or return the point at infinity, represented as EC_INFINITY.
     """
+    if m == 0:
+        return EC_INFINITY
     if m == 1:
         return point
     if m % 2 == 0:

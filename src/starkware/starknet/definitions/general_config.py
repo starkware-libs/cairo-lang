@@ -132,7 +132,7 @@ class StarknetGeneralConfig(EverestGeneralConfig):
     tx_version: int = field(
         metadata=dict(
             marshmallow_field=StrictRequiredInteger(
-                validate=validate_non_negative("Trasaction version."),
+                validate=validate_non_negative("Transaction version."),
             ),
             description=(
                 "Current transaction version - "
