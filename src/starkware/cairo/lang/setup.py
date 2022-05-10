@@ -21,7 +21,7 @@ setuptools.setup(
     setup_requires=["wheel"],
     url="https://cairo-lang.org/",
     package_data={
-        "starkware.cairo.common": ["*.cairo"],
+        "starkware.cairo.common": ["*.cairo", "*/*.cairo"],
         "starkware.cairo.lang.compiler": ["cairo.ebnf", "lib/*.cairo"],
         "starkware.cairo.lang.tracer": ["*.html", "*.css", "*.js", "*.png"],
         "starkware.cairo.lang": ["VERSION"],
