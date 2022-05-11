@@ -38,13 +38,16 @@ class Starknet:
         contract_address_salt: Optional[CastableToAddressSalt] = None,
         cairo_path: Optional[List[str]] = None,
         constructor_calldata: Optional[List[int]] = None,
+        disable_hint_validation: bool = False,
     ) -> StarknetContract:
         assert (source is None) != (
             contract_def is None
         ), "Exactly one of source, contract_def should be supplied."
         if contract_def is None:
             contract_def = compile_starknet_files(
-                files=[source], debug_info=True, cairo_path=cairo_path
+                files=[source], debug_info=True,
+                disable_hint_validation=disable_hint_validation,
+                cairo_path=cairo_path,
             )
             source = None
             cairo_path = None
