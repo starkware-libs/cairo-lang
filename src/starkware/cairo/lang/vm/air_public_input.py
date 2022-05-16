@@ -60,7 +60,7 @@ def extract_program_output(public_input: PublicInput, memory: Dict[int, int]) ->
 def get_pages_and_products(
     public_memory: List[PublicMemoryEntry], z: int, alpha: int
 ) -> Tuple[Dict[int, List[int]], Dict[int, int]]:
-    """
+    r"""
     Rearranges memory entries of the public memory by pages.
     Returns a tuple: (page, page_prods).
     * pages: a dictionary from page id to a list of interleaved addresses and values.
