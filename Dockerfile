@@ -19,10 +19,10 @@ WORKDIR /app/
 RUN ./build.sh
 
 WORKDIR /app/build/Release
-RUN make all -j8
+RUN make all -j
 
 # Run tests.
-RUN ctest -V -j8
+RUN ctest -V -j
 
 WORKDIR /app/
 RUN src/starkware/cairo/lang/package_test/run_test.sh

@@ -4,7 +4,7 @@ mkdir -p build/Release
 (
     cd build/Release
     cmake ../.. -DCMAKE_BUILD_TYPE=Release
-    make -j8 cairo_lang_package_venv
+    make -j cairo_lang_package_venv
 )
 
 VENV_SITE_DIR=build/Release/src/starkware/cairo/lang/cairo_lang_package_venv-site
