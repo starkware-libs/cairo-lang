@@ -7,19 +7,8 @@ from compiler import encode, instruction
 from vm import cairo_runner
 
 PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
-code = """
-func main():
-    [ap] = 25; ap++
-    %{
-        import math
-        memory[ap] = int(math.sqrt(memory[ap - 1]))
-    %}
-    [ap - 1] = [ap] * [ap]; ap++
-    ret
-end
-"""
 
-def printdict():
+def printdict(code):
     runner=cairo_runner.get_runner_from_code(code, layout='plain', prime=PRIME)
     mem = dict(runner.memory)
     print(code)
@@ -39,4 +28,12 @@ def printdict():
             except AssertionError:
                 pp.pprint(vars(encode.decode_instruction(keyval[1], next(it)[1])))
 
-printdict()
+def main():
+    filename = sys.argv[1]
+    with open(filename) as f:
+        code = f.read()
+    printdict(code)
+
+if __name__ == '__main__':
+    main()
+
