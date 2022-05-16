@@ -3,7 +3,7 @@ cachetools
 ecdsa
 eth-hash[pycryptodome]
 fastecdsa
-frozendict==1.2
+frozendict==2.3.2
 lark-parser
 marshmallow-dataclass>=7.1.0
 marshmallow-enum

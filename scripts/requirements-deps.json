@@ -405,7 +405,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "1.2",
+            "installed_version": "2.3.2",
             "key": "frozendict",
             "package_name": "frozendict"
         }
