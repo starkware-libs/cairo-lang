@@ -4,6 +4,7 @@ import argparse
 import json
 import re
 import sys
+from pathlib import Path
 
 from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.version import __version__
@@ -56,13 +57,17 @@ def main():
         0 if args.contract is None else 1
     ) == 1, "Exactly one of --program, --contract must be specified."
     if args.program is not None:
-        program_json = json.load(open(args.program))
+        program_json = json.loads(Path(args.program).read_text())
     else:
         assert args.contract is not None
-        program_json = json.load(open(args.contract))["program"]
+        program_json = json.loads(Path(args.contract).read_text())["program"]
 
     program = Program.load(program_json)
-    traceback = (open(args.traceback) if args.traceback != "-" else sys.stdin).read()
+    traceback = (
+        Path(args.traceback).read_text()
+        if args.traceback != "-"
+        else sys.stdin.read()
+    )
 
     print(reconstruct_traceback(program, traceback))
     return 0

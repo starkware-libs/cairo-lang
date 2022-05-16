@@ -18,9 +18,8 @@ class OsResources(ValidatedMarshmallowDataclass):
 
 
 # Empirical costs; accounted during transaction execution.
-os_resources: OsResources = OsResources.loads(
-    data=open(os.path.join(DIR, "os_resources.json")).read()
-)
+with open(os.path.join(DIR, "os_resources.json")) as fp:
+    os_resources: OsResources = OsResources.loads(data=fp.read())
 
 
 def calculate_syscall_resources(syscall_counter: Mapping[str, int]) -> ExecutionResources:

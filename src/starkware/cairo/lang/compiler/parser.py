@@ -18,8 +18,10 @@ from starkware.cairo.lang.compiler.parser_transformer import (
 )
 
 grammar_file = os.path.join(os.path.dirname(__file__), "cairo.ebnf")
+with open(grammar_file, "r") as fp:
+    content = fp.read()
 gram_parser = lark.Lark(
-    open(grammar_file, "r").read(),
+    content,
     start=[
         "cairo_file",
         "code_block",

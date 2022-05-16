@@ -1,5 +1,6 @@
 import argparse
 import sys
+from pathlib import Path
 
 from starkware.cairo.lang.compiler.ast.formatting_utils import set_one_item_per_line
 from starkware.cairo.lang.compiler.parser import parse_file
@@ -35,7 +36,7 @@ def main():
 
     with set_one_item_per_line(args.one_item_per_line):
         for path in args.files:
-            old_content = open(path).read() if path != "-" else sys.stdin.read()
+            old_content = Path(path).read_text() if path != "-" else sys.stdin.read()
             try:
                 new_content = parse_file(
                     old_content, filename="<input>" if path == "-" else path
@@ -46,7 +47,7 @@ def main():
 
             if args.inplace:
                 assert path != "-", 'Using "-i" together with "-" is not supported.'
-                open(path, "w").write(new_content)
+                Path(path).write_text(new_content)
             elif args.check:
                 assert path != "-", 'Using "-c" together with "-" is not supported.'
                 if old_content != new_content:

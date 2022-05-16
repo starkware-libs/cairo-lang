@@ -202,23 +202,23 @@ class TracerData:
         """
         Factory method constructing TracerData from files.
         """
-        program = Program.load(data=json.load(open(program_path)))
+        with open(program_path) as fp:
+            program = Program.load(data=json.load(fp))
         field_bytes = math.ceil(program.prime.bit_length() / 8)
         memory = read_memory(memory_path, field_bytes)
         trace = read_trace(trace_path)
         program_base = PROGRAM_BASE
 
         # Read AIR public input, if available and extract public memory addresses.
+        public_input = None
         if air_public_input is not None:
-            public_input = PublicInput.Schema().load(json.load(open(air_public_input)))
-        else:
-            public_input = None
+            with open(air_public_input) as fp:
+                public_input = PublicInput.Schema().load(json.load(fp))
 
-        debug_info = (
-            DebugInfo.load(data=json.load(open(debug_info_path)))
-            if debug_info_path is not None
-            else None
-        )
+        debug_info = None
+        if debug_info_path is not None:
+            with open(debug_info_path) as fp:
+                debug_info = DebugInfo.load(data=json.load(fp))
 
         # Construct the instance.
         return cls(

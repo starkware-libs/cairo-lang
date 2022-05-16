@@ -17,7 +17,8 @@ class InputFile:
         """
         if self.content is None:
             assert self.filename is not None, "Content must be set if filename is None."
-            self.content = open(self.filename, "r").read()
+            with open(self.filename) as fp:
+                self.content = fp.read()
 
         return self.content
 

@@ -237,7 +237,7 @@ class CairoPie:
 
         verify_zip_file_prefix(fileobj=fileobj)
 
-        with zipfile.ZipFile(fileobj) as zf:
+        with fileobj, zipfile.ZipFile(fileobj) as zf:
             cls.verify_zip_format(zf)
 
             with zf.open(cls.METADATA_FILENAME, "r") as fp:

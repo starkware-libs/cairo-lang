@@ -34,7 +34,8 @@ from starkware.crypto.signature.math_utils import (
 )
 
 PEDERSEN_HASH_POINT_FILENAME = os.path.join(os.path.dirname(__file__), "pedersen_params.json")
-PEDERSEN_PARAMS = json.load(open(PEDERSEN_HASH_POINT_FILENAME))
+with open(PEDERSEN_HASH_POINT_FILENAME) as fp:
+    PEDERSEN_PARAMS = json.load(fp)
 
 FIELD_PRIME = PEDERSEN_PARAMS["FIELD_PRIME"]
 FIELD_GEN = PEDERSEN_PARAMS["FIELD_GEN"]

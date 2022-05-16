@@ -79,7 +79,8 @@ def run_starknet_os_config_hash_test(fix: bool):
             fp.write(json.dumps(config_hashes, indent=4) + "\n")
         return
 
-    expected_hashes = json.load(open(HASH_PATH))
+    with open(HASH_PATH) as fp:
+        expected_hashes = json.load(fp)
     for config_name, computed_hash in config_hashes.items():
         expected_hash = expected_hashes[config_name]
         assert expected_hash == computed_hash, (

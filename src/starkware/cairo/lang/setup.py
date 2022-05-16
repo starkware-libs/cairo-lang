@@ -3,9 +3,12 @@ import os.path
 import setuptools
 
 DIR = os.path.abspath(os.path.dirname(__file__))
-requirements = open(os.path.join(DIR, "requirements.txt")).read().splitlines()
-version = open(os.path.join(DIR, "starkware/cairo/lang/VERSION")).read().strip()
-long_description = open("README.md", "r", encoding="utf-8").read()
+with open(os.path.join(DIR, "requirements.txt")) as fp:
+    requirements = fp.read().splitlines()
+with open(os.path.join(DIR, "starkware/cairo/lang/VERSION")) as fp:
+    version = fp.read().strip()
+with open("README.md", encoding="utf-8") as fp:
+    long_description = fp.read()
 
 setuptools.setup(
     name="cairo-lang",

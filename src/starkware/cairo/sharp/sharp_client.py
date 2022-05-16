@@ -58,7 +58,8 @@ class SharpClient:
                 ]
                 + used_flags
             )
-            program = Program.load(data=json.load(open(compiled_program_file.name, "r")))
+            with open(compiled_program_file.name) as fp:
+                program = Program.load(data=json.load(fp))
         return program
 
     def run_program(self, program: Program, program_input_path: Optional[str]) -> CairoPie:
@@ -199,7 +200,8 @@ def submit(args, command_args):
         cairo_pie = CairoPie.from_file(args.cairo_pie)
     else:
         if args.program is not None:
-            program = Program.load(data=json.load(open(args.program)))
+            with open(args.program) as fp:
+                program = Program.load(data=json.load(fp))
         else:
             assert args.source is not None
             print("Compiling...", file=sys.stderr)

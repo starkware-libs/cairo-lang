@@ -1,3 +1,4 @@
 import os
 
-__version__ = open(os.path.join(os.path.dirname(__file__), "VERSION")).read().strip()
+with open(os.path.join(os.path.dirname(__file__), "VERSION")) as fp:
+    __version__ = fp.read().strip()

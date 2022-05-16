@@ -13,6 +13,7 @@ import json
 import os
 from argparse import ArgumentParser
 from collections import defaultdict
+from pathlib import Path
 
 
 def main():
@@ -63,8 +64,9 @@ python_pip(pip_{package_name}
 
     # Write the output file, only if it is changed, so that the timestamp will not be updated
     # otherwise.
-    if not os.path.exists(args.output) or open(args.output, "r").read() != res:
-        open(args.output, "w").write(res)
+    output = Path(args.output)
+    if not output.exists() or output.read_text() != res:
+        output.write_text(res)
 
 
 if __name__ == "__main__":

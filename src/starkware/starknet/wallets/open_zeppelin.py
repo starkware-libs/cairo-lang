@@ -46,7 +46,8 @@ class OpenZeppelinAccount(Account):
         if os.path.exists(self.account_file):
             # Make a backup of the file.
             shutil.copy(self.account_file, self.account_file + ".backup")
-            accounts = json.load(open(self.account_file))
+            with open(self.account_file) as fp:
+                accounts = json.load(fp)
         else:
             accounts = {}
 
@@ -115,7 +116,8 @@ Transaction hash: {gateway_response['transaction_hash']}
             "Did you deploy your account contract (using 'starnet deploy_account')?"
         )
 
-        accounts = json.load(open(self.account_file))
+        with open(self.account_file) as fp:
+            accounts = json.load(fp)
         accounts_for_network = accounts.get(self.starknet_context.network_id, {})
         if self.account_name not in accounts_for_network:
             raise AccountNotFoundException(

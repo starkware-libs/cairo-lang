@@ -3,6 +3,8 @@ import json
 import os
 import sys
 import time
+from contextlib import suppress
+from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple, Type, Union
 
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
@@ -121,7 +123,7 @@ def cairo_compile_common(
         else:
             if args.debug_info_with_source:
                 for source_file in module_reader.source_files | set(args.files):
-                    file_contents_for_debug_info[source_file] = open(source_file).read()
+                    file_contents_for_debug_info[source_file] = Path(source_file).read_text()
 
             assembled_program = assemble_func(
                 preprocessed,
@@ -159,7 +161,7 @@ def get_codes(file_names: List[str]) -> List[Tuple[str, str]]:
     """
     Returns a list of pairs (file_content, file_name).
     """
-    codes = (open(path).read() if path != "-" else sys.stdin.read() for path in file_names)
+    codes = (Path(path).read_text() if path != "-" else sys.stdin.read() for path in file_names)
     codes_with_filenames = list(zip(codes, file_names))
 
     return codes_with_filenames
@@ -339,15 +341,12 @@ def generate_cairo_dependencies_file(dependencies_path: str, files: Set[str], st
         res += filename + "\n"
     res += ")\n"
 
-    try:
-        if open(dependencies_path).read() == res:
+    path = Path(dependencies_path)
+    with suppress(FileNotFoundError):
+        if path.read_text() == res:
             # File is already up to date.
             return
-    except FileNotFoundError:
-        pass
-
-    with open(dependencies_path, "w") as dependencies_file:
-        dependencies_file.write(res)
+    path.write_text(res)
 
     # Change the modification time of the file to make sure it is older than the generated
     # files.

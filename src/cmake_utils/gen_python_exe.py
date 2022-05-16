@@ -30,7 +30,8 @@ def main():
     )
     args = parser.parse_args()
 
-    venv_info = json.load(open(os.path.join(args.info_dir, f"{args.venv}.info")))
+    with open(os.path.join(args.info_dir, f"{args.venv}.info")) as fp:
+        venv_info = json.load(fp)
     # Fetch the location of the venv dir, relative to the executable script.
     build_path_bash = os.path.relpath(args.cmake_binary_dir, os.path.dirname(args.exe_path))
     assert (

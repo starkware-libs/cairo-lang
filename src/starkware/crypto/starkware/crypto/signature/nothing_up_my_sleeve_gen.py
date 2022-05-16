@@ -24,6 +24,7 @@ The output of this file is kept in 'pedersen_params.json', and 'signature.py' us
 import json
 import math
 import os
+from pathlib import Path
 
 from math_utils import ec_double, is_quad_residue, pi_as_string, sqrt_mod
 
@@ -125,7 +126,7 @@ AUTO_GENERATED_STRING = "The following data was auto-generated. PLEASE DO NOT ED
 
 # Write generated parameters to file.
 PEDERSEN_HASH_POINT_FILENAME = os.path.join(os.path.dirname(__file__), "pedersen_params.json")
-open(PEDERSEN_HASH_POINT_FILENAME, "w").write(
+Path(PEDERSEN_HASH_POINT_FILENAME, "w").write_text(
     json.dumps(
         {
             "_license": COPYRIGHT_STRING.splitlines(),

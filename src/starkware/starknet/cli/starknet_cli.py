@@ -594,7 +594,8 @@ async def tx_status(args, command_args):
                 else:
                     addr_str, path = addr_and_path_split
                     addr = parse_address(addr_str)
-                contracts[addr] = Program.load(json.load(open(path.strip()))["program"])
+                with open(path.strip()) as fp:
+                    contracts[addr] = Program.load(json.load(fp)["program"])
             error_message = reconstruct_starknet_traceback(
                 contracts=contracts, traceback_txt=error_message
             )

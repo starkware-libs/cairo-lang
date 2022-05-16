@@ -5,7 +5,8 @@ from starkware.cairo.lang.compiler.program import Program
 
 
 def run_generate_hash_test(fix: bool, program_path: str, hash_path: str, command: str):
-    compiled_program = Program.Schema().load(json.load(open(program_path)))
+    with open(program_path) as fp:
+        compiled_program = Program.Schema().load(json.load(fp))
     program_hash = hex(compute_program_hash_chain(program=compiled_program))
     program_hash_key = "program_hash"
 
@@ -14,7 +15,8 @@ def run_generate_hash_test(fix: bool, program_path: str, hash_path: str, command
             fp.write(json.dumps({program_hash_key: program_hash}, indent=4) + "\n")
         return
 
-    expected_hash = json.load(open(hash_path))[program_hash_key]
+    with open(hash_path) as fp:
+        expected_hash = json.load(fp)[program_hash_key]
     assert expected_hash == program_hash, (
         f"Wrong program hash in program_hash.json. Found: {program_hash}. "
         f"Expected: {expected_hash}. Please run {command}."

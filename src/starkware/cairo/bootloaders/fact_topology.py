@@ -22,7 +22,8 @@ class FactTopologiesFile:
 
 
 def load_fact_topologies(path) -> List[FactTopology]:
-    return FactTopologiesFile.Schema().load(json.load(open(path))).fact_topologies
+    with open(path) as fp:
+        return FactTopologiesFile.Schema().load(json.load(fp)).fact_topologies
 
 
 @dataclasses.dataclass(frozen=True)

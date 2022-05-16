@@ -23,7 +23,8 @@ def load_config(
     if config_file_path is None:
         config_file_path = "/config.yml"
 
-    config = yaml.safe_load(open(config_file_path, "r"))
+    with open(config_file_path) as fp:
+        config = yaml.safe_load(fp)
     if load_logging_config:
         logging.config.dictConfig(config.get("LOGGING", {}))
 

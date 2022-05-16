@@ -4,4 +4,5 @@ from starkware.starknet.services.api.contract_definition import ContractDefiniti
 
 DIR = os.path.dirname(__file__)
 
-account_contract = ContractDefinition.loads(open(os.path.join(DIR, "account.json")).read())
+with open(os.path.join(DIR, "account.json")) as fp:
+    account_contract = ContractDefinition.loads(fp).read()
