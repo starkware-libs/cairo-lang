@@ -24,11 +24,13 @@ def is_positive(value, prime, rc_bound):
     assert abs(val) < rc_bound, f"value={val} is out of the valid range."
     return val > 0
 
-def is_even(value, rc_bound):
+
+def is_even(value, prime, rc_bound):
     """
-    Returns true if the input is even and within the range (-rc_bound, rc_bound).
-    Raises an exception if the element is not within the accepted range.
+    Returns True if the lift of the given field element, as an integer in the range
+    (-rc_bound, rc_bound), is even.
+    Raises an exception if the element is not within that range.
     """
-    assert_integer(value)
-    assert abs(value) < rc_bound, f"value={value} is out of the valid range."
-    return value % 2 == 0
+    val = as_int(value, prime)
+    assert abs(val) < rc_bound, f"value={val} is out of the valid range."
+    return val % 2 == 0
