@@ -55,7 +55,7 @@ class StarknetErrorCode(ErrorCode):
 # Errors that are raised by the gateways and caused by wrong usage of the user.
 
 external_txs_loading_common_error_codes: List[ErrorCode] = [
-    # Raw builtin exceptions from pre/post_load/dump are wrapped with StarkExcpetion and this code.
+    # Raw builtin exceptions from pre/post_load/dump are wrapped with StarkException and this code.
     StarkErrorCode.MALFORMED_REQUEST,
     StarkErrorCode.OUT_OF_RANGE_FIELD_ELEMENT,
     StarkErrorCode.SCHEMA_VALIDATION_ERROR,

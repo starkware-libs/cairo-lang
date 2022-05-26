@@ -24,7 +24,7 @@ class BatchStore(Storage):
                 await task
             except Exception as ex:
                 if not isinstance(ex, asyncio.CancelledError):
-                    logger.error(f"Excpetion occurred! Exception: {ex}")
+                    logger.error(f"Exception occurred! Exception: {ex}")
                     logger.debug("Exception details", exc_info=True)
 
     async def set_value(self, key: bytes, value: bytes):
