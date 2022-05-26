@@ -111,7 +111,7 @@ def main():
     )
     parser.add_argument(
         "--program_output_file",
-        type=argparse.FileType("w"),
+        type=argparse.FileType("wb"),
         help="Output file name for the program output.",
     )
     parser.add_argument(
