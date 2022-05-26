@@ -378,10 +378,8 @@ def f():
 Got an exception while compiling a hint.
 %{{
 ^^
-Traceback (most recent call last):
   File "{cairo_file.name}", line 7
     a = 1 # Wrong indentation.
-    ^
 IndentationError: unexpected indent\
 """
     assert expected_error == str(excinfo.value)
@@ -427,10 +425,9 @@ def f():
 Got an exception while compiling a hint.
 %{{
 ^^
-Traceback (most recent call last):
   File "{cairo_file.name}", line 7
     b = # Wrong syntax.
-                      ^
+        ^
 SyntaxError: invalid syntax\
 """
     assert expected_error == str(excinfo.value)
