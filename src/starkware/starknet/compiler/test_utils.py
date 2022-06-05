@@ -28,8 +28,8 @@ func call_contract{syscall_ptr : felt*}(
     ret
 end
 
-func delegate_call{syscall_ptr : felt*}(
-        contract_address : felt, function_selector : felt, calldata_size : felt,
+func library_call{syscall_ptr : felt*}(
+        class_hash : felt, function_selector : felt, calldata_size : felt,
         calldata : felt*) -> (retdata_size : felt, retdata : felt*):
     ret
 end
@@ -53,12 +53,12 @@ end
     "starkware.cairo.common.hash": """
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 
-func hash2{hash_ptr : HashBuiltin*}(x, y) -> (result):
+func hash2{hash_ptr : HashBuiltin*}(x, y) -> (result : felt):
     ret
 end
 """,
     "starkware.cairo.common.alloc": """
-func alloc() -> (result):
+func alloc() -> (ptr : felt*):
     ret
 end
 """,

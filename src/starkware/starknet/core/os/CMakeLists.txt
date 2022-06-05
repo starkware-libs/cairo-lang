@@ -1,3 +1,5 @@
+add_subdirectory(block_hash)
+add_subdirectory(contract_address)
 add_subdirectory(os_config)
 add_subdirectory(transaction_hash)
 
@@ -9,7 +11,7 @@ python_lib(starknet_os_abi_lib
 
     FILES
     contracts.cairo
-    contract_hash.py
+    class_hash.py
 
     LIBS
     cairo_common_lib
@@ -19,7 +21,7 @@ python_lib(starknet_os_abi_lib
     cairo_run_builtins_lib
     cairo_vm_crypto_lib
     starknet_abi_lib
-    starknet_contract_definition_lib
+    starknet_contract_class_lib
     starkware_python_utils_lib
     pip_cachetools
 )
@@ -46,7 +48,8 @@ python_lib(starknet_os_utils_lib
     cairo_vm_lib
     starknet_abi_lib
     starknet_business_logic_state_lib
-    starknet_contract_definition_lib
+    starknet_contract_address_lib
+    starknet_contract_class_lib
     starknet_definitions_lib
     starknet_execute_entry_point_base_lib
     starknet_general_config_lib
@@ -63,7 +66,7 @@ add_dependencies(starknet_os_utils_lib starknet_os_program)
 
 full_python_test(starknet_os_program_hash_test
     PREFIX starkware/starknet/core/os
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
     TESTED_MODULES starkware/starknet/core/os
 
     FILES

@@ -31,6 +31,7 @@ python_lib(cairo_compile_lib
     expression_simplifier.py
     expression_transformer.py
     fields.py
+    filter_unused_identifiers.py
     identifier_definition.py
     identifier_manager.py
     identifier_manager_field.py
@@ -93,7 +94,7 @@ python_exe(cairo_compile_exe
 )
 
 python_venv(cairo_format_venv
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
     LIBS
     cairo_compile_lib
 )
@@ -118,7 +119,7 @@ python_lib(cairo_compile_test_utils_lib
 
 full_python_test(cairo_compile_test
     PREFIX starkware/cairo/lang/compiler
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
     TESTED_MODULES starkware/cairo/lang/compiler
 
     FILES
@@ -132,6 +133,7 @@ full_python_test(cairo_compile_test
     error_handling_test.py
     expression_evaluator_test.py
     expression_simplifier_test.py
+    filter_unused_identifiers_test.py
     identifier_definition_test.py
     identifier_manager_field_test.py
     identifier_manager_test.py
@@ -168,6 +170,7 @@ full_python_test(cairo_compile_test
     LIBS
     cairo_compile_lib
     cairo_compile_test_utils_lib
+    cairo_vm_test_utils_lib
     starkware_python_test_utils_lib
     starkware_python_utils_lib
     pip_pytest

@@ -1,4 +1,4 @@
-from typing import ClassVar, Type
+from typing import Callable, ClassVar, Type
 
 import marshmallow_oneofschema
 
@@ -12,6 +12,11 @@ class EverestTransaction(ValidatedMarshmallowDataclass):
     """
 
     Schema: ClassVar[Type[marshmallow_oneofschema.OneOfSchema]]
+
+    def log_additional_data(self, logger: Callable[[str], None]) -> None:
+        """
+        Logs additional data that isn't present in the __repr__ or __str__ functions.
+        """
 
 
 

@@ -27,7 +27,7 @@ class TraceEntry(Generic[T]):
         values = [self.ap, self.fp, self.pc]
         for x in values:
             assert isinstance(x, int)
-            assert 0 <= x < 2 ** 64
+            assert 0 <= x < 2**64
         return struct.pack("<3Q", *values)
 
     @classmethod

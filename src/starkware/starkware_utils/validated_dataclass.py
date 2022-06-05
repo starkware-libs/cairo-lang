@@ -78,6 +78,11 @@ class ValidatedDataclass:
                 )
                 continue
 
+            # If the field was not supplied but there is a default value, use the default value.
+            if field.default is not dataclasses.MISSING:
+                new_object_data[field.name] = field.default
+                continue
+
             raise Exception(
                 f"Could not randomize the field {field.name} in an object of type {cls}."
             )

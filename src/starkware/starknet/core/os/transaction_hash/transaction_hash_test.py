@@ -4,15 +4,19 @@ import pytest
 
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.crypto.signature.fast_pedersen_hash import pedersen_hash
+from starkware.starknet.core.os.class_hash import compute_class_hash
 from starkware.starknet.core.os.os_program import get_os_program
 from starkware.starknet.core.os.transaction_hash.transaction_hash import (
     TransactionHashPrefix,
+    calculate_declare_transaction_hash,
     calculate_deploy_transaction_hash,
     calculate_transaction_hash_common,
     compute_hash_on_elements,
 )
+from starkware.starknet.core.test_contract.test_utils import get_contract_class
 from starkware.starknet.definitions import constants
-from starkware.starknet.services.api.contract_definition import CONSTRUCTOR_SELECTOR
+from starkware.starknet.services.api.contract_class import CONSTRUCTOR_SELECTOR
+from starkware.starknet.services.api.gateway.transaction import DECLARE_SENDER_ADDRESS
 
 
 def run_cairo_transaction_hash(
@@ -44,12 +48,12 @@ def run_cairo_transaction_hash(
         use_full_name=True,
         verify_secure=False,
     )
-    pedersen_ptr, contract_hash = runner.get_return_values(2)
+    pedersen_ptr, class_hash = runner.get_return_values(2)
 
     assert pedersen_ptr == runner.pedersen_builtin.base + (
         runner.pedersen_builtin.cells_per_instance * (9 + len(calldata) + len(additional_data))
     )
-    return contract_hash
+    return class_hash
 
 
 @pytest.mark.parametrize("tx_hash_prefix", set(TransactionHashPrefix))
@@ -97,10 +101,13 @@ def test_transaction_hash_common_flow(
 
 @pytest.mark.parametrize("constructor_calldata", [[], [658], [539, 337], [72, 442, 233, 349, 840]])
 def test_deploy_transaction_hash(constructor_calldata: List[int]):
-    version = constants.TRANSACTION_VERSION
-    contract_address = 1
-    chain_id = 1
+    # Constant value unrelated to the transaction data.
+    version = 111
     max_fee = 0
+
+    # Tested transaction data.
+    contract_address = 10
+    chain_id = 1
 
     expected_hash = compute_hash_on_elements(
         data=[
@@ -119,6 +126,43 @@ def test_deploy_transaction_hash(constructor_calldata: List[int]):
             contract_address=contract_address,
             constructor_calldata=constructor_calldata,
             chain_id=chain_id,
+            version=version,
+        )
+        == expected_hash
+    )
+
+
+def test_declare_transaction_hash():
+    # Constant value unrelated to the transaction data.
+    entry_point_selector = 0
+
+    # Tested transaction data.
+    version = constants.TRANSACTION_VERSION
+    max_fee = 0
+    chain_id = 1
+    contract_class = get_contract_class(contract_name="dummy_account")
+    class_hash = compute_class_hash(contract_class=contract_class, hash_func=pedersen_hash)
+
+    expected_hash = compute_hash_on_elements(
+        data=[
+            TransactionHashPrefix.DECLARE.value,
+            version,
+            DECLARE_SENDER_ADDRESS,
+            entry_point_selector,
+            compute_hash_on_elements(data=[], hash_func=pedersen_hash),
+            max_fee,
+            chain_id,
+            class_hash,
+        ],
+        hash_func=pedersen_hash,
+    )
+    assert (
+        calculate_declare_transaction_hash(
+            contract_class=contract_class,
+            chain_id=chain_id,
+            sender_address=DECLARE_SENDER_ADDRESS,
+            max_fee=max_fee,
+            version=version,
         )
         == expected_hash
     )

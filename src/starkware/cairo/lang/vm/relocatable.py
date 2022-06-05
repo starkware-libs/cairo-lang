@@ -1,8 +1,8 @@
 import dataclasses
 from typing import Dict, Mapping, SupportsInt, Tuple, Union
 
-RELOCATABLE_OFFSET_LOWER_BOUND = -(2 ** 63)
-RELOCATABLE_OFFSET_UPPER_BOUND = 2 ** 63
+RELOCATABLE_OFFSET_LOWER_BOUND = -(2**63)
+RELOCATABLE_OFFSET_UPPER_BOUND = 2**63
 
 
 @dataclasses.dataclass(frozen=True)
@@ -81,7 +81,7 @@ class RelocatableValue:
             assert value < 2 ** (8 * n_bytes - 1)
             return value.to_bytes(n_bytes, byte_order)
         assert n_bytes * 8 > value.SEGMENT_BITS + value.OFFSET_BITS
-        num = 2 ** (8 * n_bytes - 1) + value.segment_index * 2 ** value.OFFSET_BITS + value.offset
+        num = 2 ** (8 * n_bytes - 1) + value.segment_index * 2**value.OFFSET_BITS + value.offset
         return num.to_bytes(n_bytes, byte_order)
 
     @classmethod
@@ -89,8 +89,8 @@ class RelocatableValue:
         n_bytes = len(data)
         num = int.from_bytes(data, byte_order)
         if num & (2 ** (8 * n_bytes - 1)):
-            offset = num & (2 ** cls.OFFSET_BITS - 1)
-            segment_index = (num >> cls.OFFSET_BITS) & (2 ** cls.SEGMENT_BITS - 1)
+            offset = num & (2**cls.OFFSET_BITS - 1)
+            segment_index = (num >> cls.OFFSET_BITS) & (2**cls.SEGMENT_BITS - 1)
             return RelocatableValue(segment_index, offset)
         return num
 

@@ -129,7 +129,7 @@ func uint256_sqrt{range_check_ptr}(n : Uint256) -> (res : Uint256):
 end
 
 # Returns 1 if the first unsigned integer is less than the second unsigned integer.
-func uint256_lt{range_check_ptr}(a : Uint256, b : Uint256) -> (res):
+func uint256_lt{range_check_ptr}(a : Uint256, b : Uint256) -> (res : felt):
     if a.high == b.high:
         return is_le(a.low + 1, b.low)
     end
@@ -137,27 +137,27 @@ func uint256_lt{range_check_ptr}(a : Uint256, b : Uint256) -> (res):
 end
 
 # Returns 1 if the first signed integer is less than the second signed integer.
-func uint256_signed_lt{range_check_ptr}(a : Uint256, b : Uint256) -> (res):
+func uint256_signed_lt{range_check_ptr}(a : Uint256, b : Uint256) -> (res : felt):
     let (a, _) = uint256_add(a, cast((low=0, high=2 ** 127), Uint256))
     let (b, _) = uint256_add(b, cast((low=0, high=2 ** 127), Uint256))
     return uint256_lt(a, b)
 end
 
 # Returns 1 if the first unsigned integer is less than or equal to the second unsigned integer.
-func uint256_le{range_check_ptr}(a : Uint256, b : Uint256) -> (res):
+func uint256_le{range_check_ptr}(a : Uint256, b : Uint256) -> (res : felt):
     let (not_le) = uint256_lt(a=b, b=a)
     return (1 - not_le)
 end
 
 # Returns 1 if the first signed integer is less than or equal to the second signed integer.
-func uint256_signed_le{range_check_ptr}(a : Uint256, b : Uint256) -> (res):
+func uint256_signed_le{range_check_ptr}(a : Uint256, b : Uint256) -> (res : felt):
     let (not_le) = uint256_signed_lt(a=b, b=a)
     return (1 - not_le)
 end
 
 # Returns 1 if the signed integer is nonnegative.
 @known_ap_change
-func uint256_signed_nn{range_check_ptr}(a : Uint256) -> (res):
+func uint256_signed_nn{range_check_ptr}(a : Uint256) -> (res : felt):
     %{ memory[ap] = 1 if 0 <= (ids.a.high % PRIME) < 2 ** 127 else 0 %}
     jmp non_negative if [ap] != 0; ap++
 
@@ -173,7 +173,7 @@ end
 
 # Returns 1 if the first signed integer is less than or equal to the second signed integer
 # and is greater than or equal to zero.
-func uint256_signed_nn_le{range_check_ptr}(a : Uint256, b : Uint256) -> (res):
+func uint256_signed_nn_le{range_check_ptr}(a : Uint256, b : Uint256) -> (res : felt):
     let (is_le) = uint256_signed_le(a=a, b=b)
     if is_le == 0:
         return (res=0)
@@ -294,7 +294,7 @@ end
 # Bitwise.
 
 # Return true if both integers are equal.
-func uint256_eq{range_check_ptr}(a : Uint256, b : Uint256) -> (res):
+func uint256_eq{range_check_ptr}(a : Uint256, b : Uint256) -> (res : felt):
     if a.high != b.high:
         return (0)
     end

@@ -7,7 +7,7 @@ from starkware.cairo.common.cairo_builtins import HashBuiltin
 # the root to the leaf), this function computes the roots twice - once with prev_leaf and once with
 # new_leaf, where the verifier is guaranteed that the same authentication path is used.
 func merkle_update{hash_ptr : HashBuiltin*}(height, prev_leaf, new_leaf, index) -> (
-    prev_root, new_root
+    prev_root : felt, new_root : felt
 ):
     if height == 0:
         # Assert that index is 0.

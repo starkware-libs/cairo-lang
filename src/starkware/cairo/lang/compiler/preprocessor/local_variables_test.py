@@ -57,7 +57,7 @@ struct MyStruct:
     member b : felt
 end
 
-func foo() -> (x : MyStruct*, y : MyStruct, z):
+func foo() -> (x : MyStruct*, y : MyStruct, z : felt):
     ret
 end
 

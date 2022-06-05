@@ -132,10 +132,12 @@ class TypeTuple(CairoType):
         for note in self.notes:
             note.assert_no_comments()
 
-    def to_particle(self) -> Particle:
+    def get_particles(self) -> List[Particle]:
         self.assert_no_comments()
-        member_particles = [member.to_particle() for member in self.members]
-        return SeparatedParticleList(elements=member_particles, start="(", end=")")
+        return [member.to_particle() for member in self.members]
+
+    def to_particle(self) -> Particle:
+        return SeparatedParticleList(elements=self.get_particles(), start="(", end=")")
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return self.members

@@ -8,6 +8,7 @@ from starkware.starknet.business_logic.execution.objects import (
     TransactionExecutionInfo,
 )
 from starkware.starknet.business_logic.internal_transaction import (
+    InternalDeclare,
     InternalDeploy,
     InternalInvokeFunction,
 )
@@ -15,7 +16,7 @@ from starkware.starknet.business_logic.state.state import CarriedState
 from starkware.starknet.definitions import constants, fields
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public.abi import get_selector_from_name
-from starkware.starknet.services.api.contract_definition import ContractDefinition, EntryPointType
+from starkware.starknet.services.api.contract_class import ContractClass, EntryPointType
 from starkware.starknet.services.api.messages import StarknetMessageToL1
 from starkware.storage.dict_storage import DictStorage
 from starkware.storage.storage import FactFetchingContext
@@ -30,8 +31,8 @@ class StarknetState:
 
     Example usage:
       starknet = await StarknetState.empty()
-      contract_definition = compile_starknet_files([CONTRACT_FILE], debug_info=True)
-      contract_address, _ = await starknet.deploy(contract_definition=contract_definition)
+      contract_class = compile_starknet_files([CONTRACT_FILE], debug_info=True)
+      contract_address, _ = await starknet.deploy(contract_class=contract_class)
       res = await starknet.invoke_raw(
           contract_address=contract_address, selector="func", calldata=[1, 2])
     """
@@ -71,9 +72,30 @@ class StarknetState:
 
         return cls(state=state, general_config=general_config)
 
+    async def declare(self, contract_class: ContractClass) -> TransactionExecutionInfo:
+        """
+        Declares a contract class.
+        Returns the execution info (which includes the class hash).
+
+        Args:
+        contract_class - a compiled StarkNet contract returned by compile_starknet_files().
+        """
+        tx = await InternalDeclare.create_for_testing(
+            ffc=self.state.ffc,
+            contract_class=contract_class,
+            chain_id=self.general_config.chain_id.value,
+        )
+
+        with self.state.copy_and_apply() as state_copy:
+            tx_execution_info = await tx.apply_state_updates(
+                state=state_copy, general_config=self.general_config
+            )
+
+        return tx_execution_info
+
     async def deploy(
         self,
-        contract_definition: ContractDefinition,
+        contract_class: ContractClass,
         constructor_calldata: List[int],
         contract_address_salt: Optional[CastableToAddressSalt] = None,
     ) -> Tuple[int, TransactionExecutionInfo]:
@@ -81,11 +103,10 @@ class StarknetState:
         Deploys a contract. Returns the contract address and the execution info.
 
         Args:
-        contract_definition - a compiled StarkNet contract returned by compile_starknet_files().
+        contract_class - a compiled StarkNet contract returned by compile_starknet_files().
         contract_address_salt - If supplied, a hexadecimal string or an integer representing
         the salt to use for deploying. Otherwise, the salt is randomized.
         """
-
         if contract_address_salt is None:
             contract_address_salt = fields.ContractAddressSalt.get_random_value()
         if isinstance(contract_address_salt, str):
@@ -94,7 +115,7 @@ class StarknetState:
 
         tx = await InternalDeploy.create_for_testing(
             ffc=self.state.ffc,
-            contract_definition=contract_definition,
+            contract_class=contract_class,
             contract_address_salt=contract_address_salt,
             constructor_calldata=constructor_calldata,
             chain_id=self.general_config.chain_id.value,
@@ -137,7 +158,7 @@ class StarknetState:
         )
 
         return await tx.execute(
-            state=copy.deepcopy(self.state),
+            state=self.state.create_child_state_for_querying(),
             general_config=self.general_config,
             only_query=True,
         )

@@ -77,7 +77,7 @@ def verify_leaves_are_reachable_from_root(
 @parametrize_random_object(n_nightly_runs=5)
 @pytest.mark.parametrize(
     "height,n_leaves",
-    [(2, 2 ** 2), (10, 2 ** 10), (10, 5), (10, 2 ** 10 // 2)],
+    [(2, 2**2), (10, 2**10), (10, 5), (10, 2**10 // 2)],
     ids=["full_tree_small", "full_tree_large", "sparse_tree", "dense_tree"],
 )
 async def test_update_and_decommit(
@@ -95,7 +95,7 @@ async def test_update_and_decommit(
     ]
     leaf_hashes_bytes = await asyncio.gather(*(leaf_fact.set_fact(ffc=ffc) for leaf_fact in leaves))
     leaf_hashes = [from_bytes(leaf_hash_bytes) for leaf_hash_bytes in leaf_hashes_bytes]
-    indices = random_object.sample(range(2 ** height), k=n_leaves)
+    indices = random_object.sample(range(2**height), k=n_leaves)
     modifications = list(zip(indices, leaves))
     preimages: BinaryFactDict = {}
     tree = await tree.update(ffc=ffc, modifications=modifications, facts=preimages)

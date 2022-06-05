@@ -3,7 +3,7 @@ import concurrent
 import concurrent.futures
 import dataclasses
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Set, Tuple, Type, TypeVar, Union
+from typing import Dict, List, Mapping, Optional, Set, Tuple, Type, TypeVar, Union
 
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.python.utils import from_bytes, to_bytes
@@ -122,7 +122,7 @@ class StarknetStorage(StarknetStorageInterface):
         assert isinstance(address, int)
 
         assert (
-            0 <= address < 2 ** self.commitment_tree.height
+            0 <= address < 2**self.commitment_tree.height
         ), f"The address {address} is out of range."
         leaves = await self.commitment_tree.get_leaves(
             ffc=self.ffc, indices=[address], fact_cls=StorageLeaf
@@ -228,7 +228,7 @@ class StarknetStorage(StarknetStorageInterface):
 
         return commitment_tree, commitment_tree_facts
 
-    def reset_state(self, storage_updates: Dict[int, StorageLeaf]):
+    def reset_state(self, storage_updates: Mapping[int, StorageLeaf]):
         self.pending_modifications.update(storage_updates)
         self.modifications.clear()
         self.initial_values.clear()
@@ -241,7 +241,7 @@ class StarknetStorage(StarknetStorageInterface):
         for i in range(0, len(dict_accesses), 3):
             key, prev_value, new_value = dict_accesses[i : i + 3]
             assert (
-                0 <= key < 2 ** self.commitment_tree.height
+                0 <= key < 2**self.commitment_tree.height
             ), f"The address {key} is out of range."
 
             curr_val = current_values.get(key)

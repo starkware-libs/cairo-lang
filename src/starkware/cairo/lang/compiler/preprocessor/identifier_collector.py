@@ -138,19 +138,27 @@ class IdentifierCollector(Visitor):
         implicit_args_scope = function_scope + CodeElementFunction.IMPLICIT_ARGUMENT_SCOPE
         rets_scope = function_scope + CodeElementFunction.RETURN_SCOPE
 
-        def handle_struct_def(identifier_list: Optional[IdentifierList], struct_name: ScopedName):
+        def handle_definition(
+            identifier_list: Optional[IdentifierList],
+            name: ScopedName,
+            identifier_type: Type[IdentifierDefinition],
+        ):
             location = elm.identifier.location
             if identifier_list is not None:
                 location = identifier_list.location
 
             self.add_future_identifier(
-                name=struct_name, identifier_type=StructDefinition, location=location
+                name=name, identifier_type=identifier_type, location=location
             )
 
         def handle_function_arguments(
             identifier_list: Optional[IdentifierList], struct_name: ScopedName
         ):
-            handle_struct_def(identifier_list=identifier_list, struct_name=struct_name)
+            handle_definition(
+                identifier_list=identifier_list,
+                name=struct_name,
+                identifier_type=StructDefinition,
+            )
             if identifier_list is None:
                 return
 
@@ -175,7 +183,9 @@ class IdentifierCollector(Visitor):
             identifier_list=elm.implicit_arguments, struct_name=implicit_args_scope
         )
 
-        handle_struct_def(identifier_list=elm.returns, struct_name=rets_scope)
+        handle_definition(
+            identifier_list=elm.returns, name=rets_scope, identifier_type=TypeDefinition
+        )
 
         # Make sure there is no name collision.
         if elm.implicit_arguments is not None:

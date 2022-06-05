@@ -10,7 +10,7 @@ from starkware.cairo.common.cairo_builtins import HashBuiltin
 #
 # Returns:
 #   result - the field element result of the hash.
-func hash2{hash_ptr : HashBuiltin*}(x, y) -> (result):
+func hash2{hash_ptr : HashBuiltin*}(x, y) -> (result : felt):
     hash_ptr.x = x
     hash_ptr.y = y
     let result = hash_ptr.result

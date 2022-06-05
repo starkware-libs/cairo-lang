@@ -28,7 +28,7 @@ struct AmmState:
 end
 
 func modify_account{range_check_ptr}(state : AmmState, account_id, diff_a, diff_b) -> (
-    state : AmmState, key
+    state : AmmState, key : felt
 ):
     alloc_locals
 
@@ -186,7 +186,7 @@ const LOG_N_ACCOUNTS = 10
 # Hint argument: initial_account_dict should be a dictionary
 # from account_id to an address in memory of the Account struct.
 func compute_merkle_roots{pedersen_ptr : HashBuiltin*, range_check_ptr}(state : AmmState) -> (
-    root_before, root_after
+    root_before : felt, root_after : felt
 ):
     alloc_locals
 
@@ -194,7 +194,6 @@ func compute_merkle_roots{pedersen_ptr : HashBuiltin*, range_check_ptr}(state : 
     let (squashed_dict_start, squashed_dict_end) = dict_squash(
         dict_accesses_start=state.account_dict_start, dict_accesses_end=state.account_dict_end
     )
-    local range_check_ptr = range_check_ptr
 
     # Hash the dict values.
     %{

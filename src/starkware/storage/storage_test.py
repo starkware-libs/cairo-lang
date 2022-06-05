@@ -1,4 +1,5 @@
 import asyncio
+from typing import Any, Dict
 
 import pytest
 
@@ -31,7 +32,7 @@ async def test_dummy_lock():
 
 @pytest.mark.asyncio
 async def test_from_config():
-    config = {"class": "starkware.storage.dict_storage.DictStorage", "config": {}}
+    config: Dict[str, Any] = {"class": "starkware.storage.dict_storage.DictStorage", "config": {}}
 
     storage = await Storage.create_instance_from_config(config=config)
     assert type(storage) is DictStorage

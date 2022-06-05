@@ -2,7 +2,7 @@ from starkware.cairo.common.math import assert_le
 from starkware.cairo.common.registers import get_ap, get_fp_and_pc
 
 # Returns base ** exp, for 0 <= exp < 2**251.
-func pow{range_check_ptr}(base, exp) -> (res):
+func pow{range_check_ptr}(base, exp) -> (res : felt):
     struct LoopLocals:
         member bit : felt
         member temp0 : felt
@@ -45,7 +45,7 @@ func pow{range_check_ptr}(base, exp) -> (res):
     # Cap the number of steps.
     let (__ap__) = get_ap()
     let (__fp__, _) = get_fp_and_pc()
-    let n_steps = (__ap__ - cast(initial_locs, felt)) / LoopLocals.SIZE - 1
+    let n_steps = (__ap__ - cast(initial_locs, felt*)) / LoopLocals.SIZE - 1
     assert_le(n_steps, 251)
     return (res=locs.res)
 end

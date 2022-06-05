@@ -1,3 +1,5 @@
+import pytest
+
 from starkware.cairo.lang.compiler.ast.formatting_utils import (
     Particle,
     ParticleFormattingConfig,
@@ -32,22 +34,28 @@ def run_test_particles_in_lines(
         )
 
 
-def test_particles_in_lines():
+@pytest.mark.parametrize("trailing_separator", [True, False])
+def test_particles_in_lines(trailing_separator: bool):
+    maybe_comma = "," if trailing_separator else ""
     particles = ParticleList(
         elements=[
             "start ",
             "foo ",
             "bar ",
-            SeparatedParticleList(elements=["a", "b", "c", "dddd", "e", "f"], end="*"),
+            SeparatedParticleList(
+                elements=["a", "b", "c", "dddd", "e", "f"],
+                end="*",
+                trailing_separator=trailing_separator,
+            ),
             " asdf",
         ]
     )
-    expected = """\
+    expected = f"""\
 start foo
   bar
   a, b, c,
   dddd, e,
-  f* asdf\
+  f{maybe_comma}* asdf\
 """
     expected_one_per_line = """\
 start foo
@@ -70,22 +78,30 @@ start foo
     particles = ParticleList(
         elements=[
             "func f(",
-            SeparatedParticleList(elements=["x", "y", "z"], end=") -> ("),
-            SeparatedParticleList(elements=["a", "b", "c"], end="):"),
+            SeparatedParticleList(
+                elements=["x", "y", "z"],
+                end=") -> (",
+                trailing_separator=trailing_separator,
+            ),
+            SeparatedParticleList(
+                elements=["a", "b", "c"],
+                end="):",
+                trailing_separator=trailing_separator,
+            ),
         ]
     )
-    expected = """\
+    expected = f"""\
 func f(
     x, y,
-    z) -> (
+    z{maybe_comma}) -> (
     a, b,
-    c):\
+    c{maybe_comma}):\
 """
-    expected_one_per_line = """\
+    expected_one_per_line = f"""\
 func f(
-    x, y, z
+    x, y, z{maybe_comma}
 ) -> (
-    a, b, c
+    a, b, c{maybe_comma}
 ):\
 """
     run_test_particles_in_lines(
@@ -96,14 +112,14 @@ func f(
     )
 
     # Same particles, using one_per_line=True.
-    expected = """\
+    expected = f"""\
 func f(
     x,
     y,
-    z) -> (
+    z{maybe_comma}) -> (
     a,
     b,
-    c):\
+    c{maybe_comma}):\
 """
     with set_one_item_per_line(False):
         assert (
@@ -117,10 +133,10 @@ func f(
         )
 
     # Same particles, using one_per_line=True, longer lines.
-    expected = """\
+    expected = f"""\
 func f(
-    x, y, z) -> (
-    a, b, c):\
+    x, y, z{maybe_comma}) -> (
+    a, b, c{maybe_comma}):\
 """
     with set_one_item_per_line(False):
         assert (
@@ -136,13 +152,23 @@ func f(
     particles = ParticleList(
         elements=[
             "func f(",
-            SeparatedParticleList(elements=["x", "y", "z"], end=") -> ("),
-            SeparatedParticleList(elements=[], end="):"),
+            SeparatedParticleList(
+                elements=["x", "y", "z"],
+                end=") -> (",
+                trailing_separator=trailing_separator,
+            ),
+            SeparatedParticleList(
+                elements=[],
+                end="):",
+                trailing_separator=trailing_separator,
+            ),
         ]
     )
-    expected = """\
+
+    maybe_comma_on_a_new_line = "\n    ," if trailing_separator else ""
+    expected = f"""\
 func f(
-    x, y, z) -> ():\
+    x, y, z{maybe_comma}) -> ({maybe_comma_on_a_new_line}):\
 """
     with set_one_item_per_line(False):
         assert (

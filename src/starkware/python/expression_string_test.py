@@ -24,9 +24,9 @@ def test_expression_string():
     assert str((a + b) * c + d + e * f) == "(a + b) * c + d + e * f"
     assert str(a - (b - c) / (d - e) / f) == "a - (b - c) / (d - e) / f"
 
-    assert str((a ** b) ** c) == "(a^b)^c"
-    assert str(a ** b ** c) == "a^(b^c)"
-    assert str(a ** ((b ** c) ** (d ** e)) ** f) == "a^(((b^c)^(d^e))^f)"
+    assert str((a**b) ** c) == "(a^b)^c"
+    assert str(a**b**c) == "a^(b^c)"
+    assert str(a ** ((b**c) ** (d**e)) ** f) == "a^(((b^c)^(d^e))^f)"
     assert str(a / b ** (c + d) * (e + f)) == "a / b^(c + d) * (e + f)"
 
     assert str(-a) == "-a"
@@ -35,6 +35,6 @@ def test_expression_string():
     assert str((-((-a) ** (-b))) ** c) == "(-((-a)^(-b)))^c"
     assert str(-(-a)) == "-(-a)"
 
-    assert str((a ** b).address_of().address_of()) == "&&(a^b)"
+    assert str((a**b).address_of().address_of()) == "&&(a^b)"
     assert str((-((-a).address_of())).address_of()) == "&(-&(-a))"
     assert str(a.address_of() - b.address_of()) == "&a - &b"

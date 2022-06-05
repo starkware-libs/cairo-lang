@@ -27,6 +27,7 @@ python_lib(starknet_general_config_lib
 
     LIBS
     cairo_instances_lib
+    cairo_run_builtins_lib
     everest_general_config_lib
     starknet_definitions_lib
     starkware_config_utils_lib

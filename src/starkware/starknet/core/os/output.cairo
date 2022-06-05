@@ -28,7 +28,7 @@ end
 # Call data of size 'calldata_size' is concatenated to the end of the header.
 struct DeploymentInfoHeader:
     member contract_address : felt
-    member contract_hash : felt
+    member class_hash : felt
     member calldata_size : felt
 end
 

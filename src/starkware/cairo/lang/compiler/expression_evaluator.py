@@ -35,9 +35,11 @@ class ExpressionEvaluator(Generic[T], ExpressionSimplifier):
 
     def eval(self, expr: Expression) -> T:
         expr, expr_type = simplify_type_system(expr, identifiers=self.identifiers)
-        assert isinstance(
-            expr_type, (TypeFelt, TypePointer)
-        ), f"Unable to evaluate expression of type '{expr_type.format()}'."
+        if not isinstance(expr_type, (TypeFelt, TypePointer)):
+            raise ExpressionEvaluatorError(
+                f"Unable to evaluate expression of type '{expr_type.format()}'.",
+                location=expr.location,
+            )
         res = self.visit(expr)
         assert isinstance(res, ExprConst), f"Unable to evaluate expression '{expr.format()}'."
         assert self.prime is not None

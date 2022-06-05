@@ -11,13 +11,14 @@ python_lib(starknet_business_logic_utils_lib
     cairo_function_runner_lib
     starknet_abi_lib
     starknet_business_logic_state_lib
-    starknet_contract_definition_lib
+    starknet_contract_class_lib
     starknet_definitions_lib
     starknet_execution_usage_lib
     starknet_general_config_lib
     starknet_transaction_execution_objects_lib
     starknet_transaction_hash_lib
     starkware_error_handling_lib
+    starkware_storage_lib
 )
 
 python_lib(starknet_internal_transaction_interface_lib
@@ -55,12 +56,13 @@ python_lib(starknet_internal_transaction_lib
     starknet_business_logic_state_lib
     starknet_business_logic_utils_lib
     starknet_contract_address_lib
-    starknet_contract_definition_lib
+    starknet_contract_class_lib
     starknet_definitions_lib
     starknet_execute_entry_point_lib
     starknet_general_config_lib
     starknet_internal_transaction_interface_lib
     starknet_os_abi_lib
+    starknet_os_utils_lib
     starknet_transaction_execution_objects_lib
     starknet_transaction_fee_lib
     starknet_transaction_hash_lib
@@ -86,7 +88,7 @@ python_lib(starknet_transaction_fee_lib
     starknet_abi_lib
     starknet_business_logic_state_lib
     starknet_business_logic_utils_lib
-    starknet_contract_definition_lib
+    starknet_contract_class_lib
     starknet_definitions_lib
     starknet_execute_entry_point_lib
     starknet_general_config_lib

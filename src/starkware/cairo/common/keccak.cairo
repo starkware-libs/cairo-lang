@@ -9,7 +9,7 @@ from starkware.cairo.common.uint256 import Uint256
 # data - an array of words representing the input data. Each word in the array is 16 bytes of the
 # input data, except the last word, which may be less.
 # length - the number of bytes in the input.
-func unsafe_keccak(data : felt*, length : felt) -> (low, high):
+func unsafe_keccak(data : felt*, length : felt) -> (low : felt, high : felt):
     alloc_locals
     local low
     local high

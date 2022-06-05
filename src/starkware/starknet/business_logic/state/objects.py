@@ -1,19 +1,19 @@
 import dataclasses
 from dataclasses import field
-from typing import ClassVar, Dict, Iterable, List, cast
+from typing import ClassVar, Dict, Iterable, Mapping, Set
 
 import marshmallow_dataclass
 
 from starkware.python.utils import gather_in_chunks, safe_zip, to_bytes
-from starkware.starknet.core.os.contract_hash import compute_contract_hash
+from starkware.starknet.core.os.class_hash import compute_class_hash
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
-from starkware.starknet.services.api.contract_definition import ContractDefinition
+from starkware.starknet.services.api.contract_class import ContractClass
 from starkware.starknet.storage.starknet_storage import StorageLeaf
 from starkware.starkware_utils.commitment_tree.leaf_fact import LeafFact
 from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import EmptyNodeFact
 from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
-from starkware.starkware_utils.error_handling import stark_assert
+from starkware.starkware_utils.error_handling import StarkException, stark_assert
 from starkware.starkware_utils.validated_dataclass import (
     ValidatedDataclass,
     ValidatedMarshmallowDataclass,
@@ -22,16 +22,23 @@ from starkware.storage.storage import HASH_BYTES, Fact, FactFetchingContext, Has
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
-class ContractDefinitionFact(ValidatedMarshmallowDataclass, Fact):
+class ContractClassFact(ValidatedMarshmallowDataclass, Fact):
     """
-    Represents a single contract definition which is stored in the full StarkNet state commitment
+    Represents a single contract class which is stored in the full StarkNet state commitment
     tree.
     """
 
-    contract_definition: ContractDefinition
+    contract_definition: ContractClass
 
     def _hash(self, hash_func: HashFunctionType) -> bytes:
-        return to_bytes(compute_contract_hash(contract_definition=self.contract_definition))
+        return to_bytes(compute_class_hash(contract_class=self.contract_definition))
+
+    @classmethod
+    def prefix(cls) -> bytes:
+        """
+        Overrides the prefix for backward compatibility.
+        """
+        return b"contract_definition_fact"
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -43,10 +50,10 @@ class ContractState(ValidatedMarshmallowDataclass, LeafFact):
     and the commitment tree root of the contract storage.
     """
 
-    contract_hash: bytes = field(metadata=fields.contract_hash_metadata)
+    contract_hash: bytes = field(metadata=fields.class_hash_metadata)
     storage_commitment_tree: PatriciaTree
 
-    UNINITIALIZED_CONTRACT_HASH: ClassVar[bytes] = b"\x00" * HASH_BYTES
+    UNINITIALIZED_CLASS_HASH: ClassVar[bytes] = b"\x00" * HASH_BYTES
 
     @classmethod
     async def create(
@@ -62,9 +69,7 @@ class ContractState(ValidatedMarshmallowDataclass, LeafFact):
             ffc=ffc, height=storage_commitment_tree_height, leaf_fact=StorageLeaf.empty()
         )
 
-        return cls(
-            storage_commitment_tree=empty_tree, contract_hash=cls.UNINITIALIZED_CONTRACT_HASH
-        )
+        return cls(storage_commitment_tree=empty_tree, contract_hash=cls.UNINITIALIZED_CLASS_HASH)
 
     @property
     def is_empty(self) -> bool:
@@ -90,35 +95,53 @@ class ContractState(ValidatedMarshmallowDataclass, LeafFact):
         return hash_func(hash_value, to_bytes(CONTRACT_STATE_HASH_VERSION))
 
     @staticmethod
-    async def fetch_contract_definitions(
-        contract_states: Iterable["ContractState"], ffc: FactFetchingContext
-    ) -> Dict[bytes, ContractDefinition]:
-        # Gather all distinct hashes.
-        contract_hashes = set(contract.contract_hash for contract in contract_states)
-        # Discard empty hash for not yet deployed contracts.
-        contract_hashes -= {ContractState.UNINITIALIZED_CONTRACT_HASH}
+    async def fetch_contract_classes(
+        contract_states: Iterable["ContractState"],
+        class_hashes: Set[bytes],
+        ffc: FactFetchingContext,
+    ) -> Dict[bytes, ContractClass]:
+        """
+        Fetches requested contract classes from storage and returns a dictionary mapping their
+        hashes to fetched classes.
+        The hashes are a union of the hashes from the given contract states and the given set of
+        class hashes.
 
-        # Fetch corresponding contract definitions from storage.
-        contract_definition_facts = await gather_in_chunks(
+        If a hash matches no declared contract class, an error is raised.
+        This can only happen in the context of a library call.
+        """
+        # Gather all distinct hashes.
+        class_hashes = class_hashes | set(contract.contract_hash for contract in contract_states)
+        # Discard empty hash for not yet deployed contracts.
+        class_hashes -= {ContractState.UNINITIALIZED_CLASS_HASH}
+
+        # Fetch corresponding contract classes from storage.
+        contract_class_facts = await gather_in_chunks(
             awaitables=(
-                ContractDefinitionFact.get_or_fail(storage=ffc.storage, suffix=contract_hash)
-                for contract_hash in contract_hashes
+                ContractClassFact.get(storage=ffc.storage, suffix=class_hash)
+                for class_hash in class_hashes
             )
         )
-        contract_definitions = [
-            fact.contract_definition
-            for fact in cast(List[ContractDefinitionFact], contract_definition_facts)
-        ]
 
-        return dict(safe_zip(contract_hashes, contract_definitions))
+        contract_classes: Dict[bytes, ContractClass] = {}
+        for class_hash, fact in safe_zip(class_hashes, contract_class_facts):
+            if fact is None:
+                formatted_class_hash = fields.class_hash_from_bytes(class_hash)
+                raise StarkException(
+                    code=StarknetErrorCode.UNDECLARED_CLASS,
+                    message=f"Class with hash {formatted_class_hash} is not declared.",
+                )
+
+            contract_classes[class_hash] = fact.contract_definition
+
+        return contract_classes
 
     @property
     def initialized(self) -> bool:
-        uninitialized = self.contract_hash == self.UNINITIALIZED_CONTRACT_HASH
+        uninitialized = self.contract_hash == self.UNINITIALIZED_CLASS_HASH
         if uninitialized:
             assert (
                 self.storage_commitment_tree.root == EmptyNodeFact.EMPTY_NODE_HASH
-            ), "Contract storage commitment root must be empty if contract hash is uninitialized."
+            ), "Contract storage commitment root must be empty if class hash is uninitialized."
 
         return not uninitialized
 
@@ -136,7 +159,7 @@ class ContractState(ValidatedMarshmallowDataclass, LeafFact):
         )
 
     async def update(
-        self, ffc: FactFetchingContext, updates: Dict[int, StorageLeaf]
+        self, ffc: FactFetchingContext, updates: Mapping[int, StorageLeaf]
     ) -> "ContractState":
         """
         Returns a new ContractState object with the same contract object and a newly calculated
@@ -152,7 +175,7 @@ class ContractState(ValidatedMarshmallowDataclass, LeafFact):
         )
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class ContractCarriedState(ValidatedDataclass):
     """
     Represents the state of a single contract in the full StarkNet state commitment tree,
@@ -160,7 +183,7 @@ class ContractCarriedState(ValidatedDataclass):
     """
 
     state: ContractState
-    storage_updates: Dict[int, StorageLeaf]
+    storage_updates: Mapping[int, StorageLeaf]
 
     @property
     def has_pending_updates(self) -> bool:
@@ -169,6 +192,10 @@ class ContractCarriedState(ValidatedDataclass):
         commitment tree root.
         """
         return len(self.storage_updates) > 0
+
+    @classmethod
+    def from_state(cls, state: ContractState) -> "ContractCarriedState":
+        return cls(state=state, storage_updates={})
 
     @classmethod
     async def empty(
@@ -183,4 +210,4 @@ class ContractCarriedState(ValidatedDataclass):
     async def update(self, ffc: FactFetchingContext) -> "ContractCarriedState":
         updated_state = await self.state.update(ffc=ffc, updates=self.storage_updates)
 
-        return ContractCarriedState(state=updated_state, storage_updates={})
+        return ContractCarriedState.from_state(state=updated_state)

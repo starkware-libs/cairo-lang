@@ -15,7 +15,7 @@ from starkware.python.utils import from_bytes, to_bytes
 curve = Curve("Curve0", FIELD_PRIME, ALPHA, BETA, EC_ORDER, *SHIFT_POINT)
 
 LOW_PART_BITS = 248
-LOW_PART_MASK = 2 ** 248 - 1
+LOW_PART_MASK = 2**248 - 1
 HASH_SHIFT_POINT = Point(*SHIFT_POINT, curve=curve)
 P_0 = Point(*CONSTANT_POINTS[2], curve=curve)
 P_1 = Point(*CONSTANT_POINTS[2 + LOW_PART_BITS], curve=curve)

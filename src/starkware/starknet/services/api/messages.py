@@ -7,7 +7,7 @@ from services.everest.definitions import fields as everest_fields
 from starkware.cairo.bootloaders.compute_fact import keccak_ints
 from starkware.starknet.business_logic.internal_transaction import InternalInvokeFunction
 from starkware.starknet.definitions import fields
-from starkware.starknet.services.api.contract_definition import EntryPointType
+from starkware.starknet.services.api.contract_class import EntryPointType
 from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 
 

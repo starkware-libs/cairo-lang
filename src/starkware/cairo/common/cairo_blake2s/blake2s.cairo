@@ -1,12 +1,13 @@
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.cairo_blake2s.packed_blake2s import N_PACKED_INSTANCES, blake2s_compress
 from starkware.cairo.common.cairo_builtins import BitwiseBuiltin
-from starkware.cairo.common.math import assert_nn_le, unsigned_div_rem
+from starkware.cairo.common.math import assert_nn_le, split_felt, unsigned_div_rem
 from starkware.cairo.common.math_cmp import is_le
 from starkware.cairo.common.memcpy import memcpy
 from starkware.cairo.common.memset import memset
 from starkware.cairo.common.pow import pow
 from starkware.cairo.common.registers import get_fp_and_pc, get_label_location
+from starkware.cairo.common.uint256 import Uint256
 
 const INPUT_BLOCK_FELTS = 16
 const INPUT_BLOCK_BYTES = 64
@@ -24,12 +25,65 @@ const INSTANCE_SIZE = STATE_SIZE_FELTS + INPUT_BLOCK_FELTS + 2 + STATE_SIZE_FELT
 #   1870078063 == int.from_bytes(b'o wo', 'little')
 #   6581362 == int.from_bytes(b'rld', 'little')
 #
-# output is an array of 8 32-bit words (little endian).
+# Returns the hash as a Uint256.
 #
 # Note: You must call finalize_blake2s() at the end of the program. Otherwise, this function
 # is not sound and a malicious prover may return a wrong result.
 # Note: the interface of this function may change in the future.
-func blake2s{range_check_ptr, blake2s_ptr : felt*}(data : felt*, n_bytes : felt) -> (
+# Note: Each input word is verified to be in the range [0, 2 ** 32) by this function.
+func blake2s{range_check_ptr, blake2s_ptr : felt*}(data : felt*, n_bytes : felt) -> (res : Uint256):
+    let (output) = blake2s_as_words(data=data, n_bytes=n_bytes)
+    let res_low = output[3] * 2 ** 96 + output[2] * 2 ** 64 + output[1] * 2 ** 32 + output[0]
+    let res_high = output[7] * 2 ** 96 + output[6] * 2 ** 64 + output[5] * 2 ** 32 + output[4]
+    return (res=Uint256(low=res_low, high=res_high))
+end
+
+# Computes blake2s of 'input', and returns the hash in big endian representation.
+# See blake2s().
+# Note that the input is still treated as little endian.
+func blake2s_bigend{bitwise_ptr : BitwiseBuiltin*, range_check_ptr, blake2s_ptr : felt*}(
+    data : felt*, n_bytes : felt
+) -> (res : Uint256):
+    let (num) = blake2s(data=data, n_bytes=n_bytes)
+
+    # Reverse byte endianness of 128-bit words.
+    tempvar value = num.high
+    assert bitwise_ptr[0].x = value
+    assert bitwise_ptr[0].y = 0x00ff00ff00ff00ff00ff00ff00ff00ff
+    tempvar value = value + (2 ** 16 - 1) * bitwise_ptr[0].x_and_y
+    assert bitwise_ptr[1].x = value
+    assert bitwise_ptr[1].y = 0x00ffff0000ffff0000ffff0000ffff00
+    tempvar value = value + (2 ** 32 - 1) * bitwise_ptr[1].x_and_y
+    assert bitwise_ptr[2].x = value
+    assert bitwise_ptr[2].y = 0x00ffffffff00000000ffffffff000000
+    tempvar value = value + (2 ** 64 - 1) * bitwise_ptr[2].x_and_y
+    assert bitwise_ptr[3].x = value
+    assert bitwise_ptr[3].y = 0x00ffffffffffffffff00000000000000
+    tempvar value = value + (2 ** 128 - 1) * bitwise_ptr[3].x_and_y
+    tempvar high = value / 2 ** (8 + 16 + 32 + 64)
+    let bitwise_ptr = bitwise_ptr + 4 * BitwiseBuiltin.SIZE
+
+    tempvar value = num.low
+    assert bitwise_ptr[0].x = value
+    assert bitwise_ptr[0].y = 0x00ff00ff00ff00ff00ff00ff00ff00ff
+    tempvar value = value + (2 ** 16 - 1) * bitwise_ptr[0].x_and_y
+    assert bitwise_ptr[1].x = value
+    assert bitwise_ptr[1].y = 0x00ffff0000ffff0000ffff0000ffff00
+    tempvar value = value + (2 ** 32 - 1) * bitwise_ptr[1].x_and_y
+    assert bitwise_ptr[2].x = value
+    assert bitwise_ptr[2].y = 0x00ffffffff00000000ffffffff000000
+    tempvar value = value + (2 ** 64 - 1) * bitwise_ptr[2].x_and_y
+    assert bitwise_ptr[3].x = value
+    assert bitwise_ptr[3].y = 0x00ffffffffffffffff00000000000000
+    tempvar value = value + (2 ** 128 - 1) * bitwise_ptr[3].x_and_y
+    tempvar low = value / 2 ** (8 + 16 + 32 + 64)
+    let bitwise_ptr = bitwise_ptr + 4 * BitwiseBuiltin.SIZE
+
+    return (res=Uint256(low=high, high=low))
+end
+
+# Same as blake2s, but outputs a pointer to 8 32-bit little endian words instead.
+func blake2s_as_words{range_check_ptr, blake2s_ptr : felt*}(data : felt*, n_bytes : felt) -> (
     output : felt*
 ):
     # Set the initial state to IV (IV[0] is modified).
@@ -402,4 +456,101 @@ func _pack_ints{range_check_ptr, blake2s_ptr : felt*}(m, packed_values : felt*):
     jmp loop if m != 0
 
     return ()
+end
+
+# Helper functions.
+# These functions serialize data to a data array to be used with blake2s().
+# They use the property that each data word is verified by blake2s() to be in range [0, 2 ** 32).
+
+# Serializes a uint256 number in a blake2s compatible way (little-endian).
+func blake2s_add_uint256{data : felt*}(num : Uint256):
+    let high = num.high
+    let low = num.low
+    %{
+        B = 32
+        MASK = 2 ** 32 - 1
+        segments.write_arg(ids.data, [(ids.low >> (B * i)) & MASK for i in range(4)])
+        segments.write_arg(ids.data + 4, [(ids.high >> (B * i)) & MASK for i in range(4)])
+    %}
+    assert data[3] * 2 ** 96 + data[2] * 2 ** 64 + data[1] * 2 ** 32 + data[0] = low
+    assert data[7] * 2 ** 96 + data[6] * 2 ** 64 + data[5] * 2 ** 32 + data[4] = high
+    let data = data + 8
+    return ()
+end
+
+# Serializes a uint256 number in a blake2s compatible way (big-endian).
+func blake2s_add_uint256_bigend{bitwise_ptr : BitwiseBuiltin*, data : felt*}(num : Uint256):
+    # Reverse byte endianness of 32-bit chunks.
+    tempvar value = num.high
+    assert bitwise_ptr[0].x = value
+    assert bitwise_ptr[0].y = 0x00ff00ff00ff00ff00ff00ff00ff00ff
+    tempvar value = value + (2 ** 16 - 1) * bitwise_ptr[0].x_and_y
+    assert bitwise_ptr[1].x = value
+    assert bitwise_ptr[1].y = 0x00ffff0000ffff0000ffff0000ffff00
+    tempvar value = value + (2 ** 32 - 1) * bitwise_ptr[1].x_and_y
+    tempvar high = value / 2 ** (8 + 16)
+
+    tempvar value = num.low
+    assert bitwise_ptr[2].x = value
+    assert bitwise_ptr[2].y = 0x00ff00ff00ff00ff00ff00ff00ff00ff
+    tempvar value = value + (2 ** 16 - 1) * bitwise_ptr[2].x_and_y
+    assert bitwise_ptr[3].x = value
+    assert bitwise_ptr[3].y = 0x00ffff0000ffff0000ffff0000ffff00
+    tempvar value = value + (2 ** 32 - 1) * bitwise_ptr[3].x_and_y
+    tempvar low = value / 2 ** (8 + 16)
+
+    let bitwise_ptr = bitwise_ptr + 4 * BitwiseBuiltin.SIZE
+
+    %{
+        B = 32
+        MASK = 2 ** 32 - 1
+        segments.write_arg(ids.data, [(ids.high >> (B * (3 - i))) & MASK for i in range(4)])
+        segments.write_arg(ids.data + 4, [(ids.low >> (B * (3 - i))) & MASK for i in range(4)])
+    %}
+
+    assert data[0] * 2 ** 96 + data[1] * 2 ** 64 + data[2] * 2 ** 32 + data[3] = high
+    assert data[4] * 2 ** 96 + data[5] * 2 ** 64 + data[6] * 2 ** 32 + data[7] = low
+    let data = data + 8
+    return ()
+end
+
+# Serializes a field element in a blake2s compatible way.
+func blake2s_add_felt{range_check_ptr, bitwise_ptr : BitwiseBuiltin*, data : felt*}(
+    num : felt, bigend : felt
+):
+    let (high, low) = split_felt(num)
+    if bigend != 0:
+        blake2s_add_uint256_bigend(Uint256(low=low, high=high))
+        return ()
+    else:
+        blake2s_add_uint256(Uint256(low=low, high=high))
+        return ()
+    end
+end
+
+# Serializes multiple field elements in a blake2s compatible way.
+# Note: This function does not serialize the number of elements. If desired, this is the caller's
+# responsibility.
+func blake2s_add_felts{range_check_ptr, bitwise_ptr : BitwiseBuiltin*, data : felt*}(
+    n_elements : felt, elements : felt*, bigend : felt
+) -> ():
+    if n_elements == 0:
+        return ()
+    end
+    blake2s_add_felt(num=elements[0], bigend=bigend)
+    return blake2s_add_felts(n_elements=n_elements - 1, elements=&elements[1], bigend=bigend)
+end
+
+# Computes the blake2s hash for multiple field elements.
+func blake2s_felts{range_check_ptr, bitwise_ptr : BitwiseBuiltin*, blake2s_ptr : felt*}(
+    n_elements : felt, elements : felt*, bigend : felt
+) -> (res : Uint256):
+    alloc_locals
+    let (data) = alloc()
+    let data_start = data
+    with data:
+        blake2s_add_felts(n_elements=n_elements, elements=elements, bigend=bigend)
+    end
+    let (res) = blake2s(data=data_start, n_bytes=n_elements * 32)
+    return (res=res)
 end

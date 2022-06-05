@@ -56,38 +56,120 @@ func call_contract{syscall_ptr : felt*}(
     return (retdata_size=response.retdata_size, retdata=response.retdata)
 end
 
-func delegate_call{syscall_ptr : felt*}(
-    contract_address : felt, function_selector : felt, calldata_size : felt, calldata : felt*
+const LIBRARY_CALL_SELECTOR = 'LibraryCall'
+const LIBRARY_CALL_L1_HANDLER_SELECTOR = 'LibraryCallL1Handler'
+
+# Describes the LibraryCall system call format.
+struct LibraryCallRequest:
+    # The system library call selector
+    # (= LIBRARY_CALL_SELECTOR or LIBRARY_CALL_L1_HANDLER_SELECTOR).
+    member selector : felt
+    # The hash of the class to run.
+    member class_hash : felt
+    # The selector of the function to call.
+    member function_selector : felt
+    # The size of the calldata.
+    member calldata_size : felt
+    # The calldata.
+    member calldata : felt*
+end
+
+struct LibraryCall:
+    member request : LibraryCallRequest
+    member response : CallContractResponse
+end
+
+# Performs a library call: Runs an entry point of another contract class
+# on the current contract state.
+func library_call{syscall_ptr : felt*}(
+    class_hash : felt, function_selector : felt, calldata_size : felt, calldata : felt*
 ) -> (retdata_size : felt, retdata : felt*):
-    let syscall = [cast(syscall_ptr, CallContract*)]
-    assert syscall.request = CallContractRequest(
-        selector=DELEGATE_CALL_SELECTOR,
-        contract_address=contract_address,
+    let syscall = [cast(syscall_ptr, LibraryCall*)]
+    assert syscall.request = LibraryCallRequest(
+        selector=LIBRARY_CALL_SELECTOR,
+        class_hash=class_hash,
         function_selector=function_selector,
         calldata_size=calldata_size,
         calldata=calldata)
-    %{ syscall_handler.delegate_call(segments=segments, syscall_ptr=ids.syscall_ptr) %}
+    %{ syscall_handler.library_call(segments=segments, syscall_ptr=ids.syscall_ptr) %}
     let response = syscall.response
 
-    let syscall_ptr = syscall_ptr + CallContract.SIZE
+    let syscall_ptr = syscall_ptr + LibraryCall.SIZE
     return (retdata_size=response.retdata_size, retdata=response.retdata)
 end
 
-func delegate_l1_handler{syscall_ptr : felt*}(
-    contract_address : felt, function_selector : felt, calldata_size : felt, calldata : felt*
+# Simialr to library_call(), except that the entry point is an L1 handler,
+# rather than an external function.
+# Note that this function does not consume an L1 message,
+# and thus it should only be called from a corresponding L1 handler.
+func library_call_l1_handler{syscall_ptr : felt*}(
+    class_hash : felt, function_selector : felt, calldata_size : felt, calldata : felt*
 ) -> (retdata_size : felt, retdata : felt*):
-    let syscall = [cast(syscall_ptr, CallContract*)]
-    assert syscall.request = CallContractRequest(
-        selector=DELEGATE_L1_HANDLER_SELECTOR,
-        contract_address=contract_address,
+    let syscall = [cast(syscall_ptr, LibraryCall*)]
+    assert syscall.request = LibraryCallRequest(
+        selector=LIBRARY_CALL_L1_HANDLER_SELECTOR,
+        class_hash=class_hash,
         function_selector=function_selector,
         calldata_size=calldata_size,
         calldata=calldata)
-    %{ syscall_handler.delegate_l1_handler(segments=segments, syscall_ptr=ids.syscall_ptr) %}
+    %{ syscall_handler.library_call_l1_handler(segments=segments, syscall_ptr=ids.syscall_ptr) %}
     let response = syscall.response
 
-    let syscall_ptr = syscall_ptr + CallContract.SIZE
+    let syscall_ptr = syscall_ptr + LibraryCall.SIZE
     return (retdata_size=response.retdata_size, retdata=response.retdata)
+end
+
+const DEPLOY_SELECTOR = 'Deploy'
+
+# Describes the Deploy system call format.
+struct DeployRequest:
+    # The system call selector (= DEPLOY_SELECTOR).
+    member selector : felt
+    # The hash of the class to deploy.
+    member class_hash : felt
+    # A salt for the new contract address calculation.
+    member contract_address_salt : felt
+    # The size of the calldata for the constructor.
+    member constructor_calldata_size : felt
+    # The calldata for the constructor.
+    member constructor_calldata : felt*
+    # Not used. Must be set to 0.
+    member reserved : felt
+end
+
+struct DeployResponse:
+    member contract_address : felt
+    member constructor_retdata_size : felt
+    member constructor_retdata : felt*
+end
+
+struct Deploy:
+    member request : DeployRequest
+    member response : DeployResponse
+end
+
+# Deploys a contract with the given class, and returns its address.
+# Fails if a contract with the same parameters was already deployed.
+func deploy{syscall_ptr : felt*}(
+    class_hash : felt,
+    contract_address_salt : felt,
+    constructor_calldata_size : felt,
+    constructor_calldata : felt*,
+) -> (contract_address : felt):
+    let syscall = [cast(syscall_ptr, Deploy*)]
+    assert syscall.request = DeployRequest(
+        selector=DEPLOY_SELECTOR,
+        class_hash=class_hash,
+        contract_address_salt=contract_address_salt,
+        constructor_calldata_size=constructor_calldata_size,
+        constructor_calldata=constructor_calldata,
+        reserved=0)
+
+    %{ syscall_handler.deploy(segments=segments, syscall_ptr=ids.syscall_ptr) %}
+    let response = syscall.response
+    let syscall_ptr = syscall_ptr + Deploy.SIZE
+
+    return (contract_address=response.contract_address)
 end
 
 const GET_CALLER_ADDRESS_SELECTOR = 'GetCallerAddress'

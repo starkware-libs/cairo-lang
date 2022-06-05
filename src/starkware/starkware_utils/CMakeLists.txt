@@ -33,7 +33,7 @@ python_lib(starkware_utils_lib
 
 full_python_test(patricia_tree_test
     PREFIX starkware/starkware_utils
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
     TESTED_MODULES starkware/starkware_utils
 
     FILES

@@ -37,7 +37,7 @@ class ContractEntryPoint(ValidatedDataclass):
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
-class ContractDefinition(ValidatedMarshmallowDataclass):
+class ContractClass(ValidatedMarshmallowDataclass):
     """
     Represents a contract in the StarkNet network.
     """
@@ -55,27 +55,27 @@ class ContractDefinition(ValidatedMarshmallowDataclass):
                     entry_points[i].selector < entry_points[i + 1].selector
                     for i in range(len(entry_points) - 1)
                 ),
-                code=StarknetErrorCode.INVALID_CONTRACT_DEFINITION,
+                code=StarknetErrorCode.INVALID_CONTRACT_CLASS,
                 message="Entry points must be unique and sorted.",
             )
 
         constructor_eps = self.entry_points_by_type.get(EntryPointType.CONSTRUCTOR)
         stark_assert(
             constructor_eps is not None,
-            code=StarknetErrorCode.INVALID_CONTRACT_DEFINITION,
+            code=StarknetErrorCode.INVALID_CONTRACT_CLASS,
             message="The contract is missing constructor endpoints. Wrong compiler version?",
         )
 
         stark_assert(
             len(constructor_eps) <= 1,  # type: ignore
-            code=StarknetErrorCode.INVALID_CONTRACT_DEFINITION,
+            code=StarknetErrorCode.INVALID_CONTRACT_CLASS,
             message="A contract may have at most 1 constructor.",
         )
 
     def validate(self):
         stark_assert(
             is_subsequence(self.program.builtins, SUPPORTED_BUILTINS),
-            code=StarknetErrorCode.INVALID_CONTRACT_DEFINITION,
+            code=StarknetErrorCode.INVALID_CONTRACT_CLASS,
             message=f"{self.program.builtins} is not a subsequence of {SUPPORTED_BUILTINS}.",
         )
 
@@ -87,10 +87,10 @@ class ContractDefinition(ValidatedMarshmallowDataclass):
             ),
         )
 
-    def remove_debug_info(self) -> "ContractDefinition":
+    def remove_debug_info(self) -> "ContractClass":
         """
         Sets debug_info in the Cairo contract program to None.
-        Returns an altered ContractDefinition instance.
+        Returns an altered ContractClass instance.
         """
         altered_program = dataclasses.replace(self.program, debug_info=None)
         return dataclasses.replace(self, program=altered_program)

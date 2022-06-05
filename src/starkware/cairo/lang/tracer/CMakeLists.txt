@@ -20,7 +20,7 @@ python_lib(cairo_tracer_lib
 
 full_python_test(cairo_tracer_test
     PREFIX starkware/cairo/lang/tracer
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
     TESTED_MODULES starkware/cairo/lang/tracer
 
     FILES

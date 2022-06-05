@@ -47,7 +47,7 @@ python_lib(starknet_testing_lib
     starknet_api_utils_lib
     starknet_business_logic_state_lib
     starknet_compile_lib
-    starknet_contract_definition_lib
+    starknet_contract_class_lib
     starknet_definitions_lib
     starknet_feeder_gateway_response_objects_lib
     starknet_general_config_lib
@@ -66,7 +66,7 @@ python_lib(starknet_testing_lib
 
 full_python_test(starknet_testing_test
     PREFIX starkware/starknet/testing
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
     TESTED_MODULES starkware/starknet/testing
 
     FILES

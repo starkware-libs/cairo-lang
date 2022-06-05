@@ -10,6 +10,7 @@ from starkware.starknet.core.os.transaction_hash.transaction_hash import (
 )
 from starkware.starknet.definitions import constants, fields
 from starkware.starknet.public.abi import EXECUTE_ENTRY_POINT_SELECTOR, get_selector_from_name
+from starkware.starknet.services.api.feeder_gateway.response_objects import PENDING_BLOCK_ID
 from starkware.starknet.services.api.gateway.transaction import Deploy, InvokeFunction
 from starkware.starknet.third_party.open_zeppelin.starknet_contracts import account_contract
 from starkware.starknet.wallets.account import Account, WrappedMethod
@@ -67,6 +68,7 @@ class OpenZeppelinAccount(Account):
             contract_address_salt=salt,
             contract_definition=account_contract,
             constructor_calldata=[public_key],
+            version=constants.TRANSACTION_VERSION,
         )
 
         gateway_response = await self.starknet_context.gateway_client.add_transaction(tx=tx)
@@ -154,7 +156,7 @@ Transaction hash: {gateway_response['transaction_hash']}
             signature=[],
         )
         res = await self.starknet_context.feeder_gateway_client.call_contract(
-            invoke_tx=get_nonce_tx, block_hash=None, block_number="pending"
+            invoke_tx=get_nonce_tx, block_hash=None, block_number=PENDING_BLOCK_ID
         )
         (nonce_hex,) = res["result"]
         return int(nonce_hex, 16)

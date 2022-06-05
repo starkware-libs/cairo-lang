@@ -53,9 +53,22 @@ func hash_update_single{hash_ptr : HashBuiltin*}(hash_state_ptr : HashState*, it
     return (new_hash_state_ptr=&new_hash_state)
 end
 
+# Computes the hash of the input data and then calls hash_update_single to add the hash
+# of the data to 'hash_state' as a single felt. See details in the documentation of HashState.
+func hash_update_with_hashchain{hash_ptr : HashBuiltin*}(
+    hash_state_ptr : HashState*, data_ptr : felt*, data_length : felt
+) -> (new_hash_state_ptr : HashState*):
+    # Hash data.
+    let (hash : felt) = hash_felts(data=data_ptr, length=data_length)
+
+    # Update 'hash_state' with the hash of the data.
+    return hash_update_single(hash_state_ptr=hash_state_ptr, item=hash)
+end
+
 # Returns the hash result of the HashState.
-func hash_finalize{hash_ptr : HashBuiltin*}(hash_state_ptr : HashState*) -> (hash):
-    return hash2(x=hash_state_ptr.current_hash, y=hash_state_ptr.n_words)
+func hash_finalize{hash_ptr : HashBuiltin*}(hash_state_ptr : HashState*) -> (hash : felt):
+    let (hash) = hash2(x=hash_state_ptr.current_hash, y=hash_state_ptr.n_words)
+    return (hash=hash)
 end
 
 # A helper function for 'hash_update', see its documentation.
@@ -105,4 +118,12 @@ func hash_update_inner{hash_ptr : HashBuiltin*}(
     let final_locals : LoopLocals* = cast(ap - LoopLocals.SIZE, LoopLocals*)
     let hash_ptr = final_locals.hash_ptr
     return (hash=final_locals.cur_hash)
+end
+
+func hash_felts{hash_ptr : HashBuiltin*}(data : felt*, length : felt) -> (hash : felt):
+    let (hash_state_ptr : HashState*) = hash_init()
+    let (hash_state_ptr) = hash_update(
+        hash_state_ptr=hash_state_ptr, data_ptr=data, data_length=length
+    )
+    return hash_finalize(hash_state_ptr=hash_state_ptr)
 end

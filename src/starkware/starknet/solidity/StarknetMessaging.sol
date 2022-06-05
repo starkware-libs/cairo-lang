@@ -101,14 +101,13 @@ contract StarknetMessaging is IStarknetMessaging {
         uint256 toAddress,
         uint256 selector,
         uint256[] calldata payload
-    ) external override returns (bytes32) {
+    ) external override returns (bytes32, uint256) {
         uint256 nonce = l1ToL2MessageNonce();
         NamedStorage.setUintValue(L1L2_MESSAGE_NONCE_TAG, nonce + 1);
         emit LogMessageToL2(msg.sender, toAddress, selector, payload, nonce);
         bytes32 msgHash = getL1ToL2MsgHash(toAddress, selector, payload, nonce);
         l1ToL2Messages()[msgHash] += 1;
-
-        return msgHash;
+        return (msgHash, nonce);
     }
 
     /**
@@ -136,12 +135,13 @@ contract StarknetMessaging is IStarknetMessaging {
         uint256 selector,
         uint256[] calldata payload,
         uint256 nonce
-    ) external override {
+    ) external override returns (bytes32) {
         emit MessageToL2CancellationStarted(msg.sender, toAddress, selector, payload, nonce);
         bytes32 msgHash = getL1ToL2MsgHash(toAddress, selector, payload, nonce);
         uint256 msgCount = l1ToL2Messages()[msgHash];
         require(msgCount > 0, "NO_MESSAGE_TO_CANCEL");
         l1ToL2MessageCancellations()[msgHash] = block.timestamp;
+        return msgHash;
     }
 
     function cancelL1ToL2Message(
@@ -149,7 +149,7 @@ contract StarknetMessaging is IStarknetMessaging {
         uint256 selector,
         uint256[] calldata payload,
         uint256 nonce
-    ) external override {
+    ) external override returns (bytes32) {
         emit MessageToL2Canceled(msg.sender, toAddress, selector, payload, nonce);
         bytes32 msgHash = getL1ToL2MsgHash(toAddress, selector, payload, nonce);
         uint256 msgCount = l1ToL2Messages()[msgHash];
@@ -163,5 +163,6 @@ contract StarknetMessaging is IStarknetMessaging {
         require(block.timestamp >= cancelAllowedTime, "MESSAGE_CANCELLATION_NOT_ALLOWED_YET");
 
         l1ToL2Messages()[msgHash] = msgCount - 1;
+        return msgHash;
     }
 }

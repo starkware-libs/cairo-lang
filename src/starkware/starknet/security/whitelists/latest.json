@@ -732,13 +732,7 @@
         {
             "allowed_expressions": [],
             "hint_lines": [
-                "syscall_handler.delegate_call(segments=segments, syscall_ptr=ids.syscall_ptr)"
-            ]
-        },
-        {
-            "allowed_expressions": [],
-            "hint_lines": [
-                "syscall_handler.delegate_l1_handler(segments=segments, syscall_ptr=ids.syscall_ptr)"
+                "syscall_handler.deploy(segments=segments, syscall_ptr=ids.syscall_ptr)"
             ]
         },
         {
@@ -787,6 +781,18 @@
             "allowed_expressions": [],
             "hint_lines": [
                 "syscall_handler.get_tx_signature(segments=segments, syscall_ptr=ids.syscall_ptr)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "syscall_handler.library_call(segments=segments, syscall_ptr=ids.syscall_ptr)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "syscall_handler.library_call_l1_handler(segments=segments, syscall_ptr=ids.syscall_ptr)"
             ]
         },
         {

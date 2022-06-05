@@ -2,6 +2,7 @@ python_lib(cairo_run_builtins_lib
     PREFIX starkware/cairo/lang/builtins
 
     FILES
+    all_builtins.py
     bitwise/bitwise_builtin_runner.py
     bitwise/instance_def.py
     ec/ec_op_builtin_runner.py
@@ -32,10 +33,11 @@ python_lib(cairo_run_builtins_test_utils_lib
 
 full_python_test(cairo_run_builtins_test
     PREFIX starkware/cairo/lang/builtins
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
     TESTED_MODULES starkware/cairo/lang/builtins
 
     FILES
+    ec/ec_op_builtin_runner_test.py
     range_check/range_check_builtin_runner_test.py
     signature/signature_builtin_runner_test.py
 

@@ -5,9 +5,9 @@ from typing import Tuple
 import pytest
 
 from starkware.starknet.business_logic.execution.objects import Event
-from starkware.starknet.core.test_contract.test_utils import get_contract_definition
-from starkware.starknet.public.abi import get_selector_from_name
-from starkware.starknet.testing.contract import StarknetContract
+from starkware.starknet.core.test_contract.test_utils import get_contract_class
+from starkware.starknet.public.abi import AbiType, get_selector_from_name
+from starkware.starknet.testing.contract import DeclaredClass, StarknetContract
 from starkware.starknet.testing.starknet import Starknet
 from starkware.starknet.utils.api_utils import cast_to_felts
 
@@ -31,20 +31,25 @@ async def test_contract(starknet: Starknet) -> StarknetContract:
 
 
 @pytest.fixture
+async def test_class(starknet: Starknet) -> DeclaredClass:
+    return await starknet.declare(source=CONTRACT_FILE)
+
+
+@pytest.fixture
 async def proxy_contract(starknet: Starknet) -> StarknetContract:
-    contract_definition = get_contract_definition("delegate_proxy")
+    contract_class = get_contract_class("delegate_proxy")
     return await starknet.deploy(
         constructor_calldata=[],
-        contract_def=contract_definition,
+        contract_class=contract_class,
     )
 
 
 @pytest.fixture
 async def account_contract(starknet: Starknet) -> StarknetContract:
-    contract_definition = get_contract_definition("dummy_account")
+    contract_class = get_contract_class("dummy_account")
     return await starknet.deploy(
         constructor_calldata=[],
-        contract_def=contract_definition,
+        contract_class=contract_class,
     )
 
 
@@ -110,10 +115,11 @@ async def test_function_call(test_contract: StarknetContract):
 
 
 @pytest.mark.asyncio
-async def test_proxy_call(test_contract: StarknetContract, proxy_contract: StarknetContract):
+async def test_proxy_call(proxy_contract: StarknetContract, test_class: DeclaredClass):
     wrapped_contract = await wrap_with_proxy(
         proxy_contract=proxy_contract,
-        impl_contract=test_contract,
+        impl_class_hash=test_class.class_hash,
+        impl_class_abi=test_class.abi,
     )
 
     await wrapped_contract.increase_value(address=132, value=7).invoke()
@@ -179,12 +185,11 @@ async def test_event(test_contract: StarknetContract):
 
 async def wrap_with_proxy(
     proxy_contract: StarknetContract,
-    impl_contract: StarknetContract,
+    impl_class_hash: int,
+    impl_class_abi: AbiType,
 ) -> StarknetContract:
     """
     Wraps an implementation contract's ABI with a proxy contract.
     """
-    await proxy_contract.set_implementation_address(
-        impl_address_=impl_contract.contract_address
-    ).invoke()
-    return proxy_contract.replace_abi(impl_contract_abi=impl_contract.abi)
+    await proxy_contract.set_implementation_hash(implementation_hash_=impl_class_hash).invoke()
+    return proxy_contract.replace_abi(impl_contract_abi=impl_class_abi)

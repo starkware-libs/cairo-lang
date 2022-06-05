@@ -9,7 +9,7 @@ func select_input_builtins(
     all_encodings : felt*, all_ptrs : felt*, selected_encodings : felt*, n_selected_builtins
 ):
     # Total number of optional builtins.
-    const N_BUILTINS = 5
+    const N_BUILTINS = 6
     # Number of memory cells used, without taking the inner function memory into account.
     const FUNC_MEMORY_WITHOUT_INNER_FUNC = 9
     const INNER_FUNC_MEMORY_PER_ITERATION = inner_select_builtins.FUNC_MEMORY_WITH_BUILTINS

@@ -61,7 +61,7 @@ def main():
         assert args.contract is not None
         program_json = json.load(open(args.contract))["program"]
 
-    program = Program.load(program_json)
+    program = Program.load(data=program_json)
     traceback = (open(args.traceback) if args.traceback != "-" else sys.stdin).read()
 
     print(reconstruct_traceback(program, traceback))

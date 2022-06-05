@@ -106,7 +106,7 @@ func squash_dict_inner(
     remaining_accesses,
     squashed_dict : DictAccess*,
     big_keys,
-) -> (range_check_ptr, squashed_dict : DictAccess*):
+) -> (range_check_ptr : felt, squashed_dict : DictAccess*):
     alloc_locals
 
     let dict_diff : DictAccess* = squashed_dict

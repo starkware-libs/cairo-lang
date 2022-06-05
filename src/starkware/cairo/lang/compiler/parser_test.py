@@ -275,7 +275,7 @@ def test_operator_precedence():
     assert expr.format() == code
 
     # Compute the value of expr from the tree and compare it with the correct value.
-    PRIME = 3 * 2 ** 30 + 1
+    PRIME = 3 * 2**30 + 1
     simplified_expr = ExpressionSimplifier(PRIME).visit(expr)
     assert isinstance(simplified_expr, ExprConst)
     assert simplified_expr.val == eval(code)
@@ -292,7 +292,7 @@ def test_div_expr():
     code = "120 / 2 / 3 / 4"
     expr = parse_expr(code)
     # Compute the value of expr from the tree and compare it with the correct value.
-    PRIME = 3 * 2 ** 30 + 1
+    PRIME = 3 * 2**30 + 1
     simplified_expr = ExpressionSimplifier(PRIME).visit(expr)
     assert isinstance(simplified_expr, ExprConst)
     assert simplified_expr.val == 5

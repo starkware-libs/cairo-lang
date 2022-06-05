@@ -8,7 +8,11 @@ from typing_extensions import Protocol
 
 from starkware.cairo.lang.compiler.debug_info import DebugInfo, InstructionLocation
 from starkware.cairo.lang.compiler.encode import is_call_instruction
-from starkware.cairo.lang.compiler.expression_evaluator import ExpressionEvaluator
+from starkware.cairo.lang.compiler.expression_evaluator import (
+    ExpressionEvaluator,
+    ExpressionEvaluatorError,
+)
+from starkware.cairo.lang.compiler.identifier_manager import IdentifierError
 from starkware.cairo.lang.compiler.instruction import decode_instruction_values
 from starkware.cairo.lang.compiler.preprocessor.flow import FlowTrackingDataActual
 from starkware.cairo.lang.compiler.preprocessor.preprocessor import AttributeBase, AttributeScope
@@ -387,7 +391,12 @@ class VirtualMachineBase(ABC):
                     fp=fp,
                 )
                 return decimal_repr(val, self.prime)
-            except (ApDeductionError, InvalidReferenceExpressionError):
+            except (
+                ApDeductionError,
+                ExpressionEvaluatorError,
+                IdentifierError,
+                InvalidReferenceExpressionError,
+            ):
                 invalid_references.append(reference)
                 return match.group(0)
 

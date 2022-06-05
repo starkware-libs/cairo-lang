@@ -4,11 +4,12 @@ from typing import Callable, Sequence
 from starkware.cairo.common.hash_state import compute_hash_on_elements
 from starkware.cairo.lang.vm.crypto import pedersen_hash
 from starkware.python.utils import from_bytes
-from starkware.starknet.definitions import constants
-from starkware.starknet.services.api.contract_definition import CONSTRUCTOR_SELECTOR
+from starkware.starknet.core.os.class_hash import compute_class_hash
+from starkware.starknet.services.api.contract_class import CONSTRUCTOR_SELECTOR, ContractClass
 
 
 class TransactionHashPrefix(Enum):
+    DECLARE = from_bytes(b"declare")
     DEPLOY = from_bytes(b"deploy")
     INVOKE = from_bytes(b"invoke")
     L1_HANDLER = from_bytes(b"l1_handler")
@@ -59,6 +60,7 @@ def calculate_transaction_hash_common(
 
 
 def calculate_deploy_transaction_hash(
+    version: int,
     contract_address: int,
     constructor_calldata: Sequence[int],
     chain_id: int,
@@ -66,7 +68,7 @@ def calculate_deploy_transaction_hash(
 ) -> int:
     return calculate_transaction_hash_common(
         tx_hash_prefix=TransactionHashPrefix.DEPLOY,
-        version=constants.TRANSACTION_VERSION,
+        version=version,
         contract_address=contract_address,
         entry_point_selector=CONSTRUCTOR_SELECTOR,
         calldata=constructor_calldata,
@@ -74,5 +76,27 @@ def calculate_deploy_transaction_hash(
         max_fee=0,
         chain_id=chain_id,
         additional_data=[],
+        hash_function=hash_function,
+    )
+
+
+def calculate_declare_transaction_hash(
+    contract_class: ContractClass,
+    chain_id: int,
+    sender_address: int,
+    max_fee: int,
+    version: int,
+    hash_function: Callable[[int, int], int] = pedersen_hash,
+) -> int:
+    class_hash = compute_class_hash(contract_class=contract_class, hash_func=hash_function)
+    return calculate_transaction_hash_common(
+        tx_hash_prefix=TransactionHashPrefix.DECLARE,
+        version=version,
+        contract_address=sender_address,
+        entry_point_selector=0,
+        calldata=[],
+        max_fee=max_fee,
+        chain_id=chain_id,
+        additional_data=[class_hash],
         hash_function=hash_function,
     )

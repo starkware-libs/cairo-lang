@@ -102,12 +102,15 @@ def encode_instruction(element: BytecodeElement, prime: int) -> List[int]:
     }[inst.ap_update]
 
     # Set fp_update.
-    assert inst.fp_update == {
-        Instruction.Opcode.NOP: Instruction.FpUpdate.REGULAR,
-        Instruction.Opcode.CALL: Instruction.FpUpdate.AP_PLUS2,
-        Instruction.Opcode.RET: Instruction.FpUpdate.DST,
-        Instruction.Opcode.ASSERT_EQ: Instruction.FpUpdate.REGULAR,
-    }[inst.opcode], f"fp_update {inst.fp_update} does not match opcode f{inst.opcode}"
+    assert (
+        inst.fp_update
+        == {
+            Instruction.Opcode.NOP: Instruction.FpUpdate.REGULAR,
+            Instruction.Opcode.CALL: Instruction.FpUpdate.AP_PLUS2,
+            Instruction.Opcode.RET: Instruction.FpUpdate.DST,
+            Instruction.Opcode.ASSERT_EQ: Instruction.FpUpdate.REGULAR,
+        }[inst.opcode]
+    ), f"fp_update {inst.fp_update} does not match opcode f{inst.opcode}"
 
     # Set opcode.
     flags |= {

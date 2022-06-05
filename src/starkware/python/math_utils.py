@@ -1,5 +1,7 @@
 import math
-from typing import Tuple, Union
+import random
+from hashlib import sha256
+from typing import Optional, Tuple, Union
 
 import sympy
 from sympy.core.numbers import igcdex
@@ -64,13 +66,13 @@ def safe_log2(x: int):
     """
     assert x > 0
     res = int(math.log(x, 2))
-    assert 2 ** res == x
+    assert 2**res == x
     return res
 
 
 def sqrt(n, p):
     """
-    Finds the minimum positive integer m such that (m*m) % p == n.
+    Finds the minimum non-negative integer m such that (m*m) % p == n.
     """
     return min(sympy.ntheory.residue_ntheory.sqrt_mod(n, p, all_roots=True))
 
@@ -90,7 +92,7 @@ def isqrt(n: int) -> int:
     while y < x:
         x = y
         y = (x + n // x) // 2
-    assert x ** 2 <= n < (x + 1) ** 2
+    assert x**2 <= n < (x + 1) ** 2
     return x
 
 
@@ -201,3 +203,25 @@ def horner_eval(coefs, point, prime):
     for coef in coefs[::-1]:
         res = (res * point + coef) % prime
     return res
+
+
+def random_ec_point(
+    field_prime: int, alpha: int, beta: int, seed: Optional[bytes] = None
+) -> Tuple[int, int]:
+    """
+    Returns a random point on the elliptic curve y^2 = x^3 + alpha * x + beta (mod field_prime).
+    If `seed` is not None, the point is created deterministically from the seed.
+    """
+    if seed is not None:
+        # If a seed is given, the function currently only extracts a 256-bit number from it.
+        assert field_prime < 2**256, "Field prime must be less than 2^256."
+    for i in range(100):
+        x = (
+            random.randrange(field_prime)
+            if seed is None
+            else int(sha256(seed + i.to_bytes(10, "little")).hexdigest(), 16)
+        )
+        y_squared = pow(x, 3, field_prime) + alpha * x + beta
+        if is_quad_residue(y_squared, field_prime):
+            return x, (random.choice([-1, 1]) * sqrt(y_squared, field_prime)) % field_prime
+    raise Exception("Could not find a point on the curve.")

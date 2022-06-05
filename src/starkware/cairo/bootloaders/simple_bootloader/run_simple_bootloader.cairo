@@ -11,7 +11,12 @@ from starkware.cairo.common.registers import get_fp_and_pc
 # Updated builtin pointers after executing all programs.
 # fact_topologies - that corresponds to the tasks (hint variable).
 func run_simple_bootloader{
-    output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecdsa_ptr, bitwise_ptr
+    output_ptr : felt*,
+    pedersen_ptr : HashBuiltin*,
+    range_check_ptr,
+    ecdsa_ptr,
+    bitwise_ptr,
+    ec_op_ptr,
 }():
     alloc_locals
     local task_range_check_ptr
@@ -38,7 +43,8 @@ func run_simple_bootloader{
         pedersen=cast(pedersen_ptr, felt),
         range_check=task_range_check_ptr,
         ecdsa=ecdsa_ptr,
-        bitwise=bitwise_ptr)
+        bitwise=bitwise_ptr,
+        ec_op=ec_op_ptr)
 
     # A struct containing the encoding of each builtin.
     local builtin_encodings : BuiltinData = BuiltinData(
@@ -46,10 +52,11 @@ func run_simple_bootloader{
         pedersen='pedersen',
         range_check='range_check',
         ecdsa='ecdsa',
-        bitwise='bitwise')
+        bitwise='bitwise',
+        ec_op='ec_op')
 
     local builtin_instance_sizes : BuiltinData = BuiltinData(
-        output=1, pedersen=3, range_check=1, ecdsa=2, bitwise=5)
+        output=1, pedersen=3, range_check=1, ecdsa=2, bitwise=5, ec_op=7)
 
     # Call execute_tasks.
     let (__fp__, _) = get_fp_and_pc()
@@ -75,6 +82,7 @@ func run_simple_bootloader{
     let range_check_ptr = builtin_ptrs.range_check
     let ecdsa_ptr = builtin_ptrs.ecdsa
     let bitwise_ptr = builtin_ptrs.bitwise
+    let ec_op_ptr = builtin_ptrs.ec_op
 
     # Verify that range_check has indeed advanced.
     let additional_range_checks = range_check_ptr - self_range_check_ptr

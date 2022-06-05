@@ -1,4 +1,5 @@
 import argparse
+import functools
 import json
 import sys
 from typing import Dict, List, Optional, Tuple
@@ -13,6 +14,7 @@ from starkware.cairo.lang.compiler.cairo_compile import (
     get_module_reader,
 )
 from starkware.cairo.lang.compiler.error_handling import LocationError
+from starkware.cairo.lang.compiler.filter_unused_identifiers import filter_unused_identifiers
 from starkware.cairo.lang.compiler.identifier_definition import FunctionDefinition
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierScope, MissingIdentifierError
 from starkware.cairo.lang.compiler.module_reader import ModuleReader
@@ -31,8 +33,8 @@ from starkware.starknet.compiler.starknet_pass_manager import starknet_pass_mana
 from starkware.starknet.compiler.starknet_preprocessor import StarknetPreprocessedProgram
 from starkware.starknet.compiler.validation_utils import verify_account_contract
 from starkware.starknet.public.abi import AbiType, get_selector_from_name
-from starkware.starknet.services.api.contract_definition import (
-    ContractDefinition,
+from starkware.starknet.services.api.contract_class import (
+    ContractClass,
     ContractEntryPoint,
     EntryPointType,
 )
@@ -106,7 +108,7 @@ def compile_starknet_files(
     debug_info: bool = False,
     disable_hint_validation: bool = False,
     cairo_path: Optional[List[str]] = None,
-) -> ContractDefinition:
+) -> ContractClass:
     return compile_starknet_codes(
         codes=get_codes(files),
         debug_info=debug_info,
@@ -120,7 +122,7 @@ def compile_starknet_codes(
     debug_info: bool = False,
     disable_hint_validation: bool = False,
     cairo_path: Optional[List[str]] = None,
-) -> ContractDefinition:
+) -> ContractClass:
     if cairo_path is None:
         cairo_path = []
     module_reader = get_module_reader(cairo_path=cairo_path)
@@ -138,7 +140,7 @@ def compile_starknet_codes(
     # Dump and load program, so that it is converted to the canonical form.
     program = Program.load(data=program.dump())
 
-    return ContractDefinition(
+    return ContractClass(
         program=program,
         entry_points_by_type=get_entry_points_by_type(program=program),
         abi=get_abi(preprocessed=preprocessed),
@@ -150,8 +152,11 @@ def assemble_starknet_contract(
     main_scope: ScopedName,
     add_debug_info: bool,
     file_contents_for_debug_info: Dict[str, str],
-) -> ContractDefinition:
+    filter_identifiers: bool,
+    is_account_contract: bool,
+) -> ContractClass:
     abi = get_abi(preprocessed=preprocessed_program)
+    verify_account_contract(contract_abi=abi, is_account_contract=is_account_contract)
     program = assemble(
         preprocessed_program,
         main_scope=main_scope,
@@ -159,9 +164,13 @@ def assemble_starknet_contract(
         file_contents_for_debug_info=file_contents_for_debug_info,
     )
 
-    return ContractDefinition(
+    entry_points_by_type = get_entry_points_by_type(program=program)
+    if filter_identifiers:
+        program = filter_unused_identifiers(program)
+
+    return ContractClass(
         program=program,
-        entry_points_by_type=get_entry_points_by_type(program=program),
+        entry_points_by_type=entry_points_by_type,
         abi=abi,
     )
 
@@ -175,6 +184,16 @@ def main():
     parser.add_argument(
         "--account_contract", action="store_true", help="Compile as account contract."
     )
+    parser.add_argument(
+        "--dont_filter_identifiers",
+        dest="filter_identifiers",
+        action="store_false",
+        help=(
+            "Disable the filter-identifiers-optimization."
+            "If True, all the identifiers will be kept, instead of just the ones mentioned in "
+            "hints or 'with_attr' statements."
+        ),
+    )
 
     def pass_manager_factory(args: argparse.Namespace, module_reader: ModuleReader) -> PassManager:
         return starknet_pass_manager(
@@ -186,13 +205,17 @@ def main():
     try:
         cairo_compile_add_common_args(parser)
         args = parser.parse_args()
+        assemble_func = functools.partial(
+            assemble_starknet_contract,
+            filter_identifiers=args.filter_identifiers,
+            is_account_contract=args.account_contract,
+        )
         preprocessed = cairo_compile_common(
             args=args,
             pass_manager_factory=pass_manager_factory,
-            assemble_func=assemble_starknet_contract,
+            assemble_func=assemble_func,
         )
         abi = get_abi(preprocessed=preprocessed)
-        verify_account_contract(contract_abi=abi, is_account_contract=args.account_contract)
         if args.abi is not None:
             json.dump(abi, args.abi, indent=4, sort_keys=True)
             args.abi.write("\n")

@@ -1,6 +1,7 @@
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Type, TypeVar, Union
 
 from starkware.cairo.lang.builtins.bitwise.bitwise_builtin_runner import BitwiseBuiltinRunner
+from starkware.cairo.lang.builtins.ec.ec_op_builtin_runner import EcOpBuiltinRunner
 from starkware.cairo.lang.builtins.hash.hash_builtin_runner import HashBuiltinRunner
 from starkware.cairo.lang.builtins.range_check.range_check_builtin_runner import (
     RangeCheckBuiltinRunner,
@@ -100,7 +101,7 @@ class CairoRunner:
             range_check=lambda name, included: RangeCheckBuiltinRunner(
                 included=included,
                 ratio=instance.builtins["range_check"].ratio,
-                inner_rc_bound=2 ** 16,
+                inner_rc_bound=2**16,
                 n_parts=instance.builtins["range_check"].n_parts,
             ),
             ecdsa=lambda name, included: SignatureBuiltinRunner(
@@ -112,6 +113,9 @@ class CairoRunner:
             ),
             bitwise=lambda name, included: BitwiseBuiltinRunner(
                 included=included, bitwise_builtin=instance.builtins["bitwise"]
+            ),
+            ec_op=lambda name, included: EcOpBuiltinRunner(
+                included=included, ec_op_builtin=instance.builtins["ec_op"]
             ),
         )
 
@@ -536,7 +540,7 @@ class CairoRunner:
 
         diluted_units = instance.diluted_pool_instance_def.units_per_step * self.vm.current_step
         unused_diluted_units = diluted_units - diluted_units_used_by_builtins
-        diluted_usage_upper_bound = 2 ** instance.diluted_pool_instance_def.n_bits
+        diluted_usage_upper_bound = 2**instance.diluted_pool_instance_def.n_bits
         if unused_diluted_units < diluted_usage_upper_bound:
             raise InsufficientAllocatedCells(
                 f"There are only {unused_diluted_units} cells to fill the diluted check holes, but "

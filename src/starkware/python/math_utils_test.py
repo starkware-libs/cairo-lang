@@ -64,7 +64,7 @@ def test_div_ceil():
 
 def test_safe_log2():
     for i in range(0, 64):
-        assert safe_log2(2 ** i) == i
+        assert safe_log2(2**i) == i
     for val in [-1, 0, 3]:
         with pytest.raises(AssertionError):
             safe_log2(val)
@@ -76,10 +76,10 @@ def test_next_power_of_2():
     assert next_power_of_2(3) == 4
     assert next_power_of_2(4) == 4
     assert next_power_of_2(5) == 8
-    assert next_power_of_2(2 ** 128) == 2 ** 128
-    assert next_power_of_2(2 ** 128 + 1) == 2 ** 129
-    assert next_power_of_2(2 ** 129 - 1) == 2 ** 129
-    assert next_power_of_2(2 ** 129) == 2 ** 129
+    assert next_power_of_2(2**128) == 2**128
+    assert next_power_of_2(2**128 + 1) == 2**129
+    assert next_power_of_2(2**129 - 1) == 2**129
+    assert next_power_of_2(2**129) == 2**129
     with pytest.raises(AssertionError):
         next_power_of_2(-2)
 
@@ -90,10 +90,10 @@ def test_prev_power_of_2():
     assert prev_power_of_2(3) == 2
     assert prev_power_of_2(4) == 4
     assert prev_power_of_2(5) == 4
-    assert prev_power_of_2(2 ** 128) == 2 ** 128
-    assert prev_power_of_2(2 ** 128 + 1) == 2 ** 128
-    assert prev_power_of_2(2 ** 129 - 1) == 2 ** 128
-    assert prev_power_of_2(2 ** 129) == 2 ** 129
+    assert prev_power_of_2(2**128) == 2**128
+    assert prev_power_of_2(2**128 + 1) == 2**128
+    assert prev_power_of_2(2**129 - 1) == 2**128
+    assert prev_power_of_2(2**129) == 2**129
     with pytest.raises(AssertionError):
         next_power_of_2(0)
     with pytest.raises(AssertionError):
@@ -118,12 +118,12 @@ def test_sqrt():
 def test_isqrt():
     for x in range(100):
         assert isqrt(x) == int(math.sqrt(x))
-    assert isqrt(2 ** 60) == 2 ** 30
-    assert isqrt(2 ** 60 + 1) == 2 ** 30
-    assert isqrt(2 ** 60 - 1) == 2 ** 30 - 1
-    assert isqrt(3 ** 100) == 3 ** 50
-    assert isqrt(3 ** 100 + 1) == 3 ** 50
-    assert isqrt(3 ** 100 - 1) == 3 ** 50 - 1
+    assert isqrt(2**60) == 2**30
+    assert isqrt(2**60 + 1) == 2**30
+    assert isqrt(2**60 - 1) == 2**30 - 1
+    assert isqrt(3**100) == 3**50
+    assert isqrt(3**100 + 1) == 3**50
+    assert isqrt(3**100 - 1) == 3**50 - 1
 
 
 def test_is_power_of_2():
@@ -131,8 +131,8 @@ def test_is_power_of_2():
     assert is_power_of_2(1)
     assert is_power_of_2(8)
     assert not is_power_of_2(3)
-    assert is_power_of_2(2 ** 129)
-    assert not is_power_of_2(2 ** 129 + 1)
+    assert is_power_of_2(2**129)
+    assert not is_power_of_2(2**129 + 1)
 
 
 def test_horner_eval():

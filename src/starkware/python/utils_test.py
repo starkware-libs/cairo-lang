@@ -8,6 +8,7 @@ import pytest
 from starkware.python.utils import (
     WriteOnceDict,
     all_subclasses,
+    as_non_optional,
     assert_exhausted,
     blockify,
     composite,
@@ -29,6 +30,12 @@ def test_indent():
 
 def test_unique():
     assert unique([3, 7, 5, 8, 7, 6, 3, 9]) == [3, 7, 5, 8, 6, 9]
+
+
+def test_as_non_optional():
+    assert as_non_optional(5) == 5
+    with pytest.raises(AssertionError):
+        as_non_optional(None)
 
 
 def test_write_once_dict():
@@ -62,7 +69,7 @@ def test_safe_zip():
 
 def test_composite():
     # Define the function: (2 * (x - y) + 1) ** 2.
-    f = composite(lambda x: x ** 2, lambda x: 2 * x + 1, lambda x, y: x - y)
+    f = composite(lambda x: x**2, lambda x: 2 * x + 1, lambda x, y: x - y)
     assert f(3, 5) == 9
 
 

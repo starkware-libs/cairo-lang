@@ -18,7 +18,7 @@ from starkware.cairo.lang.compiler.lib.registers import get_ap, get_fp_and_pc
 #     let (callback_address) = get_label_location(do_callback)
 #     do_thing_then_callback(callback=callback_address)
 # end
-func get_label_location(label_value : codeoffset) -> (res):
+func get_label_location(label_value : codeoffset) -> (res : felt*):
     let (_, pc_val) = get_fp_and_pc()
 
     ret_pc_label:

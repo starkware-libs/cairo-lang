@@ -90,6 +90,14 @@ def unique_ordered_union(x, y):
     return list(dict.fromkeys(list(x) + list(y)).keys())
 
 
+def as_non_optional(value: Optional[T]) -> T:
+    """
+    Verifies that 'value' is not None and returns it.
+    """
+    assert value is not None
+    return value
+
+
 def add_counters(x: Mapping[T, NumType], y: Mapping[T, NumType]) -> Dict[T, NumType]:
     """
     Given two dicts x, y, returns a dict d s.t.

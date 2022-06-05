@@ -399,8 +399,8 @@ class ExprFutureLabel(Expression):
 @dataclasses.dataclass
 class ExprNewOperator(Expression):
     """
-    Represents an expression of the form "new <struct_name>(<arguments>)".
-    For example, "new MyStruct(1, 2, z=3)".
+    Represents an expression of the form "new expr".
+    The typical use case is "new MyStruct(1, 2, z=3)", but "new (1 + 2)" is also valid.
     """
 
     expr: Expression

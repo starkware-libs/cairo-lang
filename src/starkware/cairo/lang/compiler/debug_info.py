@@ -26,7 +26,8 @@ class InstructionLocation:
         metadata=dict(marshmallow_field=mfields.List(ScopedNameAsStr))
     )
 
-    flow_tracking_data: FlowTrackingDataActual
+    # flow_tracking_data may be removed when filtering unnecessary identifiers is enabled.
+    flow_tracking_data: Optional[FlowTrackingDataActual]
 
     def get_all_locations(self) -> List[Location]:
         all_locations = [self.inst] + self.inst.get_parent_locations()

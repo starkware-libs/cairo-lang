@@ -16,7 +16,7 @@ end
 #
 # Use starkware.cairo.common.registers.get_label_location() to convert a function label to
 # a callback value.
-func array_rfold(value, array : felt*, n_elms, elm_size, callback) -> (res):
+func array_rfold(value, array : felt*, n_elms, elm_size, callback : felt*) -> (res : felt):
     if n_elms == 0:
         return (value)
     end
@@ -45,7 +45,7 @@ end
 #   Expected signature: (felt, T*) -> felt.
 # Use starkware.cairo.common.registers.get_label_location() to convert a function label to
 # a callback value.
-func serialize_array{output_ptr : felt*}(array : felt*, n_elms, elm_size, callback):
+func serialize_array{output_ptr : felt*}(array : felt*, n_elms, elm_size, callback : felt*):
     serialize_word(n_elms)
     let (output_ptr : felt*) = array_rfold(
         value=cast(output_ptr, felt),

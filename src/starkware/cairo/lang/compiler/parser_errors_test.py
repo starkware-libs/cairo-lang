@@ -232,3 +232,17 @@ new A() new
         ^*^
 """,
     )
+
+
+def test_modifier_in_tuple():
+    verify_exception(
+        """
+let a : (b : local felt) = 5
+""",
+        """
+file:?:?: Unexpected token Token('LOCAL', 'local'). Expected one of: \
+"(", "codeoffset", "felt", identifier.
+let a : (b : local felt) = 5
+             ^***^
+""",
+    )

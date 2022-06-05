@@ -7,7 +7,7 @@ from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableVal
 from starkware.cairo.lang.vm.vm_exceptions import SecurityError
 
 FIRST_MEMORY_ADDR = 1
-SEGMENT_SIZE_UPPER_BOUND = 2 ** 64
+SEGMENT_SIZE_UPPER_BOUND = 2**64
 
 
 class MemorySegmentManager:

@@ -4,7 +4,7 @@ from starkware.cairo.lang.compiler.cairo_compile import Program, compile_cairo
 from starkware.cairo.lang.tracer.tracer_data import InputCodeFile, TracerData, WatchEvaluator
 from starkware.cairo.lang.vm.cairo_runner import CairoRunner
 
-PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
+PRIME = 2**251 + 17 * 2**192 + 1
 
 
 def test_input_code_file():
@@ -24,7 +24,7 @@ def test_tracer_data():
     code = """
 %builtins output
 
-func main(output_ptr) -> (output_ptr):
+func main(output_ptr : felt*) -> (output_ptr : felt*):
   [ap] = 1000; ap++
   let x = 2000
   [ap] = x; ap++

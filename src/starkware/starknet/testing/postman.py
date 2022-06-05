@@ -1,4 +1,5 @@
 from starkware.eth.eth_test_utils import EthContract, EthTestUtils
+from starkware.starknet.services.api.feeder_gateway.response_objects import LATEST_BLOCK_ID
 from starkware.starknet.testing.contracts import MockStarknetMessaging
 from starkware.starknet.testing.starknet import Starknet
 
@@ -16,7 +17,7 @@ class Postman:
         # Create a filter to collect LogMessageToL2 events.
         w3_contract = self.mock_starknet_messaging_contract.w3_contract
         self.message_to_l2_filter = w3_contract.events.LogMessageToL2.createFilter(
-            fromBlock="latest"
+            fromBlock=LATEST_BLOCK_ID
         )
 
     @classmethod

@@ -2,7 +2,7 @@ import dataclasses
 from typing import Dict, List, Optional
 
 from starkware.cairo.lang.compiler.ast.arguments import IdentifierList
-from starkware.cairo.lang.compiler.ast.cairo_types import CairoType
+from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypeTuple
 from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeBlock,
     CodeElement,
@@ -106,6 +106,37 @@ class StructCollector(IdentifierAwareVisitor):
             members_list=members_list, struct_name=struct_name, location=location
         )
 
+    def create_tuple_type_from_identifier_list(
+        self,
+        identifier_list: Optional[IdentifierList],
+        type_name: ScopedName,
+        location: Optional[Location],
+    ):
+        """
+        Creates a tuple type alias based on the given 'identifier_list'.
+        """
+        members: List[TypeTuple.Item] = []
+        if identifier_list is not None:
+            for arg in identifier_list.identifiers:
+                assert_no_modifier(arg)
+                members.append(
+                    TypeTuple.Item(
+                        name=arg.identifier.name, typ=arg.get_type(), location=arg.location
+                    )
+                )
+
+            location = identifier_list.location
+
+        cairo_type = self.resolve_type(TypeTuple.from_members(members=members, location=location))
+        self.add_name_definition(
+            type_name,
+            TypeDefinition(
+                cairo_type=cairo_type,
+                location=location,
+            ),
+            location=location,
+        )
+
     def handle_struct_definition(self, struct_name: ScopedName, code_block: CodeBlock, location):
         members_list: List[MemberInfo] = []
         for commented_code_element in code_block.code_elements:
@@ -167,9 +198,9 @@ class StructCollector(IdentifierAwareVisitor):
                 struct_name=new_scope + CodeElementFunction.IMPLICIT_ARGUMENT_SCOPE,
                 location=elm.identifier.location,
             )
-            self.create_struct_from_identifier_list(
+            self.create_tuple_type_from_identifier_list(
                 identifier_list=elm.returns,
-                struct_name=new_scope + CodeElementFunction.RETURN_SCOPE,
+                type_name=new_scope + CodeElementFunction.RETURN_SCOPE,
                 location=elm.identifier.location,
             )
 

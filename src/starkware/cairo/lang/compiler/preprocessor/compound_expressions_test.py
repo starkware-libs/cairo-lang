@@ -364,7 +364,7 @@ ret
 
 def test_compound_expressions_args():
     code = """\
-func foo(a, b, c, d) -> (x, y):
+func foo(a, b, c, d) -> (x : felt, y : felt):
   return (a + b, c * c + d)
 end
 

@@ -65,7 +65,7 @@ def get_pages_and_products(
     Returns a tuple: (page, page_prods).
     * pages: a dictionary from page id to a list of interleaved addresses and values.
     * page_prods: a dictionary from page_id to the product of the page:
-    *   \prod_i (z - (address_i + alpha * value_i))
+    *   prod_i (z - (address_i + alpha * value_i))
     """
     pages: Dict[int, List[int]] = {}
     page_prods: Dict[int, int] = {}

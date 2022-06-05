@@ -1,7 +1,7 @@
 import dataclasses
 from typing import Dict, List, Optional, Tuple
 
-from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypeFelt
+from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypeFelt, TypeTuple
 from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeElementFunction,
     CodeElementReturnValueReference,
@@ -19,11 +19,7 @@ from starkware.cairo.lang.compiler.ast.notes import Notes
 from starkware.cairo.lang.compiler.ast.types import TypedIdentifier
 from starkware.cairo.lang.compiler.ast.visitor import Visitor
 from starkware.cairo.lang.compiler.error_handling import Location
-from starkware.cairo.lang.compiler.identifier_definition import (
-    AliasDefinition,
-    MemberDefinition,
-    StructDefinition,
-)
+from starkware.cairo.lang.compiler.identifier_definition import AliasDefinition, MemberDefinition
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.instruction import Register
 from starkware.cairo.lang.compiler.parser import ParserContext
@@ -44,10 +40,11 @@ from starkware.starknet.compiler.data_encoder import (
     EncodingType,
     decode_data,
     struct_to_argument_info_list,
+    tuple_type_to_argument_info_list,
 )
 from starkware.starknet.definitions import constants
 from starkware.starknet.public.abi import DEFAULT_ENTRY_POINT_NAME, DEFAULT_L1_ENTRY_POINT_NAME
-from starkware.starknet.services.api.contract_definition import SUPPORTED_BUILTINS
+from starkware.starknet.services.api.contract_class import SUPPORTED_BUILTINS
 
 RAW_INPUT_DECORATOR = "raw_input"
 RAW_OUTPUT_DECORATOR = "raw_output"
@@ -287,7 +284,7 @@ class PreExternalWrapperVisitor(Visitor):
         if args != expected_args:
             raise PreprocessorError(
                 f"@{RAW_INPUT_DECORATOR} requires the following arguments:\n"
-                "(selector: felt, calldata_size: felt, calldata: felt*).",
+                "(selector : felt, calldata_size : felt, calldata : felt*).",
                 location=elm.arguments.location,
             )
 
@@ -301,7 +298,7 @@ class PreExternalWrapperVisitor(Visitor):
         if returns is None or returns.identifiers != expected_returns:
             raise PreprocessorError(
                 f"@{RAW_OUTPUT_DECORATOR} requires the following return values:\n"
-                "(retdata_size: felt, retdata: felt*).",
+                "(retdata_size : felt, retdata : felt*).",
                 location=elm.identifier.location if returns is None else returns.location,
             )
 
@@ -517,25 +514,27 @@ class ExternalWrapperVisitor(IdentifierAwareVisitor):
                 ScopedName.from_string(f"{elm.name}.{func_alias_name}")
                 + CodeElementFunction.RETURN_SCOPE
             )
-            ret_struct_def = self.get_struct_definition(
+            ret_tuple_type = self.get_type_definition(
                 name=ret_struct_name, location=func_location
-            )
+            ).cairo_type
+            assert isinstance(ret_tuple_type, TypeTuple)
 
             encode_return_func, known_ap_change = self.process_retdata(
                 func_name=elm.name,
-                struct_def=ret_struct_def,
+                ret_tuple_type=ret_tuple_type,
                 location=func_location,
             )
 
         # Prepare code for calling the original function.
         call_code = f"""\
-let ret_struct = {func_alias_name}{{{implicit_arguments}}}({call_args.format()})
+let ret_value = {func_alias_name}{{{implicit_arguments}}}({call_args.format()})
 """
+
         if encode_return_func is None:
             if is_raw_output:
                 call_code += """\
-let retdata_size = ret_struct.retdata_size
-let retdata = ret_struct.retdata
+let retdata_size = ret_value.retdata_size
+let retdata = ret_value.retdata
 """
             else:
                 call_code += """\
@@ -558,7 +557,7 @@ let retdata_size = 0
                     location=func_location,
                 )
             call_code += f"""\
-let (range_check_ptr, retdata_size, retdata) = {elm.name}_encode_return(ret_struct, range_check_ptr)
+let (range_check_ptr, retdata_size, retdata) = {elm.name}_encode_return(ret_value, range_check_ptr)
 """
 
         call_code_elements = autogen_parse_code_block(
@@ -637,7 +636,7 @@ end
     def process_retdata(
         self,
         func_name: str,
-        struct_def: StructDefinition,
+        ret_tuple_type: TypeTuple,
         location: Location,
     ) -> Tuple[Optional[CodeElementFunction], bool]:
         """
@@ -646,20 +645,20 @@ end
         2. Whether the ap change is known.
         """
 
-        if len(struct_def.members) == 0:
+        if len(ret_tuple_type.members) == 0:
             return None, True
 
         data_encoder = DataEncoder(
-            arg_name_func=lambda arg_info: f"ret_struct.{arg_info.name}",
+            arg_name_func=lambda arg_info: f"ret_value.{arg_info.name}",
             encoding_type=EncodingType.RETURN,
             has_range_check_builtin="range_check_ptr" in self.os_context,
             identifiers=self.identifiers,
         )
-        data_encoder.run(arguments=struct_to_argument_info_list(struct_def))
+        data_encoder.run(arguments=tuple_type_to_argument_info_list(ret_tuple_type))
 
         func_elm = self.prepare_return_function(
             func_name=func_name,
-            struct_def=struct_def,
+            ret_tuple_type=ret_tuple_type,
             encoding_code_elements=data_encoder.code_elements,
             location=location,
         )
@@ -672,12 +671,12 @@ end
     def prepare_return_function(
         self,
         func_name: str,
-        struct_def: StructDefinition,
+        ret_tuple_type: TypeTuple,
         encoding_code_elements: List[CommentedCodeElement],
         location: Location,
     ) -> CodeElementFunction:
         code = f"""\
-func {func_name}_encode_return(ret_struct : {struct_def.full_name}, range_check_ptr) -> (
+func {func_name}_encode_return(ret_value : {ret_tuple_type.format()}, range_check_ptr) -> (
         range_check_ptr, data_len : felt, data : felt*):
     %{{ memory[ap] = segments.add() %}}
     alloc_locals

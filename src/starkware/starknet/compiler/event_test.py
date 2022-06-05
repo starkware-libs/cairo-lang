@@ -56,7 +56,7 @@ end
 %lang starknet
 
 # Dummy library functions.
-func alloc() -> (result):
+func alloc() -> (ptr : felt*):
     ret
 end
 func memcpy(dst : felt*, src : felt*, len):

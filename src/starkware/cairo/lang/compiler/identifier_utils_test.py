@@ -44,7 +44,7 @@ def test_get_struct_definition():
 
     assert struct_def.size == 2
 
-    with pytest.raises(DefinitionError, match="Expected 'MyConst' to be a struct. Found: 'const'."):
+    with pytest.raises(DefinitionError, match="Expected 'MyConst' to be struct. Found: 'const'."):
         get_struct_definition(scope("MyConst"), manager)
 
     with pytest.raises(MissingIdentifierError, match=re.escape("Unknown identifier 'abc'.")):

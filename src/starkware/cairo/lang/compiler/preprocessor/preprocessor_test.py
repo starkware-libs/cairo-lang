@@ -1,7 +1,6 @@
 import pytest
 
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
-from starkware.cairo.lang.compiler.ast.code_elements import CodeElementFunction
 from starkware.cairo.lang.compiler.cairo_compile import compile_cairo
 from starkware.cairo.lang.compiler.error_handling import LocationError
 from starkware.cairo.lang.compiler.identifier_definition import (
@@ -421,7 +420,7 @@ func f(x) -> (local y):
 
 def test_return():
     code = """\
-func f() -> (a, b, c):
+func f() -> (a : felt, b : felt, c : felt):
     return (1, [fp], c=[fp + 1] + 2)
 
     tempvar z = 5
@@ -466,7 +465,7 @@ def test_return_failures():
     # Named after positional.
     verify_exception(
         """
-func f() -> (a, b, c):
+func f() -> (a : felt, b : felt, c : felt):
     return (a=1, b=1, [fp] + 1)
 end
 """,
@@ -479,7 +478,7 @@ file:?:?: Positional arguments must not appear after named arguments.
     # Wrong num.
     verify_exception(
         """
-func f() -> (a, b, c, d):
+func f() -> (a : felt, b : felt, c : felt, d : felt):
     return (1, [fp] + 1)
 end
 """,
@@ -492,7 +491,7 @@ file:?:?: Expected exactly 4 expressions, got 2.
     # Wrong num.
     verify_exception(
         """
-func f() -> (a, b):
+func f() -> (a : felt, b : felt):
     return ()
 end
 """,
@@ -505,12 +504,12 @@ file:?:?: Expected exactly 2 expressions, got 0.
     # Unknown name.
     verify_exception(
         """
-func f() -> (a, b, c):
+func f() -> (a : felt, b : felt, c : felt):
     return (a=1, d=1, [fp] + 1)
 end
 """,
         """
-file:?:?: Expected named arg 'b' found 'd'.
+file:?:?: Expected named argument: 'b', found: 'd'.
     return (a=1, d=1, [fp] + 1)
                  ^
 """,
@@ -530,10 +529,10 @@ return (a=1, [fp] + 1)
 
 def test_tail_call():
     code = """\
-func f(a) -> (a):
+func f(a) -> (a : felt):
     return f(a)
 end
-func g(a, b) -> (a):
+func g(a, b) -> (a : felt):
     return f(a)
 end
 """
@@ -556,7 +555,7 @@ ret
 def test_tail_call_failure():
     verify_exception(
         """
-func g() -> (a):
+func g() -> (a : felt):
     return (a=0)
 end
 return g()
@@ -570,10 +569,10 @@ return g()
 
     verify_exception(
         """
-func g() -> (a):
+func g() -> (a : felt):
     return (a=0)
 end
-func f(x, y) -> (a, b, c, d, e):
+func f(x, y) -> (a : felt, b : felt, c : felt, d : felt, e : felt):
     return g()
 end
 """,
@@ -586,10 +585,10 @@ file:?:?: Cannot convert the return type of g to the return type of f.
 
     verify_exception(
         """
-func g{x, y}() -> (a):
+func g{x, y}() -> (a : felt):
     return (a=0)
 end
-func f{y, x}() -> (a):
+func f{y, x}() -> (a : felt):
     return g()
 end
 """,
@@ -599,18 +598,18 @@ file:?:?: Cannot convert the implicit arguments of g to the implicit arguments o
     ^********^
 The implicit arguments of 'g' were defined here:
 file:?:?
-func g{x, y}() -> (a):
+func g{x, y}() -> (a : felt):
        ^**^
 The implicit arguments of 'f' were defined here:
 file:?:?
-func f{y, x}() -> (a):
+func f{y, x}() -> (a : felt):
        ^**^
 """,
     )
 
     verify_exception(
         """
-func f(x, y) -> (a, b, c, d, e):
+func f(x, y) -> (a : felt, b : felt, c : felt, d : felt, e : felt):
     return g()
 end
 """,
@@ -640,7 +639,7 @@ file:?:?: Cannot convert the return type of g to the return type of f.
 
 def test_function_call():
     code = """\
-func foo(a, b) -> (c):
+func foo(a, b) -> (c : felt):
     bar(a=a)
     return (1)
 end
@@ -761,7 +760,7 @@ end
 
 def test_with_statement_locals():
     code = """
-func foo() -> (z):
+func foo() -> (z : felt):
     ret
 end
 
@@ -911,7 +910,7 @@ func f{x: T}() -> ():
     return ()
 end
 
-func g{x: T, y}(z, w) -> (res):
+func g{x: T, y}(z, w) -> (res : felt):
     x.a = 0
     x.b = 1
     y = 2
@@ -970,26 +969,27 @@ ret
 def test_implicit_args_failures():
     verify_exception(
         """
-func f{x}(x):
+func f{x}(x : felt):
     ret
 end
 """,
         """
 file:?:?: Arguments and return values cannot have the same name of an implicit argument.
-func f{x}(x):
-          ^
+func f{x}(x : felt):
+          ^******^
 """,
     )
+
     verify_exception(
         """
-func f{x}() -> (x):
+func f{x}() -> (x : felt):
     ret
 end
 """,
         """
 file:?:?: Arguments and return values cannot have the same name of an implicit argument.
-func f{x}() -> (x):
-                ^
+func f{x}() -> (x : felt):
+                ^******^
 """,
     )
     verify_exception(
@@ -1101,7 +1101,7 @@ ret
 def test_implcit_argument_bindings_failures():
     verify_exception(
         """
-func foo{x}(y) -> (z):
+func foo{x}(y) -> (z : felt):
     ret
 end
 
@@ -1118,7 +1118,7 @@ file:?:?: Implicit argument binding must be of the form: arg_name=var.
     )
     verify_exception(
         """
-func foo{x}(y) -> (z):
+func foo{x}(y) -> (z : felt):
     ret
 end
 
@@ -1136,7 +1136,7 @@ file:?:?: Unexpected implicit argument binding: y.
     )
     verify_exception(
         """
-func foo{x}(y) -> (z):
+func foo{x}(y) -> (z : felt):
     ret
 end
 
@@ -1185,15 +1185,14 @@ def test_func_args_and_rets_scope():
     code = """\
 const x = 1234
 [ap] = x; ap++
-func f(x, y, z) -> (a, b, x):
+func f(x, y, z) -> (a : felt, b : felt, x : felt):
     x = 1; ap++
     y = 2; ap++
-    [ap] = Return.b; ap++
+    [ap] = Args.y; ap++
     ret
 end
 [ap + 4] = x; ap++
 [ap + 5] = f.Args.x; ap++
-[ap + 6] = f.Return.x; ap++
 """
     program = preprocess_str(code=code, prime=PRIME)
     assert (
@@ -1206,7 +1205,6 @@ end
 ret
 [ap + 4] = 1234; ap++
 [ap + 5] = 0; ap++
-[ap + 6] = 2; ap++
 """
     )
 
@@ -1817,15 +1815,16 @@ func f(name, x, name):
     )
     verify_exception(
         """
-func f() -> (name, x, name):
+func f() -> (name : felt, x : felt, name : felt):
     [ap] = 1
     [ap] = 2
+    ret
 end
 """,
         """
-file:?:?: Redefinition of 'test_scope.f.Return.name'.
-func f() -> (name, x, name):
-                      ^**^
+file:?:?: Named tuple cannot have two entries with the same name.
+func f() -> (name : felt, x : felt, name : felt):
+                                    ^*********^
 """,
     )
 
@@ -2288,7 +2287,7 @@ def test_rvalue_func_call_reference_with_nondet():
     """
     program = preprocess_str(
         code="""
-func foo(val) -> (res):
+func foo(val) -> (res : felt):
     return (res=val)
 end
 let x = foo(nondet %{ 5 %})
@@ -2435,6 +2434,46 @@ file:?:?: ap may only be used in an expression of the form [ap + <const>].
     let x = ap
             ^^
 """,
+    )
+
+
+def test_dummy_reference_expr_error_flow():
+    verify_exception(
+        """\
+func test():
+    alloc_locals
+    tempvar a
+    ap += [ap]  # Revoke reference to trigger auto locals flow.
+    tempvar addr = &a
+    return ()
+end
+""",
+        """
+file:?:?: Using the value of fp directly, requires defining a variable named __fp__.
+    tempvar addr = &a
+                    ^
+""",
+    )
+
+    verify_exception(
+        """\
+struct MyStruct:
+end
+
+func test():
+    alloc_locals
+    tempvar a : MyStruct
+    ap += [ap]  # Revoke reference to trigger auto locals flow.
+    assert a.missing_member = 5
+    return ()
+end
+""",
+        """
+file:?:?: Member 'missing_member' does not appear in definition of struct 'test_scope.MyStruct'.
+    assert a.missing_member = 5
+           ^**************^
+""",
+        exc_type=CairoTypeError,
     )
 
 
@@ -2784,7 +2823,7 @@ def test_return_value_reference():
     scope = TEST_SCOPE
     program = preprocess_str(
         code="""
-func foo() -> (val, x, y):
+func foo() -> (val : felt, x : felt, y : felt):
     ret
 end
 
@@ -2811,18 +2850,13 @@ end
             reference_manager=program.reference_manager, name=scoped_name
         )
 
-    expected_type = mark_type_resolved(
-        parse_type(f"{scope}.foo.{CodeElementFunction.RETURN_SCOPE}")
+    assert simplify_type_system(get_reference("main.x").value)[1] == parse_type(
+        "(val : felt, x : felt, y : felt)"
     )
-    assert simplify_type_system(get_reference("main.x").value)[1] == expected_type
 
-    expected_type = mark_type_resolved(
-        parse_type(f"{scope}.main.{CodeElementFunction.RETURN_SCOPE}")
-    )
-    assert simplify_type_system(get_reference("main.y").value)[1] == expected_type
+    assert simplify_type_system(get_reference("main.y").value)[1] == parse_type("()")
 
-    expected_type = parse_type("felt")
-    assert simplify_type_system(get_reference("main.z").value)[1] == expected_type
+    assert simplify_type_system(get_reference("main.z").value)[1] == parse_type("felt")
 
     assert (
         program.format()
@@ -2858,7 +2892,7 @@ let x = call foo
 [x.a] = 0
 """,
         """
-file:?:?: Member 'a' does not appear in definition of struct 'test_scope.foo.Return'.
+file:?:?: Member 'a' does not appear in definition of tuple type '()'.
 [x.a] = 0
  ^*^
 """,
@@ -2900,7 +2934,7 @@ struct T:
     member a : felt
     member b : felt
 end
-func f() -> (a, b, c, d , e : T):
+func f() -> (a : felt, b : felt, c : felt, d : felt , e : T):
     return (1,2,3,4,[cast(5,T*)])
 end
 func g():
@@ -2954,7 +2988,7 @@ ret
 def test_unpacking_failures():
     verify_exception(
         f"""
-func foo() -> (a):
+func foo() -> (a : felt):
     ret
 end
 let (a, b) = foo()
@@ -2983,7 +3017,7 @@ struct T:
     member a : felt
     member b : felt
 end
-func foo() -> (a, b : T):
+func foo() -> (a : felt, b : T):
     ret
 end
 let (a, b, c) = foo()
@@ -3001,7 +3035,7 @@ struct T:
     member a : felt
     member b : felt
 end
-func foo() -> (a, b):
+func foo() -> (a : felt, b : felt):
     ret
 end
 let (a, b : T) = foo()
@@ -3023,7 +3057,7 @@ struct S:
     member a : felt
     member b : felt
 end
-func foo() -> (a, b : T):
+func foo() -> (a : felt, b : T):
     ret
 end
 func test():
@@ -3064,7 +3098,7 @@ file:?:?: Reference name cannot be '_'.
 
     verify_exception(
         f"""
-func foo() -> (a):
+func foo() -> (a : felt):
   ret
 end
 let (a) = foo()
@@ -3087,7 +3121,7 @@ Preprocessed instruction:
 def test_unpacking_modifier_failure():
     verify_exception(
         """
-func foo() -> (a, b):
+func foo() -> (a : felt, b : felt):
   ret
 end
 let (a, local b) = foo()
@@ -3379,6 +3413,37 @@ end
 [fp + (-5)] = 4
 [fp + (-4)] = 5
 [fp + (-3)] = 6
+ret
+"""
+    )
+
+
+def test_nested_struct_casting():
+    code = """\
+struct S:
+    member a: felt
+    member b: felt
+end
+func f(x : (felt, S)):
+    return ()
+end
+
+func main():
+    let s : S = S(2,3)
+    let arg : (felt, S) = (1, s)
+    f(arg)
+    return ()
+end
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert (
+        program.format()
+        == """\
+ret
+[ap] = 1; ap++
+[ap] = 2; ap++
+[ap] = 3; ap++
+call rel -7
 ret
 """
     )

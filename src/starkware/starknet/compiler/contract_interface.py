@@ -161,13 +161,14 @@ const {function_info.selector} = {get_selector_from_name(function_info.name)}
 
 
 def process_contract_function(
-    function_info: ContractFunctionInfo, func_body: CodeBlock, is_delegate: bool
+    function_info: ContractFunctionInfo, func_body: CodeBlock, is_library_call: bool
 ) -> List[CommentedCodeElement]:
     func_code_elm = function_info.elm
-    func_name = f"{'delegate_' if is_delegate else ''}{function_info.name}"
+    func_name = f"{'library_call_' if is_library_call else ''}{function_info.name}"
+    argument_name = _get_argument_name(is_library_call=is_library_call)
     code = f"""\
 func {func_name}{{syscall_ptr : felt*, range_check_ptr}}(
-    contract_address : felt):
+    {argument_name} : felt):
 end
 """
 
@@ -191,7 +192,7 @@ end
 
 
 class FuncBodyCallback(Protocol):
-    def __call__(self, function_info: ContractFunctionInfo, is_delegate: bool) -> CodeBlock:
+    def __call__(self, function_info: ContractFunctionInfo, is_library_call: bool) -> CodeBlock:
         pass
 
 
@@ -204,7 +205,7 @@ def generate_contract_interface_namespace(
 namespace {contract_name}:
     from starkware.cairo.common.alloc import alloc
     from starkware.cairo.common.memcpy import memcpy
-    from starkware.starknet.common.syscalls import call_contract, delegate_call
+    from starkware.starknet.common.syscalls import call_contract, library_call
 end
 """
 
@@ -221,11 +222,13 @@ end
 
     for function_info in contract_info.functions:
         res.code_block.code_elements += process_function_selector(function_info)
-        for is_delegate in [False, True]:
+        for is_library_call in [False, True]:
             res.code_block.code_elements += process_contract_function(
                 function_info=function_info,
-                func_body=func_body_callback(function_info=function_info, is_delegate=is_delegate),
-                is_delegate=is_delegate,
+                func_body=func_body_callback(
+                    function_info=function_info, is_library_call=is_library_call
+                ),
+                is_library_call=is_library_call,
             )
 
     res.additional_attributes[CONTRACT_INTERFACE_ATTR] = contract_info
@@ -262,7 +265,7 @@ class ContractInterfaceDeclVisitor(IdentifierAwareVisitor):
         return elm
 
     def generate_contract_function_body(
-        self, function_info: ContractFunctionInfo, is_delegate: bool
+        self, function_info: ContractFunctionInfo, is_library_call: bool
     ):
         # Add dummy references and calls that will be visited by the identifier collector
         # and the dependency graph.
@@ -273,7 +276,7 @@ let retdata_size = 0
 let retdata = 0
 call alloc
 call memcpy
-call {"delegate_call" if is_delegate else "call_contract"}
+call {_get_syscall_name(is_library_call=is_library_call)}
 """
         return autogen_parse_code_block(
             path=function_info.autogen_code_name,
@@ -307,7 +310,7 @@ class ContractInterfaceImplementationVisitor(IdentifierAwareVisitor):
         )
 
     def generate_contract_function_body(
-        self, function_info: ContractFunctionInfo, is_delegate: bool
+        self, function_info: ContractFunctionInfo, is_library_call: bool
     ):
         def get_code_elements(code: str) -> List[CommentedCodeElement]:
             return autogen_parse_code_block(
@@ -332,10 +335,11 @@ let __calldata_ptr = calldata_ptr_start
             arguments=function_info.elm.arguments, visitor=self
         )
         # Add the system call.
+        argument_name = _get_argument_name(is_library_call=is_library_call)
         code_elements += get_code_elements(
             code=f"""
-let (retdata_size, retdata) = {"delegate_call" if is_delegate else "call_contract"}(
-    contract_address=contract_address,
+let (retdata_size, retdata) = {_get_syscall_name(is_library_call=is_library_call)}(
+    {argument_name}={argument_name},
     function_selector={function_info.selector},
     calldata_size=__calldata_ptr - calldata_ptr_start,
     calldata=calldata_ptr_start)
@@ -374,3 +378,11 @@ return ({return_str})
         )
 
         return CodeBlock(code_elements=code_elements)
+
+
+def _get_argument_name(is_library_call: bool) -> str:
+    return "class_hash" if is_library_call else "contract_address"
+
+
+def _get_syscall_name(is_library_call: bool) -> str:
+    return "library_call" if is_library_call else "call_contract"

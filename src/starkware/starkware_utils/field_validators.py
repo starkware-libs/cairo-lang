@@ -69,7 +69,11 @@ validate_gateway_url = validate_url(
     url_name="Gateway endpoint", schemes={"http", "https"}, require_full_url=False
 )
 
-validate_internal_url = validate_url(
+validate_availability_gateway_endpoint_url = validate_url(
+    url_name="AvailabilityGateway endpoint", schemes={"http", "https"}, require_full_url=False
+)
+
+validate_internal_gateway_url = validate_url(
     url_name="Internal Gateway endpoint", schemes={"http", "https"}, require_full_url=False
 )
 

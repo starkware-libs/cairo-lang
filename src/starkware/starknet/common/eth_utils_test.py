@@ -12,7 +12,7 @@ from starkware.python.test_utils import maybe_raises
 CAIRO_FILE = os.path.join(os.path.dirname(__file__), "eth_utils.cairo")
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def program() -> Program:
     return compile_cairo_files([CAIRO_FILE], prime=DEFAULT_PRIME)
 
@@ -27,8 +27,8 @@ def runner(program: Program) -> CairoFunctionRunner:
     [
         (0, "Invalid Ethereum address - value is zero"),
         (1, None),
-        (2 ** 160 - 1, None),
-        (2 ** 160, "Invalid Ethereum address - value is more than 160 bits"),
+        (2**160 - 1, None),
+        (2**160, "Invalid Ethereum address - value is more than 160 bits"),
         (DEFAULT_PRIME - 1, "Invalid Ethereum address - value is more than 160 bits"),
     ],
 )

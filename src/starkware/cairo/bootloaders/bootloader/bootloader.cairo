@@ -1,19 +1,20 @@
-%builtins output pedersen range_check ecdsa bitwise
+%builtins output pedersen range_check ecdsa bitwise ec_op
 
 from starkware.cairo.bootloaders.simple_bootloader.run_simple_bootloader import (
     run_simple_bootloader,
 )
 from starkware.cairo.cairo_verifier.objects import CairoVerifierOutput
-from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.cairo_builtins import HashBuiltin
-from starkware.cairo.common.hash_state import HashState, hash_finalize, hash_init, hash_update
+from starkware.cairo.common.find_element import find_element
+from starkware.cairo.common.hash_state import hash_felts
 from starkware.cairo.common.memcpy import memcpy
 
 struct BootloaderConfig:
     # The hash of the simple bootloader program.
     member simple_bootloader_program_hash : felt
-    # The hash of a (Cairo) program that verifies a STARK proof for the Cairo machine.
-    member cairo_verifier_program_hash : felt
+    # The hashes of the supported (Cairo) programs that verify a STARK proof for the Cairo machine.
+    member supported_cairo_verifier_program_hashes_len : felt
+    member supported_cairo_verifier_program_hashes : felt*
 end
 
 struct TaskOutputHeader:
@@ -25,9 +26,16 @@ end
 #
 # Hint arguments:
 # program_input - Contains the inputs for the bootloader.
-func main{output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecdsa_ptr, bitwise_ptr}(
-    ):
-    alloc_locals
+func main{
+    output_ptr : felt*,
+    pedersen_ptr : HashBuiltin*,
+    range_check_ptr,
+    ecdsa_ptr,
+    bitwise_ptr,
+    ec_op_ptr,
+}():
+    ap += SIZEOF_LOCALS
+
     local simple_bootloader_output_start : felt*
     %{
         from starkware.cairo.bootloaders.bootloader.objects import BootloaderInput
@@ -48,29 +56,36 @@ func main{output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecds
     # contained in the bootloader input.
     %{ simple_bootloader_input = bootloader_input %}
     run_simple_bootloader{output_ptr=simple_bootloader_output_ptr}()
-    let simple_bootloader_output_end : felt* = simple_bootloader_output_ptr
+    local range_check_ptr = range_check_ptr
+    local ecdsa_ptr = ecdsa_ptr
+    local bitwise_ptr = bitwise_ptr
+    local ec_op_ptr = ec_op_ptr
+    local simple_bootloader_output_end : felt* = simple_bootloader_output_ptr
 
     %{
         # Restore the bootloader's output builtin state.
         output_builtin.set_state(output_builtin_state)
     %}
 
-    # The bootloader config appears at the beginning of the output.
-    let bootloader_config = cast(output_ptr, BootloaderConfig*)
-    let output_ptr = output_ptr + BootloaderConfig.SIZE
-
+    local bootloader_config : BootloaderConfig*
     %{
-        segments.write_arg(
-            ids.bootloader_config.address_,
+        from starkware.cairo.bootloaders.bootloader.objects import BootloaderConfig
+        bootloader_config: BootloaderConfig = bootloader_input.bootloader_config
+
+        ids.bootloader_config = segments.gen_arg(
             [
-                bootloader_input.simple_bootloader_program_hash,
-                bootloader_input.cairo_verifier_program_hash,
+                bootloader_config.simple_bootloader_program_hash,
+                len(bootloader_config.supported_cairo_verifier_program_hashes),
+                bootloader_config.supported_cairo_verifier_program_hashes,
             ],
         )
     %}
 
+    # The bootloader config appears at the beginning of the output.
+    serialize_bootloader_config(bootloader_config=bootloader_config)
+
     # Increment output_ptr to save place for n_total_tasks.
-    let output_n_total_tasks = [output_ptr]
+    local output_n_total_tasks_ptr : felt* = output_ptr
     let output_ptr = output_ptr + 1
     %{ output_start = ids.output_ptr %}
 
@@ -94,7 +109,7 @@ func main{output_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecds
     assert simple_bootloader_output_end = parse_tasks_end
 
     # Output the total number of tasks.
-    assert output_n_total_tasks = n_total_tasks
+    assert [output_n_total_tasks_ptr] = n_total_tasks
 
     %{
         from typing import List
@@ -144,13 +159,17 @@ end
 # subtasks_output - Contains direct subtasks outputs which is used for unpacking. This is an input
 # to this function and is returned for validation purposes.
 func parse_tasks{
-    output_ptr : felt*, pedersen_ptr : HashBuiltin*, n_total_tasks : felt, subtasks_output : felt*
+    output_ptr : felt*,
+    pedersen_ptr : HashBuiltin*,
+    range_check_ptr,
+    n_total_tasks : felt,
+    subtasks_output : felt*,
 }(bootloader_config : BootloaderConfig*, n_subtasks : felt):
     if n_subtasks == 0:
         return ()
     end
 
-    alloc_locals
+    ap += SIZEOF_LOCALS
 
     %{
         from starkware.cairo.bootloaders.bootloader.objects import PackedOutput
@@ -185,6 +204,26 @@ func parse_tasks{
     return parse_tasks(bootloader_config=bootloader_config, n_subtasks=n_subtasks - 1)
 end
 
+# Serializes the bootloader config.
+#
+# Arguments:
+# bootloader_config - A pointer to the bootloader config.
+func serialize_bootloader_config{output_ptr : felt*, pedersen_ptr : HashBuiltin*}(
+    bootloader_config : BootloaderConfig*
+):
+    assert [output_ptr] = bootloader_config.simple_bootloader_program_hash
+
+    # Compute the hash of the supported Cairo verifiers.
+    let (supported_cairo_verifiers_hash) = hash_felts{hash_ptr=pedersen_ptr}(
+        data=bootloader_config.supported_cairo_verifier_program_hashes,
+        length=bootloader_config.supported_cairo_verifier_program_hashes_len,
+    )
+
+    assert [output_ptr + 1] = supported_cairo_verifiers_hash
+    let output_ptr = output_ptr + 2
+    return ()
+end
+
 # Parses the task header.
 #
 # Implicit arguments:
@@ -210,9 +249,13 @@ end
 # Hint arguments:
 # packed_output - CompositePackedOutput object which uses for unpacking the task.
 func unpack_composite_packed_task{
-    output_ptr : felt*, pedersen_ptr : HashBuiltin*, n_total_tasks : felt, task_output : felt*
+    output_ptr : felt*,
+    pedersen_ptr : HashBuiltin*,
+    range_check_ptr,
+    n_total_tasks : felt,
+    task_output : felt*,
 }(bootloader_config : BootloaderConfig*):
-    alloc_locals
+    ap += SIZEOF_LOCALS
 
     # Guess the pre-image of subtasks_output_hash (subtasks_output_hash appears in task_output).
     local nested_subtasks_output : felt*
@@ -224,25 +267,27 @@ func unpack_composite_packed_task{
     %}
 
     # Compute the hash of nested_subtasks_output.
-    let (hash_state_ptr : HashState*) = hash_init()
-    let (hash_state_ptr) = hash_update{hash_ptr=pedersen_ptr}(
-        hash_state_ptr=hash_state_ptr,
-        data_ptr=nested_subtasks_output,
-        data_length=nested_subtasks_output_len,
+    let (subtasks_output_hash) = hash_felts{hash_ptr=pedersen_ptr}(
+        data=nested_subtasks_output, length=nested_subtasks_output_len
     )
-    let (subtasks_output_hash) = hash_finalize{hash_ptr=pedersen_ptr}(hash_state_ptr=hash_state_ptr)
 
     # Verify task output header.
     let (task_header : TaskOutputHeader*) = parse_task_header()
-    assert [task_header] = TaskOutputHeader(
-        size=TaskOutputHeader.SIZE + CairoVerifierOutput.SIZE,
-        program_hash=bootloader_config.cairo_verifier_program_hash)
+    assert task_header.size = TaskOutputHeader.SIZE + CairoVerifierOutput.SIZE
+
+    # Make sure the program hash is one of the supported verifier program hashes.
+    find_element(
+        array_ptr=bootloader_config.supported_cairo_verifier_program_hashes,
+        elm_size=1,
+        n_elms=bootloader_config.supported_cairo_verifier_program_hashes_len,
+        key=task_header.program_hash,
+    )
 
     # Verify task output.
     assert [cast(task_output, CairoVerifierOutput*)] = CairoVerifierOutput(
         program_hash=bootloader_config.simple_bootloader_program_hash,
         output_hash=subtasks_output_hash)
-    let task_output = task_output + CairoVerifierOutput.SIZE
+    local task_output : felt* = task_output + CairoVerifierOutput.SIZE
 
     # Call recursively to parse the composite task's subtasks.
     local nested_subtasks_output_start : felt* = nested_subtasks_output
@@ -271,12 +316,17 @@ end
 # n_total_tasks - Number of PlainPackedOutput that were unpacked. This function increments this
 # value by 1.
 func unpack_plain_packed_task{
-    output_ptr : felt*, pedersen_ptr : HashBuiltin*, n_total_tasks : felt, task_output : felt*
+    output_ptr : felt*,
+    pedersen_ptr : HashBuiltin*,
+    range_check_ptr,
+    n_total_tasks : felt,
+    task_output : felt*,
 }(bootloader_config : BootloaderConfig*):
-    alloc_locals
+    ap += SIZEOF_LOCALS
 
     # Parse task output header.
     let (task_header : TaskOutputHeader*) = parse_task_header()
+    local task_output : felt* = task_output
 
     # Copy the simple bootloader output header to the bootloader output.
     assert [cast(output_ptr, TaskOutputHeader*)] = [task_header]
@@ -285,7 +335,7 @@ func unpack_plain_packed_task{
     let output_ptr = output_ptr + TaskOutputHeader.SIZE
 
     # Copy the program output to the bootloader output.
-    let output_size = task_header.size - TaskOutputHeader.SIZE
+    local output_size = task_header.size - TaskOutputHeader.SIZE
     memcpy(dst=output_ptr, src=task_output, len=output_size)
 
     # Increment pointers.

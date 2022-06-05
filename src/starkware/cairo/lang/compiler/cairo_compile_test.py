@@ -4,7 +4,7 @@ import pytest
 
 from starkware.cairo.lang.compiler.cairo_compile import compile_cairo
 
-PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
+PRIME = 2**251 + 17 * 2**192 + 1
 
 
 def test_main_args_match_builtins():
@@ -21,7 +21,7 @@ def test_main_args_match_builtins():
             code="""
 %builtins output range_check
 
-func main(output_ptr) -> (output_ptr):
+func main(output_ptr : felt*) -> (output_ptr : felt*):
     return (output_ptr=output_ptr + 1)
 end
 """,
@@ -35,8 +35,9 @@ end
             code="""
 %builtins output range_check
 
-func main(range_check_ptr, output_ptr) -> (range_check_ptr, output_ptr):
-    return (range_check_ptr + 1, output_ptr=output_ptr + 1)
+func main(range_check_ptr : felt*, output_ptr : felt*) -> (
+        range_check_ptr : felt*, output_ptr : felt*):
+    return (range_check_ptr=range_check_ptr + 1, output_ptr=output_ptr + 1)
 end
 """,
             prime=PRIME,
@@ -57,7 +58,7 @@ def test_main_return_match_builtins():
             code="""
 %builtins output range_check
 
-func main(output_ptr, range_check_ptr) -> (output_ptr):
+func main(output_ptr : felt*, range_check_ptr : felt*) -> (output_ptr : felt*):
     return (output_ptr=output_ptr + 1)
 end
 """,

@@ -203,6 +203,8 @@ def enum_field_metadata(
 boolean_field_metadata: Dict[str, Any] = dict(marshmallow_field=RequiredBoolean())
 optional_field_metadata: Dict[str, Any] = dict(allow_none=True, load_default=None)
 
+nonrequired_optional_metadata: Dict[str, Any] = dict(load_default=None, required=False)
+nonrequired_list_metadata: Dict[str, Any] = dict(load_default=list, required=False)
 
 # Utilities.
 

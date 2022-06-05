@@ -23,9 +23,7 @@ python_lib(everest_internal_transaction_lib
     everest_transaction_lib
     starkware_config_utils_lib
     starkware_dataclasses_utils_lib
-    pip_marshmallow
-    pip_marshmallow_enum
-    pip_marshmallow_oneofschema
+    pip_marshmallow_dataclass
 )
 
 python_lib(everest_transaction_execution_objects_lib

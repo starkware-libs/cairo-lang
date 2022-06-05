@@ -65,7 +65,7 @@ class StrippedProgram(ProgramBase):
         return self
 
     def run_validity_checks(self):
-        assert isinstance(self.prime, int) and self.prime > 2 ** 63, "Invalid prime."
+        assert isinstance(self.prime, int) and self.prime > 2**63, "Invalid prime."
         assert isinstance(self.data, list) and all(
             isinstance(x, int) and 0 <= x < self.prime for x in self.data
         ), "Invalid program data."

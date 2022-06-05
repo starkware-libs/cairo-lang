@@ -44,7 +44,4 @@ def get_tx_syscall_counter(state: CarriedState) -> Mapping[str, int]:
     Returns the most-recent transaction's syscall counter (recent w.r.t. application on the given
     state).
     """
-    if state.parent_state is None:
-        return state.syscall_counter
-
-    return sub_counters(state.syscall_counter, state.parent_state.syscall_counter)
+    return sub_counters(state.syscall_counter, state.non_optional_parent_state.syscall_counter)

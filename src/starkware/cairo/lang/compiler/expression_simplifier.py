@@ -119,7 +119,7 @@ class ExpressionSimplifier(ExpressionTransformer):
             if self.prime is not None:
                 val = pow(a.val, b.val, self.prime)
             else:
-                val = a.val ** b.val
+                val = a.val**b.val
             return ExprConst(val=val, location=expr.location)
 
         return ExprPow(a=a, b=b, location=expr.location)

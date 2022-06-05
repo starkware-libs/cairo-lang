@@ -136,7 +136,7 @@ class OutputBuiltinRunner(BuiltinRunner):
                 isinstance(page_id_str, str)
                 and isinstance(values, list)
                 and len(values) == 2
-                and all(isinstance(x, int) and 0 < x < 2 ** 30 for x in values)
+                and all(isinstance(x, int) and 0 < x < 2**30 for x in values)
             ), "Invalid output builtin pages field."
             self.pages[int(page_id_str)] = PublicMemoryPage(start=values[0], size=values[1])
 
@@ -189,5 +189,5 @@ class OutputBuiltinVerifier(BuiltinVerifier):
             return [], []
 
         addresses = public_input.memory_segments["output"]
-        assert 0 <= addresses.begin_addr <= addresses.stop_ptr < 2 ** 64
+        assert 0 <= addresses.begin_addr <= addresses.stop_ptr < 2**64
         return [addresses.begin_addr], [addresses.stop_ptr]

@@ -38,11 +38,11 @@ class StarknetContract:
     """
     A high level interface to a StarkNet contract used for testing. Allows invoking functions.
     Example:
-      contract_definition = compile_starknet_files(...)
+      contract_class = compile_starknet_files(...)
       state = await StarknetState.empty()
-      contract_address = await state.deploy(contract_definition=contract_definition)
+      contract_address = await state.deploy(contract_class=contract_class)
       contract = StarknetContract(
-          state=state, abi=contract_definition.abi, contract_address=contract_address)
+          state=state, abi=contract_class.abi, contract_address=contract_address)
 
       await contract.foo(a=1, b=[2, 3]).invoke()
     """
@@ -411,3 +411,13 @@ class StarknetContractFunctionInvocation:
             raise ArgumentParsingFailed("Too many argument values.")
 
         return res
+
+
+@dataclasses.dataclass(frozen=True)
+class DeclaredClass:
+    """
+    A helper class that bundles conveniently the return value of declare().
+    """
+
+    class_hash: int
+    abi: AbiType

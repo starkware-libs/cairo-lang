@@ -6,7 +6,7 @@ python_lib(gen_solidity_lib
 )
 
 python_venv(gen_solidity_venv
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
     LIBS
     gen_solidity_lib
 )

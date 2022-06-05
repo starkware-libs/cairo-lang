@@ -12,7 +12,7 @@ python_lib(open_zeppelin_contracts_lib
     LIBS
     cairo_common_lib
     starknet_common_lib
-    starknet_contract_definition_lib
+    starknet_contract_class_lib
 )
 add_dependencies(open_zeppelin_contracts_lib
     compile_open_zeppelin_account

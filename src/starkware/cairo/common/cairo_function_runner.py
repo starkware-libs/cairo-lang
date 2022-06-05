@@ -32,7 +32,7 @@ class CairoFunctionRunner(CairoRunner):
         )
         self.builtin_runners["pedersen_builtin"] = pedersen_builtin
         range_check_builtin = RangeCheckBuiltinRunner(
-            included=True, ratio=1, inner_rc_bound=2 ** 16, n_parts=8
+            included=True, ratio=1, inner_rc_bound=2**16, n_parts=8
         )
         self.builtin_runners["range_check_builtin"] = range_check_builtin
         output_builtin = OutputBuiltinRunner(included=True)

@@ -32,7 +32,7 @@ from math_utils import ec_double, is_quad_residue, pi_as_string, sqrt_mod
 # (a) large,
 # (b) has a big multiplicative subgroup of size which is a power of two,
 # (c) sparse representation for efficient modular arithmetics.
-FIELD_PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
+FIELD_PRIME = 2**251 + 17 * 2**192 + 1
 
 # Generator of the multiplicative group of the field.
 FIELD_GEN = 3
@@ -76,7 +76,7 @@ def generate_constant_points(n_points):
         i += 1
         x = int(pi_str[i * 76 : (i + 1) * 76])
         while True:
-            y_squared = x ** 3 + ALPHA * x + beta
+            y_squared = x**3 + ALPHA * x + beta
             if is_quad_residue(y_squared, FIELD_PRIME):
                 y = sqrt_mod(y_squared, FIELD_PRIME)
                 break

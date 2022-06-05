@@ -8,7 +8,7 @@ from starkware.cairo.lang.compiler.parser import parse_expr
 from starkware.cairo.lang.compiler.substitute_identifiers import substitute_identifiers
 
 
-@pytest.mark.parametrize("prime", [None, 3 * 2 ** 30 + 1])
+@pytest.mark.parametrize("prime", [None, 3 * 2**30 + 1])
 def test_simplifier(prime):
     assignments = {"x": 10, "y": 3, "z": -2, "w": -60}
     simplifier = ExpressionSimplifier(prime)
@@ -30,7 +30,7 @@ def test_simplifier(prime):
     assert simplify(parse_expr("1 * fp")).format() == "fp"
 
 
-@pytest.mark.parametrize("prime", [None, 3 * 2 ** 30 + 1])
+@pytest.mark.parametrize("prime", [None, 3 * 2**30 + 1])
 def test_pow(prime):
     simplifier = ExpressionSimplifier(prime)
     assert simplifier.visit(parse_expr("4 ** 3 ** 2")).format() == "262144"
@@ -62,7 +62,7 @@ def test_modulo():
     assert simplifier.visit(parse_expr("2 / 3")).format() == "7"
 
 
-@pytest.mark.parametrize("prime", [None, 3 * 2 ** 30 + 1])
+@pytest.mark.parametrize("prime", [None, 3 * 2**30 + 1])
 def test_rotation(prime):
     simplifier = ExpressionSimplifier(prime)
     assert simplifier.visit(parse_expr("(fp + 10) + 1")).format() == "fp + 11"
@@ -77,7 +77,7 @@ def test_rotation(prime):
     assert simplifier.visit(parse_expr("10 + (1 + (fp + 100))")).format() == "fp + 111"
 
 
-@pytest.mark.parametrize("prime", [None, 3 * 2 ** 30 + 1])
+@pytest.mark.parametrize("prime", [None, 3 * 2**30 + 1])
 def test_division_by_zero(prime):
     simplifier = ExpressionSimplifier(prime)
     with pytest.raises(SimplifierError, match="Division by zero"):

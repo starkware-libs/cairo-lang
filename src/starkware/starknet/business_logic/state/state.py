@@ -4,7 +4,7 @@ import logging
 import typing
 from collections import ChainMap, defaultdict
 from dataclasses import field
-from typing import Dict, MutableMapping, Optional, Set, Tuple
+from typing import Mapping, MutableMapping, Optional, Set, Tuple
 
 import marshmallow_dataclass
 
@@ -23,12 +23,17 @@ from starkware.starknet.definitions.general_config import (
     DEFAULT_SEQUENCER_ADDRESS,
     StarknetGeneralConfig,
 )
-from starkware.starknet.services.api.contract_definition import ContractDefinition
+from starkware.starknet.services.api.contract_class import ContractClass
+from starkware.starknet.services.api.gateway.transaction import DECLARE_SENDER_ADDRESS
 from starkware.starknet.storage.starknet_storage import StorageLeaf
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
 from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
 from starkware.starkware_utils.config_base import Config
-from starkware.starkware_utils.error_handling import stark_assert_eq, stark_assert_le
+from starkware.starkware_utils.error_handling import (
+    StarkException,
+    stark_assert_eq,
+    stark_assert_le,
+)
 from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
 from starkware.storage.storage import FactFetchingContext
 
@@ -98,28 +103,41 @@ class BlockInfo(ValidatedMarshmallowDataclass):
 @dataclasses.dataclass(frozen=True)
 class StateSelector(StateSelectorBase):
     """
-    A class that contains a set of Cairo contract addresses (sub-commitment tree root IDs)
+    A class that contains a set of StarkNet contract addresses (sub-commitment tree root IDs)
+    and a set of hashes of relevant contract classes
     affected by one/many transaction(s).
-    Used for fetching those sub-trees from storage before transaction(s) processing.
+    Used for fetching those sub-trees and classes from storage before transaction(s) processing.
     """
 
     contract_addresses: Set[int]
+    class_hashes: Set[bytes]
 
     @classmethod
     def empty(cls) -> "StateSelector":
-        return cls(contract_addresses=set())
+        return cls(contract_addresses=set(), class_hashes=set())
 
     def __and__(self, other: "StateSelector") -> "StateSelector":
-        return StateSelector(self.contract_addresses & other.contract_addresses)
+        return StateSelector(
+            contract_addresses=self.contract_addresses & other.contract_addresses,
+            class_hashes=self.class_hashes & other.class_hashes,
+        )
 
     def __or__(self, other: "StateSelector") -> "StateSelector":
-        return StateSelector(self.contract_addresses | other.contract_addresses)
+        return StateSelector(
+            contract_addresses=self.contract_addresses | other.contract_addresses,
+            class_hashes=self.class_hashes | other.class_hashes,
+        )
 
     def __sub__(self, other: "StateSelector") -> "StateSelector":
-        return StateSelector(self.contract_addresses - other.contract_addresses)
+        return StateSelector(
+            contract_addresses=self.contract_addresses - other.contract_addresses,
+            class_hashes=self.class_hashes - other.class_hashes,
+        )
 
     def __le__(self, other: "StateSelector") -> bool:
-        return self.contract_addresses <= other.contract_addresses
+        return (self.contract_addresses <= other.contract_addresses) and (
+            self.class_hashes <= other.class_hashes
+        )
 
 
 class CarriedState(CarriedStateBase):
@@ -137,7 +155,7 @@ class CarriedState(CarriedStateBase):
         parent_state: Optional["CarriedState"],
         shared_state: "SharedState",
         ffc: FactFetchingContext,
-        contract_definitions: typing.ChainMap[bytes, ContractDefinition],
+        contract_definitions: typing.ChainMap[bytes, ContractClass],
         contract_states: ContractCarriedStateChainMapping,
         cairo_usage: ExecutionResources,
         modified_contracts: typing.ChainMap[int, None],
@@ -154,7 +172,7 @@ class CarriedState(CarriedStateBase):
         # Used for dynamic retrieval of facts during transaction execution.
         self.shared_state = shared_state
 
-        # A mapping from contract definition hash to contract definition.
+        # A mapping from class hash to contract class.
         self.contract_definitions = contract_definitions
 
         # A mapping from contract address to its carried state.
@@ -179,19 +197,21 @@ class CarriedState(CarriedStateBase):
         """
         Instantiates a CarriedState object that acts as proxy to given parent_state.
         """
-        carried_state = cls(
+        return cls(
+            # Parent state - must not be modified.
             parent_state=parent_state,
+            # Immutable objects.
             shared_state=parent_state.shared_state,
             ffc=parent_state.ffc,
+            cairo_usage=parent_state.cairo_usage,
+            block_info=parent_state.block_info,
+            # Chain maps - changes are inserted to the first map (at index 0); parent maps must not
+            # be modified.
             contract_definitions=parent_state.contract_definitions.new_child(),
             contract_states=parent_state.contract_states.new_child(),
-            cairo_usage=parent_state.cairo_usage,
             modified_contracts=(parent_state.modified_contracts.new_child()),
-            block_info=parent_state.block_info,
             syscall_counter=parent_state.syscall_counter.new_child(),
         )
-
-        return carried_state
 
     @classmethod
     def create_unfilled(
@@ -237,9 +257,7 @@ class CarriedState(CarriedStateBase):
             contract_definitions={},
             shared_state=shared_state,
             contract_states=defaultdict(
-                lambda: ContractCarriedState(
-                    state=copy.deepcopy(empty_contract_state), storage_updates={}
-                )
+                lambda: ContractCarriedState.from_state(state=copy.deepcopy(empty_contract_state))
             ),
         )
 
@@ -248,7 +266,7 @@ class CarriedState(CarriedStateBase):
         cls,
         shared_state: "SharedState",
         ffc: FactFetchingContext,
-        contract_definitions: MutableMapping[bytes, ContractDefinition],
+        contract_definitions: MutableMapping[bytes, ContractClass],
         contract_states: ContractCarriedStateMapping,
     ) -> "CarriedState":
         """
@@ -271,10 +289,35 @@ class CarriedState(CarriedStateBase):
     @property
     def state_selector(self) -> StateSelector:
         """
-        Returns the state selector of this CarriedState containing the contract addresses that
-        serve as the commitment tree leaf IDs of the full StarkNet state commitment tree.
+        Returns the state selector of this CarriedState, containing:
+        1. The contract addresses that serve as the commitment tree leaf IDs of the full StarkNet
+            state commitment tree.
+        2. The hashes of the contract classes relevant for execution,
+            not including class hashes of any class instance (i.e., contract state).
         """
-        return StateSelector(contract_addresses=set(self.contract_states.keys()))
+        all_class_hashes = set(self.contract_definitions.keys())
+        class_hashes_of_instances = set(
+            self.contract_states[contract_address].state.contract_hash
+            for contract_address in self.contract_states
+        )
+        # Keep the hashes that do not appear in a contract instance,
+        # in order for those sets to be disjoint.
+        independent_class_hashes = all_class_hashes - class_hashes_of_instances
+
+        return StateSelector(
+            contract_addresses=set(self.contract_states.keys()) - {DECLARE_SENDER_ADDRESS},
+            class_hashes=independent_class_hashes,
+        )
+
+    def create_child_state_for_querying(self) -> "CarriedState":
+        """
+        Creates a lazy copy of self.
+        Used for transaction queries, where we want to have a separation from the parent state
+        (e.g., using the chain map mechanism to extract the most recent transaction's affect on the
+        state) and do not need to apply the changes.
+        Must not be used on regular flow.
+        """
+        return CarriedState._create_from_parent_state(parent_state=self)
 
     def select(self, state_selector: StateSelectorBase) -> "CarriedState":
         raise NotImplementedError("select() is not implemented on StarkNet CarriedState.")
@@ -293,7 +336,9 @@ class CarriedState(CarriedStateBase):
 
         return self.contract_states == other.contract_states and self.block_info == other.block_info
 
-    def update_contract_storage(self, contract_address: int, modifications: Dict[int, StorageLeaf]):
+    def update_contract_storage(
+        self, contract_address: int, modifications: Mapping[int, StorageLeaf]
+    ):
         """
         Applies the given storage modifications to the given contract storage.
         """
@@ -350,6 +395,22 @@ class CarriedState(CarriedStateBase):
         # Update additional entire block-related information.
         self.parent_state.block_info = self.block_info
 
+    def get_contract_class(self, class_hash: bytes) -> ContractClass:
+        """
+        Returns the contract class with the given hash.
+        Raises an exception if the contract class is not declared.
+        """
+        contract_class = self.contract_definitions.get(class_hash, None)
+
+        if contract_class is not None:
+            return contract_class
+
+        formatted_class_hash = fields.class_hash_from_bytes(class_hash)
+        raise StarkException(
+            code=StarknetErrorCode.UNEXPECTED_FAILURE,
+            message=f"Class with hash {formatted_class_hash} is missing from state.",
+        )
+
 
 @marshmallow_dataclass.dataclass(frozen=True)
 class SharedState(SharedStateBase):
@@ -400,20 +461,22 @@ class SharedState(SharedStateBase):
         contract_states = await self.contract_states.get_leaves(
             ffc=ffc, indices=state_selector.contract_addresses, fact_cls=ContractState
         )
-        contract_definitions = await ContractState.fetch_contract_definitions(
-            contract_states=contract_states.values(), ffc=ffc
+        contract_classes = await ContractState.fetch_contract_classes(
+            contract_states=contract_states.values(),
+            class_hashes=state_selector.class_hashes,
+            ffc=ffc,
         )
 
         # Fill carried_state with fetched data.
         contract_carried_states = {
-            contract_address: ContractCarriedState(state=contract_state, storage_updates={})
+            contract_address: ContractCarriedState.from_state(state=contract_state)
             for contract_address, contract_state in contract_states.items()
         }
 
         return CarriedState.from_contracts(
             ffc=ffc,
             shared_state=self,
-            contract_definitions=contract_definitions,
+            contract_definitions=contract_classes,
             contract_states=contract_carried_states,
         )
 

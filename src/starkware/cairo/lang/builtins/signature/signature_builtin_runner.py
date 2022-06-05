@@ -121,6 +121,6 @@ class SignatureBuiltinVerifier(BuiltinVerifier):
             <= addresses.begin_addr
             <= addresses.stop_ptr
             <= addresses.begin_addr + max_size
-            < 2 ** 64
+            < 2**64
         )
         return [addresses.begin_addr], [addresses.stop_ptr]

@@ -13,7 +13,7 @@ from starkware.cairo.lang.compiler.instruction import Instruction, Register
 from starkware.cairo.lang.compiler.instruction_builder import build_instruction
 from starkware.cairo.lang.compiler.parser import parse_instruction
 
-PRIME = 2 ** 64 + 13
+PRIME = 2**64 + 13
 
 
 def test_assert_eq():

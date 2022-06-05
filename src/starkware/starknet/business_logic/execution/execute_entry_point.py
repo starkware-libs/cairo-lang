@@ -3,8 +3,6 @@ import functools
 import logging
 from typing import List, Tuple, cast
 
-import marshmallow_dataclass
-
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
@@ -16,6 +14,7 @@ from starkware.starknet.business_logic.execution.execute_entry_point_base import
 )
 from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
+    CallType,
     TransactionExecutionContext,
 )
 from starkware.starknet.business_logic.state.state import CarriedState
@@ -25,23 +24,18 @@ from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public import abi as starknet_abi
-from starkware.starknet.services.api.contract_definition import (
-    ContractDefinition,
-    ContractEntryPoint,
-)
+from starkware.starknet.services.api.contract_class import ContractClass, ContractEntryPoint
 from starkware.starknet.storage.starknet_storage import BusinessLogicStarknetStorage
 from starkware.starkware_utils.error_handling import (
     StarkException,
     stark_assert,
     wrap_with_stark_exception,
 )
-from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
 
 logger = logging.getLogger(__name__)
 
 
-@marshmallow_dataclass.dataclass(frozen=True)
-class ExecuteEntryPoint(ValidatedMarshmallowDataclass, ExecuteEntryPointBase):
+class ExecuteEntryPoint(ExecuteEntryPointBase):
     """
     Represents a Cairo entry point execution of a StarkNet contract.
     """
@@ -104,6 +98,8 @@ class ExecuteEntryPoint(ValidatedMarshmallowDataclass, ExecuteEntryPointBase):
 
         # Update resources usage (for bouncer).
         state.cairo_usage += runner.get_execution_resources()
+        if "ec_op_builtin" in state.cairo_usage.builtin_instance_counter:
+            del state.cairo_usage.builtin_instance_counter["ec_op_builtin"]
 
         # Build and return call info.
         return self._build_call_info(
@@ -127,18 +123,16 @@ class ExecuteEntryPoint(ValidatedMarshmallowDataclass, ExecuteEntryPointBase):
         Returns the corresponding CairoFunctionRunner and BusinessLogicSysCallHandler in order to
         retrieve the execution information.
         """
-        # Extract pre-fetched contract code from carried state.
-        code_contract_state = state.contract_states[self.code_address].state
-        code_contract_state.assert_initialized(contract_address=self.code_address)
-
         # Prepare input for Cairo function runner.
-        contract_definition = state.contract_definitions[code_contract_state.contract_hash]
-        contract_definition.validate()
-        entry_point = self._get_selected_entry_point(contract_definition=contract_definition)
+        class_hash = self._get_class_hash(state=state)
+        contract_class = state.get_contract_class(class_hash=class_hash)
+        contract_class.validate()
+
+        entry_point = self._get_selected_entry_point(contract_class=contract_class, state=state)
 
         # Run the specified contract entry point with given calldata.
         with wrap_with_stark_exception(code=StarknetErrorCode.SECURITY_ERROR):
-            runner = CairoFunctionRunner(program=contract_definition.program, layout="all")
+            runner = CairoFunctionRunner(program=contract_class.program, layout="all")
         os_context = os_utils.prepare_os_context(runner=runner)
 
         # Extract pre-fetched contract state from carried state.
@@ -149,9 +143,9 @@ class ExecuteEntryPoint(ValidatedMarshmallowDataclass, ExecuteEntryPointBase):
         starknet_storage = BusinessLogicStarknetStorage(
             commitment_tree=contract_state.storage_commitment_tree,
             ffc=state.ffc,
-            # Note that pending_modifications might be modified during the run as a result of an
-            # internal call.
-            pending_modifications=pre_run_contract_carried_state.storage_updates.copy(),
+            # Pass a copy of the carried storage updates (instead of a reference) - note that
+            # pending_modifications may be modified during the run as a result of an internal call.
+            pending_modifications=dict(pre_run_contract_carried_state.storage_updates),
             loop=loop,
         )
 
@@ -184,10 +178,10 @@ class ExecuteEntryPoint(ValidatedMarshmallowDataclass, ExecuteEntryPointBase):
                     "syscall_handler": syscall_handler,
                 },
                 static_locals={
-                    "__find_element_max_size": 2 ** 20,
-                    "__squash_dict_max_size": 2 ** 20,
-                    "__keccak_max_size": 2 ** 20,
-                    "__usort_max_size": 2 ** 20,
+                    "__find_element_max_size": 2**20,
+                    "__squash_dict_max_size": 2**20,
+                    "__keccak_max_size": 2**20,
+                    "__usort_max_size": 2**20,
                 },
                 run_resources=tx_execution_context.run_resources,
                 verify_secure=True,
@@ -240,12 +234,12 @@ class ExecuteEntryPoint(ValidatedMarshmallowDataclass, ExecuteEntryPointBase):
         return runner, syscall_handler
 
     def _get_selected_entry_point(
-        self, contract_definition: ContractDefinition
+        self, contract_class: ContractClass, state: CarriedState
     ) -> ContractEntryPoint:
         """
         Returns the entry point with selector corresponding with self.entry_point_selector.
         """
-        entry_points = contract_definition.entry_points_by_type[self.entry_point_type]
+        entry_points = contract_class.entry_points_by_type[self.entry_point_type]
         filtered_entry_points = list(
             filter(
                 lambda ep: ep.selector == self.entry_point_selector,
@@ -259,15 +253,15 @@ class ExecuteEntryPoint(ValidatedMarshmallowDataclass, ExecuteEntryPointBase):
                 return first_entry_point
 
         selector_formatter = fields.EntryPointSelectorField.format
-        address_formatter = fields.L2AddressField.format
-        # Non-unique entry points are not possible in a ContractDefinition object, thus
+        hash_formatter = fields.class_hash_from_bytes
+        # Non-unique entry points are not possible in a ContractClass object, thus
         # len(filtered_entry_points) <= 1.
         stark_assert(
             len(filtered_entry_points) == 1,
             code=StarknetErrorCode.ENTRY_POINT_NOT_FOUND_IN_CONTRACT,
             message=(
                 f"Entry point {selector_formatter(self.entry_point_selector)} not found in contract"
-                f" with address {address_formatter(self.contract_address)}."
+                f" with class hash {hash_formatter(self._get_class_hash(state=state))}."
             ),
         )
 
@@ -282,8 +276,10 @@ class ExecuteEntryPoint(ValidatedMarshmallowDataclass, ExecuteEntryPointBase):
     ) -> CallInfo:
         return CallInfo(
             caller_address=self.caller_address,
+            call_type=self.call_type,
             contract_address=self.contract_address,
             code_address=self.code_address,
+            class_hash=self._get_class_hash(state=syscall_handler.state),
             entry_point_selector=self.entry_point_selector,
             entry_point_type=self.entry_point_type,
             calldata=self.calldata,
@@ -295,3 +291,27 @@ class ExecuteEntryPoint(ValidatedMarshmallowDataclass, ExecuteEntryPointBase):
             accessed_storage_keys=syscall_handler.starknet_storage.accessed_addresses,
             internal_calls=syscall_handler.internal_calls,
         )
+
+    def _get_class_hash(self, state: CarriedState) -> bytes:
+        """
+        Returns the hash of the executed contract class.
+        """
+        if self.class_hash is not None:
+            # Library call.
+            assert self.call_type is CallType.DELEGATE
+            return self.class_hash
+
+        if self.call_type is CallType.CALL:
+            code_address = self.contract_address
+        elif self.call_type is CallType.DELEGATE:
+            # Delegate call (deprecated version).
+            assert self.code_address is not None
+            code_address = self.code_address
+        else:
+            raise NotImplementedError(f"Call type {self.call_type} not implemented.")
+
+        # Extract pre-fetched contract code from carried state.
+        code_contract_state = state.contract_states[code_address].state
+        code_contract_state.assert_initialized(contract_address=code_address)
+
+        return code_contract_state.contract_hash

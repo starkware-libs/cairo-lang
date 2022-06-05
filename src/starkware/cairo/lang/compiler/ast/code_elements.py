@@ -441,7 +441,7 @@ class CodeElementFunction(CodeElement):
     """
     Represents either a 'func', 'namespace' or 'struct' statement.
     For example:
-      func foo(x, y) -> (z, w):
+      func foo(x, y) -> (z : felt, w : felt):
           return (z=x, w=y)
       end
     """

@@ -50,7 +50,7 @@ N_ELEMENT_BITS_HASH = FIELD_PRIME.bit_length()
 assert N_ELEMENT_BITS_HASH == 252
 
 # Elliptic curve parameters.
-assert 2 ** N_ELEMENT_BITS_ECDSA < EC_ORDER < FIELD_PRIME
+assert 2**N_ELEMENT_BITS_ECDSA < EC_ORDER < FIELD_PRIME
 
 SHIFT_POINT = CONSTANT_POINTS[0]
 MINUS_SHIFT_POINT = (SHIFT_POINT[0], FIELD_PRIME - SHIFT_POINT[1])
@@ -136,7 +136,7 @@ def sign(msg_hash: int, priv_key: int, seed: Optional[int] = None) -> ECSignatur
     # Note: msg_hash must be smaller than 2**N_ELEMENT_BITS_ECDSA.
     # Message whose hash is >= 2**N_ELEMENT_BITS_ECDSA cannot be signed.
     # This happens with a very small probability.
-    assert 0 <= msg_hash < 2 ** N_ELEMENT_BITS_ECDSA, "Message not signable."
+    assert 0 <= msg_hash < 2**N_ELEMENT_BITS_ECDSA, "Message not signable."
 
     # Choose a valid k. In our version of ECDSA not every k value is valid,
     # and there is a negligible probability a drawn k cannot be used for signing.
@@ -154,7 +154,7 @@ def sign(msg_hash: int, priv_key: int, seed: Optional[int] = None) -> ECSignatur
 
         # DIFF: in classic ECDSA, we take int(x) % n.
         r = int(x)
-        if not (1 <= r < 2 ** N_ELEMENT_BITS_ECDSA):
+        if not (1 <= r < 2**N_ELEMENT_BITS_ECDSA):
             # Bad value. This fails with negligible probability.
             continue
 
@@ -163,7 +163,7 @@ def sign(msg_hash: int, priv_key: int, seed: Optional[int] = None) -> ECSignatur
             continue
 
         w = div_mod(k, msg_hash + r * priv_key, EC_ORDER)
-        if not (1 <= w < 2 ** N_ELEMENT_BITS_ECDSA):
+        if not (1 <= w < 2**N_ELEMENT_BITS_ECDSA):
             # Bad value. This fails with negligible probability.
             continue
 
@@ -176,7 +176,7 @@ def mimic_ec_mult_air(m: int, point: ECPoint, shift_point: ECPoint) -> ECPoint:
     Computes m * point + shift_point using the same steps like the AIR and throws an exception if
     and only if the AIR errors.
     """
-    assert 0 < m < 2 ** N_ELEMENT_BITS_ECDSA
+    assert 0 < m < 2**N_ELEMENT_BITS_ECDSA
     partial_sum = shift_point
     for _ in range(N_ELEMENT_BITS_ECDSA):
         assert partial_sum[0] != point[0]
@@ -196,9 +196,9 @@ def verify(msg_hash: int, r: int, s: int, public_key: Union[int, ECPoint]) -> bo
     # Preassumptions:
     # DIFF: in classic ECDSA, we assert 1 <= r, w <= EC_ORDER-1.
     # Since r, w < 2**N_ELEMENT_BITS_ECDSA < EC_ORDER, we only need to verify r, w != 0.
-    assert 1 <= r < 2 ** N_ELEMENT_BITS_ECDSA, "r = %s" % r
-    assert 1 <= w < 2 ** N_ELEMENT_BITS_ECDSA, "w = %s" % w
-    assert 0 <= msg_hash < 2 ** N_ELEMENT_BITS_ECDSA, "msg_hash = %s" % msg_hash
+    assert 1 <= r < 2**N_ELEMENT_BITS_ECDSA, "r = %s" % r
+    assert 1 <= w < 2**N_ELEMENT_BITS_ECDSA, "w = %s" % w
+    assert 0 <= msg_hash < 2**N_ELEMENT_BITS_ECDSA, "msg_hash = %s" % msg_hash
 
     if isinstance(public_key, int):
         # Only the x coordinate of the point is given, check the two possibilities for the y

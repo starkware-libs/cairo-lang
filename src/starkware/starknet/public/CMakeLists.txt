@@ -15,7 +15,7 @@ python_lib(starknet_abi_lib
 
 full_python_test(starknet_abi_lib_test
     PREFIX starkware/starknet/public
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
     TESTED_MODULES starkware/starknet/public/
 
     FILES

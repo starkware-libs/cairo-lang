@@ -86,8 +86,7 @@ from starkware.starknet.common.messages import send_message_to_l1
 from starkware.starknet.common.storage import normalize_address
 from starkware.starknet.common.syscalls import (
     call_contract,
-    delegate_call,
-    delegate_l1_handler,
+    deploy,
     emit_event,
     get_block_number,
     get_block_timestamp,
@@ -96,6 +95,8 @@ from starkware.starknet.common.syscalls import (
     get_sequencer_address,
     get_tx_info,
     get_tx_signature,
+    library_call,
+    library_call_l1_handler,
     storage_read,
     storage_write,
 )

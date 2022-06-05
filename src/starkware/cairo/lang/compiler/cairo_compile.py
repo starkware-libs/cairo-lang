@@ -7,10 +7,14 @@ from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple, Type, U
 
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.cairo.lang.compiler.assembler import assemble
+from starkware.cairo.lang.compiler.ast.cairo_types import TypeTuple
 from starkware.cairo.lang.compiler.constants import LIBS_DIR_ENVVAR, MAIN_SCOPE, START_FILE_NAME
 from starkware.cairo.lang.compiler.error_handling import LocationError
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierError
-from starkware.cairo.lang.compiler.identifier_utils import get_struct_definition
+from starkware.cairo.lang.compiler.identifier_utils import (
+    get_struct_definition,
+    get_type_definition,
+)
 from starkware.cairo.lang.compiler.module_reader import ModuleReader
 from starkware.cairo.lang.compiler.preprocessor.auxiliary_info_collector import (
     AuxiliaryInfoCollector,
@@ -301,12 +305,16 @@ def check_main_args(program: Program):
         )
 
     try:
-        main_returns = implicit_args + list(
-            get_struct_definition(
-                struct_name=ScopedName.from_string("__main__.main.Return"),
-                identifier_manager=program.identifiers,
-            ).members
+        return_type_def = get_type_definition(
+            name=ScopedName.from_string("__main__.main.Return"),
+            identifier_manager=program.identifiers,
         )
+        assert isinstance(return_type_def.cairo_type, TypeTuple)
+        member_names = []
+        for member in return_type_def.cairo_type.members:
+            assert member.name is not None, "Unexpected unnamed return value."
+            member_names.append(member.name)
+        main_returns = implicit_args + member_names
     except IdentifierError:
         pass
     else:

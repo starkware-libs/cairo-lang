@@ -14,11 +14,12 @@ from starkware.python.object_utils import generic_object_repr
 from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 
 logger = logging.getLogger(__name__)
+JsonObject = Dict[str, Any]
 
 
 class BadRequest(Exception):
     """
-    Base class to exceptions raised by BaseClient and its derived classes.
+    Base class to exceptions raised by ClientBase and its derived classes.
     """
 
     def __init__(self, status_code: int, text: str):
@@ -50,7 +51,7 @@ class RetryConfig(ValidatedDataclass):
     )
 
 
-class BaseClient(HasUriPrefix):
+class ClientBase(HasUriPrefix):
     """
     A base class for HTTP clients.
     """

@@ -5,12 +5,12 @@ from eth_hash.auto import keccak
 from starkware.cairo.lang.vm.crypto import pedersen_hash
 from starkware.python.utils import from_bytes
 
-MASK_250 = 2 ** 250 - 1
+MASK_250 = 2**250 - 1
 
 # MAX_STORAGE_ITEM_SIZE and ADDR_BOUND must be consistent with the corresponding constant in
 # starkware/starknet/core/storage/storage.cairo.
 MAX_STORAGE_ITEM_SIZE = 256
-ADDR_BOUND = 2 ** 251 - MAX_STORAGE_ITEM_SIZE
+ADDR_BOUND = 2**251 - MAX_STORAGE_ITEM_SIZE
 
 # OS context offset.
 SYSCALL_PTR_OFFSET = 0

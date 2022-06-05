@@ -10,7 +10,8 @@ def calculate_tx_gas_usage(
     n_modified_contracts: int,
     n_storage_writes: int,
     l1_handler_payload_size: Optional[int],
-    constructor_calldata_length: Optional[int],
+    constructor_calldata_total_length: int,
+    n_deployments: int,
 ) -> int:
     """
     Returns an estimation of the L1 gas amount that will be used (by StarkNet's update state and
@@ -21,10 +22,10 @@ def calculate_tx_gas_usage(
     Arguments:
     l1_handler_payload_size should be an int if and only if we calculate the gas usage of an
     InternalInvokeFunction of type L1 handler. Otherwise the payload size is irrelevent, and should
-    be None. Same goes to constructor_calldata_length in relation to any InternalDeploy.
+    be None. constructor_calldata_total_length is the sum of the lengths of constructor calldata
+    of all the contracts deployed by the transaction. n_deployments is the number of the
+    contracts deployed by the transaction.
     """
-    assert l1_handler_payload_size is None or constructor_calldata_length is None
-
     # Calculate the addition of the transaction to the output messages segment.
     residual_message_segment_length = get_message_segment_length(
         l2_to_l1_messages=l2_to_l1_messages,
@@ -35,7 +36,8 @@ def calculate_tx_gas_usage(
     residual_da_segment_length = get_da_segment_length(
         n_modified_contracts=n_modified_contracts,
         n_storage_writes=n_storage_writes,
-        constructor_calldata_length=constructor_calldata_length,
+        constructor_calldata_total_length=constructor_calldata_total_length,
+        n_deployments=n_deployments,
     )
 
     n_l2_to_l1_messages = len(l2_to_l1_messages)
@@ -90,7 +92,8 @@ def get_message_segment_length(
 def get_da_segment_length(
     n_modified_contracts: int,
     n_storage_writes: int,
-    constructor_calldata_length: Optional[int],
+    constructor_calldata_total_length: int,
+    n_deployments: int,
 ) -> int:
     """
     Returns the number of felts added to the output data availability segment as a result of adding
@@ -103,10 +106,10 @@ def get_da_segment_length(
     da_segment_length = n_modified_contracts * 2
     # For each modified storage cell: key, new value.
     da_segment_length += n_storage_writes * 2
-
-    if constructor_calldata_length is not None:
-        # The corresponding transaction is of type Deploy; add size of deployment info.
-        da_segment_length += constants.DEPLOYMENT_INFO_HEADER_SIZE + constructor_calldata_length
+    # Add size of deployment info.
+    da_segment_length += (
+        n_deployments * constants.DEPLOYMENT_INFO_HEADER_SIZE + constructor_calldata_total_length
+    )
 
     return da_segment_length
 

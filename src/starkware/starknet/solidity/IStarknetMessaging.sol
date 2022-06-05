@@ -13,7 +13,7 @@ interface IStarknetMessaging is IStarknetMessagingEvents {
         uint256 toAddress,
         uint256 selector,
         uint256[] calldata payload
-    ) external returns (bytes32);
+    ) external returns (bytes32, uint256);
 
     /**
       Consumes a message that was sent from an L2 contract.
@@ -36,7 +36,7 @@ interface IStarknetMessaging is IStarknetMessagingEvents {
         uint256 selector,
         uint256[] calldata payload,
         uint256 nonce
-    ) external;
+    ) external returns (bytes32);
 
     /**
       Cancels an L1 to L2 message, this function should be called messageCancellationDelay() seconds
@@ -47,5 +47,5 @@ interface IStarknetMessaging is IStarknetMessagingEvents {
         uint256 selector,
         uint256[] calldata payload,
         uint256 nonce
-    ) external;
+    ) external returns (bytes32);
 }

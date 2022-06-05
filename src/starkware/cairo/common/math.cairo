@@ -119,7 +119,7 @@ end
 # element.
 # For example, if value=17 * 2^128 + 8, then high=17 and low=8.
 @known_ap_change
-func split_felt{range_check_ptr}(value) -> (high, low):
+func split_felt{range_check_ptr}(value) -> (high : felt, low : felt):
     # Note: the following code works because PRIME - 1 is divisible by 2**128.
     const MAX_HIGH = (-1) / 2 ** 128
     const MAX_LOW = 0
@@ -206,7 +206,7 @@ end
 
 # Returns the absolute value of value.
 # Prover asumption: -rc_bound < value < rc_bound.
-func abs_value{range_check_ptr}(value) -> (abs_value):
+func abs_value{range_check_ptr}(value) -> (abs_value : felt):
     tempvar is_positive : felt
     %{
         from starkware.cairo.common.math_utils import is_positive
@@ -228,7 +228,7 @@ end
 
 # Returns the sign of value: -1, 0 or 1.
 # Prover asumption: -rc_bound < value < rc_bound.
-func sign{range_check_ptr}(value) -> (sign):
+func sign{range_check_ptr}(value) -> (sign : felt):
     if value == 0:
         return (sign=0)
     end
@@ -258,7 +258,7 @@ end
 #
 # The value of div is restricted to make sure there is no overflow.
 # q * div + r < (q + 1) * div <= rc_bound * (PRIME / rc_bound) = PRIME.
-func unsigned_div_rem{range_check_ptr}(value, div) -> (q, r):
+func unsigned_div_rem{range_check_ptr}(value, div) -> (q : felt, r : felt):
     let r = [range_check_ptr]
     let q = [range_check_ptr + 1]
     let range_check_ptr = range_check_ptr + 2
@@ -286,7 +286,7 @@ end
 # The values of div and bound are restricted to make sure there is no overflow.
 # q * div + r <  (q + 1) * div <=  rc_bound / 2 * (PRIME / rc_bound)
 # q * div + r >=  q * div      >= -rc_bound / 2 * (PRIME / rc_bound)
-func signed_div_rem{range_check_ptr}(value, div, bound) -> (q, r):
+func signed_div_rem{range_check_ptr}(value, div, bound) -> (q : felt, r : felt):
     let r = [range_check_ptr]
     let biased_q = [range_check_ptr + 1]  # == q + bound.
     let range_check_ptr = range_check_ptr + 2
@@ -346,7 +346,7 @@ end
 
 # Returns the floor value of the square root of the given value.
 # Assumptions: 0 <= value < 2**250.
-func sqrt{range_check_ptr}(value) -> (res):
+func sqrt{range_check_ptr}(value) -> (res : felt):
     alloc_locals
     local root : felt
 

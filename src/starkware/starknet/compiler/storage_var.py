@@ -212,7 +212,7 @@ tempvar range_check_ptr = range_check_ptr
         read_func_body += f"tempvar __storage_var_temp{i} : felt = __storage_var_temp{i}\n"
     unresolved_return_type_ptr = TypePointer(pointee=unresolved_return_type)
     read_func_body += (
-        f"return ([cast(&__storage_var_temp0, {unresolved_return_type_ptr.format()})])"
+        f"return ([cast(&__storage_var_temp0, {unresolved_return_type_ptr.format()})],)"
     )
 
     write_func_body = f"let (storage_addr) = addr({args})\n"

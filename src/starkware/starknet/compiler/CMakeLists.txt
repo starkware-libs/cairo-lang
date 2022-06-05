@@ -21,7 +21,7 @@ python_lib(starknet_compile_lib
     cairo_constants_lib
     starknet_abi_lib
     starknet_common_lib
-    starknet_contract_definition_lib
+    starknet_contract_class_lib
     starknet_definitions_lib
     starknet_hints_whitelist_lib
     starknet_security_lib

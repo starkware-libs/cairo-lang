@@ -116,7 +116,7 @@ end
 # and success=0.
 # Prover assumption: all the keys (the first field in each item) are in [0, RANGE_CHECK_BOUND).
 func search_sorted{range_check_ptr}(array_ptr : felt*, elm_size, n_elms, key) -> (
-    elm_ptr : felt*, success
+    elm_ptr : felt*, success : felt
 ):
     let (elm_ptr) = search_sorted_lower(
         array_ptr=array_ptr, elm_size=elm_size, n_elms=n_elms, key=key

@@ -14,35 +14,20 @@ from starkware.cairo.lang.vm.relocatable import (
     MaybeRelocatableDict,
     RelocatableValue,
 )
+from starkware.cairo.lang.vm.test_utils import run_program_in_vm
 from starkware.cairo.lang.vm.virtual_machine_base import Rule, VirtualMachineBase
 from starkware.cairo.lang.vm.vm import RunContext, VirtualMachine
 from starkware.cairo.lang.vm.vm_exceptions import InconsistentAutoDeductionError, VmException
 from starkware.python.test_utils import maybe_raises
 
-PRIME = 2 ** 64 + 13
+PRIME = 2**64 + 13
 
 
 def run_single(code: str, steps: int, *, pc=RelocatableValue(0, 10), ap=100, fp=100, extra_mem={}):
     program = compile_cairo(code, PRIME, debug_info=True)
-
-    # Set memory[fp - 1] to an arbitrary value, since [fp - 1] is assumed to be set.
-    memory: MaybeRelocatableDict = {
-        **{pc + i: v for i, v in enumerate(program.data)},
-        fp - 1: 1234,
-        **extra_mem,
-    }
-    context = RunContext(
-        pc=pc,
-        ap=ap,
-        fp=fp,
-        memory=MemoryDict(memory),
-        prime=PRIME,
+    return run_program_in_vm(
+        program=program, steps=steps, pc=pc, ap=ap, fp=fp, extra_mem=extra_mem, prime=PRIME
     )
-
-    vm = VirtualMachine(program, context, {})
-    for _ in range(steps):
-        vm.step()
-    return vm
 
 
 def test_memory_dict():
@@ -799,7 +784,8 @@ def test_traceback_with_attr():
 
     func bar(x):
         tempvar y = x + 2
-        with_attr error_message("Error in bar (x={x}, y={y})."):
+        # y and x.y evaluation should fail (y is ap-based and x.y doesn't exist).
+        with_attr error_message("Error in bar (x={x}, y={y}, {x.y})."):
             foo(y * y * y)
         end
         return ()
@@ -835,11 +821,12 @@ Cairo traceback (most recent call last):
     ^*******^
 Error message: Running bar(x=0).
 Error message: Error in main.
-:31:17: (pc=0:32)
+:32:17: (pc=0:32)
                 bar(x=-1)  # This line will cause an error.
                 ^*******^
-Error message: Error in bar (x=-1, y={y}). (Cannot evaluate ap-based or complex references: ['y'])
-:20:13: (pc=0:23)
+Error message: Error in bar (x=-1, y={y}, {x.y}). (Cannot evaluate ap-based or complex references: \
+['y', 'x.y'])
+:21:13: (pc=0:23)
             foo(y * y * y)
             ^************^
 

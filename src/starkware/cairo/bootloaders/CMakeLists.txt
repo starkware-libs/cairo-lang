@@ -20,7 +20,7 @@ python_lib(cairo_hash_program_lib
 )
 
 python_venv(cairo_hash_program_venv
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
     LIBS
     cairo_hash_program_lib
 )

@@ -18,7 +18,7 @@ struct CommitmentTreeUpdateOutput:
 end
 
 struct StateEntry:
-    member contract_hash : felt
+    member class_hash : felt
     member storage_ptr : DictAccess*
 end
 
@@ -114,24 +114,25 @@ func state_update{hash_ptr : HashBuiltin*, range_check_ptr, storage_updates_ptr 
     return (commitment_tree_update_output=commitment_tree_update_output)
 end
 
-func get_contract_state_hash{hash_ptr : HashBuiltin*}(
-    contract_hash : felt, storage_root : felt
-) -> (hash : felt):
+func get_contract_state_hash{hash_ptr : HashBuiltin*}(class_hash : felt, storage_root : felt) -> (
+    hash : felt
+):
     const CONTRACT_STATE_HASH_VERSION = 0
     const RESERVED = 0
-    if contract_hash == 0:
+    if class_hash == 0:
         if storage_root == 0:
             return (hash=0)
         end
     end
 
-    # Set res = H(H(contract_hash, storage_root), RESERVED).
-    let (hash_value) = hash2(contract_hash, storage_root)
+    # Set res = H(H(class_hash, storage_root), RESERVED).
+    let (hash_value) = hash2(class_hash, storage_root)
     let (hash_value) = hash2(hash_value, RESERVED)
 
     # Return H(hash_value, CONTRACT_STATE_HASH_VERSION). CONTRACT_STATE_HASH_VERSION must be in the
     # outermost hash to guarantee unique "decoding".
-    return hash2(hash_value, CONTRACT_STATE_HASH_VERSION)
+    let (hash) = hash2(hash_value, CONTRACT_STATE_HASH_VERSION)
+    return (hash=hash)
 end
 
 # Takes a dict of StateEntry structs and produces a dict of hashes by hashing
@@ -192,11 +193,11 @@ func hash_state_changes{
     )
 
     let (prev_value) = get_contract_state_hash(
-        contract_hash=prev_state.contract_hash, storage_root=initial_storage_root
+        class_hash=prev_state.class_hash, storage_root=initial_storage_root
     )
     assert hashed_state_changes.prev_value = prev_value
     let (new_value) = get_contract_state_hash(
-        contract_hash=new_state.contract_hash, storage_root=final_storage_root
+        class_hash=new_state.class_hash, storage_root=final_storage_root
     )
     assert hashed_state_changes.new_value = new_value
     assert hashed_state_changes.key = state_changes.key

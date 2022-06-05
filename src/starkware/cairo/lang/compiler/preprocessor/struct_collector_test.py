@@ -9,13 +9,15 @@ from starkware.cairo.lang.compiler.identifier_definition import (
     FutureIdentifierDefinition,
     MemberDefinition,
     StructDefinition,
+    TypeDefinition,
 )
-from starkware.cairo.lang.compiler.parser import parse_file
+from starkware.cairo.lang.compiler.parser import parse_file, parse_type
 from starkware.cairo.lang.compiler.preprocessor.identifier_collector import IdentifierCollector
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_test_utils import verify_exception
 from starkware.cairo.lang.compiler.preprocessor.struct_collector import StructCollector
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
+from starkware.cairo.lang.compiler.type_system import mark_type_resolved
 
 
 def _collect_struct_definitions(codes: Dict[str, str]) -> Dict[str, Set[str]]:
@@ -106,14 +108,8 @@ const Y = 1 + 1
             members={"z": MemberDefinition(offset=0, cairo_type=TypeFelt())},
             size=1,
         ),
-        "__main__.foo.Return": StructDefinition(
-            full_name=scope("__main__.foo.Return"),
-            members={
-                "c": MemberDefinition(
-                    offset=0, cairo_type=TypeStruct(scope=scope("module.S"), is_fully_resolved=True)
-                )
-            },
-            size=2,
+        "__main__.foo.Return": TypeDefinition(
+            cairo_type=mark_type_resolved(parse_type("(c : module.S)")),
         ),
         "__main__.foo.T": StructDefinition(
             full_name=scope("__main__.foo.T"),

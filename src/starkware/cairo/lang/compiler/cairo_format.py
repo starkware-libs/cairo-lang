@@ -1,13 +1,15 @@
 import argparse
 import sys
+from typing import Callable
 
 from starkware.cairo.lang.compiler.ast.formatting_utils import set_one_item_per_line
+from starkware.cairo.lang.compiler.ast.module import CairoFile
 from starkware.cairo.lang.compiler.parser import parse_file
 from starkware.cairo.lang.version import __version__
 
 
-def main():
-    parser = argparse.ArgumentParser(description="A tool to automatically format Cairo code.")
+def cairo_format_common(cairo_parser: Callable[[str, str], CairoFile], description: str):
+    parser = argparse.ArgumentParser(description=description)
     parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("files", metavar="file", type=str, nargs="+", help="File names")
     parser.add_argument(
@@ -35,11 +37,14 @@ def main():
 
     with set_one_item_per_line(args.one_item_per_line):
         for path in args.files:
-            old_content = open(path).read() if path != "-" else sys.stdin.read()
+            if path == "-":
+                old_content = sys.stdin.read()
+                filename = "<input>"
+            else:
+                old_content = open(path).read()
+                filename = path
             try:
-                new_content = parse_file(
-                    old_content, filename="<input>" if path == "-" else path
-                ).format()
+                new_content = cairo_parser(old_content, filename).format()
             except Exception as exc:
                 print(exc, file=sys.stderr)
                 return 2
@@ -56,6 +61,14 @@ def main():
                 print(new_content, end="")
 
     return return_code
+
+
+def main():
+    cairo_parser = lambda code, filename: parse_file(code=code, filename=filename)
+
+    return cairo_format_common(
+        cairo_parser=cairo_parser, description="A tool to automatically format Cairo code."
+    )
 
 
 if __name__ == "__main__":

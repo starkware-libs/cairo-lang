@@ -248,6 +248,9 @@ class ParticleList(Particle):
 class SeparatedParticleList(Particle):
     """
     A list of particles, separated by separator (e.g. comma separated argument list).
+
+    If 'trailing_separator' is True, a separator is added to the last element of the list
+    or as a stand-alone character if the list is empty.
     """
 
     def __init__(
@@ -256,6 +259,7 @@ class SeparatedParticleList(Particle):
         separator: str = ", ",
         start: str = "",
         end: str = "",
+        trailing_separator: bool = False,
     ):
         self.elements = []
         for elm in elements:
@@ -263,6 +267,7 @@ class SeparatedParticleList(Particle):
         self.separator = separator
         self.start = start
         self.end = end
+        self.trailing_separator = trailing_separator
 
     def __str__(self):
         return self.start + self.elements_to_string() + self.end
@@ -280,7 +285,10 @@ class SeparatedParticleList(Particle):
         """
         Returns a concatenation of the strings in self.elements, separated with self.separator.
         """
-        return self.separator.join(str(elm) for elm in self.elements)
+        elements_string = self.separator.join(str(elm) for elm in self.elements)
+        if self.trailing_separator:
+            elements_string += self.separator.rstrip()
+        return elements_string
 
     def add_to_builder(self, builder: ParticleLineBuilder, suffix: str = ""):
         """
@@ -366,9 +374,13 @@ class SeparatedParticleList(Particle):
         for i, particle in enumerate(self.elements):
             if one_per_line:
                 builder.newline()
-            particle_suffix = (
-                f"{self.end}{suffix}" if i == len(self.elements) - 1 else self.separator
-            )
+            if i == len(self.elements) - 1:
+                particle_suffix = (
+                    (self.separator.rstrip() if self.trailing_separator else "") + self.end + suffix
+                )
+            else:
+                particle_suffix = self.separator
+
             start_new_line = particle.is_splitable() and not builder.can_fit_in_line(
                 f"{particle}{particle_suffix}"
             )

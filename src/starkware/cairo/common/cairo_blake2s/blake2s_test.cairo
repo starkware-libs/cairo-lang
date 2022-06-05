@@ -1,7 +1,17 @@
 %builtins range_check bitwise
 
 from starkware.cairo.common.alloc import alloc
-from starkware.cairo.common.cairo_blake2s.blake2s import INSTANCE_SIZE, blake2s, finalize_blake2s
+from starkware.cairo.common.cairo_blake2s.blake2s import (
+    INSTANCE_SIZE,
+    blake2s,
+    blake2s_add_felts,
+    blake2s_add_uint256,
+    blake2s_add_uint256_bigend,
+    blake2s_as_words,
+    blake2s_bigend,
+    blake2s_felts,
+    finalize_blake2s,
+)
 from starkware.cairo.common.cairo_builtins import BitwiseBuiltin
 
 func run_blake2s{range_check_ptr, blake2s_ptr : felt*}(inputs : felt**, lengths : felt*, n : felt):

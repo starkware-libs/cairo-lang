@@ -3,7 +3,7 @@ from starkware.cairo.common.math import assert_le_felt, assert_lt_felt
 const RC_BOUND = 2 ** 128
 
 # Returns 1 if value != 0. Returns 0 otherwise.
-func is_not_zero(value) -> (res):
+func is_not_zero(value) -> (res : felt):
     if value == 0:
         return (res=0)
     end
@@ -13,7 +13,7 @@ end
 
 # Returns 1 if a >= 0 (or more precisely 0 <= a < RANGE_CHECK_BOUND).
 # Returns 0 otherwise.
-func is_nn{range_check_ptr}(a) -> (res):
+func is_nn{range_check_ptr}(a) -> (res : felt):
     %{ memory[ap] = 0 if 0 <= (ids.a % PRIME) < range_check_builtin.bound else 1 %}
     jmp out_of_range if [ap] != 0; ap++
     [range_check_ptr] = a
@@ -34,7 +34,7 @@ end
 
 # Returns 1 if a <= b (or more precisely 0 <= b - a < RANGE_CHECK_BOUND).
 # Returns 0 otherwise.
-func is_le{range_check_ptr}(a, b) -> (res):
+func is_le{range_check_ptr}(a, b) -> (res : felt):
     return is_nn(b - a)
 end
 
@@ -42,7 +42,7 @@ end
 # Returns 0 otherwise.
 #
 # Assumption: b < RANGE_CHECK_BOUND.
-func is_nn_le{range_check_ptr}(a, b) -> (res):
+func is_nn_le{range_check_ptr}(a, b) -> (res : felt):
     let (res) = is_nn(a)
     if res == 0:
         return (res=res)
@@ -54,7 +54,7 @@ end
 # Returns 0 otherwise.
 # Assumptions:
 # upper - lower <= RANGE_CHECK_BOUND
-func is_in_range{range_check_ptr}(value, lower, upper) -> (res):
+func is_in_range{range_check_ptr}(value, lower, upper) -> (res : felt):
     let (res) = is_le(lower, value)
     if res == 0:
         return (res=res)
@@ -66,7 +66,7 @@ end
 # or equal to that of b.
 # See split_felt() for more details.
 # Returns 1 if true, 0 otherwise.
-func is_le_felt{range_check_ptr}(a, b) -> (res):
+func is_le_felt{range_check_ptr}(a, b) -> (res : felt):
     %{ memory[ap] = 0 if (ids.a % PRIME) <= (ids.b % PRIME) else 1 %}
     jmp not_le if [ap] != 0; ap++
     assert_le_felt(a, b)

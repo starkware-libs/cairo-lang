@@ -122,7 +122,7 @@ def check_time(t0, min_t, max_t):
 
 
 @contextmanager
-def timed_call_range(min_t=0, max_t=2 ** 20):
+def timed_call_range(min_t=0, max_t=2**20):
     """
     Context manager that asserts that the code within took some amount of time, between
     min_t and max_t.

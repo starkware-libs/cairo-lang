@@ -37,8 +37,8 @@ async def test_basic(starknet: Starknet, contract: StarknetContract):
     assert execution_info.result == (1234,)
 
     # Check deploy without compilation.
-    contract_def = compile_starknet_files(files=[CONTRACT_FILE])
-    await starknet.deploy(contract_def=contract_def)
+    contract_class = compile_starknet_files(files=[CONTRACT_FILE])
+    await starknet.deploy(contract_class=contract_class)
 
 
 @pytest.mark.asyncio
@@ -78,9 +78,9 @@ async def test_l1_to_l2_message(starknet: Starknet, contract: StarknetContract):
 
 @pytest.mark.asyncio
 async def test_contract_interaction(starknet: Starknet):
-    contract_definition = compile_starknet_files([CONTRACT_FILE], debug_info=True)
-    contract = await starknet.deploy(contract_def=contract_definition)
-    proxy_contract = await starknet.deploy(contract_def=contract_definition)
+    contract_class = compile_starknet_files([CONTRACT_FILE], debug_info=True)
+    contract = await starknet.deploy(contract_class=contract_class)
+    proxy_contract = await starknet.deploy(contract_class=contract_class)
 
     await proxy_contract.call_increase_value(contract.contract_address, 123, 234).invoke()
     assert (await proxy_contract.get_value(123).invoke()).result == (0,)
@@ -89,8 +89,8 @@ async def test_contract_interaction(starknet: Starknet):
 
 @pytest.mark.asyncio
 async def test_struct_arrays(starknet: Starknet):
-    contract_definition = compile_starknet_files([CONTRACT_FILE], debug_info=True)
-    contract = await starknet.deploy(contract_def=contract_definition)
+    contract_class = compile_starknet_files([CONTRACT_FILE], debug_info=True)
+    contract = await starknet.deploy(contract_class=contract_class)
     assert (await contract.transpose([(123, 234), (4, 5)]).invoke()).result == (
         [
             contract.Point(x=123, y=4),

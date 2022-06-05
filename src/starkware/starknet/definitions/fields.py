@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Any, Dict, Type
+from typing import Any, Dict, Optional, Type
 
 import marshmallow
 import marshmallow.fields as mfields
@@ -49,9 +49,7 @@ felt_list_metadata = dict(
 def bytes_as_hex_dict_keys_metadata(
     values_schema: Type[marshmallow.Schema],
 ) -> Dict[str, mfields.Dict]:
-    width_validator = validate_length(
-        field_name="contract hash", length=constants.CONTRACT_HASH_BYTES
-    )
+    width_validator = validate_length(field_name="class hash", length=constants.CLASS_HASH_BYTES)
     return dict(
         marshmallow_field=mfields.Dict(
             keys=BytesAsHex(required=True, validate=width_validator),
@@ -171,34 +169,50 @@ ContractAddressSalt = everest_fields.felt(name_in_error_message="Contract salt")
 contract_address_salt_metadata = ContractAddressSalt.metadata()
 
 
-# Contract hash.
+# Class hash (as bytes).
 
 
-def validate_contract_hash(contract_hash: bytes):
-    if from_bytes(value=contract_hash, byte_order="big") >= constants.CONTRACT_HASH_UPPER_BOUND:
-        raise ValueError(
-            f"Contract hash must represent a field element; got: 0x{contract_hash.hex()}."
-        )
+def validate_optional_class_hash(class_hash: Optional[bytes]):
+    if class_hash is not None:
+        validate_class_hash(class_hash=class_hash)
 
 
-contract_hash_metadata = dict(
-    marshmallow_field=BytesAsHex(required=True, validate=validate_contract_hash),
+def validate_class_hash(class_hash: bytes):
+    if from_bytes(value=class_hash, byte_order="big") >= constants.CLASS_HASH_UPPER_BOUND:
+        raise ValueError(f"Class hash must represent a field element; got: 0x{class_hash.hex()}.")
+
+
+class_hash_metadata = dict(
+    marshmallow_field=BytesAsHex(required=True, validate=validate_class_hash),
 )
 
-non_required_contract_hash_metadata = dict(
-    marshmallow_field=BytesAsHex(required=False, validate=validate_contract_hash),
+non_required_class_hash_metadata = dict(
+    marshmallow_field=BytesAsHex(required=False, validate=validate_class_hash),
+)
+
+optional_class_hash_metadata = dict(
+    marshmallow_field=BytesAsHex(
+        required=False, load_default=None, validate=validate_optional_class_hash
+    )
 )
 
 
-ClassHashField = RangeValidatedField(
+# Class hash (as integer).
+
+
+ClassHashIntField = RangeValidatedField(
     lower_bound=0,
-    upper_bound=constants.CONTRACT_HASH_UPPER_BOUND,
+    upper_bound=constants.CLASS_HASH_UPPER_BOUND,
     name="class_hash",
-    error_code=StarknetErrorCode.OUT_OF_RANGE_CONTRACT_HASH,
+    error_code=StarknetErrorCode.OUT_OF_RANGE_CLASS_HASH,
     formatter=hex,
 )
 
-OptionalClassHashField = OptionalField(field=ClassHashField, none_probability=0)
+OptionalClassHashIntField = OptionalField(field=ClassHashIntField, none_probability=0)
+
+
+def class_hash_from_bytes(class_hash: bytes) -> str:
+    return ClassHashIntField.format(from_bytes(class_hash))
 
 
 # Entry point.
@@ -248,7 +262,8 @@ GasPriceField = RangeValidatedField(
     error_code=StarknetErrorCode.OUT_OF_RANGE_GAS_PRICE,
     formatter=hex,
 )
-gas_price_metadata = GasPriceField.metadata(required=False, load_default=0)
+LOAD_DEFAULT_GAS_PRICE = 0
+gas_price_metadata = GasPriceField.metadata(required=False, load_default=LOAD_DEFAULT_GAS_PRICE)
 
 
 # Transaction version.
@@ -260,15 +275,15 @@ TransactionVersionField = RangeValidatedField(
     error_code=StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_VERSION,
     formatter=hex,
 )
-tx_version_metadata = TransactionVersionField.metadata(
-    required=False, load_default=constants.TRANSACTION_VERSION
-)
+tx_version_metadata = TransactionVersionField.metadata(required=False, load_default=0)
 
 
 # State root.
 
 state_root_metadata = dict(marshmallow_field=BytesAsHex(required=True))
-optional_state_root_metadata = dict(marshmallow_field=BytesAsHex(required=False, allow_none=True))
+optional_state_root_metadata = dict(
+    marshmallow_field=BytesAsHex(required=False, allow_none=True, load_default=None)
+)
 
 
 # Transaction hash.

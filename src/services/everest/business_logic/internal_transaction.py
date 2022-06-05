@@ -1,52 +1,15 @@
 import functools
 import operator
 from abc import abstractmethod
-from typing import Any, ClassVar, Dict, Iterable, Optional, Type
+from typing import Iterable, Iterator, Optional, Type
 
-import marshmallow
 import marshmallow_dataclass
-from marshmallow_oneofschema import OneOfSchema
 
 from services.everest.api.gateway.transaction import EverestTransaction
 from services.everest.business_logic.state import CarriedStateBase, StateSelectorBase
 from starkware.starkware_utils.config_base import Config
+from starkware.starkware_utils.one_of_schema_tracker import SubclassSchemaTracker
 from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
-
-
-class SchemaTracker:
-    """
-    Tracks a set of classes and provides a OneOfSchema which can be used to serialize them.
-    """
-
-    def __init__(self):
-        self.classes: Dict[str, Any] = {}
-        classes = self.classes
-
-        class TransactionSchema(OneOfSchema):
-
-            type_schemas: Dict[str, Type[marshmallow.Schema]] = {}
-
-            def get_obj_type(self, obj):
-                name = type(obj).__name__
-                assert name in classes.keys() and classes[name] == type(
-                    obj
-                ), f"Trying to serialized the object {obj} that was not registered first."
-                # We register the Schema object here, since it might not exists when the object
-                # itself is registered.
-                if name not in self.type_schemas.keys():
-                    self.type_schemas[name] = obj.Schema
-                return name
-
-        self.Schema = TransactionSchema
-
-    def add_class(self, cls: type):
-        cls_name = cls.__name__
-        if cls_name in self.classes:
-            assert (
-                self.classes[cls_name] == cls
-            ), f"Trying to register two classes with the same name {cls_name}"
-        else:
-            self.classes[cls_name] = cls
 
 
 class EverestTransactionExecutionInfo(ValidatedMarshmallowDataclass):
@@ -64,32 +27,11 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
     """
 
 
-class EverestInternalStateTransaction(ValidatedMarshmallowDataclass):
+class EverestInternalStateTransaction(SubclassSchemaTracker):
     """
     Base class of application-specific internal transaction base classes.
     Contains the API of an internal transaction that can apply changes on the state.
     """
-
-    schema_tracker: ClassVar[Optional[SchemaTracker]] = None
-
-    @classmethod
-    def track_subclasses(cls):
-        """
-        Creates a OneOfSchema schema for this class, and adds each subclass to this schema.
-        """
-        cls.schema_tracker = SchemaTracker()
-        cls.Schema = cls.schema_tracker.Schema
-
-    @classmethod
-    def __init_subclass__(cls, **kwargs):
-        """
-        Registers the given cls class as a subclass of its first parent that called
-        track_subclasses (if such a parent exists).
-        """
-        super().__init_subclass__(**kwargs)  # type: ignore[call-arg]
-        if cls.schema_tracker is None:
-            return
-        cls.schema_tracker.add_class(cls)
 
     @abstractmethod
     async def apply_state_updates(
@@ -176,3 +118,9 @@ class EverestInternalTransaction(EverestInternalStateTransaction):
         """
         Verifies the signatures in the transaction.
         """
+
+
+class HasInnerTxs:
+    @abstractmethod
+    def _txs(self) -> Iterator[EverestInternalTransaction]:
+        raise NotImplementedError("_txs is not implemented for {type(self).__name__}.")

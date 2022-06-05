@@ -2,8 +2,8 @@ from typing import List
 
 from starkware.cairo.common.math_utils import as_int
 
-BASE = 2 ** 86
-SECP_P = 2 ** 256 - 2 ** 32 - 2 ** 9 - 2 ** 8 - 2 ** 7 - 2 ** 6 - 2 ** 4 - 1
+BASE = 2**86
+SECP_P = 2**256 - 2**32 - 2**9 - 2**8 - 2**7 - 2**6 - 2**4 - 1
 N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
 ALPHA = 0
 BETA = 7
@@ -31,4 +31,4 @@ def pack(z, prime):
     prime should be the Cairo field, and it is used to handle negative values of the limbs.
     """
     limbs = z.d0, z.d1, z.d2
-    return sum(as_int(limb, prime) * (BASE ** i) for i, limb in enumerate(limbs))
+    return sum(as_int(limb, prime) * (BASE**i) for i, limb in enumerate(limbs))

@@ -8,6 +8,7 @@ from starkware.cairo.lang.compiler.ast.code_elements import CodeElement, CodeEle
 from starkware.cairo.lang.compiler.identifier_definition import (
     FutureIdentifierDefinition,
     StructDefinition,
+    TypeDefinition,
 )
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.parser import parse_block
@@ -124,7 +125,9 @@ def check_preprocessor_equivalence(proc0: Preprocessor, proc1: Preprocessor):
         return {
             name: identifier_def
             for name, identifier_def in identifiers.as_dict().items()
-            if not isinstance(identifier_def, (FutureIdentifierDefinition, StructDefinition))
+            if not isinstance(
+                identifier_def, (FutureIdentifierDefinition, StructDefinition, TypeDefinition)
+            )
         }
 
     assert strip_identifiers(proc0.identifiers) == strip_identifiers(proc1.identifiers)

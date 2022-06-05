@@ -29,6 +29,7 @@ struct BuiltinData:
     member range_check : felt
     member ecdsa : felt
     member bitwise : felt
+    member ec_op : felt
 end
 
 # Executes a single task.
@@ -100,7 +101,8 @@ func execute_task{builtin_ptrs : BuiltinData*, self_range_check_ptr}(
         pedersen=cast(pedersen_ptr, felt),
         range_check=input_builtin_ptrs.range_check,
         ecdsa=input_builtin_ptrs.ecdsa,
-        bitwise=input_builtin_ptrs.bitwise)
+        bitwise=input_builtin_ptrs.bitwise,
+        ec_op=input_builtin_ptrs.ec_op)
 
     # Call select_input_builtins to get the relevant input builtin pointers for the task.
     select_input_builtins(

@@ -3,6 +3,7 @@ import os
 import pytest
 
 from starkware.cairo.common.test_utils import create_memory_struct
+from starkware.cairo.lang.builtins.all_builtins import ALL_BUILTINS
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.cairo.lang.vm.cairo_runner import CairoRunner
 from starkware.python.utils import from_bytes
@@ -27,18 +28,10 @@ def test_select_input_builtins(builtin_selection_indicators):
     runner = CairoRunner.from_file(cairo_file, DEFAULT_PRIME)
     runner.initialize_segments()
 
-    output_base = runner.segments.add()
-    hash_base = runner.segments.add()
-    range_check_base = runner.segments.add()
-    signature_base = runner.segments.add()
-    bitwise_base = runner.segments.add()
+    builtin_bases = [runner.segments.add() for builtin in ALL_BUILTINS]
 
     # Setup function.
-    builtins_encoding = {
-        builtin: from_bytes(builtin.encode("ascii"))
-        for builtin in ["output", "pedersen", "range_check", "ecdsa", "bitwise"]
-    }
-    all_builtins = [output_base, hash_base, range_check_base, signature_base, bitwise_base]
+    builtins_encoding = {builtin: from_bytes(builtin.encode("ascii")) for builtin in ALL_BUILTINS}
 
     selected_builtin_encodings = [
         builtin_encoding
@@ -50,13 +43,13 @@ def test_select_input_builtins(builtin_selection_indicators):
 
     selected_builtins = [
         builtin
-        for builtin, is_builtin_selected in zip(all_builtins, builtin_selection_indicators)
+        for builtin, is_builtin_selected in zip(builtin_bases, builtin_selection_indicators)
         if is_builtin_selected
     ]
 
     all_encodings = create_memory_struct(runner, builtins_encoding.values())
     selected_encodings = create_memory_struct(runner, selected_builtin_encodings)
-    all_ptrs = create_memory_struct(runner, all_builtins)
+    all_ptrs = create_memory_struct(runner, builtin_bases)
     n_builtins = len(selected_builtin_encodings)
 
     args = [all_encodings, all_ptrs, selected_encodings, n_builtins]

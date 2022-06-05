@@ -16,8 +16,8 @@ func main{syscall_ptr : felt*, range_check_ptr}():
     let (y0, y1) = Contract.foo(
         contract_address=0, x=0, arr_len=0, arr=cast(0, felt*), struct_arr_len=1,
         struct_arr=cast(0, MyStruct*))
-    let (y2, y3) = Contract.delegate_foo(
-        contract_address=0, x=0, arr_len=0, arr=cast(0, felt*), struct_arr_len=1,
+    let (y2, y3) = Contract.library_call_foo(
+        class_hash=0, x=0, arr_len=0, arr=cast(0, felt*), struct_arr_len=1,
         struct_arr=cast(0, MyStruct*))
     return ()
 end
@@ -54,9 +54,9 @@ end
 """
 
     expected_function_code = """
-    func {delegate_prefix}foo{{syscall_ptr : felt*, range_check_ptr}}(
-            contract_address : felt, x : felt, arr_len : felt, arr : felt*, struct_arr_len : felt,
-            struct_arr : MyStruct*) -> (y0 : felt, y1 : felt):
+    func {library_call_prefix}foo{{syscall_ptr : felt*, range_check_ptr}}(
+            {argument_name} : felt, x : felt, arr_len : felt, arr : felt*,
+            struct_arr_len : felt, struct_arr : MyStruct*) -> (y0 : felt, y1 : felt):
         alloc_locals
         let (local calldata_ptr_start : felt*) = alloc()
         let __calldata_ptr = calldata_ptr_start
@@ -65,7 +65,7 @@ end
         {felt_array_encoding}
         {struct_array_encoding}
         let (retdata_size, retdata) = {syscall_function}(
-            contract_address=contract_address,
+            {argument_name}={argument_name},
             function_selector={selector},
             calldata_size=__calldata_ptr - calldata_ptr_start,
             calldata=calldata_ptr_start)
@@ -91,7 +91,7 @@ end
 
 # Dummy library functions.
 
-func alloc() -> (result):
+func alloc() -> (ptr : felt*):
     ret
 end
 
@@ -106,8 +106,8 @@ func call_contract{{syscall_ptr : felt*}}(
     ret
 end
 
-func delegate_call{{syscall_ptr : felt*}}(
-        contract_address : felt, function_selector : felt, calldata_size : felt,
+func library_call{{syscall_ptr : felt*}}(
+        class_hash : felt, function_selector : felt, calldata_size : felt,
         calldata : felt*) -> (retdata_size : felt, retdata : felt*):
     ret
 end
@@ -116,10 +116,18 @@ end
 
 namespace Contract:
     {expected_function_code_format(
-        delegate_prefix='', syscall_function='call_contract', selector=selector)}
+        library_call_prefix='',
+        syscall_function='call_contract',
+        argument_name='contract_address',
+        selector=selector
+    )}
 
     {expected_function_code_format(
-        delegate_prefix='delegate_', syscall_function='delegate_call', selector=selector)}
+        library_call_prefix='library_call_',
+        syscall_function='library_call',
+        argument_name='class_hash',
+        selector=selector
+    )}
 end
 """
     program = preprocess_str(code)

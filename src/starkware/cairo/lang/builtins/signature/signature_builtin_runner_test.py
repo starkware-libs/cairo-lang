@@ -96,7 +96,7 @@ CODE = """
 %builtins ecdsa
 from starkware.cairo.common.cairo_builtins import SignatureBuiltin
 
-func main(ecdsa_ptr) -> (ecdsa_ptr):
+func main(ecdsa_ptr : felt) -> (ecdsa_ptr : felt):
     {hint}
     {write_pubkey}
     {write_msg}

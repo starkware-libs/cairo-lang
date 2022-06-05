@@ -847,6 +847,6 @@ def backslash_to_hex(value: bytes) -> bytes:
     r"""
     Replaces substrings of the form '\x**' with the corresponding byte.
     """
-    pattern = br"\\x([0-9a-fA-F]{2})"
+    pattern = rb"\\x([0-9a-fA-F]{2})"
     replacer = lambda m: bytes.fromhex(m.group(1).decode("ascii"))
     return re.sub(pattern, replacer, value)

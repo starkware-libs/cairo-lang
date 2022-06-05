@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Dict, Optional, Tuple, Type
+from typing import Dict, List, Optional, Tuple, Type
 
 from starkware.cairo.lang.compiler.ast.cairo_types import (
     CairoType,
@@ -23,6 +23,7 @@ from starkware.cairo.lang.compiler.identifier_manager import IdentifierError, Id
 from starkware.cairo.lang.compiler.identifier_utils import get_struct_definition
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
+from starkware.python.utils import as_non_optional
 
 
 class IdentifierAwareVisitor(Visitor):
@@ -118,6 +119,48 @@ Expected '{res.canonical_name}' to be {possible_types}. Found: '{identifier_defi
         )
         assert isinstance(res, StructDefinition)
         return res
+
+    def get_type_definition(
+        self,
+        name: ScopedName,
+        location: Optional[Location],
+    ) -> TypeDefinition:
+        """
+        Returns the type definition that corresponds to the given identifier.
+        location is used if there is an error.
+        """
+        res = self.get_identifier_definition(
+            name=name, supported_types=(TypeDefinition,), location=location
+        )
+        assert isinstance(res, TypeDefinition)
+        return res
+
+    def get_type_or_struct_definition_members(
+        self, name: ScopedName, location: Optional[Location]
+    ) -> List[Tuple[str, CairoType]]:
+        """
+        Returns the members of the type definition (assuming it's a named tuple) or struct
+        definition.
+        """
+        definition = self.get_identifier_definition(
+            name=name, supported_types=(TypeDefinition, StructDefinition), location=location
+        )
+
+        if isinstance(definition, TypeDefinition):
+            assert isinstance(definition.cairo_type, TypeTuple)
+
+            return [
+                (as_non_optional(member.name), self.resolve_type(member.typ))
+                for member in definition.cairo_type.members
+            ]
+        elif isinstance(definition, StructDefinition):
+            return [
+                (name, member_def.cairo_type) for name, member_def in definition.members.items()
+            ]
+        else:
+            raise NotImplementedError(
+                f"Unexpected type for definition: {type(definition).__name__}."
+            )
 
     def try_get_struct_definition(self, name: ScopedName) -> Optional[StructDefinition]:
         """

@@ -4,6 +4,7 @@ from typing import Mapping
 from starkware.starknet.business_logic.execution.execute_entry_point import ExecuteEntryPoint
 from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
+    CallType,
     TransactionExecutionContext,
 )
 from starkware.starknet.business_logic.state.state import CarriedState
@@ -11,16 +12,15 @@ from starkware.starknet.business_logic.utils import get_invoke_tx_total_resource
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public import abi as starknet_abi
-from starkware.starknet.services.api.contract_definition import EntryPointType
+from starkware.starknet.services.api.contract_class import EntryPointType
 from starkware.starkware_utils.error_handling import StarkException, stark_assert_le
 
 
-async def charge_fee(
+async def execute_fee_transfer(
     general_config: StarknetGeneralConfig,
     state: CarriedState,
-    account_contract_address: int,
+    tx_execution_context: TransactionExecutionContext,
     actual_fee: int,
-    max_fee: int,
 ) -> CallInfo:
     """
     Transfers the amount actual_fee from the caller account to the sequencer.
@@ -28,21 +28,18 @@ async def charge_fee(
     """
     stark_assert_le(
         actual_fee,
-        max_fee,
+        tx_execution_context.max_fee,
         code=StarknetErrorCode.FEE_TRANSFER_FAILURE,
         message="Actual fee exceeded max fee.",
     )
 
-    tx_execution_context = TransactionExecutionContext.create_for_call(
-        account_contract_address=account_contract_address,
-        n_steps=general_config.invoke_tx_max_n_steps,
-    )
-
     fee_token_address = general_config.fee_token_address
     fee_transfer_call = ExecuteEntryPoint(
-        caller_address=account_contract_address,  # The account contract address.
+        call_type=CallType.CALL,
+        caller_address=tx_execution_context.account_contract_address,
+        class_hash=None,
         contract_address=fee_token_address,
-        code_address=fee_token_address,
+        code_address=None,
         entry_point_selector=starknet_abi.TRANSFER_ENTRY_POINT_SELECTOR,
         entry_point_type=EntryPointType.EXTERNAL,
         calldata=[general_config.sequencer_address, actual_fee, 0],  # Recipient, amount (128-bit).

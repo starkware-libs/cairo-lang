@@ -21,29 +21,27 @@ from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.vm.crypto import pedersen_hash
 from starkware.python.utils import from_bytes
 from starkware.starknet.public.abi import starknet_keccak
-from starkware.starknet.services.api.contract_definition import ContractDefinition, EntryPointType
+from starkware.starknet.services.api.contract_class import ContractClass, EntryPointType
 
 CAIRO_FILE = os.path.join(os.path.dirname(__file__), "contracts.cairo")
 
-contract_hash_cache_ctx_var: ContextVar[Optional[cachetools.LRUCache]] = ContextVar(
-    "contract_hash_cache", default=None
+class_hash_cache_ctx_var: ContextVar[Optional[cachetools.LRUCache]] = ContextVar(
+    "class_hash_cache", default=None
 )
 
 
 @contextlib.contextmanager
-def set_contract_hash_cache(cache: cachetools.LRUCache):
+def set_class_hash_cache(cache: cachetools.LRUCache):
     """
-    Sets a cache to be used by compute_contract_hash().
+    Sets a cache to be used by compute_class_hash().
     """
-    assert (
-        contract_hash_cache_ctx_var.get() is None
-    ), "Cannot replace an existing contract_hash_cache."
+    assert class_hash_cache_ctx_var.get() is None, "Cannot replace an existing class_hash_cache."
 
-    token = contract_hash_cache_ctx_var.set(cache)
+    token = class_hash_cache_ctx_var.set(cache)
     try:
         yield
     finally:
-        contract_hash_cache_ctx_var.reset(token)
+        class_hash_cache_ctx_var.reset(token)
 
 
 @lru_cache()
@@ -55,32 +53,28 @@ def load_program() -> Program:
     )
 
 
-def compute_contract_hash(
-    contract_definition: ContractDefinition, hash_func: Callable[[int, int], int] = pedersen_hash
+def compute_class_hash(
+    contract_class: ContractClass, hash_func: Callable[[int, int], int] = pedersen_hash
 ) -> int:
-    cache = contract_hash_cache_ctx_var.get()
+    cache = class_hash_cache_ctx_var.get()
     if cache is None:
-        return compute_contract_hash_inner(
-            contract_definition=contract_definition, hash_func=hash_func
-        )
+        return compute_class_hash_inner(contract_class=contract_class, hash_func=hash_func)
 
-    contract_definition_bytes = contract_definition.dumps(sort_keys=True).encode()
-    key = (starknet_keccak(data=contract_definition_bytes), hash_func)
+    contract_class_bytes = contract_class.dumps(sort_keys=True).encode()
+    key = (starknet_keccak(data=contract_class_bytes), hash_func)
 
     if key not in cache:
-        cache[key] = compute_contract_hash_inner(
-            contract_definition=contract_definition, hash_func=hash_func
-        )
+        cache[key] = compute_class_hash_inner(contract_class=contract_class, hash_func=hash_func)
 
     return cache[key]
 
 
-def compute_contract_hash_inner(
-    contract_definition: ContractDefinition, hash_func: Callable[[int, int], int]
+def compute_class_hash_inner(
+    contract_class: ContractClass, hash_func: Callable[[int, int], int]
 ) -> int:
     program = load_program()
-    contract_definition_struct = get_contract_definition_struct(
-        identifiers=program.identifiers, contract_definition=contract_definition
+    contract_class_struct = get_contract_class_struct(
+        identifiers=program.identifiers, contract_class=contract_class
     )
     runner = CairoFunctionRunner(program)
 
@@ -91,21 +85,21 @@ def compute_contract_hash_inner(
     hash_builtin.initialize_segments(runner)
 
     runner.run(
-        "starkware.starknet.core.os.contracts.contract_hash",
+        "starkware.starknet.core.os.contracts.class_hash",
         hash_ptr=hash_builtin.base,
-        contract_definition=contract_definition_struct,
+        contract_class=contract_class_struct,
         use_full_name=True,
         verify_secure=False,
     )
-    _, contract_hash = runner.get_return_values(2)
-    return contract_hash
+    _, class_hash = runner.get_return_values(2)
+    return class_hash
 
 
-def compute_hinted_contract_definition_hash(contract_definition: ContractDefinition) -> int:
+def compute_hinted_class_hash(contract_class: ContractClass) -> int:
     """
-    Computes the hash of the contract definition, including hints.
+    Computes the hash of the contract class, including hints.
     """
-    dumped_program = dataclasses.replace(contract_definition.program, debug_info=None).dump()
+    dumped_program = dataclasses.replace(contract_class.program, debug_info=None).dump()
     if len(dumped_program["attributes"]) == 0:
         # Remove attributes field from raw dictionary, for hash backward compatibility of
         # contracts deployed prior to adding this feature.
@@ -119,18 +113,18 @@ def compute_hinted_contract_definition_hash(contract_definition: ContractDefinit
             if attr["flow_tracking_data"] is None:
                 del attr["flow_tracking_data"]
 
-    input_to_hash = dict(program=dumped_program, abi=contract_definition.abi)
+    input_to_hash = dict(program=dumped_program, abi=contract_class.abi)
     return starknet_keccak(data=json.dumps(input_to_hash, sort_keys=True).encode())
 
 
 def get_contract_entry_points(
     structs: CairoStructProxy,
-    contract_definition: ContractDefinition,
+    contract_class: ContractClass,
     entry_point_type: EntryPointType,
 ) -> List[CairoStructProxy]:
     # Check validity of entry points.
-    program_length = len(contract_definition.program.data)
-    entry_points = contract_definition.entry_points_by_type[entry_point_type]
+    program_length = len(contract_class.program.data)
+    entry_points = contract_class.entry_points_by_type[entry_point_type]
     for entry_point in entry_points:
         assert (
             0 <= entry_point.offset < program_length
@@ -142,8 +136,8 @@ def get_contract_entry_points(
     ]
 
 
-def get_contract_definition_struct(
-    identifiers: IdentifierManager, contract_definition: ContractDefinition
+def get_contract_class_struct(
+    identifiers: IdentifierManager, contract_class: ContractClass
 ) -> CairoStructProxy:
     """
     Returns the serialization of a contract as a list of field elements.
@@ -151,7 +145,7 @@ def get_contract_definition_struct(
     structs = CairoStructFactory(
         identifiers=identifiers,
         additional_imports=[
-            "starkware.starknet.core.os.contracts.ContractDefinition",
+            "starkware.starknet.core.os.contracts.ContractClass",
             "starkware.starknet.core.os.contracts.ContractEntryPoint",
         ],
     ).structs
@@ -164,7 +158,7 @@ def get_contract_definition_struct(
     external_functions, l1_handlers, constructors = (
         get_contract_entry_points(
             structs=structs,
-            contract_definition=contract_definition,
+            contract_class=contract_class,
             entry_point_type=entry_point_type,
         )
         for entry_point_type in (
@@ -178,8 +172,8 @@ def get_contract_definition_struct(
         for entry_points in (external_functions, l1_handlers, constructors)
     )
 
-    builtin_list = contract_definition.program.builtins
-    return structs.ContractDefinition(
+    builtin_list = contract_class.program.builtins
+    return structs.ContractClass(
         api_version=API_VERSION_IDENT.value,
         n_external_functions=len(external_functions),
         external_functions=flat_external_functions,
@@ -189,9 +183,7 @@ def get_contract_definition_struct(
         constructors=flat_constructors,
         n_builtins=len(builtin_list),
         builtin_list=[from_bytes(builtin.encode("ascii")) for builtin in builtin_list],
-        hinted_contract_definition_hash=compute_hinted_contract_definition_hash(
-            contract_definition=contract_definition
-        ),
-        bytecode_length=len(contract_definition.program.data),
-        bytecode_ptr=contract_definition.program.data,
+        hinted_class_hash=compute_hinted_class_hash(contract_class=contract_class),
+        bytecode_length=len(contract_class.program.data),
+        bytecode_ptr=contract_class.program.data,
     )

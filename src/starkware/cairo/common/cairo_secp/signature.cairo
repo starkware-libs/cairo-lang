@@ -196,7 +196,8 @@ func recover_public_key{range_check_ptr}(
 
     let (point2) = ec_mul(r_point, u2)
 
-    return ec_add(minus_point1, point2)
+    let (public_key_point) = ec_add(minus_point1, point2)
+    return (public_key_point=public_key_point)
 end
 
 # Verifies a Secp256k1 ECDSA signature.

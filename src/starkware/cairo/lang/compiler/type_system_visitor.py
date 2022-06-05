@@ -378,7 +378,7 @@ def simplify_type_system(
         be transformed into ([[fp] + 2], S);
       - If T is a struct of size 3, then expr=cast(fp, T*)[5] will be transformed into
         ([fp + 5 * 3], T).
-    In the second and third examples, the defintion of struct T is looked up, and must be present,
+    In the second and third examples, the definition of struct T is looked up, and must be present,
     in the IdentifierManager 'identifiers'.
     """
     return TypeSystemVisitor(identifiers=identifiers).visit(expr)

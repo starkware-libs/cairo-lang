@@ -48,7 +48,7 @@ end
             prog_input_file.flush()
             cairo_pie = client.run_program(compiled_program, prog_input_file.name)
 
-    assert get_program_output(cairo_pie) == [3 ** 2]
+    assert get_program_output(cairo_pie) == [3**2]
 
 
 def test_get_fact(monkeypatch: MonkeyPatch):

@@ -23,7 +23,7 @@ python_venv(cairo_lang_venv
 )
 
 python_venv(cairo_lang_package_venv
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
     LIBS
     cairo_bootloader_generate_fact_lib
     cairo_common_lib

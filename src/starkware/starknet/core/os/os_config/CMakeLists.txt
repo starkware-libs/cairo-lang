@@ -11,7 +11,7 @@ python_lib(starknet_os_config_hash_lib
 
 full_python_test(starknet_os_config_hash_test
     PREFIX starkware/starknet/core/os/os_config
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
     TESTED_MODULES starkware/starknet/core/os
 
     FILES

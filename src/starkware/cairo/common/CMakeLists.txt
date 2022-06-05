@@ -22,6 +22,7 @@ python_lib(cairo_common_lib
     dict_access.cairo
     dict.cairo
     dict.py
+    ec.cairo
     ec_point.cairo
     find_element.cairo
     hash_chain.cairo
@@ -79,7 +80,7 @@ python_lib(cairo_function_runner_lib
 
 full_python_test(cairo_common_test
     PREFIX starkware/cairo/common
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
     TESTED_MODULES starkware/cairo/common
 
     FILES

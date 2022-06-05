@@ -374,7 +374,7 @@ end
 """,
         """
 file:?:?: @raw_input requires the following arguments:
-(selector: felt, calldata_size: felt, calldata: felt*).
+(selector : felt, calldata_size : felt, calldata : felt*).
 func foo(bad_arg):
          ^*****^
 """,
@@ -388,14 +388,14 @@ def test_raw_output_failures():
 
 @external
 @raw_output
-func foo(selector : felt, calldata_size: felt, calldata: felt*):
+func foo(selector : felt, calldata_size : felt, calldata : felt*):
     return ()
 end
 """,
         """
 file:?:?: @raw_output requires the following return values:
-(retdata_size: felt, retdata: felt*).
-func foo(selector : felt, calldata_size: felt, calldata: felt*):
+(retdata_size : felt, retdata : felt*).
+func foo(selector : felt, calldata_size : felt, calldata : felt*):
      ^*^
 """,
     )
@@ -406,15 +406,15 @@ func foo(selector : felt, calldata_size: felt, calldata: felt*):
 
 @external
 @raw_output
-func foo(selector : felt, calldata_size: felt, calldata: felt*) -> (bad_ret):
+func foo(selector : felt, calldata_size : felt, calldata : felt*) -> (bad_ret):
     return ()
 end
 """,
         """
 file:?:?: @raw_output requires the following return values:
-(retdata_size: felt, retdata: felt*).
-func foo(selector : felt, calldata_size: felt, calldata: felt*) -> (bad_ret):
-                                                                    ^*****^
+(retdata_size : felt, retdata : felt*).
+func foo(selector : felt, calldata_size : felt, calldata : felt*) -> (bad_ret):
+                                                                      ^*****^
 """,
     )
 

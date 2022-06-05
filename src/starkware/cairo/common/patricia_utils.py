@@ -64,7 +64,7 @@ def compute_patricia_from_leaves_for_test(leaves, hash_func):
             if left == EMPTY and right == EMPTY:
                 next_node = EMPTY
             elif left == EMPTY:
-                next_node = (r_len + 1, r_path + 2 ** r_len, r_bottom)
+                next_node = (r_len + 1, r_path + 2**r_len, r_bottom)
             elif right == EMPTY:
                 next_node = (l_len + 1, l_path, l_bottom)
             else:
@@ -177,7 +177,7 @@ def get_descents(height: int, path: int, nodes: List[NodeType]):
     res = {}
     # length <= 1 is not a descent.
     if length > 1:
-        res[orig_height, orig_path] = length, path % 2 ** length
+        res[orig_height, orig_path] = length, path % 2**length
 
     if height > 0:
         res.update(get_descents(height - 1, path * 2, lefts))

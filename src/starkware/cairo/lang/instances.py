@@ -3,11 +3,12 @@ from dataclasses import field
 from typing import Any, Dict, Optional
 
 from starkware.cairo.lang.builtins.bitwise.instance_def import BitwiseInstanceDef
+from starkware.cairo.lang.builtins.ec.instance_def import EcOpInstanceDef
 from starkware.cairo.lang.builtins.hash.instance_def import PedersenInstanceDef
 from starkware.cairo.lang.builtins.range_check.instance_def import RangeCheckInstanceDef
 from starkware.cairo.lang.builtins.signature.instance_def import EcdsaInstanceDef
 
-PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
+PRIME = 2**251 + 17 * 2**192 + 1
 
 
 @dataclasses.dataclass
@@ -135,6 +136,12 @@ all_instance = CairoLayout(
         bitwise=BitwiseInstanceDef(
             ratio=256,
             total_n_bits=251,
+        ),
+        ec_op=EcOpInstanceDef(
+            ratio=256,
+            scalar_height=256,
+            scalar_bits=252,
+            scalar_limit=PRIME,
         ),
     ),
     n_trace_columns=27,

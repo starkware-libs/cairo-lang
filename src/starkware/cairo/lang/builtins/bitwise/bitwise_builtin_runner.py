@@ -35,7 +35,7 @@ class BitwiseBuiltinRunner(SimpleBuiltinRunner):
                 f"{self.name} builtin: Expected integer at address {x_addr}. "
                 + f"Got: {memory[x_addr]}."
             )
-            assert memory[x_addr] < 2 ** self.bitwise_builtin.total_n_bits, (
+            assert memory[x_addr] < 2**self.bitwise_builtin.total_n_bits, (
                 f"{self.name} builtin: Expected integer at address {x_addr} to be smaller than "
                 + f"2^{self.bitwise_builtin.total_n_bits}. Got: {memory[x_addr]}."
             )
@@ -43,7 +43,7 @@ class BitwiseBuiltinRunner(SimpleBuiltinRunner):
                 f"{self.name} builtin: Expected integer at address {y_addr}. "
                 + f"Got: {memory[y_addr]}."
             )
-            assert memory[y_addr] < 2 ** self.bitwise_builtin.total_n_bits, (
+            assert memory[y_addr] < 2**self.bitwise_builtin.total_n_bits, (
                 f"{self.name} builtin: Expected integer at address {y_addr} to be smaller than "
                 + f"2^{self.bitwise_builtin.total_n_bits}. Got: {memory[y_addr]}."
             )

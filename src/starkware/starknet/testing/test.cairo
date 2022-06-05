@@ -33,7 +33,8 @@ end
 
 @external
 func get_value{syscall_ptr : felt*}(address : felt) -> (res : felt):
-    return storage_read(address=address)
+    let (res) = storage_read(address=address)
+    return (res=res)
 end
 
 @external
@@ -43,7 +44,7 @@ func get_caller{syscall_ptr : felt*}() -> (res : felt):
 end
 
 @external
-func takes_array{syscall_ptr : felt*}(a_len : felt, a : felt*) -> (res):
+func takes_array{syscall_ptr : felt*}(a_len : felt, a : felt*) -> (res : felt):
     let res = a_len + a[0] + a[1]
     return (res=res)
 end

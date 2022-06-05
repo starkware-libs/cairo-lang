@@ -21,7 +21,7 @@ end
     with pytest.raises(
         VmException,
         match=f"Value {PRIME - 1}, in range check builtin 0, is out of range "
-        r"\[0, {bound}\)".format(bound=2 ** 128),
+        r"\[0, {bound}\)".format(bound=2**128),
     ):
         compile_and_run(CODE_FORMAT.format(value=-1))
 

@@ -5,6 +5,7 @@ from starkware.cairo.lang.compiler.identifier_definition import (
     LabelDefinition,
     ReferenceDefinition,
     StructDefinition,
+    TypeDefinition,
 )
 from starkware.cairo.lang.compiler.parser import parse_file
 from starkware.cairo.lang.compiler.preprocessor.identifier_collector import IdentifierCollector
@@ -57,7 +58,7 @@ let (e, f) = g()
         ("a.SIZEOF_LOCALS", ConstDefinition),
         ("a.Args", StructDefinition),
         ("a.ImplicitArgs", StructDefinition),
-        ("a.Return", StructDefinition),
+        ("a.Return", TypeDefinition),
         ("a.b", ReferenceDefinition),
         ("a.c", ReferenceDefinition),
         ("e", ReferenceDefinition),
@@ -79,7 +80,7 @@ end
         ("foo.SIZEOF_LOCALS", ConstDefinition),
         ("foo.Args", StructDefinition),
         ("foo.ImplicitArgs", StructDefinition),
-        ("foo.Return", StructDefinition),
+        ("foo.Return", TypeDefinition),
         ("foo.x", ReferenceDefinition),
         ("foo.z", ReferenceDefinition),
         ("foo.a", ReferenceDefinition),
@@ -87,7 +88,7 @@ end
         ("foo.bar.SIZEOF_LOCALS", ConstDefinition),
         ("foo.bar.Args", StructDefinition),
         ("foo.bar.ImplicitArgs", StructDefinition),
-        ("foo.bar.Return", StructDefinition),
+        ("foo.bar.Return", TypeDefinition),
         ("foo.bar.y", ReferenceDefinition),
         ("foo.bar.b", ReferenceDefinition),
     }

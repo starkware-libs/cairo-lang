@@ -16,9 +16,10 @@ python_lib(starknet_cli_lib
     starknet_abi_lib
     starknet_api_utils_lib
     starknet_compile_lib
-    starknet_contract_definition_lib
+    starknet_contract_class_lib
     starknet_definitions_lib
     starknet_feeder_gateway_client_lib
+    starknet_feeder_gateway_response_objects_lib
     starknet_gateway_client_lib
     starknet_general_config_lib
     starknet_transaction_lib
@@ -29,7 +30,7 @@ python_lib(starknet_cli_lib
 )
 
 python_venv(starknet_cli_venv
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
 
     LIBS
     starknet_cli_lib
@@ -42,7 +43,7 @@ python_exe(starknet_cli
 
 full_python_test(starknet_cli_lib_test
     PREFIX starkware/starknet/cli
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
     TESTED_MODULES starkware/starknet/cli
 
     FILES

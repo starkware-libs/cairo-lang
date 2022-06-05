@@ -1,7 +1,7 @@
 # Calls func_ptr(args[0], args[1], ..., args[n_args - 1]) and forwards its return value.
 # In order to convert a label to pc and use it as a value for the func_ptr argument,
 # use get_label_location().
-func invoke(func_ptr, n_args : felt, args : felt*):
+func invoke(func_ptr : felt*, n_args : felt, args : felt*):
     invoke_prepare_args(args_end=args + n_args, n_args=n_args)
     call abs func_ptr
     ret

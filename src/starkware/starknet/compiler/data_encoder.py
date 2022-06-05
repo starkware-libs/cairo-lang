@@ -52,6 +52,18 @@ def struct_to_argument_info_list(struct_def: StructDefinition) -> List[ArgumentI
     return res
 
 
+def tuple_type_to_argument_info_list(cairo_type: TypeTuple) -> List[ArgumentInfo]:
+    """
+    Returns a list of ArgumentInfo entries that correspond to the tuple members.
+    """
+    res = []
+    for member in cairo_type.members:
+        assert member.location is not None
+        assert member.name is not None
+        res.append(ArgumentInfo(name=member.name, cairo_type=member.typ, location=member.location))
+    return res
+
+
 class DataEncodingProcessor:
     """
     An helper class for encoding and decoding list of typed arguments to a list of felts.

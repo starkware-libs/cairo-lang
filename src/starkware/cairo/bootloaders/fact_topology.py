@@ -93,7 +93,7 @@ def get_fact_topology_from_additional_data(
             isinstance(tree_structure, list)
             and len(tree_structure) % 2 == 0
             and 0 < len(tree_structure) <= 10
-            and all(isinstance(x, int) and 0 <= x < 2 ** 30 for x in tree_structure)
+            and all(isinstance(x, int) and 0 <= x < 2**30 for x in tree_structure)
         ), f"Invalid tree structure specified in the '{GPS_FACT_TOPOLOGY}' attribute."
     else:
         assert len(pages) == 0, (

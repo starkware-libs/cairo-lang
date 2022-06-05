@@ -10,7 +10,7 @@ from starkware.cairo.lang.vm.utils import RunResources
 from starkware.cairo.lang.vm.vm_exceptions import VmException, VmExceptionBase
 
 CAIRO_FILE = os.path.join(os.path.dirname(__file__), "test.cairo")
-PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
+PRIME = 2**251 + 17 * 2**192 + 1
 
 
 def test_run_until_label():
@@ -56,7 +56,7 @@ def test_bad_stop_ptr():
     code = """\
 %builtins output
 
-func main(output_ptr) -> (output_ptr):
+func main(output_ptr : felt*) -> (output_ptr : felt*):
     [ap] = 0; ap++
     [ap - 1] = [output_ptr]
     [ap] = output_ptr + 3; ap++  # The correct return value is output_ptr + 1
@@ -82,7 +82,7 @@ def test_builtin_list():
         AssertionError,
         match=re.escape(
             "The builtins specified by the %builtins directive must be subsequence of"
-            " ['output', 'pedersen', 'range_check', 'ecdsa', 'bitwise']. "
+            " ['output', 'pedersen', 'range_check', 'ecdsa', 'bitwise', 'ec_op']. "
             "Got ['pedersen', 'output']."
         ),
     ):

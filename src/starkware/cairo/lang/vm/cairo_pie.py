@@ -35,8 +35,8 @@ class SegmentInfo:
     size: int
 
     def run_validity_checks(self):
-        assert isinstance(self.index, int) and 0 <= self.index < 2 ** 30, "Invalid segment index."
-        assert isinstance(self.size, int) and 0 <= self.size < 2 ** 30, "Invalid segment size."
+        assert isinstance(self.index, int) and 0 <= self.index < 2**30, "Invalid segment index."
+        assert isinstance(self.size, int) and 0 <= self.size < 2**30, "Invalid segment size."
 
 
 @marshmallow_dataclass.dataclass
@@ -132,13 +132,13 @@ class ExecutionResources:
 
     def run_validity_checks(self):
         assert (
-            isinstance(self.n_steps, int) and 1 <= self.n_steps < 2 ** 30
+            isinstance(self.n_steps, int) and 1 <= self.n_steps < 2**30
         ), f"Invalid n_steps: {self.n_steps}."
         assert (
-            isinstance(self.n_memory_holes, int) and 0 <= self.n_memory_holes < 2 ** 30
+            isinstance(self.n_memory_holes, int) and 0 <= self.n_memory_holes < 2**30
         ), f"Invalid n_memory_holes: {self.n_memory_holes}."
         assert isinstance(self.builtin_instance_counter, dict) and all(
-            is_valid_builtin_name(name) and isinstance(size, int) and 0 <= size < 2 ** 30
+            is_valid_builtin_name(name) and isinstance(size, int) and 0 <= size < 2**30
             for name, size in self.builtin_instance_counter.items()
         ), "Invalid builtin_instance_counter."
 
@@ -223,7 +223,7 @@ class CairoPie:
         ADDITIONAL_DATA_FILENAME,
         EXECUTION_RESOURCES_FILENAME,
     ] + OPTIONAL_FILES
-    MAX_SIZE = 1024 ** 3
+    MAX_SIZE = 1024**3
 
     @classmethod
     def from_file(cls, fileobj) -> "CairoPie":
