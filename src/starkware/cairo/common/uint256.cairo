@@ -25,6 +25,11 @@ func uint256_check{range_check_ptr}(a : Uint256):
     return ()
 end
 
+# Return true if integer is zero.
+func uint256_iszero{range_check_ptr}(a : Uint256) -> (res : felt):
+    return uint256_eq(a, Uint256(0, 0))
+end
+
 # Arithmetics.
 
 # Adds two integers. Returns the result as a 256-bit integer and the (1-bit) carry.
