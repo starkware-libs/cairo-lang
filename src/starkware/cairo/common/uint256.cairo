@@ -309,6 +309,12 @@ func uint256_eq{range_check_ptr}(a : Uint256, b : Uint256) -> (res : felt):
     return (1)
 end
 
+# Return true if integers are not equal.
+func uint256_neq{range_check_ptr}(a : Uint256, b : Uint256) -> (res : felt):
+    let (res) = uint256_eq(a, b)
+    return (1 - res)
+end
+
 # Computes the bitwise XOR of 2 uint256 integers.
 func uint256_xor{range_check_ptr, bitwise_ptr : BitwiseBuiltin*}(a : Uint256, b : Uint256) -> (
     res : Uint256
