@@ -160,6 +160,18 @@ func uint256_signed_le{range_check_ptr}(a : Uint256, b : Uint256) -> (res : felt
     return (1 - not_le)
 end
 
+# Returns 1 if the first unsigned integer is greater than to the second unsigned integer.
+func uint256_gt{range_check_ptr}(a : Uint256, b : Uint256) -> (res  : felt):
+    let (le) = uint256_le(a, b)
+    return (1 - le)
+end
+
+# Returns 1 if the first unsigned integer is greater than or equal to the second unsigned integer.
+func uint256_ge{range_check_ptr}(a : Uint256, b : Uint256) -> (res : felt):
+    let (lt) = uint256_lt(a, b)
+    return (1 - lt)
+end
+
 # Returns 1 if the signed integer is nonnegative.
 @known_ap_change
 func uint256_signed_nn{range_check_ptr}(a : Uint256) -> (res : felt):
