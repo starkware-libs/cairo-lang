@@ -8,6 +8,7 @@ from starkware.starknet.testing.contract import StarknetContract
 from starkware.starknet.testing.starknet import Starknet
 
 CONTRACT_FILE = os.path.join(os.path.dirname(__file__), "test.cairo")
+HINT_CONTRACT_FILE = os.path.join(os.path.dirname(__file__), "test_unwhitelisted_hint.cairo")
 
 
 @pytest.fixture
@@ -103,3 +104,11 @@ async def test_struct_arrays(starknet: Starknet):
         match=re.escape("argument inp[1] has wrong number of elements (expected 2, got 3 instead)"),
     ):
         await contract.transpose([(123, 234), (4, 5, 6)]).invoke()
+
+
+@pytest.mark.asyncio
+async def test_deploy_unwhitelisted_hint_contract(starknet: Starknet):
+    deployed_contract = await starknet.deploy(
+        source=HINT_CONTRACT_FILE, disable_hint_validation=True
+    )
+    assert isinstance(deployed_contract.contract_address, int)

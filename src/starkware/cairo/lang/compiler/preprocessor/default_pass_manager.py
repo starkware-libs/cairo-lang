@@ -5,9 +5,11 @@ from starkware.cairo.lang.compiler.import_loader import collect_imports
 from starkware.cairo.lang.compiler.preprocessor.auxiliary_info_collector import (
     AuxiliaryInfoCollector,
 )
+from starkware.cairo.lang.compiler.preprocessor.bool_expr.lowering import BoolExprLoweringStage
 from starkware.cairo.lang.compiler.preprocessor.dependency_graph import DependencyGraphStage
 from starkware.cairo.lang.compiler.preprocessor.directives import DirectivesCollectorStage
 from starkware.cairo.lang.compiler.preprocessor.identifier_collector import IdentifierCollector
+from starkware.cairo.lang.compiler.preprocessor.if_labels import IfLabelAssigner
 from starkware.cairo.lang.compiler.preprocessor.pass_manager import (
     PassManager,
     PassManagerContext,
@@ -16,7 +18,6 @@ from starkware.cairo.lang.compiler.preprocessor.pass_manager import (
 )
 from starkware.cairo.lang.compiler.preprocessor.preprocessor import Preprocessor
 from starkware.cairo.lang.compiler.preprocessor.struct_collector import StructCollector
-from starkware.cairo.lang.compiler.preprocessor.unique_labels import UniqueLabelCreator
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 
 
@@ -39,8 +40,12 @@ def default_pass_manager(
             ],
         ),
     )
+    manager.add_stage("bool_expr_lowering", BoolExprLoweringStage())
     manager.add_stage(
-        "unique_label_creator", VisitorStage(lambda context: UniqueLabelCreator(), modify_ast=True)
+        "if_label_assigner",
+        VisitorStage(
+            lambda context: IfLabelAssigner(unique_names=context.unique_names), modify_ast=True
+        ),
     )
     manager.add_stage(
         "identifier_collector",
@@ -49,7 +54,11 @@ def default_pass_manager(
     manager.add_stage("directives_collector", DirectivesCollectorStage())
     manager.add_stage(
         "struct_collector",
-        VisitorStage(lambda context: StructCollector(identifiers=context.identifiers)),
+        VisitorStage(
+            lambda context: StructCollector(
+                identifiers=context.identifiers, identifier_locations=context.identifier_locations
+            )
+        ),
     )
     if opt_unused_functions:
         if additional_scopes_to_compile is None:
@@ -88,9 +97,9 @@ class PreprocessorStage(Stage):
             builtins=[] if context.builtins is None else context.builtins,
             functions_to_compile=context.functions_to_compile,
             auxiliary_info_cls=self.auxiliary_info_cls,
+            identifier_locations=context.identifier_locations,
             **self.preprocessor_kwargs,
         )
-        preprocessor.identifier_locations = context.identifier_locations
 
         for module in context.modules:
             preprocessor.visit(module)

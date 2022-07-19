@@ -16,6 +16,7 @@ from starkware.cairo.common.registers import get_fp_and_pc
 from starkware.cairo.common.signature import verify_ecdsa_signature
 from starkware.starknet.common.syscalls import (
     call_contract,
+    deploy,
     get_caller_address,
     get_contract_address,
     get_tx_info,
@@ -197,6 +198,25 @@ func __execute__{
     let (response_len) = execute_list(multicall.calls_len, multicall.calls, response)
 
     return (retdata_size=response_len, retdata=response)
+end
+
+@external
+func deploy_contract{syscall_ptr : felt*}(
+    class_hash : felt,
+    contract_address_salt : felt,
+    constructor_calldata_len : felt,
+    constructor_calldata : felt*,
+    deploy_from_zero : felt,
+) -> (contract_address : felt):
+    assert_only_self()
+    let (contract_address) = deploy(
+        class_hash=class_hash,
+        contract_address_salt=contract_address_salt,
+        constructor_calldata_size=constructor_calldata_len,
+        constructor_calldata=constructor_calldata,
+        deploy_from_zero=deploy_from_zero,
+    )
+    return (contract_address=contract_address)
 end
 
 func execute_list{syscall_ptr : felt*}(calls_len : felt, calls : Call*, response : felt*) -> (

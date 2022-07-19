@@ -30,17 +30,19 @@ def run_cairo_contract_address(
     runner.run(
         func_name="get_contract_address",
         hash_ptr=runner.pedersen_builtin.base,
+        range_check_ptr=runner.range_check_builtin.base,
         salt=salt,
         class_hash=class_hash,
         constructor_calldata_size=len(constructor_calldata),
         constructor_calldata=constructor_calldata,
         deployer_address=deployer_address,
     )
-    pedersen_ptr, contract_address = runner.get_return_values(2)
+    pedersen_ptr, range_check_ptr_end, contract_address = runner.get_return_values(3)
 
     assert pedersen_ptr == runner.pedersen_builtin.base + (
         runner.pedersen_builtin.cells_per_instance * (7 + len(constructor_calldata))
     )
+    assert range_check_ptr_end.segment_index == runner.range_check_builtin.base.segment_index
     return contract_address
 
 

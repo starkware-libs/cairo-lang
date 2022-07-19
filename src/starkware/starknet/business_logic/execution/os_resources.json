@@ -6,10 +6,10 @@
                 "ecdsa_builtin": 0,
                 "output_builtin": 0,
                 "pedersen_builtin": 0,
-                "range_check_builtin": 15
+                "range_check_builtin": 22
             },
             "n_memory_holes": 0,
-            "n_steps": 526
+            "n_steps": 598
         },
         "delegate_call": {
             "builtin_instance_counter": {
@@ -17,10 +17,10 @@
                 "ecdsa_builtin": 0,
                 "output_builtin": 0,
                 "pedersen_builtin": 0,
-                "range_check_builtin": 15
+                "range_check_builtin": 22
             },
             "n_memory_holes": 0,
-            "n_steps": 548
+            "n_steps": 620
         },
         "delegate_l1_handler": {
             "builtin_instance_counter": {
@@ -39,10 +39,10 @@
                 "ecdsa_builtin": 0,
                 "output_builtin": 0,
                 "pedersen_builtin": 7,
-                "range_check_builtin": 16
+                "range_check_builtin": 19
             },
             "n_memory_holes": 0,
-            "n_steps": 781
+            "n_steps": 815
         },
         "emit_event": {
             "builtin_instance_counter": {
@@ -138,10 +138,10 @@
                 "ecdsa_builtin": 0,
                 "output_builtin": 0,
                 "pedersen_builtin": 0,
-                "range_check_builtin": 15
+                "range_check_builtin": 22
             },
             "n_memory_holes": 0,
-            "n_steps": 516
+            "n_steps": 588
         },
         "library_call_l1_handler": {
             "builtin_instance_counter": {
@@ -186,6 +186,29 @@
             },
             "n_memory_holes": 0,
             "n_steps": 42
+        }
+    },
+    "execute_txs_inner": {
+        "DECLARE": {
+            "builtin_instance_counter": {},
+            "n_memory_holes": 0,
+            "n_steps": 0
+        },
+        "DEPLOY": {
+            "builtin_instance_counter": {},
+            "n_memory_holes": 0,
+            "n_steps": 0
+        },
+        "INVOKE_FUNCTION": {
+            "builtin_instance_counter": {
+                "bitwise_builtin": 0,
+                "ecdsa_builtin": 0,
+                "output_builtin": 0,
+                "pedersen_builtin": 15,
+                "range_check_builtin": 60
+            },
+            "n_memory_holes": 0,
+            "n_steps": 2314
         }
     }
 }

@@ -1,9 +1,13 @@
 import json
 import os
 import shutil
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
+from services.external_api.client import JsonObject
 from starkware.crypto.signature.signature import get_random_private_key, private_to_stark_key, sign
+from starkware.starknet.core.os.contract_address.contract_address import (
+    calculate_contract_address_from_hash,
+)
 from starkware.starknet.core.os.transaction_hash.transaction_hash import (
     TransactionHashPrefix,
     calculate_transaction_hash_common,
@@ -18,6 +22,7 @@ from starkware.starknet.wallets.starknet_context import StarknetContext
 from starkware.starkware_utils.error_handling import StarkErrorCode
 
 ACCOUNT_FILE_NAME = "starknet_open_zeppelin_accounts.json"
+DEPLOY_CONTRACT_SELECTOR = get_selector_from_name("deploy_contract")
 GET_NONCE_SELECTOR = get_selector_from_name("get_nonce")
 
 
@@ -101,17 +106,7 @@ Transaction hash: {gateway_response['transaction_hash']}
             json.dump(accounts, f, indent=4)
             f.write("\n")
 
-    async def sign_invoke_transaction(
-        self,
-        contract_address: int,
-        selector: int,
-        calldata: List[int],
-        chain_id: int,
-        max_fee: Optional[int],
-        version: int,
-        nonce: Optional[int],
-    ) -> WrappedMethod:
-        # Read the account information.
+    def get_account_information(self) -> JsonObject:
         assert os.path.exists(self.account_file), (
             f"The account file '{self.account_file}' was not found.\n"
             "Did you deploy your account contract (using 'starnet deploy_account')?"
@@ -124,10 +119,28 @@ Transaction hash: {gateway_response['transaction_hash']}
                 f"Account '{self.account_name}' for network '{self.starknet_context.network_id}' "
                 "was not found."
             )
-        account = accounts_for_network[self.account_name]
+        return accounts_for_network[self.account_name]
 
+    async def sign_invoke_transaction(
+        self,
+        contract_address: int,
+        selector: int,
+        calldata: List[int],
+        chain_id: int,
+        max_fee: Optional[int],
+        version: int,
+        nonce: Optional[int],
+        dry_run: bool = False,
+    ) -> WrappedMethod:
+        account = self.get_account_information()
         account_address = int(account["address"], 16)
-        private_key = int(account["private_key"], 16)
+
+        private_key: Optional[int]
+        if "private_key" in account:
+            private_key = int(account["private_key"], 16)
+        else:
+            assert dry_run, f"Missing private_key for {hex(account_address)}."
+            private_key = None
 
         if nonce is None:
             # Obtain the current nonce. Note that you can't invoke a function again before the
@@ -145,6 +158,45 @@ Transaction hash: {gateway_response['transaction_hash']}
             version=version,
             nonce=nonce,
         )
+
+    async def deploy_contract(
+        self,
+        class_hash: int,
+        salt: int,
+        constructor_calldata: List[int],
+        deploy_from_zero: bool,
+        chain_id: int,
+        max_fee: Optional[int],
+        version: int,
+        nonce: Optional[int],
+    ) -> Tuple[WrappedMethod, int]:
+        account = self.get_account_information()
+        account_address = int(account["address"], 16)
+        deploy_from_zero_felt = 1 if deploy_from_zero else 0
+        calldata = [
+            class_hash,
+            salt,
+            len(constructor_calldata),
+            *constructor_calldata,
+            deploy_from_zero_felt,
+        ]
+
+        wrapped_invocation = await self.sign_invoke_transaction(
+            contract_address=account_address,
+            selector=DEPLOY_CONTRACT_SELECTOR,
+            calldata=calldata,
+            chain_id=chain_id,
+            max_fee=max_fee,
+            version=version,
+            nonce=nonce,
+        )
+        contract_address = calculate_contract_address_from_hash(
+            salt=salt,
+            class_hash=class_hash,
+            constructor_calldata=constructor_calldata,
+            deployer_address=0 if deploy_from_zero else account_address,
+        )
+        return wrapped_invocation, contract_address
 
     async def get_current_nonce(self, account_address: int) -> int:
         get_nonce_tx = InvokeFunction(
@@ -164,7 +216,7 @@ Transaction hash: {gateway_response['transaction_hash']}
 
 def sign_invoke_transaction(
     signer_address: int,
-    private_key: int,
+    private_key: Optional[int],
     contract_address: int,
     selector: int,
     calldata: List[int],
@@ -193,7 +245,10 @@ def sign_invoke_transaction(
         chain_id=chain_id,
         additional_data=[],
     )
-    signature = list(sign(msg_hash=hash_value, priv_key=private_key))
+    if private_key is None:
+        signature = []
+    else:
+        signature = list(sign(msg_hash=hash_value, priv_key=private_key))
     return WrappedMethod(
         address=signer_address,
         selector=EXECUTE_ENTRY_POINT_SELECTOR,

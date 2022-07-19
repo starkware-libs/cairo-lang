@@ -20,7 +20,7 @@ hi def link specialIdentifier Special
 
 syn keyword statement call jmp ret abs rel if const let end from import static_assert local tempvar
   \ felt return assert member cast else alloc_locals as with with_attr nondet dw codeoffset new
-  \ using
+  \ using and
 syn keyword register ap fp
 syn keyword specialIdentifier SIZEOF_LOCALS SIZE
 syn match comment '#[^\n]*\n'

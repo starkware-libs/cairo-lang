@@ -19,6 +19,7 @@ from starkware.starkware_utils.marshmallow_dataclass_fields import (
     IntAsHex,
     IntAsStr,
     StrictRequiredInteger,
+    VariadicLengthTupleField,
 )
 from starkware.starkware_utils.validated_fields import (
     OptionalField,
@@ -32,7 +33,11 @@ from starkware.starkware_utils.validated_fields import (
 # Common.
 
 felt_as_hex_list_metadata = dict(
-    marshmallow_field=mfields.List(IntAsHex(validate=everest_fields.FeltField.validate))
+    marshmallow_field=mfields.List(
+        everest_fields.FeltField.get_marshmallow_field(
+            required=True, load_default=marshmallow.utils.missing
+        )
+    )
 )
 
 felt_as_hex_or_str_list_metadata = dict(
@@ -49,7 +54,7 @@ felt_list_metadata = dict(
 def bytes_as_hex_dict_keys_metadata(
     values_schema: Type[marshmallow.Schema],
 ) -> Dict[str, mfields.Dict]:
-    width_validator = validate_length(field_name="class hash", length=constants.CLASS_HASH_BYTES)
+    width_validator = validate_length(field_name="class_hash", length=constants.CLASS_HASH_BYTES)
     return dict(
         marshmallow_field=mfields.Dict(
             keys=BytesAsHex(required=True, validate=width_validator),
@@ -91,6 +96,10 @@ OptionalSequencerAddressField = OptionalField(
     none_probability=0,
 )
 optional_sequencer_address_metadata = OptionalSequencerAddressField.metadata()
+
+starknet_version_metadata = dict(
+    marshmallow_field=mfields.String(required=False, load_default=None)
+)
 
 caller_address_metadata = address_metadata(
     name="Caller address", error_code=StarknetErrorCode.OUT_OF_RANGE_CALLER_ADDRESS
@@ -178,13 +187,13 @@ def validate_optional_class_hash(class_hash: Optional[bytes]):
 
 
 def validate_class_hash(class_hash: bytes):
-    if from_bytes(value=class_hash, byte_order="big") >= constants.CLASS_HASH_UPPER_BOUND:
-        raise ValueError(f"Class hash must represent a field element; got: 0x{class_hash.hex()}.")
+    value = from_bytes(value=class_hash, byte_order="big")
+    ClassHashIntField.validate(value=value, name="Class hash must represent a field element.")
 
 
-class_hash_metadata = dict(
-    marshmallow_field=BytesAsHex(required=True, validate=validate_class_hash),
-)
+ClassHashField = BytesAsHex(required=True, validate=validate_class_hash)
+
+class_hash_metadata = dict(marshmallow_field=ClassHashField)
 
 non_required_class_hash_metadata = dict(
     marshmallow_field=BytesAsHex(required=False, validate=validate_class_hash),
@@ -286,6 +295,19 @@ optional_state_root_metadata = dict(
 )
 
 
+# Declared contracts.
+
+declared_contracts_metadata = dict(
+    marshmallow_field=VariadicLengthTupleField(
+        ClassHashIntField.get_marshmallow_field(
+            required=True, load_default=marshmallow.utils.missing
+        ),
+        required=False,
+        load_default=(),
+    )
+)
+
+
 # Transaction hash.
 
 TransactionHashField = RangeValidatedField(
@@ -296,9 +318,6 @@ TransactionHashField = RangeValidatedField(
     formatter=hex,
 )
 transaction_hash_metadata = TransactionHashField.metadata()
-
-OptionalTransactionHashField = OptionalField(field=TransactionHashField, none_probability=0)
-optional_transaction_hash_metadata = OptionalTransactionHashField.metadata()
 
 
 # General config.

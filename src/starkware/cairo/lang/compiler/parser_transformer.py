@@ -2,11 +2,12 @@ import dataclasses
 import re
 from typing import List, Optional, Tuple
 
-from lark import Transformer, v_args
+import lark
+from lark import Token, Transformer, v_args
 
 from starkware.cairo.lang.compiler.ast.aliased_identifier import AliasedIdentifier
 from starkware.cairo.lang.compiler.ast.arguments import IdentifierList
-from starkware.cairo.lang.compiler.ast.bool_expr import BoolExpr
+from starkware.cairo.lang.compiler.ast.bool_expr import BoolAndExpr, BoolEqExpr, BoolExpr
 from starkware.cairo.lang.compiler.ast.cairo_types import (
     CairoType,
     TypeCodeoffset,
@@ -53,6 +54,7 @@ from starkware.cairo.lang.compiler.ast.expr import (
     ExprConst,
     ExprDeref,
     ExprDot,
+    Expression,
     ExprHint,
     ExprIdentifier,
     ExprNeg,
@@ -117,11 +119,6 @@ class ParserError(LocationError):
 
 
 @dataclasses.dataclass
-class Comma:
-    location: Optional[Location]
-
-
-@dataclasses.dataclass
 class CommaSeparatedWithNotes:
     """
     Represents a list of comma separated values, such as expressions or types.
@@ -144,12 +141,6 @@ class ParserTransformer(Transformer):
     def __default__(self, data: str, children, meta):
         raise TypeError(f"Unable to parse tree node of type {data}")
 
-    # Comma separated list with notes.
-
-    @v_args(meta=True)
-    def comma(self, value, meta):
-        return Comma(location=self.meta2loc(meta))
-
     def comma_separated_with_notes(self, value) -> CommaSeparatedWithNotes:
         saw_comma = True
         all_notes: List[Notes] = []
@@ -159,9 +150,9 @@ class ParserTransformer(Transformer):
             if isinstance(v, Notes):
                 # Join the notes before and after the comma.
                 current_notes.append(v)
-            elif isinstance(v, Comma):
+            elif isinstance(v, Token) and v.type == "COMMA":
                 if saw_comma:
-                    raise ParserError("Unexpected comma.", location=v.location)
+                    raise ParserError("Unexpected comma.", location=self.token2loc(v))
                 saw_comma = True
             else:
                 if not saw_comma:
@@ -232,7 +223,11 @@ class ParserTransformer(Transformer):
     @v_args(meta=True)
     def type_pointer2(self, value, meta):
         location = self.meta2loc(meta)
-        inner_location = dataclasses.replace(location, end_col=location.end_col - 1)
+        inner_location = (
+            None
+            if location is None
+            else dataclasses.replace(location, end_col=location.end_col - 1)
+        )
         return TypePointer(
             pointee=TypePointer(pointee=value[0], location=inner_location), location=location
         )
@@ -406,15 +401,19 @@ class ParserTransformer(Transformer):
     def reg_fp(self, value):
         return Register.FP
 
-    # Boolean expresions.
+    # Boolean expressions.
 
-    @v_args(meta=True)
-    def bool_expr_eq(self, value, meta):
-        return BoolExpr(a=value[0], b=value[1], eq=True, location=self.meta2loc(meta))
+    @v_args(inline=True, meta=True)
+    def bool_expr_eq(self, meta, a: Expression, notes: Notes, b: Expression):
+        return BoolEqExpr(a=a, b=b, eq=True, notes=notes, location=self.meta2loc(meta))
 
-    @v_args(meta=True)
-    def bool_expr_neq(self, value, meta):
-        return BoolExpr(a=value[0], b=value[1], eq=False, location=self.meta2loc(meta))
+    @v_args(inline=True, meta=True)
+    def bool_expr_neq(self, meta, a: Expression, notes: Notes, b: Expression):
+        return BoolEqExpr(a=a, b=b, eq=False, notes=notes, location=self.meta2loc(meta))
+
+    @v_args(inline=True, meta=True)
+    def bool_and_expr(self, meta, a: BoolExpr, notes: Notes, b: BoolEqExpr):
+        return BoolAndExpr(a=a, b=b, notes=notes, location=self.meta2loc(meta))
 
     # Types.
 
@@ -830,7 +829,7 @@ class ParserTransformer(Transformer):
             comments=comments, starts_new_line=starts_new_line, location=self.meta2loc(meta)
         )
 
-    def meta2loc(self, meta):
+    def meta2loc(self, meta: lark.tree.Meta) -> Optional[Location]:
         if meta.empty:
             return None
         return Location(
@@ -838,6 +837,16 @@ class ParserTransformer(Transformer):
             start_col=meta.column,
             end_line=meta.end_line,
             end_col=meta.end_column,
+            input_file=self.input_file,
+            parent_location=self.parser_context.parent_location,
+        )
+
+    def token2loc(self, token: Token) -> Location:
+        return Location(
+            start_line=token.line,
+            start_col=token.column,
+            end_line=token.end_line,
+            end_col=token.end_column,
             input_file=self.input_file,
             parent_location=self.parser_context.parent_location,
         )

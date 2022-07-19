@@ -90,6 +90,9 @@ class SignatureBuiltinRunner(SimpleBuiltinRunner):
             addr, RelocatableValue
         ), f"Expected memory address to be relocatable value. Found: {addr}."
         assert (
+            addr.segment_index == self.base.segment_index
+        ), f"Signature hint must point to the signature builtin segment, not {addr}."
+        assert (
             addr.offset % CELLS_PER_SIGNATURE == 0
         ), f"Signature hint must point to the public key cell, not {addr}."
         self.signatures[addr] = signature

@@ -1,7 +1,7 @@
 import asyncio
 import functools
 import logging
-from typing import List, Tuple, cast
+from typing import List, Optional, Tuple, cast
 
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
@@ -24,7 +24,11 @@ from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public import abi as starknet_abi
-from starkware.starknet.services.api.contract_class import ContractClass, ContractEntryPoint
+from starkware.starknet.services.api.contract_class import (
+    ContractClass,
+    ContractEntryPoint,
+    EntryPointType,
+)
 from starkware.starknet.storage.starknet_storage import BusinessLogicStarknetStorage
 from starkware.starkware_utils.error_handling import (
     StarkException,
@@ -39,6 +43,45 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
     """
     Represents a Cairo entry point execution of a StarkNet contract.
     """
+
+    @classmethod
+    def create_for_testing(
+        cls,
+        contract_address: int,
+        calldata: List[int],
+        entry_point_selector: int,
+        entry_point_type: Optional[EntryPointType] = None,
+        caller_address: int = 0,
+        call_type: Optional[CallType] = None,
+        class_hash: Optional[bytes] = None,
+    ):
+        return cls(
+            call_type=CallType.CALL if call_type is None else call_type,
+            contract_address=contract_address,
+            code_address=None,
+            class_hash=class_hash,
+            entry_point_selector=entry_point_selector,
+            entry_point_type=(
+                EntryPointType.EXTERNAL if entry_point_type is None else entry_point_type
+            ),
+            calldata=calldata,
+            caller_address=caller_address,
+        )
+
+    async def execute_for_testing(
+        self,
+        state: CarriedState,
+        general_config: StarknetGeneralConfig,
+        tx_execution_context: Optional[TransactionExecutionContext] = None,
+    ) -> CallInfo:
+        if tx_execution_context is None:
+            tx_execution_context = TransactionExecutionContext.create_for_testing(
+                n_steps=general_config.invoke_tx_max_n_steps
+            )
+
+        return await self.execute(
+            state=state, general_config=general_config, tx_execution_context=tx_execution_context
+        )
 
     async def execute(
         self,

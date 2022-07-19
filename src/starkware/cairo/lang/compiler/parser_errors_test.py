@@ -246,3 +246,19 @@ let a : (b : local felt) = 5
              ^***^
 """,
     )
+
+
+def test_if_with_parenthesized_condition():
+    verify_exception(
+        """
+if (a == 0 and b == 1):
+    let x = 0
+end
+""",
+        """
+file:?:?: Unexpected token Token(\'_DBL_EQ\', \'==\'). Expected one of: "(", ")", ",", ".", "=", \
+"[", "{", operator.
+if (a == 0 and b == 1):
+      ^^
+      """,
+    )

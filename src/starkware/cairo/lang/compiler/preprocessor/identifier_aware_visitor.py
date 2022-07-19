@@ -31,12 +31,18 @@ class IdentifierAwareVisitor(Visitor):
     A base class for visitors that require identifier related functionalities.
     """
 
-    def __init__(self, identifiers: Optional[IdentifierManager] = None):
+    def __init__(
+        self,
+        identifiers: Optional[IdentifierManager] = None,
+        identifier_locations: Dict[ScopedName, Location] = None,
+    ):
         super().__init__()
         if identifiers is None:
             identifiers = IdentifierManager()
+        if identifier_locations is None:
+            identifier_locations = {}
         self.identifiers = identifiers
-        self.identifier_locations: Dict[ScopedName, Location] = {}
+        self.identifier_locations = identifier_locations
 
     def handle_missing_future_definition(self, name: ScopedName, location):
         raise PreprocessorError(

@@ -1,3 +1,7 @@
+# This module provides a set of functions to compute the blake2s hash function.
+#
+# This module is similar to the keccak.cairo module. See more info there.
+
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.cairo_blake2s.packed_blake2s import N_PACKED_INSTANCES, blake2s_compress
 from starkware.cairo.common.cairo_builtins import BitwiseBuiltin

@@ -16,8 +16,8 @@ _ARROW: "->"
 _AT: "@"
 
 // Comma separated list with notes.
-comma: ","
-_expr_sep: (comma | nonempty_notes)+
+COMMA: ","
+_expr_sep: (COMMA | nonempty_notes)+
 comma_separated_with_notes{item}: notes item? (_expr_sep item)* _expr_sep?
 
 // Types.
@@ -67,8 +67,13 @@ identifier_def: IDENTIFIER
 !reg: "ap" -> reg_ap
     | "fp" -> reg_fp
 
-bool_expr: expr _DBL_EQ expr   -> bool_expr_eq
-         | expr _NEQ expr      -> bool_expr_neq
+?bool_expr: bool_and
+
+?bool_and: bool_and "and" notes bool_atom     -> bool_and_expr
+         | bool_atom
+
+?bool_atom: expr _DBL_EQ notes expr           -> bool_expr_eq
+          | expr _NEQ    notes expr           -> bool_expr_neq
 
 !modifier: "local" -> modifier_local
 

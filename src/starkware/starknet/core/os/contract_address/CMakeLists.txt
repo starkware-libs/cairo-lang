@@ -8,7 +8,9 @@ python_lib(starknet_contract_address_lib
     LIBS
     cairo_common_lib
     cairo_vm_crypto_lib
+    starknet_common_lib
     starknet_contract_class_lib
+    starknet_definitions_lib
     starknet_os_abi_lib
     starkware_python_utils_lib
 )

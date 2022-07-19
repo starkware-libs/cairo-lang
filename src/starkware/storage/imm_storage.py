@@ -53,6 +53,9 @@ class _ImmediateStorage(Storage):
 
             await task
 
+        # Clean list in order to prevent a memory leak, due to cyclic object reference.
+        self.write_tasks = []
+
 
 class LocalStorage(_ImmediateStorage):
     """

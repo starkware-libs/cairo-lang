@@ -1,6 +1,6 @@
 import dataclasses
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from starkware.starknet.wallets.starknet_context import StarknetContext
 
@@ -41,10 +41,29 @@ class Account(ABC):
         max_fee: int,
         version: int,
         nonce: Optional[int],
+        dry_run: bool = False,
     ) -> WrappedMethod:
         """
         Given a transaction to execute (or call) within the context of the account,
         prepares the required information for invoking it through the account contract.
         nonce is the nonce to be used in the transaction. If not specified, the current nonce
         is queried from the StarkNet system.
+        """
+
+    @abstractmethod
+    async def deploy_contract(
+        self,
+        class_hash: int,
+        salt: int,
+        constructor_calldata: List[int],
+        deploy_from_zero: bool,
+        chain_id: int,
+        max_fee: int,
+        version: int,
+        nonce: Optional[int],
+    ) -> Tuple[WrappedMethod, int]:
+        """
+        Prepares the required information for invoking a contract deployment function through
+        the account contract.
+        Returns the wrapped method and the deployed contract address.
         """

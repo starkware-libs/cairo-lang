@@ -21,3 +21,8 @@ class IdentifierList(AstNode):
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return self.identifiers
+
+    @classmethod
+    def from_identifiers(cls, identifiers: List[TypedIdentifier], **kwargs) -> "IdentifierList":
+        notes = [Notes() for _ in range(len(identifiers) + 1)]
+        return IdentifierList(identifiers=identifiers, notes=notes, **kwargs)

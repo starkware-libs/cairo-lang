@@ -1,7 +1,7 @@
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_test_utils import PRIME, preprocess_str
 
 
-def test_unique_label_creator():
+def test_if_labels_are_set():
     program = preprocess_str(
         code="""
 namespace B:

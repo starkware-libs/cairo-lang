@@ -102,7 +102,7 @@ class HintsWhitelist(ValidatedMarshmallowDataclass):
     @classmethod
     def from_dir(cls, dirname: str) -> "HintsWhitelist":
         """
-        Returns a whitelist from all the file in the given
+        Returns a whitelist from all the files in the given directory.
         """
         whitelists = [
             cls.from_file(filename=os.path.join(dirname, x))

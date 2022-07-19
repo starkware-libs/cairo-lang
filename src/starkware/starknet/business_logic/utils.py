@@ -5,6 +5,7 @@ from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.starknet.business_logic.execution.gas_usage import calculate_tx_gas_usage
 from starkware.starknet.business_logic.execution.objects import CallInfo
 from starkware.starknet.business_logic.execution.os_usage import (
+    calculate_execute_txs_inner_resources,
     calculate_syscall_resources,
     get_tx_syscall_counter,
 )
@@ -13,12 +14,17 @@ from starkware.starknet.business_logic.state.state import CarriedState
 from starkware.starknet.core.os.transaction_hash.transaction_hash import TransactionHashPrefix
 from starkware.starknet.definitions import constants
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
+from starkware.starknet.definitions.transaction_type import TransactionType
 from starkware.starknet.public import abi as starknet_abi
 from starkware.starknet.services.api.contract_class import ContractClass, EntryPointType
 from starkware.starkware_utils.error_handling import stark_assert, wrap_with_stark_exception
 from starkware.storage.storage import FactFetchingContext, Storage
 
 logger = logging.getLogger(__name__)
+
+FEE_TRANSFER_N_STORAGE_CHANGES = 2  # Sender and sequencer balance update.
+# Exclude the sequencer balance update, since it's charged once throughout the batch.
+FEE_TRANSFER_N_STORAGE_CHANGES_TO_CHARGE = FEE_TRANSFER_N_STORAGE_CHANGES - 1
 
 
 def get_return_values(runner: CairoFunctionRunner) -> List[int]:
@@ -130,10 +136,12 @@ def get_invoke_tx_total_resources(
     tx_syscall_counter = get_tx_syscall_counter(state=state)
     constructor_calldata_total_length, n_deployments = get_call_deployment_info(call_info=call_info)
     assert n_deployments == tx_syscall_counter.get("deploy", 0)
+
     l1_gas_usage = calculate_tx_gas_usage(
         l2_to_l1_messages=call_info.get_sorted_l2_to_l1_messages(),
         n_modified_contracts=n_modified_contracts_by_tx,
-        n_storage_writes=tx_syscall_counter.get("storage_write", 0),
+        n_storage_writes=tx_syscall_counter.get("storage_write", 0)
+        + FEE_TRANSFER_N_STORAGE_CHANGES_TO_CHARGE,
         # L1 handlers cannot be called.
         l1_handler_payload_size=None,
         constructor_calldata_total_length=constructor_calldata_total_length,
@@ -143,6 +151,9 @@ def get_invoke_tx_total_resources(
     # Add additional Cairo resources needed for the OS to run the transaction.
     execution_resources = call_info.execution_resources
     execution_resources += calculate_syscall_resources(syscall_counter=tx_syscall_counter)
+    execution_resources += calculate_execute_txs_inner_resources(
+        tx_type=TransactionType.INVOKE_FUNCTION
+    )
 
     return l1_gas_usage, execution_resources.to_dict()
 

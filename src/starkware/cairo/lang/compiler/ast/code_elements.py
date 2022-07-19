@@ -1,6 +1,6 @@
 import dataclasses
 from abc import abstractmethod
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Union
 
 from starkware.cairo.lang.compiler.ast.aliased_identifier import AliasedIdentifier
 from starkware.cairo.lang.compiler.ast.arguments import IdentifierList
@@ -418,6 +418,30 @@ class CodeBlock(AstNode):
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return self.code_elements
 
+    def __add__(self, other: "CodeBlock") -> "CodeBlock":
+        assert isinstance(other, self.__class__)
+        return CodeBlock(code_elements=self.code_elements + other.code_elements)
+
+    @classmethod
+    def from_code_elements(cls, code_elements: Iterable[CodeElement]) -> "CodeBlock":
+        return cls(
+            code_elements=[
+                CommentedCodeElement(
+                    code_elm=elm,
+                    comment=None,
+                    location=getattr(elm, "location", None),
+                )
+                for elm in code_elements
+            ]
+        )
+
+    @classmethod
+    def singleton(cls, code_element: CodeElement) -> "CodeBlock":
+        """
+        Shortcut for ``from_code_elements([code_element])``.
+        """
+        return cls.from_code_elements([code_element])
+
 
 @dataclasses.dataclass
 class CodeElementScoped(CodeElement):
@@ -601,10 +625,11 @@ class CodeElementIf(CodeElement):
     location: Optional[Location] = LocationField
 
     def format(self, allowed_line_length):
-        cond_particles = ["if ", *self.condition.get_particles()]
-        cond_particles[-1] = cond_particles[-1] + ":"
+        cond_particle = self.condition.to_particle()
+        cond_particle.add_prefix("if ")
+        cond_particle.add_suffix(":")
         code = particles_in_lines(
-            particles=ParticleList(elements=cond_particles),
+            particles=cond_particle,
             config=ParticleFormattingConfig(
                 allowed_line_length=allowed_line_length, line_indent=INDENTATION
             ),

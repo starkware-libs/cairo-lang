@@ -24,7 +24,7 @@ class IntAsHex(mfields.Field):
 
     def _deserialize(self, value, attr, data, **kwargs):
         if re.match("^0x[0-9a-f]+$", value) is None:
-            self.fail("invalid", input=value)
+            raise self.make_error("invalid", input=value)
 
         return int(value, 16)
 

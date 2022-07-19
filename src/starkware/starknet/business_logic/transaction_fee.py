@@ -79,7 +79,7 @@ def calculate_tx_fee_by_cairo_usage(
     )
 
     total_l1_gas_usage = cairo_l1_gas_usage + l1_gas_usage
-    return math.ceil(total_l1_gas_usage * gas_price)
+    return math.ceil(total_l1_gas_usage) * gas_price
 
 
 def calculate_tx_fee(

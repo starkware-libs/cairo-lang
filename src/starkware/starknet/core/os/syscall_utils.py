@@ -50,7 +50,7 @@ from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.services.api.contract_class import CONSTRUCTOR_SELECTOR, EntryPointType
 from starkware.starknet.storage.starknet_storage import (
     BusinessLogicStarknetStorage,
-    StarknetStorageInterface,
+    OsSingleStarknetStorage,
 )
 from starkware.starkware_utils.error_handling import StarkException, stark_assert
 
@@ -691,8 +691,8 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
             addr=request.calldata, size=request.calldata_size
         )
 
-        code_address = None
-        class_hash = None
+        code_address: Optional[int] = None
+        class_hash: Optional[bytes] = None
         if syscall_name == "call_contract":
             code_address = cast(int, request.contract_address)
             contract_address = code_address
@@ -747,18 +747,22 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
         request = self._read_and_validate_syscall_request(
             syscall_name="deploy", segments=segments, syscall_ptr=syscall_ptr
         )
-        assert request.reserved == 0, "The reserved field in the deploy system call must be 0."
+        assert request.deploy_from_zero in [
+            0,
+            1,
+        ], "The deploy_from_zero field in the deploy system call must be 0 or 1."
         constructor_calldata = segments.memory.get_range_as_ints(
             addr=cast(RelocatableValue, request.constructor_calldata),
             size=cast(int, request.constructor_calldata_size),
         )
         class_hash = cast(int, request.class_hash)
 
+        deployer_address = self.contract_address if request.deploy_from_zero == 0 else 0
         contract_address = calculate_contract_address_from_hash(
             salt=cast(int, request.contract_address_salt),
             class_hash=class_hash,
             constructor_calldata=constructor_calldata,
-            deployer_address=self.contract_address,
+            deployer_address=deployer_address,
         )
 
         # Initialize the contract.
@@ -1094,7 +1098,7 @@ class OsSysCallHandler(SysCallHandlerBase):
     def __init__(
         self,
         tx_execution_infos: List[TransactionExecutionInfo],
-        starknet_storage_by_address: Mapping[int, StarknetStorageInterface],
+        starknet_storage_by_address: Mapping[int, OsSingleStarknetStorage],
         block_info: BlockInfo,
     ):
         super().__init__(block_info=block_info)

@@ -12,6 +12,7 @@ from typing import (
     Any,
     AsyncIterable,
     Awaitable,
+    Callable,
     Dict,
     Iterable,
     Iterator,
@@ -374,6 +375,28 @@ def _all_subclasses(cls: type) -> List[type]:
 
 def get_exception_repr(exception: Exception) -> str:
     return f"{type(exception).__name__}({exception})"
+
+
+def func_args_to_string(
+    func: Callable, args: List[Any], kwargs: Dict[str, Any], exclude_params: List[str]
+) -> str:
+    """
+    Formats the given function's arguments in the following way:
+      <arg1_name>=<arg1_value>, <arg2_name>=<arg2_value>, ...
+    """
+    arg_names = func.__code__.co_varnames
+    formatted_args: List[str] = []
+
+    for name in arg_names:
+        if len(args) > 0:
+            if name != "self" and name not in exclude_params:
+                formatted_args.append(f"{name}={args[0]}")
+
+            args = args[1:]
+        elif name in kwargs and name not in exclude_params:
+            formatted_args.append(f"{name}={kwargs[name]}")
+
+    return ", ".join(formatted_args)
 
 
 @contextlib.contextmanager

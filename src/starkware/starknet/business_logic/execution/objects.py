@@ -4,7 +4,7 @@ import logging
 import operator
 from dataclasses import field
 from enum import Enum, auto
-from typing import Iterator, List, Optional, Set, cast
+from typing import Iterable, Iterator, List, Optional, Set, cast
 
 import marshmallow.fields as mfields
 import marshmallow_dataclass
@@ -14,7 +14,7 @@ from services.everest.definitions import fields as everest_fields
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
 from starkware.cairo.lang.vm.utils import RunResources
 from starkware.starknet.business_logic.state.state import StateSelector
-from starkware.starknet.definitions import fields
+from starkware.starknet.definitions import constants, fields
 from starkware.starknet.services.api.contract_class import CONSTRUCTOR_SELECTOR, EntryPointType
 from starkware.starknet.services.api.gateway.transaction import DECLARE_SENDER_ADDRESS
 from starkware.starkware_utils.marshmallow_dataclass_fields import (
@@ -73,6 +73,25 @@ class TransactionExecutionContext(ValidatedDataclass):
             account_contract_address=account_contract_address,
             transaction_hash=transaction_hash,
             signature=signature,
+            max_fee=max_fee,
+            version=version,
+            run_resources=RunResources(n_steps=n_steps),
+            n_emitted_events=0,
+            n_sent_messages=0,
+        )
+
+    @classmethod
+    def create_for_testing(
+        cls,
+        account_contract_address: int = 0,
+        max_fee: int = 0,
+        n_steps: int = 100000,
+        version: int = constants.TRANSACTION_VERSION,
+    ) -> "TransactionExecutionContext":
+        return cls(
+            account_contract_address=account_contract_address,
+            transaction_hash=0,
+            signature=[],
             max_fee=max_fee,
             version=version,
             run_resources=RunResources(n_steps=n_steps),
@@ -209,10 +228,16 @@ class CallInfo(SerializableMarshmallowDataclass):
             class_hashes=class_hashes,
         )
 
+        return selector | CallInfo.get_state_selector_of_many(call_infos=self.internal_calls)
+
+    @staticmethod
+    def get_state_selector_of_many(
+        call_infos: Iterable["CallInfo"],
+    ) -> StateSelector:
         return functools.reduce(
-            StateSelector.__or__,
-            (call.get_state_selector() for call in self.internal_calls),
-            selector,
+            operator.__or__,
+            (call_info.get_state_selector() for call_info in call_infos),
+            StateSelector.empty(),
         )
 
     def gen_call_topology(self) -> Iterator["CallInfo"]:
@@ -352,7 +377,7 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
 
     @staticmethod
     def get_state_selector_of_many(
-        execution_infos: List["TransactionExecutionInfo"],
+        execution_infos: Iterable["TransactionExecutionInfo"],
     ) -> StateSelector:
         return functools.reduce(
             operator.__or__,

@@ -1,3 +1,41 @@
+# This module provides a set of functions to compute the (Ethereuem compatible) keccak hash
+# function.
+#
+# In order to use the functions that get the ``keccak_ptr`` implicit argument
+# (e.g., ``keccak_uint256s()``, ``keccak()``, ...) you should:
+#
+#   1. Create a new memory segment using ``alloc()`` and store it in a variable named
+#      ``keccak_ptr``.
+#   2. Create a copy of the pointer, and name it ``keccak_ptr_start``, before using keccak.
+#   3. Use the keccak functions with the ``keccak_ptr`` implicit argument
+#      (either use the ``with`` statement or write ``{keccak_ptr=keccak_ptr}`` explicitly).
+#   4. Call ``finalize_keccak()`` (once) at the end of your program/transaction.
+#
+# For example:
+#
+#   let (keccak_ptr : felt*) = alloc()
+#   local keccak_ptr_start : felt* = keccak_ptr
+#
+#   with keccak_ptr:
+#     keccak_uint256s(...)
+#     keccak_uint256s(...)
+#   end
+#
+#   finalize_keccak(keccak_ptr_start=keccak_ptr_start, keccak_ptr_end=keccak_ptr)
+#
+# It's more efficient to reuse the ``keccak_ptr`` segment for all the keccak functions you need,
+# and call ``finalize_keccak()`` once, because of an internal batching done inside
+# ``finalize_keccak()``.
+#
+# Failing to call ``finalize_keccak()``, will make the keccak function unsound - the prover will be
+# able to choose any value as the keccak's result.
+#
+# The module also provides a set of helper functions to prepare the input data for keccak,
+# such as ``keccak_add_uint256()`` and ``keccak_add_felt()``. To use them, you should allocate
+# a new memory segment to variable named ``inputs`` (this value is an implicit argument to those
+# functions). Once the input is ready, you should call ``keccak()`` or ``keccak_bigend()``.
+# Don't forget to call ``finalize_keccak()`` at the end of the program/transaction.
+
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.bitwise import bitwise_and, bitwise_or, bitwise_xor
 from starkware.cairo.common.cairo_builtins import BitwiseBuiltin
@@ -368,7 +406,8 @@ func _keccak{range_check_ptr, bitwise_ptr : BitwiseBuiltin*, keccak_ptr : felt*}
     return (keccak_ptr - KECCAK_STATE_SIZE_FELTS)
 end
 
-# Verifies that the results of keccak() are valid.
+# Verifies that the results of keccak() are valid. For optimization, this can be called only once
+# after all the keccak calculations are completed.
 func finalize_keccak{range_check_ptr, bitwise_ptr : BitwiseBuiltin*}(
     keccak_ptr_start : felt*, keccak_ptr_end : felt*
 ):

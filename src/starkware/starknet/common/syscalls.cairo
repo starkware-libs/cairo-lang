@@ -133,8 +133,8 @@ struct DeployRequest:
     member constructor_calldata_size : felt
     # The calldata for the constructor.
     member constructor_calldata : felt*
-    # Not used. Must be set to 0.
-    member reserved : felt
+    # Used for deterministic contract address deployment.
+    member deploy_from_zero : felt
 end
 
 struct DeployResponse:
@@ -150,11 +150,13 @@ end
 
 # Deploys a contract with the given class, and returns its address.
 # Fails if a contract with the same parameters was already deployed.
+# If 'deploy_from_zero' is 1, the contract address is not affected by the deployer's address.
 func deploy{syscall_ptr : felt*}(
     class_hash : felt,
     contract_address_salt : felt,
     constructor_calldata_size : felt,
     constructor_calldata : felt*,
+    deploy_from_zero : felt,
 ) -> (contract_address : felt):
     let syscall = [cast(syscall_ptr, Deploy*)]
     assert syscall.request = DeployRequest(
@@ -163,7 +165,7 @@ func deploy{syscall_ptr : felt*}(
         contract_address_salt=contract_address_salt,
         constructor_calldata_size=constructor_calldata_size,
         constructor_calldata=constructor_calldata,
-        reserved=0)
+        deploy_from_zero=deploy_from_zero)
 
     %{ syscall_handler.deploy(segments=segments, syscall_ptr=ids.syscall_ptr) %}
     let response = syscall.response

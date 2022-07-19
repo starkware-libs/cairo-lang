@@ -139,7 +139,7 @@ class StarknetState:
         entry_point_type: EntryPointType = EntryPointType.EXTERNAL,
         nonce: Optional[int] = None,
         version: int = constants.QUERY_VERSION,
-    ) -> CallInfo:
+    ) -> Tuple[CallInfo, CarriedState]:
         """
         Calls a function on a contract and returns its CallInfo without modifying the state.
         """
@@ -156,12 +156,12 @@ class StarknetState:
             chain_id=self.general_config.chain_id.value,
             only_query=True,
         )
+        child_state = self.state.create_child_state_for_querying()
 
-        return await tx.execute(
-            state=self.state.create_child_state_for_querying(),
-            general_config=self.general_config,
-            only_query=True,
+        call_info = await tx.execute(
+            state=child_state, general_config=self.general_config, only_query=True
         )
+        return call_info, child_state
 
     async def invoke_raw(
         self,

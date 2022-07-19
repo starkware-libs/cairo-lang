@@ -58,9 +58,13 @@ class Starknet:
         contract_address_salt: Optional[CastableToAddressSalt] = None,
         cairo_path: Optional[List[str]] = None,
         constructor_calldata: Optional[List[int]] = None,
+        disable_hint_validation: bool = False,
     ) -> StarknetContract:
         contract_class = get_contract_class(
-            source=source, contract_class=contract_class, cairo_path=cairo_path
+            source=source,
+            contract_class=contract_class,
+            cairo_path=cairo_path,
+            disable_hint_validation=disable_hint_validation,
         )
         address, execution_info = await self.state.deploy(
             contract_class=contract_class,

@@ -108,12 +108,14 @@ def compile_starknet_files(
     debug_info: bool = False,
     disable_hint_validation: bool = False,
     cairo_path: Optional[List[str]] = None,
+    filter_identifiers: bool = True,
 ) -> ContractClass:
     return compile_starknet_codes(
         codes=get_codes(files),
         debug_info=debug_info,
         disable_hint_validation=disable_hint_validation,
         cairo_path=cairo_path,
+        filter_identifiers=filter_identifiers,
     )
 
 
@@ -122,6 +124,7 @@ def compile_starknet_codes(
     debug_info: bool = False,
     disable_hint_validation: bool = False,
     cairo_path: Optional[List[str]] = None,
+    filter_identifiers: bool = True,
 ) -> ContractClass:
     if cairo_path is None:
         cairo_path = []
@@ -140,10 +143,8 @@ def compile_starknet_codes(
     # Dump and load program, so that it is converted to the canonical form.
     program = Program.load(data=program.dump())
 
-    return ContractClass(
-        program=program,
-        entry_points_by_type=get_entry_points_by_type(program=program),
-        abi=get_abi(preprocessed=preprocessed),
+    return create_starknet_contract_class(
+        program=program, abi=get_abi(preprocessed), filter_identifiers=filter_identifiers
     )
 
 
@@ -164,6 +165,16 @@ def assemble_starknet_contract(
         file_contents_for_debug_info=file_contents_for_debug_info,
     )
 
+    return create_starknet_contract_class(
+        program=program, abi=abi, filter_identifiers=filter_identifiers
+    )
+
+
+def create_starknet_contract_class(
+    program: Program,
+    abi: AbiType,
+    filter_identifiers: bool = True,
+) -> ContractClass:
     entry_points_by_type = get_entry_points_by_type(program=program)
     if filter_identifiers:
         program = filter_unused_identifiers(program)
@@ -199,6 +210,7 @@ def main():
         return starknet_pass_manager(
             prime=args.prime,
             read_module=module_reader.read,
+            opt_unused_functions=args.opt_unused_functions,
             disable_hint_validation=args.disable_hint_validation,
         )
 

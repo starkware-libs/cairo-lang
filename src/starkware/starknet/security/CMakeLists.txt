@@ -43,6 +43,7 @@ python_lib(starknet_hints_whitelist_lib
     hints_whitelist.py
     whitelists/0.6.0.json
     whitelists/0.8.2.json
+    whitelists/384_bit_prime_field.json
     whitelists/cairo_blake2s.json
     whitelists/cairo_keccak.json
     whitelists/cairo_secp.json

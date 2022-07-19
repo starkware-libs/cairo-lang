@@ -174,6 +174,7 @@ def get_contract_class(
     source: Optional[str] = None,
     contract_class: Optional[ContractClass] = None,
     cairo_path: Optional[List[str]] = None,
+    disable_hint_validation: bool = False,
 ) -> ContractClass:
     """
     Given either a ContractClass instance or a source file path, returns the respective
@@ -184,7 +185,10 @@ def get_contract_class(
     ), "Exactly one of source, contract_class should be supplied."
     if contract_class is None:
         contract_class = compile_starknet_files(
-            files=[source], debug_info=True, cairo_path=cairo_path
+            files=[source],
+            debug_info=True,
+            cairo_path=cairo_path,
+            disable_hint_validation=disable_hint_validation,
         )
         source = None
         cairo_path = None

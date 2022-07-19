@@ -81,7 +81,7 @@ class ContractClass(ValidatedMarshmallowDataclass):
 
         stark_assert(
             self.program.prime == DEFAULT_PRIME,
-            code=StarknetErrorCode.SECURITY_ERROR,
+            code=StarknetErrorCode.INVALID_CONTRACT_CLASS,
             message=(
                 f"Invalid value for field prime: {self.program.prime}. Expected: {DEFAULT_PRIME}."
             ),

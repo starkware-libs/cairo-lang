@@ -268,7 +268,7 @@ class VirtualMachineBase(ABC):
         if new_scope_locals is None:
             new_scope_locals = {}
 
-        self.exec_scopes.append({**new_scope_locals, **self.builtin_runners})
+        self.exec_scopes.append(new_scope_locals.copy())
 
     def exit_scope(self):
         assert len(self.exec_scopes) > 1, "Cannot exit main scope."

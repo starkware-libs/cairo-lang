@@ -525,7 +525,11 @@ func execute_deploy_syscall{
     syscall_ptr : Deploy*,
 ):
     let request = syscall_ptr.request
-    assert request.reserved = 0
+    # Verify deploy_from_zero is either 0 (FALSE) or 1 (TRUE).
+    assert request.deploy_from_zero * (request.deploy_from_zero - 1) = 0
+    # Set deployer_address to 0 if request.deploy_from_zero is TRUE.
+    let deployer_address = (
+        (1 - request.deploy_from_zero) * caller_execution_context.contract_address)
 
     let hash_ptr = builtin_ptrs.pedersen
     with hash_ptr:
@@ -534,7 +538,7 @@ func execute_deploy_syscall{
             class_hash=request.class_hash,
             constructor_calldata_size=request.constructor_calldata_size,
             constructor_calldata=request.constructor_calldata,
-            deployer_address=caller_execution_context.contract_address,
+            deployer_address=deployer_address,
         )
     end
     tempvar builtin_ptrs = new BuiltinPointers(

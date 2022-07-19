@@ -203,8 +203,8 @@ end
 # Verifies a Secp256k1 ECDSA signature.
 # Also verifies that r and s are in the range (0, N), that their limbs are in the range
 #   [0, BASE), and that v is in the range [0, 2 ** 128).
-# Receives a keccak_ptr for computing keccak. finalize_keccak should be called after all the keccak
-# calculations are done.
+# Receives a keccak_ptr for computing keccak. finalize_keccak should be called by the function's
+#   caller after all the keccak calculations are done.
 # Assumptions:
 # * All the limbs of msg_hash are in the range [0, 3 * BASE).
 func verify_eth_signature{range_check_ptr, bitwise_ptr : BitwiseBuiltin*, keccak_ptr : felt*}(

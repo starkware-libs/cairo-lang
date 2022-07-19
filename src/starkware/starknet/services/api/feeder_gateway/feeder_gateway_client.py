@@ -6,6 +6,7 @@ from services.external_api.client import JsonObject
 from starkware.starknet.definitions import fields
 from starkware.starknet.services.api.feeder_gateway.response_objects import (
     BlockIdentifier,
+    BlockTransactionTraces,
     StarknetBlock,
     TransactionInfo,
     TransactionReceipt,
@@ -71,6 +72,20 @@ class FeederGatewayClient(EverestFeederGatewayClient):
             uri=f"/get_block?{formatted_block_named_argument}",
         )
         return StarknetBlock.loads(data=raw_response)
+
+    async def get_block_traces(
+        self,
+        block_hash: Optional[CastableToHash] = None,
+        block_number: Optional[BlockIdentifier] = None,
+    ) -> BlockTransactionTraces:
+        formatted_block_named_argument = get_formatted_block_named_argument(
+            block_hash=block_hash, block_number=block_number
+        )
+        raw_response = await self._send_request(
+            send_method="GET",
+            uri=f"/get_block_traces?{formatted_block_named_argument}",
+        )
+        return BlockTransactionTraces.loads(data=raw_response)
 
     async def get_state_update(
         self,

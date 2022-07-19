@@ -56,10 +56,13 @@ func modify_account{range_check_ptr}(state : AmmState, account_id, diff_a, diff_
     assert new_account.token_b_balance = new_token_b_balance
 
     # Perform the account update.
+    # Note that dict_write() will update the 'account_dict_end'
+    # reference.
     let (__fp__, _) = get_fp_and_pc()
     dict_write{dict_ptr=account_dict_end}(key=account_id, new_value=cast(&new_account, felt))
 
-    # Construct and return the new state.
+    # Construct and return the new state with the updated
+    # 'account_dict_end'.
     local new_state : AmmState
     assert new_state.account_dict_start = (
         state.account_dict_start)

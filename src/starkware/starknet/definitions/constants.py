@@ -15,7 +15,9 @@ BLOCK_HASH_LOWER_BOUND = 0
 BLOCK_HASH_UPPER_BOUND = FIELD_SIZE
 # Address 0 is reserved to distinguish an external transaction from an inner (L2<>L2) one.
 L2_ADDRESS_LOWER_BOUND = 1
-L2_ADDRESS_UPPER_BOUND = 2**CONTRACT_ADDRESS_BITS
+# The address upper bound is defined to be congruent with the storage var address upper bound (see
+# storage.cairo).
+L2_ADDRESS_UPPER_BOUND = 2**CONTRACT_ADDRESS_BITS - 256
 CLASS_HASH_BYTES = HASH_BYTES
 CLASS_HASH_UPPER_BOUND = FIELD_SIZE
 CONTRACT_STATES_COMMITMENT_TREE_HEIGHT = FIELD_SIZE_BITS

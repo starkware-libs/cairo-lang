@@ -8,6 +8,7 @@ from typing import DefaultDict, Dict, List, Optional, Set, Tuple, Type, Union, c
 import marshmallow.fields as mfields
 
 from starkware.cairo.lang.compiler.ast.arguments import IdentifierList
+from starkware.cairo.lang.compiler.ast.bool_expr import BoolEqExpr
 from starkware.cairo.lang.compiler.ast.cairo_types import (
     CairoType,
     CastType,
@@ -338,13 +339,12 @@ class Preprocessor(IdentifierAwareVisitor):
         prime: int,
         builtins: List[str],
         identifiers: Optional[IdentifierManager] = None,
+        identifier_locations: Dict[ScopedName, Location] = None,
         supported_decorators: Optional[Set[str]] = None,
         functions_to_compile: Optional[Set[ScopedName]] = None,
         auxiliary_info_cls: Optional[Type[AuxiliaryInfoCollector]] = None,
     ):
-        super().__init__(
-            identifiers=identifiers,
-        )
+        super().__init__(identifiers=identifiers, identifier_locations=identifier_locations)
         self.prime: int = prime
         self.instructions: List[PreprocessedInstruction] = []
         # Stores the program counter of the next instruction (where the first instruction is at 0).
@@ -864,6 +864,11 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
             self.reference_states = old_reference_states
 
     def visit_CodeElementIf(self, elm: CodeElementIf):
+        # We expect complex boolean expressions to be simplified in earlier stages.
+        assert isinstance(
+            elm.condition, BoolEqExpr
+        ), "Complex boolean expressions must be simplified at this point."
+
         # Prepare branch compound expression.
         cond_expr = self.simplify_expr_as_felt(
             ExprOperator(

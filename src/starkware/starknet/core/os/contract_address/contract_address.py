@@ -4,6 +4,7 @@ from starkware.cairo.common.hash_state import compute_hash_on_elements
 from starkware.cairo.lang.vm.crypto import pedersen_hash
 from starkware.python.utils import from_bytes
 from starkware.starknet.core.os.class_hash import compute_class_hash
+from starkware.starknet.definitions.constants import L2_ADDRESS_UPPER_BOUND
 from starkware.starknet.services.api.contract_class import ContractClass
 
 CONTRACT_ADDRESS_PREFIX = from_bytes(b"STARKNET_CONTRACT_ADDRESS")
@@ -23,6 +24,8 @@ def calculate_contract_address(
         2. Deployer address.
         3. Salt.
         4. Class hash.
+    To avoid exceeding the maximum address we take modulus L2_ADDRESS_UPPER_BOUND of the above
+    result.
     """
     class_hash = compute_class_hash(contract_class=contract_class, hash_func=hash_function)
     return calculate_contract_address_from_hash(
@@ -48,7 +51,7 @@ def calculate_contract_address_from_hash(
     constructor_calldata_hash = compute_hash_on_elements(
         data=constructor_calldata, hash_func=hash_function
     )
-    return compute_hash_on_elements(
+    raw_address = compute_hash_on_elements(
         data=[
             CONTRACT_ADDRESS_PREFIX,
             deployer_address,
@@ -58,3 +61,5 @@ def calculate_contract_address_from_hash(
         ],
         hash_func=hash_function,
     )
+
+    return raw_address % L2_ADDRESS_UPPER_BOUND

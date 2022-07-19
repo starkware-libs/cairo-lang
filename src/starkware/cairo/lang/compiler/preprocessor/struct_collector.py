@@ -18,7 +18,6 @@ from starkware.cairo.lang.compiler.identifier_definition import (
     StructDefinition,
     TypeDefinition,
 )
-from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.preprocessor.identifier_aware_visitor import (
     IdentifierAwareVisitor,
 )
@@ -42,9 +41,6 @@ class StructCollector(IdentifierAwareVisitor):
     """
     Collects all the visited struct definitions.
     """
-
-    def __init__(self, identifiers: IdentifierManager):
-        super().__init__(identifiers=identifiers)
 
     def _visit_default(self, obj):
         assert isinstance(

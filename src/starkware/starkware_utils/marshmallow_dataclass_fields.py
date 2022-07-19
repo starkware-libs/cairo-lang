@@ -48,7 +48,7 @@ class IntAsStr(mfields.Field):
 
     def _deserialize(self, value, attr, data, **kwargs):
         if re.match("^-?[0-9]+$", value) is None:
-            self.fail("invalid", input=value)
+            raise self.make_error("invalid", input=value)
 
         return int(value)
 
@@ -106,7 +106,7 @@ class IntAsHex(mfields.Field):
         if self.support_decimal_loading and re.match("^[0-9]+$", value) is not None:
             return int(value)
 
-        self.fail("invalid", input=value)
+        raise self.make_error("invalid", input=value)
 
 
 class BytesAsHex(mfields.Field):
@@ -124,7 +124,7 @@ class BytesAsHex(mfields.Field):
 
     def _deserialize(self, value, attr, data, **kwargs):
         if re.match("^[0-9a-f]*$", value) is None:
-            self.fail("invalid", input=value)
+            raise self.make_error("invalid", input=value)
 
         return bytes.fromhex(value)
 

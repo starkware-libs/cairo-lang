@@ -6,10 +6,11 @@ from starkware.cairo.common.hash_state import (
     hash_update_single,
     hash_update_with_hashchain,
 )
+from starkware.starknet.common.storage import normalize_address
 
 const CONTRACT_ADDRESS_PREFIX = 'STARKNET_CONTRACT_ADDRESS'
 
-func get_contract_address{hash_ptr : HashBuiltin*}(
+func get_contract_address{hash_ptr : HashBuiltin*, range_check_ptr}(
     salt : felt,
     class_hash : felt,
     constructor_calldata_size : felt,
@@ -28,7 +29,8 @@ func get_contract_address{hash_ptr : HashBuiltin*}(
         data_ptr=constructor_calldata,
         data_length=constructor_calldata_size,
     )
-    let (contract_address) = hash_finalize(hash_state_ptr=hash_state_ptr)
+    let (contract_address_before_modulo) = hash_finalize(hash_state_ptr=hash_state_ptr)
+    let (contract_address) = normalize_address(addr=contract_address_before_modulo)
 
     return (contract_address=contract_address)
 end

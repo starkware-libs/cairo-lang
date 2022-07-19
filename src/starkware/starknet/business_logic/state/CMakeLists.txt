@@ -6,6 +6,7 @@ python_lib(starknet_business_logic_state_lib
     objects.py
 
     LIBS
+    cairo_version_lib
     cairo_vm_lib
     everest_business_logic_lib
     everest_definitions_lib
@@ -22,5 +23,6 @@ python_lib(starknet_business_logic_state_lib
     starkware_python_utils_lib
     starkware_storage_lib
     starkware_utils_lib
+    pip_marshmallow
     pip_marshmallow_dataclass
 )

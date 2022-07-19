@@ -76,6 +76,7 @@ full_python_test(starknet_testing_test
     postman_test.py
     starknet_test.py
     test.cairo
+    test_unwhitelisted_hint.cairo
 
     LIBS
     cairo_common_lib

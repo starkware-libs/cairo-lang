@@ -13,6 +13,7 @@ from services.everest.business_logic.state import (
     SharedStateBase,
     StateSelectorBase,
 )
+from starkware.cairo.lang.version import __version__ as STARKNET_VERSION
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
 from starkware.python.utils import gather_in_chunks, safe_zip
 from starkware.starknet.business_logic.state.objects import ContractCarriedState, ContractState
@@ -58,13 +59,20 @@ class BlockInfo(ValidatedMarshmallowDataclass):
     # The sequencer address of this block.
     sequencer_address: Optional[int] = field(metadata=fields.optional_sequencer_address_metadata)
 
+    # The version of StarkNet system (e.g., "0.9.1").
+    starknet_version: Optional[str] = field(metadata=fields.starknet_version_metadata)
+
     @classmethod
     def empty(cls, sequencer_address: Optional[int]) -> "BlockInfo":
         """
         Returns an empty BlockInfo object; i.e., the one before the first in the chain.
         """
         return cls(
-            block_number=-1, block_timestamp=0, gas_price=0, sequencer_address=sequencer_address
+            block_number=-1,
+            block_timestamp=0,
+            gas_price=0,
+            sequencer_address=sequencer_address,
+            starknet_version=STARKNET_VERSION,
         )
 
     @classmethod
@@ -77,6 +85,7 @@ class BlockInfo(ValidatedMarshmallowDataclass):
             block_timestamp=block_timestamp,
             gas_price=DEFAULT_GAS_PRICE,
             sequencer_address=DEFAULT_SEQUENCER_ADDRESS,
+            starknet_version=STARKNET_VERSION,
         )
 
     def validate_legal_progress(self, next_block_info: "BlockInfo"):

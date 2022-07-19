@@ -17,6 +17,7 @@ HASH_BYTES = 32
 HashFunctionType = Callable[[bytes, bytes], bytes]
 
 TDBObject = TypeVar("TDBObject", bound="DBObject")
+TSingletonDBObject = TypeVar("TSingletonDBObject", bound="SingletonDBObject")
 TIndexedDBObject = TypeVar("TIndexedDBObject", bound="IndexedDBObject")
 TKey = TypeVar("TKey")
 TIntMapping = TypeVar("TIntMapping", bound="IntMapping[Any]")
@@ -189,6 +190,37 @@ class DBObject(Serializable):
             ))
         """
         return (self.db_key(suffix=suffix), self.serialize())
+
+
+class SingletonDBObject(DBObject):
+    """
+    A utility class for DBObjects expected to have at most one instance in storage.
+    """
+
+    @classmethod
+    def suffix(cls) -> bytes:
+        return b""
+
+    @classmethod
+    async def get_obj(
+        cls: Type[TSingletonDBObject], storage: Storage
+    ) -> Optional[TSingletonDBObject]:
+        return await cls.get(storage=storage, suffix=cls.suffix())
+
+    @classmethod
+    async def get_obj_or_fail(
+        cls: Type[TSingletonDBObject], storage: Storage
+    ) -> TSingletonDBObject:
+        return await cls.get_or_fail(storage=storage, suffix=cls.suffix())
+
+    async def set_obj(self, storage: Storage):
+        await self.set(storage=storage, suffix=self.suffix())
+
+    async def setnx_obj(self, storage: Storage) -> bool:
+        return await self.setnx(storage=storage, suffix=self.suffix())
+
+    def get_obj_update_for_mset(self) -> Tuple[bytes, bytes]:
+        return self.get_update_for_mset(suffix=self.suffix())
 
 
 class IndexedDBObject(DBObject):

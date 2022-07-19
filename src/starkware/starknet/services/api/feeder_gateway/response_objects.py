@@ -13,7 +13,10 @@ from marshmallow_oneofschema import OneOfSchema
 from typing_extensions import Literal
 from web3 import Web3
 
-from services.everest.api.feeder_gateway.response_objects import BaseResponseObject
+from services.everest.api.feeder_gateway.response_objects import (
+    BaseResponseObject,
+    ValidatedResponseObject,
+)
 from services.everest.business_logic.transaction_execution_objects import TransactionFailureReason
 from services.everest.definitions import fields as everest_fields
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
@@ -143,7 +146,7 @@ tx_status_order_relation: Dict[TransactionStatus, int] = {
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
-class TransactionInBlockInfo(BaseResponseObject):
+class TransactionInBlockInfo(ValidatedResponseObject):
     """
     Represents the information regarding a StarkNet transaction that appears in a block.
     """
@@ -219,7 +222,7 @@ class TransactionInBlockInfo(BaseResponseObject):
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
-class TransactionSpecificInfo(BaseResponseObject):
+class TransactionSpecificInfo(ValidatedResponseObject):
     tx_type: ClassVar[TransactionType]
 
     @classmethod
@@ -358,7 +361,7 @@ class TransactionInfo(TransactionInBlockInfo):
 
 
 @dataclasses.dataclass(frozen=True)
-class L1ToL2Message(BaseResponseObject):
+class L1ToL2Message(ValidatedResponseObject):
     """
     Represents a StarkNet L1-to-L2 message.
     """
@@ -373,7 +376,7 @@ class L1ToL2Message(BaseResponseObject):
 
 
 @dataclasses.dataclass(frozen=True)
-class L2ToL1Message(BaseResponseObject):
+class L2ToL1Message(ValidatedResponseObject):
     """
     Represents a StarkNet L2-to-L1 message.
     """
@@ -386,7 +389,7 @@ class L2ToL1Message(BaseResponseObject):
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
-class TransactionExecution(BaseResponseObject):
+class TransactionExecution(ValidatedResponseObject):
     """
     Represents a receipt of an executed transaction.
     """
@@ -396,7 +399,7 @@ class TransactionExecution(BaseResponseObject):
         metadata=fields.default_optional_transaction_index_metadata
     )
     # A unique identifier of the transaction.
-    transaction_hash: Optional[int] = field(metadata=fields.optional_transaction_hash_metadata)
+    transaction_hash: int = field(metadata=fields.transaction_hash_metadata)
     # L1-to-L2 messages.
     l1_to_l2_consumed_message: Optional[L1ToL2Message]
     # L2-to-L1 messages.
@@ -421,8 +424,6 @@ class TransactionReceipt(TransactionExecution, TransactionInBlockInfo):
 
         if self.status is TransactionStatus.REJECTED and self.has_execution_info:
             raise AssertionError("A rejected transaction cannot have execution info.")
-
-        assert self.transaction_hash is not None, "A receipt must include a transaction_hash."
 
     @property
     def has_execution_info(self) -> bool:
@@ -463,7 +464,7 @@ class TransactionReceipt(TransactionExecution, TransactionInBlockInfo):
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
-class StorageEntry(BaseResponseObject):
+class StorageEntry(ValidatedResponseObject):
     """
     Represents a value stored in a single contract storage entry.
     """
@@ -473,29 +474,35 @@ class StorageEntry(BaseResponseObject):
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
-class DeployedContract(BaseResponseObject):
+class DeployedContract(ValidatedResponseObject):
     """
     Represents a newly deployed contract in a block state update.
     """
 
     address: int = field(metadata=fields.L2AddressField.metadata(field_name="address"))
-    class_hash: bytes = field(metadata=fields.class_hash_metadata)
+    class_hash: int = field(metadata=fields.ClassHashIntField.metadata())
 
     @pre_load
     def replace_contract_hash_with_class_hash(
         self, data: Dict[str, Any], many: bool, **kwargs
     ) -> Dict[str, Any]:
-        if "class_hash" in data:
-            return data
+        """
+        Renames the variable "contract_hash" to "class_hash" and casts its type from
+        bytes-hex to int-hex.
+        """
+        if "class_hash" not in data:
+            assert "contract_hash" in data
+            data["class_hash"] = data.pop("contract_hash")
 
-        assert "contract_hash" in data
-        data["class_hash"] = data.pop("contract_hash")
+        assert isinstance(data["class_hash"], str)
+        if not data["class_hash"].startswith("0x"):
+            data["class_hash"] = hex(int(data["class_hash"], 16))
 
         return data
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
-class StateDiff(BaseResponseObject):
+class StateDiff(ValidatedResponseObject):
     """
     Represents the difference in the StarkNet state induced by applying a block's transactions.
     """
@@ -513,10 +520,11 @@ class StateDiff(BaseResponseObject):
     )
 
     deployed_contracts: List[DeployedContract]
+    declared_contracts: Tuple[int, ...] = field(metadata=fields.declared_contracts_metadata)
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
-class BlockStateUpdate(BaseResponseObject):
+class BlockStateUpdate(ValidatedResponseObject):
     """
     Represents a response block state update.
     """
@@ -568,7 +576,7 @@ class OrderedEventResponse(ValidatedDataclass):
 
 # NOTE: This dataclass isn't validated due to a forward-declaration issue.
 @marshmallow_dataclass.dataclass(frozen=True)
-class FunctionInvocation(SerializableMarshmallowDataclass):
+class FunctionInvocation(BaseResponseObject, SerializableMarshmallowDataclass):
     """
     A lean version of CallInfo class, containing merely the information relevant for the user.
     """
@@ -619,7 +627,7 @@ class FunctionInvocation(SerializableMarshmallowDataclass):
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
-class TransactionTrace(BaseResponseObject):
+class TransactionTrace(ValidatedResponseObject):
     """
     Represents the trace of a StarkNet transaction execution,
     including internal calls.
@@ -631,7 +639,31 @@ class TransactionTrace(BaseResponseObject):
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
-class StarknetBlock(BaseResponseObject):
+class BlockSingleTransactionTrace(TransactionTrace):
+    """
+    An object describing the trace and the transaction hash of a single transaction in the block.
+    """
+
+    transaction_hash: int = field(metadata=fields.transaction_hash_metadata)
+
+
+@marshmallow_dataclass.dataclass(frozen=True)
+class BlockTransactionTraces(ValidatedResponseObject):
+    """
+    Represents the execution traces of all transactions included in a block.
+    """
+
+    traces: Tuple[BlockSingleTransactionTrace, ...] = field(
+        metadata=dict(
+            marshmallow_field=VariadicLengthTupleField(
+                mfields.Nested(BlockSingleTransactionTrace.Schema)
+            )
+        )
+    )
+
+
+@marshmallow_dataclass.dataclass(frozen=True)
+class StarknetBlock(ValidatedResponseObject):
     """
     Represents a response StarkNet block.
     """
@@ -658,6 +690,7 @@ class StarknetBlock(BaseResponseObject):
             )
         )
     )
+    starknet_version: Optional[str] = field(metadata=fields.starknet_version_metadata)
 
     @classmethod
     def create(
@@ -669,9 +702,10 @@ class StarknetBlock(BaseResponseObject):
         transactions: Iterable[InternalTransaction],
         timestamp: int,
         sequencer_address: Optional[int],
-        transaction_receipts: Optional[Tuple[TransactionExecution, ...]],
         status: Optional[BlockStatus],
         gas_price: int,
+        transaction_receipts: Optional[Tuple[TransactionExecution, ...]],
+        starknet_version: Optional[str],
     ) -> TBlockInfo:
         return cls(
             block_hash=block_hash,
@@ -683,9 +717,10 @@ class StarknetBlock(BaseResponseObject):
             ),
             timestamp=timestamp,
             sequencer_address=sequencer_address,
-            transaction_receipts=transaction_receipts,
             status=status,
             gas_price=gas_price,
+            transaction_receipts=transaction_receipts,
+            starknet_version=starknet_version,
         )
 
     def __post_init__(self):
