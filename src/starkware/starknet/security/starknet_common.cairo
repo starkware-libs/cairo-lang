@@ -59,12 +59,16 @@ from starkware.cairo.common.memset import memset
 from starkware.cairo.common.signature import verify_ecdsa_signature
 from starkware.cairo.common.squash_dict import squash_dict
 from starkware.cairo.common.uint256 import (
+    uint256_iszero,
     uint256_add,
     uint256_and,
     uint256_cond_neg,
     uint256_eq,
+    uint256_neq,
     uint256_le,
     uint256_lt,
+    uint256_ge,
+    uint256_gt,
     uint256_mul,
     uint256_neg,
     uint256_not,

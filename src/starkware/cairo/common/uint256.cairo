@@ -25,6 +25,11 @@ func uint256_check{range_check_ptr}(a : Uint256):
     return ()
 end
 
+# Return true if integer is zero.
+func uint256_iszero{range_check_ptr}(a : Uint256) -> (res : felt):
+    return uint256_eq(a, Uint256(0, 0))
+end
+
 # Arithmetics.
 
 # Adds two integers. Returns the result as a 256-bit integer and the (1-bit) carry.
@@ -153,6 +158,18 @@ end
 func uint256_signed_le{range_check_ptr}(a : Uint256, b : Uint256) -> (res : felt):
     let (not_le) = uint256_signed_lt(a=b, b=a)
     return (1 - not_le)
+end
+
+# Returns 1 if the first unsigned integer is greater than to the second unsigned integer.
+func uint256_gt{range_check_ptr}(a : Uint256, b : Uint256) -> (res  : felt):
+    let (le) = uint256_le(a, b)
+    return (1 - le)
+end
+
+# Returns 1 if the first unsigned integer is greater than or equal to the second unsigned integer.
+func uint256_ge{range_check_ptr}(a : Uint256, b : Uint256) -> (res : felt):
+    let (lt) = uint256_lt(a, b)
+    return (1 - lt)
 end
 
 # Returns 1 if the signed integer is nonnegative.
@@ -302,6 +319,12 @@ func uint256_eq{range_check_ptr}(a : Uint256, b : Uint256) -> (res : felt):
         return (0)
     end
     return (1)
+end
+
+# Return true if integers are not equal.
+func uint256_neq{range_check_ptr}(a : Uint256, b : Uint256) -> (res : felt):
+    let (res) = uint256_eq(a, b)
+    return (1 - res)
 end
 
 # Computes the bitwise XOR of 2 uint256 integers.
