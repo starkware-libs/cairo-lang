@@ -30,7 +30,7 @@ def get_grammar_parser(grammar: str) -> lark.Lark:
             "type",
             "typed_identifier",
         ],
-        lexer="standard",
+        lexer="basic",
         parser="lalr",
         propagate_positions=True,
     )
