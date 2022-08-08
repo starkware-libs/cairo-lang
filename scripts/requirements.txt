@@ -25,7 +25,7 @@ idna==3.3
 iniconfig==1.1.1
 ipfshttpclient==0.8.0a2
 jsonschema==3.2.0
-lark-parser==0.12.0
+lark==1.1.2
 lru-dict==1.1.8
 marshmallow==3.17.1
 marshmallow-dataclass==8.5.8
