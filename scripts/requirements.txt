@@ -29,7 +29,7 @@ importlib-metadata==4.10.1
 iniconfig==1.1.1
 ipfshttpclient==0.8.0a2
 jsonschema==3.2.0
-lark-parser==0.12.0
+lark==1.1.2
 lru-dict==1.1.7
 marshmallow==3.14.1
 marshmallow-dataclass==8.5.3
