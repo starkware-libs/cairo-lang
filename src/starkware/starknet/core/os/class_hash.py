@@ -13,6 +13,7 @@ from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.common.structs import CairoStructFactory, CairoStructProxy
 from starkware.cairo.lang.builtins.hash.hash_builtin_runner import HashBuiltinRunner
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
+from starkware.cairo.lang.compiler.ast.cairo_types import add_backward_compatibility_space
 from starkware.cairo.lang.compiler.cairo_compile import compile_cairo_files
 from starkware.cairo.lang.compiler.identifier_definition import ConstDefinition
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
@@ -99,7 +100,13 @@ def compute_hinted_class_hash(contract_class: ContractClass) -> int:
     """
     Computes the hash of the contract class, including hints.
     """
-    dumped_program = dataclasses.replace(contract_class.program, debug_info=None).dump()
+    program_without_debug_info = dataclasses.replace(contract_class.program, debug_info=None)
+
+    # If compiler_version is not present, this was compiled with a compiler before version 0.10.0.
+    # Use "(a : felt)" syntax instead of "(a: felt)" so that the class hash will be the same.
+    with add_backward_compatibility_space(contract_class.program.compiler_version is None):
+        dumped_program = program_without_debug_info.dump()
+
     if len(dumped_program["attributes"]) == 0:
         # Remove attributes field from raw dictionary, for hash backward compatibility of
         # contracts deployed prior to adding this feature.

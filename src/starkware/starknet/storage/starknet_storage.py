@@ -16,6 +16,7 @@ from starkware.storage.storage import HASH_BYTES, FactFetchingContext, HashFunct
 
 
 TStorageLeaf = TypeVar("TStorageLeaf", bound="StorageLeaf")
+ContractStorageMapping = Dict[int, "StorageLeaf"]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -107,7 +108,7 @@ class StarknetStorage(StarknetStorageInterface):
         self,
         commitment_tree: PatriciaTree,
         ffc: FactFetchingContext,
-        pending_modifications: Optional[Dict[int, StorageLeaf]] = None,
+        pending_modifications: Optional[ContractStorageMapping] = None,
         loop: Optional[asyncio.AbstractEventLoop] = None,
     ):
         """
@@ -197,7 +198,7 @@ class StarknetStorage(StarknetStorageInterface):
 
         self.modifications[address] = value
 
-    def get_modifications(self) -> Dict[int, StorageLeaf]:
+    def get_modifications(self) -> ContractStorageMapping:
         """
         Returns a dict of modifications that need to be applied to self.commitment_tree.
         """
@@ -290,7 +291,7 @@ class BusinessLogicStarknetStorage(StarknetStorage):
         self,
         commitment_tree: PatriciaTree,
         ffc: FactFetchingContext,
-        pending_modifications: Optional[Dict[int, StorageLeaf]] = None,
+        pending_modifications: Optional[ContractStorageMapping] = None,
         loop: Optional[asyncio.AbstractEventLoop] = None,
     ):
         super().__init__(

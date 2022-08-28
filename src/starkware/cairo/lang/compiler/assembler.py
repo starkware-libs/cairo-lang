@@ -8,6 +8,7 @@ from starkware.cairo.lang.compiler.preprocessor.preprocessor import Preprocessed
 from starkware.cairo.lang.compiler.program import CairoHint, Program
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.compiler.unique_name_provider import UniqueNameProvider
+from starkware.cairo.lang.version import __version__
 
 
 def assemble(
@@ -80,4 +81,5 @@ def assemble(
         builtins=preprocessed_program.builtins,
         reference_manager=preprocessed_program.reference_manager,
         debug_info=debug_info,
+        compiler_version=__version__,
     )

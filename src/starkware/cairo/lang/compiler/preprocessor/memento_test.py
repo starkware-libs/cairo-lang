@@ -135,31 +135,31 @@ def check_preprocessor_equivalence(proc0: Preprocessor, proc1: Preprocessor):
 
 def test_preprocessor_checkpoint():
     code0 = """\
-        struct A:
-            member a : felt
-        end
-        func foo0(a : A) -> (res : felt):
-            return (res=1)
-        end
-        """
+struct A {
+    a: felt,
+}
+func foo0(a: A) -> (res: felt) {
+    return (res=1);
+}
+"""
     code1 = """\
-        struct B:
-            member b : felt
-        end
-        func foo1(b : B) -> (res : felt):
-            with_attr attr:
-                return (res=2)
-            end
-        end
-        """
+struct B {
+    b: felt,
+}
+func foo1(b: B) -> (res: felt) {
+    with_attr attr {
+        return (res=2);
+    }
+}
+"""
     code2 = """\
-        struct C:
-            member c : felt
-        end
-        func foo2(c : C) -> (res : felt):
-            return (res=3)
-        end
-        """
+struct C {
+    c: felt,
+}
+func foo2(c: C) -> (res: felt) {
+    return (res=3);
+}
+"""
 
     identifiers = get_identifiers([code0, code1, code2])
     preprocessor = Preprocessor(prime=PRIME, identifiers=identifiers, builtins=[])

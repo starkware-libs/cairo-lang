@@ -57,7 +57,7 @@ def cairo_compile_add_common_args(parser: argparse.ArgumentParser):
         "--no_debug_info",
         dest="debug_info",
         action="store_false",
-        help="Include debug information.",
+        help="Don't include debug information in the compiled file.",
     )
     parser.add_argument(
         "--debug_info_with_source",
@@ -139,6 +139,7 @@ def cairo_compile_common(
             )
             # Print a new line at the end.
             print(file=out)
+            out.flush()
 
         return preprocessed
     finally:
@@ -312,7 +313,7 @@ def check_main_args(program: Program):
         assert isinstance(return_type_def.cairo_type, TypeTuple)
         member_names = []
         for member in return_type_def.cairo_type.members:
-            assert member.name is not None, "Unexpected unnamed return value."
+            assert member.name is not None, "The return values of main() must be named."
             member_names.append(member.name)
         main_returns = implicit_args + member_names
     except IdentifierError:
@@ -331,11 +332,11 @@ def get_start_code():
     """
     return """\
 __start__:
-ap += main.Args.SIZE + main.ImplicitArgs.SIZE
-call main
+ap += main.Args.SIZE + main.ImplicitArgs.SIZE;
+call main;
 
 __end__:
-jmp rel 0
+jmp rel 0;
 """
 
 

@@ -16,7 +16,7 @@ def cast_to_felts(values: Sequence[Union[str, int]]) -> List[int]:
             except ValueError:
                 raise ValueError(
                     f"Invalid input value: '{value}'. Expected a decimal or hexadecimal integer."
-                )
+                ) from None
 
         if not lower_bound <= value_int < upper_bound:
             raise ValueError(

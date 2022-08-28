@@ -9,7 +9,7 @@ from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.cairo.lang.compiler.program import Program
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
-from starkware.starknet.public.abi import AbiType, get_selector_from_name
+from starkware.starknet.public.abi import AbiType
 from starkware.starkware_utils.error_handling import stark_assert
 from starkware.starkware_utils.subsequence import is_subsequence
 from starkware.starkware_utils.validated_dataclass import (
@@ -18,8 +18,7 @@ from starkware.starkware_utils.validated_dataclass import (
 )
 
 # An ordered list of the supported builtins.
-SUPPORTED_BUILTINS = ["pedersen", "range_check", "ecdsa", "bitwise"]
-CONSTRUCTOR_SELECTOR = get_selector_from_name("constructor")
+SUPPORTED_BUILTINS = ["pedersen", "range_check", "ecdsa", "bitwise", "ec_op"]
 
 
 class EntryPointType(Enum):

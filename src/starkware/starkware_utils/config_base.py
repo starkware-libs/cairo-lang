@@ -53,7 +53,7 @@ def get_object_by_path(path: str) -> Any:
 class Config(ValidatedMarshmallowDataclass):
     @classmethod
     def load(cls: Type[TConfig], data: dict) -> TConfig:
-        config_instance = super().load(data)
+        config_instance = super().load(data=data)
         log_fields(config=config_instance)
         return config_instance
 

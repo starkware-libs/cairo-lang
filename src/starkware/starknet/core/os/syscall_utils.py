@@ -1,4 +1,3 @@
-import asyncio
 import contextlib
 import dataclasses
 from abc import ABC, abstractmethod
@@ -34,24 +33,19 @@ from starkware.starknet.business_logic.execution.objects import (
     TransactionExecutionContext,
     TransactionExecutionInfo,
 )
-from starkware.starknet.business_logic.state.objects import (
-    ContractCarriedState,
-    ContractClassFact,
-    ContractState,
-)
-from starkware.starknet.business_logic.state.state import BlockInfo, CarriedState
+from starkware.starknet.business_logic.fact_state.state import ExecutionResourcesManager
+from starkware.starknet.business_logic.state.state import ContractStorageState
+from starkware.starknet.business_logic.state.state_api import SyncState
+from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
 from starkware.starknet.core.os.contract_address.contract_address import (
     calculate_contract_address_from_hash,
 )
 from starkware.starknet.core.os.os_program import get_os_program
-from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
-from starkware.starknet.services.api.contract_class import CONSTRUCTOR_SELECTOR, EntryPointType
-from starkware.starknet.storage.starknet_storage import (
-    BusinessLogicStarknetStorage,
-    OsSingleStarknetStorage,
-)
+from starkware.starknet.public.abi import CONSTRUCTOR_ENTRY_POINT_SELECTOR
+from starkware.starknet.services.api.contract_class import EntryPointType
+from starkware.starknet.storage.starknet_storage import OsSingleStarknetStorage
 from starkware.starkware_utils.error_handling import StarkException, stark_assert
 
 TCallable = TypeVar("TCallable", bound=Callable)
@@ -297,7 +291,7 @@ class SysCallHandlerBase(ABC):
             syscall_name="get_block_number", segments=segments, syscall_ptr=syscall_ptr
         )
 
-        block_number = self._get_block_number()
+        block_number = self.block_info.block_number
 
         response = self.structs.GetBlockNumberResponse(block_number=block_number)
         self._write_syscall_response(
@@ -354,7 +348,7 @@ class SysCallHandlerBase(ABC):
             syscall_name="get_block_timestamp", segments=segments, syscall_ptr=syscall_ptr
         )
 
-        block_timestamp = self._get_block_timestamp()
+        block_timestamp = self.block_info.block_timestamp
 
         response = self.structs.GetBlockTimestampResponse(block_timestamp=block_timestamp)
         self._write_syscall_response(
@@ -517,18 +511,6 @@ class SysCallHandlerBase(ABC):
         )
 
     @abstractmethod
-    def _get_block_number(self) -> int:
-        """
-        Specific implementation of the get_block_number system call.
-        """
-
-    @abstractmethod
-    def _get_block_timestamp(self) -> int:
-        """
-        Specific implementation of the get_block_timestamp system call.
-        """
-
-    @abstractmethod
     def _get_caller_address(
         self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue
     ) -> int:
@@ -587,10 +569,10 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
         self,
         execute_entry_point_cls: Type[ExecuteEntryPointBase],
         tx_execution_context: TransactionExecutionContext,
-        state: CarriedState,
+        state: SyncState,
+        resources_manager: ExecutionResourcesManager,
         caller_address: int,
         contract_address: int,
-        starknet_storage: BusinessLogicStarknetStorage,
         general_config: StarknetGeneralConfig,
         initial_syscall_ptr: RelocatableValue,
     ):
@@ -599,16 +581,18 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
         # Configuration objects.
         self.general_config = general_config
 
-        # Storage-related members.
-        self.starknet_storage = starknet_storage
-        self.loop = starknet_storage.loop
-
         # Execution-related objects.
         self.execute_entry_point_cls = execute_entry_point_cls
         self.tx_execution_context = tx_execution_context
-        self.state = state
+        self.sync_state = state
+        self.resources_manager = resources_manager
         self.caller_address = caller_address
         self.contract_address = contract_address
+
+        # Storage-related members.
+        self.starknet_storage = ContractStorageState(
+            state=self.sync_state, contract_address=contract_address
+        )
 
         # Internal calls executed by the current contract call.
         self.internal_calls: List[CallInfo] = []
@@ -616,8 +600,6 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
         self.events: List[OrderedEvent] = []
         # Messages sent by the current contract call to L1.
         self.l2_to_l1_messages: List[OrderedL2ToL1Message] = []
-        # Addresses of contracts deployed by the current contract call.
-        self.deployed_contracts: List[int] = []
 
         # Kept for validations during the run.
         self.expected_syscall_ptr = initial_syscall_ptr
@@ -637,8 +619,8 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
         return segment_start
 
     def _count_syscall(self, syscall_name: str):
-        previous_syscall_count = self.state.syscall_counter.get(syscall_name, 0)
-        self.state.syscall_counter[syscall_name] = previous_syscall_count + 1
+        previous_syscall_count = self.resources_manager.syscall_counter.get(syscall_name, 0)
+        self.resources_manager.syscall_counter[syscall_name] = previous_syscall_count + 1
 
     def _read_and_validate_syscall_request(
         self, syscall_name: str, segments: MemorySegmentManager, syscall_ptr: RelocatableValue
@@ -767,15 +749,9 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
 
         # Initialize the contract.
         class_hash_bytes = to_bytes(class_hash)
-        future = asyncio.run_coroutine_threadsafe(
-            coro=initialize_contract_state(
-                state=self.state,
-                class_hash=class_hash_bytes,
-                contract_address=contract_address,
-            ),
-            loop=self.loop,
+        self.sync_state.deploy_contract(
+            contract_address=contract_address, class_hash=class_hash_bytes
         )
-        future.result()
 
         self.execute_constructor_entry_point(
             contract_address=contract_address,
@@ -783,15 +759,12 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
             constructor_calldata=constructor_calldata,
         )
 
-        # Update deployed contract addresses.
-        self.deployed_contracts.append(contract_address)
-
         return contract_address
 
     def execute_constructor_entry_point(
         self, contract_address: int, class_hash_bytes: bytes, constructor_calldata: List[int]
     ):
-        contract_class = self.state.get_contract_class(class_hash=class_hash_bytes)
+        contract_class = self.sync_state.get_contract_class(class_hash=class_hash_bytes)
         constructor_entry_points = contract_class.entry_points_by_type[EntryPointType.CONSTRUCTOR]
         if len(constructor_entry_points) == 0:
             # Contract has no constructor.
@@ -813,7 +786,7 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
             class_hash=None,
             contract_address=contract_address,
             code_address=contract_address,
-            entry_point_selector=CONSTRUCTOR_SELECTOR,
+            entry_point_selector=CONSTRUCTOR_ENTRY_POINT_SELECTOR,
             entry_point_type=EntryPointType.CONSTRUCTOR,
             calldata=constructor_calldata,
             caller_address=self.contract_address,
@@ -823,10 +796,10 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
     def execute_entry_point(self, call: ExecuteEntryPointBase) -> List[int]:
         with self.entry_point_execution_context(call=call):
             # Execute contract call.
-            call_info = call.sync_execute(
-                state=self.state,
+            call_info = call.execute(
+                state=self.sync_state,
+                resources_manager=self.resources_manager,
                 general_config=self.general_config,
-                loop=self.loop,
                 tx_execution_context=self.tx_execution_context,
             )
 
@@ -837,15 +810,12 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
 
     @contextlib.contextmanager
     def entry_point_execution_context(self, call: ExecuteEntryPointBase):
-        # Pre-execution preperation and validations.
-        self._enrich_state(call=call)
-
         try:
             yield
         except StarkException as exception:
             raise HandlerException(
                 called_contract_address=call.contract_address, stark_exception=exception
-            )
+            ) from exception
         except Exception as exception:
             # Exceptions caught here that are not StarkException, are necessarily caused due to
             # security issues, since every exception raised from a Cairo run (in _run) is already
@@ -855,39 +825,7 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
             )
             raise HandlerException(
                 called_contract_address=call.contract_address, stark_exception=stark_exception
-            )
-
-        # Post-execution updates.
-        self._update_starknet_storage()
-
-    def _enrich_state(self, call: ExecuteEntryPointBase):
-        """
-        Prepares the state for the execution of the given call.
-        """
-        # Apply current modifications to the origin contract storage, in case there will be
-        # future nested calls to this contract.
-        self.state.update_contract_storage(
-            contract_address=self.contract_address,
-            modifications=self.starknet_storage.get_modifications(),
-        )
-
-        # Fetch required information for the call (that is not already cached in the state).
-        state_selector = call.get_state_selector()
-        state_selector -= self.state.state_selector
-        future_extra_state = asyncio.run_coroutine_threadsafe(
-            coro=self.state.shared_state.get_filled_carried_state(
-                ffc=self.state.ffc, state_selector=state_selector
-            ),
-            loop=self.loop,
-        )
-        self.state.fill_missing(other=future_extra_state.result())
-
-    def _update_starknet_storage(self):
-        """
-        Updates the StarkNet storage of the current run after a contract call.
-        """
-        contract_storage_updates = self.state.contract_states[self.contract_address].storage_updates
-        self.starknet_storage.reset_state(storage_updates=contract_storage_updates)
+            ) from exception
 
     def emit_event(self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue):
         """
@@ -924,6 +862,7 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
                     segments=segments, data=self.tx_execution_context.signature
                 ),
                 chain_id=self.general_config.chain_id.value,
+                nonce=self.tx_execution_context.nonce,
             )
             self.tx_info_ptr = self._allocate_segment(segments=segments, data=tx_info)
 
@@ -949,12 +888,6 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
 
         # Update messages count.
         self.tx_execution_context.n_sent_messages += 1
-
-    def _get_block_number(self) -> int:
-        return self.state.block_info.block_number
-
-    def _get_block_timestamp(self) -> int:
-        return self.state.block_info.block_timestamp
 
     def _get_caller_address(
         self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue
@@ -987,8 +920,8 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
         # Update modified contracts (for the bouncer).
         # Note that this is a simplified update - we are considering every write
         # as a new change in storage (w.r.t. the state of the previous batch), but it could be that
-        # a write actually cancles a change; e.g., 0 -> 5, 5 -> 0.
-        self.state.modified_contracts[self.contract_address] = None
+        # a write actually cancels a change; e.g., 0 -> 5, 5 -> 0.
+        self.resources_manager.modified_contracts[self.contract_address] = None
 
     def get_sequencer_address(self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue):
         return super().get_sequencer_address(segments=segments, syscall_ptr=syscall_ptr)
@@ -1022,62 +955,6 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
         )
 
         self.validate_read_only_segments(runner=runner)
-
-
-# Shared utilities with InternalDeploy.
-async def initialize_contract_state(
-    state: CarriedState,
-    class_hash: bytes,
-    contract_address: int,
-):
-    """
-    Initializes a new ContractState object at the given address
-    (after verifying that it is available).
-    """
-    if contract_address not in state.contract_states:
-        # The contract address was not known in advance; e.g., when deploying a contract.
-        # Fetch and cache contract state.
-        contract_state = await state.shared_state.contract_states.get_leaf(
-            ffc=state.ffc, index=contract_address, fact_cls=ContractState
-        )
-        state.contract_states[contract_address] = ContractCarriedState.from_state(
-            state=contract_state
-        )
-
-    # Extract ContractState object from carried state and validate.
-    contract_state = state.contract_states[contract_address].state
-    stark_assert(
-        not contract_state.initialized,
-        code=StarknetErrorCode.CONTRACT_ADDRESS_UNAVAILABLE,
-        message=f"Requested contract address {contract_address} is unavailable for deployment.",
-    )
-
-    if class_hash not in state.contract_definitions:
-        # Fetch contract class from storage.
-        contract_class_fact = await ContractClassFact.get(
-            storage=state.ffc.storage, suffix=class_hash
-        )
-        if contract_class_fact is None:
-            formatted_class_hash = fields.class_hash_from_bytes(class_hash=class_hash)
-            raise StarkException(
-                code=StarknetErrorCode.UNDECLARED_CLASS,
-                message=f"Class with hash {formatted_class_hash} is not declared.",
-            )
-        # Add contract class to carried state.
-        state.contract_definitions[class_hash] = contract_class_fact.contract_definition
-
-    contract_class = state.get_contract_class(class_hash=class_hash)
-
-    contract_class.validate()
-
-    # Create updated contract state.
-    newly_deployed_contract_state = await ContractState.create(
-        contract_hash=class_hash,
-        storage_commitment_tree=contract_state.storage_commitment_tree,
-    )
-    state.contract_states[contract_address] = ContractCarriedState.from_state(
-        state=newly_deployed_contract_state
-    )
 
 
 class OsSysCallHandler(SysCallHandlerBase):
@@ -1168,12 +1045,6 @@ class OsSysCallHandler(SysCallHandlerBase):
         assert len(constructor_retdata) == 0, "Unexpected constructor_retdata."
         return next(self.deployed_contracts_iterator)
 
-    def _get_block_number(self) -> int:
-        return self.block_info.block_number
-
-    def _get_block_timestamp(self) -> int:
-        return self.block_info.block_timestamp
-
     def _get_caller_address(
         self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue
     ) -> int:
@@ -1256,3 +1127,10 @@ class OsSysCallHandler(SysCallHandlerBase):
 
         call_state = self.call_stack.pop()
         assert_exhausted(iterator=call_state.execute_syscall_read_iterator)
+
+    def skip_tx(self):
+        """
+        Called when skipping the execution of a transaction.
+        It replaces a call to start_tx and end_tx.
+        """
+        next(self.tx_execution_info_iterator)

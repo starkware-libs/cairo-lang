@@ -6,6 +6,7 @@ python_lib(starknet_transaction_lib
 
     LIBS
     everest_transaction_lib
+    starknet_abi_lib
     starknet_contract_address_lib
     starknet_contract_class_lib
     starknet_definitions_lib

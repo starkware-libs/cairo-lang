@@ -4,15 +4,21 @@ from typing import Dict, List, Optional, Union
 from services.everest.api.feeder_gateway.feeder_gateway_client import EverestFeederGatewayClient
 from services.external_api.client import JsonObject
 from starkware.starknet.definitions import fields
+from starkware.starknet.services.api.feeder_gateway.request_objects import (
+    CallFunction,
+    CallL1Handler,
+)
 from starkware.starknet.services.api.feeder_gateway.response_objects import (
     BlockIdentifier,
     BlockTransactionTraces,
+    FeeEstimationInfo,
     StarknetBlock,
     TransactionInfo,
     TransactionReceipt,
+    TransactionSimulationInfo,
     TransactionTrace,
 )
-from starkware.starknet.services.api.gateway.transaction import InvokeFunction
+from starkware.starknet.services.api.gateway.transaction import AccountTransaction
 from starkware.starkware_utils.validated_fields import RangeValidatedField
 
 CastableToHash = Union[int, str]
@@ -29,7 +35,7 @@ class FeederGatewayClient(EverestFeederGatewayClient):
 
     async def call_contract(
         self,
-        invoke_tx: InvokeFunction,
+        call_function: CallFunction,
         block_hash: Optional[CastableToHash] = None,
         block_number: Optional[BlockIdentifier] = None,
     ) -> Dict[str, List[str]]:
@@ -39,25 +45,57 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         raw_response = await self._send_request(
             send_method="POST",
             uri=f"/call_contract?{formatted_block_named_argument}",
-            data=invoke_tx.dumps(),
+            data=call_function.dumps(),
         )
         return json.loads(raw_response)
 
     async def estimate_fee(
         self,
-        invoke_tx: InvokeFunction,
+        tx: AccountTransaction,
         block_hash: Optional[CastableToHash] = None,
         block_number: Optional[BlockIdentifier] = None,
-    ) -> JsonObject:
+    ) -> FeeEstimationInfo:
         formatted_block_named_argument = get_formatted_block_named_argument(
             block_hash=block_hash, block_number=block_number
         )
         raw_response = await self._send_request(
             send_method="POST",
             uri=f"/estimate_fee?{formatted_block_named_argument}",
-            data=invoke_tx.dumps(),
+            data=AccountTransaction.Schema().dumps(obj=tx),
         )
-        return json.loads(raw_response)
+        return FeeEstimationInfo.loads(data=raw_response)
+
+    async def estimate_message_fee(
+        self,
+        call_l1_handler: CallL1Handler,
+        block_hash: Optional[CastableToHash] = None,
+        block_number: Optional[BlockIdentifier] = None,
+    ) -> FeeEstimationInfo:
+        formatted_block_named_argument = get_formatted_block_named_argument(
+            block_hash=block_hash, block_number=block_number
+        )
+        raw_response = await self._send_request(
+            send_method="POST",
+            uri=f"/estimate_message_fee?{formatted_block_named_argument}",
+            data=call_l1_handler.dumps(),
+        )
+        return FeeEstimationInfo.loads(data=raw_response)
+
+    async def simulate_transaction(
+        self,
+        tx: AccountTransaction,
+        block_hash: Optional[CastableToHash] = None,
+        block_number: Optional[BlockIdentifier] = None,
+    ) -> TransactionSimulationInfo:
+        formatted_block_named_argument = get_formatted_block_named_argument(
+            block_hash=block_hash, block_number=block_number
+        )
+        raw_response = await self._send_request(
+            send_method="POST",
+            uri=f"/simulate_transaction?{formatted_block_named_argument}",
+            data=AccountTransaction.Schema().dumps(obj=tx),
+        )
+        return TransactionSimulationInfo.loads(data=raw_response)
 
     async def get_block(
         self,
@@ -110,9 +148,10 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         formatted_block_named_argument = get_formatted_block_named_argument(
             block_hash=block_hash, block_number=block_number
         )
+        contract_address_str = fields.L2AddressField.format(contract_address)
         raw_response = await self._send_request(
             send_method="GET",
-            uri=f"/get_code?contractAddress={fields.L2AddressField.format(contract_address)}&"
+            uri=f"/get_code?contractAddress={contract_address_str}&"
             f"{formatted_block_named_argument}",
         )
         return json.loads(raw_response)
@@ -130,8 +169,9 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         formatted_block_named_argument = get_formatted_block_named_argument(
             block_hash=block_hash, block_number=block_number
         )
+        contract_address_str = fields.L2AddressField.format(contract_address)
         uri = (
-            f"/get_full_contract?contractAddress={fields.L2AddressField.format(contract_address)}&"
+            f"/get_full_contract?contractAddress={contract_address_str}&"
             f"{formatted_block_named_argument}"
         )
         raw_response = await self._send_request(send_method="GET", uri=uri)
@@ -175,12 +215,27 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         formatted_block_named_argument = get_formatted_block_named_argument(
             block_hash=block_hash, block_number=block_number
         )
+        contract_address_str = fields.L2AddressField.format(contract_address)
         uri = (
-            f"/get_storage_at?contractAddress={fields.L2AddressField.format(contract_address)}&"
+            f"/get_storage_at?contractAddress={contract_address_str}&"
             f"key={key}&{formatted_block_named_argument}"
         )
         raw_response = await self._send_request(send_method="GET", uri=uri)
         return json.loads(raw_response)
+
+    async def get_nonce(
+        self,
+        contract_address: int,
+        block_hash: Optional[CastableToHash] = None,
+        block_number: Optional[BlockIdentifier] = None,
+    ) -> int:
+        formatted_block_identifier = get_formatted_block_named_argument(
+            block_hash=block_hash, block_number=block_number
+        )
+        contract_address_str = fields.L2AddressField.format(contract_address)
+        uri = f"/get_nonce?contractAddress={contract_address_str}&{formatted_block_identifier}"
+        raw_response = await self._send_request(send_method="GET", uri=uri)
+        return int(json.loads(raw_response), 16)
 
     async def get_transaction_status(self, tx_hash: CastableToHash) -> JsonObject:
         raw_response = await self._send_request(

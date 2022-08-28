@@ -12,9 +12,9 @@ def runner_and_output_runner():
     code = """
 %builtins output
 
-func main{output_ptr}():
-  ret
-end
+func main{output_ptr}() {
+    ret;
+}
 """
     program = compile_cairo(code=[(code, "")], prime=DEFAULT_PRIME, add_start=True)
     runner = CairoRunner(

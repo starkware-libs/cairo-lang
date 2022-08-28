@@ -168,17 +168,26 @@ class SimpleBuiltinRunner(BuiltinRunner):
     """
 
     def __init__(
-        self, name: str, included: bool, ratio: int, cells_per_instance: int, n_input_cells: int
+        self,
+        name: str,
+        included: bool,
+        ratio: int,
+        cells_per_instance: int,
+        n_input_cells: int,
+        instances_per_component: int = 1,
     ):
         """
         Constructs a SimpleBuiltinRunner.
         cells_per_instance is the number of memory cells per invocation.
         n_input_cells is the number of the first memory cells in each invocation that form the
         input. The rest of the cells are considered output.
+        instances_per_component is the number of invocations being handled in each call to the
+        corresponding component. It must divide the total number of invocations.
         """
         self.name = name
         self.included = included
         self.ratio = ratio
+        self.instances_per_component = instances_per_component
         self._base: Optional[RelocatableValue] = None
         self.stop_ptr: Optional[RelocatableValue] = None
         self.cells_per_instance = cells_per_instance
@@ -219,9 +228,10 @@ class SimpleBuiltinRunner(BuiltinRunner):
         return self.cells_per_instance * safe_div(runner.vm.current_step, self.ratio)
 
     def get_used_cells_and_allocated_size(self, runner):
-        if runner.vm.current_step < self.ratio:
+        min_steps = self.ratio * self.instances_per_component
+        if runner.vm.current_step < min_steps:
             raise InsufficientAllocatedCells(
-                f"Number of steps must be at least {self.ratio} for the {self.name} builtin."
+                f"Number of steps must be at least {min_steps} for the {self.name} builtin."
             )
         used = self.get_used_cells(runner)
         size = self.cells_per_instance * safe_div(runner.vm.current_step, self.ratio)
@@ -265,6 +275,14 @@ class SimpleBuiltinRunner(BuiltinRunner):
             dots = "..." if len(missing_offsets) > 20 else "."
             missing_offsets_str = ", ".join(map(str, missing_offsets[:20])) + dots
             raise AssertionError(f"Missing memory cells for {self.name}: {missing_offsets_str}")
+
+        # Verify auto deduction rules for the unassigned output cells.
+        # Assigned output cells are checked as part of the call to verify_auto_deductions().
+        for i in range(n):
+            for j in range(self.n_input_cells, self.cells_per_instance):
+                addr = self.base + (self.cells_per_instance * i + j)
+                if runner.vm.validated_memory.get(addr) is None:
+                    runner.vm.verify_auto_deductions_for_addr(addr)
 
     def get_memory_accesses(self, runner):
         segment_size = runner.segments.get_segment_size(self.base.segment_index)

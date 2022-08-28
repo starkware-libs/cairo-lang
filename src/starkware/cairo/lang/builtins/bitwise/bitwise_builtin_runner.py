@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from starkware.cairo.lang.builtins.bitwise.instance_def import (
     CELLS_PER_BITWISE,
@@ -18,7 +18,6 @@ class BitwiseBuiltinRunner(SimpleBuiltinRunner):
             cells_per_instance=CELLS_PER_BITWISE,
             n_input_cells=INPUT_CELLS_PER_BITWISE,
         )
-        self.stop_ptr: Optional[RelocatableValue] = None
         self.bitwise_builtin: BitwiseInstanceDef = bitwise_builtin
 
     def add_auto_deduction_rules(self, runner):

@@ -69,10 +69,10 @@ def fill_init_files(site_dir):
 
 
 def get_pth_dir(python: str, venv_dir: str):
-    if python == "python3.7":
-        return os.path.join(venv_dir, "lib/python3.7/site-packages")
-    elif python == "pypy3":
-        pth_dir = os.path.join(venv_dir, "site-packages")
+    if python == "python3.9":
+        return os.path.join(venv_dir, "lib/python3.9/site-packages")
+    elif python == "pypy3.9":
+        pth_dir = os.path.join(venv_dir, "lib/pypy3.9/site-packages")
         os.makedirs(pth_dir, exist_ok=True)
         return pth_dir
     else:

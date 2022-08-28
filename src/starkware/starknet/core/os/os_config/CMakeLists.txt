@@ -16,6 +16,7 @@ full_python_test(starknet_os_config_hash_test
 
     FILES
     os_config_hash_test.py
+    os_config_hash.json
 
     LIBS
     cairo_common_lib
@@ -24,6 +25,7 @@ full_python_test(starknet_os_config_hash_test
     starknet_general_config_lib
     starknet_os_utils_lib
     starkware_python_test_utils_lib
+    starkware_python_utils_lib
     pip_pytest
     pip_pytest_asyncio
 )

@@ -5,7 +5,9 @@ from starkware.cairo.common.hash_state import compute_hash_on_elements
 from starkware.cairo.lang.vm.crypto import pedersen_hash
 from starkware.python.utils import from_bytes
 from starkware.starknet.core.os.class_hash import compute_class_hash
-from starkware.starknet.services.api.contract_class import CONSTRUCTOR_SELECTOR, ContractClass
+from starkware.starknet.definitions import constants
+from starkware.starknet.public.abi import CONSTRUCTOR_ENTRY_POINT_SELECTOR
+from starkware.starknet.services.api.contract_class import ContractClass
 
 
 class TransactionHashPrefix(Enum):
@@ -70,7 +72,7 @@ def calculate_deploy_transaction_hash(
         tx_hash_prefix=TransactionHashPrefix.DEPLOY,
         version=version,
         contract_address=contract_address,
-        entry_point_selector=CONSTRUCTOR_SELECTOR,
+        entry_point_selector=CONSTRUCTOR_ENTRY_POINT_SELECTOR,
         calldata=constructor_calldata,
         # Field max_fee is considered 0 for Deploy transaction hash calculation purposes.
         max_fee=0,
@@ -86,17 +88,26 @@ def calculate_declare_transaction_hash(
     sender_address: int,
     max_fee: int,
     version: int,
+    nonce: int,
     hash_function: Callable[[int, int], int] = pedersen_hash,
 ) -> int:
     class_hash = compute_class_hash(contract_class=contract_class, hash_func=hash_function)
+
+    if version in [0, constants.QUERY_VERSION_BASE]:
+        calldata = []
+        additional_data = [class_hash]
+    else:
+        calldata = [class_hash]
+        additional_data = [nonce]
+
     return calculate_transaction_hash_common(
         tx_hash_prefix=TransactionHashPrefix.DECLARE,
         version=version,
         contract_address=sender_address,
         entry_point_selector=0,
-        calldata=[],
+        calldata=calldata,
         max_fee=max_fee,
         chain_id=chain_id,
-        additional_data=[class_hash],
+        additional_data=additional_data,
         hash_function=hash_function,
     )

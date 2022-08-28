@@ -12,6 +12,7 @@ from starkware.cairo.lang.compiler.ast.cairo_types import (
     CairoType,
     TypeCodeoffset,
     TypeFelt,
+    TypeIdentifier,
     TypePointer,
     TypeStruct,
     TypeTuple,
@@ -210,9 +211,15 @@ class ParserTransformer(Transformer):
 
     def type_struct(self, value):
         assert len(value) == 1 and isinstance(value[0], ExprIdentifier)
-        return TypeStruct(
-            scope=ScopedName.from_string(value[0].name),
-            is_fully_resolved=self.parser_context.resolved_types,
+        if self.parser_context.resolved_types:
+            # If parser_context.resolved_types is True, assume that the type is a struct.
+            return TypeStruct(
+                scope=ScopedName.from_string(value[0].name),
+                location=value[0].location,
+            )
+
+        return TypeIdentifier(
+            name=ScopedName.from_string(value[0].name),
             location=value[0].location,
         )
 
@@ -592,12 +599,11 @@ class ParserTransformer(Transformer):
 
     @v_args(meta=True)
     def code_element_return(self, value, meta):
-        (arglist,) = value
-        return CodeElementReturn(exprs=arglist.args, location=self.meta2loc(meta))
+        (expr,) = value
+        if isinstance(expr, ExprFuncCall):
+            return CodeElementTailCall(func_call=expr.rvalue, location=self.meta2loc(meta))
 
-    @v_args(meta=True)
-    def code_element_tail_call(self, value, meta):
-        return CodeElementTailCall(func_call=value[0], location=self.meta2loc(meta))
+        return CodeElementReturn(expr=expr, location=self.meta2loc(meta))
 
     def code_element_func_call(self, value):
         return CodeElementFuncCall(func_call=value[0])
@@ -622,7 +628,7 @@ class ParserTransformer(Transformer):
 
     @v_args(meta=True)
     def commented_code_element(self, value, meta):
-        comment = value[1][1:] if len(value) == 2 else None
+        comment = value[1][2:] if len(value) == 2 else None
         return CommentedCodeElement(
             code_elm=value[0], comment=comment, location=self.meta2loc(meta)
         )
@@ -675,9 +681,21 @@ class ParserTransformer(Transformer):
         )
 
     def code_element_struct(self, value):
-        decorators, element_type, identifier, code_block = value
+        decorators, identifier, code_block = value
         return CodeElementFunction(
-            element_type=element_type.value,
+            element_type="struct",
+            identifier=identifier,
+            arguments=IdentifierList(identifiers=[], notes=[]),
+            implicit_arguments=None,
+            returns=None,
+            code_block=code_block,
+            decorators=decorators,
+        )
+
+    def code_element_namespace(self, value):
+        decorators, identifier, code_block = value
+        return CodeElementFunction(
+            element_type="namespace",
             identifier=identifier,
             arguments=IdentifierList(identifiers=[], notes=[]),
             implicit_arguments=None,

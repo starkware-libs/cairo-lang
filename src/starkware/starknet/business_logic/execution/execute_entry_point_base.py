@@ -1,4 +1,3 @@
-import asyncio
 import dataclasses
 from abc import ABC, abstractmethod
 from dataclasses import field
@@ -9,7 +8,8 @@ from starkware.starknet.business_logic.execution.objects import (
     CallType,
     TransactionExecutionContext,
 )
-from starkware.starknet.business_logic.state.state import CarriedState, StateSelector
+from starkware.starknet.business_logic.fact_state.state import ExecutionResourcesManager
+from starkware.starknet.business_logic.state.state_api import SyncState
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.services.api.contract_class import EntryPointType
@@ -40,26 +40,14 @@ class ExecuteEntryPointBase(ABC, ValidatedDataclass):
     # The caller contract address.
     caller_address: int = field(metadata=fields.caller_address_metadata)
 
-    def get_state_selector(self) -> StateSelector:
-        """
-        Returns the state selector of the call (i.e., subset of state commitment tree leaves
-        it affects).
-        """
-        contract_addresses = {self.contract_address}
-        if self.code_address is not None:
-            contract_addresses.add(self.code_address)
-        class_hashes = set() if self.class_hash is None else {self.class_hash}
-
-        return StateSelector(contract_addresses=contract_addresses, class_hashes=class_hashes)
-
     @abstractmethod
-    def sync_execute(
+    def execute(
         self,
-        state: CarriedState,
+        state: SyncState,
+        resources_manager: ExecutionResourcesManager,
         general_config: StarknetGeneralConfig,
-        loop: asyncio.AbstractEventLoop,
         tx_execution_context: TransactionExecutionContext,
     ) -> CallInfo:
         """
-        Executes the entry point. Should be called from within the given loop.
+        Executes the entry point.
         """

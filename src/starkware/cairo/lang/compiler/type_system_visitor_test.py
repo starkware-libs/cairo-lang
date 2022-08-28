@@ -3,7 +3,6 @@ from typing import Optional
 
 import pytest
 
-from starkware.cairo.lang.compiler.ast.ast_objects_test_utils import remove_parentheses
 from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt, TypePointer, TypeStruct
 from starkware.cairo.lang.compiler.ast.expr import ExprFutureLabel, ExprNewOperator
 from starkware.cairo.lang.compiler.ast_objects_test import remove_parentheses
@@ -83,14 +82,14 @@ def test_type_tuples():
     simplify_type_system_test(
         "(a=fp, b=[cast(fp, T*)], c=cast(fp,T*))",
         "(fp, [fp], fp)",
-        "(a : felt, b : T, c : T*)",
+        "(a: felt, b: T, c: T*)",
     )
 
     # Nested.
     simplify_type_system_test(
         "(fp, (), ([cast(fp, T*)],))",
         "(fp, (), ([fp],))",
-        "(felt, (), (T))",
+        "(felt, (), (T,))",
     )
 
 
@@ -119,7 +118,7 @@ file:?:?: Accessing struct/tuple members for r-value structs is not supported ye
 
 
 def test_type_subscript_op():
-    t = TypeStruct(scope=scope("T"), is_fully_resolved=True)
+    t = TypeStruct(scope=scope("T"))
 
     identifier_dict = {scope("T"): StructDefinition(full_name=scope("T"), members={}, size=7)}
     identifiers = IdentifierManager.from_dict(identifier_dict)
@@ -236,25 +235,25 @@ def test_type_dot_op():
     """
     Tests type_system_visitor for ExprDot-s, in the following struct architecture:
 
-    struct S:
-        member x : felt
-        member y : felt
-    end
+    struct S {
+        x: felt,
+        y: felt,
+    }
 
-    struct T:
-        member t : felt
-        member s : S
-        member sp : S*
-    end
+    struct T {
+        t: felt,
+        s: S,
+        sp: S*,
+    }
 
-    struct R:
-        member r : R*
-    end
+    struct R {
+        r: R*,
+    }
     """
-    t = TypeStruct(scope=scope("T"), is_fully_resolved=True)
-    s = TypeStruct(scope=scope("S"), is_fully_resolved=True)
+    t = TypeStruct(scope=scope("T"))
+    s = TypeStruct(scope=scope("S"))
     s_star = TypePointer(pointee=s)
-    r = TypeStruct(scope=scope("R"), is_fully_resolved=True)
+    r = TypeStruct(scope=scope("R"))
     r_star = TypePointer(pointee=r)
 
     identifier_dict = {
@@ -366,7 +365,7 @@ cast(fp, T*).x
         """
 file:?:?: Type is expected to be fully resolved at this point.
 cast(fp, Z*).x
-^************^
+         ^
 """,
         identifiers=identifiers,
         resolve_types=False,
@@ -378,11 +377,11 @@ def test_type_dot_op_named_tuples():
     Tests type_system_visitor for ExprDot-s for named tuples.
     """
     identifiers = IdentifierManager()
-    tuple_ref = "[cast(fp, (x : felt, y : (a : felt, b : felt), z : felt)*)]"
-    tuple_ptr = "cast(fp, (x : felt, y : (a : felt, b : felt)*, z : felt)*)"
+    tuple_ref = "[cast(fp, (x: felt, y: (a: felt, b: felt), z: felt)*)]"
+    tuple_ptr = "cast(fp, (x: felt, y: (a: felt, b: felt)*, z: felt)*)"
     for (orig_expr, simplified_expr, simplified_type) in [
         (f"{tuple_ref}.x", "[fp]", "felt"),
-        (f"{tuple_ref}.y", "[fp + 1]", "(a : felt, b : felt)"),
+        (f"{tuple_ref}.y", "[fp + 1]", "(a: felt, b: felt)"),
         (f"{tuple_ref}.y.a", "[fp + 1]", "felt"),
         (f"{tuple_ref}.y.b", "[fp + 1 + 1]", "felt"),
         (f"{tuple_ref}.z", "[fp + 3]", "felt"),
@@ -405,11 +404,11 @@ file:?:?: Cannot apply dot-operator to unnamed tuple type '(felt, felt)'.
         identifiers=identifiers,
     )
     verify_exception(
-        "[cast(fp, (a : felt, b : felt)*)].x",
+        "[cast(fp, (a: felt, b: felt)*)].x",
         """
-file:?:?: Member 'x' does not appear in definition of tuple type '(a : felt, b : felt)'.
-[cast(fp, (a : felt, b : felt)*)].x
-^*********************************^
+file:?:?: Member 'x' does not appear in definition of tuple type '(a: felt, b: felt)'.
+[cast(fp, (a: felt, b: felt)*)].x
+^*******************************^
 """,
         identifiers=identifiers,
     )

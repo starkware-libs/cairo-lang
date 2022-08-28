@@ -23,6 +23,9 @@ async def test_dummy_lock():
         async with await lock_manager.lock("lock1") as lock:
             # Try to lock.
             t = asyncio.create_task(try_lock1())
+
+            # Check that lock exists.
+            assert await lock_manager.lock_exists("lock0")
             await asyncio.sleep(0.01)
             assert locked[0] is False
         await asyncio.sleep(0.01)

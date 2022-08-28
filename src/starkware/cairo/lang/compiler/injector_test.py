@@ -13,29 +13,29 @@ def test_injector():
     block: CodeBlock = parse(
         filename="<file0>",
         code="""\
-let (x, local y) = f()
-let z = 1
-if 1 != 0:
-    tempvar z = 0
-end
-local x = 1
-func foo():
-    tempvar y = 0
-end
+let (x, local y) = f();
+let z = 1;
+if (1 != 0) {
+    tempvar z = 0;
+}
+local x = 1;
+func foo() {
+    tempvar y = 0;
+}
 """,
         code_type="code_block",
         expected_type=CodeBlock,
     )
     injected0 = parse(
         filename="<file1>",
-        code="const a = 0\n",
+        code="const a = 0;\n",
         code_type="code_block",
         expected_type=CodeBlock,
     ).code_elements[0]
 
     injected1 = parse(
         filename="<file2>",
-        code="const b = 1\n",
+        code="const b = 1;\n",
         code_type="code_block",
         expected_type=CodeBlock,
     ).code_elements[0]
@@ -65,19 +65,19 @@ end
     assert (
         block.format(allowed_line_length=100)
         == """\
-let (x, local y) = f()
-const a = 0
-const b = 1
-let z = 1
-if 1 != 0:
-    tempvar z = 0
-    const b = 1
-end
-const a = 0
-local x = 1
-func foo():
-    tempvar y = 0
-    const a = 0
-end
+let (x, local y) = f();
+const a = 0;
+const b = 1;
+let z = 1;
+if (1 != 0) {
+    tempvar z = 0;
+    const b = 1;
+}
+const a = 0;
+local x = 1;
+func foo() {
+    tempvar y = 0;
+    const a = 0;
+}
 """
     )

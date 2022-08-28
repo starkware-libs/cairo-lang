@@ -12,6 +12,7 @@ from starkware.starknet.compiler.contract_interface import (
 from starkware.starknet.compiler.event import EventDeclVisitor, EventImplementationVisitor
 from starkware.starknet.compiler.external_wrapper import (
     WRAPPER_SCOPE,
+    ExternalWrapperResources,
     ExternalWrapperVisitor,
     PreExternalWrapperStage,
 )
@@ -89,7 +90,10 @@ def starknet_pass_manager(
         new_stage_name="external_wrapper",
         new_stage=VisitorStage(
             lambda context: ExternalWrapperVisitor(
-                builtins=context.builtins, identifiers=context.identifiers
+                builtins=context.builtins,
+                external_wrapper_resources=context.get_resource(ExternalWrapperResources),
+                main_scope=context.main_scope,
+                identifiers=context.identifiers,
             ),
             modify_ast=True,
         ),

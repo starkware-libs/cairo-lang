@@ -12,9 +12,21 @@ python_lib(everest_transaction_lib
     transaction.py
 
     LIBS
-    starkware_dataclasses_utils_lib
+    starkware_dataclasses_field_utils_lib
     pip_marshmallow_enum
     pip_marshmallow_oneofschema
+)
+
+python_lib(everest_config_request_lib
+    PREFIX services/everest/api/gateway
+
+    FILES
+    set_config_request.py
+
+    LIBS
+    starkware_dataclasses_field_utils_lib
+    starkware_dataclasses_utils_lib
+    starkware_error_handling_lib
 )
 
 python_lib(everest_gateway_client_lib

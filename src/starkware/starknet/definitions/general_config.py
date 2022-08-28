@@ -10,7 +10,7 @@ import marshmallow_dataclass
 from services.everest.definitions.general_config import EverestGeneralConfig
 from starkware.cairo.lang.builtins.all_builtins import (
     ALL_BUILTINS,
-    EC_OP_BUILTIN,
+    KECCAK_BUILTIN,
     OUTPUT_BUILTIN,
     with_suffix,
 )
@@ -21,6 +21,7 @@ from starkware.starkware_utils.config_base import Config, load_config
 from starkware.starkware_utils.field_validators import validate_dict, validate_non_negative
 from starkware.starkware_utils.marshmallow_dataclass_fields import (
     StrictRequiredInteger,
+    additional_metadata,
     load_int_value,
 )
 
@@ -50,6 +51,7 @@ TOKEN_DECIMALS = 18
 
 # In order to be able to use Keccak builtin, which uses bitwise, which is sparse.
 DEFAULT_MAX_STEPS = 10**6
+DEFAULT_VALIDATE_MAX_STEPS = DEFAULT_MAX_STEPS
 DEFAULT_CHAIN_ID = StarknetChainId.TESTNET
 DEFAULT_FEE_TOKEN_ADDRESS = load_int_value(
     field_metadata=fields.fee_token_address_metadata,
@@ -62,11 +64,9 @@ DEFAULT_SEQUENCER_ADDRESS = load_int_value(
 
 # Given in units of wei.
 DEFAULT_GAS_PRICE = 100 * 10**9
-
-
 DEFAULT_CAIRO_RESOURCE_FEE_WEIGHTS = {
     N_STEPS_RESOURCE: 1.0,
-    **{builtin: 0.0 for builtin in ALL_BUILTINS.except_for(EC_OP_BUILTIN).with_suffix()},
+    **{builtin: 0.0 for builtin in ALL_BUILTINS.except_for(KECCAK_BUILTIN).with_suffix()},
 }
 
 
@@ -78,7 +78,7 @@ class StarknetOsConfig(Config):
     chain_id: StarknetChainId = field(default=DEFAULT_CHAIN_ID)
 
     fee_token_address: int = field(
-        metadata=dict(
+        metadata=additional_metadata(
             **fields.fee_token_address_metadata, description="StarkNet fee token L2 address."
         ),
         default=DEFAULT_FEE_TOKEN_ADDRESS,
@@ -103,17 +103,21 @@ class StarknetGeneralConfig(EverestGeneralConfig):
         metadata=fields.invoke_tx_n_steps_metadata, default=DEFAULT_MAX_STEPS
     )
 
+    validate_max_n_steps: int = field(
+        metadata=fields.validate_n_steps_metadata, default=DEFAULT_VALIDATE_MAX_STEPS
+    )
+
     min_gas_price: int = field(metadata=fields.gas_price, default=DEFAULT_GAS_PRICE)
 
     sequencer_address: int = field(
-        metadata=dict(
+        metadata=additional_metadata(
             **fields.sequencer_address_metadata, description="StarkNet sequencer address."
         ),
         default=DEFAULT_SEQUENCER_ADDRESS,
     )
 
     tx_commitment_tree_height: int = field(
-        metadata=dict(
+        metadata=additional_metadata(
             marshmallow_field=StrictRequiredInteger(
                 validate=validate_non_negative("Transaction commitment tree height"),
             ),
@@ -123,7 +127,7 @@ class StarknetGeneralConfig(EverestGeneralConfig):
     )
 
     tx_version: int = field(
-        metadata=dict(
+        metadata=additional_metadata(
             marshmallow_field=StrictRequiredInteger(
                 validate=validate_non_negative("Transaction version."),
             ),
@@ -136,7 +140,7 @@ class StarknetGeneralConfig(EverestGeneralConfig):
     )
 
     event_commitment_tree_height: int = field(
-        metadata=dict(
+        metadata=additional_metadata(
             marshmallow_field=StrictRequiredInteger(
                 validate=validate_non_negative("Event commitment tree height"),
             ),
@@ -146,7 +150,7 @@ class StarknetGeneralConfig(EverestGeneralConfig):
     )
 
     cairo_resource_fee_weights: Dict[str, float] = field(
-        metadata=dict(
+        metadata=additional_metadata(
             marshmallow_field=mfields.Dict(
                 keys=mfields.String,
                 values=mfields.Float,
@@ -188,7 +192,7 @@ def build_general_config(raw_general_config: Dict[str, Any]) -> StarknetGeneralC
         {
             resource: 0.0
             for resource in [N_STEPS_RESOURCE]
-            + ALL_BUILTINS.except_for(EC_OP_BUILTIN).with_suffix()
+            + ALL_BUILTINS.except_for(KECCAK_BUILTIN).with_suffix()
         }
     )
     # Update relevant entries.
@@ -198,7 +202,7 @@ def build_general_config(raw_general_config: Dict[str, Any]) -> StarknetGeneralC
             # All other weights are deduced from n_steps.
             **{
                 with_suffix(builtin): n_steps_weight * all_instance.builtins[builtin].ratio
-                for builtin in ALL_BUILTINS.except_for(OUTPUT_BUILTIN, EC_OP_BUILTIN)
+                for builtin in ALL_BUILTINS.except_for(OUTPUT_BUILTIN, KECCAK_BUILTIN)
             },
         }
     )

@@ -1,11 +1,7 @@
 import dataclasses
 from typing import Any, List
 
-from starkware.starknet.business_logic.execution.objects import (
-    Event,
-    L2ToL1MessageInfo,
-    TransactionExecutionInfo,
-)
+from starkware.starknet.business_logic.execution.objects import CallInfo, Event, L2ToL1MessageInfo
 from starkware.starknet.services.api.feeder_gateway.response_objects import FunctionInvocation
 from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 
@@ -13,9 +9,9 @@ Dataclass = Any
 
 
 @dataclasses.dataclass(frozen=True)
-class StarknetTransactionExecutionInfo(ValidatedDataclass):
+class StarknetCallInfo(ValidatedDataclass):
     """
-    A lean version of TransactionExecutionInfo class, containing merely the information relevant
+    A lean version of CallInfo class, containing merely the information relevant
     for the user.
     """
 
@@ -31,16 +27,14 @@ class StarknetTransactionExecutionInfo(ValidatedDataclass):
     @classmethod
     def from_internal(
         cls,
-        tx_execution_info: TransactionExecutionInfo,
+        call_info: CallInfo,
         result: tuple,
         main_call_events: List[Dataclass],
-    ) -> "StarknetTransactionExecutionInfo":
+    ) -> "StarknetCallInfo":
         return cls(
             result=result,
             main_call_events=main_call_events,
-            raw_events=tx_execution_info.get_sorted_events(),
-            l2_to_l1_messages=tx_execution_info.get_sorted_l2_to_l1_messages(),
-            call_info=FunctionInvocation.from_internal_version(
-                call_info=tx_execution_info.call_info
-            ),
+            raw_events=call_info.get_sorted_events(),
+            l2_to_l1_messages=call_info.get_sorted_l2_to_l1_messages(),
+            call_info=FunctionInvocation.from_internal(call_info=call_info),
         )

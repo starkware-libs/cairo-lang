@@ -1,6 +1,8 @@
 import dataclasses
 from typing import Dict, Mapping, SupportsInt, Tuple, Union
 
+from starkware.python.utils import Endianness
+
 RELOCATABLE_OFFSET_LOWER_BOUND = -(2**63)
 RELOCATABLE_OFFSET_UPPER_BOUND = 2**63
 
@@ -68,7 +70,7 @@ class RelocatableValue:
         return f"{self.segment_index}:{self.offset}"
 
     @staticmethod
-    def to_bytes(value: "MaybeRelocatable", n_bytes: int, byte_order: str) -> bytes:
+    def to_bytes(value: "MaybeRelocatable", n_bytes: int, byte_order: Endianness) -> bytes:
         """
         Serializes RelocatableValue as:
         1bit |   SEGMENT_BITS |   OFFSET_BITS
@@ -85,7 +87,7 @@ class RelocatableValue:
         return num.to_bytes(n_bytes, byte_order)
 
     @classmethod
-    def from_bytes(cls, data: bytes, byte_order: str) -> "MaybeRelocatable":
+    def from_bytes(cls, data: bytes, byte_order: Endianness) -> "MaybeRelocatable":
         n_bytes = len(data)
         num = int.from_bytes(data, byte_order)
         if num & (2 ** (8 * n_bytes - 1)):

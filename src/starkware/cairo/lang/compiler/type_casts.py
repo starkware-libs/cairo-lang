@@ -88,7 +88,7 @@ def check_cast(
 
     if isinstance(src_type, TypeTuple) and isinstance(dest_type, TypeStruct):
         struct_def = get_struct_definition(
-            struct_name=dest_type.resolved_scope, identifier_manager=identifier_manager
+            struct_name=dest_type.scope, identifier_manager=identifier_manager
         )
         dest_members = [
             TypeTuple.Item(name=name, typ=member.cairo_type)
@@ -160,7 +160,7 @@ The former has {n_src_members} members while the latter has {n_dest_members} mem
             raise CairoTypeError(
                 f"""\
 Cannot cast '{src_type.format()}' to '{dest_type.format()}'.
-Expected argument name {dest_name}. Found: {src_name}.""",
+Expected argument name '{dest_name}'. Found: '{src_name}'.""",
                 location=item_location,
             )
 

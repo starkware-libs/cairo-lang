@@ -1,13 +1,16 @@
+import copy
 from typing import List, Optional, Union
 
-from starkware.python.utils import from_bytes
+from starkware.python.utils import as_non_optional, from_bytes
 from starkware.starknet.business_logic.execution.objects import TransactionExecutionInfo
+from starkware.starknet.business_logic.transaction.objects import InternalL1Handler
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
-from starkware.starknet.services.api.contract_class import ContractClass, EntryPointType
+from starkware.starknet.public.abi import get_selector_from_name
+from starkware.starknet.services.api.contract_class import ContractClass
 from starkware.starknet.services.api.messages import StarknetMessageToL1
 from starkware.starknet.testing.contract import DeclaredClass, StarknetContract
 from starkware.starknet.testing.contract_utils import get_abi, get_contract_class
-from starkware.starknet.testing.objects import StarknetTransactionExecutionInfo
+from starkware.starknet.testing.objects import StarknetCallInfo
 from starkware.starknet.testing.state import CastableToAddress, CastableToAddressSalt, StarknetState
 
 
@@ -17,7 +20,7 @@ class Starknet:
     Example:
       starknet = await Starknet.empty()
       contract = await starknet.deploy('contract.cairo')
-      await contract.foo(a=1, b=[2, 3]).invoke()
+      await contract.foo(a=1, b=[2, 3]).execute()
     """
 
     def __init__(self, state: StarknetState):
@@ -30,6 +33,9 @@ class Starknet:
     @classmethod
     async def empty(cls, general_config: Optional[StarknetGeneralConfig] = None) -> "Starknet":
         return Starknet(state=await StarknetState.empty(general_config=general_config))
+
+    def copy(self) -> "Starknet":
+        return copy.deepcopy(self)
 
     async def declare(
         self,
@@ -44,8 +50,7 @@ class Starknet:
         contract_class = get_contract_class(
             source=source, contract_class=contract_class, cairo_path=cairo_path
         )
-        execution_info = await self.state.declare(contract_class=contract_class)
-        class_hash = execution_info.call_info.class_hash
+        class_hash, _ = await self.state.declare(contract_class=contract_class)
         assert class_hash is not None
         return DeclaredClass(
             class_hash=from_bytes(class_hash), abi=get_abi(contract_class=contract_class)
@@ -72,14 +77,14 @@ class Starknet:
             constructor_calldata=[] if constructor_calldata is None else constructor_calldata,
         )
 
-        deploy_execution_info = StarknetTransactionExecutionInfo.from_internal(
-            tx_execution_info=execution_info, result=(), main_call_events=[]
+        deploy_call_info = StarknetCallInfo.from_internal(
+            call_info=as_non_optional(execution_info.call_info), result=(), main_call_events=[]
         )
         return StarknetContract(
             state=self.state,
             abi=get_abi(contract_class=contract_class),
             contract_address=address,
-            deploy_execution_info=deploy_execution_info,
+            deploy_call_info=deploy_call_info,
         )
 
     def consume_message_from_l2(self, from_address: int, to_address: int, payload: List[int]):
@@ -108,16 +113,24 @@ class Starknet:
         Takes an optional nonce paramater to force a specific nonce, this
         should only be used by the Postman class.
         """
+        if isinstance(to_address, str):
+            to_address = int(to_address, 16)
+        assert isinstance(to_address, int)
+
+        if isinstance(selector, str):
+            selector = get_selector_from_name(selector)
+        assert isinstance(selector, int)
+
         if nonce is None:
             nonce = self.l1_to_l2_nonce
             self.l1_to_l2_nonce += 1
 
-        return await self.state.invoke_raw(
+        tx = InternalL1Handler.create(
             contract_address=to_address,
-            selector=selector,
+            entry_point_selector=selector,
             calldata=[from_address, *payload],
-            caller_address=0,
-            max_fee=max_fee,
-            entry_point_type=EntryPointType.L1_HANDLER,
             nonce=nonce,
+            chain_id=self.state.general_config.chain_id.value,
         )
+
+        return await self.state.execute_tx(tx=tx)

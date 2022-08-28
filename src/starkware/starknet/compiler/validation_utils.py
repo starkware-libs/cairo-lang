@@ -1,6 +1,7 @@
-from typing import List, Optional, Tuple, Type, TypeVar
+from typing import Dict, List, Optional, Tuple, Type, TypeVar
 
 from starkware.cairo.lang.compiler.ast.arguments import IdentifierList
+from starkware.cairo.lang.compiler.ast.cairo_types import TypeTuple
 from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeElementFunction,
     CommentedCodeElement,
@@ -12,7 +13,14 @@ from starkware.cairo.lang.compiler.preprocessor.identifier_aware_visitor import 
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
 from starkware.starknet.compiler.data_encoder import ArgumentInfo, EncodingType, encode_data
 from starkware.starknet.definitions import constants
-from starkware.starknet.public.abi import EXECUTE_ENTRY_POINT_NAME, AbiType
+from starkware.starknet.public.abi import (
+    ACCOUNT_ENTRY_POINT_NAMES,
+    EXECUTE_ENTRY_POINT_NAME,
+    VALIDATE_DECLARE_ENTRY_POINT_NAME,
+    VALIDATE_ENTRY_POINT_NAME,
+    AbiEntryType,
+    AbiType,
+)
 
 TAttr = TypeVar("TAttr")
 
@@ -65,32 +73,70 @@ def verify_no_return_values(elm: CodeElementFunction, name_in_error_message: str
     Verifies that the given element has no return values and raises an exception
     otherwise.
     """
-    if elm.returns is not None and len(elm.returns.identifiers) > 0:
+    returns = elm.returns
+    if returns is None:
+        return
+
+    if not isinstance(returns, TypeTuple) or len(returns.members) > 0:
         raise PreprocessorError(
             message=f"{name_in_error_message} must have no return values.",
-            location=elm.returns.location,
+            location=returns.location,
         )
 
 
 def verify_account_contract(contract_abi: AbiType, is_account_contract: bool):
     """
-    Verifies that the given abi is that of a StarkNet account contract if and only if it
-    has an entry point named "__execute__" and raises an exception otherwise.
+    For account contracts (is_account_contract=True), verifies that the given ABI contains
+    all expected builtin entry points in their correct format.
+    For non-account contracts, verifies that it contains none of them.
     """
-    contains_execute_entry_point = any(
-        entry_point["type"] == "function" and entry_point["name"] == EXECUTE_ENTRY_POINT_NAME
-        for entry_point in contract_abi
-    )
-    if contains_execute_entry_point and (not is_account_contract):
-        raise PreprocessorError(
-            message=f"Only account contracts may have a function named "
-            f'"{EXECUTE_ENTRY_POINT_NAME}". Use --account_contract flag.'
-        )
+    account_entry_points: Dict[str, AbiEntryType] = {}
 
-    if (not contains_execute_entry_point) and is_account_contract:
-        raise PreprocessorError(
-            message=f'Account contracts must have a function named "{EXECUTE_ENTRY_POINT_NAME}".'
-        )
+    # Collect account contract special entry points.
+    for entry_point in contract_abi:
+        if entry_point["type"] == "function" and entry_point["name"] in ACCOUNT_ENTRY_POINT_NAMES:
+            account_entry_points[entry_point["name"]] = entry_point
+
+    account_entry_point_names = set(account_entry_points.keys())
+
+    if is_account_contract:
+        # Handle account contract.
+        if account_entry_point_names != ACCOUNT_ENTRY_POINT_NAMES:
+            raise PreprocessorError(
+                message=(
+                    "Account contracts must have external functions named "
+                    f"{ACCOUNT_ENTRY_POINT_NAMES}, found: {list(account_entry_point_names)}."
+                )
+            )
+
+        validate_entry_point = account_entry_points[VALIDATE_ENTRY_POINT_NAME]
+        execute_entry_point = account_entry_points[EXECUTE_ENTRY_POINT_NAME]
+        validate_declare_entry_point = account_entry_points[VALIDATE_DECLARE_ENTRY_POINT_NAME]
+        if execute_entry_point["inputs"] != validate_entry_point["inputs"]:
+            raise PreprocessorError(
+                message=(
+                    "Account contracts must have the exact same calldata for "
+                    f"'{VALIDATE_ENTRY_POINT_NAME}' and '{EXECUTE_ENTRY_POINT_NAME}' functions."
+                )
+            )
+
+        if validate_declare_entry_point["inputs"] != [{"name": "class_hash", "type": "felt"}]:
+            raise PreprocessorError(
+                message=(
+                    f"'{VALIDATE_DECLARE_ENTRY_POINT_NAME}' function must have one argument "
+                    "`class_hash: felt`."
+                )
+            )
+    else:
+        # Handle non-account contract.
+        if len(account_entry_point_names) > 0:
+            # One of the entry points exists in a non-account contract.
+            raise PreprocessorError(
+                message=(
+                    f"Only account contracts may have functions named {account_entry_point_names}. "
+                    "Use the --account_contract flag to compile an account contract."
+                )
+            )
 
 
 # Common utils.

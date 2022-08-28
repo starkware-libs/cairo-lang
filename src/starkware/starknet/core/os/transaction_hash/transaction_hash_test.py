@@ -15,8 +15,7 @@ from starkware.starknet.core.os.transaction_hash.transaction_hash import (
 )
 from starkware.starknet.core.test_contract.test_utils import get_contract_class
 from starkware.starknet.definitions import constants
-from starkware.starknet.services.api.contract_class import CONSTRUCTOR_SELECTOR
-from starkware.starknet.services.api.gateway.transaction import DECLARE_SENDER_ADDRESS
+from starkware.starknet.public.abi import CONSTRUCTOR_ENTRY_POINT_SELECTOR
 
 
 def run_cairo_transaction_hash(
@@ -114,7 +113,7 @@ def test_deploy_transaction_hash(constructor_calldata: List[int]):
             TransactionHashPrefix.DEPLOY.value,
             version,
             contract_address,
-            CONSTRUCTOR_SELECTOR,
+            CONSTRUCTOR_ENTRY_POINT_SELECTOR,
             compute_hash_on_elements(data=constructor_calldata, hash_func=pedersen_hash),
             max_fee,
             chain_id,
@@ -138,8 +137,10 @@ def test_declare_transaction_hash():
 
     # Tested transaction data.
     version = constants.TRANSACTION_VERSION
+    sender_address = 19911991
     max_fee = 0
     chain_id = 1
+    nonce = 0
     contract_class = get_contract_class(contract_name="dummy_account")
     class_hash = compute_class_hash(contract_class=contract_class, hash_func=pedersen_hash)
 
@@ -147,12 +148,12 @@ def test_declare_transaction_hash():
         data=[
             TransactionHashPrefix.DECLARE.value,
             version,
-            DECLARE_SENDER_ADDRESS,
+            sender_address,
             entry_point_selector,
-            compute_hash_on_elements(data=[], hash_func=pedersen_hash),
+            compute_hash_on_elements(data=[class_hash], hash_func=pedersen_hash),
             max_fee,
             chain_id,
-            class_hash,
+            nonce,
         ],
         hash_func=pedersen_hash,
     )
@@ -160,9 +161,10 @@ def test_declare_transaction_hash():
         calculate_declare_transaction_hash(
             contract_class=contract_class,
             chain_id=chain_id,
-            sender_address=DECLARE_SENDER_ADDRESS,
+            sender_address=sender_address,
             max_fee=max_fee,
             version=version,
+            nonce=nonce,
         )
         == expected_hash
     )

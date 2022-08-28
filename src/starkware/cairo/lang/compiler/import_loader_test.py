@@ -18,16 +18,16 @@ from starkware.cairo.lang.compiler.test_utils import read_file_from_dict
 def test_get_imports():
     code = """
 from a import b
-ap += [fp] + 2; ap++
+ap += [fp] + 2, ap++;
 from b.c.d.e import f as g
 
 my_label:
-call that
+call that;
 from vim import ide
-# from vs.code import ide
-func foo():
-  from pytest import cairo_stack_test as ci
-end
+// from vs.code import ide
+func foo() {
+    from pytest import cairo_stack_test as ci
+}
 """
     ast = parse_file(code)
     collector = DirectDependenciesCollector()
@@ -83,8 +83,8 @@ def test_shallow_tree_graph():
 from a import aa
 from b import bb
 """,
-        "a": "[ap] = 1",
-        "b": "[ap] = 2",
+        "a": "[ap] = 1;",
+        "b": "[ap] = 2;",
     }
 
     expected_res = {name: parse_file(code) for name, code in files.items()}
@@ -94,7 +94,7 @@ from b import bb
 
 def test_long_path_grph():
     files = {f"a{i}": f"from a{i+1} import b" for i in range(10)}
-    files["a9"] = "[ap] = 0"
+    files["a9"] = "[ap] = 0;"
 
     expected_res = {name: parse_file(code) for name, code in files.items()}
     assert collect_imports("a0", read_file_from_dict(files)) == expected_res
@@ -114,8 +114,8 @@ from common.second import some2
 from common.first import some1
 from common.second import some2
 """,
-        "common.first": "[ap] = 1",
-        "common.second": "[ap] = 2",
+        "common.first": "[ap] = 1;",
+        "common.second": "[ap] = 2;",
     }
 
     expected_res = {name: parse_file(code) for name, code in files.items()}
@@ -210,14 +210,14 @@ from d_no_lang import x
 """,
         "d_lang": """
 %lang lang
-const x = 0
+const x = 0;
 """,
         "d_no_lang": """
-const x = 0
+const x = 0;
 """,
         "e": """
-%lang lang  # First line.
-%lang lang  # Second line.
+%lang lang  // First line.
+%lang lang  // Second line.
 """,
     }
 
@@ -249,7 +249,7 @@ from c import x
         "e",
         """
 e:?:?: Found two %lang directives
-%lang lang  # Second line.
+%lang lang  // Second line.
 ^********^
 """,
     )

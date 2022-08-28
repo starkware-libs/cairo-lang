@@ -5,8 +5,8 @@
         ],
         "body": [
             "@storage_var",
-            "func ${1:name}() -> (${2:res : felt}):",
-            "end",
+            "func ${1:name}() -> (${2:res: felt}) {",
+            "}",
             "$0"
         ],
         "description": "A StarkNet storage variable."
@@ -17,11 +17,11 @@
         ],
         "body": [
             "@external",
-            "func ${1:name}{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(",
+            "func ${1:name}{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(",
             "\t${2:arguments}",
-            "):",
+            ") {",
             "\t$0",
-            "end"
+            "}"
         ],
         "description": "A StarkNet contract external function."
     },
@@ -31,9 +31,9 @@
         ],
         "body": [
             "@contract_interface",
-            "namespace ${1:name}:",
+            "namespace ${1:name} {",
             "\t$0",
-            "end"
+            "}"
         ],
         "description": "A contract interface for another contract."
     }

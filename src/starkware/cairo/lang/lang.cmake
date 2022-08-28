@@ -7,7 +7,7 @@ python_lib(cairo_version_lib
 )
 
 if (NOT DEFINED CAIRO_PYTHON_INTERPRETER)
-    set(CAIRO_PYTHON_INTERPRETER python3.7)
+    set(CAIRO_PYTHON_INTERPRETER python3.9)
 endif()
 
 python_venv(cairo_lang_venv
@@ -36,6 +36,7 @@ python_venv(cairo_lang_package_venv
     sharp_client_config_lib
     sharp_client_lib
     starknet_block_hash_lib
+    starknet_business_logic_fact_state_lib
     starknet_business_logic_state_lib
     starknet_script_lib
     starknet_testing_lib

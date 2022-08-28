@@ -102,28 +102,19 @@ class StructCollector(IdentifierAwareVisitor):
             members_list=members_list, struct_name=struct_name, location=location
         )
 
-    def create_tuple_type_from_identifier_list(
+    def handle_type_definition(
         self,
-        identifier_list: Optional[IdentifierList],
+        cairo_type: Optional[CairoType],
         type_name: ScopedName,
         location: Optional[Location],
     ):
         """
-        Creates a tuple type alias based on the given 'identifier_list'.
+        Creates a type definition for the given type.
         """
-        members: List[TypeTuple.Item] = []
-        if identifier_list is not None:
-            for arg in identifier_list.identifiers:
-                assert_no_modifier(arg)
-                members.append(
-                    TypeTuple.Item(
-                        name=arg.identifier.name, typ=arg.get_type(), location=arg.location
-                    )
-                )
+        if cairo_type is None:
+            cairo_type = TypeTuple.from_members(members=[], location=location)
 
-            location = identifier_list.location
-
-        cairo_type = self.resolve_type(TypeTuple.from_members(members=members, location=location))
+        cairo_type = self.resolve_type(cairo_type=cairo_type)
         self.add_name_definition(
             type_name,
             TypeDefinition(
@@ -151,7 +142,7 @@ class StructCollector(IdentifierAwareVisitor):
 
             if elm.typed_identifier.expr_type is None:
                 raise PreprocessorError(
-                    "Struct members must be explicitly typed (e.g., member x : felt).",
+                    "Struct members must be explicitly typed (e.g., x: felt).",
                     location=elm.typed_identifier.location,
                 )
 
@@ -194,8 +185,8 @@ class StructCollector(IdentifierAwareVisitor):
                 struct_name=new_scope + CodeElementFunction.IMPLICIT_ARGUMENT_SCOPE,
                 location=elm.identifier.location,
             )
-            self.create_tuple_type_from_identifier_list(
-                identifier_list=elm.returns,
+            self.handle_type_definition(
+                cairo_type=elm.returns,
                 type_name=new_scope + CodeElementFunction.RETURN_SCOPE,
                 location=elm.identifier.location,
             )

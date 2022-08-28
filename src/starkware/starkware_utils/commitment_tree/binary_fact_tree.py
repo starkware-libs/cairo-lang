@@ -2,17 +2,18 @@ from abc import abstractmethod
 from dataclasses import field
 from importlib import import_module
 from logging import Logger
-from typing import Collection, Dict, Optional, Tuple, Type
+from typing import Collection, Dict, Optional, Tuple, Type, TypeVar
 
 import marshmallow_dataclass
 
 from starkware.starkware_utils.commitment_tree.inner_node_fact import InnerNodeFact
 from starkware.starkware_utils.commitment_tree.leaf_fact import LeafFact, TLeafFact
+from starkware.starkware_utils.marshmallow_fields_metadata import bytes_as_hex_metadata
 from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
-from starkware.starkware_utils.validated_fields import bytes_as_hex_metadata
 from starkware.storage.storage import FactFetchingContext
 
 BinaryFactDict = Dict[int, Tuple[int, ...]]
+TBinaryFactTree = TypeVar("TBinaryFactTree", bound="BinaryFactTree")
 
 
 # Mypy has a problem with dataclasses that contain unimplemented abstract methods.

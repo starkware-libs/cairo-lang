@@ -48,7 +48,7 @@ def main():
     )
     parser.add_argument("--name", type=str, help="Python library target name", required=True)
     parser.add_argument(
-        "--interpreters", type=str, nargs="*", help="Supported interpreters", default=["python3.7"]
+        "--interpreters", type=str, nargs="*", help="Supported interpreters", default=["python3.9"]
     )
     parser.add_argument("--lib_dir", type=str, nargs="*", help="Library directory", required=True)
     parser.add_argument(

@@ -19,11 +19,13 @@ class StarknetErrorCode(ErrorCode):
     INVALID_STATUS_MODE = auto()
     INVALID_TRANSACTION_HASH = auto()
     INVALID_TRANSACTION_ID = auto()
+    INVALID_TRANSACTION_NONCE = auto()
     INVALID_TRANSACTION_QUERYING_VERSION = auto()
     INVALID_TRANSACTION_VERSION = auto()
     L1_TO_L2_MESSAGE_CANCELLED = auto()
     L1_TO_L2_MESSAGE_ZEROED_COUNTER = auto()
     MULTIPLE_ENTRY_POINTS_MATCH_SELECTOR = auto()
+    NON_EMPTY_SIGNATURE = auto()
     NON_PERMITTED_CONTRACT = auto()
     NO_TRACE = auto()
     OUT_OF_RANGE_ADDRESS = auto()
@@ -47,19 +49,22 @@ class StarknetErrorCode(ErrorCode):
     TRANSACTION_FAILED = auto()
     TRANSACTION_LIMIT_EXCEEDED = auto()
     TRANSACTION_NOT_FOUND = auto()
+    UNAUTHORIZED_ACTION_ON_VALIDATE = auto()
+    UNAUTHORIZED_ENTRY_POINT_FOR_INVOKE = auto()
     UNDECLARED_CLASS = auto()
     UNEXPECTED_FAILURE = auto()
     UNINITIALIZED_CONTRACT = auto()
-    UNSUPPORTED_SELECTOR_FOR_FEE = auto()
 
 
 # Errors that are raised by the gateways and caused by wrong usage of the user.
 
 common_error_codes: List[ErrorCode] = [
-    # Raw builtin exceptions from pre/post_load/dump are wrapped with StarkExcpetion and this code.
+    # Raw builtin exceptions from pre/post_load/dump are wrapped with StarkException and this code.
     StarkErrorCode.MALFORMED_REQUEST,
     StarkErrorCode.OUT_OF_RANGE_FIELD_ELEMENT,
     StarkErrorCode.SCHEMA_VALIDATION_ERROR,
+    StarknetErrorCode.INVALID_TRANSACTION_NONCE,
+    StarknetErrorCode.NON_EMPTY_SIGNATURE,
     StarknetErrorCode.OUT_OF_RANGE_CONTRACT_ADDRESS,
     StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_OFFSET,
     StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_SELECTOR,
@@ -68,9 +73,11 @@ common_error_codes: List[ErrorCode] = [
     # External-to-internal conversion errors.
     StarknetErrorCode.INVALID_TRANSACTION_QUERYING_VERSION,
     StarknetErrorCode.INVALID_TRANSACTION_VERSION,
-    StarknetErrorCode.UNSUPPORTED_SELECTOR_FOR_FEE,
+    StarknetErrorCode.UNAUTHORIZED_ENTRY_POINT_FOR_INVOKE,
     # Contract class validation.
     StarknetErrorCode.INVALID_CONTRACT_CLASS,
+    # Validate execution.
+    StarknetErrorCode.UNAUTHORIZED_ACTION_ON_VALIDATE,
 ]
 
 main_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(

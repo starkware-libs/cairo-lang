@@ -20,6 +20,7 @@ from starkware.cairo.lang.vm.memory_dict import MemoryDict
 from starkware.cairo.lang.vm.memory_segments import is_valid_memory_addr, is_valid_memory_value
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
 from starkware.python.utils import add_counters, multiply_counter_by_scalar, sub_counters
+from starkware.starkware_utils.marshmallow_dataclass_fields import additional_metadata
 
 DEFAULT_CAIRO_PIE_VERSION = "1.0"
 CURRENT_CAIRO_PIE_VERSION = "1.1"
@@ -127,7 +128,9 @@ class ExecutionResources:
 
     n_steps: int
     builtin_instance_counter: Dict[str, int]
-    n_memory_holes: int = field(metadata=dict(marshmallow_field=mfields.Integer(load_default=0)))
+    n_memory_holes: int = field(
+        metadata=additional_metadata(marshmallow_field=mfields.Integer(load_default=0))
+    )
     Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
 
     def run_validity_checks(self):
@@ -191,6 +194,20 @@ class ExecutionResources:
         return dict(
             **self.builtin_instance_counter,
             n_steps=self.n_steps + self.n_memory_holes,
+        )
+
+    def filter_unused_builtins(self) -> "ExecutionResources":
+        """
+        Returns a copy of the execution resources where all the builtins with a usage counter
+        of 0 are omitted.
+        """
+        return dataclasses.replace(
+            self,
+            builtin_instance_counter={
+                name: counter
+                for name, counter in self.builtin_instance_counter.items()
+                if counter > 0
+            },
         )
 
 

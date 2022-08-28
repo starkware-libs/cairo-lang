@@ -5,18 +5,18 @@ from starkware.starknet.cli.reconstruct_starknet_traceback import reconstruct_st
 
 def test_reconstruct_traceback():
     code1 = """
-func main():
-    assert 1 = 2
-    return ()
-end
-    """
+func main() {
+    assert 1 = 2;
+    return ();
+}
+"""
 
     code2 = """
-func main():
-    assert 2 = 3
-    return ()
-end
-    """
+func main() {
+    assert 2 = 3;
+    return ();
+}
+"""
 
     traceback_txt = """
 Error at pc=0:0:
@@ -43,7 +43,7 @@ Error message 3
     )
     expected_res = """
 filename:3:16: Error at pc=0:0:
-    assert 1 = 2
+    assert 1 = 2;
                ^
 Error message 1
 Error in the called contract (0x1234):
@@ -51,7 +51,7 @@ Error at pc=0:0:
 Error message 2
 Error in the called contract (0x5678):
 filename:3:16: Error at pc=0:0:
-    assert 2 = 3
+    assert 2 = 3;
                ^
 Error message 3
 """
@@ -67,7 +67,7 @@ Error at pc=0:0:
 Error message 1
 Error in the called contract (0x1234):
 filename:3:16: Error at pc=0:0:
-    assert 1 = 2
+    assert 1 = 2;
                ^
 Error message 2
 Error in the called contract (0x5678):

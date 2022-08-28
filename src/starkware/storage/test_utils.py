@@ -36,6 +36,9 @@ class DummyLockManager(LockManager):
             raise LockError()
         return await self.lock(name)
 
+    async def lock_exists(self, name: str) -> bool:
+        return name in self.locked.keys()
+
     async def lock(self, name: str) -> DummyLockObject:
         while name in self.locked:
             await self.locked[name]

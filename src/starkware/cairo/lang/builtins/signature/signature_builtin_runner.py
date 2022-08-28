@@ -105,7 +105,13 @@ class SignatureBuiltinRunner(SimpleBuiltinRunner):
 
     def extend_additional_data(self, data, relocate_callback, data_is_trusted=True):
         for addr, signature in data:
-            self.signatures[relocate_callback(RelocatableValue.from_tuple(addr))] = signature
+            relocated_addr = relocate_callback(RelocatableValue.from_tuple(addr))
+            assert relocated_addr.segment_index == self.base.segment_index, (
+                f"Error while loading {self.name} builtin additional data: "
+                "Signature hint must point to the signature builtin segment. "
+                f"Found: {addr} (after relocation: {relocated_addr})."
+            )
+            self.signatures[relocated_addr] = signature
 
 
 class SignatureBuiltinVerifier(BuiltinVerifier):

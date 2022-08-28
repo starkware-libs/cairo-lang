@@ -47,13 +47,14 @@ python_lib(starknet_os_utils_lib
     cairo_run_lib
     cairo_vm_lib
     starknet_abi_lib
+    starknet_business_logic_fact_state_lib
+    starknet_business_logic_patricia_state_lib
     starknet_business_logic_state_lib
     starknet_contract_address_lib
     starknet_contract_class_lib
     starknet_definitions_lib
     starknet_execute_entry_point_base_lib
     starknet_general_config_lib
-    starknet_internal_transaction_interface_lib
     starknet_storage_lib
     starknet_transaction_lib
     starknet_transaction_execution_objects_lib
@@ -71,6 +72,7 @@ full_python_test(starknet_os_program_hash_test
 
     FILES
     program_hash_test.py
+    program_hash.json
 
     LIBS
     cairo_hash_program_lib

@@ -18,20 +18,20 @@ def test_validation_rules():
 from starkware.cairo.common.cairo_builtins import EcOpBuiltin
 from starkware.cairo.common.ec_point import EcPoint
 
-func main{{ec_op_ptr: EcOpBuiltin*}}():
-    assert ec_op_ptr.p.x = {p[0]}
-    assert ec_op_ptr.p.y = {p[1]}
-    assert ec_op_ptr.q.x = {q[0]}
-    assert ec_op_ptr.q.y = {q[1]}
-    assert ec_op_ptr.m = {m}
-    with_attr error_message("Wrong result"):
-        tempvar r = ec_op_ptr.r
-        assert r.x = {r[0]}
-        assert r.y = {r[1]}
-    end
-    let ec_op_ptr = ec_op_ptr + 7
-    return ()
-end
+func main{{ec_op_ptr: EcOpBuiltin*}}() {{
+    assert ec_op_ptr.p.x = {p[0]};
+    assert ec_op_ptr.p.y = {p[1]};
+    assert ec_op_ptr.q.x = {q[0]};
+    assert ec_op_ptr.q.y = {q[1]};
+    assert ec_op_ptr.m = {m};
+    with_attr error_message("Wrong result") {{
+        tempvar r = ec_op_ptr.r;
+        assert r.x = {r[0]};
+        assert r.y = {r[1]};
+    }}
+    let ec_op_ptr = ec_op_ptr + 7;
+    return ();
+}}
 """
 
     # A valid computation.

@@ -4,8 +4,8 @@ from typing import Type, TypeVar
 
 from starkware.python.utils import from_bytes
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactTree
+from starkware.starkware_utils.marshmallow_fields_metadata import int_as_hex_metadata
 from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
-from starkware.starkware_utils.validated_fields import int_as_hex_metadata
 
 TBinaryFactTreeDiff = TypeVar("TBinaryFactTreeDiff", bound="BinaryFactTreeDiffBase")
 

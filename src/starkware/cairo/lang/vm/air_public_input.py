@@ -1,18 +1,19 @@
 import re
 from dataclasses import field
-from typing import ClassVar, Dict, List, Tuple, Type
+from typing import ClassVar, Dict, List, Optional, Tuple, Type
 
 import marshmallow
 import marshmallow_dataclass
 
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.cairo.lang.vm.utils import IntAsHex, MemorySegmentAddresses
+from starkware.starkware_utils.marshmallow_dataclass_fields import additional_metadata
 
 
 @marshmallow_dataclass.dataclass
 class PublicMemoryEntry:
     address: int
-    value: int = field(metadata=dict(marshmallow_field=IntAsHex(required=True)))
+    value: int = field(metadata=additional_metadata(marshmallow_field=IntAsHex(required=True)))
     # The public memory may be divided into several chunks, called "pages".
     page: int
 
@@ -22,6 +23,8 @@ class PublicInput:
     # The name of the layout (e.g., 'small'), see the LAYOUTS dict in
     # starkware/cairo/lang/instances.py.
     layout: str
+    # If layout is "dynamic", layout_params will contain all the computed layout parameters.
+    layout_params: Optional[Dict[str, int]]
     rc_min: int
     rc_max: int
     n_steps: int

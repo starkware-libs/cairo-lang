@@ -7,7 +7,7 @@ python_lib(everest_definitions_lib
 
     LIBS
     starkware_crypto_lib
-    starkware_dataclasses_utils_lib
+    starkware_dataclasses_field_utils_lib
     starkware_error_handling_lib
     pip_marshmallow
     pip_web3

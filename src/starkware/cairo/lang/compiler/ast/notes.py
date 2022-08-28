@@ -16,8 +16,8 @@ class Notes(AstNode):
     For example, in the following code the first comment is represented by a note and the
     second is represented in the CommentedCodeElement:
 
-      assert a = b +  # Hello.
-          c + d  # World.
+      assert a = b +  // Hello.
+          c + d  // World.
     """
 
     # The comments of the note. If empty, the value of starts_new_line is ignored.
@@ -62,11 +62,15 @@ class Notes(AstNode):
         elif len(self.comments) > 0:
             code += "  "
         for comment in self.comments:
-            assert comment.startswith("#")
-            comment_body = comment[1:].strip()
+            if comment.startswith("//"):
+                comment_body = comment[2:].strip()
+            elif comment.startswith("#"):
+                comment_body = comment[1:].strip()
+            else:
+                raise Exception("Internal error: comment prefix not found.")
             if comment_body != "":
                 comment_body = " " + comment_body
-            code += f"#{comment_body}\n"
+            code += f"//{comment_body}\n"
         return code
 
     def get_children(self) -> Sequence[Optional[AstNode]]:

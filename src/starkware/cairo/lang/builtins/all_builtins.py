@@ -11,6 +11,7 @@ RANGE_CHECK_BUILTIN = "range_check"
 ECDSA_BUILTIN = "ecdsa"
 BITWISE_BUILTIN = "bitwise"
 EC_OP_BUILTIN = "ec_op"
+KECCAK_BUILTIN = "keccak"
 
 BUILTIN_NAME_SUFFIX = "_builtin"
 
@@ -53,5 +54,6 @@ ALL_BUILTINS = BuiltinList(
         ECDSA_BUILTIN,
         BITWISE_BUILTIN,
         EC_OP_BUILTIN,
+        KECCAK_BUILTIN,
     ]
 )

@@ -23,9 +23,9 @@ TEST_SCOPE = ScopedName.from_string("test_scope")
 CAIRO_TEST_MODULES = {
     "starkware.cairo.lang.compiler.lib.registers": """
 @known_ap_change
-func get_ap() -> (ap_val : felt):
-    ret
-end
+func get_ap() -> (ap_val: felt) {
+    ret;
+}
 """,
 }
 
@@ -34,7 +34,7 @@ def strip_comments_and_linebreaks(program: str):
     """
     Removes all comments and empty lines from the given program.
     """
-    program = re.sub(r"\s*#.*\n", "\n", program)
+    program = re.sub(r"\s*//.*\n", "\n", program)
     return re.sub("\n+", "\n", program).lstrip()
 
 

@@ -23,6 +23,7 @@ setuptools.setup(
     package_data={
         "starkware.cairo.common": ["*.cairo", "*/*.cairo"],
         "starkware.cairo.lang.compiler": ["cairo.ebnf", "lib/*.cairo"],
+        "starkware.cairo.lang.migrators": ["*.ebnf"],
         "starkware.cairo.lang.tracer": ["*.html", "*.css", "*.js", "*.png"],
         "starkware.cairo.lang": ["VERSION"],
         "starkware.cairo.sharp": ["config.json"],
@@ -38,6 +39,7 @@ setuptools.setup(
         "starkware/cairo/lang/scripts/cairo-compile",
         "starkware/cairo/lang/scripts/cairo-format",
         "starkware/cairo/lang/scripts/cairo-hash-program",
+        "starkware/cairo/lang/scripts/cairo-migrate",
         "starkware/cairo/lang/scripts/cairo-reconstruct-traceback",
         "starkware/cairo/lang/scripts/cairo-run",
         "starkware/cairo/lang/scripts/cairo-sharp",

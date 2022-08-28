@@ -32,10 +32,10 @@ def runner(program: Program) -> CairoFunctionRunner:
         (DEFAULT_PRIME - 1, "Invalid Ethereum address - value is more than 160 bits"),
     ],
 )
-def test_assert_valid_eth_address(runner: CairoFunctionRunner, address, error_message):
+def test_assert_eth_address_range(runner: CairoFunctionRunner, address, error_message):
     with maybe_raises(expected_exception=VmException, error_message=error_message):
         runner.run(
-            "assert_valid_eth_address",
+            "assert_eth_address_range",
             range_check_ptr=runner.range_check_builtin.base,
             address=address,
         )

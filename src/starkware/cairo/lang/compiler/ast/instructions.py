@@ -186,7 +186,7 @@ class InstructionAst(AstNode):
     location: Optional[Location] = LocationField
 
     def format(self):
-        return self.body.format() + ("; ap++" if self.inc_ap else "")
+        return self.body.format() + (", ap++" if self.inc_ap else "")
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.body]

@@ -6,7 +6,8 @@ from typing import Iterable, Iterator, Optional, Type
 import marshmallow_dataclass
 
 from services.everest.api.gateway.transaction import EverestTransaction
-from services.everest.business_logic.state import CarriedStateBase, StateSelectorBase
+from services.everest.business_logic.state import StateSelectorBase
+from services.everest.business_logic.state_api import StateProxy
 from starkware.starkware_utils.config_base import Config
 from starkware.starkware_utils.one_of_schema_tracker import SubclassSchemaTracker
 from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
@@ -35,7 +36,7 @@ class EverestInternalStateTransaction(SubclassSchemaTracker):
 
     @abstractmethod
     async def apply_state_updates(
-        self, state: CarriedStateBase, general_config: Config
+        self, state: StateProxy, general_config: Config
     ) -> Optional[EverestTransactionExecutionInfo]:
         """
         Applies the transaction on the state in an atomic manner.

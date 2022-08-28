@@ -15,7 +15,7 @@ python_lib(services_external_api_lib
 
     LIBS
     services_external_api_utils_lib
-    starkware_dataclasses_utils_lib
+    starkware_dataclasses_field_utils_lib
     starkware_python_utils_lib
     pip_aiohttp
     ${SERVICES_EXTERNAL_API_LIB_ADDITIONAL_LIBS}

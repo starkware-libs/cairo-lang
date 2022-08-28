@@ -15,7 +15,7 @@ scope = ScopedName.from_string
 
 
 def test_offset_reference_definition_typed_members():
-    t = TypeStruct(scope=scope("T"), is_fully_resolved=True)
+    t = TypeStruct(scope=scope("T"))
     t_star = TypePointer(pointee=t)
     reference_manager = ReferenceManager()
 
