@@ -1,4 +1,5 @@
 import json
+import os
 
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.common.structs import CairoStructFactory
@@ -12,7 +13,10 @@ from starkware.starknet.core.os.os_program import get_os_program
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.general_config import StarknetChainId, StarknetOsConfig
 
-HASH_PATH = get_source_dir_path("src/starkware/starknet/core/os/os_config/os_config_hash.json")
+HASH_PATH = get_source_dir_path(
+    "src/starkware/starknet/core/os/os_config/os_config_hash.json",
+    default_value=os.path.join(os.path.dirname(__file__), "os_config_hash.json"),
+)
 FEE_TOKEN_ADDRESS = 0x49D36570D4E46F48E99674BD3FCC84644DDD6B96F7C741B1562B82F9E004DC7
 FIX_COMMAND = "starknet_os_config_hash_fix"
 

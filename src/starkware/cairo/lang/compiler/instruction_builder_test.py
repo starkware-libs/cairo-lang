@@ -17,7 +17,7 @@ def parse_and_build(inst: str) -> BytecodeElement:
 
 
 def test_assert_eq():
-    assert parse_and_build("[ap] = [fp]; ap++") == Instruction(
+    assert parse_and_build("[ap] = [fp], ap++") == Instruction(
         off0=0,
         off1=-1,
         off2=0,
@@ -63,8 +63,8 @@ def test_assert_eq():
 
 def test_assert_eq_reversed():
     assert parse_and_build("5 = [fp + 1]") == parse_and_build("[fp + 1] = 5")
-    assert parse_and_build("[[ap + 2] + 3] = [fp + 1]; ap++") == parse_and_build(
-        "[fp + 1] = [[ap + 2] + 3]; ap++"
+    assert parse_and_build("[[ap + 2] + 3] = [fp + 1], ap++") == parse_and_build(
+        "[fp + 1] = [[ap + 2] + 3], ap++"
     )
     assert parse_and_build("[ap] + [fp] = [fp + 1]") == parse_and_build("[fp + 1] = [ap] + [fp]")
 
@@ -145,7 +145,7 @@ def test_assert_eq_double_dereference():
         fp_update=Instruction.FpUpdate.REGULAR,
         opcode=Instruction.Opcode.ASSERT_EQ,
     )
-    assert parse_and_build("[ap + 2] = [[ap - 4] + 7]; ap++") == Instruction(
+    assert parse_and_build("[ap + 2] = [[ap - 4] + 7], ap++") == Instruction(
         off0=2,
         off1=-4,
         off2=7,
@@ -320,7 +320,7 @@ def test_jump_instruction():
         fp_update=Instruction.FpUpdate.REGULAR,
         opcode=Instruction.Opcode.NOP,
     )
-    assert parse_and_build("jmp abs 123; ap++") == Instruction(
+    assert parse_and_build("jmp abs 123, ap++") == Instruction(
         off0=-1,
         off1=-1,
         off2=1,
@@ -379,7 +379,7 @@ def test_jnz_instruction():
         fp_update=Instruction.FpUpdate.REGULAR,
         opcode=Instruction.Opcode.NOP,
     )
-    assert parse_and_build("jmp rel 123 if [ap] != 0; ap++") == Instruction(
+    assert parse_and_build("jmp rel 123 if [ap] != 0, ap++") == Instruction(
         off0=0,
         off1=-1,
         off2=1,
@@ -496,7 +496,7 @@ Invalid offset for call.
     )
     verify_exception(
         """\
-call rel 5; ap++
+call rel 5, ap++
 ^**************^
 ap++ may not be used with the call opcode.
 """
@@ -523,7 +523,7 @@ def test_ret_instruction():
 def test_ret_instruction_failures():
     verify_exception(
         """\
-ret; ap++
+ret, ap++
 ^*******^
 ap++ may not be used with the ret opcode.
 """
@@ -578,7 +578,7 @@ def test_addap_instruction():
 def test_addap_instruction_failures():
     verify_exception(
         """\
-ap += 5; ap++
+ap += 5, ap++
 ^***********^
 ap++ may not be used with the addap opcode.
 """

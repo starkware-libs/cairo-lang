@@ -9,21 +9,21 @@ from starkware.cairo.lang.vm.vm_exceptions import VmException
 
 def test_reconstruct_traceback():
     code = """
-    func bar():
-        assert 0 = 1
-        return ()
-    end
+func bar() {
+    assert 0 = 1;
+    return ();
+}
 
-    func foo():
-        bar()
-        return ()
-    end
+func foo() {
+    bar();
+    return ();
+}
 
-    func main():
-        foo()
-        return ()
-    end
-    """
+func main() {
+    foo();
+    return ();
+}
+"""
     codes = [(code, "filename")]
     program_with_debug_info = compile_cairo(code=codes, prime=DEFAULT_PRIME, debug_info=True)
     program_without_debug_info = compile_cairo(code=codes, prime=DEFAULT_PRIME, debug_info=False)
@@ -50,16 +50,16 @@ Unknown location (pc=0:5)\
     assert (
         res
         == """\
-filename:3:9: Error at pc=0:2:
-        assert 0 = 1
-        ^**********^
+filename:3:5: Error at pc=0:2:
+    assert 0 = 1;
+    ^***********^
 An ASSERT_EQ instruction failed: 1 != 0.
 Cairo traceback (most recent call last):
-filename:13:9
-        foo()
-        ^***^
-filename:8:9
-        bar()
-        ^***^\
+filename:13:5
+    foo();
+    ^***^
+filename:8:5
+    bar();
+    ^***^\
 """
     )

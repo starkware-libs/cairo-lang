@@ -1,7 +1,8 @@
 import dataclasses
 from abc import ABC, abstractmethod
-from typing import List, Optional, Tuple
+from typing import Awaitable, Callable, List, Tuple
 
+from starkware.starknet.services.api.contract_class import ContractClass
 from starkware.starknet.wallets.starknet_context import StarknetContext
 
 DEFAULT_ACCOUNT_DIR = "~/.starknet_accounts"
@@ -14,6 +15,7 @@ class WrappedMethod:
     calldata: List[int]
     max_fee: int
     signature: List[int]
+    nonce: int
 
 
 class Account(ABC):
@@ -40,7 +42,7 @@ class Account(ABC):
         chain_id: int,
         max_fee: int,
         version: int,
-        nonce: Optional[int],
+        nonce_callback: Callable[[int], Awaitable[int]],
         dry_run: bool = False,
     ) -> WrappedMethod:
         """
@@ -60,10 +62,25 @@ class Account(ABC):
         chain_id: int,
         max_fee: int,
         version: int,
-        nonce: Optional[int],
+        nonce_callback: Callable[[int], Awaitable[int]],
     ) -> Tuple[WrappedMethod, int]:
         """
         Prepares the required information for invoking a contract deployment function through
         the account contract.
         Returns the wrapped method and the deployed contract address.
+        """
+
+    @abstractmethod
+    async def declare(
+        self,
+        contract_class: ContractClass,
+        chain_id: int,
+        max_fee: int,
+        version: int,
+        nonce_callback: Callable[[int], Awaitable[int]],
+        dry_run: bool = False,
+    ) -> WrappedMethod:
+        """
+        Prepares the required information for declaring a contract class through the account
+        contract.
         """

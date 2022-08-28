@@ -2,17 +2,16 @@ import dataclasses
 import random
 from abc import ABC, abstractmethod
 from dataclasses import field
-from typing import Any, Callable, ClassVar, Dict, Generic, List, Optional, Type, TypeVar
+from typing import Any, Callable, ClassVar, Dict, Generic, List, Optional, TypeVar
 
 import marshmallow.fields as mfields
 import marshmallow.utils
 
 from starkware.python.utils import get_random_bytes, initialize_random
 from starkware.starkware_utils.error_handling import ErrorCode, stark_assert
-from starkware.starkware_utils.field_validators import validate_in_range
 from starkware.starkware_utils.marshmallow_dataclass_fields import (
-    BytesAsBase64Str,
     BytesAsHex,
+    FieldMetadata,
     IntAsHex,
     IntAsStr,
 )
@@ -114,7 +113,7 @@ class Field(ABC, Generic[T]):
         field_name: Optional[str] = None,
         required: bool = True,
         load_default: Any = marshmallow.utils.missing,
-    ) -> Dict[str, Any]:
+    ) -> FieldMetadata:
         """
         Creates the metadata associated with this field. If provided, then use the given field_name
         for messages, and otherwise (if it is None) use the default name.
@@ -174,9 +173,28 @@ class OptionalField(Field[Optional[T]]):
             return f"{name} is valid (None)."
         return self.field.format_invalid_value_error_message(value=value, name=name)
 
-    def get_marshmallow_field(self, required: bool, load_default: Any) -> mfields.Field:
+    # Metadata.
+
+    def metadata(
+        self,
+        field_name: Optional[str] = None,
+        required: bool = False,
+        load_default: Any = None,
+    ) -> Dict[str, Any]:
+        """
+        Creates the metadata associated with this optional field.
+        """
+        assert not required, "Optional field must not be required."
+        assert load_default is None, "Optional field must have default value None."
+        return super().metadata(field_name=field_name, required=required, load_default=load_default)
+
+    def get_marshmallow_field(
+        self, required: bool = False, load_default: Any = None
+    ) -> mfields.Field:
+        assert not required, "Optional field must not be required."
+        assert load_default is None, "Optional field must have default value None."
         # Field is created with allow_none=True if load_default is None.
-        return self.field.get_marshmallow_field(required=False, load_default=None)
+        return self.field.get_marshmallow_field(required=required, load_default=load_default)
 
 
 # Mypy has a problem with dataclasses that contain unimplemented abstract methods.
@@ -206,7 +224,9 @@ class BaseRangeValidatedField(Field[int]):
             return str(value)
         return self.formatter(value)
 
-    def get_marshmallow_field(self, required: bool, load_default: Any) -> mfields.Field:
+    def get_marshmallow_field(
+        self, required: bool = True, load_default: Any = marshmallow.utils.missing
+    ) -> mfields.Field:
         if self.formatter == hex:
             return IntAsHex(required=required, load_default=load_default)
         if self.formatter == str:
@@ -296,86 +316,10 @@ class BytesLengthField(Field[bytes]):
         return f"{name} {value_repr} length is not {self.length} bytes, instead it is {len(value)}"
 
     # Serialization.
-    def get_marshmallow_field(self, required: bool, load_default: Any) -> mfields.Field:
+    def get_marshmallow_field(
+        self, required: bool = True, load_default: Any = marshmallow.utils.missing
+    ) -> mfields.Field:
         return BytesAsHex(required=required, load_default=load_default)
 
     def format(self, value: bytes) -> str:
         return value.hex()
-
-
-# Field metadata utilities.
-
-
-def _generate_metadata(
-    marshmallow_field_cls: Type[mfields.Field],
-    validated_field: Optional[Field],
-    required: Optional[bool] = None,
-) -> Dict[str, Any]:
-    if required is None:
-        required = True
-
-    metadata: Dict[str, Any] = dict(marshmallow_field=marshmallow_field_cls(required=required))
-    if validated_field is not None:
-        metadata.update(validated_field=validated_field)
-
-    return metadata
-
-
-def int_metadata(
-    validated_field: Optional[Field], required: Optional[bool] = None
-) -> Dict[str, Any]:
-    return _generate_metadata(
-        marshmallow_field_cls=mfields.Integer, validated_field=validated_field, required=required
-    )
-
-
-def int_as_hex_metadata(
-    validated_field: Optional[Field], required: Optional[bool] = None
-) -> Dict[str, Any]:
-    return _generate_metadata(
-        marshmallow_field_cls=IntAsHex, validated_field=validated_field, required=required
-    )
-
-
-def int_as_str_metadata(
-    validated_field: Optional[Field], required: Optional[bool] = None
-) -> Dict[str, Any]:
-    return _generate_metadata(
-        marshmallow_field_cls=IntAsStr, validated_field=validated_field, required=required
-    )
-
-
-def bytes_as_hex_metadata(
-    validated_field: Optional[Field], required: Optional[bool] = None
-) -> Dict[str, Any]:
-    return _generate_metadata(
-        marshmallow_field_cls=BytesAsHex, validated_field=validated_field, required=required
-    )
-
-
-def bytes_as_base64_str_metadata(
-    validated_field: Optional[Field], required: Optional[bool] = None
-) -> Dict[str, Any]:
-    return _generate_metadata(
-        marshmallow_field_cls=BytesAsBase64Str, validated_field=validated_field, required=required
-    )
-
-
-
-def sequential_id_metadata(
-    field_name: str,
-    required: bool = True,
-    allow_previous_id: bool = False,
-    load_default: Any = marshmallow.utils.missing,
-) -> Dict[str, Any]:
-    load_default_value = load_default() if callable(load_default) else load_default
-    validator = validate_in_range(
-        field_name=field_name,
-        min_value=-1 if allow_previous_id else 0,
-        allow_none=load_default_value is None,
-    )
-    return dict(
-        marshmallow_field=mfields.Integer(
-            strict=True, required=required, validate=validator, load_default=load_default
-        )
-    )

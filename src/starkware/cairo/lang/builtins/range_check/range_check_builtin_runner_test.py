@@ -8,10 +8,10 @@ def test_validation_rules():
     CODE_FORMAT = """
 %builtins range_check
 
-func main(range_check_ptr) -> (range_check_ptr):
-    assert [range_check_ptr] = {value}
-    return (range_check_ptr=range_check_ptr + 1)
-end
+func main(range_check_ptr: felt) -> (range_check_ptr: felt) {{
+    assert [range_check_ptr] = {value};
+    return (range_check_ptr=range_check_ptr + 1);
+}}
 """
 
     # Test valid values.

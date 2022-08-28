@@ -4,6 +4,7 @@ import string
 from typing import Any, ClassVar, Dict, List, Optional
 
 import marshmallow.fields as mfields
+import marshmallow.utils
 from eth_typing import ChecksumAddress
 from web3 import Web3
 
@@ -55,7 +56,9 @@ class EthAddressTypeField(Field[str]):
         )
 
     # Serialization.
-    def get_marshmallow_field(self, required: bool, load_default: Any) -> mfields.Field:
+    def get_marshmallow_field(
+        self, required: bool = True, load_default: Any = marshmallow.utils.missing
+    ) -> mfields.Field:
         return mfields.String(required=required, load_default=load_default)
 
     def convert_valid_to_checksum(self, value: str) -> ChecksumAddress:

@@ -61,7 +61,6 @@ class ClientBase(HasUriPrefix):
         url: str,
         certificates_path: Optional[str] = None,
         retry_config: Optional[RetryConfig] = None,
-        validate_server_crt: bool = True,
     ):
         self.url = url
         self.ssl_context: Optional[ssl.SSLContext] = None
@@ -82,10 +81,7 @@ class ClientBase(HasUriPrefix):
             )
 
             # Enforce usage of server certificate authentication.
-            if validate_server_crt:
-                self.ssl_context.load_verify_locations(
-                    os.path.join(certificates_path, "server.crt")
-                )
+            self.ssl_context.load_verify_locations(os.path.join(certificates_path, "server.crt"))
 
     def __repr__(self) -> str:
         return generic_object_repr(obj=self)

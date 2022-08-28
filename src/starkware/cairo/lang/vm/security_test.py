@@ -17,8 +17,8 @@ def test_completeness():
         run_code_in_runner(
             """
 main:
-[ap] = 1
-ret
+[ap] = 1;
+ret;
 """
         )
     )
@@ -28,8 +28,8 @@ def test_negative_address():
     runner = run_code_in_runner(
         """
 main:
-[ap] = 0; ap++
-ret
+[ap] = 0, ap++;
+ret;
 """
     )
     # Access negative offset manually, so it is not taken modulo prime.
@@ -44,12 +44,13 @@ def test_out_of_program_bounds():
             run_code_in_runner(
                 """
 main:
-call test
-ret
+call test;
+ret;
+
 test:
-[ap] = [fp - 1]  # pc.
-[ap] = [[ap] + 4] # Write right after end of program.
-ret
+[ap] = [fp - 1];  // pc.
+[ap] = [[ap] + 4];  // Write right after end of program.
+ret;
 """
             )
         )
@@ -59,8 +60,8 @@ def test_pure_address_access():
     runner = run_code_in_runner(
         """
 main:
-[fp - 1] = [fp - 1]  # nop.
-ret
+[fp - 1] = [fp - 1];  // nop.
+ret;
 """
     )
     # Access a pure address manually, because runner disallows it as well.
@@ -77,13 +78,14 @@ def test_builtin_segment_access():
             run_code_in_runner(
                 """
 %builtins pedersen
+
 main:
-[ap] = 1; ap++
-[ap - 1] = [[fp - 3] + 0]
-[ap - 1] = [[fp - 3] + 1]
-[ap] = [[fp - 3] + 2]; ap++  # Read hash result.
-[ap] = [fp - 3] + 3; ap++  # Return pedersen_ptr.
-ret
+[ap] = 1, ap++;
+[ap - 1] = [[fp - 3] + 0];
+[ap - 1] = [[fp - 3] + 1];
+[ap] = [[fp - 3] + 2], ap++;  // Read hash result.
+[ap] = [fp - 3] + 3, ap++;  // Return pedersen_ptr.
+ret;
 """,
                 layout="small",
             )
@@ -93,10 +95,11 @@ ret
     runner = run_code_in_runner(
         """
 %builtins pedersen
+
 main:
-[fp - 1] = [[fp - 3] + 2]  # Access only the result portion of the builtin.
-[ap] = [fp - 3] + 3; ap++  # Return pedersen_ptr.
-ret
+[fp - 1] = [[fp - 3] + 2];  // Access only the result portion of the builtin.
+[ap] = [fp - 3] + 3, ap++;  // Return pedersen_ptr.
+ret;
 """,
         layout="small",
     )
@@ -113,14 +116,14 @@ ret
             run_code_in_runner(
                 """
 %builtins pedersen
-func main{pedersen_ptr}():
-    assert [pedersen_ptr] = 0
-    assert [pedersen_ptr + 2] = 0
-    assert [pedersen_ptr + 3] = 0
-    assert [pedersen_ptr + 5] = 0
-    let pedersen_ptr = pedersen_ptr + 6
-    return ()
-end
+func main{pedersen_ptr}() {
+    assert [pedersen_ptr] = 0;
+    assert [pedersen_ptr + 2] = 0;
+    assert [pedersen_ptr + 3] = 0;
+    assert [pedersen_ptr + 5] = 0;
+    let pedersen_ptr = pedersen_ptr + 6;
+    return ();
+}
 """,
                 layout="small",
             )

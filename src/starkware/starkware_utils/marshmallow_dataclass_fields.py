@@ -12,6 +12,8 @@ from mypy_extensions import KwArg, VarArg
 
 from starkware.starkware_utils.custom_raising_dict import CustomRaisingDict, CustomRaisingFrozenDict
 
+FieldMetadata = Dict[str, Any]
+
 OptionalFloat: Callable[[VarArg(), KwArg()], mfields.Float] = functools.partial(
     mfields.Float, allow_none=True
 )
@@ -189,25 +191,60 @@ class CustomRaisingFrozenDictField(CustomField, mfields.Mapping):
     _type = CustomRaisingFrozenDict
 
 
+# Utilities.
+
+
+def load_int_value(field_metadata: FieldMetadata, value: str) -> int:
+    return field_metadata["marshmallow_field"]._deserialize(value=value, attr=None, data=None)
+
+
+allowed_marshmallow_dataclass_keywords = {"marshmallow_field"}
+allowed_marshmallow_keywords = {
+    "load_default",
+    "dump_default",
+    "data_key",
+    "attribute",
+    "validate",
+    "required",
+    "allow_none",
+    "load_only",
+    "dump_only",
+    "error_messages",
+    "metadata",
+    *allowed_marshmallow_dataclass_keywords,
+}
+
+
+def additional_metadata(**kwargs) -> FieldMetadata:
+    """
+    Returns additional metadata for marshmallow field constructor.
+    All keywords that do not appear in allowed_marshmallow_keywords are moved to "metadata"
+    dictionary.
+    """
+    disallowed_keywords = kwargs.keys() - allowed_marshmallow_keywords
+    disallowed_kwargs = {keyword: kwargs.pop(keyword) for keyword in disallowed_keywords}
+
+    metadata: FieldMetadata = kwargs.setdefault("metadata", {})
+    metadata.update(disallowed_kwargs)
+
+    return kwargs
+
+
 # Field metadata for general use in marshmallow dataclasses.
 
 
 def enum_field_metadata(
     *, enum_class: type, require: bool = True, allow_none: bool = False
-) -> dict:
-    return dict(
+) -> FieldMetadata:
+    return additional_metadata(
         marshmallow_field=EnumField(enum_cls=enum_class, required=require, allow_none=allow_none)
     )
 
 
-boolean_field_metadata: Dict[str, Any] = dict(marshmallow_field=RequiredBoolean())
-optional_field_metadata: Dict[str, Any] = dict(allow_none=True, load_default=None)
+boolean_field_metadata: FieldMetadata = additional_metadata(marshmallow_field=RequiredBoolean())
+optional_field_metadata: FieldMetadata = additional_metadata(allow_none=True, load_default=None)
 
-nonrequired_optional_metadata: Dict[str, Any] = dict(load_default=None, required=False)
-nonrequired_list_metadata: Dict[str, Any] = dict(load_default=list, required=False)
-
-# Utilities.
-
-
-def load_int_value(field_metadata: Dict[str, Any], value: str) -> int:
-    return field_metadata["marshmallow_field"]._deserialize(value=value, attr=None, data=None)
+nonrequired_optional_metadata: FieldMetadata = additional_metadata(
+    load_default=None, required=False
+)
+nonrequired_list_metadata: FieldMetadata = additional_metadata(load_default=list, required=False)

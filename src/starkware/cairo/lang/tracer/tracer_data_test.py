@@ -24,17 +24,17 @@ def test_tracer_data():
     code = """
 %builtins output
 
-func main(output_ptr : felt*) -> (output_ptr : felt*):
-  [ap] = 1000; ap++
-  let x = 2000
-  [ap] = x; ap++
-  let x = 5000
-  let y = [ap]
-  [ap] = [ap - 2] + [ap - 1]; ap++
-  assert [output_ptr] = 1234
-  assert [output_ptr + 1] = 4321
-  ret
-end
+func main(output_ptr: felt*) -> (output_ptr: felt*) {
+    [ap] = 1000, ap++;
+    let x = 2000;
+    [ap] = x, ap++;
+    let x = 5000;
+    let y = [ap];
+    [ap] = [ap - 2] + [ap - 1], ap++;
+    assert [output_ptr] = 1234;
+    assert [output_ptr + 1] = 4321;
+    ret;
+}
 """
     program: Program = compile_cairo(code=code, prime=PRIME, debug_info=True)
     runner = CairoRunner(program, layout="small")

@@ -23,7 +23,7 @@ def main():
         nargs="*",
         required=True,
         help="Interpreters and dependency output JSON files. "
-        "Example: python3.7:python_deps.json ...",
+        "Example: python3.9:python_deps.json ...",
     )
     parser.add_argument("--output", type=str, help="Output cmake file", required=True)
     args = parser.parse_args()
@@ -38,7 +38,7 @@ def main():
         with open(dep_file, "r") as fp:
             for package in json.load(fp):
                 # Extract name of package.
-                name = package["package"]["key"].replace("-", "_").lower()
+                name = package["package"]["key"].replace("-", "_").replace(".", "_").lower()
                 # Build a requirement line for current interpreter.
                 req = (
                     package["package"]["package_name"]
@@ -48,7 +48,8 @@ def main():
                 package_versions[name].append(f'"{interpreter} {req}"')
                 # Append dependency libraries.
                 dep_names = [
-                    dep["key"].replace("-", "_").lower() for dep in package["dependencies"]
+                    dep["key"].replace("-", "_").replace(".", "_").lower()
+                    for dep in package["dependencies"]
                 ]
                 package_libs[name] += [f"{interpreter}:pip_{name}" for name in dep_names]
 

@@ -15,8 +15,10 @@ from starkware.python.math_utils import (
     isqrt,
     next_power_of_2,
     prev_power_of_2,
+    random_ec_point,
     safe_div,
     safe_log2,
+    safe_random_ec_point,
     sqrt,
 )
 
@@ -143,3 +145,29 @@ def test_horner_eval():
     assert sum(coef * pow(point, i, PRIME) for i, coef in enumerate(coefs)) % PRIME == horner_eval(
         coefs, point, PRIME
     )
+
+
+def test_random_ec_point():
+    PRIME = (1 << 251) + (17 << 192) + 1
+    ALPHA = 1
+    BETA = 3141592653589793238462643383279502884197169399375105820974944592307816406665
+    seed = random.randrange(1 << 256).to_bytes(32, "little")
+    ec_point = random_ec_point(field_prime=PRIME, alpha=ALPHA, beta=BETA, seed=seed)
+    x, y = ec_point
+    # Check that the returned point is on the curve.
+    assert pow(y, 2, PRIME) == (pow(x, 3, PRIME) + x * ALPHA + BETA) % PRIME
+    # Make sure the returned point is deterministic when the seed is constant.
+    for i in range(10):
+        assert ec_point == random_ec_point(PRIME, ALPHA, BETA, seed)
+
+
+def test_safe_random_ec_point():
+    PRIME = (1 << 251) + (17 << 192) + 1
+    ALPHA = 1
+    BETA = 3141592653589793238462643383279502884197169399375105820974944592307816406665
+    EC_ORDER = 3618502788666131213697322783095070105526743751716087489154079457884512865583
+    # Pick a random EC point and use it as the generator.
+    generator = random_ec_point(field_prime=PRIME, alpha=ALPHA, beta=BETA)
+    x, y = safe_random_ec_point(prime=PRIME, alpha=ALPHA, generator=generator, curve_order=EC_ORDER)
+    # Check that the returned point is on the curve.
+    assert pow(y, 2, PRIME) == (pow(x, 3, PRIME) + x * ALPHA + BETA) % PRIME

@@ -11,13 +11,18 @@ from starkware.cairo.lang.vm.relocatable_fields import (
     MaybeRelocatableDictField,
     MaybeRelocatableField,
 )
+from starkware.starkware_utils.marshmallow_dataclass_fields import additional_metadata
 from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
 class DummyStruct(ValidatedMarshmallowDataclass):
-    val: MaybeRelocatable = field(metadata=dict(marshmallow_field=MaybeRelocatableField()))
-    dct: MaybeRelocatableDict = field(metadata=dict(marshmallow_field=MaybeRelocatableDictField()))
+    val: MaybeRelocatable = field(
+        metadata=additional_metadata(marshmallow_field=MaybeRelocatableField())
+    )
+    dct: MaybeRelocatableDict = field(
+        metadata=additional_metadata(marshmallow_field=MaybeRelocatableDictField())
+    )
 
 
 def test_relocatable_fields_serialize_deserialize():

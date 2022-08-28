@@ -44,10 +44,13 @@ TRANSACTION_VERSION_LOWER_BOUND = 0
 TRANSACTION_VERSION_UPPER_BOUND = FIELD_SIZE
 ADDRESS_LOWER_BOUND = 0
 ADDRESS_UPPER_BOUND = 2**ADDRESS_BITS
+UNINITIALIZED_CLASS_HASH = b"\x00" * HASH_BYTES
 
 
 # In order to identify transactions from unsupported versions.
-TRANSACTION_VERSION = 0
+TRANSACTION_VERSION = 1
+# The version is considered 0 for L1-Handler transaction hash calculation purposes.
+L1_HANDLER_VERSION = 0
 # Indentation for transactions meant to query and not addressed to the OS.
 QUERY_VERSION_BASE = 2**128
 QUERY_VERSION = QUERY_VERSION_BASE + TRANSACTION_VERSION
@@ -55,7 +58,7 @@ QUERY_VERSION = QUERY_VERSION_BASE + TRANSACTION_VERSION
 # OS-related constants.
 L1_TO_L2_MSG_HEADER_SIZE = 5
 L2_TO_L1_MSG_HEADER_SIZE = 3
-DEPLOYMENT_INFO_HEADER_SIZE = 3
+DEPLOYMENT_INFO_SIZE = 2
 
 # StarkNet solidity contract-related constants.
 N_DEFAULT_TOPICS = 1  # Events have one default topic.

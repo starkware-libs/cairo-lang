@@ -1,3 +1,3 @@
-# Represents boolean values in Cairo.
-const FALSE = 0
-const TRUE = 1
+// Represents boolean values in Cairo.
+const FALSE = 0;
+const TRUE = 1;

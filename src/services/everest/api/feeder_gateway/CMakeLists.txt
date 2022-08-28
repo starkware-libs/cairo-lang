@@ -15,6 +15,6 @@ python_lib(everest_feeder_gateway_response_objects_lib
     response_objects.py
 
     LIBS
-    starkware_dataclasses_utils_lib
+    starkware_dataclasses_field_utils_lib
     pip_marshmallow
 )

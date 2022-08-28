@@ -1,6 +1,7 @@
 import os
 
 import pytest
+import pytest_asyncio
 
 from starkware.eth.eth_test_utils import EthTestUtils, eth_reverts
 from starkware.starknet.public.abi import get_selector_from_name
@@ -12,12 +13,12 @@ from starkware.starknet.testing.postman import Postman
 CONTRACT_FILE = os.path.join(os.path.dirname(__file__), "test.cairo")
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def postman(eth_test_utils: EthTestUtils) -> Postman:
     return await Postman.create(eth_test_utils)
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_contract(postman: Postman) -> StarknetContract:
     return await postman.starknet.deploy(source=CONTRACT_FILE)
 
@@ -59,7 +60,7 @@ async def test_postman_l1_to_l2_positive_flow(
     for msg_hash in msg_hashes:
         assert postman.mock_starknet_messaging_contract.l1ToL2Messages.call(msg_hash) == 0
 
-    execution_info = await test_contract.get_value(user1).invoke()
+    execution_info = await test_contract.get_value(user1).execute()
     assert execution_info.result == (2 * amount1,)
 
     user2 = 47
@@ -84,7 +85,7 @@ async def test_postman_l1_to_l2_positive_flow(
     await postman.flush()
     assert postman.mock_starknet_messaging_contract.l1ToL2Messages.call(msg_hash2) == 0
 
-    execution_info = await test_contract.get_value(user2).invoke()
+    execution_info = await test_contract.get_value(user2).execute()
     assert execution_info.result == (amount2,)
 
 
@@ -109,8 +110,8 @@ async def test_postman_l2_to_l1_positive_flow(
     l1_address = int(eth_test_utils.accounts[0].address, 16)
 
     payload1 = [1, 2, 3]
-    await test_contract.send_message(to_address=l1_address, payload=payload1).invoke()
-    await test_contract.send_message(to_address=l1_address, payload=payload1).invoke()
+    await test_contract.send_message(to_address=l1_address, payload=payload1).execute()
+    await test_contract.send_message(to_address=l1_address, payload=payload1).execute()
 
     msg_hash1 = StarknetMessageToL1(
         from_address=test_contract.contract_address,
@@ -136,7 +137,7 @@ async def test_postman_l2_to_l1_positive_flow(
         )
 
     payload2 = [4, 5]
-    await test_contract.send_message(to_address=l1_address, payload=payload2).invoke()
+    await test_contract.send_message(to_address=l1_address, payload=payload2).execute()
 
     msg_hash2 = StarknetMessageToL1(
         from_address=test_contract.contract_address,

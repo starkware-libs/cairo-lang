@@ -12,11 +12,15 @@ Fix using the starknet_hints_latest_whitelist_fix executable.
 
 
 CAIRO_FILE = os.path.join(os.path.dirname(__file__), "starknet_common.cairo")
+LATEST_WHITELIST_FILE = get_source_dir_path(
+    "src/starkware/starknet/security/whitelists/latest.json",
+    default_value=os.path.join(os.path.dirname(__file__), "whitelists/latest.json"),
+)
 
 
 def run(fix: bool):
     program = compile_cairo_files(files=[CAIRO_FILE], prime=DEFAULT_PRIME)
-    filename = get_source_dir_path("src/starkware/starknet/security/whitelists/latest.json")
+    filename = LATEST_WHITELIST_FILE
     whitelist = HintsWhitelist.from_program(program)
     if fix:
         data = whitelist.dumps(indent=4, sort_keys=True)

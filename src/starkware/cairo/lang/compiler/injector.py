@@ -9,6 +9,10 @@ from starkware.cairo.lang.compiler.ast.code_elements import (
 from starkware.cairo.lang.compiler.ast.visitor import Visitor
 
 
+class InjectionError(Exception):
+    pass
+
+
 class InjectVisitor(Visitor):
     """
     A visitor that injects code elements after other code elements, comparing by the python object
@@ -53,5 +57,6 @@ def inject_code_elements(
     """
     visitor = InjectVisitor(injections=injections)
     res = visitor.visit(ast)
-    assert len(visitor.injections) == 0, f"Some injections were unsuccessful: {visitor.injections}."
+    if len(visitor.injections) != 0:
+        raise InjectionError(f"Some injections were unsuccessful: {visitor.injections}.")
     return res

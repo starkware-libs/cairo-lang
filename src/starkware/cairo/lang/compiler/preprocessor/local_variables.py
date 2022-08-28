@@ -168,10 +168,10 @@ class LocalVariableHandler:
     def visit_CodeElementUnpackBinding(self, elm: CodeElementUnpackBinding):
         """
         Replaces
-            let (local a : T, b) = foo()
+            let (local a: T, b) = foo();
         with
-            let (local a : T , b) = foo()
-            local a : T = a
+            let (local a: T , b) = foo();
+            local a: T = a;
         """
 
         result = [elm]

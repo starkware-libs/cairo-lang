@@ -1,4 +1,6 @@
 add_subdirectory(bootloaders)
+add_subdirectory(cairo_verifier)
 add_subdirectory(common)
 add_subdirectory(lang)
 add_subdirectory(sharp)
+add_subdirectory(stark_verifier)

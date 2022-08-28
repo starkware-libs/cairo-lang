@@ -16,7 +16,7 @@ class SynchronousExecutor(Executor):
             if self._shutdown:
                 raise RuntimeError("cannot schedule new futures after shutdown")
 
-            f = Future()
+            f: Future = Future()
             try:
                 result = fn(*args, **kwargs)
             except BaseException as e:

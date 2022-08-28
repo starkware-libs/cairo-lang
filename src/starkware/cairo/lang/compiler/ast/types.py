@@ -41,7 +41,7 @@ class TypedIdentifier(AstNode):
             return SingleParticle(text=modifier_str + self.identifier.format())
         else:
             particle = self.expr_type.to_particle()
-            particle.add_prefix(modifier_str + self.identifier.format() + " : ")
+            particle.add_prefix(modifier_str + self.identifier.format() + ": ")
             return particle
 
     def format(self):

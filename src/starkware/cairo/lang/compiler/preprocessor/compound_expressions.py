@@ -1,3 +1,4 @@
+import dataclasses
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 from typing import List, Optional, Union
@@ -5,9 +6,11 @@ from typing import List, Optional, Union
 from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt
 from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeElement,
+    CodeElementFuncCall,
     CodeElementTemporaryVariable,
 )
 from starkware.cairo.lang.compiler.ast.expr import (
+    ArgList,
     ExprConst,
     ExprDeref,
     Expression,
@@ -19,6 +22,7 @@ from starkware.cairo.lang.compiler.ast.expr import (
     ExprOperator,
     ExprReg,
 )
+from starkware.cairo.lang.compiler.ast.expr_func_call import ExprFuncCall
 from starkware.cairo.lang.compiler.ast.types import TypedIdentifier
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.expression_simplifier import ExpressionSimplifier
@@ -30,7 +34,7 @@ from starkware.cairo.lang.compiler.instruction_builder import (
 )
 from starkware.cairo.lang.compiler.preprocessor.flow import RegTrackingData
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
-from starkware.cairo.lang.compiler.references import translate_ap
+from starkware.cairo.lang.compiler.references import ApDeductionError, translate_ap
 
 
 class SimplicityLevel(Enum):
@@ -198,6 +202,48 @@ class CompoundExpressionVisitor:
             not expr.is_typed
         ), "The CompoundExpressionVisitor expects ExprNewOperator expressions to be untyped."
         return self.wrap(expr)
+
+    def translate_arg_list(self, arg_list: ArgList) -> ArgList:
+        """
+        Applies translate_ap() to all the arguments in 'arg_list'.
+        """
+        return dataclasses.replace(
+            arg_list,
+            args=[
+                dataclasses.replace(arg, expr=self.translate_ap(arg.expr)) for arg in arg_list.args
+            ],
+        )
+
+    def rewrite_ExprFuncCall(self, expr: ExprFuncCall, sim: SimplicityLevel):
+        # Arguments with AP based expression need to be rewritten.
+        # The implicit arguments here are only allowed to be identifiers so there is no
+        # need to translate them.
+        func_call = dataclasses.replace(
+            expr.rvalue, arguments=self.translate_arg_list(expr.rvalue.arguments)
+        )
+
+        self.context.visit(CodeElementFuncCall(func_call=func_call))
+        location = expr.location
+        try:
+            # Note that [ap - 1] is with respect to the current ap so we need to call untranslate_ap
+            # to return an untranslated expression (that is, with respect to the initial ap).
+            return self.untranslate_ap(
+                expr=ExprDeref(
+                    addr=ExprOperator(
+                        a=ExprReg(reg=Register.AP, location=location),
+                        op="+",
+                        b=ExprConst(val=-1, location=location),
+                        location=location,
+                    ),
+                    location=location,
+                )
+            )
+        except ApDeductionError:
+            raise PreprocessorError(
+                "Only functions with known ap change may be used in an expression. "
+                f"Consider calling '{func_call.func_ident.name}' in a separate line.",
+                location=expr.location,
+            )
 
     def wrap(self, expr: Expression) -> ExprIdentifier:
         identifier = ExprIdentifier(name=self.context.new_tempvar_name(), location=expr.location)

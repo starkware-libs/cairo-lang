@@ -3,6 +3,7 @@ from typing import List
 
 from typing_extensions import Protocol
 
+from starkware.cairo.lang.compiler.ast.cairo_types import TypeTuple
 from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeBlock,
     CodeElementEmptyLine,
@@ -19,6 +20,7 @@ from starkware.cairo.lang.compiler.preprocessor.preprocessor_utils import (
     autogen_parse_code_block,
     verify_empty_code_block,
 )
+from starkware.python.utils import as_non_optional
 from starkware.starknet.compiler.data_encoder import ArgumentInfo, EncodingType, decode_data
 from starkware.starknet.compiler.validation_utils import (
     encode_calldata_arguments,
@@ -148,7 +150,7 @@ class ContractInterfaceInfo:
 
 def process_function_selector(function_info: ContractFunctionInfo) -> List[CommentedCodeElement]:
     code = f"""\
-const {function_info.selector} = {get_selector_from_name(function_info.name)}
+const {function_info.selector} = {get_selector_from_name(function_info.name)};
 """
     code_block = autogen_parse_code_block(
         path=function_info.autogen_code_name,
@@ -167,9 +169,9 @@ def process_contract_function(
     func_name = f"{'library_call_' if is_library_call else ''}{function_info.name}"
     argument_name = _get_argument_name(is_library_call=is_library_call)
     code = f"""\
-func {func_name}{{syscall_ptr : felt*, range_check_ptr}}(
-    {argument_name} : felt):
-end
+func {func_name}{{syscall_ptr: felt*, range_check_ptr}}(
+    {argument_name}: felt) {{
+}}
 """
 
     code_block = autogen_parse_code_block(
@@ -202,11 +204,11 @@ def generate_contract_interface_namespace(
 ) -> CodeElementFunction:
     contract_name = contract_info.name
     code = f"""\
-namespace {contract_name}:
+namespace {contract_name} {{
     from starkware.cairo.common.alloc import alloc
     from starkware.cairo.common.memcpy import memcpy
     from starkware.starknet.common.syscalls import call_contract, library_call
-end
+}}
 """
 
     code_block = autogen_parse_code_block(
@@ -271,12 +273,12 @@ class ContractInterfaceDeclVisitor(IdentifierAwareVisitor):
         # and the dependency graph.
         # Those statements will later be replaced by the real implementation.
         code = f"""
-let calldata_ptr_start = 0
-let retdata_size = 0
-let retdata = 0
-call alloc
-call memcpy
-call {_get_syscall_name(is_library_call=is_library_call)}
+let calldata_ptr_start = 0;
+let retdata_size = 0;
+let retdata = 0;
+call alloc;
+call memcpy;
+call {_get_syscall_name(is_library_call=is_library_call)};
 """
         return autogen_parse_code_block(
             path=function_info.autogen_code_name,
@@ -324,9 +326,9 @@ class ContractInterfaceImplementationVisitor(IdentifierAwareVisitor):
         code_elements: List[CommentedCodeElement] = []
         code_elements += get_code_elements(
             code=f"""
-alloc_locals
-let (local calldata_ptr_start : felt*) = alloc()
-let __calldata_ptr = calldata_ptr_start
+alloc_locals;
+let (local calldata_ptr_start: felt*) = alloc();
+let __calldata_ptr = calldata_ptr_start;
 """
         )
 
@@ -342,7 +344,7 @@ let (retdata_size, retdata) = {_get_syscall_name(is_library_call=is_library_call
     {argument_name}={argument_name},
     function_selector={function_info.selector},
     calldata_size=__calldata_ptr - calldata_ptr_start,
-    calldata=calldata_ptr_start)
+    calldata=calldata_ptr_start);
 """
         )
 
@@ -350,13 +352,25 @@ let (retdata_size, retdata) = {_get_syscall_name(is_library_call=is_library_call
 
         return_str = ""
         if function_info.elm.returns is not None:
+            returns = self.resolve_type(cairo_type=function_info.elm.returns)
+            if not isinstance(returns, TypeTuple):
+                raise PreprocessorError(
+                    "Only tuple types are supported as the return type of external functions.",
+                    location=returns.location,
+                )
+
+            for item in returns.members:
+                if item.name is None:
+                    raise PreprocessorError(
+                        "A return value in an interface must be named.", location=item.location
+                    )
             rets = [
                 ArgumentInfo(
-                    name=typed_identifier.identifier.name,
-                    cairo_type=self.resolve_type(typed_identifier.get_type()),
-                    location=non_optional_location(typed_identifier.identifier.location),
+                    name=as_non_optional(item.name),
+                    cairo_type=self.resolve_type(item.typ),
+                    location=non_optional_location(item.location),
                 )
-                for typed_identifier in function_info.elm.returns.identifiers
+                for item in returns.members
             ]
             ret_elements, ret_arg_list = decode_data(
                 data_ptr="retdata",
@@ -373,7 +387,7 @@ let (retdata_size, retdata) = {_get_syscall_name(is_library_call=is_library_call
 
         code_elements += get_code_elements(
             code=f"""
-return ({return_str})
+return ({return_str});
 """
         )
 

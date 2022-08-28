@@ -6,6 +6,7 @@ python_lib(cairo_relocatable_lib
     relocatable_fields.py
 
     LIBS
+    starkware_python_utils_lib
     pip_marshmallow
 )
 
@@ -124,7 +125,7 @@ full_python_test(cairo_vm_test
     cairo_vm_lib
     cairo_vm_test_utils_lib
     cairo_vm_utils_lib
-    starkware_dataclasses_utils_lib
+    starkware_dataclasses_field_utils_lib
     starkware_python_utils_lib
     starkware_python_test_utils_lib
     pip_marshmallow_dataclass

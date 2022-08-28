@@ -15,9 +15,9 @@ from starkware.python.test_utils import maybe_raises
 @pytest.fixture(scope="session")
 def identifier_manager() -> IdentifierManager:
     code = """
-struct T:
-    member x : (felt, felt)
-end
+struct T {
+    x: (felt, felt),
+}
 """
     return preprocess_str(code, PRIME, main_scope=ScopedName()).identifiers
 
@@ -35,12 +35,12 @@ end
         # Tuples and named tuples.
         ["felt", "(felt,felt)", False, False, False],
         ["((felt, felt))", "T", True, False, False],
-        ["(x : (felt, felt))", "T", True, False, False],
-        ["(y : (felt, felt))", "T", "Expected argument name x. Found: y.", False, False],
-        ["(felt)", "(a : felt)", True, True, True],
-        ["(a : felt)", "(felt)", True, True, True],
-        ["(a : felt, b : felt)", "(a : felt, c : felt)"]
-        + ["Expected argument name c. Found: b."] * 3,
+        ["(x: (felt, felt))", "T", True, False, False],
+        ["(y: (felt, felt))", "T", "Expected argument name 'x'. Found: 'y'.", False, False],
+        ["(felt)", "(a: felt)", True, True, True],
+        ["(a: felt)", "(felt)", True, True, True],
+        ["(a: felt, b: felt)", "(a: felt, c: felt)"]
+        + ["Expected argument name 'c'. Found: 'b'."] * 3,
     ],
 )
 def test_type_casts(

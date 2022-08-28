@@ -10,9 +10,8 @@ python_lib(starknet_messages_lib
     LIBS
     cairo_bootloader_generate_fact_lib
     everest_definitions_lib
-    starknet_contract_class_lib
     starknet_definitions_lib
-    starknet_internal_transaction_lib
+    starknet_transaction_objects_lib
     starkware_dataclasses_utils_lib
     starkware_error_handling_lib
 )

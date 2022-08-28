@@ -99,13 +99,13 @@ def generate_event_namespace(
 ) -> CodeElementFunction:
     event_name = event_info.elm.identifier.name
     code = f"""\
-namespace {event_name}:
+namespace {event_name} {{
     from starkware.cairo.common.alloc import alloc
     from starkware.cairo.common.memcpy import memcpy
     from starkware.starknet.common.syscalls import emit_event
 
-    const SELECTOR = {get_selector_from_name(event_name)}
-end
+    const SELECTOR = {get_selector_from_name(event_name)};
+}}
 """
 
     # Generate the namespace without the functions.
@@ -125,8 +125,8 @@ end
 
 def process_event(event_info: EventInfo, emit_func_body: CodeBlock) -> List[CommentedCodeElement]:
     code = """\
-func emit{syscall_ptr : felt*, range_check_ptr}():
-end
+func emit{syscall_ptr: felt*, range_check_ptr}() {
+}
 """
 
     # Generate an empty emit function.
@@ -171,11 +171,11 @@ class EventDeclVisitor(IdentifierAwareVisitor):
         # and the dependency graph.
         # Those statements will later be replaced by the real implementation.
         code = """\
-let __keys_ptr = 0
-let __data_ptr = 0
-call alloc
-call memcpy
-call emit_event
+let __keys_ptr = 0;
+let __data_ptr = 0;
+call alloc;
+call memcpy;
+call emit_event;
 """
         return event_info.parse_code_block(code=code)
 
@@ -202,11 +202,11 @@ class EventImplementationVisitor(IdentifierAwareVisitor):
     def generate_emit_function_body(self, event_info: EventInfo) -> CodeBlock:
         code_elements = event_info.parse_code_block(
             code="""\
-alloc_locals
-let (local __keys_ptr : felt*) = alloc()
-assert [__keys_ptr] = SELECTOR
-let (local __data_ptr : felt*) = alloc()
-let __calldata_ptr = __data_ptr
+alloc_locals;
+let (local __keys_ptr: felt*) = alloc();
+assert [__keys_ptr] = SELECTOR;
+let (local __data_ptr: felt*) = alloc();
+let __calldata_ptr = __data_ptr;
 """
         ).code_elements
 
@@ -215,8 +215,8 @@ let __calldata_ptr = __data_ptr
         # Add the emit_event system call.
         code_elements += event_info.parse_code_block(
             code="""\
-emit_event(keys_len=1, keys=__keys_ptr, data_len=__calldata_ptr - __data_ptr, data=__data_ptr)
-return ()
+emit_event(keys_len=1, keys=__keys_ptr, data_len=__calldata_ptr - __data_ptr, data=__data_ptr);
+return ();
 """
         ).code_elements
 

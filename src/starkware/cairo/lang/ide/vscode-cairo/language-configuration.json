@@ -1,7 +1,7 @@
 {
     "comments": {
         // Symbol used for single line comment.
-        "lineComment": "#",
+        "lineComment": "//",
     },
     // Symbols used as brackets.
     "brackets": [

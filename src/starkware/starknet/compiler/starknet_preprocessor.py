@@ -116,6 +116,7 @@ class StarknetPreprocessor(Preprocessor):
 
         arguments = []
         for m_name, cairo_type in members:
+            assert m_name is not None, f"Missing name for a member of {arg_full_scope}."
             assert is_type_resolved(cairo_type)
             abi_type_info = prepare_type_for_abi(cairo_type)
             arguments.append(
@@ -199,7 +200,7 @@ class StarknetPreprocessor(Preprocessor):
         if self.current_scope == WRAPPER_SCOPE:
             return
 
-        external_decorator, _, _ = parse_entry_point_decorators(elm=elm)
+        external_decorator, _, _, _ = parse_entry_point_decorators(elm=elm)
         if external_decorator is not None:
             # Add a function/constructor entry to the ABI.
             self.add_abi_function_entry(

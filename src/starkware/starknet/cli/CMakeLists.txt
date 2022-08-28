@@ -19,9 +19,11 @@ python_lib(starknet_cli_lib
     starknet_contract_class_lib
     starknet_definitions_lib
     starknet_feeder_gateway_client_lib
+    starknet_feeder_gateway_request_objects_lib
     starknet_feeder_gateway_response_objects_lib
     starknet_gateway_client_lib
     starknet_general_config_lib
+    starknet_standard_wallets_lib
     starknet_transaction_lib
     starknet_wallets_lib
     starkware_error_handling_lib

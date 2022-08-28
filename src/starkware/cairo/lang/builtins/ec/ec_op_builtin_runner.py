@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Tuple, Union
 
 from starkware.cairo.lang.builtins.ec.instance_def import (
     CELLS_PER_EC_OP,
@@ -42,12 +42,13 @@ def ec_op_impl(
     """
     doubled_point = (q_x, q_y)
     partial_sum = (p_x, p_y)
+    orig_m = m
     for _ in range(height):
         assert (doubled_point[0] - partial_sum[0]) % prime != 0, (
             "Cannot apply EC operation: computation reached two points with the same x coordinate."
             "\nAttempting to compute P + m * Q where:\n"
             f"P = {(p_x, p_y)}\n"
-            f"m = {m}\n"
+            f"m = {orig_m}\n"
             f"Q = {(q_x, q_y)}."
         )
         if m & 1 != 0:
@@ -68,7 +69,6 @@ class EcOpBuiltinRunner(SimpleBuiltinRunner):
             cells_per_instance=CELLS_PER_EC_OP,
             n_input_cells=INPUT_CELLS_PER_EC_OP,
         )
-        self.stop_ptr: Optional[RelocatableValue] = None
         self.ec_op_builtin: EcOpInstanceDef = ec_op_builtin
 
     def add_auto_deduction_rules(self, runner):
@@ -106,7 +106,7 @@ class EcOpBuiltinRunner(SimpleBuiltinRunner):
                 ec_point_x, ec_point_y = [memory[instance + i] for i in pair]
                 assert point_on_curve(
                     ec_point_x, ec_point_y, ALPHA, BETA, FIELD_PRIME
-                ), f"{self.name} builtin: point {pair} is not on the curve."
+                ), f"{self.name} builtin: point ({ec_point_x}, {ec_point_y}) is not on the curve."
 
             res = ec_op_impl(  # type: ignore
                 *[memory[instance + i] for i in range(INPUT_CELLS_PER_EC_OP)],

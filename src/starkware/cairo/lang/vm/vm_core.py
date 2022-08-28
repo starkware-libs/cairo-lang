@@ -456,6 +456,7 @@ class VirtualMachine(VirtualMachineBase):
             exec_locals["vm_enter_scope"] = self.enter_scope
             exec_locals["vm_exit_scope"] = self.exit_scope
             exec_locals.update(self.static_locals)
+            exec_locals["builtin_runners"] = self.builtin_runners
             exec_locals.update(self.builtin_runners)
 
             self.exec_hint(hint.compiled, exec_locals, hint_index=hint_index)
@@ -465,6 +466,7 @@ class VirtualMachine(VirtualMachineBase):
             for name in self.builtin_runners:
                 del exec_locals[name]
 
+            del exec_locals["builtin_runners"]
             for name in self.static_locals:
                 del exec_locals[name]
 

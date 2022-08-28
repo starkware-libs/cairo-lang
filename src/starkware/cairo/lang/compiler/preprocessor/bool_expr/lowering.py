@@ -29,7 +29,9 @@ class BoolExprLoweringVisitor(Visitor):
 
     def visit_CodeElementIf(self, elm: CodeElementIf) -> CodeElementIf:
         if isinstance(elm.condition, BoolEqExpr):
-            return elm
+            # Call visit_CodeElementIf directly instead of using visit() to avoid infinite
+            # recursion.
+            return super().visit_CodeElementIf(elm)
 
         if elm.else_code_block is not None:
             raise BoolExprLoweringError(
@@ -38,7 +40,9 @@ class BoolExprLoweringVisitor(Visitor):
             )
 
         return _lower_conjunction_chain(
-            lhs=elm.condition, main_code_block=elm.main_code_block, location=elm.location
+            lhs=elm.condition,
+            main_code_block=self.visit(elm.main_code_block),
+            location=elm.location,
         )
 
 

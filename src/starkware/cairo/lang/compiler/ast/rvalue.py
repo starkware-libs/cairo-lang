@@ -1,14 +1,16 @@
 import dataclasses
 from abc import abstractmethod
-from typing import Optional, Sequence
+from typing import List, Optional, Sequence
 
 from starkware.cairo.lang.compiler.ast.expr import ArgList, Expression, ExprIdentifier
 from starkware.cairo.lang.compiler.ast.formatting_utils import (
     INDENTATION,
     LocationField,
+    Particle,
     ParticleFormattingConfig,
     ParticleList,
     SeparatedParticleList,
+    SingleParticle,
     particles_in_lines,
 )
 from starkware.cairo.lang.compiler.ast.instructions import CallInstruction
@@ -33,7 +35,7 @@ class Rvalue(AstNode):
         """
 
     @abstractmethod
-    def get_particles(self):
+    def get_particles(self) -> List[Particle]:
         """
         Returns a list of particles that can be used to convert the Rvalue to a multiline string.
         """
@@ -57,8 +59,8 @@ class RvalueExpr(Rvalue):
     def location(self):
         return self.expr.location
 
-    def get_particles(self):
-        return [self.expr.format()]
+    def get_particles(self) -> List[Particle]:
+        return [SingleParticle(text=self.expr.format())]
 
     def format(self):
         return self.expr.format()
@@ -89,8 +91,8 @@ class RvalueCallInst(RvalueCall):
     def location(self):
         return self.call_inst.location
 
-    def get_particles(self):
-        return [self.call_inst.format()]
+    def get_particles(self) -> List[Particle]:
+        return [SingleParticle(text=self.call_inst.format())]
 
     def format(self):
         return self.call_inst.format()
@@ -116,20 +118,21 @@ class RvalueFuncCall(RvalueCall):
         if self.implicit_arguments is not None:
             self.implicit_arguments.assert_no_comments()
 
-    def get_particles(self):
+    def get_particles(self) -> List[Particle]:
         self.assert_no_comments()
 
-        particles = [self.func_ident.format()]
+        particles = self.func_ident.get_particles()
 
         if self.implicit_arguments is not None:
-            particles[-1] += "{"
+            particles[-1].add_suffix("{")
             particles.append(
                 SeparatedParticleList(
-                    elements=[x.format() for x in self.implicit_arguments.args], end="}("
+                    elements=[x.format() for x in self.implicit_arguments.args],
+                    end="}(",
                 )
             )
         else:
-            particles[-1] += "("
+            particles[-1].add_suffix("(")
 
         particles.append(
             SeparatedParticleList(elements=[x.format() for x in self.arguments.args], end=")")
@@ -137,9 +140,15 @@ class RvalueFuncCall(RvalueCall):
         return particles
 
     def format(self, allowed_line_length):
+        return self.format_ex(allowed_line_length=allowed_line_length, semicolon=False)
+
+    def format_ex(self, allowed_line_length, semicolon: bool):
         self.assert_no_comments()
+        particles = ParticleList(elements=self.get_particles())
+        if semicolon:
+            particles.add_suffix(";")
         return particles_in_lines(
-            particles=ParticleList(elements=self.get_particles()),
+            particles=particles,
             config=ParticleFormattingConfig(
                 allowed_line_length=allowed_line_length, line_indent=INDENTATION, one_per_line=True
             ),

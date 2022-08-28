@@ -123,7 +123,7 @@ function(python_lib LIB)
 endfunction()
 
 # Creates a virtual environment target.
-# Usage: python_venv(venv_name PYTHON python3.7 LIBS lib0 lib1 ...)
+# Usage: python_venv(venv_name PYTHON ${PYTHON_COMMAND} LIBS lib0 lib1 ...)
 # Target properties:
 # VENV_PYTHON: Full path to the vritual environment python executable.
 # STAMP_FILE: when this file is generated, the virtual environment is ready to use.

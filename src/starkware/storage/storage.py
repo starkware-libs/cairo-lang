@@ -434,11 +434,23 @@ class LockManager(ABC):
 
     @abstractmethod
     async def lock(self, name: str) -> LockObject:
-        pass
+        """
+        Creates a lock object.
+        """
+
+    @abstractmethod
+    async def lock_exists(self, name: str) -> bool:
+        """
+        Returns True iff lock object is exists.
+        """
 
     @abstractmethod
     async def try_lock(self, name: str, ttl: int = None) -> LockObject:
-        pass
+        """
+        Tries to create a lock object.
+        """
 
     async def destroy(self):
-        pass
+        """
+        Closes the LockManager.
+        """

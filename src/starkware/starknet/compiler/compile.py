@@ -108,10 +108,12 @@ def compile_starknet_files(
     debug_info: bool = False,
     disable_hint_validation: bool = False,
     cairo_path: Optional[List[str]] = None,
+    opt_unused_functions: bool = True,
     filter_identifiers: bool = True,
 ) -> ContractClass:
     return compile_starknet_codes(
         codes=get_codes(files),
+        opt_unused_functions=opt_unused_functions,
         debug_info=debug_info,
         disable_hint_validation=disable_hint_validation,
         cairo_path=cairo_path,
@@ -124,6 +126,7 @@ def compile_starknet_codes(
     debug_info: bool = False,
     disable_hint_validation: bool = False,
     cairo_path: Optional[List[str]] = None,
+    opt_unused_functions: bool = True,
     filter_identifiers: bool = True,
 ) -> ContractClass:
     if cairo_path is None:
@@ -134,6 +137,7 @@ def compile_starknet_codes(
         prime=DEFAULT_PRIME,
         read_module=module_reader.read,
         disable_hint_validation=disable_hint_validation,
+        opt_unused_functions=opt_unused_functions,
     )
 
     program, preprocessed = compile_cairo_ex(

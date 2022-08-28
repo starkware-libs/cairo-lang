@@ -240,27 +240,27 @@ def test_nested_particle_lists():
             "felt",
             SeparatedParticleList(elements=["felt, felt"], start="(", end=")"),
         ],
-        start="d : (",
+        start="d: (",
         end=")",
     )
     return_val_e = SeparatedParticleList(
-        elements=["f : felt", "g : felt"],
-        start="e : (",
+        elements=["f: felt", "g: felt"],
+        start="e: (",
         end=")",
     )
     return_val_h = SeparatedParticleList(
         elements=["felt", "felt", "felt", "felt"],
-        start="h : (",
+        start="h: (",
         end=")",
     )
     return_val_b = SeparatedParticleList(
         elements=[
-            "c : felt",
+            "c: felt",
             return_val_d,
             return_val_e,
             return_val_h,
         ],
-        start="b : (",
+        start="b: (",
         end=")",
     )
     particles = ParticleList(
@@ -269,7 +269,7 @@ def test_nested_particle_lists():
             SeparatedParticleList(elements=["x", "y", "z"], end=") -> ("),
             SeparatedParticleList(
                 elements=[
-                    "a : felt",
+                    "a: felt",
                     return_val_b,
                 ],
                 end="):",
@@ -278,21 +278,21 @@ def test_nested_particle_lists():
     )
     expected = """\
 func f(x, y, z) -> (
-    a : felt,
-    b : (c : felt,
-        d : (felt, (felt, felt)),
-        e : (f : felt, g : felt),
-        h : (felt, felt, felt,
+    a: felt,
+    b: (c: felt,
+        d: (felt, (felt, felt)),
+        e: (f: felt, g: felt),
+        h: (felt, felt, felt,
             felt))):\
 """
     expected_one_per_line = """\
 func f(x, y, z) -> (
-    a : felt,
-    b : (
-        c : felt,
-        d : (felt, (felt, felt)),
-        e : (f : felt, g : felt),
-        h : (
+    a: felt,
+    b: (
+        c: felt,
+        d: (felt, (felt, felt)),
+        e: (f: felt, g: felt),
+        h: (
             felt, felt, felt, felt
         ),
     ),

@@ -1,8 +1,6 @@
 python_lib(gen_solidity_lib
     FILES
     gen_solidity_env.py
-    LIBS
-    pip_mypy_extensions
 )
 
 python_venv(gen_solidity_venv

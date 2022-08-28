@@ -1,3 +1,6 @@
+add_subdirectory(ast)
+add_subdirectory(preprocessor)
+
 python_lib(cairo_compile_lib
     PREFIX starkware/cairo/lang/compiler
     FILES
@@ -131,7 +134,6 @@ full_python_test(cairo_compile_test
     FILES
     assembler_test.py
     ast_objects_test.py
-    ast/formatting_utils_test.py
     cairo_compile_test.py
     conftest.py
     debug_info_test.py
@@ -153,19 +155,6 @@ full_python_test(cairo_compile_test
     parser_errors_test.py
     parser_test_utils.py
     parser_test.py
-    preprocessor/bool_expr/lowering_test.py
-    preprocessor/compound_expressions_test.py
-    preprocessor/conftest.py
-    preprocessor/dependency_graph_test.py
-    preprocessor/flow_test.py
-    preprocessor/identifier_aware_visitor_test.py
-    preprocessor/identifier_collector_test.py
-    preprocessor/if_labels_test.py
-    preprocessor/local_variables_test.py
-    preprocessor/memento_test.py
-    preprocessor/preprocessor_test.py
-    preprocessor/reg_tracking_test.py
-    preprocessor/struct_collector_test.py
     proxy_identifier_manager_test.py
     references_test.py
     resolve_search_result_test.py

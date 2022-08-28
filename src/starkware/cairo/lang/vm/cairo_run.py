@@ -6,7 +6,8 @@ import subprocess
 import sys
 import tempfile
 import time
-from typing import IO, Dict, List, Tuple
+import traceback
+from typing import IO, Dict, List, Optional, Tuple
 
 import starkware.python.python_dependencies as python_dependencies
 from starkware.cairo.lang.compiler.debug_info import DebugInfo
@@ -157,6 +158,11 @@ def main():
         "--proof_mode", action="store_true", help="Prepare a provable execution trace."
     )
     parser.add_argument(
+        "--show_trace",
+        action="store_true",
+        help="Print the full Python error trace in case of an internal error.",
+    )
+    parser.add_argument(
         "--flavor",
         type=str,
         choices=["Debug", "Release", "RelWithDebInfo"],
@@ -193,9 +199,15 @@ def main():
             res = cairo_run(args)
         except VmException as err:
             print(err, file=sys.stderr)
+            if args.show_trace:
+                print(file=sys.stderr)
+                traceback.print_exc()
             res = 1
         except AssertionError as err:
             print(f"Error: {err}", file=sys.stderr)
+            if args.show_trace:
+                print(file=sys.stderr)
+                traceback.print_exc()
             res = 1
 
     # Generate python dependencies.
@@ -314,6 +326,9 @@ def cairo_run(args):
     except (VmException, AssertionError) as exc:
         if args.debug_error:
             print(f"Got an error:\n{exc}")
+            if args.show_trace:
+                print(file=sys.stderr)
+                traceback.print_exc()
             ret_code = 1
         else:
             raise exc
@@ -368,10 +383,21 @@ def cairo_run(args):
         field_bytes = math.ceil(program.prime.bit_length() / 8)
         write_binary_memory(memory_file, runner.relocated_memory, field_bytes)
 
+    def select_builtin_ratios(runner):
+        """
+        Temporary fucntion that returns the ratios of the bitwise builtin until actual desirable
+        dynamic ratios can be computed from the runner.
+        """
+        return {
+            f"{builtin}_ratio": instance_def.ratio
+            for builtin, instance_def in LAYOUTS["bitwise"].builtins.items()
+        }
+
     if args.air_public_input is not None:
         rc_min, rc_max = runner.get_perm_range_check_limits()
         write_air_public_input(
             layout=args.layout,
+            layout_params=select_builtin_ratios(runner) if args.layout == "dynamic" else None,
             public_input_file=args.air_public_input,
             memory=runner.relocated_memory,
             public_memory_addresses=runner.segments.get_public_memory_addresses(
@@ -473,6 +499,7 @@ def write_air_public_input(
     public_input_file: IO[str],
     memory: MemoryDict,
     layout: str,
+    layout_params: Optional[Dict[str, int]],
     public_memory_addresses: List[Tuple[int, int]],
     memory_segment_addresses: Dict[str, MemorySegmentAddresses],
     trace: List[TraceEntry[int]],
@@ -487,6 +514,7 @@ def write_air_public_input(
     assert isinstance(initial_pc, int)
     public_input = PublicInput(  # type: ignore
         layout=layout,
+        layout_params=layout_params,
         rc_min=rc_min,
         rc_max=rc_max,
         n_steps=len(trace),

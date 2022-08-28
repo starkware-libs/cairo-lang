@@ -27,8 +27,10 @@ class Visitor:
     Base visitor class for visiting code elements in the Cairo AST.
     """
 
-    def __init__(self):
-        self.accessible_scopes: List[ScopedName] = []
+    def __init__(self, accessible_scopes: Optional[List[ScopedName]] = None):
+        self.accessible_scopes: List[ScopedName] = (
+            [] if accessible_scopes is None else accessible_scopes.copy()
+        )
         self.parents: List[Optional[AstNode]] = []
         self.file_lang: Optional[str] = None
 
@@ -38,6 +40,9 @@ class Visitor:
         is found, calls '_visit_default'.
         """
         return getattr(self, f"visit_{type(obj).__name__}", self._visit_default)(obj)
+
+    def visit_CairoFile(self, elm: CairoFile):
+        return CairoFile(code_block=self.visit(elm.code_block))
 
     def visit_CodeElementFunction(self, elm: CodeElementFunction):
         if elm.element_type == "struct":

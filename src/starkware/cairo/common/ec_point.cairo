@@ -1,5 +1,5 @@
-# Represents a point on an elliptic curve.
-struct EcPoint:
-    member x : felt
-    member y : felt
-end
+// Represents a point on an elliptic curve.
+struct EcPoint {
+    x: felt,
+    y: felt,
+}

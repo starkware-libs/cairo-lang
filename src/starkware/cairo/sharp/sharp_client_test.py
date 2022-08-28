@@ -30,12 +30,10 @@ def test_compile_and_run():
 
     cairo_program = """
 %builtins output
-func main(output_ptr : felt*) -> (output_ptr : felt*):
-    %{
-        memory[ids.output_ptr] = program_input['x'] ** 2
-    %}
-    return (output_ptr=output_ptr + 1)
-end
+func main(output_ptr: felt*) -> (output_ptr: felt*) {
+    %{ memory[ids.output_ptr] = program_input['x'] ** 2 %}
+    return (output_ptr=output_ptr + 1);
+}
 """
     program_input = {"x": 3}
 

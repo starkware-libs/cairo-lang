@@ -155,7 +155,7 @@ def test_references():
         ),
     }
 
-    my_struct = TypeStruct(scope=scope("MyStruct"), is_fully_resolved=True)
+    my_struct = TypeStruct(scope=scope("MyStruct"))
     my_struct_star = TypePointer(pointee=my_struct)
     identifier_values = {
         scope("x.ref"): ReferenceDefinition(
@@ -325,7 +325,7 @@ def test_reference_rebinding():
 
 
 def test_reference_to_structs():
-    t = TypeStruct(scope=scope("T"), is_fully_resolved=True)
+    t = TypeStruct(scope=scope("T"))
     t_star = TypePointer(pointee=t)
     identifier_values = {
         scope("ref"): ReferenceDefinition(full_name=scope("ref"), cairo_type=t, references=[]),

@@ -470,18 +470,28 @@ class VirtualMachineBase(ABC):
         Makes sure that all assigned memory cells are consistent with their auto deduction rules.
         """
         for addr in self.validated_memory:
-            if not isinstance(addr, RelocatableValue):
-                continue
-            for rule, args in self.auto_deduction.get(addr.segment_index, []):
-                value = rule(self, addr, *args)
-                if value is None:
-                    continue
+            self.verify_auto_deductions_for_addr(addr)
 
-                current = self.validated_memory[addr]
-                # If the values are not the same, try using check_eq to allow a subclass
-                # to override this result.
-                if current != value and not self.check_eq(current, value):
-                    raise InconsistentAutoDeductionError(addr, current, value)
+    def verify_auto_deductions_for_addr(self, addr: MaybeRelocatable):
+        """
+        Makes sure that the value at the given address is consistent with the auto deduction rules.
+        """
+        if not isinstance(addr, RelocatableValue):
+            return
+
+        for rule, args in self.auto_deduction.get(addr.segment_index, []):
+            value = rule(self, addr, *args)
+            if value is None:
+                continue
+
+            current = self.validated_memory.get(addr)
+            if current is None:
+                continue
+
+            # If the values are not the same, try using check_eq to allow a subclass
+            # to override this result.
+            if current != value and not self.check_eq(current, value):
+                raise InconsistentAutoDeductionError(addr, current, value)
 
     def end_run(self):
         self.verify_auto_deductions()

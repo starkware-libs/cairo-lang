@@ -44,11 +44,16 @@ def main():
     parser.add_argument(
         "--info_dir", help="Directory for all libraries info files", type=str, required=True
     )
+    parser.add_argument("--solc_bin", help="Explicit solc binary", type=str, default="solc-0.6.12")
+    parser.add_argument(
+        "--optimize_runs", help="Optimize-runs arg to pass into solc", type=int, default=200
+    )
+
     args = parser.parse_args()
 
     # Clean directories.
     shutil.rmtree(args.env_dir, ignore_errors=True)
-    contracts_dir = os.path.join(args.env_dir, "contracts")
+    contracts_dir = args.env_dir
     artifacts_dir = os.path.join(args.env_dir, "artifacts")
     os.makedirs(contracts_dir)
     os.makedirs(artifacts_dir)
@@ -73,10 +78,10 @@ def main():
     # Compile.
     subprocess.check_call(
         [
-            "solc-0.6.12",
+            args.solc_bin,
             "--optimize",
             "--optimize-runs",
-            "200",
+            str(args.optimize_runs),
             "--combined-json",
             "abi,bin",
             "-o",
@@ -119,11 +124,20 @@ def extract_artifacts(artifacts_dir, combined_json_filename):
         if len(val["bin"]) > 0:
             bytecode = "0x" + val["bin"]
 
+        # Support both solc-0.6 & solc-0.8 output format.
+        # In solc-0.6 the abi is a list in a json string,
+        # whereas in 0.8 it's a plain json.
+        try:
+            abi = json.loads(val["abi"])
+        except TypeError:
+            abi = val["abi"]
+
         artifact = {
             "contractName": name,
-            "abi": json.loads(val["abi"]),
+            "abi": abi,
             "bytecode": bytecode,
         }
+
         destination_filename = os.path.join(artifacts_dir, f"{name}.json")
         with open(destination_filename, "w") as fp:
             json.dump(artifact, fp, indent=4)

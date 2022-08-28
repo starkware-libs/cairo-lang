@@ -16,16 +16,14 @@ from starkware.starkware_utils.field_validators import (
 )
 from starkware.starkware_utils.marshmallow_dataclass_fields import (
     BytesAsHex,
+    FrozenDictField,
     IntAsHex,
     IntAsStr,
     StrictRequiredInteger,
     VariadicLengthTupleField,
 )
-from starkware.starkware_utils.validated_fields import (
-    OptionalField,
-    RangeValidatedField,
-    sequential_id_metadata,
-)
+from starkware.starkware_utils.marshmallow_fields_metadata import sequential_id_metadata
+from starkware.starkware_utils.validated_fields import OptionalField, RangeValidatedField
 
 # Fields data: validation data, dataclass metadata.
 
@@ -33,11 +31,7 @@ from starkware.starkware_utils.validated_fields import (
 # Common.
 
 felt_as_hex_list_metadata = dict(
-    marshmallow_field=mfields.List(
-        everest_fields.FeltField.get_marshmallow_field(
-            required=True, load_default=marshmallow.utils.missing
-        )
-    )
+    marshmallow_field=mfields.List(everest_fields.FeltField.get_marshmallow_field())
 )
 
 felt_as_hex_or_str_list_metadata = dict(
@@ -124,6 +118,8 @@ nonce_metadata = NonceField.metadata()
 OptionalNonceField = OptionalField(field=NonceField, none_probability=0)
 optional_nonce_metadata = OptionalNonceField.metadata()
 
+non_required_nonce_metadata = NonceField.metadata(required=False, load_default=0)
+
 
 # Block.
 
@@ -157,6 +153,10 @@ signature_as_hex_metadata = felt_as_hex_or_str_list_metadata
 signature_metadata = felt_list_metadata
 retdata_as_hex_metadata = felt_as_hex_list_metadata
 
+
+# L1Handler.
+
+payload_metadata = felt_as_hex_list_metadata
 
 # Contract address.
 
@@ -299,9 +299,7 @@ optional_state_root_metadata = dict(
 
 declared_contracts_metadata = dict(
     marshmallow_field=VariadicLengthTupleField(
-        ClassHashIntField.get_marshmallow_field(
-            required=True, load_default=marshmallow.utils.missing
-        ),
+        ClassHashIntField.get_marshmallow_field(),
         required=False,
         load_default=(),
     )
@@ -338,6 +336,31 @@ invoke_tx_n_steps_metadata = dict(
     marshmallow_field=StrictRequiredInteger(validate=validate_non_negative("invoke_tx_n_steps"))
 )
 
+validate_n_steps_metadata = dict(
+    marshmallow_field=StrictRequiredInteger(validate=validate_non_negative("validate_n_steps"))
+)
+
 gas_price = dict(
     marshmallow_field=StrictRequiredInteger(validate=validate_non_negative("gas_price"))
+)
+
+
+# Nonces.
+
+address_to_nonce_metadata = dict(
+    marshmallow_field=mfields.Dict(
+        keys=L2AddressField.get_marshmallow_field(),
+        values=NonceField.get_marshmallow_field(),
+        load_default=dict,
+    )
+)
+
+# ExecutionInfo.
+
+name_to_resources_metadata = dict(
+    marshmallow_field=FrozenDictField(
+        keys=mfields.String(required=True),
+        values=StrictRequiredInteger(validate=validate_non_negative("Resource value")),
+        load_default=dict,
+    )
 )

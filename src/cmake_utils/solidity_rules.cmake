@@ -1,13 +1,21 @@
 set(GEN_SOLIDITY_ENV_EXE ${CMAKE_BINARY_DIR}/src/cmake_utils/gen_solidity_exe CACHE INTERNAL "")
+set(DEFAULT_SOLC "solc-0.6.12")
+set(DEFAULT_RUNS "200")
 
 # Creates a solidity environment target.
 # Usage: solidity_env(venv_name LIBS lib0 lib1 ...)
 function(solidity_env ENV_NAME)
   # Parse arguments.
   set(options)
-  set(oneValueArgs)
+  set(oneValueArgs SOLC_BIN OPTIMIZE_RUNS)
   set(multiValueArgs CONTRACTS LIBS)
   cmake_parse_arguments(ARGS "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+  if (NOT ARGS_SOLC_BIN)
+    set(ARGS_SOLC_BIN ${DEFAULT_SOLC})
+  endif()
+  if (NOT ARGS_OPTIMIZE_RUNS)
+    set(ARGS_OPTIMIZE_RUNS ${DEFAULT_RUNS})
+  endif()
 
   # A directory with symlinks to files of other libraries.
   set(ENV_DIR ${CMAKE_CURRENT_BINARY_DIR}/${ENV_NAME})
@@ -23,6 +31,8 @@ function(solidity_env ENV_NAME)
     OUTPUT ${ENV_INFO_FILE}
     COMMAND ${GEN_SOLIDITY_ENV_EXE}
       --name ${ENV_NAME}
+      --solc_bin ${ARGS_SOLC_BIN}
+      --optimize_runs ${ARGS_OPTIMIZE_RUNS}
       --libs ${ARGS_LIBS}
       --env_dir ${ENV_DIR}
       --info_dir ${PY_LIB_INFO_GLOBAL_DIR}

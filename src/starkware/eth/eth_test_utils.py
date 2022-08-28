@@ -58,6 +58,9 @@ class EthTestUtils:
     def get_block_by_hash(self, block_hash: str) -> "EthBlock":
         return EthBlock(w3_block=self.w3.eth.getBlock(block_hash))
 
+    def get_balance(self, address: str) -> int:
+        return self.w3.eth.getBalance(address)
+
 
 class Ganache:
     """

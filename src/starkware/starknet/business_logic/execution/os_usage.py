@@ -5,8 +5,6 @@ from typing import Mapping
 import marshmallow_dataclass
 
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
-from starkware.python.utils import sub_counters
-from starkware.starknet.business_logic.state.state import CarriedState
 from starkware.starknet.definitions.transaction_type import TransactionType
 from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
 
@@ -28,12 +26,12 @@ os_resources: OsResources = OsResources.loads(
 )
 
 
-def calculate_syscall_resources(syscall_counter: Mapping[str, int]) -> ExecutionResources:
-    """
-    Calculates and returns the additional resources needed for the OS to run the given syscalls;
-    i.e., the resources of the function execute_syscalls().
-    """
-    return functools.reduce(
+def get_additional_os_resources(
+    syscall_counter: Mapping[str, int], tx_type: TransactionType
+) -> ExecutionResources:
+    # Calculate the additional resources needed for the OS to run the given syscalls;
+    # i.e., the resources of the function execute_syscalls().
+    os_additional_resources = functools.reduce(
         ExecutionResources.__add__,
         (
             os_resources.execute_syscalls[syscall_name] * syscall_counter[syscall_name]
@@ -42,22 +40,8 @@ def calculate_syscall_resources(syscall_counter: Mapping[str, int]) -> Execution
         ExecutionResources.empty(),
     )
 
-
-def calculate_execute_txs_inner_resources(tx_type: TransactionType) -> ExecutionResources:
-    """
-    Calculates and returns the additional resources needed for the OS to run the given transaction;
-    i.e., the resources of the StarkNet OS function execute_transactions_inner().
-    """
-    return (
-        ExecutionResources.empty()
-        if tx_type not in os_resources.execute_txs_inner
-        else os_resources.execute_txs_inner[tx_type]
+    # Calculate the additional resources needed for the OS to run the given transaction;
+    # i.e., the resources of the StarkNet OS function execute_transactions_inner().
+    return os_additional_resources + os_resources.execute_txs_inner.get(
+        tx_type, ExecutionResources.empty()
     )
-
-
-def get_tx_syscall_counter(state: CarriedState) -> Mapping[str, int]:
-    """
-    Returns the most-recent transaction's syscall counter (recent w.r.t. application on the given
-    state).
-    """
-    return sub_counters(state.syscall_counter, state.non_optional_parent_state.syscall_counter)

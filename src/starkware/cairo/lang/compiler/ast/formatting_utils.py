@@ -12,13 +12,16 @@ from typing import List, Sequence, Union
 import marshmallow
 
 from starkware.cairo.lang.compiler.error_handling import LocationError
+from starkware.starkware_utils.marshmallow_dataclass_fields import additional_metadata
 
 INDENTATION = 4
 LocationField = field(
     default=None,
     hash=False,
     compare=False,
-    metadata=dict(marshmallow_field=marshmallow.fields.Field(load_only=True, dump_only=True)),
+    metadata=additional_metadata(
+        marshmallow_field=marshmallow.fields.Field(load_only=True, dump_only=True)
+    ),
 )
 max_line_length_ctx_var: ContextVar[int] = ContextVar("max_line_length", default=100)
 one_item_per_line_ctx_var: ContextVar[bool] = ContextVar("one_item_per_line", default=True)
@@ -178,6 +181,12 @@ class Particle(ABC):
         """
 
     @abstractmethod
+    def pop_prefix(self) -> str:
+        """
+        Removes and returns the particle prefix.
+        """
+
+    @abstractmethod
     def add_to_builder(self, builder: ParticleLineBuilder, suffix: str = ""):
         """
         Adds the particle to a builder, according to the formatting configuration of the builder.
@@ -204,6 +213,11 @@ class SingleParticle(Particle):
 
     def add_suffix(self, suffix: str):
         self.text += suffix
+
+    def pop_prefix(self) -> str:
+        prefix = self.text
+        self.text = ""
+        return prefix
 
     def add_to_builder(self, builder: ParticleLineBuilder, suffix: str = ""):
         builder.add_to_line(f"{self.text}{suffix}")
@@ -236,6 +250,11 @@ class ParticleList(Particle):
     def add_suffix(self, suffix: str):
         assert len(self.elements) > 0
         self.elements[-1].add_suffix(suffix)
+
+    def pop_prefix(self) -> str:
+        if len(self.elements) == 0:
+            return ""
+        return self.elements[0].pop_prefix()
 
     def add_to_builder(self, builder: ParticleLineBuilder, suffix: str = ""):
         for i, particle in enumerate(self.elements):
@@ -280,6 +299,11 @@ class SeparatedParticleList(Particle):
 
     def add_suffix(self, suffix: str):
         self.end += suffix
+
+    def pop_prefix(self) -> str:
+        prefix = self.start
+        self.start = ""
+        return prefix
 
     def elements_to_string(self) -> str:
         """
@@ -328,7 +352,7 @@ class SeparatedParticleList(Particle):
                 a,
                 b,
                 c,
-            ):
+            ) {
         """
         # If the entire list fits in a new line, add it.
         # Else, add each element of the list in a separate line.
@@ -360,10 +384,10 @@ class SeparatedParticleList(Particle):
                 x, y,
                 z) -> (
                 a, b,
-                c):
+                c) {
 
         With a longer line length we will get the lists on the same line:
-            func f(x, y, z) -> (a, b, c):
+            func f(x, y, z) -> (a, b, c) {
         """
         # If the entire list fits in the current line, add it.
         elements_string = f"{self.elements_to_string()}{self.end}{suffix}"
@@ -414,7 +438,7 @@ def particles_in_lines(particles: Particle, config: ParticleFormattingConfig) ->
             ParticleList(elements=[
                 'func f(',
                 SeparatedParticleList(elements=['x', 'y', 'z'], end=') -> ('),
-                SeparatedParticleList(elements=['a', 'b', 'c'], end='):')]),
+                SeparatedParticleList(elements=['a', 'b', 'c'], end=') {')]),
             12, 4)
     """
 

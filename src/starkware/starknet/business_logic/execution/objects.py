@@ -4,7 +4,7 @@ import logging
 import operator
 from dataclasses import field
 from enum import Enum, auto
-from typing import Iterable, Iterator, List, Optional, Set, cast
+from typing import FrozenSet, Iterable, Iterator, List, Mapping, Optional, Set, cast
 
 import marshmallow.fields as mfields
 import marshmallow_dataclass
@@ -13,23 +13,28 @@ from services.everest.business_logic.internal_transaction import EverestTransact
 from services.everest.definitions import fields as everest_fields
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
 from starkware.cairo.lang.vm.utils import RunResources
-from starkware.starknet.business_logic.state.state import StateSelector
+from starkware.python.utils import as_non_optional
+from starkware.starknet.business_logic.fact_state.contract_state_objects import StateSelector
+from starkware.starknet.business_logic.state.state import StorageEntry
 from starkware.starknet.definitions import constants, fields
-from starkware.starknet.services.api.contract_class import CONSTRUCTOR_SELECTOR, EntryPointType
-from starkware.starknet.services.api.gateway.transaction import DECLARE_SENDER_ADDRESS
+from starkware.starknet.public.abi import CONSTRUCTOR_ENTRY_POINT_SELECTOR
+from starkware.starknet.services.api.contract_class import EntryPointType
+from starkware.starknet.services.api.gateway.transaction import DEFAULT_DECLARE_SENDER_ADDRESS
 from starkware.starkware_utils.marshmallow_dataclass_fields import (
     SetField,
+    additional_metadata,
     nonrequired_list_metadata,
     nonrequired_optional_metadata,
 )
+from starkware.starkware_utils.marshmallow_fields_metadata import sequential_id_metadata
 from starkware.starkware_utils.serializable_dataclass import SerializableMarshmallowDataclass
 from starkware.starkware_utils.validated_dataclass import (
     ValidatedDataclass,
     ValidatedMarshmallowDataclass,
 )
-from starkware.starkware_utils.validated_fields import sequential_id_metadata
 
 logger = logging.getLogger(__name__)
+ResourcesMapping = Mapping[str, int]
 
 
 class CallType(Enum):
@@ -51,7 +56,10 @@ class TransactionExecutionContext(ValidatedDataclass):
     transaction_hash: int = field(metadata=fields.transaction_hash_metadata)
     # The signature of the transaction.
     signature: List[int] = field(metadata=fields.signature_metadata)
+    # The maximal fee to be paid in Wei for the execution.
     max_fee: int = field(metadata=fields.fee_metadata)
+    # The nonce of the transaction.
+    nonce: int
     version: int = field(metadata=fields.tx_version_metadata)
     run_resources: RunResources
     # Used for tracking global events order.
@@ -66,14 +74,17 @@ class TransactionExecutionContext(ValidatedDataclass):
         transaction_hash: int,
         signature: List[int],
         max_fee: int,
+        nonce: Optional[int],
         n_steps: int,
         version: int,
     ) -> "TransactionExecutionContext":
+        nonce = 0 if version in [0, constants.QUERY_VERSION_BASE] else as_non_optional(nonce)
         return cls(
             account_contract_address=account_contract_address,
             transaction_hash=transaction_hash,
             signature=signature,
             max_fee=max_fee,
+            nonce=nonce,
             version=version,
             run_resources=RunResources(n_steps=n_steps),
             n_emitted_events=0,
@@ -85,6 +96,7 @@ class TransactionExecutionContext(ValidatedDataclass):
         cls,
         account_contract_address: int = 0,
         max_fee: int = 0,
+        nonce: int = 0,
         n_steps: int = 100000,
         version: int = constants.TRANSACTION_VERSION,
     ) -> "TransactionExecutionContext":
@@ -93,6 +105,7 @@ class TransactionExecutionContext(ValidatedDataclass):
             transaction_hash=0,
             signature=[],
             max_fee=max_fee,
+            nonce=nonce,
             version=version,
             run_resources=RunResources(n_steps=n_steps),
             n_emitted_events=0,
@@ -202,7 +215,7 @@ class CallInfo(SerializableMarshmallowDataclass):
     # A set of storage keys accessed by this call, **excluding** keys from nested calls;
     # kept in order to calculate and prepare the commitment tree facts before the StarkNet OS run.
     accessed_storage_keys: Set[int] = field(
-        metadata=dict(
+        metadata=additional_metadata(
             marshmallow_field=SetField(
                 everest_fields.felt_metadata("storage_accessed_address")["marshmallow_field"]
             )
@@ -212,7 +225,9 @@ class CallInfo(SerializableMarshmallowDataclass):
     # Internal calls made by this call.
 
     internal_calls: List["CallInfo"] = field(
-        metadata=dict(marshmallow_field=mfields.List(mfields.Nested(lambda: CallInfo.Schema())))
+        metadata=additional_metadata(
+            marshmallow_field=mfields.List(mfields.Nested(lambda: CallInfo.Schema()))
+        )
     )
 
     # Deprecated fields.
@@ -220,20 +235,34 @@ class CallInfo(SerializableMarshmallowDataclass):
     # it may differ from the code of the to_address contract.
     code_address: Optional[int]
 
+    def get_visited_storage_entries(self) -> Set[StorageEntry]:
+        storage_entries = {(self.contract_address, key) for key in self.accessed_storage_keys}
+        internal_visited_storage_entries = CallInfo.get_visited_storage_entries_of_many(
+            call_infos=self.internal_calls
+        )
+        return storage_entries | internal_visited_storage_entries
+
     def get_state_selector(self) -> StateSelector:
         code_address = self.contract_address if self.code_address is None else self.code_address
-        class_hashes = set() if self.class_hash is None else {self.class_hash}
-        selector = StateSelector(
-            contract_addresses={self.contract_address, code_address} - {DECLARE_SENDER_ADDRESS},
-            class_hashes=class_hashes,
+        assert self.class_hash is not None, "Class hash is missing from call info."
+        selector = StateSelector.create(
+            contract_addresses={self.contract_address, code_address}
+            - {DEFAULT_DECLARE_SENDER_ADDRESS},
+            class_hashes=[self.class_hash],
         )
 
         return selector | CallInfo.get_state_selector_of_many(call_infos=self.internal_calls)
 
     @staticmethod
-    def get_state_selector_of_many(
-        call_infos: Iterable["CallInfo"],
-    ) -> StateSelector:
+    def get_visited_storage_entries_of_many(call_infos: Iterable["CallInfo"]) -> Set[StorageEntry]:
+        return functools.reduce(
+            operator.__or__,
+            (call_info.get_visited_storage_entries() for call_info in call_infos),
+            set(),
+        )
+
+    @staticmethod
+    def get_state_selector_of_many(call_infos: Iterable["CallInfo"]) -> StateSelector:
         return functools.reduce(
             operator.__or__,
             (call_info.get_state_selector() for call_info in call_infos),
@@ -278,7 +307,7 @@ class CallInfo(SerializableMarshmallowDataclass):
 
     @classmethod
     def empty_for_testing(cls) -> "CallInfo":
-        return cls.empty(contract_address=0, caller_address=0, class_hash=None)
+        return cls.empty(contract_address=1, caller_address=0, class_hash=None)
 
     @classmethod
     def empty_constructor_call(
@@ -290,7 +319,7 @@ class CallInfo(SerializableMarshmallowDataclass):
             class_hash=class_hash,
             call_type=CallType.CALL,
             entry_point_type=EntryPointType.CONSTRUCTOR,
-            entry_point_selector=CONSTRUCTOR_SELECTOR,
+            entry_point_selector=CONSTRUCTOR_ENTRY_POINT_SELECTOR,
         )
 
     def get_sorted_events(self) -> List[Event]:
@@ -350,18 +379,47 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
     2. Stores useful information for users; e.g., L2-to-L1 messages and emitted events.
     """
 
-    call_info: CallInfo
-    # Fee transfer call info, executed by the BE for external InvokeFunction transactions;
-    # Optional since currently Deploy transactions do not have fee (and backward compatibility).
+    # Transaction-specific validation call info.
+    validate_info: Optional[CallInfo]
+    # Transaction-specific execution call info, None for Declare.
+    call_info: Optional[CallInfo]
+    # Fee transfer call info, executed by the BE for account contract transactions (e.g., declare
+    # and invoke).
     fee_transfer_info: Optional[CallInfo]
+    # The actual fee that was charged in Wei.
     actual_fee: int = field(metadata=fields.FeeField.metadata(field_name="actual_fee"))
+    # Actual resources the transaction is charged for, including L1 gas
+    # and OS additional resources estimation.
+    actual_resources: ResourcesMapping = field(metadata=fields.name_to_resources_metadata)
+
+    @property
+    def non_optional_calls(self) -> Iterable[CallInfo]:
+        ordered_optional_calls = (self.validate_info, self.call_info, self.fee_transfer_info)
+        return tuple(call for call in ordered_optional_calls if call is not None)
 
     def get_state_selector(self) -> StateSelector:
-        call_info_selector = self.call_info.get_state_selector()
-        if self.fee_transfer_info is None:
-            return call_info_selector
+        return CallInfo.get_state_selector_of_many(call_infos=self.non_optional_calls)
 
-        return call_info_selector | self.fee_transfer_info.get_state_selector()
+    def get_executed_class_hashes(self) -> FrozenSet[bytes]:
+        return frozenset(self.get_state_selector().class_hashes)
+
+    def get_visited_storage_entries(self) -> Set[StorageEntry]:
+        return CallInfo.get_visited_storage_entries_of_many(call_infos=self.non_optional_calls)
+
+    @classmethod
+    def from_call_infos(
+        cls,
+        execute_call_info: Optional[CallInfo],
+        validate_info: Optional[CallInfo] = None,
+        fee_transfer_info: Optional[CallInfo] = None,
+    ) -> "TransactionExecutionInfo":
+        return cls(
+            validate_info=validate_info,
+            call_info=execute_call_info,
+            fee_transfer_info=fee_transfer_info,
+            actual_fee=0,
+            actual_resources={},
+        )
 
     def gen_call_iterator(self) -> Iterator[CallInfo]:
         """
@@ -369,11 +427,8 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
         (Preorder of the original call tree followed by the preorder of the call tree that was
         generated while charging the fee).
         """
-        yield from self.call_info.gen_call_topology()
-        if self.fee_transfer_info is None:
-            return
-
-        yield from self.fee_transfer_info.gen_call_topology()
+        for call_info in self.non_optional_calls:
+            yield from call_info.gen_call_topology()
 
     @staticmethod
     def get_state_selector_of_many(
@@ -385,11 +440,29 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
             StateSelector.empty(),
         )
 
+    @staticmethod
+    def get_visited_storage_entries_of_many(
+        execution_infos: Iterable["TransactionExecutionInfo"],
+    ) -> Set[StorageEntry]:
+        return functools.reduce(
+            operator.__or__,
+            (execution_info.get_visited_storage_entries() for execution_info in execution_infos),
+            set(),
+        )
+
     def get_sorted_events(self) -> List[Event]:
-        return self.call_info.get_sorted_events()
+        return [
+            event
+            for call_info in self.non_optional_calls
+            for event in call_info.get_sorted_events()
+        ]
 
     def get_sorted_l2_to_l1_messages(self) -> List[L2ToL1MessageInfo]:
-        return self.call_info.get_sorted_l2_to_l1_messages()
+        return [
+            message
+            for call_info in self.non_optional_calls
+            for message in call_info.get_sorted_l2_to_l1_messages()
+        ]
 
 
 # Deprecated classes.
@@ -441,7 +514,7 @@ class ContractCall(ValidatedMarshmallowDataclass):
     # A set of storage addresses accessed by this call, **excluding** addresses from nested calls;
     # kept in order to calculate and prepare the commitment tree facts before the StarkNet OS run.
     storage_accessed_addresses: Set[int] = field(
-        metadata=dict(
+        metadata=additional_metadata(
             marshmallow_field=SetField(
                 everest_fields.felt_metadata("storage_accessed_address")["marshmallow_field"]
             )
@@ -469,7 +542,9 @@ class ContractCall(ValidatedMarshmallowDataclass):
     @property
     def state_selector(self) -> StateSelector:
         code_address = self.to_address if self.code_address is None else self.code_address
-        return StateSelector(contract_addresses={self.to_address, code_address}, class_hashes=set())
+        return StateSelector.create(
+            contract_addresses=[self.to_address, code_address], class_hashes=[]
+        )
 
 
 @marshmallow_dataclass.dataclass(frozen=True)

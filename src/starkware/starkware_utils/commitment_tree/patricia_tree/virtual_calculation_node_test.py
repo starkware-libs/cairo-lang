@@ -1,6 +1,7 @@
 import random
 
 import pytest
+import pytest_asyncio
 
 from starkware.starkware_utils.commitment_tree.calculation import ConstantCalculation
 from starkware.starkware_utils.commitment_tree.patricia_tree.virtual_calculation_node import (
@@ -18,13 +19,13 @@ def ffc() -> FactFetchingContext:
     return FactFetchingContext(storage=MockStorage(), hash_func=hash_func)
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def leaf_calculation(ffc: FactFetchingContext) -> ConstantCalculation:
     leaf_hash = await SimpleLeafFact(value=random.randrange(1, 100)).set_fact(ffc=ffc)
     return ConstantCalculation(leaf_hash)
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def leaf_calculation2(ffc: FactFetchingContext) -> ConstantCalculation:
     leaf_hash = await SimpleLeafFact(value=random.randrange(100, 200)).set_fact(ffc=ffc)
     return ConstantCalculation(leaf_hash)

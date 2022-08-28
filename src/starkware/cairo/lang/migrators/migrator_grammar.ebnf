@@ -1,0 +1,178 @@
+%import common.INT
+%import common.WS_INLINE
+%import common.NEWLINE
+%ignore WS_INLINE
+
+HEXINT: /0x[0-9a-fA-F]+/
+HINT: /%\{(.*?)%\}/s
+IDENTIFIER: /[a-zA-Z_][a-zA-Z_0-9]*/
+STRING: /"(.*?)"/
+SHORT_STRING: /'(.*?)'/
+_DBL_PLUS: "++"
+_DBL_EQ: "=="
+_DBL_STAR: "**"
+_NEQ: "!="
+_ARROW: "->"
+_AT: "@"
+
+// Comma separated list with notes.
+COMMA: ","
+_expr_sep: (COMMA | nonempty_notes)+
+comma_separated_with_notes{item}: notes item? (_expr_sep item)* _expr_sep?
+
+// Types.
+named_type: identifier (":" type)? | non_identifier_type
+non_identifier_type: "felt"                                         -> type_felt
+                   | "codeoffset"                                   -> type_codeoffset
+                   | type "*"                                       -> type_pointer
+                   | type _DBL_STAR                                 -> type_pointer2
+                   | "(" comma_separated_with_notes{named_type} ")" -> type_tuple
+?type: non_identifier_type
+     | identifier             -> type_struct
+
+// Expressions.
+expr_assignment: expr | identifier_def "=" expr
+arg_list: comma_separated_with_notes{expr_assignment}
+
+decorator: _AT identifier_def
+decorator_list: (decorator _NEWLINE*)*
+
+?expr: sum
+?sum: product
+    | sum "+" notes product   -> expr_add
+    | sum "-" notes product   -> expr_sub
+?product: unary
+        | product "*" notes unary  -> expr_mul
+        | product "/" notes unary  -> expr_div
+?unary: pow
+      | "&" unary                             -> unary_addressof
+      | "-" unary                             -> unary_neg
+      | "new" unary                           -> unary_new_operator
+?pow: atom
+    | atom _DBL_STAR notes pow -> expr_pow
+identifier: IDENTIFIER ("." IDENTIFIER)*
+identifier_def: IDENTIFIER
+?atom: INT                                    -> atom_number
+     | HEXINT                                 -> atom_hex_number
+     | SHORT_STRING                           -> atom_short_string
+     | "nondet" HINT                          -> atom_hint
+     | reg                                    -> atom_reg
+     | function_call                          -> atom_func_call
+     | identifier
+     | "[" notes expr "]"                     -> atom_deref
+     | atom "[" notes expr "]"                -> atom_subscript
+     | atom "." identifier_def                -> atom_dot
+     | "cast" "(" notes expr "," type ")"     -> atom_cast
+     | "(" arg_list ")"                       -> atom_tuple_or_parentheses
+!reg: "ap" -> reg_ap
+    | "fp" -> reg_fp
+
+?bool_expr: bool_and
+
+?bool_and: bool_and "and" notes bool_atom     -> bool_and_expr
+         | bool_atom
+
+?bool_atom: expr _DBL_EQ notes expr           -> bool_expr_eq
+          | expr _NEQ    notes expr           -> bool_expr_neq
+
+!modifier: "local" -> modifier_local
+
+typed_identifier: (modifier)? identifier_def (":" type)?
+
+_ref_binding: typed_identifier | "(" identifier_list ")"
+
+identifier_list: notes ((typed_identifier notes "," notes)* typed_identifier notes ","?)? notes
+
+// Instructions.
+// Define RET as a terminal to get the location of the instruction correctly.
+RET: "ret"
+call_instruction: "call" "rel" expr                   -> inst_call_rel
+                | "call" "abs" expr                   -> inst_call_abs
+                | "call" identifier                   -> inst_call_label
+?instruction_body: expr "=" expr                       -> inst_assert_eq
+                 | "jmp" "rel" expr                    -> inst_jmp_rel
+                 | "jmp" "abs" expr                    -> inst_jmp_abs
+                 | "jmp" identifier                    -> inst_jmp_to_label
+                 | "jmp" "rel" expr "if" expr _NEQ INT -> inst_jnz
+                 | "jmp" identifier "if" expr _NEQ INT -> inst_jnz_to_label
+                 | call_instruction
+                 | RET                                 -> inst_ret
+                 | "ap" "+=" expr                      -> inst_add_ap
+                 | "dw" expr                           -> inst_data_word
+instruction: instruction_body                    -> instruction_noap
+           | instruction_body ";" "ap" _DBL_PLUS -> instruction_ap
+
+function_call: identifier ("{" arg_list "}")? "(" arg_list ")"
+
+// Reference expressions.
+rvalue: call_instruction     -> rvalue_call_instruction
+      | expr                 -> rvalue_expr
+
+// Directives.
+BUILTINS: "%builtins"
+LANG: "%lang"
+directive: BUILTINS identifier+  -> directive_builtins
+         | LANG identifier       -> directive_lang
+
+// Import statement.
+aliased_identifier: identifier_def ("as" identifier_def)?
+
+_import_body: aliased_identifier ("," aliased_identifier)*
+            | "(" notes (aliased_identifier notes "," notes)* aliased_identifier notes ","? notes ")"
+
+_import: "from" identifier "import" _import_body
+
+// Function/Namespace/Struct definition.
+_returns:  _ARROW _NEWLINE* "(" identifier_list ")"
+_arguments: "(" identifier_list ")"
+implicit_arguments: ("{" identifier_list "}")?
+_funcdecl: "func" identifier_def implicit_arguments _arguments _NEWLINE* _returns? ":"
+_func: decorator_list _funcdecl _NEWLINE code_block "end"
+_if: "if" bool_expr ":" _NEWLINE code_block ("else" ":" _NEWLINE code_block)? "end"
+
+_struct: decorator_list "struct" identifier_def ":"_NEWLINE code_block "end"
+_namespace: decorator_list "namespace" identifier_def ":"_NEWLINE code_block "end"
+
+_with_statement: "with" (aliased_identifier ",")* aliased_identifier ":" _NEWLINE code_block "end"
+
+_attr_val: "(" notes (STRING notes)* ")"
+_with_attr_statement: "with_attr" identifier_def _attr_val? ":" _NEWLINE code_block "end"
+
+// Cairo file.
+_NEWLINE: "\n"
+COMMENT: /#.*/
+
+// Note: code_element_label is using identifier instead of identifier_def, in order to make the
+// parser LALR-friendly.
+code_element: instruction                                       -> code_element_instruction
+            | "const" identifier_def "=" expr                   -> code_element_const
+            | "member" typed_identifier                         -> code_element_member
+            | "let" _ref_binding "=" rvalue                     -> code_element_reference
+            | "local" typed_identifier ("=" expr)?              -> code_element_local_var
+            | "tempvar" typed_identifier ("=" expr)?            -> code_element_temp_var
+            | "assert" expr "=" expr                            -> code_element_compound_assert_eq
+            | "static_assert" expr _DBL_EQ expr                 -> code_element_static_assert
+            | "return" expr                                     -> code_element_return
+            | _if                                               -> code_element_if
+            | function_call                                     -> code_element_func_call
+            | identifier ":"                                    -> code_element_label
+            | _func                                             -> code_element_function
+            | _struct                                           -> code_element_struct
+            | _namespace                                        -> code_element_namespace
+            | "using" identifier_def "=" type                   -> code_element_typedef
+            | _with_attr_statement                              -> code_element_with_attr
+            | _with_statement                                   -> code_element_with
+            | HINT                                              -> code_element_hint
+            | directive                                         -> code_element_directive
+            | _import                                           -> code_element_import
+            | "alloc_locals"                                    -> code_element_alloc_locals
+            |                                                   -> code_element_empty_line
+commented_code_element: code_element [COMMENT]
+code_block: (commented_code_element _NEWLINE)*
+
+cairo_file: code_block
+
+// Notes (comments inside parentheses).
+note_new_line: _NEWLINE
+nonempty_notes: (note_new_line | COMMENT)+ -> notes
+notes: (note_new_line | COMMENT)*

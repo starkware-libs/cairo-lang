@@ -26,7 +26,9 @@ full_python_test(starknet_hints_latest_whitelist_test
     cairo_common_lib
     cairo_constants_lib
     starknet_common_lib
+    starknet_hints_whitelist_lib
     starknet_security_lib
+    starkware_python_utils_lib
     pip_pytest
 )
 

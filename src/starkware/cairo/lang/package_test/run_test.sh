@@ -13,7 +13,7 @@ tmpdir=$(mktemp -d)
 cd ${tmpdir}
 
 # Create a new virtual environment.
-python3.7 -m venv venv
+python3.9 -m venv venv
 
 # Activate the environment.
 source venv/bin/activate
@@ -31,6 +31,8 @@ res=$(cairo-run --program=main_compiled.json  --layout=small --print_output)
 
 cairo-reconstruct-traceback --version > /dev/null
 
+# Test cairo-migrate.
+cairo-migrate --help > /dev/null
 
 # Test StarkNet compiler.
 starknet-compile ${root_dir}/src/starkware/starknet/apps/amm_sample/amm_sample.cairo > /dev/null

@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Typ
 from starkware.cairo.lang.builtins.bitwise.bitwise_builtin_runner import BitwiseBuiltinRunner
 from starkware.cairo.lang.builtins.ec.ec_op_builtin_runner import EcOpBuiltinRunner
 from starkware.cairo.lang.builtins.hash.hash_builtin_runner import HashBuiltinRunner
+from starkware.cairo.lang.builtins.keccak.keccak_builtin_runner import KeccakBuiltinRunner
 from starkware.cairo.lang.builtins.range_check.range_check_builtin_runner import (
     RangeCheckBuiltinRunner,
 )
@@ -116,6 +117,9 @@ class CairoRunner:
             ),
             ec_op=lambda name, included: EcOpBuiltinRunner(
                 included=included, ec_op_builtin=instance.builtins["ec_op"]
+            ),
+            keccak=lambda name, included: KeccakBuiltinRunner(
+                included=included, instance_def=instance.builtins["keccak"]
             ),
         )
 
@@ -822,11 +826,16 @@ def get_runner_from_code(
     return get_main_runner(program=program, hint_locals={}, layout=layout)
 
 
-def get_main_runner(program: Program, hint_locals: Dict[str, Any], layout: str):
+def get_main_runner(
+    program: Program,
+    hint_locals: Dict[str, Any],
+    layout: str,
+    allow_missing_builtins: Optional[bool] = None,
+):
     """
     Runs a main-entrypoint program using Cairo runner and returns the runner.
     """
-    runner = CairoRunner(program, layout=layout)
+    runner = CairoRunner(program, layout=layout, allow_missing_builtins=allow_missing_builtins)
     runner.initialize_segments()
     end = runner.initialize_main_entrypoint()
     runner.initialize_vm(hint_locals=hint_locals)

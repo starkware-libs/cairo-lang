@@ -7,7 +7,10 @@ from starkware.cairo.bootloaders.program_hash_test_utils import (
 from starkware.python.utils import get_source_dir_path
 
 PROGRAM_PATH = os.path.join(os.path.dirname(__file__), "starknet_os_compiled.json")
-HASH_PATH = get_source_dir_path("src/starkware/starknet/core/os/program_hash.json")
+HASH_PATH = get_source_dir_path(
+    "src/starkware/starknet/core/os/program_hash.json",
+    default_value=os.path.join(os.path.dirname(__file__), "program_hash.json"),
+)
 COMMAND = "generate_starknet_os_program_hash"
 
 

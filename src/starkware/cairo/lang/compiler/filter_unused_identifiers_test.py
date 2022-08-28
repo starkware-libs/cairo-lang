@@ -23,21 +23,21 @@ PRIME = 2**64 + 13
 def test_filter_unused_identifiers():
     program = compile_cairo(
         code="""
-func main():
-    alloc_locals
-    local a
-    local b
+func main() {
+    alloc_locals;
+    local a;
+    local b;
 
-    local x
-    tempvar x
+    local x;
+    tempvar x;
     %{ ids.x = 5 %}
-    tempvar y
+    tempvar y;
 
-    with_attr error_message("Error. b={b}"):
-        [ap] = 1
-    end
-    return ()
-end
+    with_attr error_message("Error. b={b}") {
+        [ap] = 1;
+    }
+    return ();
+}
 """,
         prime=PRIME,
     )

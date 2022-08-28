@@ -29,12 +29,13 @@ def _extract_identifiers(code):
 
 def test_collect_single_binds():
     code = """
-tempvar a = [ap]
-const b = [ap]
-local c = [ap]
-let d = [fp] + 2
+tempvar a = [ap];
+const b = [ap];
+local c = [ap];
+let d = [fp] + 2;
+
 f:
-let g : H = f(1, 2, 3)
+let g: H = f(1, 2, 3);
 """
     assert set(_extract_identifiers(code)) == {
         ("a", ReferenceDefinition),
@@ -48,10 +49,10 @@ let g : H = f(1, 2, 3)
 
 def test_collect_multi_binds():
     code = """
-func a(b, c) -> (d):
-    [ap] = [ap]
-end
-let (e, f) = g()
+func a(b, c) -> (d: felt) {
+    [ap] = [ap];
+}
+let (e, f) = g();
 """
     assert set(_extract_identifiers(code)) == {
         ("a", FunctionDefinition),
@@ -68,12 +69,12 @@ let (e, f) = g()
 
 def test_nested_funcs():
     code = """
-func foo{z}(x):
-    local a
-    func bar(y):
-        tempvar b = [ap]
-    end
-end
+func foo{z}(x) {
+    local a;
+    func bar(y) {
+        tempvar b = [ap];
+    }
+}
 """
     assert set(_extract_identifiers(code)) == {
         ("foo", FunctionDefinition),
@@ -96,8 +97,8 @@ end
 
 def test_redefinition():
     code = """
-tempvar name = [ap]
-local name = [ap]
+tempvar name = [ap];
+local name = [ap];
 """
     assert _extract_identifiers(code) == [
         ("name", ReferenceDefinition),
@@ -108,25 +109,25 @@ def test_redefinition_failures():
     verify_exception(
         """
 name:
-local name = [ap]
+local name = [ap];
 """,
         """
 file:?:?: Redefinition of 'test_scope.name'.
-local name = [ap]
+local name = [ap];
       ^**^
 """,
     )
     verify_exception(
         """
-func foo():
-end
+func foo() {
+}
 
-func foo():
-end
+func foo() {
+}
 """,
         """
 file:?:?: Redefinition of 'test_scope.foo'.
-func foo():
+func foo() {
      ^*^
 """,
     )

@@ -2,8 +2,6 @@
 # See cairo_compile for usage example.
 function(cairo_compile_base TARGET_NAME COMPILER_EXE COMPILED_PROGRAM_NAME SOURCE_FILE
     COMPILE_FLAGS)
-    set(COMPILED_PROGRAM "${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}_compiled.json")
-
     # Choose a file name for the Cairo dependencies of the compiled file.
     set(COMPILE_DEPENDENCY_FILE
         "${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}_compile_dependencies.cmake")

@@ -122,15 +122,15 @@ def test_gen_typed_args():
     """
 
     code = """
-struct Inner:
-    member a : felt
-    member b : felt
-end
+struct Inner {
+    a: felt,
+    b: felt,
+}
 
-struct MyStruct:
-    member nested : Inner
-    member ptr : Inner*
-end
+struct MyStruct {
+    nested: Inner,
+    ptr: Inner*,
+}
 """
 
     program = compile_cairo(code=code, prime=DEFAULT_PRIME)

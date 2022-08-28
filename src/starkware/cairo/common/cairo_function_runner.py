@@ -7,6 +7,8 @@ from starkware.cairo.lang.builtins.bitwise.instance_def import BitwiseInstanceDe
 from starkware.cairo.lang.builtins.ec.ec_op_builtin_runner import EcOpBuiltinRunner
 from starkware.cairo.lang.builtins.ec.instance_def import EcOpInstanceDef
 from starkware.cairo.lang.builtins.hash.hash_builtin_runner import HashBuiltinRunner
+from starkware.cairo.lang.builtins.keccak.instance_def import KeccakInstanceDef
+from starkware.cairo.lang.builtins.keccak.keccak_builtin_runner import KeccakBuiltinRunner
 from starkware.cairo.lang.builtins.range_check.range_check_builtin_runner import (
     RangeCheckBuiltinRunner,
 )
@@ -59,6 +61,15 @@ class CairoFunctionRunner(CairoRunner):
             ),
         )
         self.builtin_runners["ec_op_builtin"] = ec_op_builtin
+        keccak_builtin = KeccakBuiltinRunner(
+            included=True,
+            instance_def=KeccakInstanceDef(
+                ratio=1,
+                state_rep=[200] * 8,
+                instances_per_component=16,
+            ),
+        )
+        self.builtin_runners["keccak_builtin"] = keccak_builtin
 
         self.initialize_segments()
 
@@ -85,6 +96,10 @@ class CairoFunctionRunner(CairoRunner):
     @property
     def ec_op_builtin(self) -> EcOpBuiltinRunner:
         return cast(EcOpBuiltinRunner, self.builtin_runners["ec_op_builtin"])
+
+    @property
+    def keccak_builtin(self) -> KeccakBuiltinRunner:
+        return cast(KeccakBuiltinRunner, self.builtin_runners["keccak_builtin"])
 
     def assert_eq(self, arg: MaybeRelocatable, expected_value, apply_modulo: bool = True):
         """

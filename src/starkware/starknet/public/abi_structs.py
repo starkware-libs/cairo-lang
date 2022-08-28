@@ -41,13 +41,13 @@ def prepare_type_for_abi(cairo_type: CairoType) -> AbiTypeInfo:
             structs=structs,
         )
     elif isinstance(cairo_type, TypeStruct):
-        struct_name = cairo_type.resolved_scope.path[-1]
+        struct_name = cairo_type.scope.path[-1]
 
         return AbiTypeInfo(
             modified_type=dataclasses.replace(
                 cairo_type, scope=ScopedName.from_string(struct_name)
             ),
-            structs={cairo_type.resolved_scope},
+            structs={cairo_type.scope},
         )
     elif isinstance(cairo_type, TypeFelt):
         return AbiTypeInfo(modified_type=cairo_type, structs=set())

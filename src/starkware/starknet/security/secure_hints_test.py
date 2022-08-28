@@ -7,51 +7,43 @@ from starkware.cairo.lang.compiler.cairo_compile import compile_cairo
 from starkware.starknet.security.secure_hints import HintsWhitelist, InsecureHintError
 
 ALLOWED_CODE = """
-func f(a: felt, b: felt):
-    %{
-        This is a hint.
-    %}
-    ap += 5
-    ret
-end
+func f(a: felt, b: felt) {
+    %{ This is a hint. %}
+    ap += 5;
+    ret;
+}
 """
 
 GOOD_CODES = [
     """
-func f(b: felt):
-    %{
-        This is a hint.
-    %}
-    ap += 5
-    ret
-end
+func f(b: felt) {
+    %{ This is a hint. %}
+    ap += 5;
+    ret;
+}
 """,
 ]
 
 BAD_CODES = [
     (
         """
-func f(a: felt, b: felt):
-    let c = a / b
-    %{
-        This is a hint.
-    %}
-    ap += 5
-    ret
-end
+func f(a: felt, b: felt) {
+    let c = a / b;
+    %{ This is a hint. %}
+    ap += 5;
+    ret;
+}
 """,
         """Forbidden expressions in hint "This is a hint.":
 [NamedExpression(name='__main__.f.c', expr='cast([fp + (-4)] / [fp + (-3)], felt)')]""",
     ),
     (
         """
-func f(a: felt, b: felt):
-    %{
-        This is a bad hint.
-    %}
-    ap += 5
-    ret
-end
+func f(a: felt, b: felt) {
+    %{ This is a bad hint. %}
+    ap += 5;
+    ret;
+}
 """,
         "is not whitelisted",
     ),
@@ -84,20 +76,16 @@ def test_collision():
     Tests multiple hints with the same code but different reference expressions.
     """
     code = """
-func f():
-    let b = [ap]
-    %{
-        ids.b = 1
-    %}
-    ret
-end
-func g():
-    let b = [ap - 10]
-    %{
-        ids.b = 1
-    %}
-    ret
-end
+func f() {
+    let b = [ap];
+    %{ ids.b = 1 %}
+    ret;
+}
+func g() {
+    let b = [ap - 10];
+    %{ ids.b = 1 %}
+    ret;
+}
 """
     program = compile_cairo(code, DEFAULT_PRIME)
     whitelist = HintsWhitelist.from_program(program)

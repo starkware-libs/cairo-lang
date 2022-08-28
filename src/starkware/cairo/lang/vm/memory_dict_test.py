@@ -71,6 +71,8 @@ def test_memory_dict_check_element():
         memory["not a number"] = 12  # type: ignore
     with pytest.raises(KeyError, match="must be nonnegative"):
         memory[-12] = 13
+    with pytest.raises(ValueError, match="must be nonnegative"):
+        memory[12] = -13
     with pytest.raises(ValueError, match="The offset of a relocatable value must be nonnegative"):
         memory[RelocatableValue(segment_index=10, offset=-2)] = 13
     # A value may have a negative offset.

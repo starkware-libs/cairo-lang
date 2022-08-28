@@ -17,7 +17,7 @@ def check_felts_only_type(
         return 1
     elif isinstance(cairo_type, TypeStruct):
         struct_definition = get_struct_definition(
-            cairo_type.resolved_scope, identifier_manager=identifier_manager
+            cairo_type.scope, identifier_manager=identifier_manager
         )
 
         size = 0

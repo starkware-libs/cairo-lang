@@ -12,6 +12,7 @@ python_lib(starkware_python_utils_lib
     LIBS
     pip_pyyaml
     pip_sympy
+    pip_typing_extensions
 )
 
 python_lib(starkware_expression_string_lib

@@ -22,6 +22,7 @@ from starkware.cairo.lang.compiler.preprocessor.reg_tracking import (
 )
 from starkware.cairo.lang.compiler.references import ApDeductionError, FlowTrackingError, Reference
 from starkware.cairo.lang.compiler.scoped_name import ScopedName, ScopedNameAsStr
+from starkware.starkware_utils.marshmallow_dataclass_fields import additional_metadata
 
 
 class LostReferenceError(FlowTrackingError):
@@ -132,7 +133,7 @@ class FlowTrackingDataActual(FlowTrackingData):
     ap_tracking: RegTrackingData
     # Mapping from full reference name to the Reference instance.
     reference_ids: Dict[ScopedName, int] = field(
-        metadata=dict(
+        metadata=additional_metadata(
             marshmallow_field=mfields.Dict(keys=ScopedNameAsStr, values=mfields.Integer())
         ),
         default_factory=dict,
@@ -316,7 +317,7 @@ class FlowTracking:
     def add_flow_to_label(self, label_name: ScopedName, ap_change: RegChangeLike):
         """
         Registers a flow from current location to a label, with some ap_change.
-        For example, after 'jmp label1 if [ap] != 0; ap++', we have a flow to label1 with ap_change
+        For example, after 'jmp label1 if [ap] != 0, ap++', we have a flow to label1 with ap_change
         of 1.
         """
         ap_change = RegChange.from_expr(ap_change)
