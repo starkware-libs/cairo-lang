@@ -25,6 +25,53 @@
         ],
         "description": "A StarkNet contract external function."
     },
+    "Raw input function": {
+        "prefix": [
+            "@raw_input"
+        ],
+        "body": [
+            "@raw_input",
+            "func ${1:name}{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(",
+            "\tselector : felt, calldata_size : felt, calldata : felt*",
+            "):",
+            "\t$0",
+            "end"
+        ],
+        "description": "A StarkNet contract raw_input function."
+    },
+    "Raw output function": {
+        "prefix": [
+            "@raw_output"
+        ],
+        "body": [
+            "@raw_output",
+            "func ${1:name}{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(",
+            "\t${2:arguments}",
+            ") -> ",
+            "(retdata_size : felt, retdata : felt*)",
+            ":",
+            "\t$0",
+            "end"
+        ],
+        "description": "A StarkNet contract raw_output function."
+    },
+    "Raw input/output function": {
+        "prefix": [
+            "@raw_inout"
+        ],
+        "body": [
+            "@raw_input",
+            "@raw_output",
+            "func ${1:name}{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(",
+            "\tselector : felt, calldata_size : felt, calldata : felt*",
+            ") -> ",
+            "(retdata_size : felt, retdata : felt*)",
+            ":",
+            "\t$0",
+            "end"
+        ],
+        "description": "A StarkNet contract raw_input and raw_output function."
+    },
     "StarkNet contract interface": {
         "prefix": [
             "@contract_interface"
