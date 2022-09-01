@@ -5,7 +5,7 @@
         ],
         "body": [
             "@storage_var",
-            "func ${1:name}() -> (${2:res: felt}) {",
+            "func ${1:name}(${2}) -> (${3:res: felt}) {",
             "}",
             "$0"
         ],
