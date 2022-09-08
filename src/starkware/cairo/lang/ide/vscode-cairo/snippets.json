@@ -11,6 +11,20 @@
         ],
         "description": "A StarkNet storage variable."
     },
+    "Constructor function": {
+        "prefix": [
+            "@constructor"
+        ],
+        "body": [
+            "@constructor",
+            "func constructor{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(",
+            "\t${2:arguments}",
+            "):",
+            "\t$0",
+            "end"
+        ],
+        "description": "A StarkNet contract constructor"
+    },
     "External function": {
         "prefix": [
             "@external"
