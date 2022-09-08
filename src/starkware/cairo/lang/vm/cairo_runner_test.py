@@ -3,6 +3,7 @@ import re
 
 import pytest
 
+from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.cairo.lang.compiler.cairo_compile import compile_cairo
 from starkware.cairo.lang.vm.builtin_runner import InsufficientAllocatedCells
 from starkware.cairo.lang.vm.cairo_runner import CairoRunner, get_runner_from_code
@@ -10,11 +11,10 @@ from starkware.cairo.lang.vm.utils import RunResources
 from starkware.cairo.lang.vm.vm_exceptions import VmException, VmExceptionBase
 
 CAIRO_FILE = os.path.join(os.path.dirname(__file__), "test.cairo")
-PRIME = 2**251 + 17 * 2**192 + 1
 
 
 def test_run_until_label():
-    runner = CairoRunner.from_file(CAIRO_FILE, PRIME, proof_mode=True)
+    runner = CairoRunner.from_file(CAIRO_FILE, DEFAULT_PRIME, proof_mode=True)
     runner.initialize_segments()
     runner.initialize_main_entrypoint()
     runner.initialize_vm({})
@@ -41,7 +41,7 @@ func main() {
     ret;
 }
 """
-    program = compile_cairo(code, PRIME)
+    program = compile_cairo(code, DEFAULT_PRIME)
     runner = CairoRunner(program, layout="plain")
     runner.initialize_segments()
     runner.initialize_main_entrypoint()
@@ -66,18 +66,18 @@ func main(output_ptr: felt*) -> (output_ptr: felt*) {
     with pytest.raises(
         AssertionError, match="Invalid stop pointer for output. Expected: 2:1, found: 2:3"
     ):
-        get_runner_from_code(code, layout="small", prime=PRIME)
+        get_runner_from_code(code, layout="small", prime=DEFAULT_PRIME)
 
 
 def test_builtin_list():
     # This should work.
     program = compile_cairo(
-        code=[("%builtins output pedersen range_check ecdsa\n", "")], prime=PRIME
+        code=[("%builtins output pedersen range_check ecdsa\n", "")], prime=DEFAULT_PRIME
     )
     CairoRunner(program, layout="small")
 
     # These should fail.
-    program = compile_cairo(code=[("%builtins pedersen output\n", "")], prime=PRIME)
+    program = compile_cairo(code=[("%builtins pedersen output\n", "")], prime=DEFAULT_PRIME)
     with pytest.raises(
         AssertionError,
         match=re.escape(
@@ -89,7 +89,7 @@ def test_builtin_list():
     ):
         CairoRunner(program, layout="small")
 
-    program = compile_cairo(code=[("%builtins pedersen foo\n", "")], prime=PRIME)
+    program = compile_cairo(code=[("%builtins pedersen foo\n", "")], prime=DEFAULT_PRIME)
     with pytest.raises(
         AssertionError, match=r'Builtins {\'foo\'} are not present in layout "small"'
     ):
@@ -107,7 +107,7 @@ func main() {
         VmExceptionBase,
         match=re.escape("Every enter_scope() requires a corresponding exit_scope()."),
     ):
-        runner = get_runner_from_code(code, layout="small", prime=PRIME)
+        runner = get_runner_from_code(code, layout="small", prime=DEFAULT_PRIME)
 
 
 def test_load_data_after_init():
@@ -116,7 +116,7 @@ func main() {
     ret;
 }
 """
-    runner = get_runner_from_code(code, layout="plain", prime=PRIME)
+    runner = get_runner_from_code(code, layout="plain", prime=DEFAULT_PRIME)
     addr = runner.segments.add()
     runner.vm_memory.unfreeze_for_testing()
     runner.load_data(addr, [42])
@@ -132,7 +132,7 @@ func main() {
     ret;
 }
 """
-    runner = get_runner_from_code(code, layout="plain", prime=PRIME)
+    runner = get_runner_from_code(code, layout="plain", prime=DEFAULT_PRIME)
     runner.check_memory_usage()
 
 
@@ -145,7 +145,7 @@ func main() {
     ret;
 }
 """
-    runner = get_runner_from_code(code, layout="plain", prime=PRIME)
+    runner = get_runner_from_code(code, layout="plain", prime=DEFAULT_PRIME)
 
     with pytest.raises(
         InsufficientAllocatedCells,
@@ -180,7 +180,7 @@ func main() {{
     ]
 
     runner_no_hint, runner_untouched_hint, runner_touched_hint = [
-        get_runner_from_code(code, layout="plain", prime=PRIME)
+        get_runner_from_code(code, layout="plain", prime=DEFAULT_PRIME)
         for code in (code_no_hint, code_untouched_hint, code_touched_hint)
     ]
 

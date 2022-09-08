@@ -8,9 +8,7 @@ from starkware.cairo.lang.builtins.hash.instance_def import PedersenInstanceDef
 from starkware.cairo.lang.builtins.keccak.instance_def import KeccakInstanceDef
 from starkware.cairo.lang.builtins.range_check.instance_def import RangeCheckInstanceDef
 from starkware.cairo.lang.builtins.signature.instance_def import EcdsaInstanceDef
-
-PRIME = 2**251 + 17 * 2**192 + 1
-
+from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 
 @dataclasses.dataclass
 class CpuInstanceDef:
@@ -62,7 +60,7 @@ small_instance = CairoLayout(
             element_height=256,
             element_bits=252,
             n_inputs=2,
-            hash_limit=PRIME,
+            hash_limit=DEFAULT_PRIME,
         ),
         range_check=RangeCheckInstanceDef(
             ratio=8,
@@ -89,7 +87,7 @@ dex_instance = CairoLayout(
             element_height=256,
             element_bits=252,
             n_inputs=2,
-            hash_limit=PRIME,
+            hash_limit=DEFAULT_PRIME,
         ),
         range_check=RangeCheckInstanceDef(
             ratio=8,
@@ -121,7 +119,7 @@ perpetual_with_bitwise_instance = CairoLayout(
             element_height=256,
             element_bits=252,
             n_inputs=2,
-            hash_limit=PRIME,
+            hash_limit=DEFAULT_PRIME,
         ),
         range_check=RangeCheckInstanceDef(
             ratio=16,
@@ -141,7 +139,7 @@ perpetual_with_bitwise_instance = CairoLayout(
             ratio=1024,
             scalar_height=256,
             scalar_bits=252,
-            scalar_limit=PRIME,
+            scalar_limit=DEFAULT_PRIME,
         ),
     ),
     n_trace_columns=10,
@@ -165,7 +163,7 @@ bitwise_instance = CairoLayout(
             element_height=256,
             element_bits=252,
             n_inputs=2,
-            hash_limit=PRIME,
+            hash_limit=DEFAULT_PRIME,
         ),
         range_check=RangeCheckInstanceDef(
             ratio=8,
@@ -203,7 +201,7 @@ recursive_instance = CairoLayout(
             element_height=256,
             element_bits=252,
             n_inputs=2,
-            hash_limit=PRIME,
+            hash_limit=DEFAULT_PRIME,
         ),
         range_check=RangeCheckInstanceDef(
             ratio=8,
@@ -239,7 +237,7 @@ all_instance = CairoLayout(
             element_height=256,
             element_bits=252,
             n_inputs=2,
-            hash_limit=PRIME,
+            hash_limit=DEFAULT_PRIME,
         ),
         range_check=RangeCheckInstanceDef(
             ratio=8,
@@ -259,7 +257,7 @@ all_instance = CairoLayout(
             ratio=256,
             scalar_height=256,
             scalar_bits=252,
-            scalar_limit=PRIME,
+            scalar_limit=DEFAULT_PRIME,
         ),
     ),
     n_trace_columns=27,

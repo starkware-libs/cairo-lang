@@ -49,7 +49,7 @@ EC_ORDER = 0x800000000000010FFFFFFFFFFFFFFFFB781126DCAE7B2321E66A241ADC64D2F
 
 def generate_constant_points(n_points):
     """
-    Generates points from the curve y^2 = x^3 + x + beta over GF(FIELD_PRIME) where beta and the
+    Generates points from the curve y^2 = x^3 + x + beta over GF(DEFAULT_PRIME) where beta and the
     points are generated from the digits of pi.
     """
     # The required number of decimal digits is 76 * (1 + n_points). Add 100 digits to avoid
@@ -59,8 +59,8 @@ def generate_constant_points(n_points):
     # A curve is valid if: it's order is prime and it is not singular.
     # A sage code to reproduce 379 (the lowest number producing a valid beta):
     # ```
-    # FIELD_PRIME = 2**251 + 17 * 2**192 + 1
-    # F = GF(FIELD_PRIME)
+    # DEFAULT_PRIME = 2**251 + 17 * 2**192 + 1
+    # F = GF(DEFAULT_PRIME)
     # alpha = 1
     # for i in range(1000):
     #     beta = int(str(pi.n(digits=100)).replace('.', '')[:76]) + i
@@ -77,22 +77,22 @@ def generate_constant_points(n_points):
         x = int(pi_str[i * 76 : (i + 1) * 76])
         while True:
             y_squared = x**3 + ALPHA * x + beta
-            if is_quad_residue(y_squared, FIELD_PRIME):
-                y = sqrt_mod(y_squared, FIELD_PRIME)
+            if is_quad_residue(y_squared, DEFAULT_PRIME):
+                y = sqrt_mod(y_squared, DEFAULT_PRIME)
                 break
             x += 1
-        P = [x % FIELD_PRIME, y % FIELD_PRIME]
+        P = [x % DEFAULT_PRIME, y % DEFAULT_PRIME]
         if i <= 2:
             constant_points.append(P)
             continue
         for _ in range(248 if i % 2 == 1 else 4):
             constant_points.append(P)
-            P = list(ec_double(P, ALPHA, FIELD_PRIME))
+            P = list(ec_double(P, ALPHA, DEFAULT_PRIME))
     return beta, constant_points
 
 
 N_INPUTS = 2
-N_ELEMENT_BITS = math.ceil(math.log(FIELD_PRIME, 2))
+N_ELEMENT_BITS = math.ceil(math.log(DEFAULT_PRIME, 2))
 assert N_ELEMENT_BITS == 252
 
 N_SHIFT_POINTS = 1  # The same shift point is used in the hash and ECDSA.
@@ -130,7 +130,7 @@ open(PEDERSEN_HASH_POINT_FILENAME, "w").write(
         {
             "_license": COPYRIGHT_STRING.splitlines(),
             "_comment": AUTO_GENERATED_STRING,
-            "FIELD_PRIME": FIELD_PRIME,
+            "DEFAULT_PRIME": DEFAULT_PRIME,
             "FIELD_GEN": FIELD_GEN,
             "EC_ORDER": EC_ORDER,
             "ALPHA": ALPHA,

@@ -2,9 +2,8 @@ import re
 
 import pytest
 
+from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.cairo.lang.compiler.cairo_compile import compile_cairo
-
-PRIME = 2**251 + 17 * 2**192 + 1
 
 
 def test_main_args_match_builtins():
@@ -25,7 +24,7 @@ func main(output_ptr: felt*) -> (output_ptr: felt*) {
     return (output_ptr=output_ptr + 1);
 }
 """,
-            prime=PRIME,
+            prime=DEFAULT_PRIME,
         )
 
     # Check that even if all builtin ptrs were passed as arguments but in the wrong order then
@@ -41,7 +40,7 @@ func main(range_check_ptr: felt*, output_ptr: felt*) -> (
     return (range_check_ptr=range_check_ptr + 1, output_ptr=output_ptr + 1);
 }
 """,
-            prime=PRIME,
+            prime=DEFAULT_PRIME,
         )
 
 
@@ -63,7 +62,7 @@ func main(output_ptr: felt*, range_check_ptr: felt*) -> (output_ptr: felt*) {
     return (output_ptr=output_ptr + 1);
 }
 """,
-            prime=PRIME,
+            prime=DEFAULT_PRIME,
         )
 
 
@@ -78,5 +77,5 @@ func main(output_ptr: felt*, range_check_ptr: felt*) -> (felt*,) {
     ret;
 }
 """,
-            prime=PRIME,
+            prime=DEFAULT_PRIME,
         )
