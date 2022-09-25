@@ -1,14 +1,13 @@
+from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.cairo.lang.compiler.cairo_compile import compile_cairo
 from starkware.cairo.lang.vm.cairo_runner import CairoRunner
-
-PRIME = 2**251 + 17 * 2**192 + 1
 
 
 def compile_and_run(code: str, layout: str = "small"):
     """
     Compiles the given code and runs it in the VM.
     """
-    program = compile_cairo(code, PRIME)
+    program = compile_cairo(code, DEFAULT_PRIME)
     runner = CairoRunner(program, layout=layout, proof_mode=False)
     runner.initialize_segments()
     end = runner.initialize_main_entrypoint()
