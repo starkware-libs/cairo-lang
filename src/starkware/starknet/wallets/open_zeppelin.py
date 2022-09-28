@@ -139,7 +139,7 @@ Transaction hash: {gateway_response['transaction_hash']}
     def get_account_information(self) -> JsonObject:
         assert os.path.exists(self.account_file), (
             f"The account file '{self.account_file}' was not found.\n"
-            "Did you deploy your account contract (using 'starnet deploy_account')?"
+            "Did you deploy your account contract (using 'starknet deploy_account')?"
         )
 
         accounts = json.load(open(self.account_file))
