@@ -156,7 +156,7 @@ class StarkException(WebFriendlyException):
     an invalid transaction).
     """
 
-    def __init__(self, code, message: Optional[str] = None):
+    def __init__(self, code: ErrorCode, message: Optional[str] = None):
         self.code = code
         self.message = message
         super().__init__(status_code=500, body={"code": code, "message": message})
@@ -252,12 +252,15 @@ def wrap_with_stark_exception(
 
     try:
         yield
+    except StarkException:
+        # Raise StarkException-s as-is, so failure information is not lost.
+        raise
     except tuple(exception_types) as exception:
         message = str(exception) if message is None else message
         if logger is not None:
             logger.error(message, exc_info=True)
 
-        raise StarkException(code=code, message=message)
+        raise StarkException(code=code, message=message) from exception
 
 
 @dataclasses.dataclass(frozen=True)

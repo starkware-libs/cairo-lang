@@ -42,13 +42,17 @@ class Starknet:
         source: Optional[str] = None,
         contract_class: Optional[ContractClass] = None,
         cairo_path: Optional[List[str]] = None,
+        disable_hint_validation: bool = False,
     ) -> DeclaredClass:
         """
         Declares a ContractClass in the StarkNet network.
         Returns the class hash and the ABI of the contract.
         """
         contract_class = get_contract_class(
-            source=source, contract_class=contract_class, cairo_path=cairo_path
+            source=source,
+            contract_class=contract_class,
+            cairo_path=cairo_path,
+            disable_hint_validation=disable_hint_validation,
         )
         class_hash, _ = await self.state.declare(contract_class=contract_class)
         assert class_hash is not None

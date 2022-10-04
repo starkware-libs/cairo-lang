@@ -68,6 +68,7 @@ from starkware.cairo.common.uint256 import (
     uint256_le,
     uint256_lt,
     uint256_mul,
+    uint256_mul_div_mod,
     uint256_neg,
     uint256_not,
     uint256_or,

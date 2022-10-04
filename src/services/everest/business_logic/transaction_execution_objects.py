@@ -3,7 +3,23 @@ from typing import Any, Dict, Optional
 import marshmallow
 import marshmallow_dataclass
 
+from starkware.starkware_utils.error_handling import StarkException
 from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
+
+
+class EverestTransactionExecutionInfo(ValidatedMarshmallowDataclass):
+    """
+    Base class of classes containing information generated from an execution of a transaction on
+    the state. Each Everest application may implement it specifically.
+    Note that this object will only be relevant if the transaction executed successfully.
+    """
+
+
+@marshmallow_dataclass.dataclass(frozen=True)
+class TransactionExecutionInfo(EverestTransactionExecutionInfo):
+    """
+    A non-abstract derived class for completeness of AggregatedScope. Used by StarkEx and Perpetual.
+    """
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -30,3 +46,7 @@ class TransactionFailureReason(ValidatedMarshmallowDataclass):
 
         data["error_message"] = error_message[:5000]
         return data
+
+    @classmethod
+    def from_exception(cls, exception: StarkException) -> "TransactionFailureReason":
+        return cls(code=exception.code.name, error_message=exception.message)

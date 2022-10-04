@@ -1,9 +1,20 @@
 from typing import List, MutableMapping, NamedTuple, Optional
 
+from starkware.cairo.lang.compiler.ast.cairo_types import (
+    CairoType,
+    TypeCodeoffset,
+    TypeFelt,
+    TypePointer,
+    TypeStruct,
+    TypeTuple,
+)
 from starkware.cairo.lang.compiler.ast.code_elements import CodeElementFunction
 from starkware.cairo.lang.compiler.identifier_definition import StructDefinition
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
-from starkware.cairo.lang.compiler.identifier_utils import get_struct_definition
+from starkware.cairo.lang.compiler.identifier_utils import (
+    get_struct_definition,
+    get_type_definition,
+)
 from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.python.utils import WriteOnceDict
@@ -90,6 +101,47 @@ class CairoStructFactory:
         ]
 
         return NamedTuple(f"{func[-1:]}_full_args", typed_fields)
+
+    def size_of(self, typ: CairoType) -> int:
+        """
+        Returns the total size (in felts) of the given type. Pointer types count as one felt.
+        """
+        size = 0
+        if isinstance(typ, TypeStruct):
+            struct_def = get_struct_definition(
+                struct_name=typ.scope, identifier_manager=self.identifiers
+            )
+            size = struct_def.size
+        elif isinstance(typ, TypeTuple):
+            for item in typ.members:
+                size += self.size_of(typ=item.typ)
+        else:
+            assert isinstance(
+                typ, (TypeFelt, TypeCodeoffset, TypePointer)
+            ), f"Unsupported Cairo type {typ}."
+            size = 1
+
+        return size
+
+    def get_explicit_return_values_length(self, func: ScopedName) -> int:
+        """
+        Returns the length of the explicit return values of a function
+        """
+        full_name = self._get_full_name(func)
+        type_def = get_type_definition(
+            full_name + CodeElementFunction.RETURN_SCOPE, self.identifiers
+        )
+        return self.size_of(typ=type_def.cairo_type)
+
+    def get_implicit_args_length(self, func: ScopedName) -> int:
+        """
+        Returns the length of the implicit arguments of a function
+        """
+        full_name = self._get_full_name(func)
+        struct_def = get_struct_definition(
+            full_name + CodeElementFunction.IMPLICIT_ARGUMENT_SCOPE, self.identifiers
+        )
+        return struct_def.size
 
     @property
     def structs(self):

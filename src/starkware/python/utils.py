@@ -12,8 +12,10 @@ import time
 from collections import UserDict
 from typing import (
     Any,
+    AsyncContextManager,
     AsyncGenerator,
     AsyncIterable,
+    AsyncIterator,
     Awaitable,
     Callable,
     Coroutine,
@@ -25,6 +27,7 @@ from typing import (
     Mapping,
     Optional,
     Sequence,
+    Tuple,
     TypeVar,
 )
 
@@ -35,8 +38,7 @@ from typing_extensions import Literal, Protocol
 from starkware.python.utils_stub_module import *  # noqa
 
 T = TypeVar("T")
-TYield = TypeVar("TYield")
-TSend = TypeVar("TSend")
+TAsyncGenerator = TypeVar("TAsyncGenerator", bound=AsyncGenerator)
 NumType = TypeVar("NumType", int, float)
 HASH_BYTES = 32
 
@@ -538,7 +540,7 @@ def execute_coroutine_threadsafe(
     return future.result()
 
 
-class aclosing(contextlib.AbstractAsyncContextManager, Generic[TYield, TSend]):
+class aclosing(contextlib.AbstractAsyncContextManager, Generic[TAsyncGenerator]):
     """
     Async context manager for safely finalizing an asynchronously cleaned-up resource such as an
     async generator, calling its 'aclose()' method.
@@ -549,11 +551,33 @@ class aclosing(contextlib.AbstractAsyncContextManager, Generic[TYield, TSend]):
     See https://peps.python.org/pep-0533/ for more info.
     """
 
-    def __init__(self, agen: AsyncGenerator[TYield, TSend]):
+    def __init__(self, agen: TAsyncGenerator):
         self.agen = agen
 
-    async def __aenter__(self) -> AsyncGenerator[TYield, TSend]:
+    async def __aenter__(self) -> TAsyncGenerator:
         return self.agen
 
     async def __aexit__(self, *exc_info):
         await self.agen.aclose()
+
+
+def aclosing_context_manager(
+    function: Callable[..., TAsyncGenerator]
+) -> Callable[..., AsyncContextManager[TAsyncGenerator]]:
+    """
+    Wraps a function that returns an async generator with aclosing context manager.
+    """
+
+    def wrapper(*args, **kwargs):
+        return aclosing(agen=function(*args, **kwargs))
+
+    return wrapper
+
+
+async def aenumerate(aiterable: AsyncIterable[T], start: int = 0) -> AsyncIterator[Tuple[int, T]]:
+    """
+    Asynchronously enumerates an async iterable from a given start value.
+    """
+    counter = itertools.count(start)
+    async for element in aiterable:
+        yield next(counter), element

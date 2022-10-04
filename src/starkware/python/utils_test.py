@@ -1,4 +1,5 @@
 import asyncio
+import dataclasses
 import functools
 import random
 import re
@@ -9,7 +10,7 @@ import pytest
 
 from starkware.python.utils import (
     WriteOnceDict,
-    aclosing,
+    aclosing_context_manager,
     all_subclasses,
     as_non_optional,
     assert_exhausted,
@@ -235,28 +236,36 @@ async def test_execute_coroutine_threadsafe():
 
 @pytest.mark.asyncio
 async def test_aclosing():
-    closed: bool
-
-    async def gen_foo():
-        nonlocal closed
-        closed = False
-        try:
-            for i in range(5):
-                yield i
-        finally:
-            closed = True
+    @dataclasses.dataclass
+    class IsClosed:
+        value: bool = False
 
     # Break an async loop before fully exhausting the generator, under the context manager.
-    async with aclosing(gen_foo()) as gen:
+    @aclosing_context_manager
+    async def wrapped_foo_gen(is_closed: IsClosed):
+        try:
+            yield
+        finally:
+            is_closed.value = True
+
+    is_closed = IsClosed()
+    async with wrapped_foo_gen(is_closed=is_closed) as gen:
         async for _ in gen:
             break
 
-    assert closed
+    assert is_closed.value
 
     # Same, but without the context manager - the generator is expected to be alive after the break.
-    gen = gen_foo()
+    async def foo_gen(is_closed: IsClosed):
+        try:
+            yield
+        finally:
+            is_closed.value = True
+
+    is_closed = IsClosed()
+    gen = foo_gen(is_closed=is_closed)
     async for _ in gen:
         break
 
-    assert not closed
+    assert not is_closed.value
     await gen.aclose()  # Close properly.

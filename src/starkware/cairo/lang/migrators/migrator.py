@@ -94,18 +94,18 @@ class MigratorParserTransformer(ParserTransformer):
         )
 
     @lark.v_args(meta=True)
-    def commented_code_element(self, value, meta):
-        comment = value[1][1:] if len(value) == 2 else None
+    def commented_code_element(self, meta, value):
+        comment = value[1][1:] if value[1] is not None else None
         return CommentedCodeElement(
             code_elm=value[0], comment=comment, location=self.meta2loc(meta)
         )
 
     @lark.v_args(meta=True)
-    def code_element_return(self, value, meta):
+    def code_element_return(self, meta, value):
         (expr,) = value
 
         if not isinstance(expr, ExprParentheses):
-            return super().code_element_return(value, meta)
+            return super().code_element_return(meta, value)
 
         # Replace the outer parentheses with an ExprTuple with has_trailing_comma=True.
         location = self.meta2loc(meta)

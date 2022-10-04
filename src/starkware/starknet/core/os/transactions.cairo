@@ -1,5 +1,6 @@
 from starkware.cairo.builtin_selection.select_builtins import select_builtins
 from starkware.cairo.builtin_selection.validate_builtins import validate_builtin, validate_builtins
+from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.dict import dict_new, dict_read, dict_update, dict_write
 from starkware.cairo.common.dict_access import DictAccess
@@ -11,6 +12,7 @@ from starkware.cairo.common.segments import relocate_segment
 from starkware.cairo.common.uint256 import Uint256
 from starkware.starknet.common.constants import (
     DECLARE_HASH_PREFIX,
+    DEPLOY_ACCOUNT_HASH_PREFIX,
     DEPLOY_HASH_PREFIX,
     INVOKE_HASH_PREFIX,
     L1_HANDLER_HASH_PREFIX,
@@ -104,6 +106,10 @@ const VALIDATE_ENTRY_POINT_SELECTOR = (
 // get_selector_from_name('__validate_declare__').
 const VALIDATE_DECLARE_ENTRY_POINT_SELECTOR = (
     0x289da278a8dc833409cabfdad1581e8e7d40e42dcaed693fa4008dcdb4963b3);
+
+// get_selector_from_name('__validate_deploy__').
+const VALIDATE_DEPLOY_ENTRY_POINT_SELECTOR = (
+    0x36fcbf06cd96843058359e1a75928beacfac10727dab22a3972f0af8aa92895);
 
 // get_selector_from_name('transfer').
 const TRANSFER_ENTRY_POINT_SELECTOR = (
@@ -247,7 +253,7 @@ func execute_transactions_inner{
     }
 
     if (tx_type == 'L1_HANDLER') {
-        // Handle L1 handler transaction.
+        // Handle the L1-handler transaction.
         execute_l1_handler_transaction(block_context=block_context);
         return execute_transactions_inner(block_context=block_context, n_txs=n_txs - 1);
     }
@@ -255,6 +261,12 @@ func execute_transactions_inner{
     if (tx_type == 'DEPLOY') {
         // Handle the deploy transaction.
         execute_deploy_transaction(block_context=block_context);
+        return execute_transactions_inner(block_context=block_context, n_txs=n_txs - 1);
+    }
+
+    if (tx_type == 'DEPLOY_ACCOUNT') {
+        // Handle the deploy-account transaction.
+        execute_deploy_account_transaction(block_context=block_context);
         return execute_transactions_inner(block_context=block_context, n_txs=n_txs - 1);
     }
 
@@ -290,11 +302,11 @@ func charge_fee{
         return ();
     }
 
-    // Transactions with fee should go through the EXECUTE_ENTRY_POINT_SELECTOR
-    // or VALIDATE_DECLARE_ENTRY_POINT_SELECTOR.
+    // Transactions with fee should go through an account contract.
     tempvar selector = tx_execution_context.selector;
     assert (selector - EXECUTE_ENTRY_POINT_SELECTOR) *
-        (selector - VALIDATE_DECLARE_ENTRY_POINT_SELECTOR) = 0;
+        (selector - VALIDATE_DECLARE_ENTRY_POINT_SELECTOR) *
+        (selector - VALIDATE_DEPLOY_ENTRY_POINT_SELECTOR) = 0;
 
     local calldata: TransferCallData = TransferCallData(
         recipient=block_context.sequencer_address,
@@ -724,8 +736,6 @@ func execute_storage_read{global_state_changes: DictAccess*}(
     local state_entry: StateEntry*;
     local new_state_entry: StateEntry*;
     %{
-        syscall_handler.execute_syscall_storage_read()
-
         # Fetch a state_entry in this hint and validate it in the update that comes next.
         ids.state_entry = __dict_manager.get_dict(ids.global_state_changes)[ids.contract_address]
 
@@ -763,7 +773,11 @@ func execute_storage_write{global_state_changes: DictAccess*}(
     local state_entry: StateEntry*;
     local new_state_entry: StateEntry*;
     %{
-        ids.prev_value = syscall_handler.execute_syscall_storage_write()
+        ids.prev_value = syscall_handler.execute_syscall_storage_write(
+            contract_address=ids.contract_address,
+            key=ids.syscall_ptr.address,
+            value=ids.syscall_ptr.value
+        )
 
         # Fetch a state_entry in this hint and validate it in the update that comes next.
         ids.state_entry = __dict_manager.get_dict(ids.global_state_changes)[ids.contract_address]
@@ -1200,11 +1214,7 @@ func execute_entry_point{
     tempvar context = os_context;
     tempvar calldata_size = execution_context.calldata_size;
     tempvar calldata = execution_context.calldata;
-    %{
-        vm_enter_scope({
-            'syscall_handler': syscall_handler,
-        })
-    %}
+    %{ vm_enter_scope({'syscall_handler': syscall_handler}) %}
     call abs contract_entry_point;
     %{ vm_exit_scope() %}
     // Retrieve returned_builtin_ptrs_subset.
@@ -1323,12 +1333,11 @@ func deploy_contract{
     return ();
 }
 
-func execute_deploy_transaction{
-    range_check_ptr,
-    builtin_ptrs: BuiltinPointers*,
-    global_state_changes: DictAccess*,
-    outputs: OsCarriedOutputs*,
-}(block_context: BlockContext*) {
+// Prepares a constructor execution context based on the 'tx' hint variable.
+// Leaves 'original_tx_info' empty - should be filled later on.
+func prepare_constructor_execution_context{range_check_ptr, builtin_ptrs: BuiltinPointers*}() -> (
+    constructor_execution_context: ExecutionContext*, salt: felt
+) {
     alloc_locals;
 
     local contract_address_salt;
@@ -1340,10 +1349,11 @@ func execute_deploy_transaction{
         from starkware.python.utils import from_bytes
 
         ids.contract_address_salt = tx.contract_address_salt
-        ids.class_hash = from_bytes(tx.contract_hash)
+        ids.class_hash = from_bytes(tx.class_hash)
         ids.constructor_calldata_size = len(tx.constructor_calldata)
         ids.constructor_calldata = segments.gen_arg(arg=tx.constructor_calldata)
     %}
+    assert_nn(constructor_calldata_size);
 
     let hash_ptr = builtin_ptrs.pedersen;
     with hash_ptr {
@@ -1363,7 +1373,7 @@ func execute_deploy_transaction{
         ec_op=builtin_ptrs.ec_op,
         );
 
-    local constructor_execution_context: ExecutionContext* = new ExecutionContext(
+    tempvar constructor_execution_context = new ExecutionContext(
         entry_point_type=ENTRY_POINT_TYPE_CONSTRUCTOR,
         caller_address=ORIGIN_ADDRESS,
         contract_address=contract_address,
@@ -1373,6 +1383,110 @@ func execute_deploy_transaction{
         calldata=constructor_calldata,
         original_tx_info=cast(nondet %{ segments.add() %}, TxInfo*),
         );
+
+    return (
+        constructor_execution_context=constructor_execution_context, salt=contract_address_salt
+    );
+}
+
+func execute_deploy_account_transaction{
+    range_check_ptr,
+    builtin_ptrs: BuiltinPointers*,
+    global_state_changes: DictAccess*,
+    outputs: OsCarriedOutputs*,
+}(block_context: BlockContext*) {
+    alloc_locals;
+
+    // Calculate address and prepare constructor execution context.
+    let (
+        local constructor_execution_context: ExecutionContext*, local salt
+    ) = prepare_constructor_execution_context();
+
+    // Prepare validate_deploy calldata.
+    let (validate_deploy_calldata: felt*) = alloc();
+    assert validate_deploy_calldata[0] = constructor_execution_context.class_hash;
+    assert validate_deploy_calldata[1] = salt;
+    memcpy(
+        dst=&validate_deploy_calldata[2],
+        src=constructor_execution_context.calldata,
+        len=constructor_execution_context.calldata_size,
+    );
+
+    // Note that the members of original_tx_info are not initialized at this point.
+    local original_tx_info: TxInfo* = constructor_execution_context.original_tx_info;
+    local validate_deploy_execution_context: ExecutionContext* = new ExecutionContext(
+        entry_point_type=ENTRY_POINT_TYPE_EXTERNAL,
+        caller_address=ORIGIN_ADDRESS,
+        contract_address=constructor_execution_context.contract_address,
+        class_hash=constructor_execution_context.class_hash,
+        selector=VALIDATE_DEPLOY_ENTRY_POINT_SELECTOR,
+        calldata_size=constructor_execution_context.calldata_size + 2,
+        calldata=validate_deploy_calldata,
+        original_tx_info=original_tx_info,
+        );
+
+    // Compute transaction hash and prepare transaction info.
+    let tx_version = TRANSACTION_VERSION;
+    local max_fee = nondet %{ tx.max_fee %};
+    local nonce_ptr: felt* = cast(nondet %{ segments.gen_arg([tx.nonce]) %}, felt*);
+    let (transaction_hash) = compute_transaction_hash(
+        tx_hash_prefix=DEPLOY_ACCOUNT_HASH_PREFIX,
+        version=tx_version,
+        execution_context=validate_deploy_execution_context,
+        entry_point_selector_field=0,
+        max_fee=max_fee,
+        chain_id=block_context.starknet_os_config.chain_id,
+        additional_data_size=1,
+        additional_data=nonce_ptr,
+    );
+
+    // Assign the transaction info to both calls.
+    // Note that both constructor_execution_context and
+    // validate_deploy_execution_context hold this pointer.
+    assert [original_tx_info] = TxInfo(
+        version=tx_version,
+        account_contract_address=validate_deploy_execution_context.contract_address,
+        max_fee=max_fee,
+        signature_len=nondet %{ len(tx.signature) %},
+        signature=cast(nondet %{ segments.gen_arg(arg=tx.signature) %}, felt*),
+        transaction_hash=transaction_hash,
+        chain_id=block_context.starknet_os_config.chain_id,
+        nonce=[nonce_ptr],
+        );
+
+    %{ syscall_handler.start_tx(tx_info_ptr=ids.original_tx_info.address_) %}
+
+    deploy_contract(
+        block_context=block_context, constructor_execution_context=constructor_execution_context
+    );
+
+    // Handle nonce here since 'deploy_contract' verifies that the nonce is zeroed.
+    check_and_increment_nonce(
+        execution_context=validate_deploy_execution_context, nonce=[nonce_ptr]
+    );
+
+    // Runs the account contract's "__validate_deploy__" entry point,
+    // which is responsible for signature verification.
+    execute_entry_point(
+        block_context=block_context, execution_context=validate_deploy_execution_context
+    );
+    charge_fee(block_context=block_context, tx_execution_context=validate_deploy_execution_context);
+
+    %{ syscall_handler.end_tx() %}
+    return ();
+}
+
+func execute_deploy_transaction{
+    range_check_ptr,
+    builtin_ptrs: BuiltinPointers*,
+    global_state_changes: DictAccess*,
+    outputs: OsCarriedOutputs*,
+}(block_context: BlockContext*) {
+    alloc_locals;
+
+    let (
+        local constructor_execution_context: ExecutionContext*, _
+    ) = prepare_constructor_execution_context();
 
     // Guess tx version and make sure it's valid.
     local tx_version = nondet %{ tx.version %};

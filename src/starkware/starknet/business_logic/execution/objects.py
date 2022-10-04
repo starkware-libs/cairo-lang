@@ -9,7 +9,9 @@ from typing import FrozenSet, Iterable, Iterator, List, Mapping, Optional, Set, 
 import marshmallow.fields as mfields
 import marshmallow_dataclass
 
-from services.everest.business_logic.internal_transaction import EverestTransactionExecutionInfo
+from services.everest.business_logic.transaction_execution_objects import (
+    EverestTransactionExecutionInfo,
+)
 from services.everest.definitions import fields as everest_fields
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
 from starkware.cairo.lang.vm.utils import RunResources
@@ -17,6 +19,7 @@ from starkware.python.utils import as_non_optional
 from starkware.starknet.business_logic.fact_state.contract_state_objects import StateSelector
 from starkware.starknet.business_logic.state.state import StorageEntry
 from starkware.starknet.definitions import constants, fields
+from starkware.starknet.definitions.transaction_type import TransactionType
 from starkware.starknet.public.abi import CONSTRUCTOR_ENTRY_POINT_SELECTOR
 from starkware.starknet.services.api.contract_class import EntryPointType
 from starkware.starknet.services.api.gateway.transaction import DEFAULT_DECLARE_SENDER_ADDRESS
@@ -391,10 +394,16 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
     # Actual resources the transaction is charged for, including L1 gas
     # and OS additional resources estimation.
     actual_resources: ResourcesMapping = field(metadata=fields.name_to_resources_metadata)
+    # Transaction type is used to determine the order of the calls.
+    tx_type: Optional[TransactionType]
 
     @property
     def non_optional_calls(self) -> Iterable[CallInfo]:
-        ordered_optional_calls = (self.validate_info, self.call_info, self.fee_transfer_info)
+        if self.tx_type is TransactionType.DEPLOY_ACCOUNT:
+            # In deploy account tx, validation will take place after execution of the constructor.
+            ordered_optional_calls = (self.call_info, self.validate_info, self.fee_transfer_info)
+        else:
+            ordered_optional_calls = (self.validate_info, self.call_info, self.fee_transfer_info)
         return tuple(call for call in ordered_optional_calls if call is not None)
 
     def get_state_selector(self) -> StateSelector:
@@ -410,6 +419,7 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
     def from_call_infos(
         cls,
         execute_call_info: Optional[CallInfo],
+        tx_type: Optional[TransactionType],
         validate_info: Optional[CallInfo] = None,
         fee_transfer_info: Optional[CallInfo] = None,
     ) -> "TransactionExecutionInfo":
@@ -419,6 +429,59 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
             fee_transfer_info=fee_transfer_info,
             actual_fee=0,
             actual_resources={},
+            tx_type=tx_type,
+        )
+
+    @classmethod
+    def empty(cls) -> "TransactionExecutionInfo":
+        return cls(
+            validate_info=None,
+            call_info=None,
+            fee_transfer_info=None,
+            actual_fee=0,
+            actual_resources={},
+            tx_type=None,
+        )
+
+    @classmethod
+    def create_concurrent_stage_execution_info(
+        cls,
+        validate_info: Optional[CallInfo],
+        call_info: Optional[CallInfo],
+        actual_resources: ResourcesMapping,
+        tx_type: TransactionType,
+    ) -> "TransactionExecutionInfo":
+        """
+        Returns TransactionExecutionInfo for the concurrent stage (without
+        fee_transfer_info and without fee).
+        """
+        return cls(
+            validate_info=validate_info,
+            call_info=call_info,
+            fee_transfer_info=None,
+            actual_fee=0,
+            actual_resources=actual_resources,
+            tx_type=tx_type,
+        )
+
+    @classmethod
+    def from_concurrent_stage_execution_info(
+        cls,
+        concurrent_execution_info: "TransactionExecutionInfo",
+        actual_fee: int,
+        fee_transfer_info: Optional[CallInfo],
+    ) -> "TransactionExecutionInfo":
+        """
+        Fills the given concurrent_execution_info with actual_fee and fee_transfer_info.
+        Used when the call infos (except for the fee handling) executed in the concurrent stage.
+        """
+        return cls(
+            validate_info=concurrent_execution_info.validate_info,
+            call_info=concurrent_execution_info.call_info,
+            fee_transfer_info=fee_transfer_info,
+            actual_fee=actual_fee,
+            actual_resources=concurrent_execution_info.actual_resources,
+            tx_type=concurrent_execution_info.tx_type,
         )
 
     def gen_call_iterator(self) -> Iterator[CallInfo]:

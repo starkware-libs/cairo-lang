@@ -36,6 +36,7 @@ from starkware.starknet.services.api.contract_class import (
     EntryPointType,
 )
 from starkware.starkware_utils.error_handling import (
+    ErrorCode,
     StarkException,
     stark_assert,
     wrap_with_stark_exception,
@@ -225,7 +226,7 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
                 verify_secure=True,
             )
         except VmException as exception:
-            code = StarknetErrorCode.TRANSACTION_FAILED
+            code: ErrorCode = StarknetErrorCode.TRANSACTION_FAILED
             if isinstance(exception.inner_exc, HintException):
                 hint_exception = exception.inner_exc
 

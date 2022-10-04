@@ -9,6 +9,7 @@ from starkware.starknet.core.os.os_program import get_os_program
 from starkware.starknet.core.os.transaction_hash.transaction_hash import (
     TransactionHashPrefix,
     calculate_declare_transaction_hash,
+    calculate_deploy_account_transaction_hash,
     calculate_deploy_transaction_hash,
     calculate_transaction_hash_common,
     compute_hash_on_elements,
@@ -56,7 +57,7 @@ def run_cairo_transaction_hash(
 
 
 @pytest.mark.parametrize("tx_hash_prefix", set(TransactionHashPrefix))
-@pytest.mark.parametrize("calldata", [[], [659], [540, 338], [73, 443, 234, 350, 841]])
+@pytest.mark.parametrize("calldata", [[], [540, 338]])
 @pytest.mark.parametrize("max_fee", [0, 10, 299])
 @pytest.mark.parametrize("version", [0])
 @pytest.mark.parametrize("additional_data", [[], [17]])
@@ -98,7 +99,7 @@ def test_transaction_hash_common_flow(
     )
 
 
-@pytest.mark.parametrize("constructor_calldata", [[], [658], [539, 337], [72, 442, 233, 349, 840]])
+@pytest.mark.parametrize("constructor_calldata", [[], [539, 337]])
 def test_deploy_transaction_hash(constructor_calldata: List[int]):
     # Constant value unrelated to the transaction data.
     version = 111
@@ -131,6 +132,50 @@ def test_deploy_transaction_hash(constructor_calldata: List[int]):
     )
 
 
+@pytest.mark.parametrize("constructor_calldata", [[], [539, 337]])
+def test_deploy_account_transaction_hash(constructor_calldata: List[int]):
+    # Constant value unrelated to the transaction data.
+    entry_point_selector = 0
+
+    # Tested transaction data.
+    version = constants.TRANSACTION_VERSION
+    salt = 0
+    contract_address = 19911991
+    max_fee = 1
+    chain_id = 2
+    nonce = 0
+    contract_class = get_contract_class(contract_name="dummy_account")
+    class_hash = compute_class_hash(contract_class=contract_class, hash_func=pedersen_hash)
+    calldata = [class_hash, salt, *constructor_calldata]
+
+    expected_hash = compute_hash_on_elements(
+        data=[
+            TransactionHashPrefix.DEPLOY_ACCOUNT.value,
+            version,
+            contract_address,
+            entry_point_selector,
+            compute_hash_on_elements(data=calldata, hash_func=pedersen_hash),
+            max_fee,
+            chain_id,
+            nonce,
+        ],
+        hash_func=pedersen_hash,
+    )
+    assert (
+        calculate_deploy_account_transaction_hash(
+            version=version,
+            contract_address=contract_address,
+            class_hash=class_hash,
+            constructor_calldata=constructor_calldata,
+            max_fee=max_fee,
+            nonce=nonce,
+            salt=salt,
+            chain_id=chain_id,
+        )
+        == expected_hash
+    )
+
+
 def test_declare_transaction_hash():
     # Constant value unrelated to the transaction data.
     entry_point_selector = 0
@@ -138,8 +183,8 @@ def test_declare_transaction_hash():
     # Tested transaction data.
     version = constants.TRANSACTION_VERSION
     sender_address = 19911991
-    max_fee = 0
-    chain_id = 1
+    max_fee = 1
+    chain_id = 2
     nonce = 0
     contract_class = get_contract_class(contract_name="dummy_account")
     class_hash = compute_class_hash(contract_class=contract_class, hash_func=pedersen_hash)

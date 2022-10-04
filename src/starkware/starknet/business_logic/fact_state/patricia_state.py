@@ -4,13 +4,13 @@ from starkware.starknet.business_logic.fact_state.contract_state_objects import 
     ContractClassFact,
     ContractState,
 )
-from starkware.starknet.business_logic.state.state_api import StateReader
-from starkware.starknet.definitions import fields
-from starkware.starknet.definitions.error_codes import StarknetErrorCode
+from starkware.starknet.business_logic.state.state_api import (
+    StateReader,
+    get_stark_exception_on_undeclared_contract,
+)
 from starkware.starknet.services.api.contract_class import ContractClass
 from starkware.starknet.storage.starknet_storage import StorageLeaf
 from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
-from starkware.starkware_utils.error_handling import StarkException
 from starkware.storage.storage import FactFetchingContext
 
 
@@ -30,7 +30,16 @@ class PatriciaStateReader(StateReader):
     # StateReader API.
 
     async def get_contract_class(self, class_hash: bytes) -> ContractClass:
-        return await self._fetch_contract_class(class_hash=class_hash)
+        contract_class_fact = await ContractClassFact.get(
+            storage=self.ffc.storage, suffix=class_hash
+        )
+
+        if contract_class_fact is None:
+            raise get_stark_exception_on_undeclared_contract(class_hash=class_hash)
+
+        contract_class = contract_class_fact.contract_definition
+        contract_class.validate()
+        return contract_class
 
     async def get_class_hash_at(self, contract_address: int) -> bytes:
         contract_state = await self._get_contract_state(contract_address=contract_address)
@@ -54,6 +63,16 @@ class PatriciaStateReader(StateReader):
 
     # Internal utilities.
 
+    async def _get_raw_contract_class(self, class_hash: bytes) -> bytes:
+        raw_contract_class_fact = await self.ffc.storage.get_value(
+            key=ContractClassFact.db_key(suffix=class_hash)
+        )
+
+        if raw_contract_class_fact is None:
+            raise get_stark_exception_on_undeclared_contract(class_hash=class_hash)
+
+        return raw_contract_class_fact
+
     async def _get_contract_state(self, contract_address: int) -> ContractState:
         if contract_address not in self.contract_states:
             self.contract_states[contract_address] = await self._fetch_contract_state(
@@ -61,23 +80,6 @@ class PatriciaStateReader(StateReader):
             )
 
         return self.contract_states[contract_address]
-
-    async def _fetch_contract_class(self, class_hash: bytes) -> ContractClass:
-        contract_class_fact = await ContractClassFact.get(
-            storage=self.ffc.storage, suffix=class_hash
-        )
-
-        if contract_class_fact is None:
-            formatted_class_hash = fields.class_hash_from_bytes(class_hash=class_hash)
-            raise StarkException(
-                code=StarknetErrorCode.UNDECLARED_CLASS,
-                message=f"Class with hash {formatted_class_hash} is not declared.",
-            )
-
-        contract_class = contract_class_fact.contract_definition
-        contract_class.validate()
-
-        return contract_class
 
     async def _fetch_contract_state(self, contract_address: int) -> ContractState:
         return await self.global_state_root.get_leaf(

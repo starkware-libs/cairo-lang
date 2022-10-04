@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Tuple, Type, TypeVar
+from typing import Dict, Iterable, List, Optional, Tuple, Type, TypeVar
 
 from starkware.cairo.lang.compiler.ast.arguments import IdentifierList
 from starkware.cairo.lang.compiler.ast.cairo_types import TypeTuple
@@ -15,14 +15,24 @@ from starkware.starknet.compiler.data_encoder import ArgumentInfo, EncodingType,
 from starkware.starknet.definitions import constants
 from starkware.starknet.public.abi import (
     ACCOUNT_ENTRY_POINT_NAMES,
+    CONSTRUCTOR_ENTRY_POINT_NAME,
     EXECUTE_ENTRY_POINT_NAME,
+    MANDATORY_ACCOUNT_ENTRY_POINT_NAMES,
     VALIDATE_DECLARE_ENTRY_POINT_NAME,
+    VALIDATE_DEPLOY_ENTRY_POINT_NAME,
     VALIDATE_ENTRY_POINT_NAME,
     AbiEntryType,
     AbiType,
 )
 
 TAttr = TypeVar("TAttr")
+
+VALIDATE_DECLARE_ARGS = [{"name": "class_hash", "type": "felt"}]
+VALIDATE_DEPLOY_REQUIRED_ARGS = [
+    {"name": "class_hash", "type": "felt"},
+    {"name": "contract_address_salt", "type": "felt"},
+]
+
 
 # Common verifications.
 
@@ -91,21 +101,56 @@ def verify_account_contract(contract_abi: AbiType, is_account_contract: bool):
     For non-account contracts, verifies that it contains none of them.
     """
     account_entry_points: Dict[str, AbiEntryType] = {}
+    constructor_inputs: List[AbiEntryType] = []  # Default constructor.
 
     # Collect account contract special entry points.
     for entry_point in contract_abi:
         if entry_point["type"] == "function" and entry_point["name"] in ACCOUNT_ENTRY_POINT_NAMES:
             account_entry_points[entry_point["name"]] = entry_point
+        if (
+            entry_point["type"] == "constructor"
+            and entry_point["name"] == CONSTRUCTOR_ENTRY_POINT_NAME
+        ):
+            # Contract has an explicit constructor.
+            constructor_inputs = entry_point["inputs"]
 
-    account_entry_point_names = set(account_entry_points.keys())
+    account_entry_point_names = (
+        set(account_entry_points.keys()) & MANDATORY_ACCOUNT_ENTRY_POINT_NAMES
+    )
+    missing_account_entry_point_names = (
+        MANDATORY_ACCOUNT_ENTRY_POINT_NAMES - account_entry_point_names
+    )
+    optional_validate_deploy_entry_point = account_entry_points.get(
+        VALIDATE_DEPLOY_ENTRY_POINT_NAME
+    )
+
+    # Verifications.
+
+    if optional_validate_deploy_entry_point is not None:
+        # Handle validate_deploy.
+        expected_validate_deploy_args = VALIDATE_DEPLOY_REQUIRED_ARGS + constructor_inputs
+        if optional_validate_deploy_entry_point["inputs"] != expected_validate_deploy_args:
+            message = f"""\
+Warning:
+the arguments of '{VALIDATE_DEPLOY_ENTRY_POINT_NAME}' are expected to start with:
+'{format_inputs(inputs=VALIDATE_DEPLOY_REQUIRED_ARGS)}'
+followed by the constructor's arguments (if exist). Found:
+'{format_inputs(inputs=optional_validate_deploy_entry_point['inputs'])}'.
+
+Deploying this contract using DeployAccount transaction is not recommended and would probably fail.
+"""
+            print(message)
+
+    # Contract-type specific Verifications.
 
     if is_account_contract:
         # Handle account contract.
-        if account_entry_point_names != ACCOUNT_ENTRY_POINT_NAMES:
+        if len(missing_account_entry_point_names) > 0:
             raise PreprocessorError(
                 message=(
-                    "Account contracts must have external functions named "
-                    f"{ACCOUNT_ENTRY_POINT_NAMES}, found: {list(account_entry_point_names)}."
+                    "Account contracts must have external functions named: "
+                    f"{sort_and_format(names=MANDATORY_ACCOUNT_ENTRY_POINT_NAMES)}. "
+                    f"Missing: {sort_and_format(names=missing_account_entry_point_names)}."
                 )
             )
 
@@ -120,11 +165,11 @@ def verify_account_contract(contract_abi: AbiType, is_account_contract: bool):
                 )
             )
 
-        if validate_declare_entry_point["inputs"] != [{"name": "class_hash", "type": "felt"}]:
+        if validate_declare_entry_point["inputs"] != VALIDATE_DECLARE_ARGS:
             raise PreprocessorError(
                 message=(
                     f"'{VALIDATE_DECLARE_ENTRY_POINT_NAME}' function must have one argument "
-                    "`class_hash: felt`."
+                    f"'{format_inputs(inputs=VALIDATE_DECLARE_ARGS)}'."
                 )
             )
     else:
@@ -133,7 +178,8 @@ def verify_account_contract(contract_abi: AbiType, is_account_contract: bool):
             # One of the entry points exists in a non-account contract.
             raise PreprocessorError(
                 message=(
-                    f"Only account contracts may have functions named {account_entry_point_names}. "
+                    f"Only account contracts may have functions "
+                    f"named {sort_and_format(names=account_entry_point_names)}. "
                     "Use the --account_contract flag to compile an account contract."
                 )
             )
@@ -194,3 +240,21 @@ def encode_calldata_arguments(
         has_range_check_builtin=True,
         identifiers=visitor.identifiers,
     )
+
+
+def format_inputs(inputs: List[Dict[str, str]]) -> str:
+    """
+    Returns a readable string given the arguments of an entry point.
+    For example,
+        [{'name': 'arg', 'type': 'felt'}, {'name': 'argument', 'type': 'felt'}] ->
+            'arg: felt, argument: felt'.
+    """
+    return ", ".join(f"{arg['name']}: {arg['type']}" for arg in inputs)
+
+
+def sort_and_format(names: Iterable[str]) -> str:
+    """
+    Converts an iterable of names to a string listing the names in alphabetical order.
+    For example: {"Bob", "Alice", "Carol"} -> "'Alice', 'Bob', 'Carol'".
+    """
+    return ", ".join(f"'{name}'" for name in sorted(names))

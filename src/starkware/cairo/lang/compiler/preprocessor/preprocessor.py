@@ -667,8 +667,7 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
                 start_pc=self.current_pc,
                 implicit_args_struct=implicit_args_struct,
                 args_struct=args_struct,
-                ret_names=[] if elm.returns is None else ["ret"],
-                ret_types=[] if elm.returns is None else [self.resolve_type(elm.returns)],
+                ret_type=None if elm.returns is None else self.resolve_type(elm.returns),
             )
 
         # Process code_elements.
@@ -723,10 +722,12 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
                     default_location=location,
                 )
 
+                if self.auxiliary_info is not None:
+                    self.auxiliary_info.start_function_retry()
+
                 # These cases cannot be fixed for reference revocations:
                 # * Functions without alloc_locals.
-                # * Contexts with self.auxiliary_info.
-                if not has_alloc_locals or self.auxiliary_info is not None:
+                if not has_alloc_locals:
                     self.visit_uncommented_code_block(code_elements)
                     return
 
@@ -1578,7 +1579,7 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
         self.visit(code_elm_ret)
 
         if self.auxiliary_info is not None:
-            self.auxiliary_info.finish_return(exprs=[elm.expr])
+            self.auxiliary_info.finish_return(expr=elm.expr)
 
     def check_tail_call_cast(
         self,

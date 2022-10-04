@@ -51,7 +51,7 @@ class EthTestUtils:
 
     def advance_time(self, n_seconds: int):
         self.w3.provider.make_request(
-            method=web3_types.RPCEndpoint("evm_increaseTime"), params=n_seconds
+            method=web3_types.RPCEndpoint("evm_increaseTime"), params=[n_seconds]
         )
         self.w3.provider.make_request(method=web3_types.RPCEndpoint("evm_mine"), params=[])
 
@@ -60,6 +60,12 @@ class EthTestUtils:
 
     def get_balance(self, address: str) -> int:
         return self.w3.eth.getBalance(address)
+
+    def set_account_balance(self, address: str, balance: int):
+        assert balance >= 0, "Cannot set a negative balance."
+        self.w3.provider.make_request(
+            method=web3_types.RPCEndpoint("evm_setAccountBalance"), params=[address, balance]
+        )
 
 
 class Ganache:
@@ -74,8 +80,8 @@ class Ganache:
         """
         self.port = random.randrange(1024, 8192)
         self.ganache_proc = subprocess.Popen(
-            f"ganache-cli -p {self.port} --chainId 32 --networkId 32 --gasLimit 8000000 "
-            "--allow-unlimited-contract-size",
+            f"ganache -p {self.port} --chain.chainId 32 --chain.networkId 32 "
+            "--miner.blockGasLimit 8000000 --chain.allow-unlimited-contract-size",
             shell=True,
             stdout=subprocess.DEVNULL,
             # Open the process in a new process group.
@@ -226,7 +232,7 @@ class EthContractFunction:
             tx_hash = self._func(*args).transact(transact_args)
             w3_tx_receipt = self.contract.w3.eth.wait_for_transaction_receipt(tx_hash)
             return EthReceipt(contract=self.contract, w3_tx_receipt=w3_tx_receipt)
-        except web3.exceptions.ContractLogicError as ex:
+        except (web3.exceptions.ContractLogicError, ValueError) as ex:
             raise EthRevertException(str(ex)) from None
 
     def call(self, *args, transact_args=None):
@@ -236,7 +242,7 @@ class EthContractFunction:
         args = fix_tx_args(args)
         try:
             return handle_w3_value(self._func(*args).call(transact_args))
-        except web3.exceptions.ContractLogicError as ex:
+        except (web3.exceptions.ContractLogicError, ValueError) as ex:
             raise EthRevertException(str(ex)) from None
 
     def __call__(self, *args, transact_args=None):

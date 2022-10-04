@@ -3,29 +3,14 @@ import operator
 from abc import abstractmethod
 from typing import Iterable, Iterator, Optional, Type
 
-import marshmallow_dataclass
-
 from services.everest.api.gateway.transaction import EverestTransaction
 from services.everest.business_logic.state import StateSelectorBase
 from services.everest.business_logic.state_api import StateProxy
+from services.everest.business_logic.transaction_execution_objects import (
+    EverestTransactionExecutionInfo,
+)
 from starkware.starkware_utils.config_base import Config
 from starkware.starkware_utils.one_of_schema_tracker import SubclassSchemaTracker
-from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
-
-
-class EverestTransactionExecutionInfo(ValidatedMarshmallowDataclass):
-    """
-    Base class of classes containing information generated from an execution of a transaction on
-    the state. Each Everest application may implement it specifically.
-    Note that this object will only be relevant if the transaction executed successfully.
-    """
-
-
-@marshmallow_dataclass.dataclass(frozen=True)
-class TransactionExecutionInfo(EverestTransactionExecutionInfo):
-    """
-    A non-abstract derived class for completeness of AggregatedScope. Used by StarkEx and Perpetual.
-    """
 
 
 class EverestInternalStateTransaction(SubclassSchemaTracker):

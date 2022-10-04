@@ -37,6 +37,6 @@ contract MockStarknetMessaging is StarknetMessaging {
         );
 
         require(l1ToL2Messages()[msgHash] > 0, "INVALID_MESSAGE_TO_CONSUME");
-        l1ToL2Messages()[msgHash] -= 1;
+        l1ToL2Messages()[msgHash] = 0;
     }
 }

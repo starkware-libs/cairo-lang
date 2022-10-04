@@ -1,4 +1,3 @@
-import copy
 import logging
 from typing import Dict, Mapping, MutableMapping, Optional
 
@@ -18,7 +17,6 @@ from starkware.starknet.business_logic.fact_state.contract_state_objects import 
 )
 from starkware.starknet.business_logic.fact_state.patricia_state import PatriciaStateReader
 from starkware.starknet.business_logic.state.state import CachedState, StorageEntry
-from starkware.starknet.business_logic.state.state_api import SyncState
 from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.services.api.contract_class import ContractClass
@@ -42,14 +40,10 @@ class ExecutionResourcesManager:
     def __init__(
         self,
         cairo_usage: ExecutionResources,
-        modified_contracts: Dict[int, None],
         syscall_counter: Dict[str, int],
     ):
         # The accumulated Cairo usage.
         self.cairo_usage = cairo_usage
-
-        # Addresses of contracts whose storage has changed.
-        self.modified_contracts = modified_contracts
 
         # A mapping from system call to the cumulative times it was invoked.
         self.syscall_counter = syscall_counter
@@ -60,7 +54,6 @@ class ExecutionResourcesManager:
     def empty(cls) -> "ExecutionResourcesManager":
         return cls(
             cairo_usage=ExecutionResources.empty(),
-            modified_contracts={},
             syscall_counter={},
         )
 
@@ -79,25 +72,13 @@ class CarriedState(CarriedStateBase):
         self,
         parent_state: Optional["CarriedState"],
         state: CachedState,
-        resources_manager: ExecutionResourcesManager,
     ):
         """
         Private constructor.
         Should only be called by _create_from_parent_state and create_unfilled class methods.
         """
         super().__init__(parent_state=parent_state)
-
         self.state = state
-
-        self._sync_state: Optional[SyncState] = None
-
-        # The resources used throughout transaction stream processing.
-        self.resources_manager = resources_manager
-
-    @property
-    def sync_state(self) -> SyncState:
-        assert self._sync_state is not None
-        return self._sync_state
 
     # Alternative constructors.
 
@@ -115,10 +96,6 @@ class CarriedState(CarriedStateBase):
             parent_state=parent_state,
             # Cached state.
             state=parent_state.state._copy(),
-            # Immutable objects.
-            # Chain maps - changes are inserted to the first map (at index 0); parent maps must not
-            # be modified.
-            resources_manager=copy.deepcopy(parent_state.resources_manager),
         )
 
     @classmethod
@@ -139,7 +116,6 @@ class CarriedState(CarriedStateBase):
         return cls(
             parent_state=None,
             state=state,
-            resources_manager=ExecutionResourcesManager.empty(),
         )
 
     @classmethod
@@ -188,7 +164,6 @@ class CarriedState(CarriedStateBase):
         return cls(
             parent_state=None,
             state=state,
-            resources_manager=ExecutionResourcesManager.empty(),
         )
 
     @property
@@ -234,7 +209,6 @@ class CarriedState(CarriedStateBase):
         """
         # Apply state updates.
         parent_state = self.non_optional_parent_state
-        parent_state.resources_manager = self.resources_manager
 
         # Update CachedState.
         self.state._apply(parent=parent_state.state)
@@ -371,6 +345,19 @@ class StateDiff(EverestStateDiff):
     address_to_nonce: Mapping[int, int]
     storage_updates: Mapping[StorageEntry, int]
     block_info: BlockInfo
+
+    @classmethod
+    def empty(cls, block_info: BlockInfo):
+        """
+        Returns an empty state diff object relative to the given block info.
+        """
+        return cls(
+            class_hash_to_class={},
+            address_to_class_hash={},
+            address_to_nonce={},
+            storage_updates={},
+            block_info=block_info,
+        )
 
     @classmethod
     def from_cached_state(cls, cached_state: CachedState) -> "StateDiff":

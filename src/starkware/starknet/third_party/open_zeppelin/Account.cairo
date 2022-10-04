@@ -147,6 +147,15 @@ func __validate_declare__{
 }
 
 @external
+func __validate_deploy__{
+    syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr, ecdsa_ptr: SignatureBuiltin*
+}(class_hash: felt, contract_address_salt: felt, _public_key: felt) {
+    let (tx_info) = get_tx_info();
+    is_valid_signature(tx_info.transaction_hash, tx_info.signature_len, tx_info.signature);
+    return ();
+}
+
+@external
 func __validate__{
     syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr, ecdsa_ptr: SignatureBuiltin*
 }(call_array_len: felt, call_array: CallArray*, calldata_len: felt, calldata: felt*) {

@@ -915,13 +915,8 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
         # This value is needed to create the DictAccess while executing the corresponding
         # storage_write system call.
         self.starknet_storage.read(address=address)
-        self.starknet_storage.write(address=address, value=value)
 
-        # Update modified contracts (for the bouncer).
-        # Note that this is a simplified update - we are considering every write
-        # as a new change in storage (w.r.t. the state of the previous batch), but it could be that
-        # a write actually cancels a change; e.g., 0 -> 5, 5 -> 0.
-        self.resources_manager.modified_contracts[self.contract_address] = None
+        self.starknet_storage.write(address=address, value=value)
 
     def get_sequencer_address(self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue):
         return super().get_sequencer_address(segments=segments, syscall_ptr=syscall_ptr)
@@ -962,16 +957,6 @@ class OsSysCallHandler(SysCallHandlerBase):
     The SysCallHandler implementation that is used by the gps ambassador.
     """
 
-    class CallState:
-        def __init__(self, call_info: CallInfo):
-            # The CallInfo of the call.
-            self.call_info = call_info
-            # An iterator to the read_values array, used to fill the DictAccess array during the
-            # system call execution.
-            # This iterator might not be exhausted when another a nested call is entered.
-            # It will continue to be consumed once the inner call returns.
-            self.execute_syscall_read_iterator = iter(call_info.storage_read_values)
-
     def __init__(
         self,
         tx_execution_infos: List[TransactionExecutionInfo],
@@ -988,7 +973,7 @@ class OsSysCallHandler(SysCallHandlerBase):
         # A stack that keeps track of the state of the calls being executed now.
         # The last item is the state of the current call; the one before it, is the
         # state of the caller (the call the called the current call); and so on.
-        self.call_stack: List[OsSysCallHandler.CallState] = []
+        self.call_stack: List[CallInfo] = []
 
         # An iterator over contract addresses that were deployed during that call.
         self.deployed_contracts_iterator: Iterator[int] = iter([])
@@ -1048,12 +1033,12 @@ class OsSysCallHandler(SysCallHandlerBase):
     def _get_caller_address(
         self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue
     ) -> int:
-        return self.call_stack[-1].call_info.caller_address
+        return self.call_stack[-1].caller_address
 
     def _get_contract_address(
         self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue
     ) -> int:
-        return self.call_stack[-1].call_info.contract_address
+        return self.call_stack[-1].contract_address
 
     def _get_tx_info_ptr(self, segments: MemorySegmentManager) -> RelocatableValue:
         assert self.tx_info_ptr is not None
@@ -1067,18 +1052,15 @@ class OsSysCallHandler(SysCallHandlerBase):
         # in each write operation. See BusinessLogicSysCallHandler._storage_write().
         next(self.execute_code_read_iterator)
 
-    def execute_syscall_storage_read(self) -> int:
+    def execute_syscall_storage_write(self, contract_address: int, key: int, value: int) -> int:
         """
-        Advances execute_syscall_read_iterator and returns the value that was read.
-        """
-        return next(self.call_stack[-1].execute_syscall_read_iterator)
-
-    def execute_syscall_storage_write(self) -> int:
-        """
-        Advances execute_syscall_read_iterator and returns the storage value before
+        Updates the cached storage and returns the storage value before
         the write operation.
         """
-        return self.execute_syscall_storage_read()
+        previous_value = self.starknet_storage_by_address[contract_address].write(
+            key=key, value=value
+        )
+        return previous_value
 
     def start_tx(self, tx_info_ptr: RelocatableValue):
         """
@@ -1112,7 +1094,7 @@ class OsSysCallHandler(SysCallHandlerBase):
         self.assert_interators_exhausted()
 
         call_info = next(self.call_iterator)
-        self.call_stack.append(self.CallState(call_info=call_info))
+        self.call_stack.append(call_info)
 
         self.deployed_contracts_iterator = (
             call.contract_address
@@ -1124,9 +1106,7 @@ class OsSysCallHandler(SysCallHandlerBase):
 
     def exit_call(self):
         self.assert_interators_exhausted()
-
-        call_state = self.call_stack.pop()
-        assert_exhausted(iterator=call_state.execute_syscall_read_iterator)
+        self.call_stack.pop()
 
     def skip_tx(self):
         """

@@ -4,6 +4,7 @@ import re
 import pytest
 import pytest_asyncio
 
+from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
 from starkware.starknet.compiler.compile import compile_starknet_files
 from starkware.starknet.testing.contract import StarknetContract
 from starkware.starknet.testing.starknet import Starknet
@@ -108,8 +109,28 @@ async def test_struct_arrays(starknet: Starknet):
 
 
 @pytest.mark.asyncio
+async def test_declare_unwhitelisted_hint_contract(starknet: Starknet):
+    with pytest.raises(
+        PreprocessorError,
+        match=re.escape(
+            "This may indicate that this library function cannot be used in StarkNet contracts."
+        ),
+    ):
+        await starknet.declare(source=HINT_CONTRACT_FILE)
+
+    # Check that declare() does not throw an error with disable_hint_validation.
+    await starknet.declare(source=HINT_CONTRACT_FILE, disable_hint_validation=True)
+
+
+@pytest.mark.asyncio
 async def test_deploy_unwhitelisted_hint_contract(starknet: Starknet):
-    deployed_contract = await starknet.deploy(
-        source=HINT_CONTRACT_FILE, disable_hint_validation=True
-    )
-    assert isinstance(deployed_contract.contract_address, int)
+    with pytest.raises(
+        PreprocessorError,
+        match=re.escape(
+            "This may indicate that this library function cannot be used in StarkNet contracts."
+        ),
+    ):
+        await starknet.deploy(source=HINT_CONTRACT_FILE)
+
+    # Check that deploy() does not throw an error with disable_hint_validation.
+    await starknet.deploy(source=HINT_CONTRACT_FILE, disable_hint_validation=True)

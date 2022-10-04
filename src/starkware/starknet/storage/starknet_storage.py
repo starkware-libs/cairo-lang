@@ -327,6 +327,7 @@ class OsSingleStarknetStorage(StorageChangesApplier):
         commitment_tree: PatriciaTree,
         updated_commitment_tree: PatriciaTree,
         commitment_tree_facts: BinaryFactDict,
+        ongoing_storage_changes: Dict[int, int],
     ):
         """
         The constructor is private.
@@ -337,6 +338,7 @@ class OsSingleStarknetStorage(StorageChangesApplier):
         # entering the CairoRunner run) for optimization.
         self.updated_commitment_tree = updated_commitment_tree
         self.commitment_tree_facts = commitment_tree_facts
+        self.ongoing_storage_changes = ongoing_storage_changes
 
     def commitment_update(self) -> Tuple[PatriciaTree, BinaryFactDict]:
         return self.updated_commitment_tree, self.commitment_tree_facts
@@ -365,8 +367,24 @@ class OsSingleStarknetStorage(StorageChangesApplier):
             actual_updated_commitment_tree == updated_commitment_tree
         ), "Inconsistent commitment tree roots."
 
+        # Fetch initial values of keys accessed by this contract.
+        initial_leaves = await previous_commitment_tree.get_leaves(
+            ffc=ffc, indices=accessed_addresses, fact_cls=StorageLeaf
+        )
+        initial_entries = {key: leaf.value for key, leaf in initial_leaves.items()}
         return cls(
             commitment_tree=previous_commitment_tree,
             updated_commitment_tree=updated_commitment_tree,
             commitment_tree_facts=commitment_tree_facts,
+            ongoing_storage_changes=initial_entries,
         )
+
+    def write(self, key: int, value: int) -> int:
+        """
+        Writes the given value in the given key in ongoing_storage_changes and returns the
+        previous value. This value is needed to create the DictAccess while executing the
+        corresponding storage_write system call.
+        """
+        previous_value = self.ongoing_storage_changes[key]
+        self.ongoing_storage_changes[key] = value
+        return previous_value

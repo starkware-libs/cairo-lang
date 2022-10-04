@@ -8,7 +8,7 @@ from starkware.starknet.definitions import constants
 def calculate_tx_gas_usage(
     l2_to_l1_messages: List[L2ToL1MessageInfo],
     n_modified_contracts: int,
-    n_storage_writes: int,
+    n_storage_changes: int,
     l1_handler_payload_size: Optional[int],
     n_deployments: int,
 ) -> int:
@@ -31,9 +31,9 @@ def calculate_tx_gas_usage(
     )
 
     # Calculate the effect of the transaction on the output data availability segment.
-    residual_da_segment_length = get_da_segment_length(
+    residual_onchain_data_segment_length = get_onchain_data_segment_length(
         n_modified_contracts=n_modified_contracts,
-        n_storage_writes=n_storage_writes,
+        n_storage_changes=n_storage_changes,
         n_deployments=n_deployments,
     )
 
@@ -55,7 +55,7 @@ def calculate_tx_gas_usage(
 
     sharp_gas_usage = (
         residual_message_segment_length * eth_gas_constants.SHARP_GAS_PER_MEMORY_WORD
-        + residual_da_segment_length * eth_gas_constants.SHARP_GAS_PER_MEMORY_WORD
+        + residual_onchain_data_segment_length * eth_gas_constants.SHARP_GAS_PER_MEMORY_WORD
     )
 
     return starknet_gas_usage + sharp_gas_usage
@@ -86,9 +86,9 @@ def get_message_segment_length(
     return message_segment_length
 
 
-def get_da_segment_length(
+def get_onchain_data_segment_length(
     n_modified_contracts: int,
-    n_storage_writes: int,
+    n_storage_changes: int,
     n_deployments: int,
 ) -> int:
     """
@@ -99,13 +99,13 @@ def get_da_segment_length(
     storage updates.
     """
     # For each newly modified contract: contract address, number of modified storage cells.
-    da_segment_length = n_modified_contracts * 2
+    onchain_data_segment_length = n_modified_contracts * 2
     # For each modified storage cell: key, new value.
-    da_segment_length += n_storage_writes * 2
+    onchain_data_segment_length += n_storage_changes * 2
     # Add size of deployment info.
-    da_segment_length += n_deployments * constants.DEPLOYMENT_INFO_SIZE
+    onchain_data_segment_length += n_deployments * constants.DEPLOYMENT_INFO_SIZE
 
-    return da_segment_length
+    return onchain_data_segment_length
 
 
 def get_consumed_message_to_l2_emissions_cost(l1_handler_payload_size: Optional[int]) -> int:

@@ -2,7 +2,10 @@ from abc import ABC, abstractmethod
 
 from services.everest.business_logic.state_api import StateProxy
 from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
+from starkware.starknet.definitions import fields
+from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.services.api.contract_class import ContractClass
+from starkware.starkware_utils.error_handling import StarkException
 
 
 class StateReader(ABC):
@@ -14,6 +17,13 @@ class StateReader(ABC):
     async def get_contract_class(self, class_hash: bytes) -> ContractClass:
         """
         Returns the contract class of the given class hash.
+        Raises an exception if said class was not declared.
+        """
+
+    @abstractmethod
+    async def _get_raw_contract_class(self, class_hash: bytes) -> bytes:
+        """
+        Returns the raw bytes of the contract class object of the given class hash.
         Raises an exception if said class was not declared.
         """
 
@@ -90,6 +100,10 @@ class SyncStateReader(ABC):
         pass
 
     @abstractmethod
+    def _get_raw_contract_class(self, class_hash: bytes) -> bytes:
+        pass
+
+    @abstractmethod
     def get_class_hash_at(self, contract_address: int) -> bytes:
         pass
 
@@ -133,3 +147,14 @@ class SyncState(SyncStateReader, StateProxy):
     @abstractmethod
     def set_storage_at(self, contract_address: int, key: int, value: int):
         pass
+
+
+# Utilities.
+
+
+def get_stark_exception_on_undeclared_contract(class_hash: bytes) -> StarkException:
+    formatted_class_hash = fields.class_hash_from_bytes(class_hash=class_hash)
+    return StarkException(
+        code=StarknetErrorCode.UNDECLARED_CLASS,
+        message=f"Class with hash {formatted_class_hash} is not declared.",
+    )

@@ -6,7 +6,6 @@ python_lib(cairo_run_builtins_lib
     PREFIX starkware/cairo/lang/builtins
 
     FILES
-    all_builtins.py
     bitwise/bitwise_builtin_runner.py
     bitwise/instance_def.py
     ec/ec_op_builtin_runner.py
@@ -25,6 +24,13 @@ python_lib(cairo_run_builtins_lib
     cairo_relocatable_lib
     cairo_vm_lib
     starkware_python_utils_lib
+)
+
+python_lib(cairo_all_builtins_lib
+    PREFIX starkware/cairo/lang/builtins
+
+    FILES
+    all_builtins.py
 )
 
 python_lib(cairo_run_builtins_test_utils_lib

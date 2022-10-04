@@ -29,13 +29,16 @@ class AuxiliaryInfoCollector(ABC):
         start_pc: int,
         implicit_args_struct: StructDefinition,
         args_struct: StructDefinition,
-        ret_names: List[str],
-        ret_types: List[CairoType],
+        ret_types: Optional[CairoType],
     ):
         pass
 
     @abstractmethod
     def finish_function_info(self, end_pc: int, total_ap_change: RegChange):
+        pass
+
+    @abstractmethod
+    def start_function_retry(self):
         pass
 
     @abstractmethod
@@ -98,7 +101,7 @@ class AuxiliaryInfoCollector(ABC):
         pass
 
     @abstractmethod
-    def finish_return(self, exprs: List[Expression]):
+    def finish_return(self, expr: Expression):
         pass
 
     @abstractmethod

@@ -2,7 +2,8 @@ import base64
 import functools
 import re
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict
+from enum import Enum
+from typing import Any, Callable, Dict, Type
 
 import marshmallow.fields as mfields
 from frozendict import frozendict
@@ -60,7 +61,9 @@ class EnumField(mfields.Field):
     A field that behaves like an enum, but serializes to a string.
     """
 
-    def __init__(self, enum_cls, required: bool = False, allow_none: bool = False, **kwargs):
+    def __init__(
+        self, enum_cls: Type[Enum], required: bool = False, allow_none: bool = False, **kwargs
+    ):
         self.enum_cls = enum_cls
         super().__init__(required=required, allow_none=allow_none, **kwargs)
 
