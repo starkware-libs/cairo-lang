@@ -226,8 +226,12 @@ class EverestStateDiff(ValidatedMarshmallowDataclass):
         """
 
     @classmethod
-    def squash_many(cls: Type[TStateDiff], state_diffs: Iterable[TStateDiff]) -> TStateDiff:
+    def squash_many(
+        cls: Type[TStateDiff],
+        state_diffs: Iterable[TStateDiff],
+        initial_state_diff: TStateDiff,
+    ) -> TStateDiff:
         """
         Creates a state diff. object with the given changes applied in chronological order.
         """
-        return functools.reduce(lambda x, y: x.squash(other=y), state_diffs)
+        return functools.reduce(lambda x, y: x.squash(other=y), state_diffs, initial_state_diff)

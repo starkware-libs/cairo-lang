@@ -234,7 +234,7 @@ def parse(
 
 def lex(code: str) -> List[lark.lexer.Token]:
     """
-    Runs the lexer on the given code and returns the lark-parser tokens.
+    Runs the lexer on the given code and returns the lark tokens.
     """
     return list(GRAMMAR_PARSER.lex(code))
 

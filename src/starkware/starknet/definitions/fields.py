@@ -6,9 +6,11 @@ import marshmallow.fields as mfields
 import marshmallow.utils
 
 from services.everest.definitions import fields as everest_fields
+from starkware.cairo.lang.tracer.tracer_data import field_element_repr
 from starkware.python.utils import from_bytes
 from starkware.starknet.definitions import constants
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
+from starkware.starknet.definitions.transaction_type import TransactionType
 from starkware.starkware_utils.field_validators import (
     validate_length,
     validate_non_negative,
@@ -16,6 +18,7 @@ from starkware.starkware_utils.field_validators import (
 )
 from starkware.starkware_utils.marshmallow_dataclass_fields import (
     BytesAsHex,
+    EnumField,
     FrozenDictField,
     IntAsHex,
     IntAsStr,
@@ -43,6 +46,14 @@ felt_as_hex_or_str_list_metadata = dict(
 felt_list_metadata = dict(
     marshmallow_field=mfields.List(IntAsStr(validate=everest_fields.FeltField.validate))
 )
+
+
+def felt_formatter(hex_felt: str) -> str:
+    return field_element_repr(val=int(hex_felt, 16), prime=everest_fields.FeltField.upper_bound)
+
+
+def felt_formatter_from_int(int_felt: int) -> str:
+    return field_element_repr(val=int_felt, prime=everest_fields.FeltField.upper_bound)
 
 
 def bytes_as_hex_dict_keys_metadata(
@@ -284,7 +295,9 @@ TransactionVersionField = RangeValidatedField(
     error_code=StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_VERSION,
     formatter=hex,
 )
-tx_version_metadata = TransactionVersionField.metadata(required=False, load_default=0)
+non_required_tx_version_metadata = TransactionVersionField.metadata(required=False, load_default=0)
+
+tx_version_metadata = TransactionVersionField.metadata()
 
 
 # State root.
@@ -362,5 +375,11 @@ name_to_resources_metadata = dict(
         keys=mfields.String(required=True),
         values=StrictRequiredInteger(validate=validate_non_negative("Resource value")),
         load_default=dict,
+    )
+)
+
+optional_tx_type_metadata = dict(
+    marshmallow_field=EnumField(
+        enum_cls=TransactionType, required=False, load_default=None, allow_none=True
     )
 )

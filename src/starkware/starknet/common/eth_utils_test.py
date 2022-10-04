@@ -38,6 +38,5 @@ def test_assert_eth_address_range(runner: CairoFunctionRunner, address, error_me
             "assert_eth_address_range",
             range_check_ptr=runner.range_check_builtin.base,
             address=address,
+            verify_implicit_args_segment=True,
         )
-        (range_check_ptr_end,) = runner.get_return_values(1)
-        assert range_check_ptr_end.segment_index == runner.range_check_builtin.base.segment_index

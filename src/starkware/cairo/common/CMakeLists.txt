@@ -74,6 +74,7 @@ python_lib(cairo_common_validate_utils_lib
     cairo_run_builtins_lib
     cairo_run_lib
     cairo_vm_lib
+    starkware_python_utils_lib
 )
 
 python_lib(cairo_function_runner_lib

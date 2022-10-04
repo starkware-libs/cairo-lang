@@ -9,10 +9,14 @@ import marshmallow_dataclass
 from marshmallow_oneofschema import OneOfSchema
 
 from services.everest.api.gateway.transaction import EverestTransaction
-from starkware.starknet.core.os.contract_address.contract_address import calculate_contract_address
+from starkware.starknet.core.os.contract_address.contract_address import (
+    calculate_contract_address,
+    calculate_contract_address_from_hash,
+)
 from starkware.starknet.core.os.transaction_hash.transaction_hash import (
     TransactionHashPrefix,
     calculate_declare_transaction_hash,
+    calculate_deploy_account_transaction_hash,
     calculate_deploy_transaction_hash,
     calculate_transaction_hash_common,
 )
@@ -42,7 +46,7 @@ class Transaction(EverestTransaction):
     # signed by the account contract.
     # This field allows invalidating old transactions, whenever the meaning of the other
     # transaction fields is changed (in the OS).
-    version: int = field(metadata=fields.tx_version_metadata)
+    version: int = field(metadata=fields.non_required_tx_version_metadata)
 
     @property
     @classmethod
@@ -92,6 +96,7 @@ class Declare(AccountTransaction):
     contract_class: ContractClass
     # The address of the account contract sending the declaration transaction.
     sender_address: int = field(metadata=fields.contract_address_metadata)
+    # Repeat `nonce` to narrow its type to non-optional int.
     nonce: int = field(metadata=fields.nonce_metadata)
 
     # Class variables.
@@ -171,6 +176,45 @@ class Deploy(Transaction):
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
+class DeployAccount(AccountTransaction):
+    """
+    Represents a transaction in the StarkNet network that is a deployment of a StarkNet account
+    contract.
+    """
+
+    class_hash: int = field(metadata=fields.ClassHashIntField.metadata())
+    contract_address_salt: int = field(metadata=fields.contract_address_salt_metadata)
+    constructor_calldata: List[int] = field(metadata=fields.call_data_metadata)
+    version: int = field(metadata=fields.tx_version_metadata)
+    # Repeat `nonce` to narrow its type to non-optional int.
+    nonce: int = field(metadata=fields.nonce_metadata)
+
+    # Class variables.
+    tx_type: ClassVar[TransactionType] = TransactionType.DEPLOY_ACCOUNT
+
+    def calculate_hash(self, general_config: StarknetGeneralConfig) -> int:
+        """
+        Calculates the transaction hash in the StarkNet network.
+        """
+        contract_address = calculate_contract_address_from_hash(
+            salt=self.contract_address_salt,
+            class_hash=self.class_hash,
+            constructor_calldata=self.constructor_calldata,
+            deployer_address=0,
+        )
+        return calculate_deploy_account_transaction_hash(
+            version=self.version,
+            contract_address=contract_address,
+            class_hash=self.class_hash,
+            constructor_calldata=self.constructor_calldata,
+            max_fee=self.max_fee,
+            nonce=self.nonce,
+            salt=self.contract_address_salt,
+            chain_id=general_config.chain_id.value,
+        )
+
+
+@marshmallow_dataclass.dataclass(frozen=True)
 class InvokeFunction(AccountTransaction):
     """
     Represents a transaction in the StarkNet network that is an invocation of a Cairo contract
@@ -246,6 +290,7 @@ class AccountTransactionSchema(OneOfSchema):
 
     type_schemas: Dict[str, Type[marshmallow.Schema]] = {
         TransactionType.DECLARE.name: Declare.Schema,
+        TransactionType.DEPLOY_ACCOUNT.name: DeployAccount.Schema,
         TransactionType.INVOKE_FUNCTION.name: InvokeFunction.Schema,
     }
 

@@ -211,7 +211,7 @@ func load_contract_class_facts_inner{pedersen_ptr: HashBuiltin*, range_check_ptr
         computed_hash = ids.contract_class_fact.hash
         expected_hash = from_bytes(class_hash)
         assert computed_hash == expected_hash, (
-            "Computed class_hash is inconsistent with the hash in the os_input"
+            "Computed class_hash is inconsistent with the hash in the os_input. "
             f"Computed hash = {computed_hash}, Expected hash = {expected_hash}.")
 
         vm_load_program(contract_class.program, ids.contract_class.bytecode_ptr)

@@ -21,6 +21,7 @@ from starkware.starknet.business_logic.execution.objects import (
 )
 from starkware.starknet.business_logic.fact_state.contract_state_objects import StateSelector
 from starkware.starknet.business_logic.fact_state.state import ExecutionResourcesManager
+from starkware.starknet.business_logic.state.state import UpdatesTrackerState
 from starkware.starknet.business_logic.state.state_api import SyncState
 from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
 from starkware.starknet.business_logic.transaction.fee import calculate_tx_fee, execute_fee_transfer
@@ -39,6 +40,7 @@ from starkware.starknet.core.os.contract_address.contract_address import (
 from starkware.starknet.core.os.transaction_hash.transaction_hash import (
     TransactionHashPrefix,
     calculate_declare_transaction_hash,
+    calculate_deploy_account_transaction_hash,
     calculate_deploy_transaction_hash,
     calculate_transaction_hash_common,
 )
@@ -52,6 +54,7 @@ from starkware.starknet.services.api.gateway.transaction import (
     DEFAULT_DECLARE_SENDER_ADDRESS,
     Declare,
     Deploy,
+    DeployAccount,
     InvokeFunction,
     Transaction,
 )
@@ -139,7 +142,7 @@ class InternalTransaction(InternalStateTransaction, EverestInternalTransaction):
         assert isinstance(external_tx, Transaction)
         assert isinstance(general_config, StarknetGeneralConfig)
 
-        internal_cls = InternalTransaction.external_to_internal_cls.get(type(external_tx))
+        internal_cls = cls.external_to_internal_cls.get(type(external_tx))
         if internal_cls is None:
             raise NotImplementedError(f"Unsupported transaction type {type(external_tx).__name__}.")
 
@@ -174,6 +177,15 @@ class InternalTransaction(InternalStateTransaction, EverestInternalTransaction):
         assert isinstance(tx_execution_info, TransactionExecutionInfo)
         return tx_execution_info
 
+    @abstractmethod
+    def _apply_specific_sequential_changes(
+        self,
+        state: SyncState,
+        general_config: StarknetGeneralConfig,
+        concurrent_execution_info: TransactionExecutionInfo,
+    ) -> TransactionExecutionInfo:
+        pass
+
 
 class SyntheticTransaction(InternalStateTransaction):
     """
@@ -203,8 +215,11 @@ class InitializeBlockInfo(SyntheticTransaction):
     block_info: BlockInfo
     tx_type: ClassVar[TransactionType] = TransactionType.INITIALIZE_BLOCK_INFO
 
-    def _apply_specific_state_updates(
-        self, state: SyncState, general_config: StarknetGeneralConfig
+    def _apply_specific_sequential_changes(
+        self,
+        state: SyncState,
+        general_config: StarknetGeneralConfig,
+        concurrent_execution_info: TransactionExecutionInfo,
     ) -> Optional[TransactionExecutionInfo]:
         # Validate progress is legal.
         state.block_info.validate_legal_progress(next_block_info=self.block_info)
@@ -213,6 +228,11 @@ class InitializeBlockInfo(SyntheticTransaction):
         state.update_block_info(block_info=self.block_info)
 
         return None
+
+    def _apply_specific_concurrent_changes(
+        self, state: UpdatesTrackerState, general_config: StarknetGeneralConfig
+    ) -> TransactionExecutionInfo:
+        return TransactionExecutionInfo.empty()
 
     def get_state_selector(self, general_config: Config) -> StateSelector:
         return StateSelector.empty()
@@ -228,7 +248,7 @@ class InternalAccountTransaction(InternalTransaction):
     # signed by the account contract.
     # This field allows invalidating old transactions, whenever the meaning of the other
     # transaction fields is changed (in the OS).
-    version: int = field(metadata=fields.tx_version_metadata)
+    version: int = field(metadata=fields.non_required_tx_version_metadata)
     # The maximal fee to be paid in Wei for the execution.
     max_fee: int = field(metadata=fields.fee_metadata)
     signature: List[int] = field(metadata=fields.signature_metadata)
@@ -261,7 +281,7 @@ class InternalAccountTransaction(InternalTransaction):
         """
 
     def verify_version(self):
-        verify_version(version=self.version, only_query=False)
+        verify_version(version=self.version, only_query=False, old_supported_versions=[0])
 
     def run_validate_entrypoint(
         self,
@@ -291,7 +311,7 @@ class InternalAccountTransaction(InternalTransaction):
                 n_steps=general_config.validate_max_n_steps
             ),
         )
-        verify_no_calls_to_other_contracts(call_info=call_info)
+        verify_no_calls_to_other_contracts(call_info=call_info, function_name="'validate'")
 
         return call_info
 
@@ -350,6 +370,27 @@ class InternalAccountTransaction(InternalTransaction):
         # Note that changing contract_state.nonce directly will bypass the proxy used to revert
         # transactions.
         state.increment_nonce(contract_address=self.account_contract_address)
+
+    def _apply_specific_sequential_changes(
+        self,
+        state: SyncState,
+        general_config: StarknetGeneralConfig,
+        concurrent_execution_info: TransactionExecutionInfo,
+    ) -> TransactionExecutionInfo:
+        self._handle_nonce(state=state)
+
+        # Handle fee.
+        fee_transfer_info, actual_fee = self.charge_fee(
+            state=state,
+            general_config=general_config,
+            resources=concurrent_execution_info.actual_resources,
+        )
+
+        return TransactionExecutionInfo.from_concurrent_stage_execution_info(
+            concurrent_execution_info=concurrent_execution_info,
+            fee_transfer_info=fee_transfer_info,
+            actual_fee=actual_fee,
+        )
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -502,15 +543,14 @@ class InternalDeclare(InternalAccountTransaction):
             class_hashes=[self.class_hash],
         )
 
-    def _apply_specific_state_updates(
-        self, state: SyncState, general_config: StarknetGeneralConfig
+    def _apply_specific_concurrent_changes(
+        self, state: UpdatesTrackerState, general_config: StarknetGeneralConfig
     ) -> TransactionExecutionInfo:
         # Reject unsupported versions. This is necessary (in addition to the gateway's check)
         # since an old transaction might still reach here, e.g., in case of a re-org.
         self.verify_version()
 
         # Validate transaction.
-        self._handle_nonce(state=state)
         resources_manager = ExecutionResourcesManager.empty()
         validate_info = self.run_validate_entrypoint(
             state=state,
@@ -520,19 +560,248 @@ class InternalDeclare(InternalAccountTransaction):
 
         # Handle fee.
         actual_resources = calculate_tx_resources(
-            resources_manager=resources_manager, call_infos=[validate_info], tx_type=self.tx_type
-        )
-        fee_transfer_info, actual_fee = self.charge_fee(
-            state=state, general_config=general_config, resources=actual_resources
+            state=state,
+            resources_manager=resources_manager,
+            call_infos=[validate_info],
+            tx_type=self.tx_type,
         )
 
-        return TransactionExecutionInfo(
+        return TransactionExecutionInfo.create_concurrent_stage_execution_info(
             validate_info=validate_info,
             call_info=None,
-            fee_transfer_info=fee_transfer_info,
-            actual_fee=actual_fee,
             actual_resources=actual_resources,
+            tx_type=self.tx_type,
         )
+
+
+@marshmallow_dataclass.dataclass(frozen=True)
+class InternalDeployAccount(InternalAccountTransaction):
+    """
+    Internal version of the DeployAccount transaction (deployment of StarkNet account contracts).
+    """
+
+    contract_address: int = field(metadata=fields.contract_address_metadata)
+    contract_address_salt: int = field(metadata=fields.contract_address_salt_metadata)
+    class_hash: bytes = field(metadata=fields.class_hash_metadata)
+    constructor_calldata: List[int] = field(metadata=fields.call_data_metadata)
+    version: int = field(metadata=fields.tx_version_metadata)
+    # Repeat `nonce` to narrow its type to non-optional int.
+    nonce: int = field(metadata=fields.nonce_metadata)
+
+    # Class variables.
+    tx_type: ClassVar[TransactionType] = TransactionType.DEPLOY_ACCOUNT
+    related_external_cls: ClassVar[Type[Transaction]] = DeployAccount
+    validate_entry_point_selector: ClassVar[int] = starknet_abi.VALIDATE_DEPLOY_ENTRY_POINT_SELECTOR
+
+    @property
+    def account_contract_address(self) -> int:
+        return self.contract_address
+
+    @property
+    def validate_entrypoint_calldata(self) -> List[int]:
+        # '__validate_deploy__' is expected to get the arguments:
+        # class_hash, salt, constructor_calldata.
+        return [
+            from_bytes(self.class_hash),
+            self.contract_address_salt,
+            *self.constructor_calldata,
+        ]
+
+    def verify_version(self):
+        verify_version(version=self.version, only_query=False, old_supported_versions=[])
+
+    @classmethod
+    def create(
+        cls,
+        class_hash: int,
+        max_fee: int,
+        version: int,
+        nonce: int,
+        constructor_calldata: List[int],
+        signature: List[int],
+        contract_address_salt: int,
+        chain_id: int,
+    ) -> "InternalDeployAccount":
+        contract_address = calculate_contract_address_from_hash(
+            salt=contract_address_salt,
+            class_hash=class_hash,
+            constructor_calldata=constructor_calldata,
+            deployer_address=0,
+        )
+        internal_deploy_account = cls(
+            contract_address=contract_address,
+            contract_address_salt=contract_address_salt,
+            constructor_calldata=constructor_calldata,
+            class_hash=to_bytes(class_hash),
+            version=version,
+            max_fee=max_fee,
+            signature=signature,
+            nonce=nonce,
+            hash_value=calculate_deploy_account_transaction_hash(
+                version=version,
+                contract_address=contract_address,
+                class_hash=class_hash,
+                constructor_calldata=constructor_calldata,
+                max_fee=max_fee,
+                nonce=nonce,
+                salt=contract_address_salt,
+                chain_id=chain_id,
+            ),
+        )
+        internal_deploy_account.verify_version()
+        return internal_deploy_account
+
+    @classmethod
+    async def create_for_testing(
+        cls,
+        contract_class: ContractClass,
+        max_fee: int,
+        contract_address_salt: int = 0,
+        constructor_calldata: Optional[List[int]] = None,
+        chain_id: int = 0,
+        signature: Optional[List[int]] = None,
+    ) -> "InternalDeployAccount":
+        return InternalDeployAccount.create(
+            class_hash=compute_class_hash(contract_class=contract_class),
+            contract_address_salt=contract_address_salt,
+            constructor_calldata=[] if constructor_calldata is None else constructor_calldata,
+            nonce=0,
+            max_fee=max_fee,
+            version=constants.TRANSACTION_VERSION,
+            signature=[] if signature is None else signature,
+            chain_id=chain_id,
+        )
+
+    @classmethod
+    def _specific_from_external(
+        cls, external_tx: Transaction, general_config: StarknetGeneralConfig
+    ) -> "InternalDeployAccount":
+        assert isinstance(external_tx, DeployAccount)
+        return cls.create(
+            class_hash=external_tx.class_hash,
+            max_fee=external_tx.max_fee,
+            version=external_tx.version,
+            nonce=external_tx.nonce,
+            constructor_calldata=external_tx.constructor_calldata,
+            signature=external_tx.signature,
+            contract_address_salt=external_tx.contract_address_salt,
+            chain_id=general_config.chain_id.value,
+        )
+
+    def to_external(self) -> DeployAccount:
+        return DeployAccount(
+            version=self.version,
+            max_fee=self.max_fee,
+            signature=self.signature,
+            nonce=self.nonce,
+            contract_address_salt=self.contract_address_salt,
+            class_hash=from_bytes(self.class_hash),
+            constructor_calldata=self.constructor_calldata,
+        )
+
+    def get_state_selector(self, general_config: Config) -> StateSelector:
+        """
+        Returns the state selector of the transaction (i.e., subset of state commitment tree leaves
+        it affects).
+        """
+        return StateSelector.create(
+            contract_addresses=[self.contract_address], class_hashes=[self.class_hash]
+        )
+
+    def _apply_specific_concurrent_changes(
+        self, state: UpdatesTrackerState, general_config: StarknetGeneralConfig
+    ) -> TransactionExecutionInfo:
+        """
+        Adds the deployed contract to the global commitment tree state.
+        """
+        # Reject unsupported versions. This is necessary (in addition to the gateway's check)
+        # since an old transaction might still reach here, e.g., in case of a re-org.
+        self.verify_version()
+
+        # Ensure the class is declared (by reading it).
+        contract_class = state.get_contract_class(class_hash=self.class_hash)
+
+        # Deploy.
+        state.deploy_contract(contract_address=self.contract_address, class_hash=self.class_hash)
+
+        # Run the constructor.
+        resources_manager = ExecutionResourcesManager.empty()
+        constructor_call_info = self.handle_constructor(
+            contract_class=contract_class,
+            state=state,
+            general_config=general_config,
+            resources_manager=resources_manager,
+        )
+
+        # Validate transaction.
+        validate_info = self.run_validate_entrypoint(
+            state=state, resources_manager=resources_manager, general_config=general_config
+        )
+
+        actual_resources = calculate_tx_resources(
+            state=state,
+            resources_manager=resources_manager,
+            call_infos=[constructor_call_info, validate_info],
+            tx_type=self.tx_type,
+        )
+
+        return TransactionExecutionInfo.create_concurrent_stage_execution_info(
+            validate_info=validate_info,
+            call_info=constructor_call_info,
+            actual_resources=actual_resources,
+            tx_type=self.tx_type,
+        )
+
+    def handle_constructor(
+        self,
+        contract_class: ContractClass,
+        state: UpdatesTrackerState,
+        general_config: StarknetGeneralConfig,
+        resources_manager: ExecutionResourcesManager,
+    ) -> CallInfo:
+        n_ctors = len(contract_class.entry_points_by_type[EntryPointType.CONSTRUCTOR])
+        if n_ctors == 0:
+            stark_assert(
+                len(self.constructor_calldata) == 0,
+                code=StarknetErrorCode.TRANSACTION_FAILED,
+                message="Cannot pass calldata to a contract with no constructor.",
+            )
+            return CallInfo.empty_constructor_call(
+                contract_address=self.contract_address,
+                caller_address=0,
+                class_hash=self.class_hash,
+            )
+        else:
+            return self.run_constructor_entrypoint(
+                state=state, general_config=general_config, resources_manager=resources_manager
+            )
+
+    def run_constructor_entrypoint(
+        self,
+        state: UpdatesTrackerState,
+        general_config: StarknetGeneralConfig,
+        resources_manager: ExecutionResourcesManager,
+    ) -> CallInfo:
+        call = ExecuteEntryPoint.create(
+            contract_address=self.contract_address,
+            entry_point_selector=starknet_abi.CONSTRUCTOR_ENTRY_POINT_SELECTOR,
+            entry_point_type=EntryPointType.CONSTRUCTOR,
+            calldata=self.constructor_calldata,
+            caller_address=0,
+        )
+        constructor_call_info = call.execute(
+            state=state,
+            resources_manager=resources_manager,
+            general_config=general_config,
+            tx_execution_context=self.get_execution_context(
+                n_steps=general_config.validate_max_n_steps
+            ),
+        )
+        verify_no_calls_to_other_contracts(
+            call_info=constructor_call_info, function_name="DeployAccount's constructor"
+        )
+
+        return constructor_call_info
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -546,7 +815,7 @@ class InternalDeploy(InternalTransaction):
     # signed by the account contract.
     # This field allows invalidating old transactions, whenever the meaning of the other
     # transaction fields is changed (in the OS).
-    version: int = field(metadata=fields.tx_version_metadata)
+    version: int = field(metadata=fields.non_required_tx_version_metadata)
     contract_address: int = field(metadata=fields.contract_address_metadata)
     contract_address_salt: int = field(metadata=fields.contract_address_salt_metadata)
     contract_hash: bytes = field(metadata=fields.non_required_class_hash_metadata)
@@ -580,7 +849,7 @@ class InternalDeploy(InternalTransaction):
         chain_id: int,
         version: int,
     ):
-        verify_version(version=version, only_query=False)
+        verify_version(version=version, only_query=False, old_supported_versions=[0])
 
         class_hash = compute_class_hash(contract_class=contract_class)
         contract_address = calculate_contract_address_from_hash(
@@ -638,6 +907,10 @@ class InternalDeploy(InternalTransaction):
             version=external_tx.version,
         )
 
+    @property
+    def class_hash(self) -> bytes:
+        return self.contract_hash
+
     def to_external(self) -> Deploy:
         raise NotImplementedError("Cannot convert internal deploy transaction to external object.")
 
@@ -648,26 +921,34 @@ class InternalDeploy(InternalTransaction):
         """
         return StateSelector.create(contract_addresses=[self.contract_address], class_hashes=[])
 
-    def _apply_specific_state_updates(
-        self, state: SyncState, general_config: StarknetGeneralConfig
+    def _apply_specific_concurrent_changes(
+        self, state: UpdatesTrackerState, general_config: StarknetGeneralConfig
     ) -> TransactionExecutionInfo:
         """
         Adds the deployed contract to the global commitment tree state.
         """
         # Reject unsupported versions. This is necessary (in addition to the gateway's check)
         # since an old transaction might still reach here, e.g., in case of a re-org.
-        verify_version(version=self.version, only_query=False)
+        verify_version(version=self.version, only_query=False, old_supported_versions=[0])
 
         # Execute transaction.
         state.deploy_contract(contract_address=self.contract_address, class_hash=self.contract_hash)
         contract_class = state.get_contract_class(class_hash=self.contract_hash)
         n_ctors = len(contract_class.entry_points_by_type[EntryPointType.CONSTRUCTOR])
         if n_ctors == 0:
-            return self.handle_empty_constructor()
+            return self.handle_empty_constructor(state=state)
         else:
             return self.invoke_constructor(state=state, general_config=general_config)
 
-    def handle_empty_constructor(self) -> TransactionExecutionInfo:
+    def _apply_specific_sequential_changes(
+        self,
+        state: SyncState,
+        general_config: StarknetGeneralConfig,
+        concurrent_execution_info: TransactionExecutionInfo,
+    ) -> TransactionExecutionInfo:
+        return concurrent_execution_info
+
+    def handle_empty_constructor(self, state: UpdatesTrackerState) -> TransactionExecutionInfo:
         stark_assert(
             len(self.constructor_calldata) == 0,
             code=StarknetErrorCode.TRANSACTION_FAILED,
@@ -681,19 +962,21 @@ class InternalDeploy(InternalTransaction):
         )
         resources_manager = ExecutionResourcesManager.empty()
         actual_resources = calculate_tx_resources(
-            resources_manager=resources_manager, call_infos=[call_info], tx_type=self.tx_type
+            state=state,
+            resources_manager=resources_manager,
+            call_infos=[call_info],
+            tx_type=self.tx_type,
         )
 
-        return TransactionExecutionInfo(
+        return TransactionExecutionInfo.create_concurrent_stage_execution_info(
             validate_info=None,
             call_info=call_info,
-            fee_transfer_info=None,
-            actual_fee=0,
             actual_resources=actual_resources,
+            tx_type=self.tx_type,
         )
 
     def invoke_constructor(
-        self, state: SyncState, general_config: StarknetGeneralConfig
+        self, state: UpdatesTrackerState, general_config: StarknetGeneralConfig
     ) -> TransactionExecutionInfo:
         call = ExecuteEntryPoint.create(
             contract_address=self.contract_address,
@@ -720,15 +1003,17 @@ class InternalDeploy(InternalTransaction):
             tx_execution_context=tx_execution_context,
         )
         actual_resources = calculate_tx_resources(
-            resources_manager=resources_manager, call_infos=[call_info], tx_type=self.tx_type
+            state=state,
+            resources_manager=resources_manager,
+            call_infos=[call_info],
+            tx_type=self.tx_type,
         )
 
-        return TransactionExecutionInfo(
+        return TransactionExecutionInfo.create_concurrent_stage_execution_info(
             validate_info=None,
             call_info=call_info,
-            fee_transfer_info=None,
-            actual_fee=0,
             actual_resources=actual_resources,
+            tx_type=self.tx_type,
         )
 
 
@@ -826,7 +1111,7 @@ class InternalInvokeFunction(InternalAccountTransaction):
     ):
         """
         Creates an account contract invocation to the 'dummy_account'
-        test contract at address 'account_address'.
+        test contract at address 'account_address'; should only be used in tests.
         """
 
         return cls.create(
@@ -949,8 +1234,8 @@ class InternalInvokeFunction(InternalAccountTransaction):
 
         return StateSelector.create(contract_addresses=contract_addresses, class_hashes=[])
 
-    def _apply_specific_state_updates(
-        self, state: SyncState, general_config: StarknetGeneralConfig
+    def _apply_specific_concurrent_changes(
+        self, state: UpdatesTrackerState, general_config: StarknetGeneralConfig
     ) -> TransactionExecutionInfo:
         """
         Applies self to 'state' by executing the entry point and charging fee for it (if needed).
@@ -960,7 +1245,6 @@ class InternalInvokeFunction(InternalAccountTransaction):
         self.verify_version()
 
         # Validate transaction.
-        self._handle_nonce(state=state)
         resources_manager = ExecutionResourcesManager.empty()
         validate_info = self.run_validate_entrypoint(
             state=state,
@@ -977,22 +1261,17 @@ class InternalInvokeFunction(InternalAccountTransaction):
 
         # Handle fee.
         actual_resources = calculate_tx_resources(
+            state=state,
             resources_manager=resources_manager,
             call_infos=[call_info, validate_info],
             tx_type=self.tx_type,
         )
-        fee_transfer_info, actual_fee = self.charge_fee(
-            state=state,
-            general_config=general_config,
-            resources=actual_resources,
-        )
 
-        return TransactionExecutionInfo(
+        return TransactionExecutionInfo.create_concurrent_stage_execution_info(
             validate_info=validate_info,
             call_info=call_info,
-            fee_transfer_info=fee_transfer_info,
-            actual_fee=actual_fee,
             actual_resources=actual_resources,
+            tx_type=self.tx_type,
         )
 
     def run_validate_entrypoint(
@@ -1051,7 +1330,7 @@ class InternalL1Handler(InternalTransaction):
     calldata: List[int] = field(metadata=fields.call_data_metadata)
     # A unique nonce, added by the StarkNet core contract on L1. Guarantees a unique
     # hash_value of transactions.
-    nonce: int = field(metadata=fields.nonce_metadata)
+    nonce: Optional[int] = field(metadata=fields.optional_nonce_metadata)
 
     # Class variables.
     tx_type: ClassVar[TransactionType] = TransactionType.L1_HANDLER
@@ -1060,6 +1339,22 @@ class InternalL1Handler(InternalTransaction):
     @classmethod
     def related_external_cls(cls) -> Type[Transaction]:
         raise NotImplementedError("InternalL1Handler does not have a corresponding external class.")
+
+    @marshmallow.decorators.pre_load
+    def remove_deprecated_fields(
+        self, data: Dict[str, Any], many: bool, **kwargs
+    ) -> Dict[str, Any]:
+        for deprecated_field in (
+            "entry_point_type",
+            "max_fee",
+            "signature",
+            "version",
+            "caller_address",
+            "code_address",
+        ):
+            data.pop(deprecated_field, None)
+
+        return data
 
     @classmethod
     def _specific_from_external(
@@ -1122,8 +1417,8 @@ class InternalL1Handler(InternalTransaction):
         """
         return StateSelector.create(contract_addresses=[self.contract_address], class_hashes=[])
 
-    def _apply_specific_state_updates(
-        self, state: SyncState, general_config: StarknetGeneralConfig
+    def _apply_specific_concurrent_changes(
+        self, state: UpdatesTrackerState, general_config: StarknetGeneralConfig
     ) -> TransactionExecutionInfo:
         """
         Applies self to 'state' by executing the L1-handler entry point.
@@ -1146,20 +1441,29 @@ class InternalL1Handler(InternalTransaction):
                 n_steps=general_config.invoke_tx_max_n_steps
             ),
         )
+
         actual_resources = calculate_tx_resources(
+            state=state,
             resources_manager=resources_manager,
             call_infos=[call_info],
             tx_type=self.tx_type,
             l1_handler_payload_size=self.get_payload_size(),
         )
 
-        return TransactionExecutionInfo(
+        return TransactionExecutionInfo.create_concurrent_stage_execution_info(
             validate_info=None,
             call_info=call_info,
-            fee_transfer_info=None,
-            actual_fee=0,
             actual_resources=actual_resources,
+            tx_type=self.tx_type,
         )
+
+    def _apply_specific_sequential_changes(
+        self,
+        state: SyncState,
+        general_config: StarknetGeneralConfig,
+        concurrent_execution_info: TransactionExecutionInfo,
+    ) -> TransactionExecutionInfo:
+        return concurrent_execution_info
 
     def get_execution_context(self, n_steps: int) -> TransactionExecutionContext:
         return TransactionExecutionContext.create(
@@ -1167,7 +1471,7 @@ class InternalL1Handler(InternalTransaction):
             transaction_hash=self.hash_value,
             signature=[],
             max_fee=0,
-            nonce=self.nonce,
+            nonce=as_non_optional(self.nonce),
             n_steps=n_steps,
             version=constants.L1_HANDLER_VERSION,
         )
@@ -1195,12 +1499,24 @@ class InternalTransactionSchema(OneOfSchema):
     type_schemas: Dict[str, Type[marshmallow.Schema]] = {
         TransactionType.DECLARE.name: InternalDeclare.Schema,
         TransactionType.DEPLOY.name: InternalDeploy.Schema,
+        TransactionType.DEPLOY_ACCOUNT.name: InternalDeployAccount.Schema,
         TransactionType.INVOKE_FUNCTION.name: InternalInvokeFunction.Schema,
         TransactionType.L1_HANDLER.name: InternalL1Handler.Schema,
     }
 
     def get_obj_type(self, obj: InternalTransaction) -> str:
         return obj.tx_type.name
+
+    def get_data_type(self, data: Dict[str, Any]) -> str:
+        data_type = data.get(self.type_field)
+        if (
+            data_type == TransactionType.INVOKE_FUNCTION.name
+            and data.get("entry_point_type") == TransactionType.L1_HANDLER.name
+        ):
+            data.pop(self.type_field)
+            return TransactionType.L1_HANDLER.name
+
+        return super().get_data_type(data=data)
 
 
 InternalTransaction.Schema = InternalTransactionSchema

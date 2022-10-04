@@ -29,11 +29,10 @@ python_lib(everest_internal_transaction_lib
     LIBS
     everest_business_logic_lib
     everest_business_logic_state_api_lib
+    everest_transaction_execution_objects_lib
     everest_transaction_lib
     starkware_config_utils_lib
-    starkware_dataclasses_utils_lib
     starkware_one_of_schema_utils_lib
-    pip_marshmallow_dataclass
 )
 
 python_lib(everest_transaction_execution_objects_lib

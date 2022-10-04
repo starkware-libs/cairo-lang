@@ -14,6 +14,7 @@ from starkware.starknet.business_logic.execution.objects import (
 from starkware.starknet.business_logic.execution.os_usage import get_additional_os_resources
 from starkware.starknet.business_logic.fact_state.contract_state_objects import ContractClassFact
 from starkware.starknet.business_logic.fact_state.state import ExecutionResourcesManager
+from starkware.starknet.business_logic.state.state import UpdatesTrackerState
 from starkware.starknet.business_logic.state.state_api import SyncState
 from starkware.starknet.definitions import constants, fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
@@ -58,7 +59,7 @@ def get_return_values(runner: CairoFunctionRunner) -> List[int]:
     return cast(List[int], values)
 
 
-def verify_version(version: int, only_query: bool):
+def verify_version(version: int, only_query: bool, old_supported_versions: List[int]):
     """
     Validates the given transaction version.
 
@@ -67,7 +68,7 @@ def verify_version(version: int, only_query: bool):
     being invoked in the StarkNet OS.
     """
     assert constants.TRANSACTION_VERSION == 1
-    allowed_versions = [0, constants.TRANSACTION_VERSION]
+    allowed_versions = [*old_supported_versions, constants.TRANSACTION_VERSION]
     if only_query:
         error_code = StarknetErrorCode.INVALID_TRANSACTION_QUERYING_VERSION
         allowed_versions += [constants.QUERY_VERSION_BASE + v for v in allowed_versions]
@@ -156,6 +157,7 @@ def calculate_tx_resources(
     resources_manager: ExecutionResourcesManager,
     call_infos: Iterable[Optional[CallInfo]],
     tx_type: TransactionType,
+    state: UpdatesTrackerState,
     l1_handler_payload_size: Optional[int] = None,
 ) -> ResourcesMapping:
     """
@@ -164,11 +166,9 @@ def calculate_tx_resources(
     Used for transaction fee; calculation is made as if the transaction is the first in batch, for
     consistency.
     """
-    # Number of modified contracts by the most recently applied-on-state transaction.
-    n_modified_contracts_by_tx = len(resources_manager.modified_contracts.keys())
+    (n_modified_contracts, n_storage_changes) = state.count_actual_storage_changes()
 
     non_optional_call_infos = [call for call in call_infos if call is not None]
-    tx_syscall_counter = resources_manager.syscall_counter
     n_deployments = 0
     for call_info in non_optional_call_infos:
         n_deployments += get_call_n_deployments(call_info=call_info)
@@ -179,14 +179,14 @@ def calculate_tx_resources(
 
     l1_gas_usage = calculate_tx_gas_usage(
         l2_to_l1_messages=l2_to_l1_messages,
-        n_modified_contracts=n_modified_contracts_by_tx,
-        n_storage_writes=tx_syscall_counter.get("storage_write", 0)
-        + FEE_TRANSFER_N_STORAGE_CHANGES_TO_CHARGE,
+        n_modified_contracts=n_modified_contracts,
+        n_storage_changes=n_storage_changes + FEE_TRANSFER_N_STORAGE_CHANGES_TO_CHARGE,
         l1_handler_payload_size=l1_handler_payload_size,
         n_deployments=n_deployments,
     )
 
     cairo_usage = resources_manager.cairo_usage
+    tx_syscall_counter = resources_manager.syscall_counter
     # Add additional Cairo resources needed for the OS to run the transaction.
     cairo_usage += get_additional_os_resources(syscall_counter=tx_syscall_counter, tx_type=tx_type)
 
@@ -272,11 +272,11 @@ def validate_entrypoint_execution_context(resources_manager: ExecutionResourcesM
     )
 
 
-def verify_no_calls_to_other_contracts(call_info: CallInfo):
+def verify_no_calls_to_other_contracts(call_info: CallInfo, function_name: str):
     invoked_contract_address = call_info.contract_address
     for internal_call in call_info.gen_call_topology():
         if internal_call.contract_address != invoked_contract_address:
             raise StarkException(
                 code=StarknetErrorCode.UNAUTHORIZED_ACTION_ON_VALIDATE,
-                message="Calling other contracts during `validate` execution is forbidden.",
+                message=f"Calling other contracts during {function_name} execution is forbidden.",
             )

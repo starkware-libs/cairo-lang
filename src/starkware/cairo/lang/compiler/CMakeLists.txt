@@ -94,7 +94,7 @@ python_lib(cairo_compile_lib
     pip_marshmallow_enum
     pip_marshmallow_oneofschema
     pip_marshmallow
-    pip_lark_parser
+    pip_lark
 )
 
 python_exe(cairo_compile_exe

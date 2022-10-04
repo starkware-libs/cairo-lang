@@ -25,6 +25,11 @@ func __validate_declare__(class_hash: felt) {
 }
 
 @external
+func __validate_deploy__(class_hash: felt, contract_address_salt: felt) {
+    return ();
+}
+
+@external
 func __validate__(contract_address, selector: felt, calldata_len: felt, calldata: felt*) {
     return ();
 }

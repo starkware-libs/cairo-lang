@@ -628,7 +628,7 @@ class ParserTransformer(Transformer):
 
     @v_args(meta=True)
     def commented_code_element(self, meta, value):
-        comment = value[1][2:] if len(value) == 2 else None
+        comment = value[1][2:] if value[1] is not None else None
         return CommentedCodeElement(
             code_elm=value[0], comment=comment, location=self.meta2loc(meta)
         )

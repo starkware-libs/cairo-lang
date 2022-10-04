@@ -12,7 +12,6 @@ from typing import Any, Awaitable, Callable, Dict, List, Literal, Optional, Tupl
 
 from web3 import Web3
 
-from services.everest.definitions import fields as everest_fields
 from services.external_api.client import RetryConfig
 from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt, TypePointer
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
@@ -20,7 +19,6 @@ from starkware.cairo.lang.compiler.parser import parse_type
 from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.compiler.type_system import mark_type_resolved
 from starkware.cairo.lang.compiler.type_utils import check_felts_only_type
-from starkware.cairo.lang.tracer.tracer_data import field_element_repr
 from starkware.cairo.lang.version import __version__
 from starkware.cairo.lang.vm.crypto import get_crypto_lib_context_manager
 from starkware.python.utils import from_bytes
@@ -53,7 +51,7 @@ from starkware.starknet.services.api.gateway.gateway_client import GatewayClient
 from starkware.starknet.services.api.gateway.transaction import (
     AccountTransaction,
     Declare,
-    Deploy,
+    DeployAccount,
     InvokeFunction,
     Transaction,
 )
@@ -119,10 +117,6 @@ def parse_block_identifiers(
         return block_hash, default_block_number
 
     return block_hash, block_number
-
-
-def felt_formatter(hex_felt: str) -> str:
-    return field_element_repr(val=int(hex_felt, 16), prime=everest_fields.FeltField.upper_bound)
 
 
 def get_optional_arg_value(args, arg_name: str, environment_var: str) -> Optional[str]:
@@ -284,7 +278,7 @@ async def compute_max_fee(
         max_fee = math.ceil(simulate_tx_info.fee_estimation.overall_fee * FEE_MARGIN_OF_ESTIMATION)
         max_fee_eth = float(Web3.fromWei(max_fee, "ether"))
 
-        print(f"Sending the transaction with max_fee: {max_fee_eth:.6f} ETH.")
+        print(f"Sending the transaction with max_fee: {max_fee_eth:.6f} ETH ({max_fee} WEI).")
     else:
         max_fee = 0
 
@@ -390,7 +384,7 @@ async def load_account(
             f"Unable to find wallet '{wallet}': Class '{class_name}' was not found."
         ) from None
 
-    return await account_class.create(starknet_context=starknet_context, account_name=account_name)
+    return account_class.create(starknet_context=starknet_context, account_name=account_name)
 
 
 def handle_network_param(args):
@@ -528,27 +522,17 @@ async def create_invoke_tx_for_deploy(
     Creates and returns an InvokeFunction transaction to deploy a contract with the given arguments,
     which is wrapped and signed by the wallet provider.
     """
-    version = constants.QUERY_VERSION if call else constants.TRANSACTION_VERSION
     account = await load_account_from_args(args=args)
-    wrapped_method, contract_address = await account.deploy_contract(
+    return await account.deploy_contract(
         class_hash=class_hash,
         salt=salt,
         constructor_calldata=constructor_calldata,
         deploy_from_zero=args.deploy_from_zero,
         chain_id=get_chain_id(args),
         max_fee=max_fee,
-        version=version,
+        version=constants.QUERY_VERSION if call else constants.TRANSACTION_VERSION,
         nonce_callback=create_get_nonce_callback(args=args),
     )
-    tx = InvokeFunction(
-        contract_address=wrapped_method.address,
-        calldata=wrapped_method.calldata,
-        max_fee=wrapped_method.max_fee,
-        version=version,
-        signature=wrapped_method.signature,
-        nonce=wrapped_method.nonce,
-    )
-    return tx, contract_address
 
 
 async def create_invoke_tx(
@@ -582,7 +566,7 @@ async def create_invoke_tx(
         "Signature cannot be passed explicitly when using an account contract. "
         "Consider making a direct contract call using --no_wallet."
     )
-    wrapped_method = await account.sign_invoke_transaction(
+    return await account.invoke(
         contract_address=invoke_tx_args.address,
         selector=invoke_tx_args.selector,
         calldata=invoke_tx_args.calldata,
@@ -591,14 +575,6 @@ async def create_invoke_tx(
         version=version,
         nonce_callback=create_get_nonce_callback(args=args),
         dry_run=args.dry_run,
-    )
-    return InvokeFunction(
-        contract_address=wrapped_method.address,
-        calldata=wrapped_method.calldata,
-        max_fee=wrapped_method.max_fee,
-        version=version,
-        nonce=wrapped_method.nonce,
-        signature=wrapped_method.signature,
     )
 
 
@@ -638,20 +614,31 @@ async def create_declare_tx(
         "Signature cannot be passed explicitly when using an account contract. "
         "Consider making a direct declaration using --no_wallet."
     )
-    wrapped_method = await account.declare(
+    return await account.declare(
         contract_class=declare_tx_args.contract_class,
         chain_id=get_chain_id(args),
         max_fee=max_fee,
         version=version,
         nonce_callback=create_get_nonce_callback(args=args),
     )
-    return Declare(
-        contract_class=declare_tx_args.contract_class,
-        sender_address=wrapped_method.address,
-        max_fee=wrapped_method.max_fee,
+
+
+async def create_deploy_account_tx(
+    args: argparse.Namespace,
+    account: Account,
+    max_fee: int,
+    query: bool,
+) -> Tuple[DeployAccount, int]:
+    """
+    Creates and returns a Deploy Account transaction with the given parameters along with the new
+    account address.
+    """
+    version = constants.QUERY_VERSION if query else constants.TRANSACTION_VERSION
+    return await account.deploy_account(
+        max_fee=max_fee,
         version=version,
-        signature=wrapped_method.signature,
-        nonce=wrapped_method.nonce,
+        chain_id=get_chain_id(args),
+        dry_run=query,
     )
 
 
@@ -707,33 +694,20 @@ def assert_tx_received(gateway_response: Dict[str, str]):
     ), f"Failed to send transaction. Response: {gateway_response}."
 
 
-async def estimate_fee(args: argparse.Namespace, tx: AccountTransaction):
-    tx_simulate_info = await simulate_tx_inner(args=args, tx=tx, has_block_info=True)
-    print_fee_info(fee_info=tx_simulate_info.fee_estimation)
-
-
-async def simulate_transaction(args: argparse.Namespace, tx: AccountTransaction):
-    tx_simulate_info = await simulate_tx_inner(args=args, tx=tx, has_block_info=True)
-    print_fee_info(fee_info=tx_simulate_info.fee_estimation)
-    print()
-    print(tx_simulate_info.trace.dumps(indent=4, sort_keys=True))
-
-
 async def simulate_or_estimate_fee(args: argparse.Namespace, tx: AccountTransaction):
     args.block_hash, args.block_number = parse_block_identifiers(args.block_hash, args.block_number)
+    tx_simulate_info = await simulate_tx_inner(args=args, tx=tx, has_block_info=True)
+    print_fee_info(fee_info=tx_simulate_info.fee_estimation)
+
     if args.simulate:
-        await simulate_transaction(args=args, tx=tx)
-    else:
-        await estimate_fee(args=args, tx=tx)
+        print()
+        print(tx_simulate_info.trace.dumps(indent=4, sort_keys=True))
 
 
 # Subparsers.
 
 
-async def declare(
-    args: argparse.Namespace,
-    command_args: List[str],
-):
+async def declare(args: argparse.Namespace, command_args: List[str]):
     """
     Creates a Declare transaction and sends it to the gateway. In case a wallet is provided, the
     transaction is wrapped and signed by the wallet provider. Otherwise, a sender address and a
@@ -803,7 +777,9 @@ async def deploy(args, command_args):
     parser.add_argument(
         "--token", type=str, help="Used for deploying contracts in Alpha MainNet.", required=False
     )
-    parser.add_argument("--class_hash", type=str, help="The class hash of the deployed contract.")
+    parser.add_argument(
+        "--class_hash", type=str, help="The class hash of the deployed contract.", required=True
+    )
     parser.add_argument(
         "--nonce",
         type=int,
@@ -817,81 +793,17 @@ async def deploy(args, command_args):
         "--max_fee", type=int, help="The maximal fee to be paid for the deployment."
     )
     parser.add_argument(
-        "--contract", type=argparse.FileType("r"), help="The contract class to deploy."
-    )
-    parser.add_argument(
         "--deploy_from_zero",
         action="store_true",
         help="Use 0 instead of the deployer address for the contract address computation.",
     )
     parser.parse_args(command_args, namespace=args)
 
-    has_wallet = get_wallet_provider(args=args) is not None
-    if has_wallet:
-        assert args.contract is None, (
-            "--contract should not be passed when deploying a contract while using a wallet. "
-            "Try passing --class_hash instead or using the --no_wallet flag."
-        )
-        assert (
-            args.class_hash is not None
-        ), "--class_hash must be passed when deploying a contract while using a wallet."
-        await deploy_with_invoke(args=args)
-    else:
-        assert (
-            args.contract is not None
-        ), "--contract must be passed when deploying a contract without using a wallet."
-        assert (
-            args.class_hash is None
-        ), "--class_hash should not be passed when deploying a contract without using a wallet."
-        await deploy_tx(args=args)
+    assert (
+        get_wallet_provider(args=args) is not None
+    ), "You must provide a wallet when deploying a contract."
 
-
-async def deploy_tx(args):
-    inputs = cast_to_felts(args.inputs)
-    salt = get_salt(salt=args.salt)
-
-    contract_class = ContractClass.loads(data=args.contract.read())
-    abi = contract_class.abi
-    assert abi is not None, "Missing ABI in the given contract class."
-
-    for abi_entry in abi:
-        # ABI entry validation.
-        if "type" not in abi_entry:
-            raise AbiFormatError(ABI_TYPE_NOT_FOUND_ERROR)
-
-        if abi_entry["type"] == "constructor":
-            try:
-                validate_arguments(
-                    inputs=inputs,
-                    abi_entry=abi_entry,
-                    identifier_manager=identifier_manager_from_abi(abi=abi),
-                )
-                break
-            except AbiFormatError as abi_error:
-                raise AbiFormatError(
-                    f"Failed to parse the contract ABI: {abi_error}"
-                ) from abi_error
-    else:
-        assert len(inputs) == 0, "--inputs cannot be specified for contracts without a constructor."
-
-    tx = Deploy(
-        contract_address_salt=salt,
-        contract_definition=contract_class,
-        constructor_calldata=inputs,
-        version=constants.TRANSACTION_VERSION,
-    )
-
-    gateway_client = get_gateway_client(args)
-    gateway_response = await gateway_client.add_transaction(tx=tx, token=args.token)
-    assert_tx_received(gateway_response=gateway_response)
-    contract_address = int(gateway_response["address"], 16)
-    # Don't end sentences with '.', to allow easy double-click copy-pasting of the values.
-    print(
-        f"""\
-Deploy transaction was sent.
-Contract address: 0x{contract_address:064x}
-Transaction hash: {gateway_response['transaction_hash']}"""
-    )
+    await deploy_with_invoke(args=args)
 
 
 async def deploy_with_invoke(args: argparse.Namespace):
@@ -930,14 +842,72 @@ Transaction hash: {gateway_response['transaction_hash']}"""
     )
 
 
-async def deploy_account(args, command_args):
-    parser = argparse.ArgumentParser(
-        description="Initialize the account and deploy the account contract to StarkNet."
-    )
+async def new_account(args, command_args):
+    parser = argparse.ArgumentParser(description="Initializes an account contract.")
     # Use parse_args to add the --help flag for the subcommand.
     parser.parse_args(command_args, namespace=args)
     account = await load_account_from_args(args)
-    await account.deploy()
+    account.new_account()
+
+
+async def deploy_account(args: argparse.Namespace, command_args: List[str]):
+    parser = argparse.ArgumentParser(
+        description=(
+            "Deploys an initialized account contract to StarkNet. "
+            "For more information, see new_account."
+        )
+    )
+    add_deploy_account_tx_arguments(parser=parser)
+    # Use parse_args to add the --help flag for the subcommand.
+    parser.parse_args(command_args, namespace=args)
+    validate_max_fee(max_fee=args.max_fee)
+    account = await load_account_from_args(args)
+
+    deploy_account_tx_for_simulate, _ = await create_deploy_account_tx(
+        args=args,
+        account=account,
+        max_fee=args.max_fee if args.max_fee is not None else 0,
+        query=True,
+    )
+
+    if args.simulate or args.estimate_fee:
+        await simulate_or_estimate_fee(args=args, tx=deploy_account_tx_for_simulate)
+        return
+
+    assert args.block_hash is None and args.block_number is None, (
+        "--block_hash and --block_number should only be passed when either --simulate or "
+        "--estimate_fee flag are used."
+    )
+    max_fee = await compute_max_fee(
+        args=args, tx=deploy_account_tx_for_simulate, is_account_contract_invocation=True
+    )
+
+    tx, contract_address = await create_deploy_account_tx(
+        args=args,
+        account=account,
+        max_fee=max_fee,
+        query=False,
+    )
+
+    gateway_client = get_gateway_client(args)
+    gateway_response = await gateway_client.add_transaction(tx=tx)
+    assert_tx_received(gateway_response=gateway_response)
+    # Verify the address received from the gateway.
+    assert (actual_address := int(gateway_response["address"], 16)) == contract_address, (
+        f"The address returned from the Gateway: 0x{actual_address:064x} "
+        f"does not match the address stored in the account: 0x{contract_address:064x}. "
+        "Are you using the correct version of the CLI?"
+    )
+
+    # Don't end sentences with '.', to allow easy double-click copy-pasting of the values.
+    print(
+        f"""\
+Sent deploy account contract transaction.
+
+Contract address: 0x{contract_address:064x}
+Transaction hash: {gateway_response['transaction_hash']}
+"""
+    )
 
 
 async def call(args: argparse.Namespace, command_args: List[str]):
@@ -954,7 +924,7 @@ async def call(args: argparse.Namespace, command_args: List[str]):
     gateway_response = await feeder_client.call_contract(
         call_function=call_function_args, block_hash=args.block_hash, block_number=args.block_number
     )
-    print(*map(felt_formatter, gateway_response["result"]))
+    print(*map(fields.felt_formatter, gateway_response["result"]))
 
 
 async def invoke(args: argparse.Namespace, command_args: List[str]):
@@ -1353,9 +1323,36 @@ async def get_storage_at(args, command_args):
 # Add arguments.
 
 
+def add_account_tx_arguments(parser: argparse.ArgumentParser):
+    """
+    Adds the arguments: max_fee, signature and nonce.
+    """
+    parser.add_argument(
+        "--nonce",
+        type=int,
+        help=(
+            "Used for explicitly specifying the transaction nonce. "
+            "If not specified, the current nonce of the account contract "
+            "(as returned from StarkNet) will be used."
+        ),
+    )
+    parser.add_argument(
+        "--signature",
+        type=str,
+        nargs="*",
+        default=[],
+        help="The signature information for transaction.",
+    )
+    parser.add_argument(
+        "--max_fee",
+        type=int,
+        help="The maximal fee to be paid for the execution of the transaction.",
+    )
+
+
 def add_simulate_tx_arguments(parser: argparse.ArgumentParser):
     """
-    Adds the arguments: simulate, estimate_fee.
+    Adds the arguments: simulate, estimate_fee and the block identifier arguments.
     """
     parser.add_argument(
         "--simulate",
@@ -1366,6 +1363,10 @@ def add_simulate_tx_arguments(parser: argparse.ArgumentParser):
         "--estimate_fee",
         action="store_true",
         help="Estimates the fee of the transaction.",
+    )
+    add_block_identifier_arguments(
+        parser=parser,
+        block_role_description="be used as the context for the transaction simulation",
     )
 
 
@@ -1385,35 +1386,11 @@ def add_declare_tx_arguments(parser: argparse.ArgumentParser):
         type=str,
         help="The address of the account contract sending the transaction.",
     )
-    parser.add_argument(
-        "--max_fee",
-        type=int,
-        help="The maximal fee to be paid for the declaration.",
-    )
-    parser.add_argument(
-        "--signature",
-        type=str,
-        nargs="*",
-        default=[],
-        help="The signature information for the declaration.",
-    )
-    parser.add_argument(
-        "--nonce",
-        type=int,
-        help=(
-            "Used for explicitly specifying the transaction nonce. "
-            "If not specified, the current nonce of the account contract "
-            "(as returned from StarkNet) will be used."
-        ),
-    )
+    add_account_tx_arguments(parser=parser)
     parser.add_argument(
         "--token", type=str, help="Used for declaring contracts in Alpha MainNet.", required=False
     )
     add_simulate_tx_arguments(parser=parser)
-    add_block_identifier_arguments(
-        parser=parser,
-        block_role_description="be used as the context for the transaction simulation",
-    )
 
 
 def add_call_function_arguments(parser: argparse.ArgumentParser):
@@ -1447,39 +1424,27 @@ def add_call_l1_handler_arguments(parser: argparse.ArgumentParser):
 
 def add_invoke_tx_arguments(parser: argparse.ArgumentParser):
     """
-    Adds the arguments: address, abi, function, inputs, nonce, signature, the simulate arguments and
-    the block identifier arguments.
+    Adds the arguments: address, abi, function, inputs, nonce, signature, max_fee, dry_run, the
+    simulate arguments and the block identifier arguments.
     """
     add_call_function_arguments(parser=parser)
-    parser.add_argument(
-        "--nonce",
-        type=int,
-        help=(
-            "Used for explicitly specifying the transaction nonce. "
-            "If not specified, the current nonce of the account contract "
-            "(as returned from StarkNet) will be used."
-        ),
-    )
+    add_account_tx_arguments(parser=parser)
     parser.add_argument(
         "--dry_run",
         action="store_true",
         help="Prepare the transaction and print it without signing or sending it.",
     )
+    add_simulate_tx_arguments(parser=parser)
+
+
+def add_deploy_account_tx_arguments(parser: argparse.ArgumentParser):
+    """
+    Adds the arguments: max_fee, the simulate arguments and the block identifier arguments.
+    """
     parser.add_argument(
-        "--signature",
-        type=str,
-        nargs="*",
-        default=[],
-        help="The signature information for the invoked function.",
-    )
-    parser.add_argument(
-        "--max_fee", type=int, help="The maximal fee to be paid for the function invocation."
+        "--max_fee", type=int, help="The maximal fee to be paid for the deployment."
     )
     add_simulate_tx_arguments(parser=parser)
-    add_block_identifier_arguments(
-        parser=parser,
-        block_role_description="be used as the context for the transaction simulation",
-    )
 
 
 def add_block_identifier_arguments(
@@ -1522,6 +1487,7 @@ async def main():
         "get_transaction_receipt": get_transaction_receipt,
         "get_transaction_trace": get_transaction_trace,
         "invoke": invoke,
+        "new_account": new_account,
         "tx_status": tx_status,
     }
     parser = argparse.ArgumentParser(description="A tool to communicate with StarkNet.")
@@ -1603,4 +1569,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    sys.exit(asyncio.run(main()))

@@ -44,6 +44,12 @@ class StateSyncifier(SyncState):
             coroutine=self.async_state.get_contract_class(class_hash=class_hash), loop=self.loop
         )
 
+    def _get_raw_contract_class(self, class_hash: bytes) -> bytes:
+        return execute_coroutine_threadsafe(
+            coroutine=self.async_state._get_raw_contract_class(class_hash=class_hash),
+            loop=self.loop,
+        )
+
     def get_class_hash_at(self, contract_address: int) -> bytes:
         return execute_coroutine_threadsafe(
             coroutine=self.async_state.get_class_hash_at(contract_address=contract_address),
@@ -100,11 +106,12 @@ class StateCache:
 
     def __init__(self):
         self.contract_classes: Dict[bytes, ContractClass] = {}
+        self.raw_contract_classes: Dict[bytes, bytes] = {}
 
-        # Reader's cached information.
-        self._class_hash_reads: Dict[int, bytes] = {}
-        self._nonce_reads: Dict[int, int] = {}
-        self._storage_reads: Dict[StorageEntry, int] = {}
+        # Reader's cached information; initial values, read before any write operation (per cell).
+        self._class_hash_initial_values: Dict[int, bytes] = {}
+        self._nonce_initial_values: Dict[int, int] = {}
+        self._storage_initial_values: Dict[StorageEntry, int] = {}
 
         # Writer's cached information.
         self._class_hash_writes: Dict[int, bytes] = {}
@@ -115,12 +122,14 @@ class StateCache:
 
         # Mappings from contract address to different attributes.
         self.address_to_class_hash: Mapping[int, bytes] = ChainMap(
-            self._class_hash_writes, self._class_hash_reads
+            self._class_hash_writes, self._class_hash_initial_values
         )
-        self.address_to_nonce: Mapping[int, int] = ChainMap(self._nonce_writes, self._nonce_reads)
+        self.address_to_nonce: Mapping[int, int] = ChainMap(
+            self._nonce_writes, self._nonce_initial_values
+        )
         # Mapping from (contract_address, key) to a value in the contract's storage.
         self.storage_view: Mapping[StorageEntry, int] = ChainMap(
-            self._storage_writes, self._storage_reads
+            self._storage_writes, self._storage_initial_values
         )
 
     def update_writes_from_other(self, other: "StateCache"):
@@ -173,29 +182,38 @@ class CachedState(State):
 
         return self.cache.contract_classes[class_hash]
 
+    async def _get_raw_contract_class(self, class_hash: bytes) -> bytes:
+        if class_hash not in self.cache.raw_contract_classes:
+            raw_contract_class = await self.state_reader._get_raw_contract_class(
+                class_hash=class_hash
+            )
+            self.cache.raw_contract_classes[class_hash] = raw_contract_class
+
+        return self.cache.raw_contract_classes[class_hash]
+
     async def get_class_hash_at(self, contract_address: int) -> bytes:
         if contract_address not in self.cache.address_to_class_hash:
             class_hash = await self.state_reader.get_class_hash_at(
                 contract_address=contract_address
             )
-            self.cache._class_hash_reads[contract_address] = class_hash
+            self.cache._class_hash_initial_values[contract_address] = class_hash
 
         return self.cache.address_to_class_hash[contract_address]
 
     async def get_nonce_at(self, contract_address: int) -> int:
         if contract_address not in self.cache.address_to_nonce:
-            self.cache._nonce_reads[contract_address] = await self.state_reader.get_nonce_at(
-                contract_address=contract_address
-            )
+            self.cache._nonce_initial_values[
+                contract_address
+            ] = await self.state_reader.get_nonce_at(contract_address=contract_address)
 
         return self.cache.address_to_nonce[contract_address]
 
     async def get_storage_at(self, contract_address: int, key: int) -> int:
         address_key_pair = (contract_address, key)
         if address_key_pair not in self.cache.storage_view:
-            self.cache._storage_reads[address_key_pair] = await self.state_reader.get_storage_at(
-                contract_address=contract_address, key=key
-            )
+            self.cache._storage_initial_values[
+                address_key_pair
+            ] = await self.state_reader.get_storage_at(contract_address=contract_address, key=key)
 
         return self.cache.storage_view[address_key_pair]
 
@@ -271,17 +289,25 @@ class CachedSyncState(SyncState):
 
         return self.cache.contract_classes[class_hash]
 
+    def _get_raw_contract_class(self, class_hash: bytes) -> bytes:
+        if class_hash not in self.cache.raw_contract_classes:
+            self.cache.raw_contract_classes[class_hash] = self.state_reader._get_raw_contract_class(
+                class_hash=class_hash
+            )
+
+        return self.cache.raw_contract_classes[class_hash]
+
     def get_class_hash_at(self, contract_address: int) -> bytes:
         if contract_address not in self.cache.address_to_class_hash:
-            self.cache._class_hash_reads[contract_address] = self.state_reader.get_class_hash_at(
-                contract_address=contract_address
-            )
+            self.cache._class_hash_initial_values[
+                contract_address
+            ] = self.state_reader.get_class_hash_at(contract_address=contract_address)
 
         return self.cache.address_to_class_hash[contract_address]
 
     def get_nonce_at(self, contract_address: int) -> int:
         if contract_address not in self.cache.address_to_nonce:
-            self.cache._nonce_reads[contract_address] = self.state_reader.get_nonce_at(
+            self.cache._nonce_initial_values[contract_address] = self.state_reader.get_nonce_at(
                 contract_address=contract_address
             )
 
@@ -290,7 +316,7 @@ class CachedSyncState(SyncState):
     def get_storage_at(self, contract_address: int, key: int) -> int:
         address_key_pair = (contract_address, key)
         if address_key_pair not in self.cache.storage_view:
-            self.cache._storage_reads[address_key_pair] = self.state_reader.get_storage_at(
+            self.cache._storage_initial_values[address_key_pair] = self.state_reader.get_storage_at(
                 contract_address=contract_address, key=key
             )
 
@@ -346,3 +372,100 @@ class ContractStorageState:
     def write(self, address: int, value: int):
         self.accessed_keys.add(address)
         self.state.set_storage_at(contract_address=self.contract_address, key=address, value=value)
+
+
+class UpdatesTrackerState(SyncState):
+    """
+    An implementation of the SyncState API that wraps another SyncState object and contains a cache.
+    All requests are delegated to the wrapped SyncState, and caches are maintained for storage reads
+    and writes.
+
+    The goal of this implementation is to allow more precise and fair computation of the number of
+    storage-writes a single transaction preforms for the purposes of transaction fee calculation.
+    That is, if a given transaction writes to the same storage address multiple times, this should
+    be counted as a single storage-write. Additionally, if a transaction writes a value to storage
+    which is equal to the initial value previously contained in that address, then no change needs
+    to be done and this should not count as a storage-write.
+    """
+
+    def __init__(self, state: SyncState):
+        self.state = state
+        # Initial values read before any write operation (per storage cell).
+        self._storage_initial_values: Dict[StorageEntry, int] = {}
+        self._storage_writes: Dict[StorageEntry, int] = {}
+
+    def get_storage_at(self, contract_address: int, key: int) -> int:
+        # Delegate the request to the actual state anyway (even if the value is already cached).
+        return_value = self.state.get_storage_at(contract_address=contract_address, key=key)
+        address_key_pair = (contract_address, key)
+        if not self._was_accessed(address_key_pair=address_key_pair):
+            # First access (read or write) to this cell; cache initial value.
+            self._storage_initial_values[address_key_pair] = return_value
+
+        return return_value
+
+    def set_storage_at(self, contract_address: int, key: int, value: int):
+        """
+        This method writes to a storage cell and updates the cache accordingly. If this is the first
+        access to the cell (read or write), the method first reads the value at that cell and caches
+        it.
+
+        This read operation is necessary for fee calculation. Because if the transaction writes a
+        value to storage that is identical to the value previously held at that address, then no
+        change is made to that cell and it does not count as a storage-change in fee calculation.
+        """
+        address_key_pair = (contract_address, key)
+        if not self._was_accessed(address_key_pair=address_key_pair):
+            # First access (read or write) to this cell; cache initial value.
+            self._storage_initial_values[address_key_pair] = self.state.get_storage_at(
+                contract_address=contract_address, key=key
+            )
+
+        self._storage_writes[address_key_pair] = value
+        return self.state.set_storage_at(contract_address=contract_address, key=key, value=value)
+
+    @property
+    def block_info(self) -> BlockInfo:
+        return self.state.block_info
+
+    def update_block_info(self, block_info: BlockInfo):
+        return self.state.update_block_info(block_info=block_info)
+
+    def _get_raw_contract_class(self, class_hash: bytes) -> bytes:
+        return self.state._get_raw_contract_class(class_hash=class_hash)
+
+    def get_contract_class(self, class_hash: bytes) -> ContractClass:
+        return self.state.get_contract_class(class_hash=class_hash)
+
+    def get_class_hash_at(self, contract_address: int) -> bytes:
+        return self.state.get_class_hash_at(contract_address=contract_address)
+
+    def get_nonce_at(self, contract_address: int) -> int:
+        return self.state.get_nonce_at(contract_address=contract_address)
+
+    def set_contract_class(self, class_hash: bytes, contract_class: ContractClass):
+        return self.state.set_contract_class(class_hash=class_hash, contract_class=contract_class)
+
+    def deploy_contract(self, contract_address: int, class_hash: bytes):
+        return self.state.deploy_contract(contract_address=contract_address, class_hash=class_hash)
+
+    def increment_nonce(self, contract_address: int):
+        return self.state.increment_nonce(contract_address=contract_address)
+
+    def count_actual_storage_changes(self) -> Tuple[int, int]:
+        """
+        Returns the number of storage changes done through this state, and the number of modified
+        contracts, where a contract is considered as modified if one or more of its storage cells
+        has changed.
+        """
+        storage_updates = dict(self._storage_writes.items() - self._storage_initial_values.items())
+        modified_contracts = {
+            contract_address for (contract_address, _key) in storage_updates.keys()
+        }
+        return (len(modified_contracts), len(storage_updates))
+
+    def _was_accessed(self, address_key_pair: Tuple[int, int]) -> bool:
+        return (
+            address_key_pair in self._storage_initial_values
+            or address_key_pair in self._storage_writes
+        )

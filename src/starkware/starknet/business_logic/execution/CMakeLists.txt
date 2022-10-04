@@ -7,7 +7,7 @@ python_lib(starknet_transaction_execution_objects_lib
     LIBS
     cairo_vm_lib
     everest_definitions_lib
-    everest_internal_transaction_lib
+    everest_transaction_execution_objects_lib
     starknet_abi_lib
     starknet_business_logic_patricia_state_lib
     starknet_business_logic_state_lib

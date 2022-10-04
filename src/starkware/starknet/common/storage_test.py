@@ -43,8 +43,10 @@ def test_constants(program: Program):
     ],
 )
 def test_normalize_address(runner: CairoFunctionRunner, value):
-    runner.run("normalize_address", range_check_ptr=runner.range_check_builtin.base, addr=value)
-    range_check_ptr_end, result = runner.get_return_values(2)
-    assert range_check_ptr_end.segment_index == runner.range_check_builtin.base.segment_index
-
+    (_, (result,)) = runner.run(
+        "normalize_address",
+        range_check_ptr=runner.range_check_builtin.base,
+        addr=value,
+        verify_implicit_args_segment=True,
+    )
     assert result == value % ADDR_BOUND

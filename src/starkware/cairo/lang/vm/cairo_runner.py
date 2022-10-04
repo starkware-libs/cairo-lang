@@ -251,8 +251,10 @@ class CairoRunner:
         self.load_data(self.execution_base, stack)
 
     def initialize_vm(
-        self, hint_locals, static_locals: Optional[Dict[str, Any]] = None, vm_class=VirtualMachine
+        self, hint_locals, static_locals: Optional[Dict[str, Any]] = None, vm_class=None
     ):
+        if vm_class is None:
+            vm_class = VirtualMachine
         context = RunContext(
             pc=self.initial_pc,
             ap=self.initial_ap,

@@ -1,7 +1,7 @@
 import dataclasses
 from abc import ABC, abstractmethod
 from dataclasses import field
-from typing import List, Optional, TypeVar
+from typing import List, Optional
 
 from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
@@ -14,8 +14,6 @@ from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.services.api.contract_class import EntryPointType
 from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
-
-TExecuteEntryPoint = TypeVar("TExecuteEntryPoint", bound="ExecuteEntryPointBase")
 
 
 # Mypy has a problem with dataclasses that contain unimplemented abstract methods.

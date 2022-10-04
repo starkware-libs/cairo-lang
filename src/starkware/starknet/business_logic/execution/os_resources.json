@@ -27,7 +27,7 @@
                 "range_check_builtin": 16
             },
             "n_memory_holes": 0,
-            "n_steps": 796
+            "n_steps": 798
         },
         "emit_event": {
             "builtin_instance_counter": {},
@@ -106,12 +106,20 @@
                 "range_check_builtin": 57
             },
             "n_memory_holes": 0,
-            "n_steps": 2330
+            "n_steps": 2334
         },
         "DEPLOY": {
             "builtin_instance_counter": {},
             "n_memory_holes": 0,
             "n_steps": 0
+        },
+        "DEPLOY_ACCOUNT": {
+            "builtin_instance_counter": {
+                "pedersen_builtin": 23,
+                "range_check_builtin": 74
+            },
+            "n_memory_holes": 0,
+            "n_steps": 3096
         },
         "INVOKE_FUNCTION": {
             "builtin_instance_counter": {
@@ -119,7 +127,7 @@
                 "range_check_builtin": 70
             },
             "n_memory_holes": 0,
-            "n_steps": 2833
+            "n_steps": 2835
         },
         "L1_HANDLER": {
             "builtin_instance_counter": {

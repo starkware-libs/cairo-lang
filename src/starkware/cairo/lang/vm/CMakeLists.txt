@@ -43,6 +43,7 @@ python_lib(cairo_vm_lib
     vm_exceptions.py
 
     LIBS
+    cairo_all_builtins_lib
     cairo_compile_lib
     cairo_relocatable_lib
     cairo_vm_crypto_lib

@@ -1,4 +1,5 @@
 import dataclasses
+from abc import abstractmethod
 from dataclasses import field
 from enum import Enum, auto
 from typing import Any, ClassVar, Dict, Iterable, List, Optional, Tuple, Type, TypeVar, Union
@@ -8,6 +9,7 @@ import marshmallow.exceptions
 import marshmallow.fields as mfields
 import marshmallow.utils
 import marshmallow_dataclass
+from marshmallow.decorators import pre_load
 from marshmallow_oneofschema import OneOfSchema
 from typing_extensions import Literal
 from web3 import Web3
@@ -30,6 +32,7 @@ from starkware.starknet.business_logic.execution.objects import (
 from starkware.starknet.business_logic.transaction.objects import (
     InternalDeclare,
     InternalDeploy,
+    InternalDeployAccount,
     InternalInvokeFunction,
     InternalL1Handler,
     InternalTransaction,
@@ -224,8 +227,9 @@ class TransactionInBlockInfo(ValidatedResponseObject):
 
 @marshmallow_dataclass.dataclass(frozen=True)
 class TransactionSpecificInfo(ValidatedResponseObject):
+    transaction_hash: int = field(metadata=fields.transaction_hash_metadata)
     tx_type: ClassVar[TransactionType]
-    version: int = field(metadata=fields.tx_version_metadata)
+    version: int = field(metadata=fields.non_required_tx_version_metadata)
 
     @classmethod
     def from_internal(cls, internal_tx: InternalTransaction) -> "TransactionSpecificInfo":
@@ -233,9 +237,14 @@ class TransactionSpecificInfo(ValidatedResponseObject):
             return DeclareSpecificInfo.from_internal_declare(internal_tx=internal_tx)
         elif isinstance(internal_tx, InternalDeploy):
             return DeploySpecificInfo.from_internal_deploy(internal_tx=internal_tx)
+        elif isinstance(internal_tx, InternalDeployAccount):
+            return DeployAccountSpecificInfo.from_internal_deploy_account(internal_tx=internal_tx)
         elif isinstance(internal_tx, InternalInvokeFunction):
             if internal_tx.entry_point_type is EntryPointType.L1_HANDLER:
                 return L1HandlerSpecificInfo.from_internal_invoke(internal_tx=internal_tx)
+            assert (
+                internal_tx.entry_point_type is EntryPointType.EXTERNAL
+            ), "An InternalInvokeFunction transaction must have EXTERNAL entry point type."
             return InvokeSpecificInfo.from_internal_invoke(internal_tx=internal_tx)
         elif isinstance(internal_tx, InternalL1Handler):
             return L1HandlerSpecificInfo.from_internal_l1_handler(internal_tx=internal_tx)
@@ -243,16 +252,34 @@ class TransactionSpecificInfo(ValidatedResponseObject):
             raise NotImplementedError(f"No response object for {internal_tx}.")
 
 
+# Mypy has a problem with dataclasses that contain unimplemented abstract methods.
+# See https://github.com/python/mypy/issues/5374 for details on this problem.
+@marshmallow_dataclass.dataclass(frozen=True)  # type: ignore[misc]
+class AccountTransactionSpecificInfo(TransactionSpecificInfo):
+    max_fee: int = field(metadata=fields.fee_metadata)
+    signature: List[int] = field(metadata=fields.signature_as_hex_metadata)
+    nonce: Optional[int] = field(metadata=fields.optional_nonce_metadata)
+
+    @property
+    @abstractmethod
+    def account_contract_address(self) -> int:
+        """
+        The address of the account contract initiating this transaction.
+        """
+
+
 @marshmallow_dataclass.dataclass(frozen=True)
-class DeclareSpecificInfo(TransactionSpecificInfo):
+class DeclareSpecificInfo(AccountTransactionSpecificInfo):
     class_hash: int = field(metadata=fields.ClassHashIntField.metadata())
     sender_address: int = field(metadata=fields.contract_address_metadata)
+    # Repeat `nonce` to narrow its type to non-optional int.
     nonce: int = field(metadata=fields.nonce_metadata)
-    max_fee: int = field(metadata=fields.fee_metadata)
-    transaction_hash: int = field(metadata=fields.transaction_hash_metadata)
-    signature: List[int] = field(metadata=fields.signature_as_hex_metadata)
 
     tx_type: ClassVar[TransactionType] = TransactionType.DECLARE
+
+    @property
+    def account_contract_address(self) -> int:
+        return self.sender_address
 
     @classmethod
     def from_internal_declare(cls, internal_tx: InternalDeclare) -> "DeclareSpecificInfo":
@@ -273,7 +300,6 @@ class DeploySpecificInfo(TransactionSpecificInfo):
     contract_address_salt: int = field(metadata=fields.contract_address_salt_metadata)
     class_hash: Optional[int] = field(metadata=fields.OptionalClassHashIntField.metadata())
     constructor_calldata: List[int] = field(metadata=fields.call_data_as_hex_metadata)
-    transaction_hash: int = field(metadata=fields.transaction_hash_metadata)
 
     tx_type: ClassVar[TransactionType] = TransactionType.DEPLOY
 
@@ -290,24 +316,71 @@ class DeploySpecificInfo(TransactionSpecificInfo):
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
-class InvokeSpecificInfo(TransactionSpecificInfo):
+class DeployAccountSpecificInfo(AccountTransactionSpecificInfo):
     contract_address: int = field(metadata=fields.contract_address_metadata)
-    entry_point_selector: int = field(metadata=fields.entry_point_selector_metadata)
-    entry_point_type: EntryPointType
-    nonce: Optional[int] = field(metadata=fields.optional_nonce_metadata)
+    contract_address_salt: int = field(metadata=fields.contract_address_salt_metadata)
+    class_hash: int = field(metadata=fields.ClassHashIntField.metadata())
+    constructor_calldata: List[int] = field(metadata=fields.call_data_as_hex_metadata)
+    version: int = field(metadata=fields.tx_version_metadata)
+    # Repeat `nonce` to narrow its type to non-optional int.
+    nonce: int = field(metadata=fields.nonce_metadata)
+
+    tx_type: ClassVar[TransactionType] = TransactionType.DEPLOY_ACCOUNT
+
+    @property
+    def account_contract_address(self) -> int:
+        return self.contract_address
+
+    @classmethod
+    def from_internal_deploy_account(
+        cls, internal_tx: InternalDeployAccount
+    ) -> "DeployAccountSpecificInfo":
+        return cls(
+            contract_address=internal_tx.contract_address,
+            contract_address_salt=internal_tx.contract_address_salt,
+            class_hash=from_bytes(internal_tx.class_hash),
+            constructor_calldata=internal_tx.constructor_calldata,
+            nonce=internal_tx.nonce,
+            max_fee=internal_tx.max_fee,
+            version=internal_tx.version,
+            transaction_hash=internal_tx.hash_value,
+            signature=internal_tx.signature,
+        )
+
+
+@marshmallow_dataclass.dataclass(frozen=True)
+class InvokeSpecificInfo(AccountTransactionSpecificInfo):
+    contract_address: int = field(metadata=fields.contract_address_metadata)
+    entry_point_selector: Optional[int] = field(
+        metadata=fields.optional_entry_point_selector_metadata
+    )
     calldata: List[int] = field(metadata=fields.call_data_as_hex_metadata)
-    signature: List[int] = field(metadata=fields.signature_as_hex_metadata)
-    transaction_hash: int = field(metadata=fields.transaction_hash_metadata)
-    max_fee: int = field(metadata=fields.fee_metadata)
 
     tx_type: ClassVar[TransactionType] = TransactionType.INVOKE_FUNCTION
+
+    @property
+    def account_contract_address(self) -> int:
+        return self.contract_address
+
+    @pre_load
+    def remove_entry_point_type_and_make_selector_optional(
+        self, data: Dict[str, Any], many: bool, **kwargs
+    ) -> Dict[str, List[str]]:
+        if "entry_point_type" in data:
+            del data["entry_point_type"]
+
+        version = fields.TransactionVersionField.load_value(data["version"])
+        if version != 0:
+            data["entry_point_selector"] = None
+        return data
 
     @classmethod
     def from_internal_invoke(cls, internal_tx: InternalInvokeFunction) -> "InvokeSpecificInfo":
         return cls(
             contract_address=internal_tx.contract_address,
-            entry_point_selector=internal_tx.entry_point_selector,
-            entry_point_type=internal_tx.entry_point_type,
+            entry_point_selector=(
+                None if internal_tx.version != 0 else internal_tx.entry_point_selector
+            ),
             nonce=internal_tx.nonce,
             calldata=internal_tx.calldata,
             version=internal_tx.version,
@@ -321,9 +394,8 @@ class InvokeSpecificInfo(TransactionSpecificInfo):
 class L1HandlerSpecificInfo(TransactionSpecificInfo):
     contract_address: int = field(metadata=fields.contract_address_metadata)
     entry_point_selector: int = field(metadata=fields.entry_point_selector_metadata)
-    nonce: int = field(metadata=fields.nonce_metadata)
+    nonce: Optional[int] = field(metadata=fields.optional_nonce_metadata)
     calldata: List[int] = field(metadata=fields.call_data_as_hex_metadata)
-    transaction_hash: int = field(metadata=fields.transaction_hash_metadata)
 
     tx_type: ClassVar[TransactionType] = TransactionType.L1_HANDLER
 
@@ -346,7 +418,7 @@ class L1HandlerSpecificInfo(TransactionSpecificInfo):
         return cls(
             contract_address=internal_tx.contract_address,
             entry_point_selector=internal_tx.entry_point_selector,
-            nonce=internal_tx.nonce if internal_tx.nonce is not None else 0,
+            nonce=internal_tx.nonce,
             calldata=internal_tx.calldata,
             version=constants.L1_HANDLER_VERSION,
             transaction_hash=internal_tx.hash_value,
@@ -357,6 +429,7 @@ class TransactionSpecificInfoSchema(OneOfSchema):
     type_schemas: Dict[str, Type[marshmallow.Schema]] = {
         TransactionType.DECLARE.name: DeclareSpecificInfo.Schema,
         TransactionType.DEPLOY.name: DeploySpecificInfo.Schema,
+        TransactionType.DEPLOY_ACCOUNT.name: DeployAccountSpecificInfo.Schema,
         TransactionType.INVOKE_FUNCTION.name: InvokeSpecificInfo.Schema,
         TransactionType.L1_HANDLER.name: L1HandlerSpecificInfo.Schema,
     }
