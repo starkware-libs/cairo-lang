@@ -13,7 +13,6 @@ python_lib(starkware_storage_lib
 
     FILES
     __init__.py
-    batch_store.py
     dict_storage.py
     gated_storage.py
     imm_storage.py
@@ -54,11 +53,10 @@ python_lib(starkware_storage_test_utils_lib
 
 full_python_test(starkware_storage_test
     PREFIX starkware/storage
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
     TESTED_MODULES starkware/storage
 
     FILES
-    batch_store_test.py
     gated_storage_test.py
     storage_test.py
 

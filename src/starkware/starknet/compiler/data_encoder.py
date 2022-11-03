@@ -52,6 +52,19 @@ def struct_to_argument_info_list(struct_def: StructDefinition) -> List[ArgumentI
     return res
 
 
+def tuple_type_to_argument_info_list(cairo_type: TypeTuple) -> List[ArgumentInfo]:
+    """
+    Returns a list of ArgumentInfo entries that correspond to the tuple members.
+    """
+    res = []
+    for member in cairo_type.members:
+        assert member.location is not None
+        assert member.name is not None, "tuple_type_to_argument_info_list expects a named tuple."
+
+        res.append(ArgumentInfo(name=member.name, cairo_type=member.typ, location=member.location))
+    return res
+
+
 class DataEncodingProcessor:
     """
     An helper class for encoding and decoding list of typed arguments to a list of felts.
@@ -241,7 +254,7 @@ class DataDecoder(DataEncodingProcessor):
     def pre_process(self):
         self.add_code(
             f"""\
-let __{self.var_name}_ptr : felt* = cast({self.data_ptr}, felt*)
+let __{self.var_name}_ptr: felt* = cast({self.data_ptr}, felt*);
 """,
             parent_location=self.struct_parent_location,
         )
@@ -249,21 +262,21 @@ let __{self.var_name}_ptr : felt* = cast({self.data_ptr}, felt*)
     def post_process(self):
         self.add_code(
             f"""\
-let __{self.var_name}_actual_size =  __{self.var_name}_ptr - cast({self.data_ptr}, felt*)
+let __{self.var_name}_actual_size =  __{self.var_name}_ptr - cast({self.data_ptr}, felt*);
 """,
             parent_location=self.struct_parent_location,
         )
         self.add_code(
             f"""\
-assert {self.data_size} = __{self.var_name}_actual_size
+assert {self.data_size} = __{self.var_name}_actual_size;
 """,
             parent_location=self.struct_parent_location,
         )
 
     def process_felt(self, arg_info: ArgumentInfo):
         return f"""\
-let __{self.var_name}_arg_{arg_info.name} = [__{self.var_name}_ptr]
-let __{self.var_name}_ptr = __{self.var_name}_ptr + 1
+let __{self.var_name}_arg_{arg_info.name} = [__{self.var_name}_ptr];
+let __{self.var_name}_ptr = __{self.var_name}_ptr + 1;
 """
 
     def process_array(self, arg_info: ArgumentInfo, elm_size: int):
@@ -271,21 +284,21 @@ let __{self.var_name}_ptr = __{self.var_name}_ptr + 1
         var = f"__{self.var_name}_arg_{arg_info.name}"
         len_var = f"__{self.var_name}_arg_{arg_info.name}_len"
         return f"""\
-# Check that the length is non-negative.
-assert [range_check_ptr] = {len_var}
-let range_check_ptr = range_check_ptr + 1
-# Create the reference.
-let {var} = cast(__{self.var_name}_ptr, {type_str})
-# Use 'tempvar' instead of 'let' to avoid repeating this computation for the
-# following arguments.
-tempvar __{self.var_name}_ptr = __{self.var_name}_ptr + {len_var} * {elm_size}
+// Check that the length is non-negative.
+assert [range_check_ptr] = {len_var};
+let range_check_ptr = range_check_ptr + 1;
+// Create the reference.
+let {var} = cast(__{self.var_name}_ptr, {type_str});
+// Use 'tempvar' instead of 'let' to avoid repeating this computation for the
+// following arguments.
+tempvar __{self.var_name}_ptr = __{self.var_name}_ptr + {len_var} * {elm_size};
 """
 
     def process_felts_object(self, arg_info: ArgumentInfo, size: int):
         return f"""\
 let __{self.var_name}_arg_{arg_info.name} = [
-    cast(__{self.var_name}_ptr, {TypePointer(pointee=arg_info.cairo_type).format()})]
-let __{self.var_name}_ptr = __{self.var_name}_ptr + {size}
+    cast(__{self.var_name}_ptr, {TypePointer(pointee=arg_info.cairo_type).format()})];
+let __{self.var_name}_ptr = __{self.var_name}_ptr + {size};
 """
 
 
@@ -351,40 +364,40 @@ class DataEncoder(DataEncodingProcessor):
 
     def process_felt(self, arg_info: ArgumentInfo):
         return f"""\
-assert [__{self.var_name}_ptr] = {self.arg_name_func(arg_info)}
-let __{self.var_name}_ptr = __{self.var_name}_ptr + 1
+assert [__{self.var_name}_ptr] = {self.arg_name_func(arg_info)};
+let __{self.var_name}_ptr = __{self.var_name}_ptr + 1;
 """
 
     def process_array(self, arg_info: ArgumentInfo, elm_size: int):
         len_var = f"{self.arg_name_func(arg_info)}_len"
         self.known_ap_change = False
         return f"""\
-# Check that the length is non-negative.
-assert [range_check_ptr] = {len_var}
-# Store the updated range_check_ptr as a local variable to keep it available after
-# the memcpy.
-local range_check_ptr = range_check_ptr + 1
-# Keep a reference to __{self.var_name}_ptr.
-let __{self.var_name}_ptr_copy = __{self.var_name}_ptr
-# Store the updated __{self.var_name}_ptr as a local variable to keep it available after
-# the memcpy.
-local __{self.var_name}_ptr : felt* = __{self.var_name}_ptr + {len_var} * {elm_size}
+// Check that the length is non-negative.
+assert [range_check_ptr] = {len_var};
+// Store the updated range_check_ptr as a local variable to keep it available after
+// the memcpy.
+local range_check_ptr = range_check_ptr + 1;
+// Keep a reference to __{self.var_name}_ptr.
+let __{self.var_name}_ptr_copy = __{self.var_name}_ptr;
+// Store the updated __{self.var_name}_ptr as a local variable to keep it available after
+// the memcpy.
+local __{self.var_name}_ptr: felt* = __{self.var_name}_ptr + {len_var} * {elm_size};
 memcpy(
     dst=__{self.var_name}_ptr_copy,
     src={self.arg_name_func(arg_info)},
-    len={len_var} * {elm_size})
+    len={len_var} * {elm_size});
 """
 
     def process_felts_object(self, arg_info: ArgumentInfo, size: int):
         body = "\n".join(
-            f"assert [__{self.var_name}_ptr + {i}] = [__{self.var_name}_tmp + {i}]"
+            f"assert [__{self.var_name}_ptr + {i}] = [__{self.var_name}_tmp + {i}];"
             for i in range(size)
         )
         return f"""\
-# Create a reference to {self.arg_name_func(arg_info)} as felt*.
-let __{self.var_name}_tmp : felt* = cast(&{self.arg_name_func(arg_info)}, felt*)
+// Create a reference to {self.arg_name_func(arg_info)} as felt*.
+let __{self.var_name}_tmp: felt* = cast(&{self.arg_name_func(arg_info)}, felt*);
 {body}
-let __{self.var_name}_ptr = __{self.var_name}_ptr + {size}
+let __{self.var_name}_ptr = __{self.var_name}_ptr + {size};
 """
 
 

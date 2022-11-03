@@ -1,9 +1,10 @@
 import dataclasses
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
-from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypeFelt
+from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypeFelt, TypeTuple
 from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeElementFunction,
+    CodeElementImport,
     CodeElementReturnValueReference,
     CodeElementScoped,
     CodeElementWith,
@@ -19,14 +20,10 @@ from starkware.cairo.lang.compiler.ast.notes import Notes
 from starkware.cairo.lang.compiler.ast.types import TypedIdentifier
 from starkware.cairo.lang.compiler.ast.visitor import Visitor
 from starkware.cairo.lang.compiler.error_handling import Location
-from starkware.cairo.lang.compiler.identifier_definition import (
-    AliasDefinition,
-    MemberDefinition,
-    StructDefinition,
-)
+from starkware.cairo.lang.compiler.identifier_definition import AliasDefinition, MemberDefinition
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.instruction import Register
-from starkware.cairo.lang.compiler.parser import ParserContext
+from starkware.cairo.lang.compiler.parser import ParserContext, parse_type
 from starkware.cairo.lang.compiler.preprocessor.identifier_aware_visitor import (
     IdentifierAwareVisitor,
 )
@@ -44,13 +41,15 @@ from starkware.starknet.compiler.data_encoder import (
     EncodingType,
     decode_data,
     struct_to_argument_info_list,
+    tuple_type_to_argument_info_list,
 )
 from starkware.starknet.definitions import constants
 from starkware.starknet.public.abi import DEFAULT_ENTRY_POINT_NAME, DEFAULT_L1_ENTRY_POINT_NAME
-from starkware.starknet.services.api.contract_definition import SUPPORTED_BUILTINS
+from starkware.starknet.services.api.contract_class import SUPPORTED_BUILTINS
 
 RAW_INPUT_DECORATOR = "raw_input"
 RAW_OUTPUT_DECORATOR = "raw_output"
+RAW_OUTPUT_RETURNS = parse_type("(retdata_size: felt, retdata: felt*)")
 
 EXTERNAL_DECORATOR = "external"
 L1_HANDLER_DECORATOR = "l1_handler"
@@ -74,24 +73,27 @@ BUILTIN_PTR_TO_BUILTIN = {
 
 def parse_entry_point_decorators(
     elm: CodeElementFunction,
-) -> Tuple[Optional[ExprIdentifier], bool, bool]:
+) -> Tuple[Optional[ExprIdentifier], bool, bool, List[ExprIdentifier]]:
     """
     If the function has one of the external decorators, returns
-      (external_decorator, is_raw_input, is_raw_output).
+      (external_decorator, is_raw_input, is_raw_output, other_decorators).
     Otherwise, returns None.
     """
     is_raw_input = False
     is_raw_output = False
     external_decorator = None
+    other_decorators = []
     for decorator in elm.decorators:
         if decorator.name in ENTRY_POINT_DECORATORS and external_decorator is None:
             external_decorator = decorator
-        if decorator.name == RAW_INPUT_DECORATOR:
+        elif decorator.name == RAW_INPUT_DECORATOR:
             is_raw_input = True
-        if decorator.name == RAW_OUTPUT_DECORATOR:
+        elif decorator.name == RAW_OUTPUT_DECORATOR:
             is_raw_output = True
+        else:
+            other_decorators.append(decorator)
 
-    return external_decorator, is_raw_input, is_raw_output
+    return external_decorator, is_raw_input, is_raw_output, other_decorators
 
 
 def get_abi_entry_type(external_decorator_name: str) -> str:
@@ -105,13 +107,25 @@ def get_abi_entry_type(external_decorator_name: str) -> str:
         raise NotImplementedError(f"Unsupported decorator {external_decorator_name}")
 
 
+@dataclasses.dataclass
+class ExternalWrapperResources:
+    # A list of pairs (path, name) of entities (directly) imported by the main module.
+    # External functions from other modules will be wrapped only if they appear in this set.
+    directly_imported_names: Set[Tuple[str, str]] = dataclasses.field(default_factory=set)
+
+
 class PreExternalWrapperVisitor(Visitor):
     """
     Scans the external wrappers before ExternalWrapperVisitor, runs some validations and collects
     the used builtins.
     """
 
-    def __init__(self, builtins: Optional[List[str]]):
+    def __init__(
+        self,
+        builtins: Optional[List[str]],
+        main_scope: ScopedName,
+        external_wrapper_resources: ExternalWrapperResources,
+    ):
         super().__init__()
         # The list of builtins in the %builtins directive, or None if the %builtins directive is
         # missing.
@@ -124,15 +138,29 @@ class PreExternalWrapperVisitor(Visitor):
         # The constructor definition. Only one constructor is allowed.
         self.constructor: Optional[CodeElementFunction] = None
 
+        self.external_wrapper_resources = external_wrapper_resources
+        self.main_scope = main_scope
+
     def _visit_default(self, obj):
         return obj
+
+    def visit_CodeElementImport(self, elm: CodeElementImport):
+        if self.current_scope != self.main_scope:
+            return elm
+
+        # This is an import statement that appears in the main module,
+        # add the imported items to directly_imported_names.
+        directly_imported_names = self.external_wrapper_resources.directly_imported_names
+        for item in elm.import_items:
+            directly_imported_names.add((elm.path.name, item.orig_identifier.name))
+        return elm
 
     def visit_CodeElementFunction(self, elm: CodeElementFunction):
         is_default_entry_point = elm.name in [DEFAULT_ENTRY_POINT_NAME, DEFAULT_L1_ENTRY_POINT_NAME]
         if is_default_entry_point:
             self.validate_default_entry_point_signature(elm)
 
-        external_decorator, is_raw_input, is_raw_output = parse_entry_point_decorators(elm=elm)
+        external_decorator, is_raw_input, is_raw_output, _ = parse_entry_point_decorators(elm=elm)
         if external_decorator is None:
             return super().visit_CodeElementFunction(elm=elm)
 
@@ -292,16 +320,11 @@ class PreExternalWrapperVisitor(Visitor):
             )
 
     def validate_raw_output_signature(self, elm: CodeElementFunction):
-        expected_returns = [
-            TypedIdentifier(identifier=ExprIdentifier("retdata_size"), expr_type=TypeFelt()),
-            TypedIdentifier(identifier=ExprIdentifier("retdata"), expr_type=FELT_STAR),
-        ]
-
         returns = elm.returns
-        if returns is None or returns.identifiers != expected_returns:
+        if returns != RAW_OUTPUT_RETURNS:
             raise PreprocessorError(
                 f"@{RAW_OUTPUT_DECORATOR} requires the following return values:\n"
-                "(retdata_size: felt, retdata: felt*).",
+                f"{RAW_OUTPUT_RETURNS.format()}.",
                 location=elm.identifier.location if returns is None else returns.location,
             )
 
@@ -314,7 +337,11 @@ class PreExternalWrapperVisitor(Visitor):
 
 class PreExternalWrapperStage(Stage):
     def run(self, context: PassManagerContext):
-        visitor = PreExternalWrapperVisitor(builtins=context.builtins)
+        visitor = PreExternalWrapperVisitor(
+            builtins=context.builtins,
+            main_scope=context.main_scope,
+            external_wrapper_resources=context.get_resource(ExternalWrapperResources),
+        )
         for module in context.modules:
             visitor.visit(module)
         if context.builtins is None:
@@ -327,8 +354,17 @@ class ExternalWrapperVisitor(IdentifierAwareVisitor):
     that converts between the StarkNet contract ABI and the Cairo calling convention.
     """
 
-    def __init__(self, builtins: List[str], identifiers: Optional[IdentifierManager] = None):
+    def __init__(
+        self,
+        builtins: List[str],
+        external_wrapper_resources: ExternalWrapperResources,
+        main_scope: ScopedName,
+        identifiers: Optional[IdentifierManager] = None,
+    ):
         super().__init__(identifiers=identifiers)
+
+        self.external_wrapper_resources = external_wrapper_resources
+        self.main_scope = main_scope
 
         # A mapping from name to offset in the os_context that is passed to the contract.
         self.os_context: Dict[str, int] = self.get_os_context(builtins=builtins)
@@ -466,7 +502,7 @@ class ExternalWrapperVisitor(IdentifierAwareVisitor):
                 path=f"autogen/starknet/external/{elm.name}",
                 code=(
                     f"let {ptr_name} = [cast({os_context_ptr.format()} + {index}, "
-                    f"{cairo_type.format()}*)]\n"
+                    f"{cairo_type.format()}*)];\n"
                 ),
                 parser_context=ParserContext(
                     parent_location=(
@@ -479,7 +515,7 @@ class ExternalWrapperVisitor(IdentifierAwareVisitor):
 
             assert index == len(return_args_exprs), "Unexpected index."
 
-            return_args_decl.append(f"{ptr_name} : {cairo_type.format()}")
+            return_args_decl.append(f"{ptr_name}: {cairo_type.format()}")
             return_args_exprs.append(ptr_name)
 
         arg_struct_def = self.get_struct_definition(
@@ -517,31 +553,37 @@ class ExternalWrapperVisitor(IdentifierAwareVisitor):
                 ScopedName.from_string(f"{elm.name}.{func_alias_name}")
                 + CodeElementFunction.RETURN_SCOPE
             )
-            ret_struct_def = self.get_struct_definition(
+            ret_tuple_type = self.get_type_definition(
                 name=ret_struct_name, location=func_location
-            )
+            ).cairo_type
+            if not isinstance(ret_tuple_type, TypeTuple):
+                raise PreprocessorError(
+                    "Only tuple types are supported as the return type of external functions.",
+                    location=ret_tuple_type.location,
+                )
 
             encode_return_func, known_ap_change = self.process_retdata(
                 func_name=elm.name,
-                struct_def=ret_struct_def,
+                ret_tuple_type=ret_tuple_type,
                 location=func_location,
             )
 
         # Prepare code for calling the original function.
         call_code = f"""\
-let ret_struct = {func_alias_name}{{{implicit_arguments}}}({call_args.format()})
+let ret_value = {func_alias_name}{{{implicit_arguments}}}({call_args.format()});
 """
+
         if encode_return_func is None:
             if is_raw_output:
                 call_code += """\
-let retdata_size = ret_struct.retdata_size
-let retdata = ret_struct.retdata
+let retdata_size = ret_value.retdata_size;
+let retdata = ret_value.retdata;
 """
             else:
                 call_code += """\
-%{ memory[ap] = segments.add() %}        # Allocate memory for return value.
-tempvar retdata : felt*
-let retdata_size = 0
+%{ memory[ap] = segments.add() %}        // Allocate memory for return value.
+tempvar retdata: felt*;
+let retdata_size = 0;
 """
         else:
             if not known_ap_change:
@@ -558,7 +600,7 @@ let retdata_size = 0
                     location=func_location,
                 )
             call_code += f"""\
-let (range_check_ptr, retdata_size, retdata) = {elm.name}_encode_return(ret_struct, range_check_ptr)
+let (range_check_ptr, retdata_size, retdata) = {elm.name}_encode_return(ret_value, range_check_ptr);
 """
 
         call_code_elements = autogen_parse_code_block(
@@ -579,11 +621,11 @@ let (range_check_ptr, retdata_size, retdata) = {elm.name}_encode_return(ret_stru
         code_elements += decode_code_elements
         code_elements += call_code_elements
 
-        return_args_decl += ["size", "retdata : felt*"]
+        return_args_decl += ["size: felt", "retdata: felt*"]
         return_args_exprs += ["retdata_size", "retdata"]
 
         code = f"""\
-return ({",".join(return_args_exprs)})
+return ({",".join(return_args_exprs)});
 """
 
         code_elements += autogen_parse_code_block(
@@ -598,9 +640,9 @@ return ({",".join(return_args_exprs)})
         # Generate the function skeleton code.
         return_str = ", ".join(return_args_decl)
         code = f"""\
-func {elm.name}() -> ({return_str}):
-    {"alloc_locals" if using_locals else ""}
-end
+func {elm.name}() -> ({return_str}) {{
+    {"alloc_locals;" if using_locals else ""}
+}}
 """
 
         func_code_block = autogen_parse_code_block(
@@ -637,7 +679,7 @@ end
     def process_retdata(
         self,
         func_name: str,
-        struct_def: StructDefinition,
+        ret_tuple_type: TypeTuple,
         location: Location,
     ) -> Tuple[Optional[CodeElementFunction], bool]:
         """
@@ -646,20 +688,26 @@ end
         2. Whether the ap change is known.
         """
 
-        if len(struct_def.members) == 0:
+        if len(ret_tuple_type.members) == 0:
             return None, True
 
+        for item in ret_tuple_type.members:
+            if item.name is None:
+                raise PreprocessorError(
+                    "A return value in an external function must be named.", location=item.location
+                )
+
         data_encoder = DataEncoder(
-            arg_name_func=lambda arg_info: f"ret_struct.{arg_info.name}",
+            arg_name_func=lambda arg_info: f"ret_value.{arg_info.name}",
             encoding_type=EncodingType.RETURN,
             has_range_check_builtin="range_check_ptr" in self.os_context,
             identifiers=self.identifiers,
         )
-        data_encoder.run(arguments=struct_to_argument_info_list(struct_def))
+        data_encoder.run(arguments=tuple_type_to_argument_info_list(ret_tuple_type))
 
         func_elm = self.prepare_return_function(
             func_name=func_name,
-            struct_def=struct_def,
+            ret_tuple_type=ret_tuple_type,
             encoding_code_elements=data_encoder.code_elements,
             location=location,
         )
@@ -672,24 +720,24 @@ end
     def prepare_return_function(
         self,
         func_name: str,
-        struct_def: StructDefinition,
+        ret_tuple_type: TypeTuple,
         encoding_code_elements: List[CommentedCodeElement],
         location: Location,
     ) -> CodeElementFunction:
         code = f"""\
-func {func_name}_encode_return(ret_struct : {struct_def.full_name}, range_check_ptr) -> (
-        range_check_ptr, data_len : felt, data : felt*):
+func {func_name}_encode_return(ret_value: {ret_tuple_type.format()}, range_check_ptr) -> (
+        range_check_ptr: felt, data_len: felt, data: felt*) {{
     %{{ memory[ap] = segments.add() %}}
-    alloc_locals
-    local __return_value_ptr_start : felt*
-    let __return_value_ptr = __return_value_ptr_start
-    with range_check_ptr:
-    end
+    alloc_locals;
+    local __return_value_ptr_start: felt*;
+    let __return_value_ptr = __return_value_ptr_start;
+    with range_check_ptr {{
+    }}
     return (
         range_check_ptr=range_check_ptr,
         data_len=__return_value_ptr - __return_value_ptr_start,
-        data=__return_value_ptr_start)
-end
+        data=__return_value_ptr_start);
+}}
 """
 
         code_elements = autogen_parse_code_block(
@@ -711,10 +759,24 @@ end
         return func_elm
 
     def visit_CodeElementFunction(self, elm: CodeElementFunction):
-        external_decorator, is_raw_input, is_raw_output = parse_entry_point_decorators(elm=elm)
+        (
+            external_decorator,
+            is_raw_input,
+            is_raw_output,
+            other_decorators,
+        ) = parse_entry_point_decorators(elm=elm)
         if external_decorator is None:
             return super().visit_CodeElementFunction(elm=elm)
 
+        directly_imported_names = self.external_wrapper_resources.directly_imported_names
+        is_directly_imported = (str(self.current_scope), elm.name) in directly_imported_names
+        is_in_main_module = self.current_scope == self.main_scope
+        if not (is_in_main_module or is_directly_imported):
+            # Remove the external-related decorators, so that the function will not appear in the
+            # ABI.
+            return super().visit_CodeElementFunction(
+                elm=dataclasses.replace(elm, decorators=other_decorators)
+            )
         location = elm.identifier.location
 
         # Retrieve the canonical name of the function before switching scopes.

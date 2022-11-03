@@ -41,10 +41,10 @@ def dummy_location():
 def identifiers_for_testing() -> IdentifierManager:
     return preprocess_str(
         """
-struct MyStruct:
-    member x : felt
-    member y : felt
-end
+struct MyStruct {
+    x: felt,
+    y: felt,
+}
 """,
         prime=DEFAULT_PRIME,
     ).identifiers
@@ -87,29 +87,29 @@ def test_decode_data_flow():
     assert (
         "".join(code_element.format(100) + "\n" for code_element in code_elements)
         == """\
-let __calldata_ptr : felt* = cast(data_ptr, felt*)
+let __calldata_ptr: felt* = cast(data_ptr, felt*);
 
-let __calldata_arg_a_len = [__calldata_ptr]
-let __calldata_ptr = __calldata_ptr + 1
+let __calldata_arg_a_len = [__calldata_ptr];
+let __calldata_ptr = __calldata_ptr + 1;
 
-# Check that the length is non-negative.
-assert [range_check_ptr] = __calldata_arg_a_len
-let range_check_ptr = range_check_ptr + 1
-# Create the reference.
-let __calldata_arg_a = cast(__calldata_ptr, (test_scope.MyStruct, (felt, felt))*)
-# Use 'tempvar' instead of 'let' to avoid repeating this computation for the
-# following arguments.
-tempvar __calldata_ptr = __calldata_ptr + __calldata_arg_a_len * 4
+// Check that the length is non-negative.
+assert [range_check_ptr] = __calldata_arg_a_len;
+let range_check_ptr = range_check_ptr + 1;
+// Create the reference.
+let __calldata_arg_a = cast(__calldata_ptr, (test_scope.MyStruct, (felt, felt))*);
+// Use 'tempvar' instead of 'let' to avoid repeating this computation for the
+// following arguments.
+tempvar __calldata_ptr = __calldata_ptr + __calldata_arg_a_len * 4;
 
-let __calldata_arg_b = [__calldata_ptr]
-let __calldata_ptr = __calldata_ptr + 1
+let __calldata_arg_b = [__calldata_ptr];
+let __calldata_ptr = __calldata_ptr + 1;
 
 let __calldata_arg_c = [
-    cast(__calldata_ptr, (felt, (felt, felt))*)]
-let __calldata_ptr = __calldata_ptr + 3
+    cast(__calldata_ptr, (felt, (felt, felt))*)];
+let __calldata_ptr = __calldata_ptr + 3;
 
-let __calldata_actual_size = __calldata_ptr - cast(data_ptr, felt*)
-assert data_size = __calldata_actual_size
+let __calldata_actual_size = __calldata_ptr - cast(data_ptr, felt*);
+assert data_size = __calldata_actual_size;
 """.replace(
             "\n\n", "\n"
         )
@@ -130,8 +130,8 @@ assert data_size = __calldata_actual_size
     code_elements, expr = run_decode_data(arguments, encoding_type=EncodingType.RETURN)
     assert "".join(code_element.format(100) + "\n" for code_element in code_elements).startswith(
         """\
-let __return_value_ptr : felt* = cast(data_ptr, felt*)
-let __return_value_arg_a_len = [__return_value_ptr]
+let __return_value_ptr: felt* = cast(data_ptr, felt*);
+let __return_value_arg_a_len = [__return_value_ptr];
 """
     )
     assert code_elements[0].code_elm.expr.location.parent_location == (
@@ -205,30 +205,30 @@ def test_encode_data_for_return():
     assert (
         "".join(code_element.format(100) + "\n" for code_element in code_elements)
         == """\
-assert [__return_value_ptr] = x.a
-let __return_value_ptr = __return_value_ptr + 1
+assert [__return_value_ptr] = x.a;
+let __return_value_ptr = __return_value_ptr + 1;
 
-assert [__return_value_ptr] = x.b_len
-let __return_value_ptr = __return_value_ptr + 1
+assert [__return_value_ptr] = x.b_len;
+let __return_value_ptr = __return_value_ptr + 1;
 
-# Check that the length is non-negative.
-assert [range_check_ptr] = x.b_len
-# Store the updated range_check_ptr as a local variable to keep it available after
-# the memcpy.
-local range_check_ptr = range_check_ptr + 1
-# Keep a reference to __return_value_ptr.
-let __return_value_ptr_copy = __return_value_ptr
-# Store the updated __return_value_ptr as a local variable to keep it available after
-# the memcpy.
-local __return_value_ptr : felt* = __return_value_ptr + x.b_len * 3
-memcpy(dst=__return_value_ptr_copy, src=x.b, len=x.b_len * 3)
+// Check that the length is non-negative.
+assert [range_check_ptr] = x.b_len;
+// Store the updated range_check_ptr as a local variable to keep it available after
+// the memcpy.
+local range_check_ptr = range_check_ptr + 1;
+// Keep a reference to __return_value_ptr.
+let __return_value_ptr_copy = __return_value_ptr;
+// Store the updated __return_value_ptr as a local variable to keep it available after
+// the memcpy.
+local __return_value_ptr: felt* = __return_value_ptr + x.b_len * 3;
+memcpy(dst=__return_value_ptr_copy, src=x.b, len=x.b_len * 3);
 
-# Create a reference to x.c as felt*.
-let __return_value_tmp : felt* = cast(&x.c, felt*)
-assert [__return_value_ptr + 0] = [__return_value_tmp + 0]
-assert [__return_value_ptr + 1] = [__return_value_tmp + 1]
-assert [__return_value_ptr + 2] = [__return_value_tmp + 2]
-let __return_value_ptr = __return_value_ptr + 3
+// Create a reference to x.c as felt*.
+let __return_value_tmp: felt* = cast(&x.c, felt*);
+assert [__return_value_ptr + 0] = [__return_value_tmp + 0];
+assert [__return_value_ptr + 1] = [__return_value_tmp + 1];
+assert [__return_value_ptr + 2] = [__return_value_tmp + 2];
+let __return_value_ptr = __return_value_ptr + 3;
 """.replace(
             "\n\n", "\n"
         )

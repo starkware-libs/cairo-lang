@@ -4,7 +4,7 @@
     "patterns": [
         {
             "name": "meta.control.if",
-            "begin": "\\b(if)\\s+(.+)\\s*\\:",
+            "begin": "\\b(if).*\\(",
             "beginCaptures": {
                 "1": {
                     "name": "keyword.control.if"
@@ -14,7 +14,7 @@
                 }
             },
             "contentName": "source.cairo",
-            "end": "\\bend\\b",
+            "end": "\\}",
             "patterns": [
                 {
                     "include": "source.cairo"
@@ -28,7 +28,7 @@
         },
         {
             "name": "meta.control.with",
-            "begin": "\\b(with)\\s+(.+)\\s*\\:",
+            "begin": "\\b(with)\\s+(.+)\\s*\\{",
             "beginCaptures": {
                 "1": {
                     "name": "keyword.control.with"
@@ -38,7 +38,7 @@
                 }
             },
             "contentName": "source.cairo",
-            "end": "\\bend\\b",
+            "end": "\\}",
             "patterns": [
                 {
                     "include": "source.cairo"
@@ -52,7 +52,7 @@
         },
         {
             "name": "meta.control.with_attr",
-            "begin": "\\b(with_attr)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*[(:]",
+            "begin": "\\b(with_attr)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*[({]",
             "beginCaptures": {
                 "1": {
                     "name": "keyword.control.with_attr"
@@ -62,7 +62,7 @@
                 }
             },
             "contentName": "source.cairo",
-            "end": "\\bend\\b",
+            "end": "\\}",
             "patterns": [
                 {
                     "include": "source.cairo"
@@ -88,7 +88,7 @@
         },
         {
             "name": "keyword.other.meta",
-            "match": "\\b(const|let|local|tempvar|felt|as|from|import|static_assert|return|assert|member|cast|alloc_locals|with|with_attr|nondet|dw|codeoffset|new|using)\\b"
+            "match": "\\b(const|let|local|tempvar|felt|as|from|import|static_assert|return|assert|cast|alloc_locals|with|with_attr|nondet|dw|codeoffset|new|using|and)\\b"
         },
         {
             "name": "markup.italic",
@@ -96,11 +96,11 @@
         },
         {
             "name": "comment.line.sharp",
-            "match": "#[^\n]*\n"
+            "match": "//[^\n]*\n"
         },
         {
             "name": "entity.name.function",
-            "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*:"
+            "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*:\\s*$"
         },
         {
             "name": "meta.function.cairo",
@@ -114,7 +114,7 @@
                 }
             },
             "contentName": "source.cairo",
-            "end": "\\bend\\b",
+            "end": "\\}",
             "patterns": [
                 {
                     "include": "source.cairo"
@@ -128,7 +128,7 @@
         },
         {
             "name": "meta.function.cairo",
-            "begin": "\\b(struct|namespace)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*:",
+            "begin": "\\b(struct|namespace)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\{",
             "beginCaptures": {
                 "1": {
                     "name": "storage.type.function.cairo"
@@ -138,7 +138,7 @@
                 }
             },
             "contentName": "source.cairo",
-            "end": "\\bend\\b",
+            "end": "\\}",
             "patterns": [
                 {
                     "include": "source.cairo"
@@ -174,30 +174,6 @@
                 }
             },
             "end": "%}",
-            "endCaptures": {
-                "0": {
-                    "name": "punctuation.section.embedded.end.python"
-                },
-                "1": {
-                    "name": "source.python"
-                }
-            },
-            "name": "meta.embedded.block.python",
-            "contentName": "source.python",
-            "patterns": [
-                {
-                    "include": "source.python"
-                }
-            ]
-        },
-        {
-            "begin": "%\\[",
-            "beginCaptures": {
-                "0": {
-                    "name": "punctuation.section.embedded.begin.python"
-                }
-            },
-            "end": "%\\]",
             "endCaptures": {
                 "0": {
                     "name": "punctuation.section.embedded.end.python"

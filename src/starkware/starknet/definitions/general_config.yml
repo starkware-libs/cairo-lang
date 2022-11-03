@@ -2,11 +2,13 @@ cairo_resource_fee_weights:
   n_steps: 1.0
 contract_storage_commitment_tree_height: 251
 event_commitment_tree_height: 64
-min_gas_price: 100000000000
 global_state_commitment_tree_height: 251
 invoke_tx_max_n_steps: 1000000
-sequencer_address: '0x37b2cd6baaa515f520383bee7b7094f892f4c770695fc329a8973e841a971ae'
+min_gas_price: 100000000000
+sequencer_address: '0x388ca486b82e20cc81965d056b4cdcaacdffe0cf08e20ed8ba10ea97a487004'
 starknet_os_config:
-  fee_token_address: '0x20abcf49dad3e9813d65bf1b8d54c5a0c9e6049a3027bd8c2ab315475c0a5c1'
+  chain_id: TESTNET
+  fee_token_address: '0x25c725399cf6de6baa0be8f1adbd93c11d34424e47e7e73f01f6557e5667d92'
 tx_commitment_tree_height: 64
-tx_version: 0
+tx_version: 1
+validate_max_n_steps: 1000000

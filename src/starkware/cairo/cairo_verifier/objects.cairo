@@ -1,7 +1,4 @@
-struct CairoVerifierOutput:
-    member program_hash : felt
-    member output_hash : felt
-end
-
-struct StarkProof:
-end
+struct CairoVerifierOutput {
+    program_hash: felt,
+    output_hash: felt,
+}

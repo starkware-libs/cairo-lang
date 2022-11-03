@@ -13,7 +13,7 @@ python_lib(starknet_security_lib
 
 full_python_test(starknet_hints_latest_whitelist_test
     PREFIX starkware/starknet/security
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
     TESTED_MODULES starkware/starknet/security
 
     FILES
@@ -26,7 +26,9 @@ full_python_test(starknet_hints_latest_whitelist_test
     cairo_common_lib
     cairo_constants_lib
     starknet_common_lib
+    starknet_hints_whitelist_lib
     starknet_security_lib
+    starkware_python_utils_lib
     pip_pytest
 )
 
@@ -42,10 +44,13 @@ python_lib(starknet_hints_whitelist_lib
     FILES
     hints_whitelist.py
     whitelists/0.6.0.json
+    whitelists/0.8.2.json
+    whitelists/384_bit_prime_field.json
     whitelists/cairo_blake2s.json
     whitelists/cairo_keccak.json
     whitelists/cairo_secp.json
     whitelists/cairo_sha256.json
+    whitelists/cairo_sha256_arbitrary_input_length.json
     whitelists/ec_bigint.json
     whitelists/ec_recover.json
     whitelists/latest.json

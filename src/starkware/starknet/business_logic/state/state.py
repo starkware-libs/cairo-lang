@@ -1,466 +1,471 @@
-import copy
-import dataclasses
-import logging
-import typing
-from collections import ChainMap, defaultdict
-from dataclasses import field
-from typing import Dict, MutableMapping, Optional, Set, Tuple
+import asyncio
+import contextlib
+from collections import ChainMap
+from typing import Dict, Iterator, List, Mapping, Set, Tuple
 
-import marshmallow_dataclass
-
-from services.everest.business_logic.state import (
-    CarriedStateBase,
-    SharedStateBase,
-    StateSelectorBase,
+from starkware.python.utils import execute_coroutine_threadsafe
+from starkware.starknet.business_logic.state.state_api import (
+    State,
+    StateReader,
+    SyncState,
+    SyncStateReader,
 )
-from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
-from starkware.python.utils import gather_in_chunks, safe_zip
-from starkware.starknet.business_logic.state.objects import ContractCarriedState, ContractState
-from starkware.starknet.definitions import fields
+from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
+from starkware.starknet.definitions import constants
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
-from starkware.starknet.definitions.general_config import (
-    DEFAULT_GAS_PRICE,
-    DEFAULT_SEQUENCER_ADDRESS,
-    StarknetGeneralConfig,
-)
-from starkware.starknet.services.api.contract_definition import ContractDefinition
-from starkware.starknet.storage.starknet_storage import StorageLeaf
-from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
-from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
-from starkware.starkware_utils.config_base import Config
-from starkware.starkware_utils.error_handling import stark_assert_eq, stark_assert_le
-from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
-from starkware.storage.storage import FactFetchingContext
+from starkware.starknet.services.api.contract_class import ContractClass
+from starkware.starkware_utils.error_handling import stark_assert
 
-logger = logging.getLogger(__name__)
-state_objects_logger = logging.getLogger(f"{__name__}:state_objects_logger")
-
-ContractCarriedStateMapping = MutableMapping[int, ContractCarriedState]
-ContractCarriedStateChainMapping = typing.ChainMap[int, ContractCarriedState]
+StorageEntry = Tuple[int, int]  # (contract_address, key).
 
 
-@marshmallow_dataclass.dataclass(frozen=True)
-class BlockInfo(ValidatedMarshmallowDataclass):
-    # The sequence number of the last block created.
-    block_number: int = field(metadata=fields.block_number_metadata)
-
-    # Timestamp of the beginning of the last block creation attempt.
-    block_timestamp: int = field(metadata=fields.timestamp_metadata)
-
-    # L1 gas price (in Wei) measured at the beginning of the last block creation attempt.
-    gas_price: int = field(metadata=fields.gas_price_metadata)
-
-    # The sequencer address of this block.
-    sequencer_address: Optional[int] = field(metadata=fields.optional_sequencer_address_metadata)
-
-    @classmethod
-    def empty(cls, sequencer_address: Optional[int]) -> "BlockInfo":
-        """
-        Returns an empty BlockInfo object; i.e., the one before the first in the chain.
-        """
-        return cls(
-            block_number=-1, block_timestamp=0, gas_price=0, sequencer_address=sequencer_address
-        )
-
-    @classmethod
-    def create_for_testing(cls, block_number: int, block_timestamp: int) -> "BlockInfo":
-        """
-        Returns a BlockInfo object with default gas_price.
-        """
-        return cls(
-            block_number=block_number,
-            block_timestamp=block_timestamp,
-            gas_price=DEFAULT_GAS_PRICE,
-            sequencer_address=DEFAULT_SEQUENCER_ADDRESS,
-        )
-
-    def validate_legal_progress(self, next_block_info: "BlockInfo"):
-        """
-        Validates that next_block_info is a legal progress of self.
-        """
-        # Check that the block number increases by 1.
-        stark_assert_eq(
-            next_block_info.block_number,
-            self.block_number + 1,
-            code=StarknetErrorCode.INVALID_BLOCK_NUMBER,
-            message="Block number must increase by 1.",
-        )
-
-        # Check that block timestamp in not decreasing.
-        stark_assert_le(
-            self.block_timestamp,
-            next_block_info.block_timestamp,
-            code=StarknetErrorCode.INVALID_BLOCK_TIMESTAMP,
-            message="Block timestamp must not decrease.",
-        )
-
-
-@dataclasses.dataclass(frozen=True)
-class StateSelector(StateSelectorBase):
+class StateSyncifier(SyncState):
     """
-    A class that contains a set of Cairo contract addresses (sub-commitment tree root IDs)
-    affected by one/many transaction(s).
-    Used for fetching those sub-trees from storage before transaction(s) processing.
+    Acts as a synchronous variant of a given (asynchronous) State object.
+    Should be used only from within the given loop.
     """
 
-    contract_addresses: Set[int]
+    def __init__(self, async_state: State, loop: asyncio.AbstractEventLoop):
+        # State to sychronize.
+        self.async_state = async_state
 
-    @classmethod
-    def empty(cls) -> "StateSelector":
-        return cls(contract_addresses=set())
+        # Current running event loop; used for running async tasks in a synchronous context.
+        self.loop = loop
 
-    def __and__(self, other: "StateSelector") -> "StateSelector":
-        return StateSelector(self.contract_addresses & other.contract_addresses)
+    @property
+    def block_info(self) -> BlockInfo:
+        return self.async_state.block_info
 
-    def __or__(self, other: "StateSelector") -> "StateSelector":
-        return StateSelector(self.contract_addresses | other.contract_addresses)
+    def update_block_info(self, block_info: BlockInfo):
+        self.async_state.block_info = block_info
 
-    def __sub__(self, other: "StateSelector") -> "StateSelector":
-        return StateSelector(self.contract_addresses - other.contract_addresses)
+    def get_contract_class(self, class_hash: bytes) -> ContractClass:
+        return execute_coroutine_threadsafe(
+            coroutine=self.async_state.get_contract_class(class_hash=class_hash), loop=self.loop
+        )
 
-    def __le__(self, other: "StateSelector") -> bool:
-        return self.contract_addresses <= other.contract_addresses
+    def _get_raw_contract_class(self, class_hash: bytes) -> bytes:
+        return execute_coroutine_threadsafe(
+            coroutine=self.async_state._get_raw_contract_class(class_hash=class_hash),
+            loop=self.loop,
+        )
+
+    def get_class_hash_at(self, contract_address: int) -> bytes:
+        return execute_coroutine_threadsafe(
+            coroutine=self.async_state.get_class_hash_at(contract_address=contract_address),
+            loop=self.loop,
+        )
+
+    def get_nonce_at(self, contract_address: int) -> int:
+        return execute_coroutine_threadsafe(
+            coroutine=self.async_state.get_nonce_at(contract_address=contract_address),
+            loop=self.loop,
+        )
+
+    def get_storage_at(self, contract_address: int, key: int) -> int:
+        return execute_coroutine_threadsafe(
+            coroutine=self.async_state.get_storage_at(contract_address=contract_address, key=key),
+            loop=self.loop,
+        )
+
+    def set_contract_class(self, class_hash: bytes, contract_class: ContractClass):
+        return execute_coroutine_threadsafe(
+            coroutine=self.async_state.set_contract_class(
+                class_hash=class_hash, contract_class=contract_class
+            ),
+            loop=self.loop,
+        )
+
+    def deploy_contract(self, contract_address: int, class_hash: bytes):
+        return execute_coroutine_threadsafe(
+            coroutine=self.async_state.deploy_contract(
+                class_hash=class_hash, contract_address=contract_address
+            ),
+            loop=self.loop,
+        )
+
+    def increment_nonce(self, contract_address: int):
+        return execute_coroutine_threadsafe(
+            coroutine=self.async_state.increment_nonce(contract_address=contract_address),
+            loop=self.loop,
+        )
+
+    def set_storage_at(self, contract_address: int, key: int, value: int):
+        return execute_coroutine_threadsafe(
+            coroutine=self.async_state.set_storage_at(
+                contract_address=contract_address, key=key, value=value
+            ),
+            loop=self.loop,
+        )
 
 
-class CarriedState(CarriedStateBase):
+class StateCache:
     """
-    A state containing a mapping from contract addresses to their states and the accumulated
-    modifications to the contract storage across transactions.
-
-    This will be a sub-state of the total state (SharedState). It is carried and maintained by
-    the Batcher, as each pending transaction is applied to it during the attempt to include it in
-    a block. After a block is created the carried state is applied to the shared state.
+    Holds read and write requests.
     """
 
-    def __init__(
+    def __init__(self):
+        self.contract_classes: Dict[bytes, ContractClass] = {}
+        self.raw_contract_classes: Dict[bytes, bytes] = {}
+
+        # Reader's cached information; initial values, read before any write operation (per cell).
+        self._class_hash_initial_values: Dict[int, bytes] = {}
+        self._nonce_initial_values: Dict[int, int] = {}
+        self._storage_initial_values: Dict[StorageEntry, int] = {}
+
+        # Writer's cached information.
+        self._class_hash_writes: Dict[int, bytes] = {}
+        self._nonce_writes: Dict[int, int] = {}
+        self._storage_writes: Dict[StorageEntry, int] = {}
+
+        # State view.
+
+        # Mappings from contract address to different attributes.
+        self.address_to_class_hash: Mapping[int, bytes] = ChainMap(
+            self._class_hash_writes, self._class_hash_initial_values
+        )
+        self.address_to_nonce: Mapping[int, int] = ChainMap(
+            self._nonce_writes, self._nonce_initial_values
+        )
+        # Mapping from (contract_address, key) to a value in the contract's storage.
+        self.storage_view: Mapping[StorageEntry, int] = ChainMap(
+            self._storage_writes, self._storage_initial_values
+        )
+
+    def update_writes_from_other(self, other: "StateCache"):
+        self.contract_classes.update(other.contract_classes)
+        self._class_hash_writes.update(other._class_hash_writes)
+        self._nonce_writes.update(other._nonce_writes)
+        self._storage_writes.update(other._storage_writes)
+
+    def update_writes(
         self,
-        parent_state: Optional["CarriedState"],
-        shared_state: "SharedState",
-        ffc: FactFetchingContext,
-        contract_definitions: typing.ChainMap[bytes, ContractDefinition],
-        contract_states: ContractCarriedStateChainMapping,
-        cairo_usage: ExecutionResources,
-        modified_contracts: typing.ChainMap[int, None],
-        block_info: BlockInfo,
-        syscall_counter: typing.ChainMap[str, int],
+        contract_classes: Mapping[bytes, ContractClass],
+        address_to_class_hash: Mapping[int, bytes],
+        address_to_nonce: Mapping[int, int],
+        storage_updates: Mapping[Tuple[int, int], int],
     ):
-        """
-        Private constructor.
-        Should only be called by _create_from_parent_state and create_unfilled class methods.
-        """
-        super().__init__(parent_state=parent_state)
+        self.contract_classes.update(contract_classes)
+        self._class_hash_writes.update(address_to_class_hash)
+        self._nonce_writes.update(address_to_nonce)
+        self._storage_writes.update(storage_updates)
 
-        # The last committed state; the one this carried state was created from.
-        # Used for dynamic retrieval of facts during transaction execution.
-        self.shared_state = shared_state
+    def get_accessed_contract_addresses(self) -> Set[int]:
+        return {
+            *self.address_to_class_hash.keys(),
+            *self.address_to_nonce.keys(),
+            *[address for address, _key in self.storage_view.keys()],
+        }
 
-        # A mapping from contract definition hash to contract definition.
-        self.contract_definitions = contract_definitions
+    def get_accessed_class_hashes(self) -> Set[bytes]:
+        return set(self.contract_classes.keys())
 
-        # A mapping from contract address to its carried state.
-        self.contract_states = contract_states
 
-        # The accumulated Cairo usage.
-        self.cairo_usage = cairo_usage
+class CachedState(State):
+    """
+    A cached implementation of the State API. See State's documentation.
+    """
 
-        # Carried state fetches commitment tree leaves from storage during transaction processing.
-        self.ffc = ffc
+    def __init__(self, block_info: BlockInfo, state_reader: StateReader):
+        self.block_info = block_info
+        self.state_reader = state_reader
+        self.cache = StateCache()
 
-        # Addresses of contracts whose storage has changed.
-        self.modified_contracts = modified_contracts
-
+    def update_block_info(self, block_info: BlockInfo):
         self.block_info = block_info
 
-        # A mapping from system call to the cumulative times it was invoked.
-        self.syscall_counter = syscall_counter
-
-    @classmethod
-    def _create_from_parent_state(cls, parent_state: "CarriedState") -> "CarriedState":
-        """
-        Instantiates a CarriedState object that acts as proxy to given parent_state.
-        """
-        carried_state = cls(
-            parent_state=parent_state,
-            shared_state=parent_state.shared_state,
-            ffc=parent_state.ffc,
-            contract_definitions=parent_state.contract_definitions.new_child(),
-            contract_states=parent_state.contract_states.new_child(),
-            cairo_usage=parent_state.cairo_usage,
-            modified_contracts=(parent_state.modified_contracts.new_child()),
-            block_info=parent_state.block_info,
-            syscall_counter=parent_state.syscall_counter.new_child(),
-        )
-
-        return carried_state
-
-    @classmethod
-    def create_unfilled(
-        cls, shared_state: "SharedState", ffc: FactFetchingContext
-    ) -> "CarriedState":
-        """
-        Creates a carried state based on the given shared state, where the fields related to the
-        commitment leaves (e.g., contract states) are kept unfilled.
-        """
-        return cls(
-            parent_state=None,
-            ffc=ffc,
-            shared_state=shared_state,
-            contract_definitions=ChainMap(),
-            contract_states=ChainMap(),
-            cairo_usage=ExecutionResources.empty(),
-            modified_contracts=ChainMap(),
-            block_info=shared_state.block_info,
-            syscall_counter=ChainMap(),
-        )
-
-    @classmethod
-    async def empty_for_testing(
-        cls,
-        shared_state: Optional["SharedState"],
-        ffc: FactFetchingContext,
-        general_config: StarknetGeneralConfig,
-    ) -> "CarriedState":
-        """
-        Creates an empty carried state allowing accessing all possible contract addresses (by
-        using defaultdict). This constructor should only be used in tests.
-        """
-        empty_contract_state = await ContractState.empty(
-            storage_commitment_tree_height=general_config.contract_storage_commitment_tree_height,
-            ffc=ffc,
-        )
-
-        if shared_state is None:
-            shared_state = await SharedState.empty(ffc=ffc, general_config=general_config)
-
-        return cls.from_contracts(
-            ffc=ffc,
-            contract_definitions={},
-            shared_state=shared_state,
-            contract_states=defaultdict(
-                lambda: ContractCarriedState(
-                    state=copy.deepcopy(empty_contract_state), storage_updates={}
-                )
-            ),
-        )
-
-    @classmethod
-    def from_contracts(
-        cls,
-        shared_state: "SharedState",
-        ffc: FactFetchingContext,
-        contract_definitions: MutableMapping[bytes, ContractDefinition],
-        contract_states: ContractCarriedStateMapping,
-    ) -> "CarriedState":
-        """
-        Returns a carried state object, containing the given contracts.
-        Other members are initialized with the empty object values.
-        This is a utility function and should not be used in the regular flow.
-        """
-        return cls(
-            parent_state=None,
-            ffc=ffc,
-            shared_state=shared_state,
-            contract_definitions=ChainMap(contract_definitions),
-            contract_states=ChainMap(contract_states),
-            cairo_usage=ExecutionResources.empty(),
-            modified_contracts=ChainMap(),
-            block_info=shared_state.block_info,
-            syscall_counter=ChainMap(),
-        )
-
-    @property
-    def state_selector(self) -> StateSelector:
-        """
-        Returns the state selector of this CarriedState containing the contract addresses that
-        serve as the commitment tree leaf IDs of the full StarkNet state commitment tree.
-        """
-        return StateSelector(contract_addresses=set(self.contract_states.keys()))
-
-    def select(self, state_selector: StateSelectorBase) -> "CarriedState":
-        raise NotImplementedError("select() is not implemented on StarkNet CarriedState.")
-
-    def _fill_missing(self, other: "CarriedState"):
-        """
-        Enriches state with the missing information from another CarriedState instance.
-        This is a private method, only to be called from public fill_missing method.
-        """
-        self.contract_states.update(other.contract_states)
-        self.contract_definitions.update(other.contract_definitions)
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, CarriedState):
-            return NotImplemented
-
-        return self.contract_states == other.contract_states and self.block_info == other.block_info
-
-    def update_contract_storage(self, contract_address: int, modifications: Dict[int, StorageLeaf]):
-        """
-        Applies the given storage modifications to the given contract storage.
-        """
-        contract_carried_state = self.contract_states[contract_address]
-        self.contract_states[contract_address] = dataclasses.replace(
-            contract_carried_state,
-            storage_updates={
-                **contract_carried_state.storage_updates,
-                **modifications,
-            },
-        )
-
-    def subtract_merkle_facts(self, previous_state: "CarriedState") -> "CarriedState":
-        """
-        Subtraction of contract states from current carried state to previous one is unnecessary,
-        since it is very unlikely contract state will not change throughout a block.
-        """
-        raise NotImplementedError
-
-    @property
-    def chain_maps(self) -> Tuple[typing.ChainMap, ...]:
-        return (
-            self.contract_states,
-            self.contract_definitions,
-            self.modified_contracts,
-            self.syscall_counter,
-        )
-
-    def _validate_references_of_chain_maps(self):
-        assert self.parent_state is not None
-        for child_chain_map, parent_chain_map in zip(self.chain_maps, self.parent_state.chain_maps):
-            # Verify that the child's parent maps are all references to its (expected) parent maps.
-            assert all(
-                child_map is parent_map
-                # safe_zip also verifies that the lists are of the same length.
-                for child_map, parent_map in safe_zip(
-                    child_chain_map.parents.maps, parent_chain_map.maps
-                )
-            ), "Child ChainMap does not hold a reference to its parent."
-
-    def _apply(self):
-        """
-        Applies state updates to self.parent_state.
-        This method should not be directly used; use copy_and_apply instead.
-        """
-        assert self.parent_state is not None
-        self._validate_references_of_chain_maps()
-
-        # Apply state updates.
-        self.parent_state.cairo_usage = self.cairo_usage
-        for child_chain_map, parent_chain_map in zip(self.chain_maps, self.parent_state.chain_maps):
-            parent_chain_map.update(child_chain_map.maps[0])
-
-        # Update additional entire block-related information.
-        self.parent_state.block_info = self.block_info
-
-
-@marshmallow_dataclass.dataclass(frozen=True)
-class SharedState(SharedStateBase):
-    """
-    A class representing a combination of the onchain and offchain state.
-    """
-
-    contract_states: PatriciaTree
-    block_info: BlockInfo
-
-    @classmethod
-    async def empty(cls, ffc: FactFetchingContext, general_config: Config) -> "SharedState":
-        """
-        Returns an empty state. This is called before creating very first block.
-        """
-        # Downcast arguments to application-specific types.
-        assert isinstance(general_config, StarknetGeneralConfig)
-
-        empty_contract_state = await ContractState.empty(
-            storage_commitment_tree_height=general_config.contract_storage_commitment_tree_height,
-            ffc=ffc,
-        )
-        empty_contract_states = await PatriciaTree.empty_tree(
-            ffc=ffc,
-            height=general_config.global_state_commitment_tree_height,
-            leaf_fact=empty_contract_state,
-        )
-
-        return cls(
-            contract_states=empty_contract_states,
-            block_info=BlockInfo.empty(sequencer_address=general_config.sequencer_address),
-        )
-
-    def to_carried_state(self, ffc: FactFetchingContext) -> CarriedState:
-        """
-        Returns an unfilled CarriedState. Its contract states should be filled using
-        get_filled_carried_state() method.
-        """
-        return CarriedState.create_unfilled(ffc=ffc, shared_state=self)
-
-    async def get_filled_carried_state(
-        self, ffc: FactFetchingContext, state_selector: StateSelectorBase
-    ) -> CarriedState:
-        # Downcast arguments to application-specific types.
-        assert isinstance(state_selector, StateSelector)
-
-        # Fetch required data from DB, according to the state selector.
-        contract_states = await self.contract_states.get_leaves(
-            ffc=ffc, indices=state_selector.contract_addresses, fact_cls=ContractState
-        )
-        contract_definitions = await ContractState.fetch_contract_definitions(
-            contract_states=contract_states.values(), ffc=ffc
-        )
-
-        # Fill carried_state with fetched data.
-        contract_carried_states = {
-            contract_address: ContractCarriedState(state=contract_state, storage_updates={})
-            for contract_address, contract_state in contract_states.items()
-        }
-
-        return CarriedState.from_contracts(
-            ffc=ffc,
-            shared_state=self,
-            contract_definitions=contract_definitions,
-            contract_states=contract_carried_states,
-        )
-
-    async def apply_state_updates(
-        self,
-        ffc: FactFetchingContext,
-        previous_carried_state: CarriedStateBase,
-        current_carried_state: CarriedStateBase,
-        facts: Optional[BinaryFactDict] = None,
-    ) -> "SharedState":
-        # Note that previous_carried_state is part of the API of
-        # SharedStateBase.apply_state_updates().
-
-        # Downcast arguments to application-specific types.
-        assert isinstance(previous_carried_state, CarriedState)
-        assert isinstance(current_carried_state, CarriedState)
-
-        # Verify the carried states originated from this shared state.
-        assert previous_carried_state.shared_state is self
-        assert current_carried_state.shared_state is self
-
-        state_objects_logger.debug(
-            f"Updating state from previous carried state: {previous_carried_state} "
-            f"to current carried state: {current_carried_state}"
-        )
-
-        # Update contract storage roots with cached changes.
-        updated_contract_states = await gather_in_chunks(
-            awaitables=(
-                contract_state.update(ffc=ffc)
-                for contract_state in current_carried_state.contract_states.values()
+    async def get_contract_class(self, class_hash: bytes) -> ContractClass:
+        if class_hash not in self.cache.contract_classes:
+            self.cache.contract_classes[class_hash] = await self.state_reader.get_contract_class(
+                class_hash=class_hash
             )
-        )
-        contract_states: typing.ChainMap[int, ContractCarriedState] = ChainMap(
-            dict(safe_zip(current_carried_state.contract_states.keys(), updated_contract_states))
+
+        return self.cache.contract_classes[class_hash]
+
+    async def _get_raw_contract_class(self, class_hash: bytes) -> bytes:
+        if class_hash not in self.cache.raw_contract_classes:
+            raw_contract_class = await self.state_reader._get_raw_contract_class(
+                class_hash=class_hash
+            )
+            self.cache.raw_contract_classes[class_hash] = raw_contract_class
+
+        return self.cache.raw_contract_classes[class_hash]
+
+    async def get_class_hash_at(self, contract_address: int) -> bytes:
+        if contract_address not in self.cache.address_to_class_hash:
+            class_hash = await self.state_reader.get_class_hash_at(
+                contract_address=contract_address
+            )
+            self.cache._class_hash_initial_values[contract_address] = class_hash
+
+        return self.cache.address_to_class_hash[contract_address]
+
+    async def get_nonce_at(self, contract_address: int) -> int:
+        if contract_address not in self.cache.address_to_nonce:
+            self.cache._nonce_initial_values[
+                contract_address
+            ] = await self.state_reader.get_nonce_at(contract_address=contract_address)
+
+        return self.cache.address_to_nonce[contract_address]
+
+    async def get_storage_at(self, contract_address: int, key: int) -> int:
+        address_key_pair = (contract_address, key)
+        if address_key_pair not in self.cache.storage_view:
+            self.cache._storage_initial_values[
+                address_key_pair
+            ] = await self.state_reader.get_storage_at(contract_address=contract_address, key=key)
+
+        return self.cache.storage_view[address_key_pair]
+
+    async def set_contract_class(self, class_hash: bytes, contract_class: ContractClass):
+        self.cache.contract_classes[class_hash] = contract_class
+
+    async def deploy_contract(self, contract_address: int, class_hash: bytes):
+        stark_assert(
+            contract_address != 0,
+            code=StarknetErrorCode.OUT_OF_RANGE_ADDRESS,
+            message=f"Cannot deploy contract at address 0.",
         )
 
-        # Apply changes.
-        contract_state_modifications = {
-            contract_address: contract_carried_state.state
-            for contract_address, contract_carried_state in (contract_states.items())
+        current_class_hash = await self.get_class_hash_at(contract_address=contract_address)
+        stark_assert(
+            current_class_hash == constants.UNINITIALIZED_CLASS_HASH,
+            code=StarknetErrorCode.CONTRACT_ADDRESS_UNAVAILABLE,
+            message=f"Requested contract address {contract_address} is unavailable for deployment.",
+        )
+
+        self.cache._class_hash_writes[contract_address] = class_hash
+
+    async def increment_nonce(self, contract_address: int):
+        current_nonce = await self.get_nonce_at(contract_address=contract_address)
+        self.cache._nonce_writes[contract_address] = current_nonce + 1
+
+    async def set_storage_at(self, contract_address: int, key: int, value: int):
+        self.cache._storage_writes[(contract_address, key)] = value
+
+    def _copy(self) -> "CachedState":
+        # Note that the reader's cache may be updated by this copy's read requests.
+        return CachedState(block_info=self.block_info, state_reader=self)
+
+    def _apply(self, parent: "CachedState"):
+        """
+        Apply updates to parent state.
+        """
+        assert self.state_reader is parent, "Current reader expected to be the parent state."
+
+        parent.block_info = self.block_info
+        parent.cache.update_writes_from_other(other=self.cache)
+
+    @contextlib.contextmanager
+    def copy_and_apply(self: "CachedState") -> Iterator["CachedState"]:
+        copied_state = self._copy()
+        # The exit logic will not be called in case an exception is raised inside the context.
+        yield copied_state
+        copied_state._apply(parent=self)  # Apply to self.
+
+
+class CachedSyncState(SyncState):
+    """
+    A cached implementation of the SyncState API. See CachedState's documentation.
+    """
+
+    def __init__(self, block_info: BlockInfo, state_reader: SyncStateReader):
+        self._block_info = block_info
+        self.state_reader = state_reader
+        self.cache = StateCache()
+
+    @property
+    def block_info(self) -> BlockInfo:
+        return self._block_info
+
+    def update_block_info(self, block_info: BlockInfo):
+        self._block_info = block_info
+
+    def get_contract_class(self, class_hash: bytes) -> ContractClass:
+        if class_hash not in self.cache.contract_classes:
+            self.cache.contract_classes[class_hash] = self.state_reader.get_contract_class(
+                class_hash=class_hash
+            )
+
+        return self.cache.contract_classes[class_hash]
+
+    def _get_raw_contract_class(self, class_hash: bytes) -> bytes:
+        if class_hash not in self.cache.raw_contract_classes:
+            self.cache.raw_contract_classes[class_hash] = self.state_reader._get_raw_contract_class(
+                class_hash=class_hash
+            )
+
+        return self.cache.raw_contract_classes[class_hash]
+
+    def get_class_hash_at(self, contract_address: int) -> bytes:
+        if contract_address not in self.cache.address_to_class_hash:
+            self.cache._class_hash_initial_values[
+                contract_address
+            ] = self.state_reader.get_class_hash_at(contract_address=contract_address)
+
+        return self.cache.address_to_class_hash[contract_address]
+
+    def get_nonce_at(self, contract_address: int) -> int:
+        if contract_address not in self.cache.address_to_nonce:
+            self.cache._nonce_initial_values[contract_address] = self.state_reader.get_nonce_at(
+                contract_address=contract_address
+            )
+
+        return self.cache.address_to_nonce[contract_address]
+
+    def get_storage_at(self, contract_address: int, key: int) -> int:
+        address_key_pair = (contract_address, key)
+        if address_key_pair not in self.cache.storage_view:
+            self.cache._storage_initial_values[address_key_pair] = self.state_reader.get_storage_at(
+                contract_address=contract_address, key=key
+            )
+
+        return self.cache.storage_view[address_key_pair]
+
+    def set_contract_class(self, class_hash: bytes, contract_class: ContractClass):
+        self.cache.contract_classes[class_hash] = contract_class
+
+    def deploy_contract(self, contract_address: int, class_hash: bytes):
+        stark_assert(
+            class_hash != constants.UNINITIALIZED_CLASS_HASH,
+            code=StarknetErrorCode.OUT_OF_RANGE_ADDRESS,
+            message=f"Cannot deploy contract address 0.",
+        )
+
+        current_class_hash = self.get_class_hash_at(contract_address=contract_address)
+        stark_assert(
+            current_class_hash == constants.UNINITIALIZED_CLASS_HASH,
+            code=StarknetErrorCode.CONTRACT_ADDRESS_UNAVAILABLE,
+            message=f"Requested contract address {contract_address} is unavailable for deployment.",
+        )
+
+        self.cache._class_hash_writes[contract_address] = class_hash
+
+    def increment_nonce(self, contract_address: int):
+        current_nonce = self.get_nonce_at(contract_address=contract_address)
+        self.cache._nonce_writes[contract_address] = current_nonce + 1
+
+    def set_storage_at(self, contract_address: int, key: int, value: int):
+        self.cache._storage_writes[(contract_address, key)] = value
+
+
+class ContractStorageState:
+    """
+    Defines the API for accessing StarkNet single contract storage state.
+    """
+
+    def __init__(self, state: SyncState, contract_address: int):
+        self.state = state
+        self.contract_address = contract_address
+
+        # Maintain all read request values in chronological order.
+        self.read_values: List[int] = []
+        self.accessed_keys: Set[int] = set()
+
+    def read(self, address: int) -> int:
+        self.accessed_keys.add(address)
+        value = self.state.get_storage_at(contract_address=self.contract_address, key=address)
+        self.read_values.append(value)
+
+        return value
+
+    def write(self, address: int, value: int):
+        self.accessed_keys.add(address)
+        self.state.set_storage_at(contract_address=self.contract_address, key=address, value=value)
+
+
+class UpdatesTrackerState(SyncState):
+    """
+    An implementation of the SyncState API that wraps another SyncState object and contains a cache.
+    All requests are delegated to the wrapped SyncState, and caches are maintained for storage reads
+    and writes.
+
+    The goal of this implementation is to allow more precise and fair computation of the number of
+    storage-writes a single transaction preforms for the purposes of transaction fee calculation.
+    That is, if a given transaction writes to the same storage address multiple times, this should
+    be counted as a single storage-write. Additionally, if a transaction writes a value to storage
+    which is equal to the initial value previously contained in that address, then no change needs
+    to be done and this should not count as a storage-write.
+    """
+
+    def __init__(self, state: SyncState):
+        self.state = state
+        # Initial values read before any write operation (per storage cell).
+        self._storage_initial_values: Dict[StorageEntry, int] = {}
+        self._storage_writes: Dict[StorageEntry, int] = {}
+
+    def get_storage_at(self, contract_address: int, key: int) -> int:
+        # Delegate the request to the actual state anyway (even if the value is already cached).
+        return_value = self.state.get_storage_at(contract_address=contract_address, key=key)
+        address_key_pair = (contract_address, key)
+        if not self._was_accessed(address_key_pair=address_key_pair):
+            # First access (read or write) to this cell; cache initial value.
+            self._storage_initial_values[address_key_pair] = return_value
+
+        return return_value
+
+    def set_storage_at(self, contract_address: int, key: int, value: int):
+        """
+        This method writes to a storage cell and updates the cache accordingly. If this is the first
+        access to the cell (read or write), the method first reads the value at that cell and caches
+        it.
+
+        This read operation is necessary for fee calculation. Because if the transaction writes a
+        value to storage that is identical to the value previously held at that address, then no
+        change is made to that cell and it does not count as a storage-change in fee calculation.
+        """
+        address_key_pair = (contract_address, key)
+        if not self._was_accessed(address_key_pair=address_key_pair):
+            # First access (read or write) to this cell; cache initial value.
+            self._storage_initial_values[address_key_pair] = self.state.get_storage_at(
+                contract_address=contract_address, key=key
+            )
+
+        self._storage_writes[address_key_pair] = value
+        return self.state.set_storage_at(contract_address=contract_address, key=key, value=value)
+
+    @property
+    def block_info(self) -> BlockInfo:
+        return self.state.block_info
+
+    def update_block_info(self, block_info: BlockInfo):
+        return self.state.update_block_info(block_info=block_info)
+
+    def _get_raw_contract_class(self, class_hash: bytes) -> bytes:
+        return self.state._get_raw_contract_class(class_hash=class_hash)
+
+    def get_contract_class(self, class_hash: bytes) -> ContractClass:
+        return self.state.get_contract_class(class_hash=class_hash)
+
+    def get_class_hash_at(self, contract_address: int) -> bytes:
+        return self.state.get_class_hash_at(contract_address=contract_address)
+
+    def get_nonce_at(self, contract_address: int) -> int:
+        return self.state.get_nonce_at(contract_address=contract_address)
+
+    def set_contract_class(self, class_hash: bytes, contract_class: ContractClass):
+        return self.state.set_contract_class(class_hash=class_hash, contract_class=contract_class)
+
+    def deploy_contract(self, contract_address: int, class_hash: bytes):
+        return self.state.deploy_contract(contract_address=contract_address, class_hash=class_hash)
+
+    def increment_nonce(self, contract_address: int):
+        return self.state.increment_nonce(contract_address=contract_address)
+
+    def count_actual_storage_changes(self) -> Tuple[int, int]:
+        """
+        Returns the number of storage changes done through this state, and the number of modified
+        contracts, where a contract is considered as modified if one or more of its storage cells
+        has changed.
+        """
+        storage_updates = dict(self._storage_writes.items() - self._storage_initial_values.items())
+        modified_contracts = {
+            contract_address for (contract_address, _key) in storage_updates.keys()
         }
-        updated_global_contract_root = await self.contract_states.update(
-            ffc=ffc, modifications=list(contract_state_modifications.items())
-        )
+        return (len(modified_contracts), len(storage_updates))
 
-        return SharedState(
-            contract_states=updated_global_contract_root,
-            block_info=current_carried_state.block_info,
+    def _was_accessed(self, address_key_pair: Tuple[int, int]) -> bool:
+        return (
+            address_key_pair in self._storage_initial_values
+            or address_key_pair in self._storage_writes
         )

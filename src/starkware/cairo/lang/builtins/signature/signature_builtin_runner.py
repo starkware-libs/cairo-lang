@@ -90,6 +90,9 @@ class SignatureBuiltinRunner(SimpleBuiltinRunner):
             addr, RelocatableValue
         ), f"Expected memory address to be relocatable value. Found: {addr}."
         assert (
+            addr.segment_index == self.base.segment_index
+        ), f"Signature hint must point to the signature builtin segment, not {addr}."
+        assert (
             addr.offset % CELLS_PER_SIGNATURE == 0
         ), f"Signature hint must point to the public key cell, not {addr}."
         self.signatures[addr] = signature
@@ -102,7 +105,13 @@ class SignatureBuiltinRunner(SimpleBuiltinRunner):
 
     def extend_additional_data(self, data, relocate_callback, data_is_trusted=True):
         for addr, signature in data:
-            self.signatures[relocate_callback(RelocatableValue.from_tuple(addr))] = signature
+            relocated_addr = relocate_callback(RelocatableValue.from_tuple(addr))
+            assert relocated_addr.segment_index == self.base.segment_index, (
+                f"Error while loading {self.name} builtin additional data: "
+                "Signature hint must point to the signature builtin segment. "
+                f"Found: {addr} (after relocation: {relocated_addr})."
+            )
+            self.signatures[relocated_addr] = signature
 
 
 class SignatureBuiltinVerifier(BuiltinVerifier):
@@ -121,6 +130,6 @@ class SignatureBuiltinVerifier(BuiltinVerifier):
             <= addresses.begin_addr
             <= addresses.stop_ptr
             <= addresses.begin_addr + max_size
-            < 2 ** 64
+            < 2**64
         )
         return [addresses.begin_addr], [addresses.stop_ptr]

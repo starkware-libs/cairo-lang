@@ -10,7 +10,7 @@ python_lib(cairo_builtin_selection_lib
 
 full_python_test(cairo_builtin_selection_test
     PREFIX starkware/cairo/builtin_selection
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
     TESTED_MODULES starkware/cairo/builtin_selection
 
     FILES

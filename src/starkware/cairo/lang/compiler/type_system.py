@@ -4,6 +4,7 @@ from starkware.cairo.lang.compiler.ast.cairo_types import (
     CairoType,
     TypeCodeoffset,
     TypeFelt,
+    TypeIdentifier,
     TypePointer,
     TypeStruct,
     TypeTuple,
@@ -17,14 +18,13 @@ def mark_type_resolved(cairo_type: CairoType) -> CairoType:
     Marks the given type as resolved (struct names are absolute).
     This function can be used after parsing a string which is known to contain resolved types.
     """
-    if isinstance(cairo_type, (TypeFelt, TypeCodeoffset)):
+    if isinstance(cairo_type, (TypeFelt, TypeCodeoffset, TypeStruct)):
         return cairo_type
     elif isinstance(cairo_type, TypePointer):
         return dataclasses.replace(cairo_type, pointee=mark_type_resolved(cairo_type.pointee))
-    elif isinstance(cairo_type, TypeStruct):
-        if cairo_type.is_fully_resolved:
-            return cairo_type
-        return dataclasses.replace(cairo_type, is_fully_resolved=True)
+    elif isinstance(cairo_type, TypeIdentifier):
+        # Assume that the type is a struct.
+        return TypeStruct(scope=cairo_type.name, location=cairo_type.location)
     elif isinstance(cairo_type, TypeTuple):
         return dataclasses.replace(
             cairo_type,
@@ -41,12 +41,10 @@ def is_type_resolved(cairo_type: CairoType) -> bool:
     """
     Returns true if the type is resolved (struct names are absolute).
     """
-    if isinstance(cairo_type, (TypeFelt, TypeCodeoffset)):
+    if isinstance(cairo_type, (TypeFelt, TypeCodeoffset, TypeStruct)):
         return True
     elif isinstance(cairo_type, TypePointer):
         return is_type_resolved(cairo_type.pointee)
-    elif isinstance(cairo_type, TypeStruct):
-        return cairo_type.is_fully_resolved
     elif isinstance(cairo_type, TypeTuple):
         return all(map(is_type_resolved, cairo_type.types))
     else:

@@ -1,14 +1,15 @@
 from collections import namedtuple
 from dataclasses import make_dataclass
-from typing import Any, Dict, Iterable, List, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypeFelt, TypePointer
 from starkware.cairo.lang.compiler.identifier_definition import StructDefinition
 from starkware.cairo.lang.compiler.parser import parse_type
 from starkware.cairo.lang.compiler.type_system import mark_type_resolved
+from starkware.starknet.compiler.compile import compile_starknet_files
 from starkware.starknet.public.abi import AbiType, get_selector_from_name
 from starkware.starknet.public.abi_structs import struct_definition_from_abi_entry
-from starkware.starknet.services.api.contract_definition import ContractDefinition
+from starkware.starknet.services.api.contract_class import ContractClass
 from starkware.starknet.testing.objects import Dataclass
 
 EventIdentifier = Union[str, int]
@@ -164,6 +165,33 @@ def flatten(name: str, value: Union[Any, Iterable], max_depth: int = 30) -> List
     return res
 
 
-def get_abi(contract_definition: ContractDefinition) -> AbiType:
-    assert contract_definition.abi is not None, "Missing ABI."
-    return contract_definition.abi
+def get_abi(contract_class: ContractClass) -> AbiType:
+    assert contract_class.abi is not None, "Missing ABI."
+    return contract_class.abi
+
+
+def get_contract_class(
+    source: Optional[str] = None,
+    contract_class: Optional[ContractClass] = None,
+    cairo_path: Optional[List[str]] = None,
+    disable_hint_validation: bool = False,
+) -> ContractClass:
+    """
+    Given either a ContractClass instance or a source file path, returns the respective
+    ContractClass instance.
+    """
+    assert (source is None) != (
+        contract_class is None
+    ), "Exactly one of source, contract_class should be supplied."
+    if contract_class is None:
+        contract_class = compile_starknet_files(
+            files=[source],
+            debug_info=True,
+            cairo_path=cairo_path,
+            disable_hint_validation=disable_hint_validation,
+        )
+        source = None
+        cairo_path = None
+    assert cairo_path is None, "The cairo_path argument can only be used with the source argument."
+    assert contract_class is not None
+    return contract_class

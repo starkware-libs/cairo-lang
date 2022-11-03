@@ -10,7 +10,7 @@ python_lib(fact_checker_lib
 
 full_python_test(fact_checker_test
     PREFIX starkware/cairo/sharp
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
 
     FILES
     fact_checker_test.py
@@ -38,7 +38,7 @@ python_lib(sharp_client_lib
 
 full_python_test(sharp_client_lib_test
     PREFIX starkware/cairo/sharp
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
 
     FILES
     client_lib_test.py

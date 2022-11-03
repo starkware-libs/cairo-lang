@@ -1,3 +1,5 @@
+import pytest
+
 from starkware.cairo.lang.compiler.ast.formatting_utils import (
     Particle,
     ParticleFormattingConfig,
@@ -32,22 +34,28 @@ def run_test_particles_in_lines(
         )
 
 
-def test_particles_in_lines():
+@pytest.mark.parametrize("trailing_separator", [True, False])
+def test_particles_in_lines(trailing_separator: bool):
+    maybe_comma = "," if trailing_separator else ""
     particles = ParticleList(
         elements=[
             "start ",
             "foo ",
             "bar ",
-            SeparatedParticleList(elements=["a", "b", "c", "dddd", "e", "f"], end="*"),
+            SeparatedParticleList(
+                elements=["a", "b", "c", "dddd", "e", "f"],
+                end="*",
+                trailing_separator=trailing_separator,
+            ),
             " asdf",
         ]
     )
-    expected = """\
+    expected = f"""\
 start foo
   bar
   a, b, c,
   dddd, e,
-  f* asdf\
+  f{maybe_comma}* asdf\
 """
     expected_one_per_line = """\
 start foo
@@ -70,22 +78,30 @@ start foo
     particles = ParticleList(
         elements=[
             "func f(",
-            SeparatedParticleList(elements=["x", "y", "z"], end=") -> ("),
-            SeparatedParticleList(elements=["a", "b", "c"], end="):"),
+            SeparatedParticleList(
+                elements=["x", "y", "z"],
+                end=") -> (",
+                trailing_separator=trailing_separator,
+            ),
+            SeparatedParticleList(
+                elements=["a", "b", "c"],
+                end="):",
+                trailing_separator=trailing_separator,
+            ),
         ]
     )
-    expected = """\
+    expected = f"""\
 func f(
     x, y,
-    z) -> (
+    z{maybe_comma}) -> (
     a, b,
-    c):\
+    c{maybe_comma}):\
 """
-    expected_one_per_line = """\
+    expected_one_per_line = f"""\
 func f(
-    x, y, z
+    x, y, z{maybe_comma}
 ) -> (
-    a, b, c
+    a, b, c{maybe_comma}
 ):\
 """
     run_test_particles_in_lines(
@@ -96,14 +112,14 @@ func f(
     )
 
     # Same particles, using one_per_line=True.
-    expected = """\
+    expected = f"""\
 func f(
     x,
     y,
-    z) -> (
+    z{maybe_comma}) -> (
     a,
     b,
-    c):\
+    c{maybe_comma}):\
 """
     with set_one_item_per_line(False):
         assert (
@@ -117,10 +133,10 @@ func f(
         )
 
     # Same particles, using one_per_line=True, longer lines.
-    expected = """\
+    expected = f"""\
 func f(
-    x, y, z) -> (
-    a, b, c):\
+    x, y, z{maybe_comma}) -> (
+    a, b, c{maybe_comma}):\
 """
     with set_one_item_per_line(False):
         assert (
@@ -136,13 +152,23 @@ func f(
     particles = ParticleList(
         elements=[
             "func f(",
-            SeparatedParticleList(elements=["x", "y", "z"], end=") -> ("),
-            SeparatedParticleList(elements=[], end="):"),
+            SeparatedParticleList(
+                elements=["x", "y", "z"],
+                end=") -> (",
+                trailing_separator=trailing_separator,
+            ),
+            SeparatedParticleList(
+                elements=[],
+                end="):",
+                trailing_separator=trailing_separator,
+            ),
         ]
     )
-    expected = """\
+
+    maybe_comma_on_a_new_line = "\n    ," if trailing_separator else ""
+    expected = f"""\
 func f(
-    x, y, z) -> ():\
+    x, y, z{maybe_comma}) -> ({maybe_comma_on_a_new_line}):\
 """
     with set_one_item_per_line(False):
         assert (
@@ -214,27 +240,27 @@ def test_nested_particle_lists():
             "felt",
             SeparatedParticleList(elements=["felt, felt"], start="(", end=")"),
         ],
-        start="d : (",
+        start="d: (",
         end=")",
     )
     return_val_e = SeparatedParticleList(
-        elements=["f : felt", "g : felt"],
-        start="e : (",
+        elements=["f: felt", "g: felt"],
+        start="e: (",
         end=")",
     )
     return_val_h = SeparatedParticleList(
         elements=["felt", "felt", "felt", "felt"],
-        start="h : (",
+        start="h: (",
         end=")",
     )
     return_val_b = SeparatedParticleList(
         elements=[
-            "c : felt",
+            "c: felt",
             return_val_d,
             return_val_e,
             return_val_h,
         ],
-        start="b : (",
+        start="b: (",
         end=")",
     )
     particles = ParticleList(
@@ -243,7 +269,7 @@ def test_nested_particle_lists():
             SeparatedParticleList(elements=["x", "y", "z"], end=") -> ("),
             SeparatedParticleList(
                 elements=[
-                    "a : felt",
+                    "a: felt",
                     return_val_b,
                 ],
                 end="):",
@@ -252,21 +278,21 @@ def test_nested_particle_lists():
     )
     expected = """\
 func f(x, y, z) -> (
-    a : felt,
-    b : (c : felt,
-        d : (felt, (felt, felt)),
-        e : (f : felt, g : felt),
-        h : (felt, felt, felt,
+    a: felt,
+    b: (c: felt,
+        d: (felt, (felt, felt)),
+        e: (f: felt, g: felt),
+        h: (felt, felt, felt,
             felt))):\
 """
     expected_one_per_line = """\
 func f(x, y, z) -> (
-    a : felt,
-    b : (
-        c : felt,
-        d : (felt, (felt, felt)),
-        e : (f : felt, g : felt),
-        h : (
+    a: felt,
+    b: (
+        c: felt,
+        d: (felt, (felt, felt)),
+        e: (f: felt, g: felt),
+        h: (
             felt, felt, felt, felt
         ),
     ),

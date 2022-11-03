@@ -20,7 +20,7 @@ from starkware.cairo.sharp.sharp_client import init_client
 
 N_ACCOUNTS = 5
 N_BATCHES = 3
-MIN_OPERATOR_BALANCE = 0.1 * 10 ** 18
+MIN_OPERATOR_BALANCE = 0.1 * 10**18
 BATCH_SIZE = 10
 GAS_PRICE = 10000000000
 AMM_SOURCE_PATH = os.path.join(os.path.dirname(__file__), "amm.cairo")
@@ -33,11 +33,11 @@ def init_prover(bin_dir: str, node_rpc_url: str) -> BatchProver:
 
     node_rpc_url: a URL of an Ethereum node RPC.
     """
-    balance = Balance(a=random.randint(10 ** 6, 10 ** 8), b=random.randint(10 ** 6, 10 ** 8))
+    balance = Balance(a=random.randint(10**6, 10**8), b=random.randint(10**6, 10**8))
     accounts = {
         i: Account(
             pub_key=i,
-            balance=Balance(a=random.randint(10 ** 5, 10 ** 7), b=random.randint(10 ** 5, 10 ** 7)),
+            balance=Balance(a=random.randint(10**5, 10**7), b=random.randint(10**5, 10**7)),
         )
         for i in range(N_ACCOUNTS)
     }
@@ -133,7 +133,7 @@ def main():
         operator_private_key = int(operator_private_key_str, 16)
     except ValueError:
         print("Generating a random key...")
-        operator_private_key = random.randint(0, 2 ** 256)
+        operator_private_key = random.randint(0, 2**256)
     operator_private_key = "0x{:064x}".format(operator_private_key)
     operator = eth.Account.from_key(operator_private_key)
 
@@ -190,7 +190,7 @@ def tx_kwargs(w3: Web3, sender_account: eth.Account):
     sender_account: the account sending the transaction.
     """
     nonce = w3.eth.getTransactionCount(sender_account)
-    return {"from": sender_account, "gas": 10 ** 6, "gasPrice": GAS_PRICE, "nonce": nonce}
+    return {"from": sender_account, "gas": 10**6, "gasPrice": GAS_PRICE, "nonce": nonce}
 
 
 def send_transaction(w3, transaction, sender_account: BaseAccount):

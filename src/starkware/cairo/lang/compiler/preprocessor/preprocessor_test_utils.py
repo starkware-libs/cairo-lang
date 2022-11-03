@@ -14,7 +14,7 @@ from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import Prepro
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.compiler.test_utils import read_file_from_dict
 
-PRIME = 3 * 2 ** 30 + 1
+PRIME = 3 * 2**30 + 1
 
 # Note that the TEST_SCOPE is hardcoded in the tests.
 TEST_SCOPE = ScopedName.from_string("test_scope")
@@ -23,9 +23,9 @@ TEST_SCOPE = ScopedName.from_string("test_scope")
 CAIRO_TEST_MODULES = {
     "starkware.cairo.lang.compiler.lib.registers": """
 @known_ap_change
-func get_ap() -> (ap_val):
-    ret
-end
+func get_ap() -> (ap_val: felt) {
+    ret;
+}
 """,
 }
 
@@ -34,7 +34,7 @@ def strip_comments_and_linebreaks(program: str):
     """
     Removes all comments and empty lines from the given program.
     """
-    program = re.sub(r"\s*#.*\n", "\n", program)
+    program = re.sub(r"\s*//.*\n", "\n", program)
     return re.sub("\n+", "\n", program).lstrip()
 
 

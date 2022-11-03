@@ -1,21 +1,39 @@
 import asyncio
 import dataclasses
+import itertools
 from abc import ABC, abstractmethod
 from concurrent.futures import Executor
-from typing import Any, Dict, Generic, List, Optional, Tuple, Type, TypeVar
+from typing import Any, Dict, Generic, Iterable, List, Optional, Tuple, Type, TypeVar
 
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
 from starkware.starkware_utils.commitment_tree.binary_fact_tree_node import (
     BinaryFactDict,
     TBinaryFactTreeNode,
-    TInnerNodeFact,
 )
+from starkware.starkware_utils.commitment_tree.inner_node_fact import InnerNodeFact
 from starkware.starkware_utils.commitment_tree.leaf_fact import LeafFact
-from starkware.storage.storage import FactFetchingContext, HashFunctionType
+from starkware.storage.storage import Fact, FactFetchingContext, HashFunctionType
 
 T = TypeVar("T")
 TCalculationNode = TypeVar("TCalculationNode", bound="CalculationNode")
-NodeFactDict = Dict[bytes, TInnerNodeFact]
+
+
+@dataclasses.dataclass
+class NodeFactDict:
+    """
+    A mapping between a hash and its corresponding fact. Split into two maps, one for leaves and
+    one for inner nodes.
+    """
+
+    inner_nodes: Dict[bytes, InnerNodeFact] = dataclasses.field(default_factory=dict)
+    leaves: Dict[bytes, LeafFact] = dataclasses.field(default_factory=dict)
+
+    def update(self, other: "NodeFactDict"):
+        self.inner_nodes.update(other.inner_nodes)
+        self.leaves.update(other.leaves)
+
+    def items(self) -> Iterable[Tuple[bytes, Fact]]:
+        return itertools.chain(self.inner_nodes.items(), self.leaves.items())
 
 
 class Calculation(Generic[T], ABC):
@@ -59,7 +77,7 @@ class Calculation(Generic[T], ABC):
         """
         Same as calculate(), but return the facts.
         """
-        fact_nodes: NodeFactDict = {}
+        fact_nodes = NodeFactDict()
         result = self.calculate(
             dependency_results=dependency_results, hash_func=hash_func, fact_nodes=fact_nodes
         )
@@ -97,7 +115,7 @@ class Calculation(Generic[T], ABC):
 
         Recursively calcuates the result of the dependency calculations.
         """
-        fact_nodes: NodeFactDict = {}
+        fact_nodes = NodeFactDict()
         result = self.full_calculate(hash_func=hash_func, fact_nodes=fact_nodes)
         return result, fact_nodes
 
@@ -186,7 +204,7 @@ class LeafFactCalculation(HashCalculation):
     ) -> bytes:
         assert len(dependency_results) == 0, "LeafFactCalculation has no dependencies."
         hash_result = self.fact._hash(hash_func=hash_func)
-        fact_nodes[hash_result] = self.fact
+        fact_nodes.leaves[hash_result] = self.fact
         return hash_result
 
     def get_dependency_calculations(self) -> List[Calculation[bytes]]:

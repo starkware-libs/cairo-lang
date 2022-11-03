@@ -46,12 +46,15 @@ class _ImmediateStorage(Storage):
 
         logger.debug(f"Performing {n_write_tasks} writing tasks to storage...")
 
-        logging_chunk_size = 2 ** 8
+        logging_chunk_size = 2**8
         for n_handled_tasks, task in enumerate(self.write_tasks):
             if n_handled_tasks % logging_chunk_size == 0:
                 logger.debug(f"{len(self.write_tasks) - n_handled_tasks} writing tasks left.")
 
             await task
+
+        # Clean list in order to prevent a memory leak, due to cyclic object reference.
+        self.write_tasks = []
 
 
 class LocalStorage(_ImmediateStorage):

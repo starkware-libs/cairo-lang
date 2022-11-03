@@ -2,7 +2,7 @@ import dataclasses
 from typing import Dict, List, Optional
 
 from starkware.cairo.lang.compiler.ast.arguments import IdentifierList
-from starkware.cairo.lang.compiler.ast.cairo_types import CairoType
+from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypeTuple
 from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeBlock,
     CodeElement,
@@ -18,7 +18,6 @@ from starkware.cairo.lang.compiler.identifier_definition import (
     StructDefinition,
     TypeDefinition,
 )
-from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.preprocessor.identifier_aware_visitor import (
     IdentifierAwareVisitor,
 )
@@ -42,9 +41,6 @@ class StructCollector(IdentifierAwareVisitor):
     """
     Collects all the visited struct definitions.
     """
-
-    def __init__(self, identifiers: IdentifierManager):
-        super().__init__(identifiers=identifiers)
 
     def _visit_default(self, obj):
         assert isinstance(
@@ -106,6 +102,28 @@ class StructCollector(IdentifierAwareVisitor):
             members_list=members_list, struct_name=struct_name, location=location
         )
 
+    def handle_type_definition(
+        self,
+        cairo_type: Optional[CairoType],
+        type_name: ScopedName,
+        location: Optional[Location],
+    ):
+        """
+        Creates a type definition for the given type.
+        """
+        if cairo_type is None:
+            cairo_type = TypeTuple.from_members(members=[], location=location)
+
+        cairo_type = self.resolve_type(cairo_type=cairo_type)
+        self.add_name_definition(
+            type_name,
+            TypeDefinition(
+                cairo_type=cairo_type,
+                location=location,
+            ),
+            location=location,
+        )
+
     def handle_struct_definition(self, struct_name: ScopedName, code_block: CodeBlock, location):
         members_list: List[MemberInfo] = []
         for commented_code_element in code_block.code_elements:
@@ -124,7 +142,7 @@ class StructCollector(IdentifierAwareVisitor):
 
             if elm.typed_identifier.expr_type is None:
                 raise PreprocessorError(
-                    "Struct members must be explicitly typed (e.g., member x : felt).",
+                    "Struct members must be explicitly typed (e.g., x: felt).",
                     location=elm.typed_identifier.location,
                 )
 
@@ -167,9 +185,9 @@ class StructCollector(IdentifierAwareVisitor):
                 struct_name=new_scope + CodeElementFunction.IMPLICIT_ARGUMENT_SCOPE,
                 location=elm.identifier.location,
             )
-            self.create_struct_from_identifier_list(
-                identifier_list=elm.returns,
-                struct_name=new_scope + CodeElementFunction.RETURN_SCOPE,
+            self.handle_type_definition(
+                cairo_type=elm.returns,
+                type_name=new_scope + CodeElementFunction.RETURN_SCOPE,
                 location=elm.identifier.location,
             )
 

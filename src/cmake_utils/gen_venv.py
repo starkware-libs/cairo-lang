@@ -69,14 +69,32 @@ def fill_init_files(site_dir):
 
 
 def get_pth_dir(python: str, venv_dir: str):
-    if python == "python3.7":
-        return os.path.join(venv_dir, "lib/python3.7/site-packages")
-    elif python == "pypy3":
-        pth_dir = os.path.join(venv_dir, "site-packages")
+    if python == "python3.9":
+        return os.path.join(venv_dir, "lib/python3.9/site-packages")
+    elif python == "pypy3.9":
+        pth_dir = os.path.join(venv_dir, "lib/pypy3.9/site-packages")
         os.makedirs(pth_dir, exist_ok=True)
         return pth_dir
     else:
         raise NotImplementedError(f"Unsupported python executable {python}")
+
+
+def find_python(exec_name: str) -> str:
+    """
+    Tries to find Python executable in well known paths.
+
+    Arguments:
+    exec_name: Expected name of the Python executable, for example `python3.7`.
+    """
+
+    path = "/usr/bin:/usr/local/bin:" + os.getenv("PATH", default="")
+    python_exec = shutil.which(exec_name, path=path)
+    if python_exec is not None:
+        return python_exec
+
+    raise RuntimeError(
+        f"Unable to find Python executable named {exec_name} in PATH or well known directories."
+    )
 
 
 def main():
@@ -101,12 +119,8 @@ def main():
     shutil.rmtree(args.site_dir, ignore_errors=True)
     os.makedirs(args.site_dir)
 
-    # Find python.
-    lookup_paths = [
-        "/usr/bin",
-        "/usr/local/bin",
-    ]
-    python_exec = shutil.which(args.python, path=":".join(lookup_paths))
+    python_exec = find_python(args.python)
+
     # Prepare an empty virtual environment in the background.
     # --symlinks prefers symlinks of copying.
     # --without-pip installs a completely empty venv, with no pip.

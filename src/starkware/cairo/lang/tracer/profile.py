@@ -48,7 +48,7 @@ class ProfileBuilder:
         sample_type = self._profile.sample_type.add()
         sample_type.type = self.string_id("running time")
         sample_type.unit = self.string_id("steps")
-        self._profile.time_nanos = int(time.time() * 10 ** 9)
+        self._profile.time_nanos = int(time.time() * 10**9)
 
         # Main function.
         self._func_name_to_id["__main__"] = self.string_id("__main__")

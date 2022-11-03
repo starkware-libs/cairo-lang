@@ -42,7 +42,7 @@ class BinaryCalculation(HashCalculation):
         left_hash, right_hash = dependency_results
         fact = BinaryNodeFact(left_hash, right_hash)
         fact_hash = fact._hash(hash_func=hash_func)
-        fact_nodes[fact_hash] = fact
+        fact_nodes.inner_nodes[fact_hash] = fact
         return fact_hash
 
 
@@ -64,7 +64,7 @@ class EdgeCalculation(HashCalculation):
         (bottom_hash,) = dependency_results
         fact = EdgeNodeFact(bottom_node=bottom_hash, edge_path=self.path, edge_length=self.length)
         fact_hash = fact._hash(hash_func=hash_func)
-        fact_nodes[fact_hash] = fact
+        fact_nodes.inner_nodes[fact_hash] = fact
         return fact_hash
 
 

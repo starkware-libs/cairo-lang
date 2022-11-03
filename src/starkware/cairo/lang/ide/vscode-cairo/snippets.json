@@ -1,0 +1,40 @@
+{
+    "Storage variable": {
+        "prefix": [
+            "@storage_var"
+        ],
+        "body": [
+            "@storage_var",
+            "func ${1:name}() -> (${2:res: felt}) {",
+            "}",
+            "$0"
+        ],
+        "description": "A StarkNet storage variable."
+    },
+    "External function": {
+        "prefix": [
+            "@external"
+        ],
+        "body": [
+            "@external",
+            "func ${1:name}{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(",
+            "\t${2:arguments}",
+            ") {",
+            "\t$0",
+            "}"
+        ],
+        "description": "A StarkNet contract external function."
+    },
+    "StarkNet contract interface": {
+        "prefix": [
+            "@contract_interface"
+        ],
+        "body": [
+            "@contract_interface",
+            "namespace ${1:name} {",
+            "\t$0",
+            "}"
+        ],
+        "description": "A contract interface for another contract."
+    }
+}

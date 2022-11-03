@@ -155,7 +155,7 @@ def test_references():
         ),
     }
 
-    my_struct = TypeStruct(scope=scope("MyStruct"), is_fully_resolved=True)
+    my_struct = TypeStruct(scope=scope("MyStruct"))
     my_struct_star = TypePointer(pointee=my_struct)
     identifier_values = {
         scope("x.ref"): ReferenceDefinition(
@@ -183,7 +183,7 @@ def test_references():
         ),
     }
     identifiers = IdentifierManager.from_dict(identifier_values)
-    prime = 2 ** 64 + 13
+    prime = 2**64 + 13
     ap = 100
     fp = 200
     memory: MaybeRelocatableDict = {
@@ -286,7 +286,7 @@ def get_vm_consts(
     context = VmConstsContext(
         identifiers=identifiers,
         evaluator=ExpressionEvaluator[MaybeRelocatable](
-            2 ** 64 + 13, 0, 0, memory, identifiers
+            2**64 + 13, 0, 0, memory, identifiers
         ).eval,
         reference_manager=reference_manager,
         flow_tracking_data=flow_tracking_data,
@@ -325,7 +325,7 @@ def test_reference_rebinding():
 
 
 def test_reference_to_structs():
-    t = TypeStruct(scope=scope("T"), is_fully_resolved=True)
+    t = TypeStruct(scope=scope("T"))
     t_star = TypePointer(pointee=t)
     identifier_values = {
         scope("ref"): ReferenceDefinition(full_name=scope("ref"), cairo_type=t, references=[]),
@@ -482,7 +482,7 @@ def test_revoked_reference():
         scope("x"): ReferenceDefinition(full_name=scope("x"), cairo_type=TypeFelt(), references=[]),
     }
     identifiers = IdentifierManager.from_dict(identifier_values)
-    prime = 2 ** 64 + 13
+    prime = 2**64 + 13
     ap = 100
     fp = 200
     memory: MaybeRelocatableDict = {}

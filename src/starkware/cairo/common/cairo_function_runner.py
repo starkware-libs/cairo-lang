@@ -1,5 +1,5 @@
 from collections.abc import Iterable
-from typing import Any, Dict, Optional, Union, cast
+from typing import Any, Dict, Optional, Tuple, Union, cast
 
 from starkware.cairo.common.structs import CairoStructFactory
 from starkware.cairo.lang.builtins.bitwise.bitwise_builtin_runner import BitwiseBuiltinRunner
@@ -7,6 +7,8 @@ from starkware.cairo.lang.builtins.bitwise.instance_def import BitwiseInstanceDe
 from starkware.cairo.lang.builtins.ec.ec_op_builtin_runner import EcOpBuiltinRunner
 from starkware.cairo.lang.builtins.ec.instance_def import EcOpInstanceDef
 from starkware.cairo.lang.builtins.hash.hash_builtin_runner import HashBuiltinRunner
+from starkware.cairo.lang.builtins.keccak.instance_def import KeccakInstanceDef
+from starkware.cairo.lang.builtins.keccak.keccak_builtin_runner import KeccakBuiltinRunner
 from starkware.cairo.lang.builtins.range_check.range_check_builtin_runner import (
     RangeCheckBuiltinRunner,
 )
@@ -21,6 +23,7 @@ from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableVal
 from starkware.cairo.lang.vm.security import verify_secure_runner
 from starkware.cairo.lang.vm.utils import RunResources
 from starkware.cairo.lang.vm.vm_exceptions import SecurityError, VmException
+from starkware.python.utils import safe_zip
 
 
 class CairoFunctionRunner(CairoRunner):
@@ -32,7 +35,7 @@ class CairoFunctionRunner(CairoRunner):
         )
         self.builtin_runners["pedersen_builtin"] = pedersen_builtin
         range_check_builtin = RangeCheckBuiltinRunner(
-            included=True, ratio=1, inner_rc_bound=2 ** 16, n_parts=8
+            included=True, ratio=1, inner_rc_bound=2**16, n_parts=8
         )
         self.builtin_runners["range_check_builtin"] = range_check_builtin
         output_builtin = OutputBuiltinRunner(included=True)
@@ -59,6 +62,15 @@ class CairoFunctionRunner(CairoRunner):
             ),
         )
         self.builtin_runners["ec_op_builtin"] = ec_op_builtin
+        keccak_builtin = KeccakBuiltinRunner(
+            included=True,
+            instance_def=KeccakInstanceDef(
+                ratio=1,
+                state_rep=[200] * 8,
+                instances_per_component=16,
+            ),
+        )
+        self.builtin_runners["keccak_builtin"] = keccak_builtin
 
         self.initialize_segments()
 
@@ -85,6 +97,10 @@ class CairoFunctionRunner(CairoRunner):
     @property
     def ec_op_builtin(self) -> EcOpBuiltinRunner:
         return cast(EcOpBuiltinRunner, self.builtin_runners["ec_op_builtin"])
+
+    @property
+    def keccak_builtin(self) -> KeccakBuiltinRunner:
+        return cast(KeccakBuiltinRunner, self.builtin_runners["keccak_builtin"])
 
     def assert_eq(self, arg: MaybeRelocatable, expected_value, apply_modulo: bool = True):
         """
@@ -115,26 +131,33 @@ class CairoFunctionRunner(CairoRunner):
         trace_on_failure: bool = False,
         apply_modulo_to_args: Optional[bool] = None,
         use_full_name: bool = False,
+        verify_implicit_args_segment: bool = False,
         **kwargs,
-    ):
+    ) -> Tuple[Tuple[MaybeRelocatable, ...], Tuple[MaybeRelocatable, ...]]:
         """
         Runs func_name(*args).
         args are converted to Cairo-friendly ones using gen_arg.
+
+        Returns the return values of the function, splitted into 2 tuples of implicit values and
+        explicit values. Structs will be flattened to a sequence of felts as part of the returned
+        tuple.
 
         Additional params:
         verify_secure - Run verify_secure_runner to do extra verifications.
         trace_on_failure - Run the tracer in case of failure to help debugging.
         apply_modulo_to_args - Apply modulo operation on integer arguments.
         use_full_name - Treat 'func_name' as a fully qualified identifier name, rather than a
-         relative one.
+          relative one.
+        verify_implicit_args_segment - For each implicit argument, verify that the argument and the
+          return value are in the same segment.
         """
         assert isinstance(self.program, Program)
         entrypoint = self.program.get_label(func_name, full_name_lookup=use_full_name)
 
         structs_factory = CairoStructFactory.from_program(program=self.program)
-        full_args_struct = structs_factory.build_func_args(
-            func=ScopedName.from_string(scope=func_name)
-        )
+        func = ScopedName.from_string(scope=func_name)
+
+        full_args_struct = structs_factory.build_func_args(func=func)
         all_args = full_args_struct(*args, **kwargs)
 
         try:
@@ -157,6 +180,44 @@ Got {type(ex).__name__} exception during the execution of {func_name}:
                 )
                 trace_runner(runner=self)
             raise
+
+        # The number of implicit arguments is identical to the number of implicit return values.
+        n_implicit_ret_vals = structs_factory.get_implicit_args_length(func=func)
+        n_explicit_ret_vals = structs_factory.get_explicit_return_values_length(func=func)
+        n_ret_vals = n_explicit_ret_vals + n_implicit_ret_vals
+        implicit_retvals = tuple(
+            self.vm_memory.get_range(
+                addr=self.vm.run_context.ap - n_ret_vals, size=n_implicit_ret_vals
+            )
+        )
+
+        explicit_retvals = tuple(
+            self.vm_memory.get_range(
+                addr=self.vm.run_context.ap - n_explicit_ret_vals, size=n_explicit_ret_vals
+            )
+        )
+
+        # Verify the memory segments of the implicit arguments.
+        if verify_implicit_args_segment:
+            implicit_args = all_args[:n_implicit_ret_vals]
+            for implicit_arg, implicit_retval in safe_zip(implicit_args, implicit_retvals):
+                assert isinstance(
+                    implicit_arg, RelocatableValue
+                ), f"Implicit arguments must be RelocatableValues, {implicit_arg} is not."
+                assert isinstance(implicit_retval, RelocatableValue), (
+                    f"Argument {implicit_arg} is a RelocatableValue, but the returned value "
+                    f"{implicit_retval} is not."
+                )
+                assert implicit_arg.segment_index == implicit_retval.segment_index, (
+                    f"Implicit argument {implicit_arg} is not on the same segment as the returned "
+                    f"{implicit_retval}."
+                )
+                assert implicit_retval.offset >= implicit_arg.offset, (
+                    f"The offset of the returned implicit argument {implicit_retval} is less than "
+                    f"the offset of the input {implicit_arg}."
+                )
+
+        return implicit_retvals, explicit_retvals
 
     def run_from_entrypoint(
         self,

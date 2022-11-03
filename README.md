@@ -12,7 +12,7 @@ We recommend starting from [Setting up the environment](https://cairo-lang.org/d
 # Installation instructions
 
 You should be able to download the python package zip file directly from
-[github](https://github.com/starkware-libs/cairo-lang/releases/tag/v0.5.2)
+[github](https://github.com/starkware-libs/cairo-lang/releases/tag/v0.10.1)
 and install it using ``pip``.
 See [Setting up the environment](https://cairo-lang.org/docs/quickstart.html).
 
@@ -54,7 +54,7 @@ Once the docker image is built, you can fetch the python package zip file using:
 
 ```bash
 > container_id=$(docker create cairo)
-> docker cp ${container_id}:/app/cairo-lang-0.8.2.1.zip .
+> docker cp ${container_id}:/app/cairo-lang-0.10.1.zip .
 > docker rm -v ${container_id}
 ```
 

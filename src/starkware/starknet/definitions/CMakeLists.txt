@@ -8,9 +8,12 @@ python_lib(starknet_definitions_lib
     transaction_type.py
 
     LIBS
+    cairo_tracer_lib
     cairo_vm_crypto_lib
     everest_definitions_lib
+    everest_transaction_type_lib
     starkware_crypto_lib
+    starkware_dataclasses_field_utils_lib
     starkware_dataclasses_utils_lib
     starkware_error_handling_lib
     starkware_python_utils_lib
@@ -26,10 +29,13 @@ python_lib(starknet_general_config_lib
     general_config.yml
 
     LIBS
+    cairo_all_builtins_lib
     cairo_instances_lib
+    cairo_run_builtins_lib
     everest_general_config_lib
     starknet_definitions_lib
     starkware_config_utils_lib
+    starkware_dataclasses_field_utils_lib
     starkware_dataclasses_utils_lib
     starkware_python_utils_lib
     pip_marshmallow

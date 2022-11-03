@@ -2,7 +2,7 @@
     "name": "cairo",
     "displayName": "Cairo",
     "description": "Support Cairo syntax",
-    "version": "0.8.2",
+    "version": "0.10.1",
     "engines": {
         "vscode": "^1.30.0"
     },
@@ -38,6 +38,12 @@
                 "embeddedLanguages": {
                     "meta.embedded.block.python": "source.python"
                 }
+            }
+        ],
+        "snippets": [
+            {
+                "language": "cairo",
+                "path": "./snippets.json"
             }
         ],
         "configuration": [

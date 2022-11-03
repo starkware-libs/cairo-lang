@@ -8,6 +8,7 @@ import marshmallow_dataclass
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.preprocessor.flow import FlowTrackingDataActual
 from starkware.cairo.lang.compiler.scoped_name import ScopedName, ScopedNameAsStr
+from starkware.starkware_utils.marshmallow_dataclass_fields import additional_metadata
 from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
 
 
@@ -23,10 +24,11 @@ class InstructionLocation:
     inst: Location
     hints: List[Optional[HintLocation]]
     accessible_scopes: List[ScopedName] = field(
-        metadata=dict(marshmallow_field=mfields.List(ScopedNameAsStr))
+        metadata=additional_metadata(marshmallow_field=mfields.List(ScopedNameAsStr))
     )
 
-    flow_tracking_data: FlowTrackingDataActual
+    # flow_tracking_data may be removed when filtering unnecessary identifiers is enabled.
+    flow_tracking_data: Optional[FlowTrackingDataActual]
 
     def get_all_locations(self) -> List[Location]:
         all_locations = [self.inst] + self.inst.get_parent_locations()

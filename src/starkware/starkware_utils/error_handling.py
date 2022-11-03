@@ -1,8 +1,12 @@
 import contextlib
+import dataclasses
 import logging
 import operator
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional, Type
+from types import TracebackType
+from typing import Any, Callable, Dict, List, Optional, Type
+
+import marshmallow
 
 symbol_to_function = {"!=": operator.ne, "==": operator.eq, ">": operator.gt, ">=": operator.ge}
 
@@ -54,6 +58,8 @@ class StarkErrorCode(ErrorCode):
     INVALID_FACT = auto()
     #: Fee taken is too high.
     INVALID_FEE_TAKEN = auto()
+    #: Invalid multi transaction.
+    INVALID_MULTI_TRANSACTION = auto()
     #: Invalid order ID.
     INVALID_ORDER_ID = auto()
     #: Invalid order type.
@@ -102,6 +108,8 @@ class StarkErrorCode(ErrorCode):
     OUT_OF_RANGE_EXPIRATION_TIMESTAMP = auto()
     #: Field element value is out of range.
     OUT_OF_RANGE_FIELD_ELEMENT = auto()
+    #: Forced trade nonce value is out of range.
+    OUT_OF_RANGE_FORCED_TRADE_NONCE = auto()
     #: Nonce value is out of range.
     OUT_OF_RANGE_NONCE = auto()
     #: Oracle price quorum value is out of range.
@@ -148,7 +156,7 @@ class StarkException(WebFriendlyException):
     an invalid transaction).
     """
 
-    def __init__(self, code, message: Optional[str] = None):
+    def __init__(self, code: ErrorCode, message: Optional[str] = None):
         self.code = code
         self.message = message
         super().__init__(status_code=500, body={"code": code, "message": message})
@@ -244,9 +252,73 @@ def wrap_with_stark_exception(
 
     try:
         yield
+    except StarkException:
+        # Raise StarkException-s as-is, so failure information is not lost.
+        raise
     except tuple(exception_types) as exception:
         message = str(exception) if message is None else message
         if logger is not None:
             logger.error(message, exc_info=True)
 
-        raise StarkException(code=code, message=message)
+        raise StarkException(code=code, message=message) from exception
+
+
+@dataclasses.dataclass(frozen=True)
+class ErrorByKey:
+    key_error: str
+    error: BaseException
+
+    def __repr__(self) -> str:
+        return f"{{{self.key_error}: {repr(self.error)}}}"
+
+
+class ErrorCollector:
+    """
+    Context manager for collecting errors.
+
+    For example:
+        for tx in txs:
+            with error_collector(key_error=tx.tx_id):
+                # Do something that might raise an exception.
+        assert len(error_collector.errors) == 0, str(error_collector.errors)
+    """
+
+    def __init__(self):
+        self.errors: List[ErrorByKey] = []
+
+    def __call__(self, key_error: str) -> "ErrorCollector":
+        self._element = key_error
+        return self
+
+    def __enter__(self):
+        pass
+
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> bool:
+        if exc_type is not None:
+            assert exc_value is not None
+            self.errors.append(ErrorByKey(key_error=self._element, error=exc_value))
+        return True
+
+
+def stark_exception_dominant_in_validation_error(
+    stark_error_code: StarkErrorCode,
+) -> Callable:
+    """
+    A custom error-handling function for a marshmallow schema. Raises StarkException with the given
+    error code when either serialization or deserialization fails with any StarkException.
+    """
+
+    def handle_error(self, exc: marshmallow.ValidationError, data, **kwargs) -> None:
+        if "StarkException" in str(exc.messages):
+            raise StarkException(
+                code=stark_error_code,
+                message=f"Either serialization or deserialization error: {exc.messages}",
+            )
+        raise exc
+
+    return handle_error

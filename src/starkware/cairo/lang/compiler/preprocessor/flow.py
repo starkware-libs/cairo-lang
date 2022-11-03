@@ -22,6 +22,7 @@ from starkware.cairo.lang.compiler.preprocessor.reg_tracking import (
 )
 from starkware.cairo.lang.compiler.references import ApDeductionError, FlowTrackingError, Reference
 from starkware.cairo.lang.compiler.scoped_name import ScopedName, ScopedNameAsStr
+from starkware.starkware_utils.marshmallow_dataclass_fields import additional_metadata
 
 
 class LostReferenceError(FlowTrackingError):
@@ -59,6 +60,13 @@ class ReferenceManager:
 
     def get_ref(self, ref_id: int) -> Reference:
         return self.references[ref_id]
+
+    def filter_references(self, ref_ids_to_keep: List[int]):
+        """
+        Filters references that their index is not in ref_ids_to_keep.
+        """
+        new_references = [ref for i, ref in enumerate(self.references) if i in ref_ids_to_keep]
+        return dataclasses.replace(self, references=new_references)
 
 
 class FlowTrackingData(ABC):
@@ -125,7 +133,7 @@ class FlowTrackingDataActual(FlowTrackingData):
     ap_tracking: RegTrackingData
     # Mapping from full reference name to the Reference instance.
     reference_ids: Dict[ScopedName, int] = field(
-        metadata=dict(
+        metadata=additional_metadata(
             marshmallow_field=mfields.Dict(keys=ScopedNameAsStr, values=mfields.Integer())
         ),
         default_factory=dict,
@@ -136,6 +144,30 @@ class FlowTrackingDataActual(FlowTrackingData):
         return cls(
             ap_tracking=RegTrackingData.new(group_alloc),
         )
+
+    def get_reference_id(self, name: ScopedName) -> Optional[int]:
+        return self.reference_ids.get(name)
+
+    def filter_references(self, names_to_keep: List[ScopedName]) -> "FlowTrackingDataActual":
+        """
+        Filters references that their name is not in names_to_keep.
+        """
+        new_reference_ids = {
+            name: ref_id for name, ref_id in self.reference_ids.items() if name in names_to_keep
+        }
+        return dataclasses.replace(self, reference_ids=new_reference_ids)
+
+    def update_reference_ids(self, old_to_new_ref_id: Dict[int, int]) -> "FlowTrackingDataActual":
+        """
+        Updates the reference ids according to the given old_to_new_ref_id dictionary.
+        """
+        new_reference_ids = {}
+        for name, ref_id in self.reference_ids.items():
+            new_ref_id = old_to_new_ref_id.get(ref_id)
+            assert new_ref_id is not None, "Missing reference id."
+            new_reference_ids[name] = new_ref_id
+
+        return dataclasses.replace(self, reference_ids=new_reference_ids)
 
     def resolve_reference(self, reference_manager: ReferenceManager, name: ScopedName) -> Reference:
         ref_id = self.reference_ids.get(name)
@@ -235,7 +267,7 @@ class InstructionFlows:
     # next_inst is the flow to the next instruction. None means there is no flow.
     # InstructionFlows() is an instruction with no known flow.
     next_inst: Optional[RegChange] = None
-    # jumps is the possible flows to other locations in the program, represetned as fully qualified
+    # jumps is the possible flows to other locations in the program, represented as fully qualified
     # names of labels.
     jumps: Dict[ScopedName, RegChange] = field(default_factory=dict)
 
@@ -257,7 +289,7 @@ class FlowTracking:
     """
 
     def __init__(self):
-        # Current flow tracking data. FlowTrackingDataUnreachable means the currect position is
+        # Current flow tracking data. FlowTrackingDataUnreachable means the current position is
         # unreachable - has no flow. For example, between a ret and another instruction.
         self.data: FlowTrackingData = FlowTrackingDataUnreachable()
         # Mapping from a fully qualified label name to its tracking data.
@@ -285,7 +317,7 @@ class FlowTracking:
     def add_flow_to_label(self, label_name: ScopedName, ap_change: RegChangeLike):
         """
         Registers a flow from current location to a label, with some ap_change.
-        For example, after 'jmp label1 if [ap] != 0; ap++', we have a flow to label1 with ap_change
+        For example, after 'jmp label1 if [ap] != 0, ap++', we have a flow to label1 with ap_change
         of 1.
         """
         ap_change = RegChange.from_expr(ap_change)

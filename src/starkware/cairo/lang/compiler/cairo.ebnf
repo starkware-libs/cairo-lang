@@ -16,8 +16,8 @@ _ARROW: "->"
 _AT: "@"
 
 // Comma separated list with notes.
-comma: ","
-_expr_sep: (comma | nonempty_notes)+
+COMMA: ","
+_expr_sep: (COMMA | nonempty_notes)+
 comma_separated_with_notes{item}: notes item? (_expr_sep item)* _expr_sep?
 
 // Types.
@@ -67,8 +67,13 @@ identifier_def: IDENTIFIER
 !reg: "ap" -> reg_ap
     | "fp" -> reg_fp
 
-bool_expr: expr _DBL_EQ expr   -> bool_expr_eq
-         | expr _NEQ expr      -> bool_expr_neq
+?bool_expr: bool_and
+
+?bool_and: bool_and "and" notes bool_atom     -> bool_and_expr
+         | bool_atom
+
+?bool_atom: expr _DBL_EQ notes expr           -> bool_expr_eq
+          | expr _NEQ    notes expr           -> bool_expr_neq
 
 !modifier: "local" -> modifier_local
 
@@ -95,7 +100,7 @@ call_instruction: "call" "rel" expr                   -> inst_call_rel
                  | "ap" "+=" expr                      -> inst_add_ap
                  | "dw" expr                           -> inst_data_word
 instruction: instruction_body                    -> instruction_noap
-           | instruction_body ";" "ap" _DBL_PLUS -> instruction_ap
+           | instruction_body "," "ap" _DBL_PLUS -> instruction_ap
 
 function_call: identifier ("{" arg_list "}")? "(" arg_list ")"
 
@@ -118,52 +123,58 @@ _import_body: aliased_identifier ("," aliased_identifier)*
 _import: "from" identifier "import" _import_body
 
 // Function/Namespace/Struct definition.
-_returns:  _ARROW _NEWLINE* "(" identifier_list ")"
+_returns:  _ARROW _NEWLINE* type
 _arguments: "(" identifier_list ")"
 implicit_arguments: ("{" identifier_list "}")?
-_funcdecl: "func" identifier_def implicit_arguments _arguments _NEWLINE* _returns? ":"
-_func: decorator_list _funcdecl _NEWLINE code_block "end"
-_if: "if" bool_expr ":" _NEWLINE code_block ("else" ":" _NEWLINE code_block)? "end"
+_funcdecl: "func" identifier_def implicit_arguments _arguments _NEWLINE* _returns? "{"
+_func: decorator_list _funcdecl _NEWLINE code_block "}"
+_if: "if" "(" bool_expr ")" "{" _NEWLINE code_block ("}" "else" "{" _NEWLINE code_block)? "}"
 
-!_some_namespace: "struct" | "namespace"
-_struct: decorator_list _some_namespace identifier_def ":"_NEWLINE code_block "end"
+_struct: decorator_list "struct" identifier_def "{" _NEWLINE struct_code_block "}"
+_namespace: decorator_list "namespace" identifier_def "{" _NEWLINE code_block "}"
 
-_with_statement: "with" (aliased_identifier ",")* aliased_identifier ":" _NEWLINE code_block "end"
+_with_statement: "with" (aliased_identifier ",")* aliased_identifier "{" _NEWLINE code_block "}"
 
 _attr_val: "(" notes (STRING notes)* ")"
-_with_attr_statement: "with_attr" identifier_def _attr_val? ":" _NEWLINE code_block "end"
+_with_attr_statement: "with_attr" identifier_def _attr_val? "{" _NEWLINE code_block "}"
 
 // Cairo file.
 _NEWLINE: "\n"
-COMMENT: /#.*/
+COMMENT: /\/\/.*/
 
 // Note: code_element_label is using identifier instead of identifier_def, in order to make the
 // parser LALR-friendly.
-code_element: instruction                                       -> code_element_instruction
-            | "const" identifier_def "=" expr                   -> code_element_const
-            | "member" typed_identifier                         -> code_element_member
-            | "let" _ref_binding "=" rvalue                     -> code_element_reference
-            | "local" typed_identifier ("=" expr)?              -> code_element_local_var
-            | "tempvar" typed_identifier ("=" expr)?            -> code_element_temp_var
-            | "assert" expr "=" expr                            -> code_element_compound_assert_eq
-            | "static_assert" expr _DBL_EQ expr                 -> code_element_static_assert
-            | "return" "(" arg_list ")"                         -> code_element_return
-            | "return" function_call                            -> code_element_tail_call
+code_element: instruction ";"                                   -> code_element_instruction
+            | "const" identifier_def "=" expr ";"               -> code_element_const
+            | "let" _ref_binding "=" rvalue ";"                 -> code_element_reference
+            | "local" typed_identifier ("=" expr)? ";"          -> code_element_local_var
+            | "tempvar" typed_identifier ("=" expr)? ";"        -> code_element_temp_var
+            | "assert" expr "=" expr ";"                        -> code_element_compound_assert_eq
+            | "static_assert" expr _DBL_EQ expr ";"             -> code_element_static_assert
+            | "return" expr ";"                                 -> code_element_return
             | _if                                               -> code_element_if
-            | function_call                                     -> code_element_func_call
+            | function_call ";"                                 -> code_element_func_call
             | identifier ":"                                    -> code_element_label
             | _func                                             -> code_element_function
             | _struct                                           -> code_element_struct
-            | "using" identifier_def "=" type                   -> code_element_typedef
+            | _namespace                                        -> code_element_namespace
+            | "using" identifier_def "=" type ";"               -> code_element_typedef
             | _with_attr_statement                              -> code_element_with_attr
             | _with_statement                                   -> code_element_with
             | HINT                                              -> code_element_hint
             | directive                                         -> code_element_directive
             | _import                                           -> code_element_import
-            | "alloc_locals"                                    -> code_element_alloc_locals
+            | "alloc_locals" ";"                                -> code_element_alloc_locals
             |                                                   -> code_element_empty_line
 commented_code_element: code_element [COMMENT]
 code_block: (commented_code_element _NEWLINE)*
+
+// A version of code_block for structs. This allows any combination of empty lines, comments and
+// struct members.
+struct_code_element: typed_identifier ","                       -> code_element_member
+                   |                                            -> code_element_empty_line
+struct_commented_code_element: struct_code_element [COMMENT]    -> commented_code_element
+struct_code_block: (struct_commented_code_element _NEWLINE)*    -> code_block
 
 cairo_file: code_block
 

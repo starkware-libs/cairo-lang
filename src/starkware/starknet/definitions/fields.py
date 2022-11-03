@@ -1,14 +1,16 @@
 import dataclasses
-from typing import Any, Dict, Type
+from typing import Any, Dict, Optional, Type
 
 import marshmallow
 import marshmallow.fields as mfields
 import marshmallow.utils
 
 from services.everest.definitions import fields as everest_fields
+from starkware.cairo.lang.tracer.tracer_data import field_element_repr
 from starkware.python.utils import from_bytes
 from starkware.starknet.definitions import constants
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
+from starkware.starknet.definitions.transaction_type import TransactionType
 from starkware.starkware_utils.field_validators import (
     validate_length,
     validate_non_negative,
@@ -16,15 +18,15 @@ from starkware.starkware_utils.field_validators import (
 )
 from starkware.starkware_utils.marshmallow_dataclass_fields import (
     BytesAsHex,
+    EnumField,
+    FrozenDictField,
     IntAsHex,
     IntAsStr,
     StrictRequiredInteger,
+    VariadicLengthTupleField,
 )
-from starkware.starkware_utils.validated_fields import (
-    OptionalField,
-    RangeValidatedField,
-    sequential_id_metadata,
-)
+from starkware.starkware_utils.marshmallow_fields_metadata import sequential_id_metadata
+from starkware.starkware_utils.validated_fields import OptionalField, RangeValidatedField
 
 # Fields data: validation data, dataclass metadata.
 
@@ -32,7 +34,7 @@ from starkware.starkware_utils.validated_fields import (
 # Common.
 
 felt_as_hex_list_metadata = dict(
-    marshmallow_field=mfields.List(IntAsHex(validate=everest_fields.FeltField.validate))
+    marshmallow_field=mfields.List(everest_fields.FeltField.get_marshmallow_field())
 )
 
 felt_as_hex_or_str_list_metadata = dict(
@@ -46,12 +48,18 @@ felt_list_metadata = dict(
 )
 
 
+def felt_formatter(hex_felt: str) -> str:
+    return field_element_repr(val=int(hex_felt, 16), prime=everest_fields.FeltField.upper_bound)
+
+
+def felt_formatter_from_int(int_felt: int) -> str:
+    return field_element_repr(val=int_felt, prime=everest_fields.FeltField.upper_bound)
+
+
 def bytes_as_hex_dict_keys_metadata(
     values_schema: Type[marshmallow.Schema],
 ) -> Dict[str, mfields.Dict]:
-    width_validator = validate_length(
-        field_name="contract hash", length=constants.CONTRACT_HASH_BYTES
-    )
+    width_validator = validate_length(field_name="class_hash", length=constants.CLASS_HASH_BYTES)
     return dict(
         marshmallow_field=mfields.Dict(
             keys=BytesAsHex(required=True, validate=width_validator),
@@ -94,6 +102,10 @@ OptionalSequencerAddressField = OptionalField(
 )
 optional_sequencer_address_metadata = OptionalSequencerAddressField.metadata()
 
+starknet_version_metadata = dict(
+    marshmallow_field=mfields.String(required=False, load_default=None)
+)
+
 caller_address_metadata = address_metadata(
     name="Caller address", error_code=StarknetErrorCode.OUT_OF_RANGE_CALLER_ADDRESS
 )
@@ -116,6 +128,8 @@ nonce_metadata = NonceField.metadata()
 
 OptionalNonceField = OptionalField(field=NonceField, none_probability=0)
 optional_nonce_metadata = OptionalNonceField.metadata()
+
+non_required_nonce_metadata = NonceField.metadata(required=False, load_default=0)
 
 
 # Block.
@@ -151,6 +165,10 @@ signature_metadata = felt_list_metadata
 retdata_as_hex_metadata = felt_as_hex_list_metadata
 
 
+# L1Handler.
+
+payload_metadata = felt_as_hex_list_metadata
+
 # Contract address.
 
 L2AddressField = RangeValidatedField(
@@ -171,34 +189,50 @@ ContractAddressSalt = everest_fields.felt(name_in_error_message="Contract salt")
 contract_address_salt_metadata = ContractAddressSalt.metadata()
 
 
-# Contract hash.
+# Class hash (as bytes).
 
 
-def validate_contract_hash(contract_hash: bytes):
-    if from_bytes(value=contract_hash, byte_order="big") >= constants.CONTRACT_HASH_UPPER_BOUND:
-        raise ValueError(
-            f"Contract hash must represent a field element; got: 0x{contract_hash.hex()}."
-        )
+def validate_optional_class_hash(class_hash: Optional[bytes]):
+    if class_hash is not None:
+        validate_class_hash(class_hash=class_hash)
 
 
-contract_hash_metadata = dict(
-    marshmallow_field=BytesAsHex(required=True, validate=validate_contract_hash),
+def validate_class_hash(class_hash: bytes):
+    value = from_bytes(value=class_hash, byte_order="big")
+    ClassHashIntField.validate(value=value, name="Class hash must represent a field element.")
+
+
+ClassHashField = BytesAsHex(required=True, validate=validate_class_hash)
+
+class_hash_metadata = dict(marshmallow_field=ClassHashField)
+
+non_required_class_hash_metadata = dict(
+    marshmallow_field=BytesAsHex(required=False, validate=validate_class_hash),
 )
 
-non_required_contract_hash_metadata = dict(
-    marshmallow_field=BytesAsHex(required=False, validate=validate_contract_hash),
+optional_class_hash_metadata = dict(
+    marshmallow_field=BytesAsHex(
+        required=False, load_default=None, validate=validate_optional_class_hash
+    )
 )
 
 
-ClassHashField = RangeValidatedField(
+# Class hash (as integer).
+
+
+ClassHashIntField = RangeValidatedField(
     lower_bound=0,
-    upper_bound=constants.CONTRACT_HASH_UPPER_BOUND,
+    upper_bound=constants.CLASS_HASH_UPPER_BOUND,
     name="class_hash",
-    error_code=StarknetErrorCode.OUT_OF_RANGE_CONTRACT_HASH,
+    error_code=StarknetErrorCode.OUT_OF_RANGE_CLASS_HASH,
     formatter=hex,
 )
 
-OptionalClassHashField = OptionalField(field=ClassHashField, none_probability=0)
+OptionalClassHashIntField = OptionalField(field=ClassHashIntField, none_probability=0)
+
+
+def class_hash_from_bytes(class_hash: bytes) -> str:
+    return ClassHashIntField.format(from_bytes(class_hash))
 
 
 # Entry point.
@@ -248,7 +282,8 @@ GasPriceField = RangeValidatedField(
     error_code=StarknetErrorCode.OUT_OF_RANGE_GAS_PRICE,
     formatter=hex,
 )
-gas_price_metadata = GasPriceField.metadata(required=False, load_default=0)
+LOAD_DEFAULT_GAS_PRICE = 0
+gas_price_metadata = GasPriceField.metadata(required=False, load_default=LOAD_DEFAULT_GAS_PRICE)
 
 
 # Transaction version.
@@ -260,15 +295,28 @@ TransactionVersionField = RangeValidatedField(
     error_code=StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_VERSION,
     formatter=hex,
 )
-tx_version_metadata = TransactionVersionField.metadata(
-    required=False, load_default=constants.TRANSACTION_VERSION
-)
+non_required_tx_version_metadata = TransactionVersionField.metadata(required=False, load_default=0)
+
+tx_version_metadata = TransactionVersionField.metadata()
 
 
 # State root.
 
 state_root_metadata = dict(marshmallow_field=BytesAsHex(required=True))
-optional_state_root_metadata = dict(marshmallow_field=BytesAsHex(required=False, allow_none=True))
+optional_state_root_metadata = dict(
+    marshmallow_field=BytesAsHex(required=False, allow_none=True, load_default=None)
+)
+
+
+# Declared contracts.
+
+declared_contracts_metadata = dict(
+    marshmallow_field=VariadicLengthTupleField(
+        ClassHashIntField.get_marshmallow_field(),
+        required=False,
+        load_default=(),
+    )
+)
 
 
 # Transaction hash.
@@ -281,9 +329,6 @@ TransactionHashField = RangeValidatedField(
     formatter=hex,
 )
 transaction_hash_metadata = TransactionHashField.metadata()
-
-OptionalTransactionHashField = OptionalField(field=TransactionHashField, none_probability=0)
-optional_transaction_hash_metadata = OptionalTransactionHashField.metadata()
 
 
 # General config.
@@ -304,6 +349,37 @@ invoke_tx_n_steps_metadata = dict(
     marshmallow_field=StrictRequiredInteger(validate=validate_non_negative("invoke_tx_n_steps"))
 )
 
+validate_n_steps_metadata = dict(
+    marshmallow_field=StrictRequiredInteger(validate=validate_non_negative("validate_n_steps"))
+)
+
 gas_price = dict(
     marshmallow_field=StrictRequiredInteger(validate=validate_non_negative("gas_price"))
+)
+
+
+# Nonces.
+
+address_to_nonce_metadata = dict(
+    marshmallow_field=mfields.Dict(
+        keys=L2AddressField.get_marshmallow_field(),
+        values=NonceField.get_marshmallow_field(),
+        load_default=dict,
+    )
+)
+
+# ExecutionInfo.
+
+name_to_resources_metadata = dict(
+    marshmallow_field=FrozenDictField(
+        keys=mfields.String(required=True),
+        values=StrictRequiredInteger(validate=validate_non_negative("Resource value")),
+        load_default=dict,
+    )
+)
+
+optional_tx_type_metadata = dict(
+    marshmallow_field=EnumField(
+        enum_cls=TransactionType, required=False, load_default=None, allow_none=True
+    )
 )

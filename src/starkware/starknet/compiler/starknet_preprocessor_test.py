@@ -1,5 +1,5 @@
 from starkware.starknet.compiler.test_utils import preprocess_str, verify_exception
-from starkware.starknet.services.api.contract_definition import SUPPORTED_BUILTINS
+from starkware.starknet.services.api.contract_class import SUPPORTED_BUILTINS
 
 
 def test_builtin_directive_after_external():
@@ -7,9 +7,9 @@ def test_builtin_directive_after_external():
         """
 %lang starknet
 @external
-func f{}():
-    return()
-end
+func f{}() {
+    return ();
+}
 %builtins pedersen range_check ecdsa
 """,
         """
@@ -50,9 +50,9 @@ def test_missing_lang_directive():
     verify_exception(
         """
 @external
-func f{}():
-    return()
-end
+func f{}() {
+    return ();
+}
 """,
         """
 file:?:?: External decorators can only be used in source files that contain the \
@@ -81,10 +81,10 @@ def test_invalid_hint():
         """
 %lang starknet
 @external
-func fc():
+func fc() {
     %{ __storage.commitment_update() %}
-    return ()
-end
+    return ();
+}
 """,
         """
 file:?:?: Hint is not whitelisted.
@@ -101,49 +101,49 @@ def test_abi_basic():
 %lang starknet
 %builtins range_check
 
-namespace MyNamespace:
-    struct ExternalStruct:
-        member y: (x : felt, y : felt)
-    end
-end
+namespace MyNamespace {
+    struct ExternalStruct {
+        y: (x: felt, y: felt),
+    }
+}
 
-struct ExternalStruct2:
-    member x: (felt, MyNamespace.ExternalStruct)
-end
+struct ExternalStruct2 {
+    x: (felt, MyNamespace.ExternalStruct),
+}
 
-struct NonExternalStruct:
-end
+struct NonExternalStruct {
+}
 
-struct ExternalStruct3:
-    member x: felt
-end
+struct ExternalStruct3 {
+    x: felt,
+}
 
 @constructor
-func constructor{syscall_ptr}():
-    return ()
-end
+func constructor{syscall_ptr}() {
+    return ();
+}
 
 @external
-func f(a : (x : felt, y : felt), arr_len : felt, arr : felt*) -> (b : felt, c : felt):
-    return (0, 1)
-end
+func f(a: (x: felt, y: felt), arr_len: felt, arr: felt*) -> (b: felt, c: felt) {
+    return (0, 1);
+}
 
 @view
-func g() -> (a: ExternalStruct3):
-    return (ExternalStruct3(0))
-end
+func g() -> (a: ExternalStruct3) {
+    return (a=ExternalStruct3(0));
+}
 
 @l1_handler
-func handler(from_address, a: ExternalStruct2):
-    return ()
-end
+func handler(from_address, a: ExternalStruct2) {
+    return ();
+}
 
-struct ExternalStruct4:
-end
+struct ExternalStruct4 {
+}
 
 @event
-func status(a: felt, arr_len : felt, arr : felt*, external_struct : ExternalStruct4):
-end
+func status(a: felt, arr_len: felt, arr: felt*, external_struct: ExternalStruct4) {
+}
 """
     )
 
@@ -163,7 +163,7 @@ end
         {
             "type": "struct",
             "name": "ExternalStruct",
-            "members": [{"name": "y", "offset": 0, "type": "(x : felt, y : felt)"}],
+            "members": [{"name": "y", "offset": 0, "type": "(x: felt, y: felt)"}],
             "size": 2,
         },
         {
@@ -180,7 +180,7 @@ end
         },
         {
             "inputs": [
-                {"name": "a", "type": "(x : felt, y : felt)"},
+                {"name": "a", "type": "(x: felt, y: felt)"},
                 {"name": "arr_len", "type": "felt"},
                 {"name": "arr", "type": "felt*"},
             ],
@@ -228,33 +228,33 @@ def test_abi_failures():
         """
 %lang starknet
 
-namespace a:
-    struct MyStruct:
-    end
-end
+namespace a {
+    struct MyStruct {
+    }
+}
 
-namespace b:
-    struct MyStruct:
-    end
+namespace b {
+    struct MyStruct {
+    }
 
-    struct MyStruct2:
-        member x: ((MyStruct, MyStruct), felt)
-    end
-end
+    struct MyStruct2 {
+        x: ((MyStruct, MyStruct), felt),
+    }
+}
 
 @external
-func f(x : (felt, a.MyStruct)):
-    return()
-end
+func f(x: (felt, a.MyStruct)) {
+    return ();
+}
 
 @view
-func g(y : b.MyStruct2):
-    return()
-end
+func g(y: b.MyStruct2) {
+    return ();
+}
 """,
         """
 file:?:?: Found two external structs named MyStruct: test_scope.a.MyStruct, test_scope.b.MyStruct.
-    struct MyStruct:
+    struct MyStruct {
            ^******^
 """,
     )

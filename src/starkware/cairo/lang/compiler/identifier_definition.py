@@ -1,7 +1,7 @@
 import dataclasses
 from abc import ABC, abstractmethod
 from dataclasses import field
-from typing import ClassVar, Dict, List, Optional, Type
+from typing import ClassVar, Dict, List, Optional, Type, TypeVar
 
 import marshmallow
 import marshmallow_dataclass
@@ -15,6 +15,9 @@ from starkware.cairo.lang.compiler.fields import CairoTypeAsStr
 from starkware.cairo.lang.compiler.preprocessor.flow import FlowTrackingData, ReferenceManager
 from starkware.cairo.lang.compiler.references import Reference
 from starkware.cairo.lang.compiler.scoped_name import ScopedName, ScopedNameAsStr
+from starkware.starkware_utils.marshmallow_dataclass_fields import additional_metadata
+
+TIdentifierDefinition = TypeVar("TIdentifierDefinition", bound="IdentifierDefinition")
 
 
 class DefinitionError(Exception):
@@ -43,7 +46,9 @@ class AliasDefinition(IdentifierDefinition):
     TYPE: ClassVar[str] = "alias"
     Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
 
-    destination: ScopedName = field(metadata=dict(marshmallow_field=ScopedNameAsStr()))
+    destination: ScopedName = field(
+        metadata=additional_metadata(marshmallow_field=ScopedNameAsStr())
+    )
 
 
 @marshmallow_dataclass.dataclass
@@ -60,7 +65,9 @@ class MemberDefinition(IdentifierDefinition):
     Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
 
     offset: int
-    cairo_type: CairoType = field(metadata=dict(marshmallow_field=CairoTypeAsStr(required=True)))
+    cairo_type: CairoType = field(
+        metadata=additional_metadata(marshmallow_field=CairoTypeAsStr(required=True))
+    )
 
     location: Optional[Location] = LocationField
 
@@ -70,15 +77,15 @@ class StructDefinition(IdentifierDefinition):
     """
     Represents a struct definition.
 
-    struct MyStruct:
+    struct MyStruct {
         ...
-    end
+    }
     """
 
     TYPE: ClassVar[str] = "struct"
     Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
 
-    full_name: ScopedName = field(metadata=dict(marshmallow_field=ScopedNameAsStr()))
+    full_name: ScopedName = field(metadata=additional_metadata(marshmallow_field=ScopedNameAsStr()))
 
     # members sorted by member offset, note the sort_members post_load function.
     members: Dict[str, MemberDefinition]
@@ -105,7 +112,9 @@ class TypeDefinition(IdentifierDefinition):
     TYPE: ClassVar[str] = "type_definition"
     Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
 
-    cairo_type: CairoType = field(metadata=dict(marshmallow_field=CairoTypeAsStr(required=True)))
+    cairo_type: CairoType = field(
+        metadata=additional_metadata(marshmallow_field=CairoTypeAsStr(required=True))
+    )
     location: Optional[Location] = LocationField
 
 
@@ -136,8 +145,10 @@ class ReferenceDefinition(IdentifierDefinition):
     TYPE: ClassVar[str] = "reference"
     Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
 
-    full_name: ScopedName = field(metadata=dict(marshmallow_field=ScopedNameAsStr()))
-    cairo_type: CairoType = field(metadata=dict(marshmallow_field=CairoTypeAsStr(required=True)))
+    full_name: ScopedName = field(metadata=additional_metadata(marshmallow_field=ScopedNameAsStr()))
+    cairo_type: CairoType = field(
+        metadata=additional_metadata(marshmallow_field=CairoTypeAsStr(required=True))
+    )
     references: List[Reference]
 
     def eval(

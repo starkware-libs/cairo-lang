@@ -2,10 +2,11 @@ python_lib(starknet_common_lib
     PREFIX starkware/starknet/common
 
     FILES
+    constants.cairo
+    eth_utils.cairo
     messages.cairo
     storage.cairo
     syscalls.cairo
-    eth_utils.cairo
 
     LIBS
     cairo_common_lib
@@ -13,7 +14,7 @@ python_lib(starknet_common_lib
 
 full_python_test(starknet_common_lib_test
     PREFIX starkware/starknet/common
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
     TESTED_MODULES starkware/starknet/common
 
     FILES

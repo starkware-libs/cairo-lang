@@ -3,6 +3,7 @@ from typing import List, Set, Tuple
 import pytest
 
 from starkware.cairo.common.structs import CairoStructFactory
+from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.cairo.lang.compiler.cairo_compile import compile_cairo
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
 from starkware.cairo.lang.vm.memory_segments import MemorySegmentManager
@@ -12,11 +13,9 @@ from starkware.cairo.lang.vm.relocatable import (
     RelocatableValue,
 )
 
-PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
-
 
 def test_relocate_segments():
-    segments = MemorySegmentManager(memory=MemoryDict({}), prime=PRIME)
+    segments = MemorySegmentManager(memory=MemoryDict({}), prime=DEFAULT_PRIME)
 
     for i in range(5):
         assert segments.add() == RelocatableValue(segment_index=i, offset=0)
@@ -57,7 +56,7 @@ def test_relocate_segments():
     ]
 
     # Negative flows.
-    segments = MemorySegmentManager(memory=MemoryDict({}), prime=PRIME)
+    segments = MemorySegmentManager(memory=MemoryDict({}), prime=DEFAULT_PRIME)
     segments.add(size=1)
     with pytest.raises(AssertionError, match="compute_effective_sizes must be called before"):
         segments.relocate_segments()
@@ -79,7 +78,7 @@ def test_get_segment_used_size():
         RelocatableValue(4, 1): 0,
     }
     memory = MemoryDict(memory_data)
-    segments = MemorySegmentManager(memory=memory, prime=PRIME)
+    segments = MemorySegmentManager(memory=memory, prime=DEFAULT_PRIME)
     segments.n_segments = 5
     memory.freeze()
     segments.compute_effective_sizes()
@@ -87,7 +86,7 @@ def test_get_segment_used_size():
 
 
 def test_gen_args():
-    segments = MemorySegmentManager(memory=MemoryDict({}), prime=PRIME)
+    segments = MemorySegmentManager(memory=MemoryDict({}), prime=DEFAULT_PRIME)
 
     test_array = [2, 3, 7]
     arg = [1, test_array, [4, -1]]
@@ -97,11 +96,11 @@ def test_gen_args():
 
     assert memory[ptr] == 1
     memory.get_range(memory[ptr + 1], len(test_array)) == test_array
-    memory.get_range(memory[ptr + 2], 2) == [4, PRIME - 1]
+    memory.get_range(memory[ptr + 2], 2) == [4, DEFAULT_PRIME - 1]
 
 
 def test_get_memory_holes():
-    segments = MemorySegmentManager(memory=MemoryDict({}), prime=PRIME)
+    segments = MemorySegmentManager(memory=MemoryDict({}), prime=DEFAULT_PRIME)
     seg0 = segments.add(size=10)
     seg1 = segments.add()
 
@@ -123,18 +122,18 @@ def test_gen_typed_args():
     """
 
     code = """
-struct Inner:
-    member a : felt
-    member b : felt
-end
+struct Inner {
+    a: felt,
+    b: felt,
+}
 
-struct MyStruct:
-    member nested : Inner
-    member ptr : Inner*
-end
+struct MyStruct {
+    nested: Inner,
+    ptr: Inner*,
+}
 """
 
-    program = compile_cairo(code=code, prime=PRIME)
+    program = compile_cairo(code=code, prime=DEFAULT_PRIME)
 
     structs = CairoStructFactory.from_program(program=program).structs
     my_struct = structs.MyStruct
@@ -142,7 +141,7 @@ end
 
     typed_args = my_struct(nested=inner(a=1, b=7), ptr=inner(a=3, b=4))
 
-    segments = MemorySegmentManager(memory=MemoryDict({}), prime=PRIME)
+    segments = MemorySegmentManager(memory=MemoryDict({}), prime=DEFAULT_PRIME)
     cairo_arg = segments.gen_typed_args(args=typed_args)
 
     assert len(cairo_arg) == 3

@@ -33,7 +33,7 @@ from starkware.starknet.public.abi_structs import (
     struct_definition_to_abi_entry,
 )
 from starkware.starknet.security.secure_hints import HintsWhitelist, InsecureHintError
-from starkware.starknet.services.api.contract_definition import SUPPORTED_BUILTINS
+from starkware.starknet.services.api.contract_class import SUPPORTED_BUILTINS
 from starkware.starkware_utils.subsequence import is_subsequence
 
 
@@ -112,12 +112,13 @@ class StarknetPreprocessor(Preprocessor):
         Returns a list of dictionaries describing the function's arguments or return values.
         Processes structs used by each argument and adds them to the abi.
         """
-        arg_struct_def = self.get_struct_definition(name=arg_full_scope, location=location)
+        members = self.get_type_or_struct_definition_members(name=arg_full_scope, location=location)
 
         arguments = []
-        for m_name, member in arg_struct_def.members.items():
-            assert is_type_resolved(member.cairo_type)
-            abi_type_info = prepare_type_for_abi(member.cairo_type)
+        for m_name, cairo_type in members:
+            assert m_name is not None, f"Missing name for a member of {arg_full_scope}."
+            assert is_type_resolved(cairo_type)
+            abi_type_info = prepare_type_for_abi(cairo_type)
             arguments.append(
                 {
                     "name": m_name,
@@ -199,7 +200,7 @@ class StarknetPreprocessor(Preprocessor):
         if self.current_scope == WRAPPER_SCOPE:
             return
 
-        external_decorator, _, _ = parse_entry_point_decorators(elm=elm)
+        external_decorator, _, _, _ = parse_entry_point_decorators(elm=elm)
         if external_decorator is not None:
             # Add a function/constructor entry to the ABI.
             self.add_abi_function_entry(

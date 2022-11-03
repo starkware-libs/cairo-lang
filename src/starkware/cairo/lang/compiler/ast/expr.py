@@ -7,13 +7,21 @@ from typing import List, Optional, Sequence
 import marshmallow
 
 from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, CastType
-from starkware.cairo.lang.compiler.ast.formatting_utils import INDENTATION, LocationField
+from starkware.cairo.lang.compiler.ast.formatting_utils import (
+    INDENTATION,
+    LocationField,
+    Particle,
+    ParticleList,
+    SeparatedParticleList,
+    SingleParticle,
+)
 from starkware.cairo.lang.compiler.ast.node import AstNode
 from starkware.cairo.lang.compiler.ast.notes import Notes, NotesField
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.instruction import Register
 from starkware.python.expression_string import ExpressionString
 from starkware.python.utils import indent, safe_zip
+from starkware.starkware_utils.marshmallow_dataclass_fields import additional_metadata
 
 
 class Expression(AstNode):
@@ -34,6 +42,12 @@ class Expression(AstNode):
         insertion of parentheses (where required).
         """
 
+    @abstractmethod
+    def get_particles(self) -> List[Particle]:
+        """
+        Returns a list of particles representing the expression, for formatting purposes.
+        """
+
 
 @dataclasses.dataclass
 class ExprConst(Expression):
@@ -44,15 +58,24 @@ class ExprConst(Expression):
         default=None,
         hash=False,
         compare=False,
-        metadata=dict(marshmallow_field=marshmallow.fields.Field(load_only=True, dump_only=True)),
+        metadata=additional_metadata(
+            marshmallow_field=marshmallow.fields.Field(load_only=True, dump_only=True)
+        ),
     )
     location: Optional[Location] = LocationField
 
+    def absolute_val_format(self) -> str:
+        return str(abs(self.val)) if self.format_str is None else self.format_str
+
     def to_expr_str(self):
-        abs_format = str(abs(self.val)) if self.format_str is None else self.format_str
+        abs_format = self.absolute_val_format()
         if self.val >= 0:
             return ExpressionString.highest(abs_format)
         return -ExpressionString.highest(abs_format)
+
+    def get_particles(self) -> List[Particle]:
+        abs_format = self.absolute_val_format()
+        return [SingleParticle(text=abs_format if self.val >= 0 else f"-{abs_format}")]
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return []
@@ -99,6 +122,9 @@ class ExprHint(Expression):
     def to_expr_str(self):
         return ExpressionString.highest(f"nondet {self.to_str()}")
 
+    def get_particles(self) -> List[Particle]:
+        return [SingleParticle(text=f"nondet {self.to_str()}")]
+
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return []
 
@@ -110,6 +136,9 @@ class ExprIdentifier(Expression):
 
     def to_expr_str(self):
         return ExpressionString.highest(self.name)
+
+    def get_particles(self) -> List[Particle]:
+        return [SingleParticle(text=self.name)]
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return []
@@ -185,6 +214,9 @@ class ExprReg(Expression):
     def to_expr_str(self):
         return ExpressionString.highest(self.reg.name.lower())
 
+    def get_particles(self) -> List[Particle]:
+        return [SingleParticle(text=self.reg.name.lower())]
+
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return []
 
@@ -214,6 +246,13 @@ class ExprOperator(Expression):
         else:
             raise NotImplementedError(f"Unexpected operator '{self.op}'")
 
+    def get_particles(self) -> List[Particle]:
+        self.notes.assert_no_comments()
+
+        a_particles = self.a.get_particles()
+        a_particles[-1].add_suffix(f" {self.op} ")
+        return a_particles + self.b.get_particles()
+
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.a, self.b]
 
@@ -233,6 +272,13 @@ class ExprPow(Expression):
             b = b.prepend("\n")
         return a.double_star_pow(b)
 
+    def get_particles(self) -> List[Particle]:
+        self.notes.assert_no_comments()
+
+        a_particles = self.a.get_particles()
+        a_particles[-1].add_suffix(f" ** ")
+        return a_particles + self.b.get_particles()
+
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.a, self.b]
 
@@ -249,6 +295,11 @@ class ExprAddressOf(Expression):
     def to_expr_str(self):
         return self.expr.to_expr_str().address_of()
 
+    def get_particles(self) -> List[Particle]:
+        particles = self.expr.get_particles()
+        particles[0].add_prefix("&")
+        return particles
+
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.expr]
 
@@ -260,6 +311,11 @@ class ExprNeg(Expression):
 
     def to_expr_str(self):
         return -self.val.to_expr_str()
+
+    def get_particles(self) -> List[Particle]:
+        particles = self.val.get_particles()
+        particles[0].add_prefix("-")
+        return particles
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.val]
@@ -273,6 +329,17 @@ class ExprParentheses(Expression):
 
     def to_expr_str(self):
         return ExpressionString.highest(f"({self.notes.format()}{str(self.val.to_expr_str())})")
+
+    def get_particles(self) -> List[Particle]:
+        self.notes.assert_no_comments()
+        return [
+            SeparatedParticleList(
+                elements=self.val.get_particles(),
+                start="(",
+                end=")",
+                separator="",
+            )
+        ]
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.val]
@@ -292,6 +359,14 @@ class ExprDeref(Expression):
         self.notes.assert_no_comments()
         notes = "" if self.notes.empty else "\n"
         return ExpressionString.highest(f"[{notes}{str(self.addr.to_expr_str())}]")
+
+    def get_particles(self) -> List[Particle]:
+        self.notes.assert_no_comments()
+        return [
+            SeparatedParticleList(
+                elements=self.addr.get_particles(), start="[", end="]", separator=""
+            )
+        ]
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.addr]
@@ -316,6 +391,17 @@ class ExprSubscript(Expression):
             f"{self.expr.to_expr_str():HIGHEST}[{notes}{str(self.offset.to_expr_str())}]"
         )
 
+    def get_particles(self) -> List[Particle]:
+        self.notes.assert_no_comments()
+
+        expr_particles = self.expr.get_particles()
+        expr_particles[-1].add_suffix("[")
+        offset_particle = SeparatedParticleList(
+            elements=self.offset.get_particles(), start="", end="]", separator=""
+        )
+
+        return expr_particles + [offset_particle]
+
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.expr, self.offset]
 
@@ -335,6 +421,13 @@ class ExprDot(Expression):
         return ExpressionString.highest(
             f"{self.expr.to_expr_str():HIGHEST}.{str(self.member.to_expr_str())}"
         )
+
+    def get_particles(self) -> List[Particle]:
+        expr_particles = self.expr.get_particles()
+        member_str = "".join(str(particle) for particle in self.member.get_particles())
+        expr_particles[-1].add_suffix(f".{member_str}")
+
+        return expr_particles
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.expr, self.member]
@@ -361,6 +454,17 @@ class ExprCast(Expression):
             f"cast({notes}{str(self.expr.to_expr_str())}, {self.dest_type.format()})"
         )
 
+    def get_particles(self) -> List[Particle]:
+        expr_particles = self.expr.get_particles()
+        type_particle = self.dest_type.to_particle()
+        return [
+            SeparatedParticleList(
+                elements=[ParticleList(elements=expr_particles), type_particle],
+                start="cast(",
+                end=")",
+            )
+        ]
+
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.expr, self.dest_type]
 
@@ -373,6 +477,13 @@ class ExprTuple(Expression):
     def to_expr_str(self):
         code = self.members.format()
         return ExpressionString.highest(f"({code})")
+
+    def get_particles(self) -> List[Particle]:
+        return [
+            SeparatedParticleList(
+                elements=[x.format() for x in self.members.args], start="(", end=")"
+            )
+        ]
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.members]
@@ -392,6 +503,9 @@ class ExprFutureLabel(Expression):
     def to_expr_str(self):
         return self.identifier.to_expr_str()
 
+    def get_particles(self) -> List[Particle]:
+        return self.identifier.get_particles()
+
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.identifier]
 
@@ -399,8 +513,8 @@ class ExprFutureLabel(Expression):
 @dataclasses.dataclass
 class ExprNewOperator(Expression):
     """
-    Represents an expression of the form "new <struct_name>(<arguments>)".
-    For example, "new MyStruct(1, 2, z=3)".
+    Represents an expression of the form "new expr".
+    The typical use case is "new MyStruct(1, 2, z=3)", but "new (1 + 2)" is also valid.
     """
 
     expr: Expression
@@ -411,6 +525,11 @@ class ExprNewOperator(Expression):
 
     def to_expr_str(self):
         return self.expr.to_expr_str().operator_new()
+
+    def get_particles(self) -> List[Particle]:
+        particles = self.expr.get_particles()
+        particles[0].add_prefix("new ")
+        return particles
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.expr]

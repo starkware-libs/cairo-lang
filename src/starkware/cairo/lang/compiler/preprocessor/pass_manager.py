@@ -1,12 +1,15 @@
 import dataclasses
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple, Type, TypeVar
 
 from starkware.cairo.lang.compiler.ast.module import CairoModule
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.preprocessor.preprocessor import PreprocessedProgram
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
+from starkware.cairo.lang.compiler.unique_name_provider import UniqueNameProvider
+
+T = TypeVar("T")
 
 
 @dataclasses.dataclass
@@ -18,6 +21,8 @@ class PassManagerContext:
     main_scope: ScopedName
     identifiers: IdentifierManager
     modules: List[CairoModule] = dataclasses.field(default_factory=list)
+    # A map from a fully-qualified identifier name to the location of its definition.
+    # This provides additional information about the compiled program, which can be used by IDEs.
     identifier_locations: Dict[ScopedName, Location] = dataclasses.field(default_factory=dict)
     # List of builtins.
     builtins: Optional[List[str]] = None
@@ -25,6 +30,16 @@ class PassManagerContext:
     # A set of functions to compile (None means all functions will be compiled).
     # If the unused function optimization is enabled, only reachable functions will be compiled.
     functions_to_compile: Optional[Set[ScopedName]] = None
+    unique_names: UniqueNameProvider = dataclasses.field(default_factory=UniqueNameProvider)
+    # A general purpose map of resources that need to be shared between stages.
+    # resources[T] should be of type T.
+    # Use get_resource() instead of accessing this dictionary directly.
+    _resources: Dict[Type, Any] = dataclasses.field(default_factory=dict)
+
+    def get_resource(self, typ: Type[T]) -> T:
+        if typ not in self._resources:
+            self._resources[typ] = typ()
+        return self._resources[typ]
 
 
 class Stage(ABC):

@@ -8,27 +8,27 @@ from starkware.cairo.lang.compiler.type_utils import check_felts_only_type
 def test_check_felts_only_type():
     program = preprocess_str(
         """
-struct A:
-    member x : felt
-end
+struct A {
+    x: felt,
+}
 
-struct B:
-end
+struct B {
+}
 
-struct C:
-    member x : felt
-    member y : (felt, A, B)
-    member z : A
-end
+struct C {
+    x: felt,
+    y: (felt, A, B),
+    z: A,
+}
 
-struct D:
-    member x : felt*
-end
+struct D {
+    x: felt*,
+}
 
-struct E:
-    member x : D
-end
-    """,
+struct E {
+    x: D,
+}
+""",
         prime=DEFAULT_PRIME,
     )
 

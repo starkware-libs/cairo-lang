@@ -21,7 +21,7 @@ from starkware.python.utils import add_counters
 
 def test_cairo_pie_serialize_deserialize():
     program = compile_cairo(
-        code=[("%builtins output pedersen range_check ecdsa\nmain:\n[ap] = [ap]\n", "")],
+        code=[("%builtins output pedersen range_check ecdsa\nmain:\n[ap] = [ap];\n", "")],
         prime=DEFAULT_PRIME,
     )
     metadata = CairoPieMetadata(
@@ -68,9 +68,9 @@ def cairo_pie():
     code = """
 %builtins output pedersen
 
-func main(output_ptr, pedersen_ptr) -> (output_ptr, pedersen_ptr):
-    return (output_ptr=output_ptr, pedersen_ptr=pedersen_ptr)
-end
+func main(output_ptr: felt*, pedersen_ptr: felt*) -> (output_ptr: felt*, pedersen_ptr: felt*) {
+    return (output_ptr=output_ptr, pedersen_ptr=pedersen_ptr);
+}
 """
     runner = get_runner_from_code(code=[(code, "")], layout="small", prime=DEFAULT_PRIME)
     return runner.get_cairo_pie()
@@ -147,7 +147,7 @@ def test_cairo_pie_memory_invalid_value(cairo_pie: CairoPie):
 
 def test_add_execution_resources():
     """
-    Tests ExecutionResources __add__ calculation.
+    Tests ExecutionResources.__add__().
     """
     dummy_builtins = ["builtin1", "builtin2", "builtin3", "builtin4"]
 
@@ -185,3 +185,24 @@ def test_add_execution_resources():
 
     assert total_execution_resources.builtin_instance_counter == total_builtin_instance_counter
     assert total_execution_resources.n_steps == total_steps
+
+
+def test_filter_unused_builtins():
+    """
+    Tests ExecutionResources.filter_unused_builtins().
+    """
+    execution_resources1 = ExecutionResources(
+        n_steps=17,
+        builtin_instance_counter={"builtin1": 1, "builtin2": 2, "builtin3": 1, "builtin4": 4},
+        n_memory_holes=5,
+    )
+
+    execution_resources2 = ExecutionResources(
+        n_steps=17,
+        builtin_instance_counter={"builtin1": 1, "builtin2": 2, "builtin3": 3, "builtin4": 4},
+        n_memory_holes=5,
+    )
+
+    diff = (execution_resources2 - execution_resources1).filter_unused_builtins()
+
+    assert diff.builtin_instance_counter == {"builtin3": 2}

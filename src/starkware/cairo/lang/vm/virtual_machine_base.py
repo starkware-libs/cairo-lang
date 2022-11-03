@@ -8,7 +8,11 @@ from typing_extensions import Protocol
 
 from starkware.cairo.lang.compiler.debug_info import DebugInfo, InstructionLocation
 from starkware.cairo.lang.compiler.encode import is_call_instruction
-from starkware.cairo.lang.compiler.expression_evaluator import ExpressionEvaluator
+from starkware.cairo.lang.compiler.expression_evaluator import (
+    ExpressionEvaluator,
+    ExpressionEvaluatorError,
+)
+from starkware.cairo.lang.compiler.identifier_manager import IdentifierError
 from starkware.cairo.lang.compiler.instruction import decode_instruction_values
 from starkware.cairo.lang.compiler.preprocessor.flow import FlowTrackingDataActual
 from starkware.cairo.lang.compiler.preprocessor.preprocessor import AttributeBase, AttributeScope
@@ -264,7 +268,7 @@ class VirtualMachineBase(ABC):
         if new_scope_locals is None:
             new_scope_locals = {}
 
-        self.exec_scopes.append({**new_scope_locals, **self.builtin_runners})
+        self.exec_scopes.append(new_scope_locals.copy())
 
     def exit_scope(self):
         assert len(self.exec_scopes) > 1, "Cannot exit main scope."
@@ -387,7 +391,12 @@ class VirtualMachineBase(ABC):
                     fp=fp,
                 )
                 return decimal_repr(val, self.prime)
-            except (ApDeductionError, InvalidReferenceExpressionError):
+            except (
+                ApDeductionError,
+                ExpressionEvaluatorError,
+                IdentifierError,
+                InvalidReferenceExpressionError,
+            ):
                 invalid_references.append(reference)
                 return match.group(0)
 
@@ -461,18 +470,28 @@ class VirtualMachineBase(ABC):
         Makes sure that all assigned memory cells are consistent with their auto deduction rules.
         """
         for addr in self.validated_memory:
-            if not isinstance(addr, RelocatableValue):
-                continue
-            for rule, args in self.auto_deduction.get(addr.segment_index, []):
-                value = rule(self, addr, *args)
-                if value is None:
-                    continue
+            self.verify_auto_deductions_for_addr(addr)
 
-                current = self.validated_memory[addr]
-                # If the values are not the same, try using check_eq to allow a subclass
-                # to override this result.
-                if current != value and not self.check_eq(current, value):
-                    raise InconsistentAutoDeductionError(addr, current, value)
+    def verify_auto_deductions_for_addr(self, addr: MaybeRelocatable):
+        """
+        Makes sure that the value at the given address is consistent with the auto deduction rules.
+        """
+        if not isinstance(addr, RelocatableValue):
+            return
+
+        for rule, args in self.auto_deduction.get(addr.segment_index, []):
+            value = rule(self, addr, *args)
+            if value is None:
+                continue
+
+            current = self.validated_memory.get(addr)
+            if current is None:
+                continue
+
+            # If the values are not the same, try using check_eq to allow a subclass
+            # to override this result.
+            if current != value and not self.check_eq(current, value):
+                raise InconsistentAutoDeductionError(addr, current, value)
 
     def end_run(self):
         self.verify_auto_deductions()

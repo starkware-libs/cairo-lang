@@ -63,9 +63,6 @@ class DependencyGraphVisitor(Visitor):
         if self.current_function is not None:
             self.visited_identifiers.setdefault(self.current_function, []).append(canonical_name)
 
-    def visit_CodeElementMember(self, elm):
-        pass
-
     def visit_ExprDot(self, expr: ExprDot):
         # We override the default visitor, since we must not visit expr.member.
         self.visit(expr.expr)

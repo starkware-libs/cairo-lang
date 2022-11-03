@@ -27,6 +27,7 @@ def test_main_scope():
         main_scope=ScopedName.from_string("a"),
         identifiers=identifiers,
         reference_manager=reference_manager,
+        compiler_version=None,
     )
 
     # Check accessible identifiers.
@@ -65,6 +66,7 @@ def test_program_start_property():
         main_scope=main_scope,
         identifiers=identifiers,
         reference_manager=reference_manager,
+        compiler_version=None,
     )
     assert program.start == 3
 
@@ -77,5 +79,6 @@ def test_program_start_property():
         main_scope=main_scope,
         identifiers=IdentifierManager(),
         reference_manager=reference_manager,
+        compiler_version=None,
     )
     assert program.start == 0

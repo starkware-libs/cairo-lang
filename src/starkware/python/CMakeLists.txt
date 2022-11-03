@@ -12,6 +12,7 @@ python_lib(starkware_python_utils_lib
     LIBS
     pip_pyyaml
     pip_sympy
+    pip_typing_extensions
 )
 
 python_lib(starkware_expression_string_lib
@@ -44,7 +45,7 @@ python_lib(starkware_python_test_utils_lib
 
 full_python_test(starkware_python_utils_test
     PREFIX starkware/python
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
     TESTED_MODULES starkware/python
 
     FILES

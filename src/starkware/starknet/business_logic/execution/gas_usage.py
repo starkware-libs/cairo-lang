@@ -8,9 +8,9 @@ from starkware.starknet.definitions import constants
 def calculate_tx_gas_usage(
     l2_to_l1_messages: List[L2ToL1MessageInfo],
     n_modified_contracts: int,
-    n_storage_writes: int,
+    n_storage_changes: int,
     l1_handler_payload_size: Optional[int],
-    constructor_calldata_length: Optional[int],
+    n_deployments: int,
 ) -> int:
     """
     Returns an estimation of the L1 gas amount that will be used (by StarkNet's update state and
@@ -20,11 +20,10 @@ def calculate_tx_gas_usage(
 
     Arguments:
     l1_handler_payload_size should be an int if and only if we calculate the gas usage of an
-    InternalInvokeFunction of type L1 handler. Otherwise the payload size is irrelevent, and should
-    be None. Same goes to constructor_calldata_length in relation to any InternalDeploy.
+    InternalInvokeFunction of type L1 handler. Otherwise the payload size is irrelevant, and should
+    be None.
+    n_deployments is the number of the contracts deployed by the transaction.
     """
-    assert l1_handler_payload_size is None or constructor_calldata_length is None
-
     # Calculate the addition of the transaction to the output messages segment.
     residual_message_segment_length = get_message_segment_length(
         l2_to_l1_messages=l2_to_l1_messages,
@@ -32,10 +31,10 @@ def calculate_tx_gas_usage(
     )
 
     # Calculate the effect of the transaction on the output data availability segment.
-    residual_da_segment_length = get_da_segment_length(
+    residual_onchain_data_segment_length = get_onchain_data_segment_length(
         n_modified_contracts=n_modified_contracts,
-        n_storage_writes=n_storage_writes,
-        constructor_calldata_length=constructor_calldata_length,
+        n_storage_changes=n_storage_changes,
+        n_deployments=n_deployments,
     )
 
     n_l2_to_l1_messages = len(l2_to_l1_messages)
@@ -56,7 +55,7 @@ def calculate_tx_gas_usage(
 
     sharp_gas_usage = (
         residual_message_segment_length * eth_gas_constants.SHARP_GAS_PER_MEMORY_WORD
-        + residual_da_segment_length * eth_gas_constants.SHARP_GAS_PER_MEMORY_WORD
+        + residual_onchain_data_segment_length * eth_gas_constants.SHARP_GAS_PER_MEMORY_WORD
     )
 
     return starknet_gas_usage + sharp_gas_usage
@@ -87,28 +86,26 @@ def get_message_segment_length(
     return message_segment_length
 
 
-def get_da_segment_length(
+def get_onchain_data_segment_length(
     n_modified_contracts: int,
-    n_storage_writes: int,
-    constructor_calldata_length: Optional[int],
+    n_storage_changes: int,
+    n_deployments: int,
 ) -> int:
     """
     Returns the number of felts added to the output data availability segment as a result of adding
     a transaction to a batch. Note that constant cells - such as the one that holds the number of
     modified contracts - are not counted.
-    This segment consists of deployment info. (of contracts deployed by the transaction) and
+    This segment consists of deployment info (of contracts deployed by the transaction) and
     storage updates.
     """
     # For each newly modified contract: contract address, number of modified storage cells.
-    da_segment_length = n_modified_contracts * 2
+    onchain_data_segment_length = n_modified_contracts * 2
     # For each modified storage cell: key, new value.
-    da_segment_length += n_storage_writes * 2
+    onchain_data_segment_length += n_storage_changes * 2
+    # Add size of deployment info.
+    onchain_data_segment_length += n_deployments * constants.DEPLOYMENT_INFO_SIZE
 
-    if constructor_calldata_length is not None:
-        # The corresponding transaction is of type Deploy; add size of deployment info.
-        da_segment_length += constants.DEPLOYMENT_INFO_HEADER_SIZE + constructor_calldata_length
-
-    return da_segment_length
+    return onchain_data_segment_length
 
 
 def get_consumed_message_to_l2_emissions_cost(l1_handler_payload_size: Optional[int]) -> int:

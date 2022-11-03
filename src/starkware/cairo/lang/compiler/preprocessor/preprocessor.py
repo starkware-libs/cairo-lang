@@ -3,16 +3,18 @@ from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import field
 from enum import Enum, auto
-from typing import DefaultDict, Dict, List, Optional, Set, Tuple, Type, Union, cast
+from typing import DefaultDict, Dict, List, Optional, Sequence, Set, Tuple, Type, Union, cast
 
 import marshmallow.fields as mfields
 
 from starkware.cairo.lang.compiler.ast.arguments import IdentifierList
+from starkware.cairo.lang.compiler.ast.bool_expr import BoolEqExpr
 from starkware.cairo.lang.compiler.ast.cairo_types import (
     CairoType,
     CastType,
     TypeCodeoffset,
     TypeFelt,
+    TypeIdentifier,
     TypePointer,
     TypeStruct,
     TypeTuple,
@@ -34,7 +36,6 @@ from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeElementInstruction,
     CodeElementLabel,
     CodeElementLocalVariable,
-    CodeElementMember,
     CodeElementReference,
     CodeElementReturn,
     CodeElementReturnValueReference,
@@ -99,8 +100,11 @@ from starkware.cairo.lang.compiler.identifier_definition import (
     StructDefinition,
 )
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierError, IdentifierManager
-from starkware.cairo.lang.compiler.identifier_utils import get_struct_definition
-from starkware.cairo.lang.compiler.injector import inject_code_elements
+from starkware.cairo.lang.compiler.identifier_utils import (
+    get_struct_definition,
+    get_type_definition,
+)
+from starkware.cairo.lang.compiler.injector import InjectionError, inject_code_elements
 from starkware.cairo.lang.compiler.instruction import Register
 from starkware.cairo.lang.compiler.instruction_builder import (
     InstructionBuilderError,
@@ -154,9 +158,10 @@ from starkware.cairo.lang.compiler.references import FlowTrackingError, Referenc
 from starkware.cairo.lang.compiler.resolve_search_result import resolve_search_result
 from starkware.cairo.lang.compiler.scoped_name import ScopedName, ScopedNameAsStr
 from starkware.cairo.lang.compiler.substitute_identifiers import substitute_identifiers
-from starkware.cairo.lang.compiler.type_casts import check_cast
+from starkware.cairo.lang.compiler.type_casts import CairoTypeError, check_cast
 from starkware.cairo.lang.compiler.type_system_visitor import get_expr_addr, simplify_type_system
 from starkware.python.utils import safe_zip
+from starkware.starkware_utils.marshmallow_dataclass_fields import additional_metadata
 from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 
 # Indicates that the compiler should be able to deduce the change in the ap register for this
@@ -180,6 +185,11 @@ class ReferenceChecker(ExpressionTransformer):
     def visit_ExprNewOperator(self, expr: ExprNewOperator):
         raise PreprocessorError(
             "The use of 'new' in reference expressions is not allowed.", location=expr.location
+        )
+
+    def visit_ExprFuncCall(self, expr: ExprFuncCall):
+        raise PreprocessorError(
+            "Function calls are not allowed inside reference expressions.", location=expr.location
         )
 
 
@@ -217,13 +227,14 @@ class PreprocessedInstruction:
 
     def format(self, with_locations: bool = False) -> str:
         location_str = (
-            f"  # {self.instruction.location.topmost_location()}."
+            f"  // {self.instruction.location.topmost_location()}."
             if with_locations and self.instruction.location is not None
             else ""
         )
         return (
             "".join(hint.format(get_max_line_length()) + "\n" for hint, _ in self.hints)
             + self.instruction.format()
+            + ";"
             + location_str
         )
 
@@ -240,7 +251,9 @@ class AttributeScope(AttributeBase, ValidatedDataclass):
     end_pc: int
     flow_tracking_data: Optional[FlowTrackingDataActual] = field(metadata=dict(load_default=None))
     accessible_scopes: List[ScopedName] = field(
-        metadata=dict(marshmallow_field=mfields.List(ScopedNameAsStr, load_default=list)),
+        metadata=additional_metadata(
+            marshmallow_field=mfields.List(ScopedNameAsStr, load_default=list)
+        ),
     )
 
 
@@ -335,13 +348,12 @@ class Preprocessor(IdentifierAwareVisitor):
         prime: int,
         builtins: List[str],
         identifiers: Optional[IdentifierManager] = None,
+        identifier_locations: Dict[ScopedName, Location] = None,
         supported_decorators: Optional[Set[str]] = None,
         functions_to_compile: Optional[Set[ScopedName]] = None,
         auxiliary_info_cls: Optional[Type[AuxiliaryInfoCollector]] = None,
     ):
-        super().__init__(
-            identifiers=identifiers,
-        )
+        super().__init__(identifiers=identifiers, identifier_locations=identifier_locations)
         self.prime: int = prime
         self.instructions: List[PreprocessedInstruction] = []
         # Stores the program counter of the next instruction (where the first instruction is at 0).
@@ -388,7 +400,7 @@ class Preprocessor(IdentifierAwareVisitor):
         self.attributes: List[AttributeScope] = []
 
         self.auxiliary_info = (
-            auxiliary_info_cls.create(prime) if auxiliary_info_cls is not None else None
+            auxiliary_info_cls.create(prime, self) if auxiliary_info_cls is not None else None
         )
 
         # Current code element that is being processed.
@@ -655,6 +667,7 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
                 start_pc=self.current_pc,
                 implicit_args_struct=implicit_args_struct,
                 args_struct=args_struct,
+                ret_type=None if elm.returns is None else self.resolve_type(elm.returns),
             )
 
         # Process code_elements.
@@ -685,7 +698,10 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
                 self.function_metadata[new_scope].total_ap_change = RegChangeUnknown()
 
             if self.auxiliary_info is not None:
-                self.auxiliary_info.finish_function_info(end_pc=self.current_pc)
+                self.auxiliary_info.finish_function_info(
+                    end_pc=self.current_pc,
+                    total_ap_change=self.function_metadata[new_scope].total_ap_change,
+                )
 
     def visit_function_body_with_retries(self, code_block: CodeBlock, location: Optional[Location]):
         """
@@ -702,14 +718,16 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
                     code_elements=[x.code_elm for x in code_block.code_elements],
                     scope=self.current_scope,
                     get_size_callback=self.get_size,
-                    get_unpacking_struct_definition_callback=self.get_unpacking_struct_definition,
+                    get_unpacking_type_callback=self.get_unpacking_type,
                     default_location=location,
                 )
 
+                if self.auxiliary_info is not None:
+                    self.auxiliary_info.start_function_retry()
+
                 # These cases cannot be fixed for reference revocations:
                 # * Functions without alloc_locals.
-                # * Contexts with self.auxiliary_info.
-                if not has_alloc_locals or self.auxiliary_info is not None:
+                if not has_alloc_locals:
                     self.visit_uncommented_code_block(code_elements)
                     return
 
@@ -737,9 +755,14 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
                 memento = None
 
                 # Fix revocations.
-                code_block = self.fix_reference_revocations(
-                    code_block=code_block, reference_trial=reference_trial
-                )
+                try:
+                    code_block = self.fix_reference_revocations(
+                        code_block=code_block, reference_trial=reference_trial
+                    )
+                except InjectionError:
+                    # Injection error may be raised when new code elements were created during
+                    # processing the original AST.
+                    raise reference_trial.exception
         finally:
             if memento is not None:
                 assert self is memento.apply(preprocessor)
@@ -861,6 +884,11 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
             self.reference_states = old_reference_states
 
     def visit_CodeElementIf(self, elm: CodeElementIf):
+        # We expect complex boolean expressions to be simplified in earlier stages.
+        assert isinstance(
+            elm.condition, BoolEqExpr
+        ), "Complex boolean expressions must be simplified at this point."
+
         # Prepare branch compound expression.
         cond_expr = self.simplify_expr_as_felt(
             ExprOperator(
@@ -989,19 +1017,7 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
         )
 
         if self.auxiliary_info is not None:
-            self.auxiliary_info.add_const(name, val.val)
-
-    def visit_CodeElementMember(self, elm: CodeElementMember):
-        self.check_no_hints("Hints before member definitions are not allowed.")
-
-        if self.inside_a_struct():
-            # Was already handled by the struct collector.
-            return
-
-        raise PreprocessorError(
-            "The member keyword may only be used inside a struct.",
-            location=elm.typed_identifier.location,
-        )
+            self.auxiliary_info.add_const(name, elm.expr, val.val)
 
     def visit_CodeElementReference(self, elm: CodeElementReference):
         name = self.current_scope + elm.typed_identifier.identifier.name
@@ -1030,6 +1046,14 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
 
         location = val.location
 
+        if self.auxiliary_info is not None:
+            self.auxiliary_info.add_reference(
+                identifier=elm.typed_identifier,
+                resolved_type=dst_type,
+                expr=elm.expr,
+                identifier_loc=elm.typed_identifier.location,
+            )
+
         # At this point 'val' is a simplified typeless expression and we need 'ref_expr'
         # to include a cast to the correct type.
         # We insert the cast at the correct location according to the outermost expression in 'val'.
@@ -1055,9 +1079,6 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
             cairo_type=dst_type,
             location=elm.typed_identifier.location,
         )
-
-        if self.auxiliary_info is not None:
-            self.auxiliary_info.add_reference(name, elm.expr, elm.typed_identifier.location)
 
     def visit_CodeElementLocalVariable(self, elm: CodeElementLocalVariable):
         raise PreprocessorError(
@@ -1124,7 +1145,7 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
 
         if self.auxiliary_info is not None:
             self.auxiliary_info.start_temp_var(
-                self.current_scope + elm.typed_identifier.identifier.name,
+                elm.typed_identifier,
                 elm.expr,
                 elm.typed_identifier.location,
             )
@@ -1204,7 +1225,7 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
         )
 
         if self.auxiliary_info is not None:
-            self.auxiliary_info.finish_temp_var()
+            self.auxiliary_info.finish_temp_var(dest_type)
 
     def visit_CodeElementCompoundAssertEq(self, instruction: CodeElementCompoundAssertEq):
         expr_a, expr_type_a = self.simplify_expr(instruction.a)
@@ -1216,7 +1237,9 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
             )
 
         if self.auxiliary_info is not None:
-            self.auxiliary_info.start_compound_assert_eq(lhs=instruction.a, rhs=instruction.b)
+            self.auxiliary_info.start_compound_assert_eq(
+                lhs=instruction.a, rhs=instruction.b, resolved_type=expr_type_a
+            )
 
         dst_exprs = self.simplified_expr_to_felt_expr_list(expr=expr_a, expr_type=expr_type_a)
         src_exprs = self.simplified_expr_to_felt_expr_list(expr=expr_b, expr_type=expr_type_b)
@@ -1295,30 +1318,30 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
         return exprs[prefix_size:]
 
     def process_expr_assignment_list(
-        self, exprs: List[ExprAssignment], struct_name: ScopedName, location: Optional[Location]
+        self,
+        exprs: List[ExprAssignment],
+        members: Sequence[Tuple[Optional[str], CairoType]],
+        location: Optional[Location],
     ) -> List[Expression]:
         """
-        Returns the expressions for an argument list.
+        Returns the expressions that assign 'exprs' to 'members'
         Used both for function call and a return instruction.
-        Verifies the correctness of expr assignment with respect to the expected struct.
+        Verifies the correctness of expr assignment with respect to the members.
 
         exprs - list of ExprAssignment objects to process.
-        struct_name - ScopedName of the struct against which the expr list is verified.
+        members - A sequence of members against which the expr list is verified.
         location - location to attach to errors if no finer location is relevant.
         """
-
-        struct_def = self.get_struct_definition(name=struct_name, location=location)
-        n_members = len(struct_def.members)
+        n_members = len(members)
         # Make sure we have the correct number of expressions.
         if len(exprs) != n_members:
             raise PreprocessorError(
                 f"Expected exactly {n_members} expressions, got {len(exprs)}.", location=location
             )
 
-        passed_args = list(struct_def.members.items())
         reached_named = False
         compound_expressions = []
-        for (member_name, member_def), expr_assignment in zip(passed_args, exprs):
+        for (member_name, member_type), expr_assignment in safe_zip(members, exprs):
             if expr_assignment.identifier is None:
                 # Make sure all named args are after positional args.
                 if reached_named:
@@ -1330,14 +1353,16 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
                 reached_named = True
                 name = expr_assignment.identifier.name
                 if name != member_name:
+                    if member_name is None:
+                        error_msg = f"Expected unnamed argument, found: '{name}'."
+                    else:
+                        error_msg = f"Expected named argument: '{member_name}', found: '{name}'."
                     raise PreprocessorError(
-                        f"Expected named arg '{member_name}' found '{name}'.",
+                        error_msg,
                         location=expr_assignment.identifier.location,
                     )
 
-            felt_expr_list = self.simplify_expr_to_felt_expr_list(
-                expr_assignment.expr, member_def.cairo_type
-            )
+            felt_expr_list = self.simplify_expr_to_felt_expr_list(expr_assignment.expr, member_type)
             compound_expressions.extend(felt_expr_list)
 
         return compound_expressions
@@ -1482,7 +1507,7 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
         self,
         arguments: List[ExprAssignment],
         implicit_args: Optional[List[Optional[ExprIdentifier]]],
-        struct_name: ScopedName,
+        members: Sequence[Tuple[Optional[str], CairoType]],
         implicit_args_struct_name: ScopedName,
         location: Optional[Location],
     ):
@@ -1490,19 +1515,32 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
         Generates instructions to push all arguments (including the implicit arguments) onto the
         stack.
         Used both for function call and a return instruction.
-        Verifies the correctness of expr assignment with respect to the expected struct.
+        Verifies the correctness of expr assignment with respect to the 'members' and
+        'implicit_args_struct_name'.
         In more detail: translates a list of expressions to a set of instructions evaluating the
         expressions and storing the values to memory, starting from address 'ap'.
 
         arguments - list of ExprAssignment objects to process.
         implicit_args - list of implicit argument bindings.
-        struct_name - ScopedName of the struct against which the expr list is verified.
-        implicit_args_struct_name - Similar to struct_name, for the implicit arguments.
+        members - A sequence of members against which the expr list is verified.
+        implicit_args_struct_name - ScopedName of the the implicit arguments struct.
         location - location to attach to errors if no finer location is relevant.
         """
         args_expressions = self.process_expr_assignment_list(
-            exprs=arguments, struct_name=struct_name, location=location
+            exprs=arguments, members=members, location=location
         )
+
+        # Note that it is important to process the arguments before the implicit arguments
+        # as the implicit arguments might be updated during the processing of the arguments.
+        args_expressions = process_compound_expressions(
+            exprs=args_expressions,
+            simplicity=SimplicityLevel.OPERATION,
+            context=self._compound_expression_context,
+        )
+
+        # args_expressions might reference tempvars so they need to be simplified before they can be
+        # passed to 'push_compound_expressions'.
+        args_expressions = [self.simplify_expr_as_felt(expr) for expr in args_expressions]
 
         implicit_args_expressions = self.process_implicit_arguments(
             implicit_args=implicit_args,
@@ -1524,10 +1562,14 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
         if self.auxiliary_info is not None:
             self.auxiliary_info.start_return()
 
+        return_type_definition = self.get_type_definition(
+            name=CodeElementFunction.RETURN_SCOPE,
+            location=elm.location,
+        )
         self.push_arguments(
-            arguments=cast(List[ExprAssignment], elm.exprs),
+            arguments=[ExprAssignment(identifier=None, expr=elm.expr, location=elm.location)],
             implicit_args=None,
-            struct_name=CodeElementFunction.RETURN_SCOPE,
+            members=[(None, return_type_definition.cairo_type)],
             implicit_args_struct_name=CodeElementFunction.IMPLICIT_ARGUMENT_SCOPE,
             location=elm.location,
         )
@@ -1537,34 +1579,27 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
         self.visit(code_elm_ret)
 
         if self.auxiliary_info is not None:
-            self.auxiliary_info.finish_return(exprs=elm.exprs)
+            self.auxiliary_info.finish_return(expr=elm.expr)
 
     def check_tail_call_cast(
         self,
-        src_struct: StructDefinition,
-        dest_struct: StructDefinition,
+        src_type: CairoType,
+        dest_type: CairoType,
         location: Optional[Location],
     ) -> bool:
         """
-        Checks if src_struct can be converted to dest_struct in the context of a tail call.
+        Checks if src_type can be converted to dest_type in the context of a tail call.
         """
-        src_members = src_struct.members
-        dest_members = dest_struct.members
-
-        if len(src_members) != len(dest_members):
-            return False
-
-        for src_member, dest_member in zip(src_members.values(), dest_members.values()):
-            if not check_cast(
-                src_type=src_member.cairo_type,
-                dest_type=dest_member.cairo_type,
+        try:
+            return check_cast(
+                src_type=src_type,
+                dest_type=dest_type,
                 identifier_manager=self.identifiers,
                 cast_type=CastType.ASSIGN,
                 location=location,
-            ):
-                return False
-
-        return True
+            )
+        except CairoTypeError:
+            return False
 
     def visit_CodeElementTailCall(self, elm: CodeElementTailCall):
         if self.current_scope not in self.function_metadata:
@@ -1578,20 +1613,16 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
         # Visit function call before type check to get better error message.
         self.visit(CodeElementFuncCall(func_call=elm.func_call))
 
-        func_name = elm.func_call.func_ident.name
-
-        src_struct = self.get_struct_definition(
-            name=ScopedName.from_string(func_name) + CodeElementFunction.RETURN_SCOPE,
-            location=elm.location,
-        )
-
-        dest_struct = get_struct_definition(
-            struct_name=self.current_scope + CodeElementFunction.RETURN_SCOPE,
+        dest_type_def = get_type_definition(
+            name=self.current_scope + CodeElementFunction.RETURN_SCOPE,
             identifier_manager=self.identifiers,
         )
 
+        func_name = elm.func_call.func_ident.name
         if not self.check_tail_call_cast(
-            src_struct=src_struct, dest_struct=dest_struct, location=elm.location
+            src_type=self.get_return_type(func_call=elm.func_call),
+            dest_type=dest_type_def.cairo_type,
+            location=elm.location,
         ):
             raise PreprocessorError(
                 f"""\
@@ -1653,7 +1684,7 @@ Cannot convert the implicit arguments of {func_name} to the implicit arguments o
             name=called_function + CodeElementFunction.IMPLICIT_ARGUMENT_SCOPE, location=location
         )
         return_size = self.get_size_by_type_name(
-            struct_name=called_function + CodeElementFunction.RETURN_SCOPE, location=location
+            type_name=called_function + CodeElementFunction.RETURN_SCOPE, location=location
         )
 
         assert len(implicit_args_struct.members) == len(implicit_args)
@@ -1736,7 +1767,10 @@ Cannot convert the implicit arguments of {func_name} to the implicit arguments o
         self.push_arguments(
             arguments=cast(List[ExprAssignment], elm.func_call.arguments.args),
             implicit_args=processed_implicit_args,
-            struct_name=called_function + CodeElementFunction.ARGUMENT_SCOPE,
+            members=self.get_type_or_struct_definition_members(
+                name=called_function + CodeElementFunction.ARGUMENT_SCOPE,
+                location=elm.func_call.arguments.location,
+            ),
             implicit_args_struct_name=called_function + CodeElementFunction.IMPLICIT_ARGUMENT_SCOPE,
             location=elm.func_call.location,
         )
@@ -1822,10 +1856,8 @@ Cannot convert the implicit arguments of {func_name} to the implicit arguments o
         expr_type = elm.typed_identifier.expr_type
         if expr_type is None:
             if func_ident is not None:
-                expr_type = TypeStruct(
-                    scope=ScopedName.from_string(func_ident.name)
-                    + CodeElementFunction.RETURN_SCOPE,
-                    is_fully_resolved=False,
+                expr_type = TypeIdentifier(
+                    name=ScopedName.from_string(func_ident.name) + CodeElementFunction.RETURN_SCOPE,
                     location=func_ident.location,
                 )
             else:
@@ -1847,24 +1879,35 @@ Cannot convert the implicit arguments of {func_name} to the implicit arguments o
             location=elm.typed_identifier.location,
         )
 
-    def get_unpacking_struct_definition(self, elm: CodeElementUnpackBinding):
+    def get_unpacking_type(self, elm: CodeElementUnpackBinding) -> TypeTuple:
+        """
+        Returns the (tuple) type of the return value of the called function in the given
+        CodeElementUnpackBinding instance.
+        """
         if not isinstance(elm.rvalue, RvalueFuncCall):
             raise PreprocessorError(
-                f"Cannot unpack {elm.rvalue.format()}.", location=elm.rvalue.location
+                "Unpack binding is currently only supported for function calls. "
+                f"Got: {elm.rvalue.format()}.",
+                location=elm.rvalue.location,
             )
 
-        func_ident = elm.rvalue.func_ident
-        return_type = self.resolve_type(
-            TypeStruct(
-                scope=ScopedName.from_string(func_ident.name) + CodeElementFunction.RETURN_SCOPE,
-                is_fully_resolved=False,
-                location=func_ident.location,
-            )
-        )
-        assert isinstance(return_type, TypeStruct), f"Unexpected type {return_type}."
-        struct_def = get_struct_definition(return_type.scope, identifier_manager=self.identifiers)
+        return_type = self.get_return_type(func_call=elm.rvalue)
+        if not isinstance(return_type, TypeTuple):
+            notes = []
 
-        expected_len = len(struct_def.members)
+            suggestion_ast = self.get_suggestion_for_wrong_unpacking(elm=elm)
+            if suggestion_ast is not None:
+                suggestion_txt = suggestion_ast.format(get_max_line_length())
+                notes.append(f"Did you mean:\n{suggestion_txt}")
+
+            raise PreprocessorError(
+                f"Cannot unpack the return value of '{elm.rvalue.func_ident.format()}'. "
+                "The return type is not a tuple.",
+                location=elm.rvalue.location,
+                notes=notes,
+            )
+
+        expected_len = len(return_type.members)
         unpacking_identifiers = elm.unpacking_list.identifiers
         if len(unpacking_identifiers) != expected_len:
             suffix = "s" if expected_len > 1 else ""
@@ -1874,18 +1917,45 @@ Expected {expected_len} unpacking identifier{suffix}, found {len(unpacking_ident
                 location=elm.unpacking_list.location,
             )
 
-        return struct_def
+        return return_type
+
+    def get_suggestion_for_wrong_unpacking(
+        self, elm: CodeElementUnpackBinding
+    ) -> Optional[CodeElement]:
+        """
+        Generates a 'did you mean' suggestion for a wrong unpack binding.
+        """
+        unpacking_identifiers = elm.unpacking_list.identifiers
+        if len(unpacking_identifiers) != 1 or not isinstance(elm.rvalue, RvalueFuncCall):
+            return None
+
+        identifier = unpacking_identifiers[0]
+        if identifier.modifier is None:
+            return CodeElementReturnValueReference(
+                typed_identifier=identifier, func_call=elm.rvalue
+            )
+        elif identifier.modifier.name == "local":
+            return CodeElementLocalVariable(
+                typed_identifier=identifier.strip_modifier(), expr=ExprFuncCall(rvalue=elm.rvalue)
+            )
+
+        return None
 
     def visit_CodeElementUnpackBinding(self, elm: CodeElementUnpackBinding):
-        struct_def = self.get_unpacking_struct_definition(elm)
+        unpacking_type = self.get_unpacking_type(elm)
 
         assert isinstance(
             elm.rvalue, RvalueFuncCall
         ), f"Invalid type for elm.rvalue: {type(elm.rvalue).__name__}."
         self.visit(CodeElementFuncCall(func_call=elm.rvalue))
 
-        for typed_identifier, member_def in zip(
-            elm.unpacking_list.identifiers, struct_def.members.values()
+        offsets = [0]
+        for member in unpacking_type.members:
+            offsets.append(offsets[-1] + self.get_size(member.typ))
+        total_size = offsets[-1]
+
+        for typed_identifier, member, offset in safe_zip(
+            elm.unpacking_list.identifiers, unpacking_type.members, offsets[:-1]
         ):
             excluded = []
             if self.current_scope in self.function_metadata:
@@ -1893,16 +1963,19 @@ Expected {expected_len} unpacking identifier{suffix}, found {len(unpacking_ident
             # Forbid locals outside of functions.
             assert_no_modifier(typed_identifier, excluded=excluded)
 
+            if self.auxiliary_info is not None:
+                self.auxiliary_info.add_func_ret_vars([typed_identifier.name])
+
             if typed_identifier.name == "_":
                 continue
 
             if typed_identifier.expr_type is not None:
                 cairo_type = self.resolve_type(typed_identifier.get_type())
             else:
-                cairo_type = member_def.cairo_type
+                cairo_type = member.typ
 
             if not check_cast(
-                src_type=member_def.cairo_type,
+                src_type=member.typ,
                 dest_type=cairo_type,
                 identifier_manager=self.identifiers,
                 cast_type=CastType.UNPACKING,
@@ -1910,7 +1983,7 @@ Expected {expected_len} unpacking identifier{suffix}, found {len(unpacking_ident
             ):
                 raise PreprocessorError(
                     f"""\
-Expected expression of type '{member_def.cairo_type.format()}', got '{cairo_type.format()}'.""",
+Expected expression of type '{member.typ.format()}', got '{cairo_type.format()}'.""",
                     location=typed_identifier.location,
                 )
 
@@ -1918,12 +1991,9 @@ Expected expression of type '{member_def.cairo_type.format()}', got '{cairo_type
                 name=self.current_scope + typed_identifier.identifier.name,
                 reg=Register.AP,
                 cairo_type=cairo_type,
-                offset=member_def.offset - struct_def.size,
+                offset=offset - total_size,
                 location=typed_identifier.location,
             )
-
-            if self.auxiliary_info is not None:
-                self.auxiliary_info.add_func_ret_vars([typed_identifier.identifier.name])
 
     def add_label(self, identifier: ExprIdentifier):
         name = self.current_scope + identifier.name
@@ -2195,7 +2265,9 @@ Expected expression of type '{member_def.cairo_type.format()}', got '{cairo_type
             resolve_type_callback=self.resolve_type,
             get_struct_members_callback=self.get_struct_members,
         )
-        expr, expr_type = simplify_type_system(expr, identifiers=self.identifiers)
+        expr, expr_type = simplify_type_system(
+            expr=expr, identifiers=self.identifiers, accessible_scopes=self.accessible_scopes
+        )
         return self.simplifier.visit(expr), self.resolve_type(expr_type)
 
     def simplify_expr_as_felt(self, expr) -> Expression:
@@ -2382,7 +2454,9 @@ Expected expression of type '{expected_type.format()}', got '{expr_type.format()
                     err.reference,
                     err_to_throw,
                 )
-                return self.get_dummy_reference_expr(identifier_definition)
+                return self.get_dummy_reference_expr(
+                    identifier_definition=identifier_definition, location=var.location
+                )
             except FlowTrackingError as exc:
                 raise PreprocessorError(
                     f"Reference '{var.name}' was revoked.", location=var.location, notes=exc.notes
@@ -2395,7 +2469,9 @@ Expected expression of type '{expected_type.format()}', got '{expr_type.format()
             location=var.location,
         )
 
-    def get_dummy_reference_expr(self, identifier_definition: IdentifierDefinition) -> Expression:
+    def get_dummy_reference_expr(
+        self, identifier_definition: IdentifierDefinition, location: Optional[Location]
+    ) -> Expression:
         if isinstance(identifier_definition, ReferenceDefinition):
             parent = identifier_definition
         elif isinstance(identifier_definition, OffsetReferenceDefinition):
@@ -2405,9 +2481,7 @@ Expected expression of type '{expected_type.format()}', got '{expr_type.format()
             raise NotImplementedError(
                 f"Unsupported identifier type {type(identifier_definition).__name__}."
             )
-        location = None
-        if len(parent.references[0].locations) > 0:
-            location = parent.references[0].locations[-1]
+
         expr = create_simple_ref_expr(
             reg=Register.FP,
             offset=0,
@@ -2416,7 +2490,11 @@ Expected expression of type '{expected_type.format()}', got '{expr_type.format()
         )
         if isinstance(identifier_definition, OffsetReferenceDefinition):
             for member_name in identifier_definition.member_path.path:
-                expr = ExprDot(expr=expr, member=ExprIdentifier(name=member_name))
+                expr = ExprDot(
+                    expr=expr,
+                    member=ExprIdentifier(name=member_name, location=location),
+                    location=location,
+                )
         return expr
 
     def get_instruction_size(self, instruction: InstructionAst, allow_auto_deduction: bool = False):
@@ -2466,7 +2544,7 @@ Expected expression of type '{expected_type.format()}', got '{expr_type.format()
         """
         Returns the list of members of the given struct.
         """
-        struct_definition = self.identifiers.get_by_full_name(name=struct_type.resolved_scope)
+        struct_definition = self.identifiers.get_by_full_name(name=struct_type.scope)
         assert isinstance(
             struct_definition, StructDefinition
         ), f"Expected StructDefinition, found: {type(struct_definition).__name__}."

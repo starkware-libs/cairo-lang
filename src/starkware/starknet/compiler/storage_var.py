@@ -1,9 +1,10 @@
 import dataclasses
-from typing import List
+from typing import Dict, List, Optional
 
-from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypePointer
+from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypePointer, TypeTuple
 from starkware.cairo.lang.compiler.ast.code_elements import CodeElementFunction
 from starkware.cairo.lang.compiler.ast.formatting_utils import get_max_line_length
+from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.parser import parse
 from starkware.cairo.lang.compiler.preprocessor.identifier_aware_visitor import (
     IdentifierAwareVisitor,
@@ -37,14 +38,23 @@ FORBIDDEN_ARGUMENT_NAMES = {
 
 
 def get_return_type(elm: CodeElementFunction) -> CairoType:
-    returns_single_value = elm.returns is not None and len(elm.returns.identifiers) == 1
+    returns_single_value = False
+    if elm.returns is not None:
+        if not isinstance(elm.returns, TypeTuple):
+            raise PreprocessorError(
+                "Only tuple types are currently supported for storage variables.",
+                location=elm.returns.location,
+            )
+
+        returns_single_value = len(elm.returns.members) == 1
+
     if not returns_single_value:
         raise PreprocessorError(
             "Storage variables must return exactly one value.",
             location=elm.returns.location if elm.returns is not None else elm.identifier.location,
         )
     assert elm.returns is not None
-    return elm.returns.identifiers[0].get_type()
+    return elm.returns.members[0].typ
 
 
 def generate_storage_var_functions(
@@ -60,28 +70,28 @@ def generate_storage_var_functions(
     )
 
     code = f"""\
-namespace {var_name}:
+namespace {var_name} {{
     from starkware.starknet.common.storage import normalize_address
     from starkware.starknet.common.syscalls import storage_read, storage_write
     from starkware.cairo.common.cairo_builtins import HashBuiltin
     from starkware.cairo.common.hash import hash2
 
-    func addr{{pedersen_ptr : HashBuiltin*, range_check_ptr}}() -> (res : felt):
+    func addr{{pedersen_ptr: HashBuiltin*, range_check_ptr}}() -> (res: felt) {{
         {addr_func_body}
-    end
+    }}
 
     func read{{
-        syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr
-    }}():
+        syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
+    }}() {{
         {read_func_body}
-    end
+    }}
 
     func write{{
-        syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr
-    }}(value : felt):
+        syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
+    }}(value: felt) {{
         {write_func_body}
-    end
-end\
+    }}
+}}\
 """
 
     res = parse(autogen_filename, code, "code_element", CodeElementFunction)
@@ -185,42 +195,42 @@ def process_storage_var(visitor: IdentifierAwareVisitor, elm: CodeElementFunctio
 
     var_name = elm.identifier.name
     addr = storage_var_name_to_base_addr(var_name)
-    addr_func_body = f"let res = {addr}\n"
+    addr_func_body = f"let res = {addr};\n"
     for arg, arg_size in safe_zip(elm.arguments.identifiers, arg_sizes):
         assert arg_size is not None
         for i in range(arg_size):
             value_str = f"cast(&{arg.identifier.name}, felt*)[{i}]"
-            addr_func_body += f"let (res) = hash2{{hash_ptr=pedersen_ptr}}(res, {value_str})\n"
+            addr_func_body += f"let (res) = hash2{{hash_ptr=pedersen_ptr}}(res, {value_str});\n"
     if len(elm.arguments.identifiers) > 0:
-        addr_func_body += "let (res) = normalize_address(addr=res)\n"
-    addr_func_body += "return (res=res)\n"
+        addr_func_body += "let (res) = normalize_address(addr=res);\n"
+    addr_func_body += "return (res=res);\n"
 
     args = ", ".join(arg.identifier.name for arg in elm.arguments.identifiers)
 
-    read_func_body = f"let (storage_addr) = addr({args})\n"
+    read_func_body = f"let (storage_addr) = addr({args});\n"
     for i in range(var_size):
         read_func_body += (
-            f"let (__storage_var_temp{i}) = storage_read(address=storage_addr + {i})\n"
+            f"let (__storage_var_temp{i}) = storage_read(address=storage_addr + {i});\n"
         )
     # Copy the return implicit args and the return values to a contiguous segment.
     read_func_body += """
-tempvar syscall_ptr = syscall_ptr
-tempvar pedersen_ptr = pedersen_ptr
-tempvar range_check_ptr = range_check_ptr
+tempvar syscall_ptr = syscall_ptr;
+tempvar pedersen_ptr = pedersen_ptr;
+tempvar range_check_ptr = range_check_ptr;
 """
     for i in range(var_size):
-        read_func_body += f"tempvar __storage_var_temp{i} : felt = __storage_var_temp{i}\n"
+        read_func_body += f"tempvar __storage_var_temp{i}: felt = __storage_var_temp{i};\n"
     unresolved_return_type_ptr = TypePointer(pointee=unresolved_return_type)
     read_func_body += (
-        f"return ([cast(&__storage_var_temp0, {unresolved_return_type_ptr.format()})])"
+        f"return ([cast(&__storage_var_temp0, {unresolved_return_type_ptr.format()})],);"
     )
 
-    write_func_body = f"let (storage_addr) = addr({args})\n"
+    write_func_body = f"let (storage_addr) = addr({args});\n"
     for i in range(var_size):
         write_func_body += (
-            f"storage_write(address=storage_addr + {i}, value=[cast(&value, felt) + {i}])\n"
+            f"storage_write(address=storage_addr + {i}, value=[cast(&value, felt) + {i}]);\n"
         )
-    write_func_body += "return ()\n"
+    write_func_body += "return ();\n"
     return generate_storage_var_functions(
         elm,
         addr_func_body=addr_func_body,
@@ -245,6 +255,13 @@ class StorageVarDeclVisitor(IdentifierAwareVisitor):
     functions will full implementation.
     """
 
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+
+        # A map from storage variable name to its location.
+        # Used to ensure unique names.
+        self.storage_var_name_to_location: Dict[str, Optional[Location]] = {}
+
     def _visit_default(self, obj):
         return obj
 
@@ -252,39 +269,58 @@ class StorageVarDeclVisitor(IdentifierAwareVisitor):
         is_storage_var, storage_var_location = has_decorator(
             elm=elm, decorator_name=STORAGE_VAR_DECORATOR
         )
-        if is_storage_var:
-            verify_starknet_lang(
-                file_lang=self.file_lang,
-                location=storage_var_location,
-                name_in_error_message=f"@{STORAGE_VAR_DECORATOR}",
-            )
-            # Add dummy references and calls that will be visited by the identifier collector
-            # and the dependency graph.
-            # Those statements will later be replaced by the real implementation.
-            addr_func_body = """
-let res = 0
-call hash2
-call normalize_address
-"""
-            read_func_body = """
-let storage_addr = 0
-call addr
-call storage_read
-"""
-            write_func_body = """
-let storage_addr = 0
-call addr
-call storage_write
-"""
-            return generate_storage_var_functions(
-                elm,
-                addr_func_body=addr_func_body,
-                read_func_body=read_func_body,
-                write_func_body=write_func_body,
-                is_impl=False,
-            )
+        if not is_storage_var:
+            return elm
 
-        return elm
+        self.check_unique_names(elm=elm)
+
+        verify_starknet_lang(
+            file_lang=self.file_lang,
+            location=storage_var_location,
+            name_in_error_message=f"@{STORAGE_VAR_DECORATOR}",
+        )
+        # Add dummy references and calls that will be visited by the identifier collector
+        # and the dependency graph.
+        # Those statements will later be replaced by the real implementation.
+        addr_func_body = """
+let res = 0;
+call hash2;
+call normalize_address;
+"""
+        read_func_body = """
+let storage_addr = 0;
+call addr;
+call storage_read;
+"""
+        write_func_body = """
+let storage_addr = 0;
+call addr;
+call storage_write;
+"""
+        return generate_storage_var_functions(
+            elm,
+            addr_func_body=addr_func_body,
+            read_func_body=read_func_body,
+            write_func_body=write_func_body,
+            is_impl=False,
+        )
+
+    def check_unique_names(self, elm: CodeElementFunction):
+        if elm.name not in self.storage_var_name_to_location:
+            self.storage_var_name_to_location[elm.name] = elm.identifier.location
+            return
+
+        notes = []
+        other_location = self.storage_var_name_to_location[elm.name]
+        if other_location is not None:
+            notes.append(
+                other_location.to_string_with_content("Note: another definition appears here.")
+            )
+        raise PreprocessorError(
+            f"Found more than one storage variable with the same name ('{elm.name}').",
+            location=elm.identifier.location,
+            notes=notes,
+        )
 
 
 class StorageVarImplementationVisitor(IdentifierAwareVisitor):

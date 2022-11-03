@@ -1,7 +1,7 @@
 import dataclasses
 from typing import Callable, List, Optional, Tuple
 
-from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, CastType
+from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, CastType, TypeTuple
 from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeBlock,
     CodeElement,
@@ -22,7 +22,6 @@ from starkware.cairo.lang.compiler.ast.expr import ExprCast, ExprConst, ExprIden
 from starkware.cairo.lang.compiler.ast.instructions import AddApInstruction, InstructionAst
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.expression_transformer import ExpressionTransformer
-from starkware.cairo.lang.compiler.identifier_definition import StructDefinition
 from starkware.cairo.lang.compiler.instruction import Register
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_utils import assert_no_modifier
@@ -55,9 +54,7 @@ class LocalVariableHandler:
     def __init__(
         self,
         get_size_callback: Callable[[CairoType], int],
-        get_unpacking_struct_definition_callback: Callable[
-            [CodeElementUnpackBinding], StructDefinition
-        ],
+        get_unpacking_type_callback: Callable[[CodeElementUnpackBinding], TypeTuple],
     ):
         # The size of the local variables in this scope.
         self.local_vars_size: int = 0
@@ -69,7 +66,7 @@ class LocalVariableHandler:
         self.saw_alloc_locals = False
 
         self.get_size_callback = get_size_callback
-        self.get_unpacking_struct_definition_callback = get_unpacking_struct_definition_callback
+        self.get_unpacking_type_callback = get_unpacking_type_callback
 
     def visit(self, obj):
         funcname = f"visit_{type(obj).__name__}"
@@ -171,18 +168,16 @@ class LocalVariableHandler:
     def visit_CodeElementUnpackBinding(self, elm: CodeElementUnpackBinding):
         """
         Replaces
-            let (local a : T, b) = foo()
+            let (local a: T, b) = foo();
         with
-            let (local a : T , b) = foo()
-            local a : T = a
+            let (local a: T , b) = foo();
+            local a: T = a;
         """
 
         result = [elm]
 
-        struct_def = self.get_unpacking_struct_definition_callback(elm)
-        for typed_identifier, member_def in zip(
-            elm.unpacking_list.identifiers, struct_def.members.values()
-        ):
+        unpacking_type = self.get_unpacking_type_callback(elm)
+        for typed_identifier, member in zip(elm.unpacking_list.identifiers, unpacking_type.members):
             if typed_identifier.modifier is None or typed_identifier.modifier.name != "local":
                 continue
 
@@ -190,9 +185,7 @@ class LocalVariableHandler:
 
             # Add type if missing.
             if typed_identifier.expr_type is None:
-                typed_identifier = dataclasses.replace(
-                    typed_identifier, expr_type=member_def.cairo_type
-                )
+                typed_identifier = dataclasses.replace(typed_identifier, expr_type=member.typ)
 
             if typed_identifier.identifier.name == "_":
                 raise PreprocessorError(
@@ -219,21 +212,21 @@ def preprocess_local_variables(
     code_elements: List[CodeElement],
     scope: ScopedName,
     get_size_callback: Callable[[CairoType], int],
-    get_unpacking_struct_definition_callback: Callable[
-        [CodeElementUnpackBinding], StructDefinition
-    ],
+    get_unpacking_type_callback: Callable[[CodeElementUnpackBinding], TypeTuple],
     default_location: Optional[Location],
 ) -> Tuple[bool, List[CodeElement]]:
     """
     Preprocesses the local variables of one function.
-    get_size_callback is a callback that takes a CairoType and returns its size.
+    * get_size_callback - a callback that takes a CairoType and returns its size.
+    * get_unpacking_type_callback - a callback that takes a CodeElementUnpackBinding element
+      and returns the (tuple) type of the return value of the called function.
     Returns a tuple:
     * has_locals - a boolean indicating if the function has the alloc_locals keyword.
     * new_code_elements - the result of the preprocessing.
     """
     handler = LocalVariableHandler(
         get_size_callback=get_size_callback,
-        get_unpacking_struct_definition_callback=get_unpacking_struct_definition_callback,
+        get_unpacking_type_callback=get_unpacking_type_callback,
     )
     result = []
     for elm in code_elements:

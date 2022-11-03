@@ -1,6 +1,7 @@
-from typing import Dict, Optional, Type
+from typing import Dict, Optional, Type, Union
 
 from starkware.cairo.lang.compiler.ast.arguments import IdentifierList
+from starkware.cairo.lang.compiler.ast.cairo_types import CairoType
 from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeBlock,
     CodeElement,
@@ -138,19 +139,27 @@ class IdentifierCollector(Visitor):
         implicit_args_scope = function_scope + CodeElementFunction.IMPLICIT_ARGUMENT_SCOPE
         rets_scope = function_scope + CodeElementFunction.RETURN_SCOPE
 
-        def handle_struct_def(identifier_list: Optional[IdentifierList], struct_name: ScopedName):
+        def handle_definition(
+            defintion: Optional[Union[IdentifierList, CairoType]],
+            name: ScopedName,
+            identifier_type: Type[IdentifierDefinition],
+        ):
             location = elm.identifier.location
-            if identifier_list is not None:
-                location = identifier_list.location
+            if defintion is not None:
+                location = defintion.location
 
             self.add_future_identifier(
-                name=struct_name, identifier_type=StructDefinition, location=location
+                name=name, identifier_type=identifier_type, location=location
             )
 
         def handle_function_arguments(
             identifier_list: Optional[IdentifierList], struct_name: ScopedName
         ):
-            handle_struct_def(identifier_list=identifier_list, struct_name=struct_name)
+            handle_definition(
+                defintion=identifier_list,
+                name=struct_name,
+                identifier_type=StructDefinition,
+            )
             if identifier_list is None:
                 return
 
@@ -175,21 +184,21 @@ class IdentifierCollector(Visitor):
             identifier_list=elm.implicit_arguments, struct_name=implicit_args_scope
         )
 
-        handle_struct_def(identifier_list=elm.returns, struct_name=rets_scope)
+        handle_definition(defintion=elm.returns, name=rets_scope, identifier_type=TypeDefinition)
 
         # Make sure there is no name collision.
         if elm.implicit_arguments is not None:
             implicit_arg_names = {arg_id.name for arg_id in elm.implicit_arguments.identifiers}
-            arg_and_return_identifiers = list(elm.arguments.identifiers)
-            if elm.returns is not None:
-                arg_and_return_identifiers += elm.returns.identifiers
+            arg_and_return_named_locations = [
+                (typed_identifier.name, typed_identifier.identifier.location)
+                for typed_identifier in elm.arguments.identifiers
+            ]
 
-            for arg_id in arg_and_return_identifiers:
-                if arg_id.name in implicit_arg_names:
+            for arg_name, arg_location in arg_and_return_named_locations:
+                if arg_name in implicit_arg_names:
                     raise PreprocessorError(
-                        "Arguments and return values cannot have the same name of an implicit "
-                        "argument.",
-                        location=arg_id.location,
+                        "An argument cannot have the same name as an implicit argument.",
+                        location=arg_location,
                     )
 
         # Add SIZEOF_LOCALS for current block at identifier definition location if available.

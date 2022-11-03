@@ -4,7 +4,7 @@ from typing import Callable, Dict, Iterable, List, Optional, TypeVar, Union
 import marshmallow
 import marshmallow.exceptions
 import marshmallow.validate
-from web3 import Web3
+from eth_utils import is_checksum_address
 
 DNS_REGEX = r"^((\*)|(\*\.))?([a-z0-9-]){1,62}(\.[a-z0-9-]{1,62})*\.?$"
 
@@ -69,12 +69,20 @@ validate_gateway_url = validate_url(
     url_name="Gateway endpoint", schemes={"http", "https"}, require_full_url=False
 )
 
-validate_internal_url = validate_url(
+validate_availability_gateway_endpoint_url = validate_url(
+    url_name="AvailabilityGateway endpoint", schemes={"http", "https"}, require_full_url=False
+)
+
+validate_internal_gateway_url = validate_url(
     url_name="Internal Gateway endpoint", schemes={"http", "https"}, require_full_url=False
 )
 
 validate_node_endpoint = validate_url(
     url_name="Node endpoint", schemes={"http", "https"}, require_full_url=False
+)
+
+validate_alternative_endpoint = validate_url(
+    url_name="Alternative transactions endpoint", schemes={"http", "https"}, require_full_url=True
 )
 
 
@@ -215,7 +223,7 @@ def validate_public_key(field_name: str) -> ValidatorType:
         for address in addresses:
             validate_address_regex(address)
 
-            if not Web3.isChecksumAddress(address):
+            if not is_checksum_address(value=address):
                 raise marshmallow.ValidationError(error_message.format(input=address))
 
         return True
@@ -225,6 +233,15 @@ def validate_public_key(field_name: str) -> ValidatorType:
 
 def validate_private_key(field_name: str) -> ValidatorType:
     error_message = "Invalid {field_name}: {{input}}; must be a legal Ethereum private key".format(
+        field_name=field_name
+    )
+
+    private_key_regex = r"^0x[a-fA-F0-9]{64}$"
+    return marshmallow.validate.Regexp(regex=private_key_regex, error=error_message)
+
+
+def validate_block_hash(field_name: str) -> ValidatorType:
+    error_message = "Invalid {field_name}: {{input}}; must be a legal Ethereum block hash".format(
         field_name=field_name
     )
 

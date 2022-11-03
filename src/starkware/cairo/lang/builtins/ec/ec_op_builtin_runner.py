@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Tuple, Union
 
 from starkware.cairo.lang.builtins.ec.instance_def import (
     CELLS_PER_EC_OP,
@@ -8,7 +8,7 @@ from starkware.cairo.lang.builtins.ec.instance_def import (
 from starkware.cairo.lang.vm.builtin_runner import SimpleBuiltinRunner
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
 from starkware.crypto.signature.signature import ALPHA, BETA, FIELD_PRIME
-from starkware.python.math_utils import EC_INFINITY, ec_safe_add, ec_safe_mult
+from starkware.python.math_utils import ec_add, ec_double
 
 # The indices of the inputs that represent EC points.
 EC_POINT_INDICES = [(0, 1), (2, 3), (5, 6)]
@@ -29,14 +29,35 @@ def point_on_curve(x: int, y: int, alpha: int, beta: int, p: int) -> bool:
 
 
 def ec_op_impl(
-    p_x: int, p_y: int, q_x: int, q_y: int, m: int, alpha: int, p: int
+    p_x: int, p_y: int, q_x: int, q_y: int, m: int, alpha: int, prime: int, height: int
 ) -> Union[Tuple[int, int], str]:
     """
     Returns the result of the EC operation P + m * Q.
     where P = (p_x, p_y), Q = (q_x, q_y) are points on the elliptic curve defined as
-    y^2 = x^3 + alpha * x + beta (mod p).
+    y^2 = x^3 + alpha * x + beta (mod prime).
+
+    Mimics the operation of the AIR, so that this function fails whenever the builtin AIR
+    would not yield a correct result, i.e. when any part of the computation attempts to add
+    two points with the same x coordinate.
     """
-    return ec_safe_add((p_x, p_y), ec_safe_mult(m, (q_x, q_y), alpha, p), alpha, p)
+    doubled_point = (q_x, q_y)
+    partial_sum = (p_x, p_y)
+    orig_m = m
+    for _ in range(height):
+        assert (doubled_point[0] - partial_sum[0]) % prime != 0, (
+            "Cannot apply EC operation: computation reached two points with the same x coordinate."
+            "\nAttempting to compute P + m * Q where:\n"
+            f"P = {(p_x, p_y)}\n"
+            f"m = {orig_m}\n"
+            f"Q = {(q_x, q_y)}."
+        )
+        if m & 1 != 0:
+            partial_sum = ec_add(partial_sum, doubled_point, prime)
+
+        doubled_point = ec_double(doubled_point, alpha, prime)
+        m >>= 1
+
+    return partial_sum
 
 
 class EcOpBuiltinRunner(SimpleBuiltinRunner):
@@ -48,7 +69,6 @@ class EcOpBuiltinRunner(SimpleBuiltinRunner):
             cells_per_instance=CELLS_PER_EC_OP,
             n_input_cells=INPUT_CELLS_PER_EC_OP,
         )
-        self.stop_ptr: Optional[RelocatableValue] = None
         self.ec_op_builtin: EcOpInstanceDef = ec_op_builtin
 
     def add_auto_deduction_rules(self, runner):
@@ -63,17 +83,22 @@ class EcOpBuiltinRunner(SimpleBuiltinRunner):
             if not all(instance + i in memory for i in range(INPUT_CELLS_PER_EC_OP)):
                 return None
 
-            # Assert that m <= scalar_limit.
-            if self.ec_op_builtin.scalar_limit is not None:
-                assert (
-                    memory[instance + M_INDEX] <= self.ec_op_builtin.scalar_limit
-                ), f"{self.name} builtin: m must be at most {self.ec_op_builtin.scalar_limit}."
-
             for i in range(INPUT_CELLS_PER_EC_OP):
                 assert vm.is_integer_value(memory[instance + i]), (
                     f"{self.name} builtin: Expected integer at address {instance + i}."
                     f"Got: {memory[instance + i]}."
                 )
+
+            # Assert that m is under the limit defined by scalar_limit or scalar_bits.
+            limit = (
+                self.ec_op_builtin.scalar_limit
+                if self.ec_op_builtin.scalar_limit is not None
+                else (1 << self.ec_op_builtin.scalar_bits)
+            )
+
+            assert (
+                memory[instance + M_INDEX] < limit
+            ), f"{self.name} builtin: m must be at most {limit}."
 
             # Assert that if the current address is part of a point which is all set in the
             # memory, the point is on the curve.
@@ -81,13 +106,14 @@ class EcOpBuiltinRunner(SimpleBuiltinRunner):
                 ec_point_x, ec_point_y = [memory[instance + i] for i in pair]
                 assert point_on_curve(
                     ec_point_x, ec_point_y, ALPHA, BETA, FIELD_PRIME
-                ), f"{self.name} builtin: point {pair} is not on the curve."
+                ), f"{self.name} builtin: point ({ec_point_x}, {ec_point_y}) is not on the curve."
 
             res = ec_op_impl(  # type: ignore
-                *[memory[instance + i] for i in range(INPUT_CELLS_PER_EC_OP)], ALPHA, FIELD_PRIME
+                *[memory[instance + i] for i in range(INPUT_CELLS_PER_EC_OP)],
+                alpha=ALPHA,
+                prime=FIELD_PRIME,
+                height=self.ec_op_builtin.scalar_height,
             )
-            # The result cannot be the point at infinity.
-            assert res != EC_INFINITY, "The result cannot be the point at infinity."
 
             return res[index - INPUT_CELLS_PER_EC_OP]
 

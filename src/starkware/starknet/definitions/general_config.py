@@ -8,6 +8,12 @@ import marshmallow.fields as mfields
 import marshmallow_dataclass
 
 from services.everest.definitions.general_config import EverestGeneralConfig
+from starkware.cairo.lang.builtins.all_builtins import (
+    ALL_BUILTINS,
+    KECCAK_BUILTIN,
+    OUTPUT_BUILTIN,
+    with_suffix,
+)
 from starkware.cairo.lang.instances import all_instance
 from starkware.python.utils import from_bytes
 from starkware.starknet.definitions import constants, fields
@@ -15,12 +21,14 @@ from starkware.starkware_utils.config_base import Config, load_config
 from starkware.starkware_utils.field_validators import validate_dict, validate_non_negative
 from starkware.starkware_utils.marshmallow_dataclass_fields import (
     StrictRequiredInteger,
+    additional_metadata,
     load_int_value,
 )
 
 GENERAL_CONFIG_FILE_NAME = "general_config.yml"
 DOCKER_GENERAL_CONFIG_PATH = os.path.join("/", GENERAL_CONFIG_FILE_NAME)
 GENERAL_CONFIG_PATH = os.path.join(os.path.dirname(__file__), GENERAL_CONFIG_FILE_NAME)
+N_STEPS_RESOURCE = "n_steps"
 
 # Reference to the default general config.
 default_general_config = load_config(
@@ -42,7 +50,8 @@ TOKEN_DECIMALS = 18
 # Default configuration values.
 
 # In order to be able to use Keccak builtin, which uses bitwise, which is sparse.
-DEFAULT_MAX_STEPS = 10 ** 6
+DEFAULT_MAX_STEPS = 10**6
+DEFAULT_VALIDATE_MAX_STEPS = DEFAULT_MAX_STEPS
 DEFAULT_CHAIN_ID = StarknetChainId.TESTNET
 DEFAULT_FEE_TOKEN_ADDRESS = load_int_value(
     field_metadata=fields.fee_token_address_metadata,
@@ -54,26 +63,10 @@ DEFAULT_SEQUENCER_ADDRESS = load_int_value(
 )
 
 # Given in units of wei.
-DEFAULT_GAS_PRICE = 100 * 10 ** 9
-
-class CairoResource(Enum):
-    N_STEPS = "n_steps"
-    PEDERSEN_BUILTIN = "pedersen_builtin"
-    RANGE_CHECK_BUILTIN = "range_check_builtin"
-    ECDSA_BUILTIN = "ecdsa_builtin"
-    BITWISE_BUILTIN = "bitwise_builtin"
-    OUTPUT_BUILTIN = "output_builtin"
-    EC_OP_BUILTIN = "ec_op_builtin"
-
-
+DEFAULT_GAS_PRICE = 100 * 10**9
 DEFAULT_CAIRO_RESOURCE_FEE_WEIGHTS = {
-    CairoResource.N_STEPS.value: 1.0,
-    CairoResource.PEDERSEN_BUILTIN.value: 0.0,
-    CairoResource.RANGE_CHECK_BUILTIN.value: 0.0,
-    CairoResource.ECDSA_BUILTIN.value: 0.0,
-    CairoResource.BITWISE_BUILTIN.value: 0.0,
-    CairoResource.OUTPUT_BUILTIN.value: 0.0,
-    CairoResource.EC_OP_BUILTIN.value: 0.0,
+    N_STEPS_RESOURCE: 1.0,
+    **{builtin: 0.0 for builtin in ALL_BUILTINS.except_for(KECCAK_BUILTIN).with_suffix()},
 }
 
 
@@ -85,7 +78,7 @@ class StarknetOsConfig(Config):
     chain_id: StarknetChainId = field(default=DEFAULT_CHAIN_ID)
 
     fee_token_address: int = field(
-        metadata=dict(
+        metadata=additional_metadata(
             **fields.fee_token_address_metadata, description="StarkNet fee token L2 address."
         ),
         default=DEFAULT_FEE_TOKEN_ADDRESS,
@@ -110,17 +103,21 @@ class StarknetGeneralConfig(EverestGeneralConfig):
         metadata=fields.invoke_tx_n_steps_metadata, default=DEFAULT_MAX_STEPS
     )
 
+    validate_max_n_steps: int = field(
+        metadata=fields.validate_n_steps_metadata, default=DEFAULT_VALIDATE_MAX_STEPS
+    )
+
     min_gas_price: int = field(metadata=fields.gas_price, default=DEFAULT_GAS_PRICE)
 
     sequencer_address: int = field(
-        metadata=dict(
+        metadata=additional_metadata(
             **fields.sequencer_address_metadata, description="StarkNet sequencer address."
         ),
         default=DEFAULT_SEQUENCER_ADDRESS,
     )
 
     tx_commitment_tree_height: int = field(
-        metadata=dict(
+        metadata=additional_metadata(
             marshmallow_field=StrictRequiredInteger(
                 validate=validate_non_negative("Transaction commitment tree height"),
             ),
@@ -130,7 +127,7 @@ class StarknetGeneralConfig(EverestGeneralConfig):
     )
 
     tx_version: int = field(
-        metadata=dict(
+        metadata=additional_metadata(
             marshmallow_field=StrictRequiredInteger(
                 validate=validate_non_negative("Transaction version."),
             ),
@@ -143,7 +140,7 @@ class StarknetGeneralConfig(EverestGeneralConfig):
     )
 
     event_commitment_tree_height: int = field(
-        metadata=dict(
+        metadata=additional_metadata(
             marshmallow_field=StrictRequiredInteger(
                 validate=validate_non_negative("Event commitment tree height"),
             ),
@@ -153,7 +150,7 @@ class StarknetGeneralConfig(EverestGeneralConfig):
     )
 
     cairo_resource_fee_weights: Dict[str, float] = field(
-        metadata=dict(
+        metadata=additional_metadata(
             marshmallow_field=mfields.Dict(
                 keys=mfields.String,
                 values=mfields.Float,
@@ -184,28 +181,29 @@ def build_general_config(raw_general_config: Dict[str, Any]) -> StarknetGeneralC
     """
     raw_general_config = copy.deepcopy(raw_general_config)
     cairo_resource_fee_weights: Dict[str, float] = raw_general_config["cairo_resource_fee_weights"]
-    n_steps_key = CairoResource.N_STEPS.value
     assert cairo_resource_fee_weights.keys() == {
-        n_steps_key
-    }, f"Only {n_steps_key} weight should be given."
+        N_STEPS_RESOURCE
+    }, f"Only {N_STEPS_RESOURCE} weight should be given."
 
-    n_steps_weight = cairo_resource_fee_weights[n_steps_key]
+    n_steps_weight = cairo_resource_fee_weights[N_STEPS_RESOURCE]
 
     # Zero all entries.
-    cairo_resource_fee_weights.update({resource.value: 0.0 for resource in CairoResource})
+    cairo_resource_fee_weights.update(
+        {
+            resource: 0.0
+            for resource in [N_STEPS_RESOURCE]
+            + ALL_BUILTINS.except_for(KECCAK_BUILTIN).with_suffix()
+        }
+    )
     # Update relevant entries.
     cairo_resource_fee_weights.update(
         {
-            n_steps_key: n_steps_weight,
+            N_STEPS_RESOURCE: n_steps_weight,
             # All other weights are deduced from n_steps.
-            CairoResource.PEDERSEN_BUILTIN.value: n_steps_weight
-            * all_instance.builtins["pedersen"].ratio,
-            CairoResource.RANGE_CHECK_BUILTIN.value: n_steps_weight
-            * all_instance.builtins["range_check"].ratio,
-            CairoResource.ECDSA_BUILTIN.value: n_steps_weight
-            * all_instance.builtins["ecdsa"].ratio,
-            CairoResource.BITWISE_BUILTIN.value: n_steps_weight
-            * all_instance.builtins["bitwise"].ratio,
+            **{
+                with_suffix(builtin): n_steps_weight * all_instance.builtins[builtin].ratio
+                for builtin in ALL_BUILTINS.except_for(OUTPUT_BUILTIN, KECCAK_BUILTIN)
+            },
         }
     )
 

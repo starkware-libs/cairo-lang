@@ -1,6 +1,6 @@
 import os
 from functools import lru_cache
-from typing import List, Optional
+from typing import List, Optional, Type
 
 import lark
 from lark.exceptions import LarkError, UnexpectedCharacters, UnexpectedToken, VisitError
@@ -17,22 +17,27 @@ from starkware.cairo.lang.compiler.parser_transformer import (
     ParserTransformer,
 )
 
-grammar_file = os.path.join(os.path.dirname(__file__), "cairo.ebnf")
-gram_parser = lark.Lark(
-    open(grammar_file, "r").read(),
-    start=[
-        "cairo_file",
-        "code_block",
-        "code_element",
-        "expr",
-        "instruction",
-        "type",
-        "typed_identifier",
-    ],
-    lexer="standard",
-    parser="lalr",
-    propagate_positions=True,
-)
+
+def get_grammar_parser(grammar: str) -> lark.Lark:
+    return lark.Lark(
+        grammar=grammar,
+        start=[
+            "cairo_file",
+            "code_block",
+            "code_element",
+            "expr",
+            "instruction",
+            "type",
+            "typed_identifier",
+        ],
+        lexer="basic",
+        parser="lalr",
+        propagate_positions=True,
+    )
+
+
+GRAMMER_FILE = os.path.join(os.path.dirname(__file__), "cairo.ebnf")
+GRAMMAR_PARSER = get_grammar_parser(grammar=open(GRAMMER_FILE, "r").read())
 
 
 def wrap_lark_error(err: LarkError, input_file: InputFile) -> Exception:
@@ -94,6 +99,7 @@ def wrap_lark_error(err: LarkError, input_file: InputFile) -> Exception:
             "_NEQ": '"!="',
             "ALLOC_LOCALS": '"alloc_locals"',
             "AMPERSAND": '"&"',
+            "AND": '"and"',
             "AS": '"as"',
             "ASSERT": '"assert"',
             "BUILTINS": '"%builtins"',
@@ -101,11 +107,13 @@ def wrap_lark_error(err: LarkError, input_file: InputFile) -> Exception:
             "CAST": '"cast"',
             "COLON": '":"',
             "COMMA": '","',
+            "CODEOFFSET": '"codeoffset"',
             "CONST": '"const"',
             "DOT": '"."',
             "DW": '"dw"',
             "END": '"end"',
             "EQUAL": '"="',
+            "FELT": '"felt"',
             "FROM": '"from"',
             "FUNC": '"func"',
             "HEXINT": "integer",
@@ -179,6 +187,8 @@ def parse(
     code: str,
     code_type: str,
     expected_type,
+    parser_transformer_class: Type[ParserTransformer] = ParserTransformer,
+    grammar_parser: lark.Lark = GRAMMAR_PARSER,
     parser_context: Optional[ParserContext] = None,
 ):
     """
@@ -186,9 +196,9 @@ def parse(
     code_type is the ebnf rule to start from (e.g., 'expr' or 'cairo_file').
     """
     input_file = InputFile(filename=filename, content=code)
-    parser_transformer = ParserTransformer(input_file, parser_context=parser_context)
+    parser_transformer = parser_transformer_class(input_file, parser_context=parser_context)
 
-    parser = gram_parser.parse_interactive(code, start=code_type)
+    parser = grammar_parser.parse_interactive(code, start=code_type)
     parser_state = parser.parser_state
     try:
         token = None
@@ -224,9 +234,9 @@ def parse(
 
 def lex(code: str) -> List[lark.lexer.Token]:
     """
-    Runs the lexer on the given code and returns the lark-parser tokens.
+    Runs the lexer on the given code and returns the lark tokens.
     """
-    return list(gram_parser.lex(code))
+    return list(GRAMMAR_PARSER.lex(code))
 
 
 def parse_file(

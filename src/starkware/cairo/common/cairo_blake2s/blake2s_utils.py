@@ -29,7 +29,7 @@ SIGMA = [
 
 
 def right_rot(value, n):
-    return (value >> n) | ((value & (2 ** n - 1)) << (32 - n))
+    return (value >> n) | ((value & (2**n - 1)) << (32 - n))
 
 
 # Helper function for the Cairo blake2s() implementation.
@@ -60,7 +60,7 @@ def blake2s_compress(
     h is a list of 8 32-bit words.
     message is a list of 16 32-bit words.
     """
-    state = h + IV[:4] + [x % 2 ** 32 for x in [IV[4] ^ t0, IV[5] ^ t1, IV[6] ^ f0, IV[7] ^ f1]]
+    state = h + IV[:4] + [x % 2**32 for x in [IV[4] ^ t0, IV[5] ^ t1, IV[6] ^ f0, IV[7] ^ f1]]
     for i in range(10):
         state = blake_round(state, message, SIGMA[i])
     return [x ^ v0 ^ v1 for x, v0, v1 in zip(h, state[:8], state[8:])]
@@ -98,13 +98,13 @@ def blake_round(state: List[int], message: List[int], sigma: List[int]) -> List[
 
 
 def mix(a: int, b: int, c: int, d: int, m0: int, m1: int) -> Tuple[int, int, int, int]:
-    a = (a + b + m0) % 2 ** 32
+    a = (a + b + m0) % 2**32
     d = right_rot((d ^ a), 16)
-    c = (c + d) % 2 ** 32
+    c = (c + d) % 2**32
     b = right_rot((b ^ c), 12)
-    a = (a + b + m1) % 2 ** 32
+    a = (a + b + m1) % 2**32
     d = right_rot((d ^ a), 8)
-    c = (c + d) % 2 ** 32
+    c = (c + d) % 2**32
     b = right_rot((b ^ c), 7)
 
     return a, b, c, d

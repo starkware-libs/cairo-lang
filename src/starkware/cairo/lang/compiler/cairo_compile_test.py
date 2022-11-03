@@ -4,7 +4,7 @@ import pytest
 
 from starkware.cairo.lang.compiler.cairo_compile import compile_cairo
 
-PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
+PRIME = 2**251 + 17 * 2**192 + 1
 
 
 def test_main_args_match_builtins():
@@ -21,9 +21,9 @@ def test_main_args_match_builtins():
             code="""
 %builtins output range_check
 
-func main(output_ptr) -> (output_ptr):
-    return (output_ptr=output_ptr + 1)
-end
+func main(output_ptr: felt*) -> (output_ptr: felt*) {
+    return (output_ptr=output_ptr + 1);
+}
 """,
             prime=PRIME,
         )
@@ -35,9 +35,11 @@ end
             code="""
 %builtins output range_check
 
-func main(range_check_ptr, output_ptr) -> (range_check_ptr, output_ptr):
-    return (range_check_ptr + 1, output_ptr=output_ptr + 1)
-end
+func main(range_check_ptr: felt*, output_ptr: felt*) -> (
+    range_check_ptr: felt*, output_ptr: felt*
+) {
+    return (range_check_ptr=range_check_ptr + 1, output_ptr=output_ptr + 1);
+}
 """,
             prime=PRIME,
         )
@@ -57,9 +59,24 @@ def test_main_return_match_builtins():
             code="""
 %builtins output range_check
 
-func main(output_ptr, range_check_ptr) -> (output_ptr):
-    return (output_ptr=output_ptr + 1)
-end
+func main(output_ptr: felt*, range_check_ptr: felt*) -> (output_ptr: felt*) {
+    return (output_ptr=output_ptr + 1);
+}
+""",
+            prime=PRIME,
+        )
+
+
+def test_main_unnamed_return():
+    expected_error_msg = "The return values of main() must be named."
+    with pytest.raises(AssertionError, match=re.escape(expected_error_msg)):
+        compile_cairo(
+            code="""
+%builtins output range_check
+
+func main(output_ptr: felt*, range_check_ptr: felt*) -> (felt*,) {
+    ret;
+}
 """,
             prime=PRIME,
         )

@@ -11,6 +11,7 @@ from starkware.cairo.lang.compiler.parser import parse_expr
 from starkware.cairo.lang.compiler.preprocessor.flow import ReferenceManager
 from starkware.cairo.lang.compiler.program import CairoHint, Program
 from starkware.starknet.security.simple_references import is_simple_reference
+from starkware.starkware_utils.marshmallow_dataclass_fields import additional_metadata
 from starkware.starkware_utils.validated_dataclass import (
     ValidatedDataclass,
     ValidatedMarshmallowDataclass,
@@ -48,7 +49,9 @@ class NamedExpression(ValidatedMarshmallowDataclass):
 class HintsWhitelistEntry(ValidatedDataclass):
     hint_lines: List[str]
     allowed_expressions: Set[NamedExpression] = field(
-        metadata=dict(marshmallow_field=SetField(mfields.Nested(NamedExpression.Schema)))
+        metadata=additional_metadata(
+            marshmallow_field=SetField(mfields.Nested(NamedExpression.Schema))
+        )
     )
     Schema: ClassVar[Type[marshmallow.Schema]]
 
@@ -83,7 +86,7 @@ class HintsWhitelist(ValidatedMarshmallowDataclass):
 
     # Maps a hint string to the set of allowed expressions in its references.
     allowed_reference_expressions_for_hint: Dict[str, Set[NamedExpression]] = field(
-        metadata=dict(marshmallow_field=HintsWhitelistDict())
+        metadata=additional_metadata(marshmallow_field=HintsWhitelistDict())
     )
 
     @classmethod
@@ -102,7 +105,7 @@ class HintsWhitelist(ValidatedMarshmallowDataclass):
     @classmethod
     def from_dir(cls, dirname: str) -> "HintsWhitelist":
         """
-        Returns a whitelist from all the file in the given
+        Returns a whitelist from all the files in the given directory.
         """
         whitelists = [
             cls.from_file(filename=os.path.join(dirname, x))
@@ -138,6 +141,21 @@ class HintsWhitelist(ValidatedMarshmallowDataclass):
             for code, refs in whitelist.allowed_reference_expressions_for_hint.items():
                 res.setdefault(code, set()).update(refs)
         return cls(allowed_reference_expressions_for_hint=res)
+
+    def diff(self, other_whitelist: "HintsWhitelist") -> "HintsWhitelist":
+        """
+        Returns the difference between this whitelist and the given other_whitelist.
+        """
+        diff_allowed_reference_expressions_for_hint = {
+            code: self.allowed_reference_expressions_for_hint[code]
+            for code in (
+                self.allowed_reference_expressions_for_hint.keys()
+                - other_whitelist.allowed_reference_expressions_for_hint.keys()
+            )
+        }
+        return HintsWhitelist(
+            allowed_reference_expressions_for_hint=diff_allowed_reference_expressions_for_hint
+        )
 
     # Reading operations.
     def verify_program_hint_secure(self, program: Program):

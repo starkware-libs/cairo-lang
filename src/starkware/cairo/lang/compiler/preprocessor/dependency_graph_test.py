@@ -36,71 +36,71 @@ def _extract_dependency_graph(codes: Dict[str, str]) -> DependencyGraphVisitor:
 def test_dependency_graph():
     modules = {
         "module": """
-func func0() -> (res):
-    return (res=0)
-end
-func func1():
-    return ()
-end
-func func2():
-    return ()
-end
-func func3():
-    return ()
-end
+func func0() -> (res: felt) {
+    return (res=0);
+}
+func func1() {
+    return ();
+}
+func func2() {
+    return ();
+}
+func func3() {
+    return ();
+}
 """,
         "__main__": """
 from module import func1 as func1_alias
 
-func foo():
-    struct S:
-        member x : S*
-        member y : S*
-    end
+func foo() {
+    struct S {
+        x: S*,
+        y: S*,
+    }
 
-    struct T:
-        member x : S*
-    end
+    struct T {
+        x: S*,
+    }
 
-    # Importing creates a dependency even if not used.
+    // Importing creates a dependency even if not used.
     from module import func0 as func0_alias, func2
 
-    tempvar _tempvar = [ap]
-    const _const = [ap]
-    local _local = [ap]
-    let _reference = [fp] + 2
+    tempvar _tempvar = [ap];
+    const _const = [ap];
+    local _local = [ap];
+    let _reference = [fp] + 2;
 
     _label:
-    let _typed_reference : W = ns.myfunc(1, 2, 3)
-end
+    let _typed_reference: W = ns.myfunc(1, 2, 3);
+}
 
-namespace ns:
-    func myfunc():
-        myfunc()
-        func1_alias()
-    end
+namespace ns {
+    func myfunc() {
+        myfunc();
+        func1_alias();
+    }
 
-    call bar  # This line will be ignored since it's outside of any function.
-end
+    call bar;  // This line will be ignored since it's outside of any function.
+}
 
-struct W:
-    member x : felt
-end
+struct W {
+    x: felt,
+}
 
-func bar():
-    const a = foo.S.x + 1
-    jmp bar if foo.S.y * 2 != 0
-    let w : W* = 0
-    let w_x = w.x
-    foo.func0_alias()
-end
+func bar() {
+    const a = foo.S.x + 1;
+    jmp bar if foo.S.y * 2 != 0;
+    let w: W* = 0;
+    let w_x = w.x;
+    foo.func0_alias();
+}
 
-func main():
-    jmp foo._label
-    call bar
-end
+func main() {
+    jmp foo._label;
+    call bar;
+}
 
-call bar  # This line will be ignored since it's outside of any function.
+call bar;  // This line will be ignored since it's outside of any function.
 """,
         "": """
 from module import func2

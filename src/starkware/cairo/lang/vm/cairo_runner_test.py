@@ -10,7 +10,7 @@ from starkware.cairo.lang.vm.utils import RunResources
 from starkware.cairo.lang.vm.vm_exceptions import VmException, VmExceptionBase
 
 CAIRO_FILE = os.path.join(os.path.dirname(__file__), "test.cairo")
-PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
+PRIME = 2**251 + 17 * 2**192 + 1
 
 
 def test_run_until_label():
@@ -37,9 +37,9 @@ def test_run_until_label():
 
 def test_run_past_end():
     code = """\
-func main():
-    ret
-end
+func main() {
+    ret;
+}
 """
     program = compile_cairo(code, PRIME)
     runner = CairoRunner(program, layout="plain")
@@ -56,12 +56,12 @@ def test_bad_stop_ptr():
     code = """\
 %builtins output
 
-func main(output_ptr) -> (output_ptr):
-    [ap] = 0; ap++
-    [ap - 1] = [output_ptr]
-    [ap] = output_ptr + 3; ap++  # The correct return value is output_ptr + 1
-    ret
-end
+func main(output_ptr: felt*) -> (output_ptr: felt*) {
+    [ap] = 0, ap++;
+    [ap - 1] = [output_ptr];
+    [ap] = output_ptr + 3, ap++;  // The correct return value is output_ptr + 1
+    ret;
+}
 """
     with pytest.raises(
         AssertionError, match="Invalid stop pointer for output. Expected: 2:1, found: 2:3"
@@ -82,9 +82,10 @@ def test_builtin_list():
         AssertionError,
         match=re.escape(
             "The builtins specified by the %builtins directive must be subsequence of"
-            " ['output', 'pedersen', 'range_check', 'ecdsa', 'bitwise']. "
-            "Got ['pedersen', 'output']."
-        ),
+            " ['output', 'pedersen'"
+        )
+        + ".*"
+        + re.escape("]. Got ['pedersen', 'output']."),
     ):
         CairoRunner(program, layout="small")
 
@@ -97,10 +98,10 @@ def test_builtin_list():
 
 def test_missing_exit_scope():
     code = """\
-func main():
+func main() {
     %{ vm_enter_scope() %}
-    ret
-end
+    ret;
+}
 """
     with pytest.raises(
         VmExceptionBase,
@@ -111,9 +112,9 @@ end
 
 def test_load_data_after_init():
     code = """\
-func main():
-    ret
-end
+func main() {
+    ret;
+}
 """
     runner = get_runner_from_code(code, layout="plain", prime=PRIME)
     addr = runner.segments.add()
@@ -124,12 +125,12 @@ end
 
 def test_small_memory_hole():
     code = """\
-func main():
-    [ap] = 0
-    ap += 4
-    [ap] = 0
-    ret
-end
+func main() {
+    [ap] = 0;
+    ap += 4;
+    [ap] = 0;
+    ret;
+}
 """
     runner = get_runner_from_code(code, layout="plain", prime=PRIME)
     runner.check_memory_usage()
@@ -137,12 +138,12 @@ end
 
 def test_memory_hole_insufficient():
     code = """\
-func main():
-    [ap] = 0
-    ap += 1000
-    [ap] = 0
-    ret
-end
+func main() {
+    [ap] = 0;
+    ap += 1000;
+    [ap] = 0;
+    ret;
+}
 """
     runner = get_runner_from_code(code, layout="plain", prime=PRIME)
 
@@ -157,25 +158,25 @@ end
 
 def test_hint_memory_holes():
     code_base_format = """\
-func main():
-    [ap] = 0
+func main() {{
+    [ap] = 0;
     %{{
         memory[fp + 1] = segments.add_temp_segment()
     %}}
-    [[fp + 1]] = [ap]
-    ap += 7
+    [[fp + 1]] = [ap];
+    ap += 7;
     {}
-    ap += 1
-    [ap] = 0
+    ap += 1;
+    [ap] = 0;
     %{{
         memory.add_relocation_rule(memory[fp + 1], fp + 3)
     %}}
-    ret
-end
+    ret;
+}}
 """
     code_no_hint, code_untouched_hint, code_touched_hint = [
         code_base_format.format(extra_code)
-        for extra_code in ["", "%{ memory[ap] = 7 %}", "%{ memory[ap] = 7 %}\n [ap]=[ap]"]
+        for extra_code in ["", "%{ memory[ap] = 7 %}", "%{ memory[ap] = 7 %}\n [ap]=[ap];"]
     ]
 
     runner_no_hint, runner_untouched_hint, runner_touched_hint = [

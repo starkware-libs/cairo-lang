@@ -123,7 +123,7 @@ function(python_lib LIB)
 endfunction()
 
 # Creates a virtual environment target.
-# Usage: python_venv(venv_name PYTHON python3.7 LIBS lib0 lib1 ...)
+# Usage: python_venv(venv_name PYTHON ${PYTHON_COMMAND} LIBS lib0 lib1 ...)
 # Target properties:
 # VENV_PYTHON: Full path to the vritual environment python executable.
 # STAMP_FILE: when this file is generated, the virtual environment is ready to use.
@@ -217,15 +217,29 @@ endfunction()
 
 function(python_test TEST_NAME)
   # Parse arguments.
-  set(options)
+  set(options NO_CODE_COVERAGE)
   set(oneValueArgs VENV TESTED_MODULES TEST_ARGS ENVIRONMENT_VARS)
   set(multiValueArgs)
   cmake_parse_arguments(ARGS "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
+  # If code coverage is enabled, and the target is run as part of the nightly run, need to add
+  # command line options + an environment variable.
+  set(COVERAGE_ARGS "")
+  if(NOT ARGS_NO_CODE_COVERAGE AND ("$ENV{NIGHTLY_TEST}" EQUAL "1"))
+    # Set COVERAGE_DEBUG environment variable for debugging coverage-related failures, as suggested
+    # here: https://github.com/pytest-dev/pytest-cov/issues/237.
+    set(ENV{COVERAGE_DEBUG} "process,config")
+    set(COVERAGE_ARGS "--cov-report html:{VENV_SITE_DIR}/coverage_py_html \
+      --cov {VENV_SITE_DIR}/${ARGS_TESTED_MODULES}"
+    )
+    string(REPLACE "/" "." COVERAGE_FILE_SUFFIX "${ARGS_TESTED_MODULES}")
+    string(APPEND ARGS_ENVIRONMENT_VARS " COVERAGE_FILE=.coverage.${COVERAGE_FILE_SUFFIX}")
+  endif()
+
   python_exe(${TEST_NAME}
     VENV ${ARGS_VENV}
     MODULE pytest
-    ARGS "{VENV_SITE_DIR}/${ARGS_TESTED_MODULES} ${ARGS_TEST_ARGS}"
+    ARGS "${COVERAGE_ARGS} {VENV_SITE_DIR}/${ARGS_TESTED_MODULES} ${ARGS_TEST_ARGS}"
     WORKING_DIR ${CMAKE_BINARY_DIR}
     ENVIRONMENT_VARS ${ARGS_ENVIRONMENT_VARS}
   )
@@ -238,12 +252,44 @@ endfunction()
 
 function(full_python_test TEST_NAME)
   # Parse arguments.
-  set(options)
+  set(options NO_CODE_COVERAGE)
   set(oneValueArgs TESTED_MODULES TEST_ARGS PYTHON ENVIRONMENT_VARS)
-  cmake_parse_arguments(ARGS "${options}" "${oneValueArgs}" "" ${ARGN})
+  set(multiValueArgs LIBS ARTIFACTS PY_EXE_DEPENDENCIES)
+  cmake_parse_arguments(ARGS "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+  # If code coverage is suppressed, the option needs to be passed to the python_exe macro.
+  # Otherwise, need to add the pytest-cov dependency.
+  set(CODE_COVERAGE_SUPPRESSION_FLAG)
+  if(ARGS_NO_CODE_COVERAGE OR NOT ("$ENV{NIGHTLY_TEST}" EQUAL "1"))
+    set(CODE_COVERAGE_SUPPRESSION_FLAG NO_CODE_COVERAGE)
+  else()
+    list(APPEND ARGS_LIBS "pip_pytest_cov")
+  endif()
+
+  # Use a 3rd-party Python debugger (instead of `pdb`).
+  #
+  # Usage: Override both args below before CMake imports this file.
+  # The contents of the variables should be as follows:
+  #
+  #     PYTHON_DEBUGGER_LIB: the name of the python_lib for the debugger package.
+  #         format: "pip_<lib_name>" # For more on this format, see the definition
+  #                                    of `python_lib` above.
+  #     PYTHON_BREAKPOINT_HANDLER: the cmd that triggers the debugger
+  #                                (will be run when `breakpoint()` is called).
+  #         format: "PYTHONBREAKPOINT=<debugger_start_command>"
+  #
+  # Example (for the package `ipdb`):
+  #
+  #    PYTHON_DEBUGGER_LIB="pip_ipdb"
+  #    PYTHON_BREAKPOINT_HANDLER="PYTHONBREAKPOINT=ipdb.set_trace"
+  list(APPEND ARGS_LIBS ${PYTHON_DEBUGGER_LIB})
+  list(APPEND ARGS_ENVIRONMENT_VARS ${PYTHON_BREAKPOINT_HANDLER})
 
   python_lib(${TEST_NAME}_lib
     ${ARGS_UNPARSED_ARGUMENTS}
+    LIBS ${ARGS_LIBS}
+    ARTIFACTS ${ARGS_ARTIFACTS}
+    PY_EXE_DEPENDENCIES ${ARGS_PY_EXE_DEPENDENCIES}
   )
   python_venv(${TEST_NAME}_venv
     PYTHON ${ARGS_PYTHON}
@@ -254,5 +300,6 @@ function(full_python_test TEST_NAME)
     TESTED_MODULES ${ARGS_TESTED_MODULES}
     TEST_ARGS ${ARGS_TEST_ARGS}
     ENVIRONMENT_VARS ${ARGS_ENVIRONMENT_VARS}
+    ${CODE_COVERAGE_SUPPRESSION_FLAG}
   )
 endfunction()

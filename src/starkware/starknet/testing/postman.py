@@ -1,6 +1,11 @@
+from typing import Type, TypeVar
+
 from starkware.eth.eth_test_utils import EthContract, EthTestUtils
+from starkware.starknet.services.api.feeder_gateway.response_objects import LATEST_BLOCK_ID
 from starkware.starknet.testing.contracts import MockStarknetMessaging
 from starkware.starknet.testing.starknet import Starknet
+
+TPostman = TypeVar("TPostman", bound="Postman")
 
 
 class Postman:
@@ -16,11 +21,11 @@ class Postman:
         # Create a filter to collect LogMessageToL2 events.
         w3_contract = self.mock_starknet_messaging_contract.w3_contract
         self.message_to_l2_filter = w3_contract.events.LogMessageToL2.createFilter(
-            fromBlock="latest"
+            fromBlock=LATEST_BLOCK_ID
         )
 
     @classmethod
-    async def create(cls, eth_test_utils: EthTestUtils):
+    async def create(cls: Type[TPostman], eth_test_utils: EthTestUtils) -> TPostman:
         mock_starknet_messaging_contract = eth_test_utils.accounts[0].deploy(
             MockStarknetMessaging, 0
         )

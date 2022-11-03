@@ -38,8 +38,8 @@ foo bar
 foo = bar test
 """,
         """
-file:?:?: Unexpected token Token('IDENTIFIER', 'test'). Expected one of: "(", ".", ";", "[", "{", \
-operator.
+file:?:?: Unexpected token Token('IDENTIFIER', 'test'). Expected one of: "(", ",", ".", ";", "[", \
+"{", operator.
 foo = bar test
           ^**^
 """,
@@ -79,7 +79,7 @@ static_assert ap
 [ap] = x& + y
 """,
         """
-file:?:?: Unexpected token Token('AMPERSAND', '&'). Expected one of: "(", ".", ";", "[", "{", \
+file:?:?: Unexpected token Token('AMPERSAND', '&'). Expected one of: "(", ",", ".", ";", "[", "{", \
 operator.
 [ap] = x& + y
         ^
@@ -117,22 +117,22 @@ foo( *
     )
     verify_exception(
         """
-if x y
+if (x y
 """,
         """
 file:?:?: Unexpected token Token('IDENTIFIER', 'y'). Expected one of: "!=", "(", ".", "==", "[", \
 "{", operator.
-if x y
-     ^
+if (x y
+      ^
 """,
     )
     verify_exception(
         """
-x = y; ap--
+x = y, ap--
 """,
         """
 file:?:?: Unexpected token Token('MINUS', '-'). Expected: "++".
-x = y; ap--
+x = y, ap--
          ^
 """,
     )
@@ -141,7 +141,7 @@ x = y; ap--
 func foo()*
 """,
         """
-file:?:?: Unexpected token Token('STAR', '*'). Expected one of: "->", ":".
+file:?:?: Unexpected token Token('STAR', '*'). Expected one of: "->", "{".
 func foo()*
           ^
 """,
@@ -165,14 +165,14 @@ def test_parser_error():
     # Unexpected EOF - missing 'end'.
     verify_exception(
         """
-func f():
-const a = 5
+func f() {
+const a = 5;
 """,
         """
 file:?:?: Unexpected end of input. Expected one of: "%builtins", "%lang", "@", "alloc_locals", \
-"assert", "call", "const", "dw", "end", "from", ...
-const a = 5
-           ^
+"assert", "call", "const", "dw", "from", "func", ...
+const a = 5;
+            ^
 """,
     )
 
@@ -230,5 +230,66 @@ new A() new
 file:?:?: Unexpected token Token('NEW', 'new'). Expected one of: ".", "=", "[", operator.
 new A() new
         ^*^
+""",
+    )
+
+
+def test_modifier_in_tuple():
+    verify_exception(
+        """
+let a : (b : local felt) = 5;
+""",
+        """
+file:?:?: Unexpected token Token('LOCAL', 'local'). Expected one of: \
+"(", "codeoffset", "felt", identifier.
+let a : (b : local felt) = 5;
+             ^***^
+""",
+    )
+
+
+def test_if_with_parenthesized_condition():
+    verify_exception(
+        """
+if ((a == 0 and b == 1)) {
+    let x = 0;
+}
+""",
+        """
+file:?:?: Unexpected token Token(\'_DBL_EQ\', \'==\'). Expected one of: "(", ")", ",", ".", "=", \
+"[", "{", operator.
+if ((a == 0 and b == 1)) {
+       ^^
+      """,
+    )
+
+
+def test_modifier_in_return_type():
+    verify_exception(
+        """
+func f(x) -> (local y) {
+    ret;
+}
+""",
+        """
+file:?:?: Unexpected token Token('LOCAL', 'local'). \
+Expected one of: "(", ")", ",", "codeoffset", "felt", identifier.
+func f(x) -> (local y) {
+              ^***^
+""",
+    )
+
+
+def test_bad_struct():
+    verify_exception(
+        """
+struct T {
+    return ();
+}
+""",
+        """
+file:?:?: Unexpected token Token('RETURN', 'return'). Expected one of: "local", "}", identifier.
+    return ();
+    ^****^
 """,
     )

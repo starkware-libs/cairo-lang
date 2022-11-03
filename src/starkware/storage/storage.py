@@ -3,7 +3,7 @@ import contextlib
 import dataclasses
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Type, TypeVar
+from typing import Any, Callable, Dict, Generic, Optional, Sequence, Tuple, Type, TypeVar
 
 from starkware.python.object_utils import generic_object_repr
 from starkware.python.utils import from_bytes, get_exception_repr, to_bytes
@@ -15,7 +15,12 @@ logger = logging.getLogger(__name__)
 
 HASH_BYTES = 32
 HashFunctionType = Callable[[bytes, bytes], bytes]
-TIntToIntMapping = TypeVar("TIntToIntMapping", bound="IntToIntMapping")
+
+TDBObject = TypeVar("TDBObject", bound="DBObject")
+TSingletonDBObject = TypeVar("TSingletonDBObject", bound="SingletonDBObject")
+TIndexedDBObject = TypeVar("TIndexedDBObject", bound="IndexedDBObject")
+TKey = TypeVar("TKey")
+TIntMapping = TypeVar("TIntMapping", bound="IntMapping[Any]")
 
 
 class Storage(ABC):
@@ -138,9 +143,6 @@ class Storage(ABC):
         return await self.get_float(key=key)
 
 
-TDBObject = TypeVar("TDBObject", bound="DBObject")
-
-
 class DBObject(Serializable):
     @classmethod
     def db_key(cls, suffix: bytes) -> bytes:
@@ -190,7 +192,35 @@ class DBObject(Serializable):
         return (self.db_key(suffix=suffix), self.serialize())
 
 
-TIndexedDBObject = TypeVar("TIndexedDBObject", bound="IndexedDBObject")
+class SingletonDBObject(DBObject):
+    """
+    A utility class for DBObjects expected to have at most one instance in storage.
+    """
+
+    @classmethod
+    def suffix(cls) -> bytes:
+        return b""
+
+    @classmethod
+    async def get_obj(
+        cls: Type[TSingletonDBObject], storage: Storage
+    ) -> Optional[TSingletonDBObject]:
+        return await cls.get(storage=storage, suffix=cls.suffix())
+
+    @classmethod
+    async def get_obj_or_fail(
+        cls: Type[TSingletonDBObject], storage: Storage
+    ) -> TSingletonDBObject:
+        return await cls.get_or_fail(storage=storage, suffix=cls.suffix())
+
+    async def set_obj(self, storage: Storage):
+        await self.set(storage=storage, suffix=self.suffix())
+
+    async def setnx_obj(self, storage: Storage) -> bool:
+        return await self.setnx(storage=storage, suffix=self.suffix())
+
+    def get_obj_update_for_mset(self) -> Tuple[bytes, bytes]:
+        return self.get_update_for_mset(suffix=self.suffix())
 
 
 class IndexedDBObject(DBObject):
@@ -237,38 +267,85 @@ class IndexedDBObject(DBObject):
         return (self.key(index), self.serialize())
 
 
-@dataclasses.dataclass(frozen=True)
-class IntToIntMapping(ValidatedDataclass, IndexedDBObject):
+# Mypy has a problem with dataclasses that contain unimplemented abstract methods.
+# See https://github.com/python/mypy/issues/5374 for details on this problem.
+@dataclasses.dataclass(frozen=True)  # type: ignore[misc]
+class IntMapping(ValidatedDataclass, DBObject, Generic[TKey]):
     """
-    Represents a mapping from integer key to integer value.
+    Represents a mapping from type `TKey` to an `int` value.
     """
 
     value: int
 
+    @classmethod
+    @abstractmethod
+    def encode_db_key(cls, key: TKey) -> bytes:
+        """
+        Transforms the given key into bytes.
+        """
+
     def serialize(self) -> bytes:
-        length = (self.value.bit_length() + 7) // 8  # Floor division.
-        return to_bytes(value=self.value, length=length)
+        byte_length = (self.value.bit_length() + 7) // 8  # Floor division.
+        return to_bytes(value=self.value, length=byte_length)
 
     @classmethod
-    def deserialize(cls: Type[TIntToIntMapping], data: bytes) -> TIntToIntMapping:
+    def deserialize(cls: Type[TIntMapping], data: bytes) -> TIntMapping:
         return cls(value=from_bytes(data))
 
+    async def setnx_int(self, storage: Storage, key: TKey) -> bool:
+        return await self.setnx(storage=storage, suffix=self.encode_db_key(key=key))
+
     @classmethod
-    async def get_value_or_fail(cls, storage: Storage, key: int) -> int:
+    async def create_and_setnx_int(cls, storage: Storage, key: TKey, value: int) -> bool:
+        obj = cls(value=value)
+        return await obj.setnx_int(storage=storage, key=key)
+
+    @classmethod
+    async def set_int(cls, storage: Storage, key: TKey, value: int):
+        obj = cls(value=value)
+        await obj.set(storage=storage, suffix=cls.encode_db_key(key=key))
+
+    @classmethod
+    async def get_int(cls, storage: Storage, key: TKey) -> Optional[int]:
+        obj = await cls.get(storage=storage, suffix=cls.encode_db_key(key))
+        if obj is None:
+            return None
+
+        return obj.value
+
+    @classmethod
+    async def get_int_or_fail(cls, storage: Storage, key: TKey) -> int:
         """
         Reads the value object from storage under the given key, and
         returns its corresponding value. Raises an error, if does not exist in storage.
         """
-        value_db_object = await cls.get_obj(storage=storage, index=key)
-        assert (
-            value_db_object is not None
-        ), f"{cls.__name__} value of key {key} does not appear in storage."
+        value = await cls.get_int(storage=storage, key=key)
 
-        return value_db_object.value
+        assert value is not None, f"{cls.__name__} value of key {key} does not appear in storage."
+
+        return value
+
+
+@dataclasses.dataclass(frozen=True)
+class IntToIntMapping(IntMapping[int]):
+    """
+    Represents a mapping from integer key to integer value.
+    """
 
     @classmethod
-    async def setnx_value(cls, storage: Storage, key: int, value: int) -> bool:
-        return await cls(value=value).setnx_obj(storage=storage, index=key)
+    def encode_db_key(cls, key: int) -> bytes:
+        return str(key).encode("ascii")
+
+
+@dataclasses.dataclass(frozen=True)
+class StringToIntMapping(IntMapping[str]):
+    """
+    Represents a mapping from a string key to an integer value.
+    """
+
+    @classmethod
+    def encode_db_key(cls, key: str) -> bytes:
+        return key.encode("ascii")
 
 
 class FactFetchingContext:
@@ -357,11 +434,23 @@ class LockManager(ABC):
 
     @abstractmethod
     async def lock(self, name: str) -> LockObject:
-        pass
+        """
+        Creates a lock object.
+        """
+
+    @abstractmethod
+    async def lock_exists(self, name: str) -> bool:
+        """
+        Returns True iff lock object is exists.
+        """
 
     @abstractmethod
     async def try_lock(self, name: str, ttl: int = None) -> LockObject:
-        pass
+        """
+        Tries to create a lock object.
+        """
 
     async def destroy(self):
-        pass
+        """
+        Closes the LockManager.
+        """

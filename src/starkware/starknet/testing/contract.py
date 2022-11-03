@@ -25,7 +25,7 @@ from starkware.starknet.testing.contract_utils import (
     flatten,
     parse_arguments,
 )
-from starkware.starknet.testing.objects import Dataclass, StarknetTransactionExecutionInfo
+from starkware.starknet.testing.objects import Dataclass, StarknetCallInfo
 from starkware.starknet.testing.state import CastableToAddress, StarknetState
 from starkware.starknet.utils.api_utils import cast_to_felts
 
@@ -38,13 +38,13 @@ class StarknetContract:
     """
     A high level interface to a StarkNet contract used for testing. Allows invoking functions.
     Example:
-      contract_definition = compile_starknet_files(...)
+      contract_class = compile_starknet_files(...)
       state = await StarknetState.empty()
-      contract_address = await state.deploy(contract_definition=contract_definition)
+      contract_address = await state.deploy(contract_class=contract_class)
       contract = StarknetContract(
-          state=state, abi=contract_definition.abi, contract_address=contract_address)
+          state=state, abi=contract_class.abi, contract_address=contract_address)
 
-      await contract.foo(a=1, b=[2, 3]).invoke()
+      await contract.foo(a=1, b=[2, 3]).execute()
     """
 
     def __init__(
@@ -52,11 +52,11 @@ class StarknetContract:
         state: StarknetState,
         abi: AbiType,
         contract_address: CastableToAddress,
-        deploy_execution_info: StarknetTransactionExecutionInfo,
+        deploy_call_info: StarknetCallInfo,
     ):
         self.state = state
         self.abi = abi
-        self.deploy_execution_info = deploy_execution_info
+        self.deploy_call_info = deploy_call_info
 
         self.struct_manager = StructManager(abi=abi)
         self.event_manager = EventManager(abi=abi)
@@ -246,7 +246,7 @@ class StarknetContract:
             state=self.state,
             abi=impl_contract_abi,
             contract_address=self.contract_address,
-            deploy_execution_info=self.deploy_execution_info,
+            deploy_call_info=self.deploy_call_info,
         )
 
 
@@ -270,59 +270,57 @@ class StarknetContractFunctionInvocation:
     retdata_tuple: type
     has_raw_output: bool
 
-    async def call(
-        self, caller_address: int = 0, signature: List[int] = None
-    ) -> StarknetTransactionExecutionInfo:
+    async def call(self, caller_address: int = 0) -> StarknetCallInfo:
         """
         Executes the function call without changing the state.
         """
-        return await self._invoke_on_given_state(
-            state=self.state.copy(), caller_address=caller_address, signature=signature
+        return await self._execute_on_given_state(
+            state=self.state.copy(), caller_address=caller_address
         )
 
     async def invoke(
         self, caller_address: int = 0, max_fee: int = 0, signature: List[int] = None
-    ) -> StarknetTransactionExecutionInfo:
+    ) -> StarknetCallInfo:
+        raise NotImplementedError(
+            "Invoking through an account contract is not supported yet, please use "
+            "execute() instead."
+        )
+
+    async def execute(self, caller_address: int = 0) -> StarknetCallInfo:
         """
         Executes the function call and apply changes on the state.
         """
-        return await self._invoke_on_given_state(
-            state=self.state, caller_address=caller_address, max_fee=max_fee, signature=signature
-        )
+        return await self._execute_on_given_state(state=self.state, caller_address=caller_address)
 
-    async def _invoke_on_given_state(
+    async def _execute_on_given_state(
         self,
         state: StarknetState,
         caller_address: int = 0,
-        max_fee: int = 0,
-        signature: List[int] = None,
-    ) -> StarknetTransactionExecutionInfo:
+    ) -> StarknetCallInfo:
         """
         Executes the function call and apply changes on the given state.
         """
-        execution_info = await state.invoke_raw(
+        call_info = await state.execute_entry_point_raw(
             contract_address=self.contract_address,
             selector=self.name,
             calldata=self.calldata,
             caller_address=caller_address,
-            max_fee=max_fee,
-            signature=None if signature is None else cast_to_felts(values=signature),
         )
         # Check if function has @raw_output.
         if self.has_raw_output:
             # Return the result as a raw tuple.
-            result = tuple(execution_info.call_info.retdata)
+            result = tuple(call_info.retdata)
         else:
             args = self._build_arguments(
-                arg_values=execution_info.call_info.retdata,
+                arg_values=call_info.retdata,
                 arg_types=self.retdata_arg_types,
             )
             result = self.retdata_tuple(*args)
 
-        main_call_raw_events = execution_info.call_info.events
+        main_call_raw_events = call_info.events
 
-        return StarknetTransactionExecutionInfo.from_internal(
-            tx_execution_info=execution_info,
+        return StarknetCallInfo.from_internal(
+            call_info=call_info,
             result=result,
             main_call_events=self._build_events(raw_events=main_call_raw_events),
         )
@@ -401,13 +399,23 @@ class StarknetContractFunctionInvocation:
                 build_arg(arg_type=arg_type, arg_value_iterator=arg_value_iterator)
                 for arg_type in arg_types
             ]
-        except StopIteration:
-            raise ArgumentParsingFailed("Too few argument values.")
+        except StopIteration as exception:
+            raise ArgumentParsingFailed("Too few argument values.") from exception
 
         # Make sure the iterator is empty.
         try:
             assert_exhausted(iterator=arg_value_iterator)
-        except AssertionError:
-            raise ArgumentParsingFailed("Too many argument values.")
+        except AssertionError as exception:
+            raise ArgumentParsingFailed("Too many argument values.") from exception
 
         return res
+
+
+@dataclasses.dataclass(frozen=True)
+class DeclaredClass:
+    """
+    A helper class that bundles conveniently the return value of declare().
+    """
+
+    class_hash: int
+    abi: AbiType

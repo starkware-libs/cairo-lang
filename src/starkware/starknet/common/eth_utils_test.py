@@ -12,7 +12,7 @@ from starkware.python.test_utils import maybe_raises
 CAIRO_FILE = os.path.join(os.path.dirname(__file__), "eth_utils.cairo")
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def program() -> Program:
     return compile_cairo_files([CAIRO_FILE], prime=DEFAULT_PRIME)
 
@@ -27,17 +27,16 @@ def runner(program: Program) -> CairoFunctionRunner:
     [
         (0, "Invalid Ethereum address - value is zero"),
         (1, None),
-        (2 ** 160 - 1, None),
-        (2 ** 160, "Invalid Ethereum address - value is more than 160 bits"),
+        (2**160 - 1, None),
+        (2**160, "Invalid Ethereum address - value is more than 160 bits"),
         (DEFAULT_PRIME - 1, "Invalid Ethereum address - value is more than 160 bits"),
     ],
 )
-def test_assert_valid_eth_address(runner: CairoFunctionRunner, address, error_message):
+def test_assert_eth_address_range(runner: CairoFunctionRunner, address, error_message):
     with maybe_raises(expected_exception=VmException, error_message=error_message):
         runner.run(
-            "assert_valid_eth_address",
+            "assert_eth_address_range",
             range_check_ptr=runner.range_check_builtin.base,
             address=address,
+            verify_implicit_args_segment=True,
         )
-        (range_check_ptr_end,) = runner.get_return_values(1)
-        assert range_check_ptr_end.segment_index == runner.range_check_builtin.base.segment_index

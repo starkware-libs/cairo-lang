@@ -8,10 +8,10 @@ def test_validation_rules():
     CODE_FORMAT = """
 %builtins range_check
 
-func main(range_check_ptr) -> (range_check_ptr):
-    assert [range_check_ptr] = {value}
-    return (range_check_ptr=range_check_ptr + 1)
-end
+func main(range_check_ptr: felt) -> (range_check_ptr: felt) {{
+    assert [range_check_ptr] = {value};
+    return (range_check_ptr=range_check_ptr + 1);
+}}
 """
 
     # Test valid values.
@@ -21,7 +21,7 @@ end
     with pytest.raises(
         VmException,
         match=f"Value {PRIME - 1}, in range check builtin 0, is out of range "
-        r"\[0, {bound}\)".format(bound=2 ** 128),
+        r"\[0, {bound}\)".format(bound=2**128),
     ):
         compile_and_run(CODE_FORMAT.format(value=-1))
 

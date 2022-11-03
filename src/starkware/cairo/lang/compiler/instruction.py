@@ -119,8 +119,8 @@ def decode_instruction_values(encoded_instruction):
     Returns a tuple (flags, off0, off1, off2) according to the given encoded instruction.
     """
     assert 0 <= encoded_instruction < 2 ** (3 * OFFSET_BITS + N_FLAGS), "Unsupported instruction."
-    off0 = encoded_instruction & (2 ** OFFSET_BITS - 1)
-    off1 = (encoded_instruction >> OFFSET_BITS) & (2 ** OFFSET_BITS - 1)
-    off2 = (encoded_instruction >> (2 * OFFSET_BITS)) & (2 ** OFFSET_BITS - 1)
+    off0 = encoded_instruction & (2**OFFSET_BITS - 1)
+    off1 = (encoded_instruction >> OFFSET_BITS) & (2**OFFSET_BITS - 1)
+    off2 = (encoded_instruction >> (2 * OFFSET_BITS)) & (2**OFFSET_BITS - 1)
     flags_val = encoded_instruction >> (3 * OFFSET_BITS)
     return flags_val, off0, off1, off2

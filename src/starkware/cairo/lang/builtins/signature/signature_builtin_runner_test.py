@@ -33,8 +33,8 @@ class SignatureExample:
 SIG_PTR = "ecdsa_ptr"
 formats = SimpleNamespace(
     hint_code_format="%{{ ecdsa_builtin.add_signature({addr}, {signature}) %}}",
-    pubkey_code_format=f"assert [{SIG_PTR} + SignatureBuiltin.pub_key] = {{pubkey}}",
-    msg_code_format=f"assert [{SIG_PTR} + SignatureBuiltin.message] = {{msg}}",
+    pubkey_code_format=f"assert [{SIG_PTR} + SignatureBuiltin.pub_key] = {{pubkey}};",
+    msg_code_format=f"assert [{SIG_PTR} + SignatureBuiltin.message] = {{msg}};",
 )
 
 # The address is used inside a hint.
@@ -96,12 +96,12 @@ CODE = """
 %builtins ecdsa
 from starkware.cairo.common.cairo_builtins import SignatureBuiltin
 
-func main(ecdsa_ptr) -> (ecdsa_ptr):
+func main(ecdsa_ptr: felt) -> (ecdsa_ptr: felt) {{
     {hint}
     {write_pubkey}
     {write_msg}
-    return(ecdsa_ptr=ecdsa_ptr + SignatureBuiltin.SIZE)
-end
+    return (ecdsa_ptr=ecdsa_ptr + SignatureBuiltin.SIZE);
+}}
 """
 
 test = SignatureTest()

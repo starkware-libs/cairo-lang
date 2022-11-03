@@ -5,23 +5,34 @@ from eth_hash.auto import keccak
 from starkware.cairo.lang.vm.crypto import pedersen_hash
 from starkware.python.utils import from_bytes
 
-MASK_250 = 2 ** 250 - 1
+MASK_250 = 2**250 - 1
 
 # MAX_STORAGE_ITEM_SIZE and ADDR_BOUND must be consistent with the corresponding constant in
 # starkware/starknet/core/storage/storage.cairo.
 MAX_STORAGE_ITEM_SIZE = 256
-ADDR_BOUND = 2 ** 251 - MAX_STORAGE_ITEM_SIZE
+ADDR_BOUND = 2**251 - MAX_STORAGE_ITEM_SIZE
 
 # OS context offset.
 SYSCALL_PTR_OFFSET = 0
 
+CONSTRUCTOR_ENTRY_POINT_NAME = "constructor"
 DEFAULT_ENTRY_POINT_NAME = "__default__"
 DEFAULT_L1_ENTRY_POINT_NAME = "__l1_default__"
 DEFAULT_ENTRY_POINT_SELECTOR = 0
 EXECUTE_ENTRY_POINT_NAME = "__execute__"
 TRANSFER_ENTRY_POINT_NAME = "transfer"
+VALIDATE_ENTRY_POINT_NAME = "__validate__"
+VALIDATE_DECLARE_ENTRY_POINT_NAME = "__validate_declare__"
+VALIDATE_DEPLOY_ENTRY_POINT_NAME = "__validate_deploy__"
+ACCOUNT_ENTRY_POINT_NAMES = {
+    EXECUTE_ENTRY_POINT_NAME,
+    VALIDATE_ENTRY_POINT_NAME,
+    VALIDATE_DECLARE_ENTRY_POINT_NAME,
+}
+EXTENDED_ACCOUNT_ENTRY_POINT_NAMES = {*ACCOUNT_ENTRY_POINT_NAMES, VALIDATE_DEPLOY_ENTRY_POINT_NAME}
 
-AbiType = List[Dict[str, Any]]
+AbiEntryType = Dict[str, Any]
+AbiType = List[AbiEntryType]
 
 
 def starknet_keccak(data: bytes) -> int:
@@ -39,8 +50,16 @@ def get_selector_from_name(func_name: str) -> int:
     return starknet_keccak(data=func_name.encode("ascii"))
 
 
+CONSTRUCTOR_ENTRY_POINT_SELECTOR = get_selector_from_name(func_name=CONSTRUCTOR_ENTRY_POINT_NAME)
 EXECUTE_ENTRY_POINT_SELECTOR = get_selector_from_name(func_name=EXECUTE_ENTRY_POINT_NAME)
 TRANSFER_ENTRY_POINT_SELECTOR = get_selector_from_name(func_name=TRANSFER_ENTRY_POINT_NAME)
+VALIDATE_ENTRY_POINT_SELECTOR = get_selector_from_name(func_name=VALIDATE_ENTRY_POINT_NAME)
+VALIDATE_DECLARE_ENTRY_POINT_SELECTOR = get_selector_from_name(
+    func_name=VALIDATE_DECLARE_ENTRY_POINT_NAME
+)
+VALIDATE_DEPLOY_ENTRY_POINT_SELECTOR = get_selector_from_name(
+    func_name=VALIDATE_DEPLOY_ENTRY_POINT_NAME
+)
 
 
 def get_storage_var_address(var_name: str, *args) -> int:

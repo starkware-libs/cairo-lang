@@ -1,3 +1,6 @@
+import asyncio
+import dataclasses
+import functools
 import random
 import re
 import string
@@ -7,12 +10,16 @@ import pytest
 
 from starkware.python.utils import (
     WriteOnceDict,
+    aclosing_context_manager,
     all_subclasses,
+    as_non_optional,
     assert_exhausted,
     blockify,
     composite,
+    execute_coroutine_threadsafe,
     gather_in_chunks,
     indent,
+    is_in_sorted_sequence,
     iter_blockify,
     multiply_counter_by_scalar,
     safe_zip,
@@ -29,6 +36,12 @@ def test_indent():
 
 def test_unique():
     assert unique([3, 7, 5, 8, 7, 6, 3, 9]) == [3, 7, 5, 8, 6, 9]
+
+
+def test_as_non_optional():
+    assert as_non_optional(5) == 5
+    with pytest.raises(AssertionError):
+        as_non_optional(None)
 
 
 def test_write_once_dict():
@@ -62,7 +75,7 @@ def test_safe_zip():
 
 def test_composite():
     # Define the function: (2 * (x - y) + 1) ** 2.
-    f = composite(lambda x: x ** 2, lambda x: 2 * x + 1, lambda x, y: x - y)
+    f = composite(lambda x: x**2, lambda x: 2 * x + 1, lambda x, y: x - y)
     assert f(3, 5) == 9
 
 
@@ -178,3 +191,81 @@ def test_multiply_counter_by_scalar():
     assert multiply_counter_by_scalar(scalar=5, counter=dict(a=1, b=2)) == dict(a=5, b=10)
     assert multiply_counter_by_scalar(scalar=0, counter=dict(a=1, b=2)) == dict(a=0, b=0)
     assert multiply_counter_by_scalar(scalar=-2, counter=dict(a=7, b=-1)) == dict(a=-14, b=2)
+
+
+def test_is_in_sorted_sequence():
+    sorted_list = [-1, 0, 1, 3, 7, 8, 15]
+    # In.
+    assert is_in_sorted_sequence(sorted_sequence=sorted_list, item=-1)
+    assert is_in_sorted_sequence(sorted_sequence=sorted_list, item=7)
+
+    # Not in.
+    assert not is_in_sorted_sequence(sorted_sequence=sorted_list, item=-10)
+    assert not is_in_sorted_sequence(sorted_sequence=sorted_list, item=4)
+    assert not is_in_sorted_sequence(sorted_sequence=sorted_list, item=20)
+
+    # Should work for special cases.
+    nan = float("nan")
+
+    # Demo.
+    assert nan != nan
+    assert nan is nan
+
+    # In.
+    assert is_in_sorted_sequence(sorted_sequence=[nan], item=nan)
+
+
+@pytest.mark.asyncio
+async def test_execute_coroutine_threadsafe():
+    loop = asyncio.get_running_loop()
+
+    async def foo(x: int) -> int:
+        return x
+
+    def sync_foo(x: int) -> int:
+        return execute_coroutine_threadsafe(coroutine=foo(x), loop=loop)
+
+    # Positive flow - run in a separate thread.
+    x = 5
+    assert x == await loop.run_in_executor(executor=None, func=functools.partial(sync_foo, x=x))
+
+    # Negative flow - try to run in the main thread.
+    with pytest.raises(AssertionError, match="Cannot run foo synchronously in main thread."):
+        sync_foo(x=x)
+
+
+@pytest.mark.asyncio
+async def test_aclosing():
+    @dataclasses.dataclass
+    class IsClosed:
+        value: bool = False
+
+    # Break an async loop before fully exhausting the generator, under the context manager.
+    @aclosing_context_manager
+    async def wrapped_foo_gen(is_closed: IsClosed):
+        try:
+            yield
+        finally:
+            is_closed.value = True
+
+    is_closed = IsClosed()
+    async with wrapped_foo_gen(is_closed=is_closed) as gen:
+        async for _ in gen:
+            break
+
+    assert is_closed.value
+
+    # Same, but without the context manager - the generator is expected to be alive after the break.
+    async def foo_gen(is_closed: IsClosed):
+        try:
+            yield
+        finally:
+            is_closed.value = True
+
+    is_closed = IsClosed()
+    gen = foo_gen(is_closed=is_closed)
+    async for _ in gen:
+        break
+
+    assert not is_closed.value
+    await gen.aclose()  # Close properly.

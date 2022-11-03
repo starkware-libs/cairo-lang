@@ -14,35 +14,20 @@ from starkware.cairo.lang.vm.relocatable import (
     MaybeRelocatableDict,
     RelocatableValue,
 )
+from starkware.cairo.lang.vm.test_utils import run_program_in_vm
 from starkware.cairo.lang.vm.virtual_machine_base import Rule, VirtualMachineBase
 from starkware.cairo.lang.vm.vm import RunContext, VirtualMachine
 from starkware.cairo.lang.vm.vm_exceptions import InconsistentAutoDeductionError, VmException
 from starkware.python.test_utils import maybe_raises
 
-PRIME = 2 ** 64 + 13
+PRIME = 2**64 + 13
 
 
 def run_single(code: str, steps: int, *, pc=RelocatableValue(0, 10), ap=100, fp=100, extra_mem={}):
     program = compile_cairo(code, PRIME, debug_info=True)
-
-    # Set memory[fp - 1] to an arbitrary value, since [fp - 1] is assumed to be set.
-    memory: MaybeRelocatableDict = {
-        **{pc + i: v for i, v in enumerate(program.data)},
-        fp - 1: 1234,
-        **extra_mem,
-    }
-    context = RunContext(
-        pc=pc,
-        ap=ap,
-        fp=fp,
-        memory=MemoryDict(memory),
-        prime=PRIME,
+    return run_program_in_vm(
+        program=program, steps=steps, pc=pc, ap=ap, fp=fp, extra_mem=extra_mem, prime=PRIME
     )
-
-    vm = VirtualMachine(program, context, {})
-    for _ in range(steps):
-        vm.step()
-    return vm
 
 
 def test_memory_dict():
@@ -61,17 +46,17 @@ def test_memory_dict():
 
 def test_simple():
     code = """
-    [ap] = [ap - 1] + 2; ap++
-    [ap] = [ap - 1] * 3; ap++
-    [ap] = 10; ap++
-    # Skip two instructions.
-    jmp rel 6
-    [ap] = [ap - 1] + 4; ap++  # Skipped.
-    [ap] = [ap - 1] + 5; ap++  # Skipped.
-    [ap] = [ap - 1] + 6; ap++
-    jmp abs 12
-    [ap] = [ap - 1] * 7; ap++
-    """
+[ap] = [ap - 1] + 2, ap++;
+[ap] = [ap - 1] * 3, ap++;
+[ap] = 10, ap++;
+// Skip two instructions.
+jmp rel 6;
+[ap] = [ap - 1] + 4, ap++;  // Skipped.
+[ap] = [ap - 1] + 5, ap++;  // Skipped.
+[ap] = [ap - 1] + 6, ap++;
+jmp abs 12;
+[ap] = [ap - 1] * 7, ap++;
+"""
 
     vm = run_single(code, 9, pc=10, ap=102, extra_mem={101: 1})
 
@@ -85,16 +70,16 @@ def test_simple():
 
 def test_jnz():
     code = """
-    [ap] = 7; ap++
+[ap] = 7, ap++;
 
-    loop:
-    jmp body if [ap - 1] != 0
-    [ap] = 4; ap++
+loop:
+jmp body if [ap - 1] != 0;
+[ap] = 4, ap++;
 
-    body:
-    [ap] = [ap - 1] - 1; ap++
-    jmp loop
-    """
+body:
+[ap] = [ap - 1] - 1, ap++;
+jmp loop;
+"""
 
     vm = run_single(code, 100, ap=101)
 
@@ -110,11 +95,12 @@ def test_jnz():
 @pytest.mark.parametrize("offset", [0, -1])
 def test_jnz_relocatables(offset: int):
     code = """
-    jmp body if [ap - 1] != 0
-    [ap] = 0; ap++
-    body:
-    [ap] = 1; ap++
-    """
+jmp body if [ap - 1] != 0;
+[ap] = 0, ap++;
+
+body:
+[ap] = 1, ap++;
+"""
     relocatable_value = RelocatableValue(segment_index=5, offset=offset)
     error_message = (
         None
@@ -128,27 +114,27 @@ def test_jnz_relocatables(offset: int):
 
 def test_call_ret():
     code = """
-    [fp] = 1000; ap++
-    call a
-    [ap] = [fp] + 1; ap++
-    call a
-    [ap] = [fp] + 2; ap++
+[fp] = 1000, ap++;
+call a;
+[ap] = [fp] + 1, ap++;
+call a;
+[ap] = [fp] + 2, ap++;
 
-    l_end:
-    jmp l_end
+l_end:
+jmp l_end;
 
-    a:
-    [fp] = 2000; ap++
-    call b
-    [ap] = [fp] + 1; ap++
-    call b
-    [ap] = [fp] + 2; ap++
-    ret
+a:
+[fp] = 2000, ap++;
+call b;
+[ap] = [fp] + 1, ap++;
+call b;
+[ap] = [fp] + 2, ap++;
+ret;
 
-    b:
-    [fp] = 3000; ap++
-    ret
-    """
+b:
+[fp] = 3000, ap++;
+ret;
+"""
 
     vm = run_single(code, 30)
 
@@ -173,10 +159,10 @@ def test_call_ret():
 
 def test_addap():
     code = """
-    [ap] = 3; ap++
-    ap += 30
-    [ap] = 4
-    """
+[ap] = 3, ap++;
+ap += 30;
+[ap] = 4;
+"""
 
     vm = run_single(code, 3)
 
@@ -187,10 +173,10 @@ def test_addap():
 
 def test_access_op1_ap():
     code = """
-    [ap] = 3; ap++
-    [ap] = [ap - 1] * [ap - 1]; ap++
-    jmp abs [ap - 1] + [ap - 2]
-    """
+[ap] = 3, ap++;
+[ap] = [ap - 1] * [ap - 1], ap++;
+jmp abs [ap - 1] + [ap - 2];
+"""
 
     vm = run_single(code, 3, ap=200)
 
@@ -201,49 +187,47 @@ def test_access_op1_ap():
 
 def test_hints():
     code = """
-const x = 1200
-const y = 8000
+const x = 1200;
+const y = 8000;
 
 %{
-# Test math utils.
-x = fdiv(3, 2)
-assert fmul(x, 2) == 3
-assert (x * 2) % PRIME == 3
-assert fsub(0, 1) == PRIME - 1
+    # Test math utils.
+    x = fdiv(3, 2)
+    assert fmul(x, 2) == 3
+    assert (x * 2) % PRIME == 3
+    assert fsub(0, 1) == PRIME - 1
 %}
-call foo
+call foo;
 
 %{
-assert ids.x + ids.foo.y == 1234
-assert ids.y == 8000
-memory[fp + 1] = ids.z
+    assert ids.x + ids.foo.y == 1234
+    assert ids.y == 8000
+    memory[fp + 1] = ids.z
 %}
-[fp] = [fp]
+[fp] = [fp];
 
-func foo():
-  const y = 34
-  const z = 0
-  let mem_at_fp_plus_one = [fp + 1]
-  %{
-  abc = 123
-  %}
-  [fp] = 2000
-  %{
-  v = memory[fp] // 2
+func foo() {
+    const y = 34;
+    const z = 0;
+    let mem_at_fp_plus_one = [fp + 1];
+    %{ abc = 123 %}
+    [fp] = 2000;
+    %{
+        v = memory[fp] // 2
 
-  ids.mem_at_fp_plus_one = v
-  memory[fp + 2] = ids.x + ids.y
+        ids.mem_at_fp_plus_one = v
+        memory[fp + 2] = ids.x + ids.y
 
-  # Make sure abc is accessible.
-  assert abc == 123
+        # Make sure abc is accessible.
+        assert abc == 123
 
-  # Try to use imports in list comprehension (check that exec() is called correctly).
-  import random
-  [random.randrange(10) for _ in range(10)]
-  %}
-  [fp] = [fp + 1] + [fp + 1]
-  ret
-end
+        # Try to use imports in list comprehension (check that exec() is called correctly).
+        import random
+        [random.randrange(10) for _ in range(10)]
+    %}
+    [fp] = [fp + 1] + [fp + 1];
+    ret;
+}
 """
 
     vm = run_single(code, 4, ap=200)
@@ -258,11 +242,11 @@ end
 
 def test_hint_between_references():
     code = """
-let x = 1
+let x = 1;
 %{ assert ids.x == 1 %}
-let x = 2
+let x = 2;
 %{ assert ids.x == 2 %}
-ap += 0
+ap += 0;
 """
     run_single(code=code, steps=1)
 
@@ -270,7 +254,7 @@ ap += 0
 def test_nondet_hint_pointer():
     code = """
 %{ from starkware.cairo.lang.vm.relocatable import RelocatableValue %}
-tempvar x : felt* = cast(nondet %{ RelocatableValue(12, 34) %}, felt*) + 3
+tempvar x: felt* = cast(nondet %{ RelocatableValue(12, 34) %}, felt*) + 3;
 """
     vm = run_single(code=code, steps=2)
     assert vm.run_context.memory[101] == RelocatableValue(12, 37)
@@ -278,7 +262,7 @@ tempvar x : felt* = cast(nondet %{ RelocatableValue(12, 34) %}, felt*) + 3
 
 def test_hint_exception():
     code = """
-# Some comment.
+// Some comment.
 
 %{ x = 0 %}
 
@@ -286,7 +270,7 @@ def test_hint_exception():
 def f():
     0 / 0  # Raises exception.
 %}
-[ap] = 0; ap++
+[ap] = 0, ap++;
 
 %{ y = 0 %}
 %{
@@ -294,7 +278,7 @@ def f():
 
 f()
 %}
-[ap] = 1; ap++
+[ap] = 1, ap++;
 """
 
     # In this test we actually do write the code to a file, to allow the linecache module to fetch
@@ -341,14 +325,14 @@ ZeroDivisionError: division by zero\
 
 def test_hint_indentation_error():
     code = """
-# Some comment.
+// Some comment.
 
 %{
-def f():
-    b = 1
-        a = 1 # Wrong indentation.
+    def f():
+        b = 1
+            a = 1 # Wrong indentation.
 %}
-[ap] = 0; ap++
+[ap] = 0, ap++;
 """
 
     # In this test we actually do write the code to a file, to allow the linecache module to fetch
@@ -378,10 +362,8 @@ def f():
 Got an exception while compiling a hint.
 %{{
 ^^
-Traceback (most recent call last):
   File "{cairo_file.name}", line 7
     a = 1 # Wrong indentation.
-    ^
 IndentationError: unexpected indent\
 """
     assert expected_error == str(excinfo.value)
@@ -389,15 +371,15 @@ IndentationError: unexpected indent\
 
 def test_hint_syntax_error():
     code = """
-# Make sure the hint is not located at the start of the program.
-[ap] = 1
+// Make sure the hint is not located at the start of the program.
+[ap] = 1;
 
 %{
-def f():
-    b = # Wrong syntax.
-    a = 1
+    def f():
+        b = # Wrong syntax.
+        a = 1
 %}
-[ap] = 0; ap++
+[ap] = 0, ap++;
 """
 
     # In this test we actually do write the code to a file, to allow the linecache module to fetch
@@ -427,10 +409,9 @@ def f():
 Got an exception while compiling a hint.
 %{{
 ^^
-Traceback (most recent call last):
   File "{cairo_file.name}", line 7
     b = # Wrong syntax.
-                      ^
+        ^
 SyntaxError: invalid syntax\
 """
     assert expected_error == str(excinfo.value)
@@ -444,33 +425,33 @@ def test_hint_scopes():
     assert outer_scope_var == 17
     assert 'inner_scope_var' not in locals()
 %}
-[ap] = 1; ap++
+[ap] = 1, ap++;
 %{
     assert 'outer_scope_var' not in locals()
     assert inner_scope_var == 'scope 1'
     # create new inner_scope_var local in the inner scope.
     vm_enter_scope({'inner_scope_var': 'scope 2'})
 %}
-[ap] = 2; ap++
+[ap] = 2, ap++;
 %{
     assert 'outer_scope_var' not in locals()
     assert inner_scope_var == 'scope 2'
     vm_exit_scope()
 %}
-[ap] = 3; ap++
+[ap] = 3, ap++;
 %{
     # Make sure that the we get the original inner_scope_var.
     assert inner_scope_var == 'scope 1'
     vm_exit_scope()
 %}
-[ap] = 4; ap++
+[ap] = 4, ap++;
 %{
     assert outer_scope_var == 17
     # Try to access a variable in the scope we just exited.
     inner_scope_var
 %}
-[ap] = 5; ap++
-    """
+[ap] = 5, ap++;
+"""
 
     vm = run_single(code, 4)
     with pytest.raises(VmException, match="name 'inner_scope_var' is not defined"):
@@ -484,12 +465,10 @@ def test_skip_instruction_execution():
     vm.run_context.pc += 2
     vm.skip_instruction_execution = True
 %}
-[ap] = [ap] + 1; ap++ # This intruction will not be executed.
-%{
-    x = 1
-%}
-[ap] = 10; ap++
-    """
+[ap] = [ap] + 1, ap++;  // This intruction will not be executed.
+%{ x = 1 %}
+[ap] = 10, ap++;
+"""
 
     program = compile_cairo(code, PRIME, debug_info=True)
 
@@ -525,7 +504,7 @@ def test_skip_instruction_execution():
 
 def test_auto_deduction_rules():
     code = """
-[fp + 1] = [fp] + [ap]
+[fp + 1] = [fp] + [ap];
 """
 
     program = compile_cairo(code=code, prime=PRIME, debug_info=True)
@@ -566,9 +545,9 @@ def test_auto_deduction_rules():
 def test_memory_validation_in_hints():
     code = """
 %{ memory[ap] = 0 %}
-[ap] = [ap]; ap++
+[ap] = [ap], ap++;
 %{ memory[ap] = 0 %}
-[ap] = [ap]; ap++
+[ap] = [ap], ap++;
 """
 
     program = compile_cairo(code=code, prime=PRIME, debug_info=True)
@@ -602,8 +581,8 @@ def test_memory_validation_in_hints():
 
 def test_nonpure_mul():
     code = """
-    [ap] = [ap - 1] * 2; ap++
-    """
+[ap] = [ap - 1] * 2, ap++;
+"""
 
     with pytest.raises(VmException, match="Could not complete computation *"):
         run_single(code, 1, ap=102, extra_mem={101: RelocatableValue(1, 0)})
@@ -611,8 +590,8 @@ def test_nonpure_mul():
 
 def test_nonpure_jmp_rel():
     code = """
-    jmp rel [ap - 1]
-    """
+jmp rel [ap - 1];
+"""
 
     with pytest.raises(VmException, match="Could not complete computation jmp rel"):
         run_single(code, 1, ap=102, extra_mem={101: RelocatableValue(1, 0)})
@@ -620,8 +599,8 @@ def test_nonpure_jmp_rel():
 
 def test_jmp_segment():
     code = """
-    jmp abs [ap]; ap++
-    """
+jmp abs [ap], ap++;
+"""
     program = compile_cairo(code=code, prime=PRIME, debug_info=True)
 
     program_base_a = RelocatableValue(0, 10)
@@ -653,19 +632,19 @@ def test_jmp_segment():
 
 def test_simple_deductions():
     code = """
-    # 2 = 3 * ?.
-    [fp] = [fp - 1] * [ap]; ap++
-    # 2 = ? * 3.
-    [fp] = [ap] * [fp - 1]; ap++
-    # 2 = 3 + ?.
-    [fp] = [fp - 1] + [ap]; ap++
-    # 2 = ? + 3.
-    [fp] = [ap] + [fp - 1]; ap++
-    # 2 = ?.
-    [fp] = [ap]; ap++
-    # ? = 2.
-    [ap] = [fp]; ap++
-    """
+// 2 = 3 * ?.
+[fp] = [fp - 1] * [ap], ap++;
+// 2 = ? * 3.
+[fp] = [ap] * [fp - 1], ap++;
+// 2 = 3 + ?.
+[fp] = [fp - 1] + [ap], ap++;
+// 2 = ? + 3.
+[fp] = [ap] + [fp - 1], ap++;
+// 2 = ?.
+[fp] = [ap], ap++;
+// ? = 2.
+[ap] = [fp], ap++;
+"""
 
     vm = run_single(code, 6, ap=101, extra_mem={99: 3, 100: 2})
 
@@ -681,8 +660,8 @@ def test_simple_deductions():
 
 def test_failing_assert_eq():
     code = """
-    [ap] = [ap + 1] + [ap + 2]
-    """
+[ap] = [ap + 1] + [ap + 2];
+"""
 
     with pytest.raises(VmException, match="An ASSERT_EQ instruction failed"):
         run_single(code, 1, extra_mem={100: 1, 101: 3, 102: 2})
@@ -690,33 +669,33 @@ def test_failing_assert_eq():
 
 def test_call_unknown():
     code = """
-    call rel [ap]
-    """
+call rel [ap];
+"""
     with pytest.raises(VmException, match="Unknown value for memory cell at address 100"):
         run_single(code, 1)
 
 
 def test_invalid_instruction():
     code = """
-    dw -1
-    """
+dw -1;
+"""
     with pytest.raises(VmException) as exc_info:
         run_single(code, 1)
 
     assert str(exc_info.value) == (
         """\
-:2:5: Error at pc=0:10:
+:2:1: Error at pc=0:10:
 Unsupported instruction.
-    dw -1
-    ^***^\
+dw -1;
+^***^\
 """
     )
 
 
 def test_call_wrong_operands():
     code = """
-    call rel 0
-    """
+call rel 0;
+"""
     with pytest.raises(
         VmException,
         match=r"Call failed to write return-pc \(inconsistent op0\): 0 != 0:12. "
@@ -733,24 +712,24 @@ def test_call_wrong_operands():
 
 def test_traceback():
     code = """
-    call main
+call main;
 
-    func foo(x):
-        %{ assert ids.x != 0 %}
-        return ()
-    end
+func foo(x) {
+    %{ assert ids.x != 0 %}
+    return ();
+}
 
-    func bar(x):
-        foo(x * x * x)
-        return ()
-    end
+func bar(x) {
+    foo(x * x * x);
+    return ();
+}
 
-    func main():
-        bar(x=1)
-        bar(x=0)  # This line will cause an error.
-        return ()
-    end
-    """
+func main() {
+    bar(x=1);
+    bar(x=0);  // This line will cause an error.
+    return ();
+}
+"""
 
     with pytest.raises(VmException) as exc_info:
         run_single(code, 100, ap=101, extra_mem={99: 3, 100: 2})
@@ -758,20 +737,20 @@ def test_traceback():
     assert (
         str(exc_info.value)
         == """\
-:5:9: Error at pc=0:12:
+:5:5: Error at pc=0:12:
 Got an exception while executing a hint.
-        %{ assert ids.x != 0 %}
-        ^*********************^
+    %{ assert ids.x != 0 %}
+    ^*********************^
 Cairo traceback (most recent call last):
-:2:5: (pc=0:10)
-    call main
-    ^*******^
-:16:9: (pc=0:24)
-        bar(x=0)  # This line will cause an error.
-        ^******^
-:10:9: (pc=0:15)
-        foo(x * x * x)
-        ^************^
+:2:1: (pc=0:10)
+call main;
+^*******^
+:16:5: (pc=0:24)
+    bar(x=0);  // This line will cause an error.
+    ^******^
+:10:5: (pc=0:15)
+    foo(x * x * x);
+    ^************^
 
 Traceback (most recent call last):
   File "", line 5, in <module>
@@ -782,41 +761,42 @@ AssertionError\
 
 def test_traceback_with_attr():
     code = """
-    call main
+call main;
 
-    func foo(x):
-        with_attr error_message("Error in foo (x={x})."):
-            with_attr error_message("Should not appear in trace."):
-                assert 0 = 0
-            end
-            with_attr attr_name("Should not appear in trace (attr_name instead of error_message)."):
-                %{ assert ids.x != 1 %}
-                [ap] = 1; ap++
-            end
-        end
-        return ()
-    end
+func foo(x) {
+    with_attr error_message("Error in foo (x={x}).") {
+        with_attr error_message("Should not appear in trace.") {
+            assert 0 = 0;
+        }
+        with_attr attr_name("Should not appear in trace (attr_name instead of error_message).") {
+            %{ assert ids.x != 1 %}
+            [ap] = 1, ap++;
+        }
+    }
+    return ();
+}
 
-    func bar(x):
-        tempvar y = x + 2
-        with_attr error_message("Error in bar (x={x}, y={y})."):
-            foo(y * y * y)
-        end
-        return ()
-    end
+func bar(x) {
+    tempvar y = x + 2;
+    // y and x.y evaluation should fail (y is ap-based and x.y doesn't exist).
+    with_attr error_message("Error in bar (x={x}, y={y}, {x.y}).") {
+        foo(y * y * y);
+    }
+    return ();
+}
 
-    func main():
-        with_attr error_message("Error in main."):
-            with_attr error_message("Running bar(x=1)."):
-                bar(x=1)
-            end
-            with_attr error_message("Running bar(x=0)."):
-                bar(x=-1)  # This line will cause an error.
-            end
-        end
-        return ()
-    end
-    """
+func main() {
+    with_attr error_message("Error in main.") {
+        with_attr error_message("Running bar(x=1).") {
+            bar(x=1);
+        }
+        with_attr error_message("Running bar(x=0).") {
+            bar(x=-1);  // This line will cause an error.
+        }
+    }
+    return ();
+}
+"""
 
     with pytest.raises(VmException) as exc_info:
         run_single(code, 100, pc=RelocatableValue(0, 10), ap=101, extra_mem={99: 3, 100: 2})
@@ -825,23 +805,24 @@ def test_traceback_with_attr():
         str(exc_info.value)
         == """\
 Error message: Error in foo (x=1).
-:10:17: Error at pc=0:16:
+:10:13: Error at pc=0:16:
 Got an exception while executing a hint.
-                %{ assert ids.x != 1 %}
-                ^*********************^
+            %{ assert ids.x != 1 %}
+            ^*********************^
 Cairo traceback (most recent call last):
-:2:5: (pc=0:10)
-    call main
-    ^*******^
+:2:1: (pc=0:10)
+call main;
+^*******^
 Error message: Running bar(x=0).
 Error message: Error in main.
-:31:17: (pc=0:32)
-                bar(x=-1)  # This line will cause an error.
-                ^*******^
-Error message: Error in bar (x=-1, y={y}). (Cannot evaluate ap-based or complex references: ['y'])
-:20:13: (pc=0:23)
-            foo(y * y * y)
-            ^************^
+:32:13: (pc=0:32)
+            bar(x=-1);  // This line will cause an error.
+            ^*******^
+Error message: Error in bar (x=-1, y={y}, {x.y}). (Cannot evaluate ap-based or complex references: \
+['y', 'x.y'])
+:21:9: (pc=0:23)
+        foo(y * y * y);
+        ^************^
 
 Traceback (most recent call last):
   File "", line 10, in <module>

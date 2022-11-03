@@ -4,6 +4,7 @@ from typing import Dict, Optional
 
 import marshmallow.fields as mfields
 
+from starkware.cairo.lang.builtins.all_builtins import ALL_BUILTINS
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 
 
@@ -23,7 +24,7 @@ class IntAsHex(mfields.Field):
 
     def _deserialize(self, value, attr, data, **kwargs):
         if re.match("^0x[0-9a-f]+$", value) is None:
-            self.fail("invalid", input=value)
+            raise self.make_error("invalid", input=value)
 
         return int(value, 16)
 
@@ -86,9 +87,9 @@ def sort_segments(
     public input.
     Gets and returns a dictionary from segment name to a MemorySegmentAddresses.
     """
-    segment_names = ["program", "execution", "output", "pedersen", "range_check", "ecdsa"]
-    if "bitwise" in memory_segments:
-        segment_names.append("bitwise")
+    segment_names = ["program", "execution"] + [
+        builtin for builtin in ALL_BUILTINS if builtin in memory_segments
+    ]
     res = {name: memory_segments[name] for name in segment_names}
     assert len(res) == len(memory_segments), f"Wrong segments given: {memory_segments}."
     return res

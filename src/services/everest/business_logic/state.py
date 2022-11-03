@@ -1,7 +1,9 @@
 import contextlib
+import functools
 from abc import ABC, abstractmethod
-from typing import Iterator, Optional, Type, TypeVar
+from typing import Iterable, Iterator, Optional, Type, TypeVar
 
+from services.everest.business_logic.state_api import StateProxy
 from starkware.python.object_utils import generic_object_repr
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
 from starkware.starkware_utils.config_base import Config
@@ -14,6 +16,7 @@ from starkware.storage.storage import FactFetchingContext
 TStateSelector = TypeVar("TStateSelector", bound="StateSelectorBase")
 TCarriedState = TypeVar("TCarriedState", bound="CarriedStateBase")
 TSharedState = TypeVar("TSharedState", bound="SharedStateBase")
+TStateDiff = TypeVar("TStateDiff", bound="EverestStateDiff")
 TGeneralConfig = TypeVar("TGeneralConfig", bound=Config)
 
 
@@ -49,7 +52,7 @@ class StateSelectorBase(ABC, ValidatedDataclass):
         pass
 
 
-class CarriedStateBase(ABC):
+class CarriedStateBase(StateProxy):
     """
     A class representing a sub-state of the total state (SharedState).
     It is carried and maintained by the Batcher, as each pending transaction is applied to it
@@ -201,3 +204,34 @@ class SharedStateBase(ValidatedMarshmallowDataclass):
         facts: Optional[BinaryFactDict] = None,
     ) -> TSharedState:
         pass
+
+
+class EverestStateDiff(ValidatedMarshmallowDataclass):
+    """
+    Represents uncommitted changes to a state.
+    """
+
+    @abstractmethod
+    def squash(self: TStateDiff, other: TStateDiff) -> TStateDiff:
+        """
+        Creates a state diff. object by applying the given object on self.
+        """
+
+    @abstractmethod
+    async def commit(
+        self, ffc: FactFetchingContext, previous_state: SharedStateBase
+    ) -> SharedStateBase:
+        """
+        Returns a new state after applying the changes onto the given state.
+        """
+
+    @classmethod
+    def squash_many(
+        cls: Type[TStateDiff],
+        state_diffs: Iterable[TStateDiff],
+        initial_state_diff: TStateDiff,
+    ) -> TStateDiff:
+        """
+        Creates a state diff. object with the given changes applied in chronological order.
+        """
+        return functools.reduce(lambda x, y: x.squash(other=y), state_diffs, initial_state_diff)

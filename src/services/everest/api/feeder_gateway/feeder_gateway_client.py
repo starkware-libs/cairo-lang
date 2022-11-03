@@ -1,10 +1,10 @@
 import json
 from typing import ClassVar
 
-from services.external_api.base_client import BaseClient
+from services.external_api.client import ClientBase
 
 
-class EverestFeederGatewayClient(BaseClient):
+class EverestFeederGatewayClient(ClientBase):
     """
     Base class to FeederGatewayClient classes.
     """

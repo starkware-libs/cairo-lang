@@ -6,6 +6,7 @@ python_lib(cairo_relocatable_lib
     relocatable_fields.py
 
     LIBS
+    starkware_python_utils_lib
     pip_marshmallow
 )
 
@@ -42,6 +43,7 @@ python_lib(cairo_vm_lib
     vm_exceptions.py
 
     LIBS
+    cairo_all_builtins_lib
     cairo_compile_lib
     cairo_relocatable_lib
     cairo_vm_crypto_lib
@@ -83,9 +85,21 @@ python_exe(cairo_run_exe
     MODULE starkware.cairo.lang.vm.cairo_run
 )
 
+python_lib(cairo_vm_test_utils_lib
+    PREFIX starkware/cairo/lang/vm
+
+    FILES
+    test_utils.py
+
+    LIBS
+    cairo_compile_lib
+    cairo_run_lib
+    cairo_vm_lib
+)
+
 full_python_test(cairo_vm_test
     PREFIX starkware/cairo/lang/vm
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
     TESTED_MODULES starkware/cairo/lang/vm
 
     FILES
@@ -110,8 +124,9 @@ full_python_test(cairo_vm_test
     cairo_constants_lib
     cairo_run_lib
     cairo_vm_lib
+    cairo_vm_test_utils_lib
     cairo_vm_utils_lib
-    starkware_dataclasses_utils_lib
+    starkware_dataclasses_field_utils_lib
     starkware_python_utils_lib
     starkware_python_test_utils_lib
     pip_marshmallow_dataclass

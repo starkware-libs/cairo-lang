@@ -26,7 +26,7 @@ python_lib(starknet_mock_messaging_contracts_lib
     ARTIFACTS
     "${CMAKE_CURRENT_BINARY_DIR}/MockStarknetMessaging.json MockStarknetMessaging.json"
 )
-add_dependencies(starknet_mock_messaging_contracts_lib starknet_mock_messaging_sol)
+add_dependencies(starknet_mock_messaging_contracts_lib mock_starknet_messaging_sol_env)
 
 python_lib(starknet_testing_lib
     PREFIX starkware/starknet/testing
@@ -45,16 +45,19 @@ python_lib(starknet_testing_lib
     cairo_vm_lib
     starknet_abi_lib
     starknet_api_utils_lib
+    starknet_business_logic_fact_state_lib
+    starknet_business_logic_patricia_state_lib
     starknet_business_logic_state_lib
     starknet_compile_lib
-    starknet_contract_definition_lib
+    starknet_contract_class_lib
     starknet_definitions_lib
+    starknet_execute_entry_point_lib
     starknet_feeder_gateway_response_objects_lib
     starknet_general_config_lib
-    starknet_internal_transaction_interface_lib
-    starknet_internal_transaction_lib
+    starknet_transaction_objects_lib
     starknet_messages_lib
     starknet_mock_messaging_contracts_lib
+    starknet_os_abi_lib
     starknet_transaction_execution_objects_lib
     starknet_transaction_lib
     starkware_dataclasses_utils_lib
@@ -66,7 +69,7 @@ python_lib(starknet_testing_lib
 
 full_python_test(starknet_testing_test
     PREFIX starkware/starknet/testing
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
     TESTED_MODULES starkware/starknet/testing
 
     FILES
@@ -76,6 +79,7 @@ full_python_test(starknet_testing_test
     postman_test.py
     starknet_test.py
     test.cairo
+    test_unwhitelisted_hint.cairo
 
     LIBS
     cairo_common_lib

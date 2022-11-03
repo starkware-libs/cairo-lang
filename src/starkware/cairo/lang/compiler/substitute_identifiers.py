@@ -1,6 +1,11 @@
 from typing import Callable, List, Optional, Union
 
-from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypeStruct
+from starkware.cairo.lang.compiler.ast.cairo_types import (
+    CairoType,
+    TypeFunction,
+    TypeIdentifier,
+    TypeStruct,
+)
 from starkware.cairo.lang.compiler.ast.expr import (
     ExprCast,
     ExprConst,
@@ -74,31 +79,35 @@ class SubstituteIdentifiers(ExpressionTransformer):
         )
 
     def visit_ExprFuncCall(self, expr: ExprFuncCall):
-        # Convert ExprFuncCall to ExprCast.
         rvalue = expr.rvalue
+        cairo_type = self.resolve_type_callback(
+            TypeIdentifier(
+                name=ScopedName.from_string(rvalue.func_ident.name),
+                location=expr.location,
+            )
+        )
+
+        if isinstance(cairo_type, TypeFunction):
+            # Note that arguments to the given function call ('expr') are left as is and not visited
+            # here.
+            return expr
+
+        if not isinstance(cairo_type, TypeStruct):
+            raise CairoTypeError(
+                f"Struct constructor cannot be used for type '{cairo_type.format()}'.",
+                location=expr.location,
+            )
+
+        # Convert the constructor call to ExprCast.
         if rvalue.implicit_arguments is not None:
             raise CairoTypeError(
                 "Implicit arguments cannot be used with struct constructors.",
                 location=rvalue.implicit_arguments.location,
             )
 
-        struct_type = self.resolve_type_callback(
-            TypeStruct(
-                scope=ScopedName.from_string(rvalue.func_ident.name),
-                is_fully_resolved=False,
-                location=expr.location,
-            )
-        )
-
-        if not isinstance(struct_type, TypeStruct):
-            raise CairoTypeError(
-                f"Struct constructor cannot be used for type '{struct_type.format()}'.",
-                location=expr.location,
-            )
-
         # Verify named arguments in struct constructor.
         if self.get_struct_members_callback is not None:
-            struct_members = self.get_struct_members_callback(struct_type)
+            struct_members = self.get_struct_members_callback(cairo_type)
             # Note that it's OK if len(struct_members) != len(rvalue.arguments.args) as
             # length compatibility of cast is checked later on.
             for member, expr_assignment in zip(struct_members, rvalue.arguments.args):
@@ -109,7 +118,7 @@ class SubstituteIdentifiers(ExpressionTransformer):
                 call_member = identifier.name
                 if call_member != member:
                     raise CairoTypeError(
-                        f"Argument name mismatch for '{struct_type.format()}': "
+                        f"Argument name mismatch for '{cairo_type.format()}': "
                         f"expected '{member}', found '{call_member}'.",
                         location=identifier.location,
                     )
@@ -117,7 +126,7 @@ class SubstituteIdentifiers(ExpressionTransformer):
         return self.visit(
             ExprCast(
                 expr=ExprTuple(rvalue.arguments, location=expr.location),
-                dest_type=struct_type,
+                dest_type=cairo_type,
                 location=expr.location,
             )
         )

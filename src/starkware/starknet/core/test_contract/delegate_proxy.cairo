@@ -1,53 +1,53 @@
-# Note that this is a dummy contract to be used in tests.
+// Note that this is a dummy contract to be used in tests.
 
 %lang starknet
 %builtins pedersen range_check bitwise
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
-from starkware.starknet.common.syscalls import delegate_call, delegate_l1_handler
+from starkware.starknet.common.syscalls import library_call, library_call_l1_handler
 
-# The address of the implementation contract.
+// The hash of the implementation contract class.
 @storage_var
-func impl_address() -> (address : felt):
-end
+func implementation_hash() -> (class_hash: felt) {
+}
 
 @external
-func set_implementation_address{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    impl_address_ : felt
-):
-    impl_address.write(value=impl_address_)
-    return ()
-end
+func set_implementation_hash{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    implementation_hash_: felt
+) {
+    implementation_hash.write(value=implementation_hash_);
+    return ();
+}
 
 @external
 @raw_input
 @raw_output
-func __default__{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    selector : felt, calldata_size : felt, calldata : felt*
-) -> (retdata_size : felt, retdata : felt*):
-    let (address) = impl_address.read()
+func __default__{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    selector: felt, calldata_size: felt, calldata: felt*
+) -> (retdata_size: felt, retdata: felt*) {
+    let (class_hash) = implementation_hash.read();
 
-    let (retdata_size : felt, retdata : felt*) = delegate_call(
-        contract_address=address,
+    let (retdata_size: felt, retdata: felt*) = library_call(
+        class_hash=class_hash,
         function_selector=selector,
         calldata_size=calldata_size,
         calldata=calldata,
-    )
-    return (retdata_size=retdata_size, retdata=retdata)
-end
+    );
+    return (retdata_size=retdata_size, retdata=retdata);
+}
 
 @l1_handler
 @raw_input
-func __l1_default__{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    selector : felt, calldata_size : felt, calldata : felt*
-):
-    let (address) = impl_address.read()
+func __l1_default__{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    selector: felt, calldata_size: felt, calldata: felt*
+) {
+    let (class_hash) = implementation_hash.read();
 
-    delegate_l1_handler(
-        contract_address=address,
+    library_call_l1_handler(
+        class_hash=class_hash,
         function_selector=selector,
         calldata_size=calldata_size,
         calldata=calldata,
-    )
-    return ()
-end
+    );
+    return ();
+}

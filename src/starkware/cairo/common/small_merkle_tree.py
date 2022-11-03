@@ -29,7 +29,7 @@ class MerkleTree:
 
         default_node = self.default_leaf
         indices = set()
-        leaves_offset = 2 ** self.tree_height
+        leaves_offset = 2**self.tree_height
         for index, value in modifications:
             node_index = leaves_offset + index
             self.node_values[node_index] = value

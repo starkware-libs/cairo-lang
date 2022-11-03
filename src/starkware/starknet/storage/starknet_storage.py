@@ -3,7 +3,7 @@ import concurrent
 import concurrent.futures
 import dataclasses
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Set, Tuple, Type, TypeVar, Union
+from typing import Dict, List, Mapping, Optional, Set, Tuple, Type, TypeVar, Union
 
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.python.utils import from_bytes, to_bytes
@@ -16,6 +16,7 @@ from starkware.storage.storage import HASH_BYTES, FactFetchingContext, HashFunct
 
 
 TStorageLeaf = TypeVar("TStorageLeaf", bound="StorageLeaf")
+ContractStorageMapping = Dict[int, "StorageLeaf"]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -78,6 +79,16 @@ class StarknetStorageInterface(ABC):
         Performs a write operation.
         """
 
+
+class StorageChangesApplier(ABC):
+    """
+    Storage changes applier interface.
+    """
+
+    def __init__(self, commitment_tree: PatriciaTree):
+        # The commitment tree prior to changes' application.
+        self.commitment_tree = commitment_tree
+
     @abstractmethod
     def commitment_update(self) -> Tuple[PatriciaTree, BinaryFactDict]:
         """
@@ -90,24 +101,24 @@ class StarknetStorageInterface(ABC):
 class StarknetStorage(StarknetStorageInterface):
     """
     StarkNet storage class.
-
-    Used for caching of read and write operations in a StarkNet contract.
+    Caches read and write operations.
     """
 
     def __init__(
         self,
         commitment_tree: PatriciaTree,
         ffc: FactFetchingContext,
-        pending_modifications: Optional[Dict[int, StorageLeaf]] = None,
+        pending_modifications: Optional[ContractStorageMapping] = None,
         loop: Optional[asyncio.AbstractEventLoop] = None,
     ):
         """
         Creates a StarkNet storage corresponding to the given 'commitment_tree' and
         'pending_modifications'.
-        Updates are done with respect to the given ffc.
+        Updates are done with respect to the given FFC.
         """
-        self.ffc = ffc
         self.commitment_tree = commitment_tree
+
+        self.ffc = ffc
         self.modifications: Dict[int, Union[int, concurrent.futures.Future[int]]] = {}
 
         # A mapping with the initial storage values, used to override values in the commitment tree
@@ -122,7 +133,7 @@ class StarknetStorage(StarknetStorageInterface):
         assert isinstance(address, int)
 
         assert (
-            0 <= address < 2 ** self.commitment_tree.height
+            0 <= address < 2**self.commitment_tree.height
         ), f"The address {address} is out of range."
         leaves = await self.commitment_tree.get_leaves(
             ffc=self.ffc, indices=[address], fact_cls=StorageLeaf
@@ -187,18 +198,7 @@ class StarknetStorage(StarknetStorageInterface):
 
         self.modifications[address] = value
 
-    def commitment_update(self) -> Tuple[PatriciaTree, BinaryFactDict]:
-        """
-        Updates the facts storage with the values written to cache.
-
-        Returns the resulting commitment tree and the commitment tree facts required for the Cairo
-        commitment tree multi-update function.
-        """
-        return asyncio.run_coroutine_threadsafe(
-            coro=self.commitment_update_async(), loop=self.loop
-        ).result()
-
-    def get_modifications(self) -> Dict[int, StorageLeaf]:
+    def get_modifications(self) -> ContractStorageMapping:
         """
         Returns a dict of modifications that need to be applied to self.commitment_tree.
         """
@@ -210,6 +210,59 @@ class StarknetStorage(StarknetStorageInterface):
             modifications[address] = StorageLeaf(value=value)
 
         return modifications
+
+    def reset_state(self, storage_updates: Mapping[int, StorageLeaf]):
+        self.pending_modifications.update(storage_updates)
+        self.modifications.clear()
+        self.initial_values.clear()
+
+    def validate_dict_accesses(self, dict_accesses: List[int]):
+        current_values: Dict[int, int] = {}
+
+        assert len(dict_accesses) % 3 == 0, "len(dict_accesses) % DictAccess.SIZE must be 0."
+
+        for i in range(0, len(dict_accesses), 3):
+            key, prev_value, new_value = dict_accesses[i : i + 3]
+            assert (
+                0 <= key < 2**self.commitment_tree.height
+            ), f"The address {key} is out of range."
+
+            curr_val = current_values.get(key)
+            if curr_val is None:
+                curr_val = self.initial_values.get(key)
+                assert (
+                    curr_val is not None
+                ), f"Bad dict access at address {key}, prev_value was not read from storage."
+
+            assert curr_val == prev_value, (
+                f"Bad dict access at address {key}, expected prev_value to be {curr_val}, "
+                f"found {prev_value}."
+            )
+
+            current_values[key] = new_value
+
+        assert current_values == self.modifications, (
+            f"dict_accesses_modificitions = {current_values} "
+            f"do not equal actual modificiation = {self.modifications}."
+        )
+
+
+class OsGlobalStarknetStorage(StarknetStorage, StorageChangesApplier):
+    """
+    The StarknetStorage implementation for the global StarkNet storage.
+    It is used by the StarkNet OS run in the GpsAmbassador.
+    """
+
+    def commitment_update(self) -> Tuple[PatriciaTree, BinaryFactDict]:
+        """
+        Updates the facts storage with the values written to cache.
+
+        Returns the resulting commitment tree and the commitment tree facts required for the Cairo
+        commitment tree multi-update function.
+        """
+        return asyncio.run_coroutine_threadsafe(
+            coro=self.commitment_update_async(), loop=self.loop
+        ).result()
 
     async def commitment_update_async(self) -> Tuple[PatriciaTree, BinaryFactDict]:
         """
@@ -228,41 +281,6 @@ class StarknetStorage(StarknetStorageInterface):
 
         return commitment_tree, commitment_tree_facts
 
-    def reset_state(self, storage_updates: Dict[int, StorageLeaf]):
-        self.pending_modifications.update(storage_updates)
-        self.modifications.clear()
-        self.initial_values.clear()
-
-    def validate_dict_accesses(self, dict_accesses: List[int]):
-        current_values: Dict[int, int] = {}
-
-        assert len(dict_accesses) % 3 == 0, "len(dict_accesses) % DictAccess.SIZE must be 0."
-
-        for i in range(0, len(dict_accesses), 3):
-            key, prev_value, new_value = dict_accesses[i : i + 3]
-            assert (
-                0 <= key < 2 ** self.commitment_tree.height
-            ), f"The address {key} is out of range."
-
-            curr_val = current_values.get(key)
-            if curr_val is None:
-                curr_val = self.initial_values.get(key)
-                assert (
-                    curr_val is not None
-                ), f"Bad dict access at address {key}, prev_value was not read from storage."
-
-            assert (
-                curr_val == prev_value
-            ), f"""\
-Bad dict access at address {key}, expected prev_value to be {curr_val}, found {prev_value}."""
-
-            current_values[key] = new_value
-
-        assert (
-            current_values == self.modifications
-        ), f"""\
-dict_accesses_modificitions = {current_values} != actual modificiation = {self.modifications}."""
-
 
 class BusinessLogicStarknetStorage(StarknetStorage):
     """
@@ -273,7 +291,7 @@ class BusinessLogicStarknetStorage(StarknetStorage):
         self,
         commitment_tree: PatriciaTree,
         ffc: FactFetchingContext,
-        pending_modifications: Optional[Dict[int, StorageLeaf]] = None,
+        pending_modifications: Optional[ContractStorageMapping] = None,
         loop: Optional[asyncio.AbstractEventLoop] = None,
     ):
         super().__init__(
@@ -298,9 +316,10 @@ class BusinessLogicStarknetStorage(StarknetStorage):
         self.accessed_addresses.add(address)
 
 
-class OsStarknetStorage(StarknetStorageInterface):
+class OsSingleStarknetStorage(StorageChangesApplier):
     """
-    The StarknetStorage implementation that is used by the StarkNet OS run in the GpsAmbassador.
+    The StarknetStorage implementation for a single contract storage.
+    It is used by the StarkNet OS run in the GpsAmbassador.
     """
 
     def __init__(
@@ -308,22 +327,18 @@ class OsStarknetStorage(StarknetStorageInterface):
         commitment_tree: PatriciaTree,
         updated_commitment_tree: PatriciaTree,
         commitment_tree_facts: BinaryFactDict,
+        ongoing_storage_changes: Dict[int, int],
     ):
         """
         The constructor is private.
         """
-        self.commitment_tree = commitment_tree  # This is the previous commitment tree.
+        super().__init__(commitment_tree=commitment_tree)
 
         # The return values of commitment_update, computed at the creation of this object (before
         # entering the CairoRunner run) for optimization.
         self.updated_commitment_tree = updated_commitment_tree
         self.commitment_tree_facts = commitment_tree_facts
-
-    def read(self, address: int) -> int:
-        raise NotImplementedError("read() is not implemented in OsStarknetStorage.")
-
-    def write(self, address: int, value: int):
-        raise NotImplementedError("write() is not implemented in OsStarknetStorage.")
+        self.ongoing_storage_changes = ongoing_storage_changes
 
     def commitment_update(self) -> Tuple[PatriciaTree, BinaryFactDict]:
         return self.updated_commitment_tree, self.commitment_tree_facts
@@ -335,7 +350,7 @@ class OsStarknetStorage(StarknetStorageInterface):
         updated_commitment_tree: PatriciaTree,
         ffc: FactFetchingContext,
         accessed_addresses: Set[int],
-    ) -> "OsStarknetStorage":
+    ) -> "OsSingleStarknetStorage":
         # Compute commitment tree facts.
         # Get modifications from the given updated commitment tree.
         modifications = await updated_commitment_tree.get_leaves(
@@ -352,8 +367,24 @@ class OsStarknetStorage(StarknetStorageInterface):
             actual_updated_commitment_tree == updated_commitment_tree
         ), "Inconsistent commitment tree roots."
 
+        # Fetch initial values of keys accessed by this contract.
+        initial_leaves = await previous_commitment_tree.get_leaves(
+            ffc=ffc, indices=accessed_addresses, fact_cls=StorageLeaf
+        )
+        initial_entries = {key: leaf.value for key, leaf in initial_leaves.items()}
         return cls(
             commitment_tree=previous_commitment_tree,
             updated_commitment_tree=updated_commitment_tree,
             commitment_tree_facts=commitment_tree_facts,
+            ongoing_storage_changes=initial_entries,
         )
+
+    def write(self, key: int, value: int) -> int:
+        """
+        Writes the given value in the given key in ongoing_storage_changes and returns the
+        previous value. This value is needed to create the DictAccess while executing the
+        corresponding storage_write system call.
+        """
+        previous_value = self.ongoing_storage_changes[key]
+        self.ongoing_storage_changes[key] = value
+        return previous_value

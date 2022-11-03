@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Set
 
 from starkware.cairo.lang.builtins.hash.instance_def import CELLS_PER_HASH, INPUT_CELLS_PER_HASH
 from starkware.cairo.lang.vm.builtin_runner import BuiltinVerifier, SimpleBuiltinRunner
@@ -16,7 +16,6 @@ class HashBuiltinRunner(SimpleBuiltinRunner):
             n_input_cells=INPUT_CELLS_PER_HASH,
         )
         self.hash_func = hash_func
-        self.stop_ptr: Optional[RelocatableValue] = None
         self.verified_addresses: Set[MaybeRelocatable] = set()
 
     def add_auto_deduction_rules(self, runner):
@@ -91,6 +90,6 @@ class HashBuiltinVerifier(BuiltinVerifier):
             <= addresses.begin_addr
             <= addresses.stop_ptr
             <= addresses.begin_addr + max_size
-            < 2 ** 64
+            < 2**64
         )
         return [addresses.begin_addr], [addresses.stop_ptr]

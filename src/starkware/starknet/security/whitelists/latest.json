@@ -63,6 +63,22 @@
             "allowed_expressions": [],
             "hint_lines": [
                 "a = (ids.a.high << 128) + ids.a.low",
+                "b = (ids.b.high << 128) + ids.b.low",
+                "div = (ids.div.high << 128) + ids.div.low",
+                "quotient, remainder = divmod(a * b, div)",
+                "",
+                "ids.quotient_low.low = quotient & ((1 << 128) - 1)",
+                "ids.quotient_low.high = (quotient >> 128) & ((1 << 128) - 1)",
+                "ids.quotient_high.low = (quotient >> 256) & ((1 << 128) - 1)",
+                "ids.quotient_high.high = quotient >> 384",
+                "ids.remainder.low = remainder & ((1 << 128) - 1)",
+                "ids.remainder.high = remainder >> 128"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "a = (ids.a.high << 128) + ids.a.low",
                 "div = (ids.div.high << 128) + ids.div.low",
                 "quotient, remainder = divmod(a, div)",
                 "",
@@ -128,6 +144,12 @@
                 "            break",
                 "    else:",
                 "        raise ValueError(f'Key {key} was not found.')"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "assert excluded == 2"
             ]
         },
         {
@@ -481,20 +503,6 @@
                 "from starkware.cairo.common.math_utils import assert_integer",
                 "assert_integer(ids.a)",
                 "assert_integer(ids.b)",
-                "a = ids.a % PRIME",
-                "b = ids.b % PRIME",
-                "assert a <= b, f'a = {a} is not less than or equal to b = {b}.'",
-                "",
-                "ids.small_inputs = int(",
-                "    a < range_check_builtin.bound and (b - a) < range_check_builtin.bound)"
-            ]
-        },
-        {
-            "allowed_expressions": [],
-            "hint_lines": [
-                "from starkware.cairo.common.math_utils import assert_integer",
-                "assert_integer(ids.a)",
-                "assert_integer(ids.b)",
                 "assert (ids.a % PRIME) < (ids.b % PRIME), \\",
                 "    f'a = {ids.a % PRIME} is not less than b = {ids.b % PRIME}.'"
             ]
@@ -536,6 +544,75 @@
                 "assert both_ints or both_relocatable, \\",
                 "    f'assert_not_equal failed: non-comparable values: {ids.a}, {ids.b}.'",
                 "assert (ids.a - ids.b) % PRIME != 0, f'assert_not_equal failed: {ids.a} = {ids.b}.'"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "from starkware.crypto.signature.signature import ALPHA, BETA, FIELD_PRIME",
+                "from starkware.python.math_utils import random_ec_point",
+                "from starkware.python.utils import to_bytes",
+                "",
+                "# Define a seed for random_ec_point that's dependent on all the input, so that:",
+                "#   (1) The added point s is deterministic.",
+                "#   (2) It's hard to choose inputs for which the builtin will fail.",
+                "seed = b\"\".join(map(to_bytes, [ids.p.x, ids.p.y, ids.m, ids.q.x, ids.q.y]))",
+                "ids.s.x, ids.s.y = random_ec_point(FIELD_PRIME, ALPHA, BETA, seed)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "from starkware.crypto.signature.signature import ALPHA, BETA, FIELD_PRIME",
+                "from starkware.python.math_utils import random_ec_point",
+                "from starkware.python.utils import to_bytes",
+                "",
+                "n_elms = ids.len",
+                "assert isinstance(n_elms, int) and n_elms >= 0, \\",
+                "    f'Invalid value for len. Got: {n_elms}.'",
+                "if '__chained_ec_op_max_len' in globals():",
+                "    assert n_elms <= __chained_ec_op_max_len, \\",
+                "        f'chained_ec_op() can only be used with len<={__chained_ec_op_max_len}. ' \\",
+                "        f'Got: n_elms={n_elms}.'",
+                "",
+                "# Define a seed for random_ec_point that's dependent on all the input, so that:",
+                "#   (1) The added point s is deterministic.",
+                "#   (2) It's hard to choose inputs for which the builtin will fail.",
+                "seed = b\"\".join(",
+                "    map(",
+                "        to_bytes,",
+                "        [",
+                "            ids.p.x,",
+                "            ids.p.y,",
+                "            *memory.get_range(ids.m, n_elms),",
+                "            *memory.get_range(ids.q.address_, 2 * n_elms),",
+                "        ],",
+                "    )",
+                ")",
+                "ids.s.x, ids.s.y = random_ec_point(FIELD_PRIME, ALPHA, BETA, seed)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "from starkware.crypto.signature.signature import ALPHA, BETA, FIELD_PRIME",
+                "from starkware.python.math_utils import recover_y",
+                "ids.p.x = ids.x",
+                "# This raises an exception if `x` is not on the curve.",
+                "ids.p.y = recover_y(ids.x, ALPHA, BETA, FIELD_PRIME)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "from starkware.crypto.signature.signature import FIELD_PRIME",
+                "from starkware.python.math_utils import div_mod, is_quad_residue, sqrt",
+                "",
+                "x = ids.x",
+                "if is_quad_residue(x, FIELD_PRIME):",
+                "    ids.y = sqrt(x, FIELD_PRIME)",
+                "else:",
+                "    ids.y = sqrt(div_mod(x, 3, FIELD_PRIME), FIELD_PRIME)"
             ]
         },
         {
@@ -620,6 +697,30 @@
         {
             "allowed_expressions": [],
             "hint_lines": [
+                "import itertools",
+                "",
+                "from starkware.cairo.common.math_utils import assert_integer",
+                "assert_integer(ids.a)",
+                "assert_integer(ids.b)",
+                "a = ids.a % PRIME",
+                "b = ids.b % PRIME",
+                "assert a <= b, f'a = {a} is not less than or equal to b = {b}.'",
+                "",
+                "# Find an arc less than PRIME / 3, and another less than PRIME / 2.",
+                "lengths_and_indices = [(a, 0), (b - a, 1), (PRIME - 1 - b, 2)]",
+                "lengths_and_indices.sort()",
+                "assert lengths_and_indices[0][0] <= PRIME // 3 and lengths_and_indices[1][0] <= PRIME // 2",
+                "excluded = lengths_and_indices[2][1]",
+                "",
+                "memory[ids.range_check_ptr + 1], memory[ids.range_check_ptr + 0] = (",
+                "    divmod(lengths_and_indices[0][0], ids.PRIME_OVER_3_HIGH))",
+                "memory[ids.range_check_ptr + 3], memory[ids.range_check_ptr + 2] = (",
+                "    divmod(lengths_and_indices[1][0], ids.PRIME_OVER_2_HIGH))"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
                 "last_pos = 0",
                 "positions = positions_dict[ids.value][::-1]"
             ]
@@ -652,6 +753,18 @@
             "allowed_expressions": [],
             "hint_lines": [
                 "memory[ap] = 1 if 0 <= (ids.a.high % PRIME) < 2 ** 127 else 0"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "memory[ap] = 1 if excluded != 0 else 0"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "memory[ap] = 1 if excluded != 1 else 0"
             ]
         },
         {
@@ -732,13 +845,7 @@
         {
             "allowed_expressions": [],
             "hint_lines": [
-                "syscall_handler.delegate_call(segments=segments, syscall_ptr=ids.syscall_ptr)"
-            ]
-        },
-        {
-            "allowed_expressions": [],
-            "hint_lines": [
-                "syscall_handler.delegate_l1_handler(segments=segments, syscall_ptr=ids.syscall_ptr)"
+                "syscall_handler.deploy(segments=segments, syscall_ptr=ids.syscall_ptr)"
             ]
         },
         {
@@ -787,6 +894,18 @@
             "allowed_expressions": [],
             "hint_lines": [
                 "syscall_handler.get_tx_signature(segments=segments, syscall_ptr=ids.syscall_ptr)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "syscall_handler.library_call(segments=segments, syscall_ptr=ids.syscall_ptr)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "syscall_handler.library_call_l1_handler(segments=segments, syscall_ptr=ids.syscall_ptr)"
             ]
         },
         {

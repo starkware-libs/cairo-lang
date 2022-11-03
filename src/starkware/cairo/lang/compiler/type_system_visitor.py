@@ -1,10 +1,11 @@
 import dataclasses
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 from starkware.cairo.lang.compiler.ast.cairo_types import (
     CairoType,
     TypeCodeoffset,
     TypeFelt,
+    TypeIdentifier,
     TypePointer,
     TypeStruct,
     TypeTuple,
@@ -27,6 +28,7 @@ from starkware.cairo.lang.compiler.ast.expr import (
     ExprSubscript,
     ExprTuple,
 )
+from starkware.cairo.lang.compiler.ast.expr_func_call import ExprFuncCall
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.expression_simplifier import ExpressionSimplifier
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
@@ -34,6 +36,7 @@ from starkware.cairo.lang.compiler.identifier_utils import get_struct_definition
 from starkware.cairo.lang.compiler.preprocessor.identifier_aware_visitor import (
     IdentifierAwareVisitor,
 )
+from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.compiler.type_casts import CairoTypeError, check_cast
 from starkware.python.utils import safe_zip
 
@@ -49,8 +52,12 @@ class TypeSystemVisitor(IdentifierAwareVisitor):
     Helper class for simplify_type_system().
     """
 
-    def __init__(self, identifiers: Optional[IdentifierManager] = None):
-        super().__init__(identifiers)
+    def __init__(
+        self,
+        identifiers: Optional[IdentifierManager] = None,
+        accessible_scopes: Optional[List[ScopedName]] = None,
+    ):
+        super().__init__(identifiers=identifiers, accessible_scopes=accessible_scopes)
         self.identifiers_initalized = identifiers is not None
 
     def visit_ExprConst(self, expr: ExprConst) -> Tuple[ExprConst, TypeFelt]:
@@ -141,6 +148,19 @@ class TypeSystemVisitor(IdentifierAwareVisitor):
                 f"'{offset_type.format()}'.",
                 location=offset_location,
             )
+
+    def visit_ExprFuncCall(self, expr: ExprFuncCall) -> Tuple[ExprFuncCall, CairoType]:
+        return_type = self.get_return_type(func_call=expr.rvalue)
+        if not isinstance(return_type, (TypeFelt, TypeCodeoffset, TypePointer)):
+            raise CairoTypeError(
+                "Only functions with a simple return type are supported inside an expression. "
+                f"Got: '{return_type.format()}'.",
+                location=expr.location,
+            )
+
+        # Note that arguments to the given function call ('expr') are left as is (not visited here).
+        # The argument types will be validated when the code for the function call is generated.
+        return (expr, return_type)
 
     def visit_ExprSubscript(self, expr: ExprSubscript) -> Tuple[Expression, CairoType]:
         inner_expr, inner_type = self.visit(expr.expr)
@@ -235,6 +255,12 @@ class TypeSystemVisitor(IdentifierAwareVisitor):
         inner_expr, inner_type = self.visit(expr.expr)
         if isinstance(inner_type, TypePointer):
             if not isinstance(inner_type.pointee, (TypeStruct, TypeTuple)):
+                if isinstance(inner_type.pointee, TypeIdentifier):
+                    raise CairoTypeError(
+                        f"Type is expected to be fully resolved at this point.",
+                        location=inner_type.pointee.location,
+                    )
+
                 raise CairoTypeError(
                     f"Cannot apply dot-operator to pointer-to-non-struct type "
                     f"'{inner_type.format()}'.",
@@ -259,7 +285,7 @@ class TypeSystemVisitor(IdentifierAwareVisitor):
         if isinstance(inner_type, TypeStruct):
             try:
                 struct_def = get_struct_definition(
-                    struct_name=inner_type.resolved_scope, identifier_manager=self.identifiers
+                    struct_name=inner_type.scope, identifier_manager=self.identifiers
                 )
             except Exception as exc:
                 raise CairoTypeError(str(exc), location=expr.location)
@@ -367,7 +393,9 @@ class TypeSystemVisitor(IdentifierAwareVisitor):
 
 
 def simplify_type_system(
-    expr: Expression, identifiers: Optional[IdentifierManager] = None
+    expr: Expression,
+    identifiers: Optional[IdentifierManager] = None,
+    accessible_scopes: Optional[List[ScopedName]] = None,
 ) -> Tuple[Expression, CairoType]:
     """
     Given an expression returns a type-simplified expression and its Cairo type.
@@ -378,7 +406,10 @@ def simplify_type_system(
         be transformed into ([[fp] + 2], S);
       - If T is a struct of size 3, then expr=cast(fp, T*)[5] will be transformed into
         ([fp + 5 * 3], T).
-    In the second and third examples, the defintion of struct T is looked up, and must be present,
+    In the second and third examples, the definition of struct T is looked up, and must be present,
     in the IdentifierManager 'identifiers'.
     """
-    return TypeSystemVisitor(identifiers=identifiers).visit(expr)
+    return TypeSystemVisitor(
+        identifiers=identifiers,
+        accessible_scopes=accessible_scopes,
+    ).visit(expr)

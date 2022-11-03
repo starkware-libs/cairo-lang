@@ -7,7 +7,6 @@ from starkware.starkware_utils.commitment_tree.binary_fact_tree_node import (
     TBinaryFactTreeNode,
 )
 from starkware.starkware_utils.commitment_tree.calculation import CalculationNode, NodeFactDict
-from starkware.starkware_utils.commitment_tree.inner_node_fact import InnerNodeFact
 from starkware.starkware_utils.commitment_tree.leaf_fact import LeafFact
 from starkware.starkware_utils.commitment_tree.merkle_tree.traverse_tree import traverse_tree
 from starkware.starkware_utils.executor import executor_ctx_var
@@ -51,7 +50,7 @@ async def update_tree(
     # 2. Node is a leaf update, and we just updated the leaf value.
     # 3. When its two children are already updated (happens in update_necessary()).
     updated_nodes: Dict[int, CalculationNode] = {}
-    new_facts: NodeFactDict = {}
+    new_facts = NodeFactDict()
 
     async def update_necessary(node_index: int):
         """
@@ -134,10 +133,9 @@ async def update_tree(
     await write_fact_nodes(ffc=ffc, fact_nodes=new_facts)
 
     if facts is not None:
-        for fact_hash, node_fact in new_facts.items():
-            # The leaves aren't stored in `facts`. Only nodes are stored there.
-            if isinstance(node_fact, InnerNodeFact):
-                facts[from_bytes(fact_hash)] = node_fact.to_tuple()
+        # The leaves aren't stored in `facts`. Only nodes are stored there.
+        for fact_hash, node_fact in new_facts.inner_nodes.items():
+            facts[from_bytes(fact_hash)] = node_fact.to_tuple()
 
     return root_node
 

@@ -18,12 +18,12 @@ hi def link funcName Function
 hi def link num Constant
 hi def link specialIdentifier Special
 
-syn keyword statement call jmp ret abs rel if const let end from import static_assert local tempvar
-  \ felt return assert member cast else alloc_locals as with with_attr nondet dw codeoffset new
-  \ using
+syn keyword statement call jmp ret abs rel if const let from import static_assert local tempvar
+  \ felt return assert cast else alloc_locals as with with_attr nondet dw codeoffset new
+  \ using and
 syn keyword register ap fp
 syn keyword specialIdentifier SIZEOF_LOCALS SIZE
-syn match comment '#[^\n]*\n'
+syn match comment '//[^\n]*\n'
 syn keyword funcDef func namespace struct nextgroup=funcName skipwhite
 syn match funcName '[a-zA-Z_][a-zA-Z0-9_]*' display contained
 syn match num '[+-]\?\d\+'

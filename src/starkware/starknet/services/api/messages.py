@@ -5,9 +5,9 @@ from typing import List
 
 from services.everest.definitions import fields as everest_fields
 from starkware.cairo.bootloaders.compute_fact import keccak_ints
-from starkware.starknet.business_logic.internal_transaction import InternalInvokeFunction
+from starkware.python.utils import as_non_optional
+from starkware.starknet.business_logic.transaction.objects import InternalL1Handler
 from starkware.starknet.definitions import fields
-from starkware.starknet.services.api.contract_definition import EntryPointType
 from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 
 
@@ -70,17 +70,11 @@ class StarknetMessageToL2(StarknetMessage):
         return keccak_ints(values=self.encode())
 
     @staticmethod
-    def get_message_hash_from_tx(tx: InternalInvokeFunction) -> str:
-        assert (
-            tx.entry_point_type is EntryPointType.L1_HANDLER
-        ), f"Transaction must be of type L1_HANDLER. Got: {tx.entry_point_type.name}."
-
-        assert tx.nonce is not None, "L1 handlers must include a nonce."
-
+    def get_message_hash_from_tx(tx: InternalL1Handler) -> str:
         return StarknetMessageToL2(
             from_address=tx.calldata[0],
             to_address=tx.contract_address,
             l1_handler_selector=tx.entry_point_selector,
             payload=tx.calldata[1:],
-            nonce=tx.nonce,
+            nonce=as_non_optional(tx.nonce),
         ).get_hash()

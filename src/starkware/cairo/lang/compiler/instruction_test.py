@@ -10,8 +10,8 @@ from starkware.cairo.lang.compiler.instruction import (
 
 
 def test_decode():
-    offsets = [randrange(0, 2 ** OFFSET_BITS) for _ in range(3)]
-    flags = randrange(0, 2 ** N_FLAGS)
+    offsets = [randrange(0, 2**OFFSET_BITS) for _ in range(3)]
+    flags = randrange(0, 2**N_FLAGS)
     instruction = 0
     for part in [flags] + offsets[::-1]:
         instruction = (instruction << OFFSET_BITS) | part

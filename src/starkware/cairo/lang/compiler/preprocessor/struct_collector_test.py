@@ -9,13 +9,15 @@ from starkware.cairo.lang.compiler.identifier_definition import (
     FutureIdentifierDefinition,
     MemberDefinition,
     StructDefinition,
+    TypeDefinition,
 )
-from starkware.cairo.lang.compiler.parser import parse_file
+from starkware.cairo.lang.compiler.parser import parse_file, parse_type
 from starkware.cairo.lang.compiler.preprocessor.identifier_collector import IdentifierCollector
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_error import PreprocessorError
 from starkware.cairo.lang.compiler.preprocessor.preprocessor_test_utils import verify_exception
 from starkware.cairo.lang.compiler.preprocessor.struct_collector import StructCollector
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
+from starkware.cairo.lang.compiler.type_system import mark_type_resolved
 
 
 def _collect_struct_definitions(codes: Dict[str, str]) -> Dict[str, Set[str]]:
@@ -48,22 +50,22 @@ def _collect_struct_definitions(codes: Dict[str, str]) -> Dict[str, Set[str]]:
 def test_struct_collector():
     modules = {
         "module": """
-struct S:
-    member x : S*
-    member y : S*
-end
+struct S {
+    x: S*,
+    y: S*,
+}
 """,
         "__main__": """
 from module import S
 
-func foo{z}(a : S, b) -> (c : S):
-    struct T:
-        member x : S*
-    end
-    const X = 5
-    return (c=a + X)
-end
-const Y = 1 + 1
+func foo{z}(a: S, b) -> (c: S) {
+    struct T {
+        x: S*,
+    }
+    const X = 5;
+    return (c=a + X);
+}
+const Y = 1 + 1;
 """,
     }
 
@@ -77,15 +79,11 @@ const Y = 1 + 1
             members={
                 "x": MemberDefinition(
                     offset=0,
-                    cairo_type=TypePointer(
-                        pointee=TypeStruct(scope=scope("module.S"), is_fully_resolved=True)
-                    ),
+                    cairo_type=TypePointer(pointee=TypeStruct(scope=scope("module.S"))),
                 ),
                 "y": MemberDefinition(
                     offset=1,
-                    cairo_type=TypePointer(
-                        pointee=TypeStruct(scope=scope("module.S"), is_fully_resolved=True)
-                    ),
+                    cairo_type=TypePointer(pointee=TypeStruct(scope=scope("module.S"))),
                 ),
             },
             size=2,
@@ -94,9 +92,7 @@ const Y = 1 + 1
         "__main__.foo.Args": StructDefinition(
             full_name=scope("__main__.foo.Args"),
             members={
-                "a": MemberDefinition(
-                    offset=0, cairo_type=TypeStruct(scope=scope("module.S"), is_fully_resolved=True)
-                ),
+                "a": MemberDefinition(offset=0, cairo_type=TypeStruct(scope=scope("module.S"))),
                 "b": MemberDefinition(offset=2, cairo_type=TypeFelt()),
             },
             size=3,
@@ -106,23 +102,15 @@ const Y = 1 + 1
             members={"z": MemberDefinition(offset=0, cairo_type=TypeFelt())},
             size=1,
         ),
-        "__main__.foo.Return": StructDefinition(
-            full_name=scope("__main__.foo.Return"),
-            members={
-                "c": MemberDefinition(
-                    offset=0, cairo_type=TypeStruct(scope=scope("module.S"), is_fully_resolved=True)
-                )
-            },
-            size=2,
+        "__main__.foo.Return": TypeDefinition(
+            cairo_type=mark_type_resolved(parse_type("(c: module.S)")),
         ),
         "__main__.foo.T": StructDefinition(
             full_name=scope("__main__.foo.T"),
             members={
                 "x": MemberDefinition(
                     offset=0,
-                    cairo_type=TypePointer(
-                        pointee=TypeStruct(scope=scope("module.S"), is_fully_resolved=True)
-                    ),
+                    cairo_type=TypePointer(pointee=TypeStruct(scope=scope("module.S"))),
                 ),
             },
             size=1,
@@ -135,10 +123,10 @@ const Y = 1 + 1
 def test_struct_collector_failure():
     modules = {
         "module": """
-struct S:
-    member x : S*
-    member x : S*
-end
+struct S {
+    x: S*,
+    x: S*,
+}
 """
     }
 
@@ -147,29 +135,19 @@ end
 
     modules = {
         "module": """
-struct S:
-    member local a
-end
+struct S {
+    local a,
+}
 """
     }
     with pytest.raises(PreprocessorError, match="Unexpected modifier 'local'."):
         _collect_struct_definitions(modules)
 
-    modules = {
-        "module": """
-struct S:
-    return()
-end
-"""
-    }
-    with pytest.raises(PreprocessorError, match="Unexpected statement inside a struct definition."):
-        _collect_struct_definitions(modules)
-
     verify_exception(
         """
 @decorator
-struct Struct:
-end
+struct Struct {
+}
 """,
         """
 file:?:?: Decorators for structs are not supported.

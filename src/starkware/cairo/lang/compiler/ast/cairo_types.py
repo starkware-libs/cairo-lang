@@ -1,5 +1,7 @@
 import dataclasses
 from abc import abstractmethod
+from contextlib import contextmanager
+from contextvars import ContextVar
 from enum import Enum, auto
 from typing import List, Optional, Sequence
 
@@ -13,6 +15,25 @@ from starkware.cairo.lang.compiler.ast.node import AstNode
 from starkware.cairo.lang.compiler.ast.notes import Notes
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
+
+add_backward_compatibility_space_ctx_var: ContextVar[int] = ContextVar(
+    "add_backward_compatibility_space", default=False
+)
+
+
+@contextmanager
+def add_backward_compatibility_space(value: bool):
+    """
+    Adds space before the colon when formatting named tuple types.
+    This should be used for backward compatibility in the contract hash computation in versions
+    before 0.10.0.
+    For example, use "(a : felt)" instead of "(a: felt)".
+    """
+    token = add_backward_compatibility_space_ctx_var.set(value)
+    try:
+        yield
+    finally:
+        add_backward_compatibility_space_ctx_var.reset(token)
 
 
 class CairoType(AstNode):
@@ -72,22 +93,45 @@ class TypePointer(CairoType):
 
 
 @dataclasses.dataclass
+class TypeIdentifier(CairoType):
+    """
+    Represents a name of an unresolved type.
+    This type can be resolved to TypeStruct or TypeDefinition.
+    """
+
+    name: ScopedName
+    location: Optional[Location] = LocationField
+
+    def to_particle(self) -> Particle:
+        return SingleParticle(text=str(self.name))
+
+    def get_children(self) -> Sequence[Optional[AstNode]]:
+        return []
+
+
+@dataclasses.dataclass
 class TypeStruct(CairoType):
     scope: ScopedName
-    # Indicates whether scope refers to the fully resolved name.
-    is_fully_resolved: bool
     location: Optional[Location] = LocationField
 
     def to_particle(self) -> Particle:
         return SingleParticle(text=str(self.scope))
 
-    @property
-    def resolved_scope(self):
-        """
-        Verifies that is_fully_resolved=True and returns scope.
-        """
-        assert self.is_fully_resolved, "Type is expected to be fully resolved at this point."
-        return self.scope
+    def get_children(self) -> Sequence[Optional[AstNode]]:
+        return []
+
+
+@dataclasses.dataclass
+class TypeFunction(CairoType):
+    """
+    Represents a type of a function.
+    """
+
+    scope: ScopedName
+    location: Optional[Location] = LocationField
+
+    def to_particle(self) -> Particle:
+        return SingleParticle(text=str(self.scope))
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return []
@@ -97,14 +141,14 @@ class TypeStruct(CairoType):
 class TypeTuple(CairoType):
     """
     Represents a type of a named or unnamed tuple.
-    For example, "(felt, felt*)" or "(a : felt, b : felt*)".
+    For example, "(felt, felt*)" or "(a: felt, b: felt*)".
     """
 
     @dataclasses.dataclass
     class Item(AstNode):
         """
         Represents a possibly named type item of a TypeTuple.
-        For example: "felt" or "a : felt".
+        For example: "felt" or "a: felt".
         """
 
         name: Optional[str]
@@ -114,7 +158,10 @@ class TypeTuple(CairoType):
         def to_particle(self) -> Particle:
             particle = self.typ.to_particle()
             if self.name is not None:
-                particle.add_prefix(f"{self.name} : ")
+                backward_compatibility_space = (
+                    " " if add_backward_compatibility_space_ctx_var.get() else ""
+                )
+                particle.add_prefix(f"{self.name}{backward_compatibility_space}: ")
             return particle
 
         def get_children(self) -> Sequence[Optional[AstNode]]:
@@ -132,10 +179,15 @@ class TypeTuple(CairoType):
         for note in self.notes:
             note.assert_no_comments()
 
-    def to_particle(self) -> Particle:
+    def get_particles(self) -> List[Particle]:
         self.assert_no_comments()
-        member_particles = [member.to_particle() for member in self.members]
-        return SeparatedParticleList(elements=member_particles, start="(", end=")")
+        return [member.to_particle() for member in self.members]
+
+    def to_particle(self) -> Particle:
+        has_trailing_comma = len(self.members) == 1 and self.members[0].name is None
+        return SeparatedParticleList(
+            elements=self.get_particles(), start="(", end=")", trailing_separator=has_trailing_comma
+        )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return self.members
@@ -179,7 +231,7 @@ class CastType(Enum):
     FORCED = 0
     # When an explicit cast occurs using 'cast(*, *)'.
     EXPLICIT = auto()
-    # When unpacking occurs (e.g., 'let (x : T) = foo()').
+    # When unpacking occurs (e.g., 'let (x: T) = foo();').
     UNPACKING = auto()
-    # When a variable is initialized (e.g., 'tempvar x : T = 5').
+    # When a variable is initialized (e.g., 'tempvar x: T = 5;').
     ASSIGN = auto()

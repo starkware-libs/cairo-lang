@@ -11,7 +11,8 @@ interface IStarknetMessagingEvents {
         uint256 indexed toAddress,
         uint256 indexed selector,
         uint256[] payload,
-        uint256 nonce
+        uint256 nonce,
+        uint256 fee
     );
 
     // An event that is raised when a message from L2 to L1 is consumed.

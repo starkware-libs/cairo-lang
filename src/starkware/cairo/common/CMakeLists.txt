@@ -1,3 +1,5 @@
+add_subdirectory(cairo_blake2s)
+
 python_lib(cairo_common_lib
     PREFIX starkware/cairo/common
     FILES
@@ -22,6 +24,7 @@ python_lib(cairo_common_lib
     dict_access.cairo
     dict.cairo
     dict.py
+    ec.cairo
     ec_point.cairo
     find_element.cairo
     hash_chain.cairo
@@ -31,6 +34,7 @@ python_lib(cairo_common_lib
     hash.cairo
     invoke.cairo
     keccak.cairo
+    keccak_state.cairo
     math_cmp.cairo
     math_utils.py
     math.cairo
@@ -61,6 +65,18 @@ python_lib(cairo_common_lib
     ${CAIRO_COMMON_LIB_ADDITIONAL_LIBS}
 )
 
+python_lib(cairo_common_validate_utils_lib
+    PREFIX starkware/cairo/common
+    FILES
+    validate_utils.py
+
+    LIBS
+    cairo_run_builtins_lib
+    cairo_run_lib
+    cairo_vm_lib
+    starkware_python_utils_lib
+)
+
 python_lib(cairo_function_runner_lib
     PREFIX starkware/cairo/common
 
@@ -75,21 +91,4 @@ python_lib(cairo_function_runner_lib
     cairo_tracer_lib
     cairo_vm_crypto_lib
     cairo_vm_lib
-)
-
-full_python_test(cairo_common_test
-    PREFIX starkware/cairo/common
-    PYTHON python3.7
-    TESTED_MODULES starkware/cairo/common
-
-    FILES
-    cairo_blake2s/blake2s_test.cairo
-    cairo_blake2s/blake2s_test.py
-
-    LIBS
-    cairo_common_lib
-    cairo_constants_lib
-    cairo_function_runner_lib
-    pip_pytest
-    pip_pytest_asyncio
 )

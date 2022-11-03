@@ -20,6 +20,7 @@ from starkware.cairo.lang.vm.memory_dict import MemoryDict
 from starkware.cairo.lang.vm.memory_segments import is_valid_memory_addr, is_valid_memory_value
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
 from starkware.python.utils import add_counters, multiply_counter_by_scalar, sub_counters
+from starkware.starkware_utils.marshmallow_dataclass_fields import additional_metadata
 
 DEFAULT_CAIRO_PIE_VERSION = "1.0"
 CURRENT_CAIRO_PIE_VERSION = "1.1"
@@ -35,8 +36,8 @@ class SegmentInfo:
     size: int
 
     def run_validity_checks(self):
-        assert isinstance(self.index, int) and 0 <= self.index < 2 ** 30, "Invalid segment index."
-        assert isinstance(self.size, int) and 0 <= self.size < 2 ** 30, "Invalid segment size."
+        assert isinstance(self.index, int) and 0 <= self.index < 2**30, "Invalid segment index."
+        assert isinstance(self.size, int) and 0 <= self.size < 2**30, "Invalid segment size."
 
 
 @marshmallow_dataclass.dataclass
@@ -127,18 +128,20 @@ class ExecutionResources:
 
     n_steps: int
     builtin_instance_counter: Dict[str, int]
-    n_memory_holes: int = field(metadata=dict(marshmallow_field=mfields.Integer(load_default=0)))
+    n_memory_holes: int = field(
+        metadata=additional_metadata(marshmallow_field=mfields.Integer(load_default=0))
+    )
     Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
 
     def run_validity_checks(self):
         assert (
-            isinstance(self.n_steps, int) and 1 <= self.n_steps < 2 ** 30
+            isinstance(self.n_steps, int) and 1 <= self.n_steps < 2**30
         ), f"Invalid n_steps: {self.n_steps}."
         assert (
-            isinstance(self.n_memory_holes, int) and 0 <= self.n_memory_holes < 2 ** 30
+            isinstance(self.n_memory_holes, int) and 0 <= self.n_memory_holes < 2**30
         ), f"Invalid n_memory_holes: {self.n_memory_holes}."
         assert isinstance(self.builtin_instance_counter, dict) and all(
-            is_valid_builtin_name(name) and isinstance(size, int) and 0 <= size < 2 ** 30
+            is_valid_builtin_name(name) and isinstance(size, int) and 0 <= size < 2**30
             for name, size in self.builtin_instance_counter.items()
         ), "Invalid builtin_instance_counter."
 
@@ -193,6 +196,20 @@ class ExecutionResources:
             n_steps=self.n_steps + self.n_memory_holes,
         )
 
+    def filter_unused_builtins(self) -> "ExecutionResources":
+        """
+        Returns a copy of the execution resources where all the builtins with a usage counter
+        of 0 are omitted.
+        """
+        return dataclasses.replace(
+            self,
+            builtin_instance_counter={
+                name: counter
+                for name, counter in self.builtin_instance_counter.items()
+                if counter > 0
+            },
+        )
+
 
 @dataclasses.dataclass
 class CairoPie:
@@ -223,7 +240,7 @@ class CairoPie:
         ADDITIONAL_DATA_FILENAME,
         EXECUTION_RESOURCES_FILENAME,
     ] + OPTIONAL_FILES
-    MAX_SIZE = 1024 ** 3
+    MAX_SIZE = 1024**3
 
     @classmethod
     def from_file(cls, fileobj) -> "CairoPie":

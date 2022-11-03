@@ -22,25 +22,19 @@
                 "required_version": ">=4.0.0a3,<5.0"
             },
             {
-                "installed_version": "0.13.0",
-                "key": "asynctest",
-                "package_name": "asynctest",
-                "required_version": "==0.13.0"
-            },
-            {
-                "installed_version": "21.4.0",
+                "installed_version": "22.1.0",
                 "key": "attrs",
                 "package_name": "attrs",
                 "required_version": ">=17.3.0"
             },
             {
-                "installed_version": "2.0.11",
+                "installed_version": "2.1.1",
                 "key": "charset-normalizer",
                 "package_name": "charset-normalizer",
                 "required_version": ">=2.0,<3.0"
             },
             {
-                "installed_version": "1.3.0",
+                "installed_version": "1.3.1",
                 "key": "frozenlist",
                 "package_name": "frozenlist",
                 "required_version": ">=1.1.1"
@@ -52,13 +46,7 @@
                 "required_version": ">=4.5,<7.0"
             },
             {
-                "installed_version": "4.0.1",
-                "key": "typing-extensions",
-                "package_name": "typing-extensions",
-                "required_version": ">=3.7.4"
-            },
-            {
-                "installed_version": "1.7.2",
+                "installed_version": "1.8.1",
                 "key": "yarl",
                 "package_name": "yarl",
                 "required_version": ">=1.0,<2.0"
@@ -73,7 +61,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "1.3.0",
+                "installed_version": "1.3.1",
                 "key": "frozenlist",
                 "package_name": "frozenlist",
                 "required_version": ">=1.1.0"
@@ -86,14 +74,7 @@
         }
     },
     {
-        "dependencies": [
-            {
-                "installed_version": "4.0.1",
-                "key": "typing-extensions",
-                "package_name": "typing-extensions",
-                "required_version": ">=3.6.5"
-            }
-        ],
+        "dependencies": [],
         "package": {
             "installed_version": "4.0.2",
             "key": "async-timeout",
@@ -103,15 +84,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "0.13.0",
-            "key": "asynctest",
-            "package_name": "asynctest"
-        }
-    },
-    {
-        "dependencies": [],
-        "package": {
-            "installed_version": "21.4.0",
+            "installed_version": "22.1.0",
             "key": "attrs",
             "package_name": "attrs"
         }
@@ -127,7 +100,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "1.2.2",
+            "installed_version": "2.6.0",
             "key": "bitarray",
             "package_name": "bitarray"
         }
@@ -135,7 +108,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "5.0.0",
+            "installed_version": "5.2.0",
             "key": "cachetools",
             "package_name": "cachetools"
         }
@@ -143,7 +116,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "2021.10.8",
+            "installed_version": "2022.6.15",
             "key": "certifi",
             "package_name": "certifi"
         }
@@ -151,7 +124,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "2.0.11",
+            "installed_version": "2.1.1",
             "key": "charset-normalizer",
             "package_name": "charset-normalizer"
         }
@@ -159,14 +132,14 @@
     {
         "dependencies": [
             {
-                "installed_version": "0.11.2",
+                "installed_version": "0.12.0",
                 "key": "toolz",
                 "package_name": "toolz",
                 "required_version": ">=0.8.0"
             }
         ],
         "package": {
-            "installed_version": "0.11.2",
+            "installed_version": "0.12.0",
             "key": "cytoolz",
             "package_name": "cytoolz"
         }
@@ -181,7 +154,7 @@
             }
         ],
         "package": {
-            "installed_version": "0.17.0",
+            "installed_version": "0.18.0",
             "key": "ecdsa",
             "package_name": "ecdsa"
         }
@@ -195,7 +168,7 @@
                 "required_version": ">=2.0.0,<3.0.0"
             },
             {
-                "installed_version": "1.10.0",
+                "installed_version": "1.9.5",
                 "key": "eth-utils",
                 "package_name": "eth-utils",
                 "required_version": ">=1.2.0,<2.0.0"
@@ -208,7 +181,7 @@
             }
         ],
         "package": {
-            "installed_version": "2.1.1",
+            "installed_version": "2.2.0",
             "key": "eth-abi",
             "package_name": "eth-abi"
         }
@@ -216,13 +189,13 @@
     {
         "dependencies": [
             {
-                "installed_version": "1.2.2",
+                "installed_version": "2.6.0",
                 "key": "bitarray",
                 "package_name": "bitarray",
-                "required_version": ">=1.2.1,<1.3.0"
+                "required_version": ">=1.2.1,<3"
             },
             {
-                "installed_version": "2.1.1",
+                "installed_version": "2.2.0",
                 "key": "eth-abi",
                 "package_name": "eth-abi",
                 "required_version": ">=2.0.0b7,<3"
@@ -246,13 +219,13 @@
                 "required_version": ">=0.1.2,<2"
             },
             {
-                "installed_version": "1.10.0",
+                "installed_version": "1.9.5",
                 "key": "eth-utils",
                 "package_name": "eth-utils",
                 "required_version": ">=1.3.0,<2"
             },
             {
-                "installed_version": "0.2.2",
+                "installed_version": "0.3.0",
                 "key": "hexbytes",
                 "package_name": "hexbytes",
                 "required_version": ">=0.1.0,<1"
@@ -265,7 +238,7 @@
             }
         ],
         "package": {
-            "installed_version": "0.5.7",
+            "installed_version": "0.5.9",
             "key": "eth-account",
             "package_name": "eth-account"
         }
@@ -273,7 +246,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "0.3.2",
+            "installed_version": "0.5.0",
             "key": "eth-hash",
             "package_name": "eth-hash"
         }
@@ -281,7 +254,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "0.11.2",
+                "installed_version": "0.12.0",
                 "key": "cytoolz",
                 "package_name": "cytoolz",
                 "required_version": ">=0.9.0,<1.0.0"
@@ -293,13 +266,13 @@
                 "required_version": ">=0.1.0-beta.4,<1.0.0"
             },
             {
-                "installed_version": "1.10.0",
+                "installed_version": "1.9.5",
                 "key": "eth-utils",
                 "package_name": "eth-utils",
                 "required_version": ">=1.0.0-beta.1,<2.0.0"
             },
             {
-                "installed_version": "3.14.1",
+                "installed_version": "3.15.0",
                 "key": "pycryptodome",
                 "package_name": "pycryptodome",
                 "required_version": ">=3.4.7,<4.0.0"
@@ -320,7 +293,7 @@
                 "required_version": ">=2.2.1,<3.0.0"
             },
             {
-                "installed_version": "1.10.0",
+                "installed_version": "1.9.5",
                 "key": "eth-utils",
                 "package_name": "eth-utils",
                 "required_version": ">=1.8.2,<2.0.0"
@@ -335,13 +308,13 @@
     {
         "dependencies": [
             {
-                "installed_version": "1.10.0",
+                "installed_version": "1.9.5",
                 "key": "eth-utils",
                 "package_name": "eth-utils",
                 "required_version": ">=1.0.1,<2"
             },
             {
-                "installed_version": "0.2.2",
+                "installed_version": "0.3.0",
                 "key": "hexbytes",
                 "package_name": "hexbytes",
                 "required_version": ">=0.1.0,<1"
@@ -370,16 +343,16 @@
     {
         "dependencies": [
             {
-                "installed_version": "0.11.2",
+                "installed_version": "0.12.0",
                 "key": "cytoolz",
                 "package_name": "cytoolz",
                 "required_version": ">=0.10.1,<1.0.0"
             },
             {
-                "installed_version": "0.3.2",
+                "installed_version": "0.5.0",
                 "key": "eth-hash",
                 "package_name": "eth-hash",
-                "required_version": ">=0.3.1,<0.4.0"
+                "required_version": ">=0.1.0,<1.0.0"
             },
             {
                 "installed_version": "2.3.0",
@@ -389,7 +362,7 @@
             }
         ],
         "package": {
-            "installed_version": "1.10.0",
+            "installed_version": "1.9.5",
             "key": "eth-utils",
             "package_name": "eth-utils"
         }
@@ -413,7 +386,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "1.3.0",
+            "installed_version": "1.3.1",
             "key": "frozenlist",
             "package_name": "frozenlist"
         }
@@ -421,7 +394,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "0.2.2",
+            "installed_version": "0.3.0",
             "key": "hexbytes",
             "package_name": "hexbytes"
         }
@@ -432,27 +405,6 @@
             "installed_version": "3.3",
             "key": "idna",
             "package_name": "idna"
-        }
-    },
-    {
-        "dependencies": [
-            {
-                "installed_version": "4.0.1",
-                "key": "typing-extensions",
-                "package_name": "typing-extensions",
-                "required_version": ">=3.6.4"
-            },
-            {
-                "installed_version": "3.7.0",
-                "key": "zipp",
-                "package_name": "zipp",
-                "required_version": ">=0.5"
-            }
-        ],
-        "package": {
-            "installed_version": "4.10.1",
-            "key": "importlib-metadata",
-            "package_name": "importlib-metadata"
         }
     },
     {
@@ -472,7 +424,7 @@
                 "required_version": ">=0.0.7"
             },
             {
-                "installed_version": "2.27.1",
+                "installed_version": "2.28.1",
                 "key": "requests",
                 "package_name": "requests",
                 "required_version": ">=2.11"
@@ -487,16 +439,10 @@
     {
         "dependencies": [
             {
-                "installed_version": "21.4.0",
+                "installed_version": "22.1.0",
                 "key": "attrs",
                 "package_name": "attrs",
                 "required_version": ">=17.4.0"
-            },
-            {
-                "installed_version": "4.10.1",
-                "key": "importlib-metadata",
-                "package_name": "importlib-metadata",
-                "required_version": null
             },
             {
                 "installed_version": "0.18.1",
@@ -505,7 +451,7 @@
                 "required_version": ">=0.14.0"
             },
             {
-                "installed_version": "60.5.0",
+                "installed_version": "63.2.0",
                 "key": "setuptools",
                 "package_name": "setuptools",
                 "required_version": null
@@ -526,23 +472,30 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "0.12.0",
-            "key": "lark-parser",
-            "package_name": "lark-parser"
+            "installed_version": "1.1.2",
+            "key": "lark",
+            "package_name": "lark"
         }
     },
     {
         "dependencies": [],
         "package": {
-            "installed_version": "1.1.7",
+            "installed_version": "1.1.8",
             "key": "lru-dict",
             "package_name": "lru-dict"
         }
     },
     {
-        "dependencies": [],
+        "dependencies": [
+            {
+                "installed_version": "21.3",
+                "key": "packaging",
+                "package_name": "packaging",
+                "required_version": ">=17.0"
+            }
+        ],
         "package": {
-            "installed_version": "3.14.1",
+            "installed_version": "3.17.1",
             "key": "marshmallow",
             "package_name": "marshmallow"
         }
@@ -550,20 +503,20 @@
     {
         "dependencies": [
             {
-                "installed_version": "3.14.1",
+                "installed_version": "3.17.1",
                 "key": "marshmallow",
                 "package_name": "marshmallow",
                 "required_version": ">=3.13.0,<4.0"
             },
             {
-                "installed_version": "0.7.1",
+                "installed_version": "0.8.0",
                 "key": "typing-inspect",
                 "package_name": "typing-inspect",
                 "required_version": ">=0.7.1"
             }
         ],
         "package": {
-            "installed_version": "8.5.3",
+            "installed_version": "8.5.8",
             "key": "marshmallow-dataclass",
             "package_name": "marshmallow-dataclass"
         }
@@ -571,7 +524,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "3.14.1",
+                "installed_version": "3.17.1",
                 "key": "marshmallow",
                 "package_name": "marshmallow",
                 "required_version": ">=2.0.0"
@@ -586,7 +539,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "3.14.1",
+                "installed_version": "3.17.1",
                 "key": "marshmallow",
                 "package_name": "marshmallow",
                 "required_version": ">=3.0.0,<4.0.0"
@@ -666,7 +619,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "1.21.5",
+            "installed_version": "1.23.2",
             "key": "numpy",
             "package_name": "numpy"
         }
@@ -674,7 +627,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "3.0.7",
+                "installed_version": "3.0.9",
                 "key": "pyparsing",
                 "package_name": "pyparsing",
                 "required_version": ">=2.0.2,!=3.0.5"
@@ -704,7 +657,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "21.3.1",
+            "installed_version": "22.2.2",
             "key": "pip",
             "package_name": "pip"
         }
@@ -712,7 +665,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "21.3.1",
+                "installed_version": "22.2.2",
                 "key": "pip",
                 "package_name": "pip",
                 "required_version": ">=6.0.0"
@@ -725,14 +678,7 @@
         }
     },
     {
-        "dependencies": [
-            {
-                "installed_version": "4.10.1",
-                "key": "importlib-metadata",
-                "package_name": "importlib-metadata",
-                "required_version": ">=0.12"
-            }
-        ],
+        "dependencies": [],
         "package": {
             "installed_version": "1.0.0",
             "key": "pluggy",
@@ -742,7 +688,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "0.13.1",
+            "installed_version": "0.14.1",
             "key": "prometheus-client",
             "package_name": "prometheus-client"
         }
@@ -750,7 +696,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "3.19.4",
+            "installed_version": "3.20.1",
             "key": "protobuf",
             "package_name": "protobuf"
         }
@@ -766,7 +712,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "3.14.1",
+            "installed_version": "3.15.0",
             "key": "pycryptodome",
             "package_name": "pycryptodome"
         }
@@ -774,7 +720,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "3.0.7",
+            "installed_version": "3.0.9",
             "key": "pyparsing",
             "package_name": "pyparsing"
         }
@@ -790,16 +736,10 @@
     {
         "dependencies": [
             {
-                "installed_version": "21.4.0",
+                "installed_version": "22.1.0",
                 "key": "attrs",
                 "package_name": "attrs",
                 "required_version": ">=19.2.0"
-            },
-            {
-                "installed_version": "4.10.1",
-                "key": "importlib-metadata",
-                "package_name": "importlib-metadata",
-                "required_version": ">=0.12"
             },
             {
                 "installed_version": "1.1.1",
@@ -833,7 +773,7 @@
             }
         ],
         "package": {
-            "installed_version": "7.0.0",
+            "installed_version": "7.1.2",
             "key": "pytest",
             "package_name": "pytest"
         }
@@ -841,20 +781,14 @@
     {
         "dependencies": [
             {
-                "installed_version": "7.0.0",
+                "installed_version": "7.1.2",
                 "key": "pytest",
                 "package_name": "pytest",
                 "required_version": ">=6.1.0"
-            },
-            {
-                "installed_version": "4.0.1",
-                "key": "typing-extensions",
-                "package_name": "typing-extensions",
-                "required_version": ">=3.7.2"
             }
         ],
         "package": {
-            "installed_version": "0.18.0",
+            "installed_version": "0.19.0",
             "key": "pytest-asyncio",
             "package_name": "pytest-asyncio"
         }
@@ -862,16 +796,16 @@
     {
         "dependencies": [
             {
-                "installed_version": "2021.10.8",
+                "installed_version": "2022.6.15",
                 "key": "certifi",
                 "package_name": "certifi",
                 "required_version": ">=2017.4.17"
             },
             {
-                "installed_version": "2.0.11",
+                "installed_version": "2.1.1",
                 "key": "charset-normalizer",
                 "package_name": "charset-normalizer",
-                "required_version": "~=2.0.0"
+                "required_version": ">=2,<3"
             },
             {
                 "installed_version": "3.3",
@@ -880,14 +814,14 @@
                 "required_version": ">=2.5,<4"
             },
             {
-                "installed_version": "1.26.8",
+                "installed_version": "1.26.12",
                 "key": "urllib3",
                 "package_name": "urllib3",
                 "required_version": ">=1.21.1,<1.27"
             }
         ],
         "package": {
-            "installed_version": "2.27.1",
+            "installed_version": "2.28.1",
             "key": "requests",
             "package_name": "requests"
         }
@@ -895,7 +829,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "1.10.0",
+                "installed_version": "1.9.5",
                 "key": "eth-utils",
                 "package_name": "eth-utils",
                 "required_version": ">=1.0.2,<2"
@@ -910,7 +844,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "60.5.0",
+            "installed_version": "63.2.0",
             "key": "setuptools",
             "package_name": "setuptools"
         }
@@ -933,7 +867,7 @@
             }
         ],
         "package": {
-            "installed_version": "1.9",
+            "installed_version": "1.10.1",
             "key": "sympy",
             "package_name": "sympy"
         }
@@ -949,7 +883,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "0.11.2",
+            "installed_version": "0.12.0",
             "key": "toolz",
             "package_name": "toolz"
         }
@@ -965,7 +899,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "4.0.1",
+            "installed_version": "4.3.0",
             "key": "typing-extensions",
             "package_name": "typing-extensions"
         }
@@ -979,14 +913,14 @@
                 "required_version": ">=0.3.0"
             },
             {
-                "installed_version": "4.0.1",
+                "installed_version": "4.3.0",
                 "key": "typing-extensions",
                 "package_name": "typing-extensions",
                 "required_version": ">=3.7.4"
             }
         ],
         "package": {
-            "installed_version": "0.7.1",
+            "installed_version": "0.8.0",
             "key": "typing-inspect",
             "package_name": "typing-inspect"
         }
@@ -994,7 +928,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "1.26.8",
+            "installed_version": "1.26.12",
             "key": "urllib3",
             "package_name": "urllib3"
         }
@@ -1016,19 +950,19 @@
                 "required_version": ">=3.7.4.post0,<4"
             },
             {
-                "installed_version": "2.1.1",
+                "installed_version": "2.2.0",
                 "key": "eth-abi",
                 "package_name": "eth-abi",
                 "required_version": ">=2.0.0b6,<3.0.0"
             },
             {
-                "installed_version": "0.5.7",
+                "installed_version": "0.5.9",
                 "key": "eth-account",
                 "package_name": "eth-account",
                 "required_version": ">=0.5.7,<0.6.0"
             },
             {
-                "installed_version": "0.3.2",
+                "installed_version": "0.5.0",
                 "key": "eth-hash",
                 "package_name": "eth-hash",
                 "required_version": ">=0.2.0,<1.0.0"
@@ -1040,13 +974,13 @@
                 "required_version": ">=2.0.0,<3.0.0"
             },
             {
-                "installed_version": "1.10.0",
+                "installed_version": "1.9.5",
                 "key": "eth-utils",
                 "package_name": "eth-utils",
                 "required_version": ">=1.9.5,<2.0.0"
             },
             {
-                "installed_version": "0.2.2",
+                "installed_version": "0.3.0",
                 "key": "hexbytes",
                 "package_name": "hexbytes",
                 "required_version": ">=0.1.0,<1.0.0"
@@ -1064,28 +998,22 @@
                 "required_version": ">=3.2.0,<4.0.0"
             },
             {
-                "installed_version": "1.1.7",
+                "installed_version": "1.1.8",
                 "key": "lru-dict",
                 "package_name": "lru-dict",
                 "required_version": ">=1.1.6,<2.0.0"
             },
             {
-                "installed_version": "3.19.4",
+                "installed_version": "3.20.1",
                 "key": "protobuf",
                 "package_name": "protobuf",
                 "required_version": ">=3.10.0,<4"
             },
             {
-                "installed_version": "2.27.1",
+                "installed_version": "2.28.1",
                 "key": "requests",
                 "package_name": "requests",
                 "required_version": ">=2.16.0,<3.0.0"
-            },
-            {
-                "installed_version": "4.0.1",
-                "key": "typing-extensions",
-                "package_name": "typing-extensions",
-                "required_version": ">=3.7.4.1,<5"
             },
             {
                 "installed_version": "9.1",
@@ -1095,7 +1023,7 @@
             }
         ],
         "package": {
-            "installed_version": "5.27.0",
+            "installed_version": "5.28.0",
             "key": "web3",
             "package_name": "web3"
         }
@@ -1129,26 +1057,12 @@
                 "key": "multidict",
                 "package_name": "multidict",
                 "required_version": ">=4.0"
-            },
-            {
-                "installed_version": "4.0.1",
-                "key": "typing-extensions",
-                "package_name": "typing-extensions",
-                "required_version": ">=3.7.4"
             }
         ],
         "package": {
-            "installed_version": "1.7.2",
+            "installed_version": "1.8.1",
             "key": "yarl",
             "package_name": "yarl"
-        }
-    },
-    {
-        "dependencies": [],
-        "package": {
-            "installed_version": "3.7.0",
-            "key": "zipp",
-            "package_name": "zipp"
         }
     }
 ]

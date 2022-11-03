@@ -11,7 +11,7 @@ from starkware.starknet.public.abi import ADDR_BOUND, MAX_STORAGE_ITEM_SIZE
 CAIRO_FILE = os.path.join(os.path.dirname(__file__), "storage.cairo")
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def program() -> Program:
     return compile_cairo_files([CAIRO_FILE], prime=DEFAULT_PRIME)
 
@@ -30,21 +30,23 @@ def test_constants(program: Program):
     "value",
     [
         0,
-        2 ** 250 - 1,
-        2 ** 250,
-        2 ** 250 + 1,
+        2**250 - 1,
+        2**250,
+        2**250 + 1,
         ADDR_BOUND - 1,
         ADDR_BOUND,
         ADDR_BOUND + 1,
-        2 ** 251 - 1,
-        2 ** 251,
-        2 ** 251 + 1,
+        2**251 - 1,
+        2**251,
+        2**251 + 1,
         DEFAULT_PRIME - 1,
     ],
 )
 def test_normalize_address(runner: CairoFunctionRunner, value):
-    runner.run("normalize_address", range_check_ptr=runner.range_check_builtin.base, addr=value)
-    range_check_ptr_end, result = runner.get_return_values(2)
-    assert range_check_ptr_end.segment_index == runner.range_check_builtin.base.segment_index
-
+    (_, (result,)) = runner.run(
+        "normalize_address",
+        range_check_ptr=runner.range_check_builtin.base,
+        addr=value,
+        verify_implicit_args_segment=True,
+    )
     assert result == value % ADDR_BOUND

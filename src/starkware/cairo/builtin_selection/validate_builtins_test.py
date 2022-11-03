@@ -38,7 +38,7 @@ def test_validate_builtins(old_builtins, new_builtins, builtin_sizes, expect_thr
     range_check_builtin = RangeCheckBuiltinRunner(
         included=True,
         ratio=None,
-        inner_rc_bound=2 ** 16,
+        inner_rc_bound=2**16,
         n_parts=small_instance.builtins["range_check"].n_parts,
     )
     runner.builtin_runners["range_check_builtin"] = range_check_builtin

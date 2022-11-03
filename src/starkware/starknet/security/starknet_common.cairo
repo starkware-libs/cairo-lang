@@ -24,6 +24,7 @@ from starkware.cairo.common.cairo_secp.signature import (
 )
 from starkware.cairo.common.default_dict import default_dict_finalize, default_dict_new
 from starkware.cairo.common.dict import dict_read, dict_squash, dict_update, dict_write
+from starkware.cairo.common.ec import chained_ec_op, ec_op, recover_y
 from starkware.cairo.common.find_element import find_element, search_sorted, search_sorted_lower
 from starkware.cairo.common.keccak import unsafe_keccak
 from starkware.cairo.common.math import (
@@ -39,6 +40,7 @@ from starkware.cairo.common.math import (
     assert_not_equal,
     assert_not_zero,
     horner_eval,
+    is_quad_residue,
     sign,
     signed_div_rem,
     split_felt,
@@ -66,6 +68,7 @@ from starkware.cairo.common.uint256 import (
     uint256_le,
     uint256_lt,
     uint256_mul,
+    uint256_mul_div_mod,
     uint256_neg,
     uint256_not,
     uint256_or,
@@ -86,8 +89,7 @@ from starkware.starknet.common.messages import send_message_to_l1
 from starkware.starknet.common.storage import normalize_address
 from starkware.starknet.common.syscalls import (
     call_contract,
-    delegate_call,
-    delegate_l1_handler,
+    deploy,
     emit_event,
     get_block_number,
     get_block_timestamp,
@@ -96,6 +98,8 @@ from starkware.starknet.common.syscalls import (
     get_sequencer_address,
     get_tx_info,
     get_tx_signature,
+    library_call,
+    library_call_l1_handler,
     storage_read,
     storage_write,
 )

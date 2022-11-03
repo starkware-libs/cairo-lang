@@ -15,7 +15,7 @@ class RangeCheckBuiltinRunner(SimpleBuiltinRunner):
             n_input_cells=1,
         )
         self.inner_rc_bound = inner_rc_bound
-        self.bound = inner_rc_bound ** n_parts
+        self.bound = inner_rc_bound**n_parts
         self.n_parts = n_parts
 
     def add_validation_rules(self, runner):
@@ -99,6 +99,6 @@ class RangeCheckBuiltinVerifier(BuiltinVerifier):
             <= addresses.begin_addr
             <= addresses.stop_ptr
             <= addresses.begin_addr + max_size
-            < 2 ** 64
+            < 2**64
         )
         return [addresses.begin_addr], [addresses.stop_ptr]

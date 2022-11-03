@@ -22,7 +22,7 @@ python_lib(starkware_utils_lib
     starkware_commitment_tree_facts_lib
     starkware_config_utils_lib
     starkware_custom_dict_utils_lib
-    starkware_dataclasses_utils_lib
+    starkware_dataclasses_field_utils_lib
     starkware_error_handling_lib
     starkware_python_utils_lib
     starkware_serializability_utils_lib
@@ -33,7 +33,7 @@ python_lib(starkware_utils_lib
 
 full_python_test(patricia_tree_test
     PREFIX starkware/starkware_utils
-    PYTHON python3.7
+    PYTHON ${PYTHON_COMMAND}
     TESTED_MODULES starkware/starkware_utils
 
     FILES

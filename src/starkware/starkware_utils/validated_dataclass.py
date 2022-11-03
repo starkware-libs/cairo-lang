@@ -55,6 +55,9 @@ class ValidatedDataclass:
         """
         new_object_data = {}
         for field in dataclasses.fields(cls):
+            if not field.init:
+                continue
+
             # Fields with a value from the arguments.
             if field.name in data.keys():
                 new_object_data[field.name] = data[field.name]
@@ -78,6 +81,11 @@ class ValidatedDataclass:
                 )
                 continue
 
+            # If the field was not supplied but there is a default value, use the default value.
+            if has_default_value(attr_value=field):
+                new_object_data[field.name] = get_default_value(field=field)
+                continue
+
             raise Exception(
                 f"Could not randomize the field {field.name} in an object of type {cls}."
             )
@@ -86,6 +94,10 @@ class ValidatedDataclass:
 
     def validate_values(self):
         for field in dataclasses.fields(self):
+            # init=False fields are ignored as they are not yet defined.
+            if non_init_with_default(field=field):
+                continue
+
             metadata = getattr(field, "metadata", None)
             if metadata is None:
                 continue
@@ -104,6 +116,10 @@ class ValidatedDataclass:
 
     def validate_types(self):
         for field in dataclasses.fields(self):
+            # init=False fields are ignored as they are not yet defined.
+            if non_init_with_default(field=field):
+                continue
+
             typeguard.check_type(
                 argname=field.name, value=getattr(self, field.name), expected_type=field.type
             )
@@ -219,7 +235,7 @@ def set_class_annotations_and_attribute_values(
     for name, attr_value in attr_values.items():
         setattr(cls, name, attr_value)
 
-        if has_default_value(cls=cls, attr_value=attr_value):
+        if has_default_value(attr_value=attr_value):
             default_value_annotations[name] = annotations[name]
 
     # Locate members with default values in the end of the annotations dictionary.
@@ -231,7 +247,7 @@ def set_class_annotations_and_attribute_values(
     cls.__annotations__.update(default_value_annotations)
 
 
-def has_default_value(cls, attr_value: Any) -> bool:
+def has_default_value(attr_value: Any) -> bool:
     """
     Returns whether the class member has a default value or not.
     """
@@ -243,17 +259,35 @@ def has_default_value(cls, attr_value: Any) -> bool:
         """
         return True
 
-    # If member does not appear in __init__'s signature, having a default value is irrelevant.
     return (
-        attr_value.init
-        and attr_value.default is not dataclasses.MISSING
-        or
+        attr_value.default is not dataclasses.MISSING
         # Mypy has a problem with object members that are callables (it sees access to them as
         # passing self). This is actually originated in dataclasses' annotations in typeshed, since
         # the source code has no annotations.
         # See https://github.com/python/mypy/issues/6910 for details on this problem.
-        attr_value.default_factory is not dataclasses.MISSING  # type: ignore
+        or attr_value.default_factory is not dataclasses.MISSING  # type: ignore
     )
+
+
+def non_init_with_default(field: dataclasses.Field) -> bool:
+    # A field that that does not appear in the c-tor's signature but does have a default value is
+    # initialized with this value in the dataclass' c-tor.
+    return not field.init and not has_default_value(attr_value=field)
+
+
+def get_default_value(field: dataclasses.Field) -> Any:
+    """
+    Returns the default value for the given field if exists or dataclasses.MISSING otherwise.
+    In case of a default_factory function, returns the output of its call.
+    """
+    if field.default is not dataclasses.MISSING:
+        return field.default
+
+    # See https://github.com/python/mypy/issues/6910 for the mypy type-ignore cause.
+    if field.default_factory is not dataclasses.MISSING:  # type: ignore
+        return field.default_factory()  # type: ignore
+
+    return dataclasses.MISSING
 
 
 # Validators for private use in this file.

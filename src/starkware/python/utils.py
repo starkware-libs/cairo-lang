@@ -1,4 +1,5 @@
 import asyncio
+import bisect
 import contextlib
 import itertools
 import logging
@@ -6,29 +7,93 @@ import os
 import random
 import re
 import subprocess
+import threading
 import time
 from collections import UserDict
 from typing import (
     Any,
+    AsyncContextManager,
+    AsyncGenerator,
     AsyncIterable,
+    AsyncIterator,
     Awaitable,
+    Callable,
+    Coroutine,
     Dict,
+    Generic,
     Iterable,
     Iterator,
     List,
     Mapping,
     Optional,
+    Sequence,
+    Tuple,
     TypeVar,
 )
 
 import yaml
+from typing_extensions import Literal, Protocol
 
 # All functions with stubs are imported from this module.
 from starkware.python.utils_stub_module import *  # noqa
 
 T = TypeVar("T")
+TAsyncGenerator = TypeVar("TAsyncGenerator", bound=AsyncGenerator)
 NumType = TypeVar("NumType", int, float)
 HASH_BYTES = 32
+
+# If more shared types start popping up here extract to types.py.
+Endianness = Literal["big", "little"]
+TComparable = TypeVar("TComparable", bound="Comparable")
+
+
+class Comparable(Protocol):
+    """
+    A protocol for comparable classes.
+    Used for type annotation.
+    """
+
+    def __eq__(self, other: Any) -> bool:
+        pass
+
+    def __lt__(self: TComparable, other: TComparable) -> bool:
+        pass
+
+    def __gt__(self: TComparable, other: TComparable) -> bool:
+        pass
+
+    def __le__(self: TComparable, other: TComparable) -> bool:
+        pass
+
+    def __ge__(self: TComparable, other: TComparable) -> bool:
+        pass
+
+
+class TriviallyCopyable:
+    """
+    Implements trivially the '__copy__' and the '__deepcopy__' methods. I.e., the following holds:
+    obj is copy(obj) and obj is deepcopy(obj).
+    """
+
+    def __deepcopy__(self, memo):
+        return self
+
+    def __copy__(self):
+        return self
+
+
+class TriviallyCopyableCallback(TriviallyCopyable, Generic[T]):
+    """
+    Pypy's deepcopy has a bug with copying some objects, such as functions.
+    This class wrapps callable objects and implements the expected behaviour of the copy
+    functions on functions (which is trivial; see copy.py documentation).
+    """
+
+    def __init__(self, callback: Callable[..., T]):
+        self._callback = callback
+
+    def __call__(self, *args: Any, **kwargs: Any) -> T:
+        return self._callback(*args, **kwargs)
 
 
 def get_package_path():
@@ -45,18 +110,34 @@ def get_build_dir_path(rel_path=""):
     Returns a path to a file inside the build directory (or the docker).
     rel_path is the relative path of the file with respect to the build directory.
     """
-    build_root = os.environ["BUILD_ROOT"]
-    return os.path.join(build_root, rel_path)
+    if "BUILD_ROOT" in os.environ:
+        return os.path.join(os.environ["BUILD_ROOT"], rel_path)
+
+    from bazel_tools.tools.python.runfiles import runfiles
+
+    return runfiles.Create().Rlocation(os.path.join("__main__", rel_path))
 
 
-def get_source_dir_path(rel_path=""):
+def get_source_dir_path(rel_path: str = "", default_value: Optional[str] = None):
     """
     Returns a path to a file inside the source directory. Does not work in docker.
     rel_path is the relative path of the file with respect to the source directory.
     """
-    source_root = os.path.join(os.environ["BUILD_ROOT"], "../../")
-    assert os.path.exists(os.path.join(source_root, "src"))
-    return os.path.join(source_root, rel_path)
+    if "BUILD_ROOT" in os.environ:
+        source_root = os.path.join(os.environ["BUILD_ROOT"], "../../")
+        assert os.path.exists(os.path.join(source_root, "src"))
+        return os.path.join(source_root, rel_path)
+
+    if "BUILD_WORKSPACE_DIRECTORY" in os.environ:
+        source_root = os.environ["BUILD_WORKSPACE_DIRECTORY"]
+        assert os.path.exists(os.path.join(source_root, "src"))
+        return os.path.join(source_root, rel_path)
+
+    # If both BUILD_ROOT and BUILD_WORKSPACE_DIRECTORY are missing, return the default value.
+    if default_value is not None:
+        return default_value
+
+    raise Exception(f"Failed to get source path for {rel_path}.")
 
 
 def assert_same_and_get(*args):
@@ -90,6 +171,14 @@ def unique_ordered_union(x, y):
     return list(dict.fromkeys(list(x) + list(y)).keys())
 
 
+def as_non_optional(value: Optional[T]) -> T:
+    """
+    Verifies that 'value' is not None and returns it.
+    """
+    assert value is not None
+    return value
+
+
 def add_counters(x: Mapping[T, NumType], y: Mapping[T, NumType]) -> Dict[T, NumType]:
     """
     Given two dicts x, y, returns a dict d s.t.
@@ -112,6 +201,17 @@ def multiply_counter_by_scalar(scalar: NumType, counter: Mapping[T, NumType]) ->
       d[k] = scalar * counter[k]
     """
     return {k: scalar * v for k, v in counter.items()}
+
+
+def is_in_sorted_sequence(sorted_sequence: Sequence[TComparable], item: TComparable) -> bool:
+    """
+    Returns True if and only if the given item is in the given sorted sequence.
+    """
+    index = bisect.bisect_left(sorted_sequence, item)
+    if index == len(sorted_sequence):
+        return False
+
+    return sorted_sequence[index] == item or sorted_sequence[index] is item
 
 
 def indent(code, indentation):
@@ -265,7 +365,7 @@ def composite(*funcs):
 def to_bytes(
     value: int,
     length: Optional[int] = None,
-    byte_order: Optional[str] = None,
+    byte_order: Optional[Endianness] = None,
     signed: Optional[bool] = None,
 ) -> bytes:
     """
@@ -285,7 +385,9 @@ def to_bytes(
 
 
 def from_bytes(
-    value: bytes, byte_order: Optional[str] = None, signed: Optional[bool] = None
+    value: bytes,
+    byte_order: Optional[Endianness] = None,
+    signed: Optional[bool] = None,
 ) -> int:
     """
     Converts the given bytes object (parsed according to the given byte order) to an integer.
@@ -368,6 +470,28 @@ def get_exception_repr(exception: Exception) -> str:
     return f"{type(exception).__name__}({exception})"
 
 
+def func_args_to_string(
+    func: Callable, args: List[Any], kwargs: Dict[str, Any], exclude_params: List[str]
+) -> str:
+    """
+    Formats the given function's arguments in the following way:
+      <arg1_name>=<arg1_value>, <arg2_name>=<arg2_value>, ...
+    """
+    arg_names = func.__code__.co_varnames
+    formatted_args: List[str] = []
+
+    for name in arg_names:
+        if len(args) > 0:
+            if name != "self" and name not in exclude_params:
+                formatted_args.append(f"{name}={args[0]}")
+
+            args = args[1:]
+        elif name in kwargs and name not in exclude_params:
+            formatted_args.append(f"{name}={kwargs[name]}")
+
+    return ", ".join(formatted_args)
+
+
 @contextlib.contextmanager
 def log_time(logger: logging.Logger, name: str):
     """
@@ -398,3 +522,62 @@ def update_yaml_file(file_path: str, data: Dict[str, Any]):
     with open(file_path, "w") as fp:
         fp.write(yaml.dump(data=data, default_flow_style=False, width=400))
         fp.flush()
+
+
+def execute_coroutine_threadsafe(
+    coroutine: Coroutine[Any, Any, T], loop: asyncio.AbstractEventLoop
+) -> T:
+    """
+    Submits a coroutine object to a given event loop and returns the result.
+    """
+    # Verify we are not inside the main thread (as this will block it).
+    coroutine_name = coroutine.__name__  # type: ignore[attr-defined]
+    assert (
+        threading.current_thread() is not threading.main_thread()
+    ), f"Cannot run {coroutine_name} synchronously in main thread."
+
+    future = asyncio.run_coroutine_threadsafe(coro=coroutine, loop=loop)
+    return future.result()
+
+
+class aclosing(contextlib.AbstractAsyncContextManager, Generic[TAsyncGenerator]):
+    """
+    Async context manager for safely finalizing an asynchronously cleaned-up resource such as an
+    async generator, calling its 'aclose()' method.
+
+    This cleanup does not necessarily happen implicitly if a break (or exception) is coming from
+    the external loop. For example, see the test of this object.
+
+    See https://peps.python.org/pep-0533/ for more info.
+    """
+
+    def __init__(self, agen: TAsyncGenerator):
+        self.agen = agen
+
+    async def __aenter__(self) -> TAsyncGenerator:
+        return self.agen
+
+    async def __aexit__(self, *exc_info):
+        await self.agen.aclose()
+
+
+def aclosing_context_manager(
+    function: Callable[..., TAsyncGenerator]
+) -> Callable[..., AsyncContextManager[TAsyncGenerator]]:
+    """
+    Wraps a function that returns an async generator with aclosing context manager.
+    """
+
+    def wrapper(*args, **kwargs):
+        return aclosing(agen=function(*args, **kwargs))
+
+    return wrapper
+
+
+async def aenumerate(aiterable: AsyncIterable[T], start: int = 0) -> AsyncIterator[Tuple[int, T]]:
+    """
+    Asynchronously enumerates an async iterable from a given start value.
+    """
+    counter = itertools.count(start)
+    async for element in aiterable:
+        yield next(counter), element

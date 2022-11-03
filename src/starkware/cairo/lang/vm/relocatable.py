@@ -1,8 +1,10 @@
 import dataclasses
 from typing import Dict, Mapping, SupportsInt, Tuple, Union
 
-RELOCATABLE_OFFSET_LOWER_BOUND = -(2 ** 63)
-RELOCATABLE_OFFSET_UPPER_BOUND = 2 ** 63
+from starkware.python.utils import Endianness
+
+RELOCATABLE_OFFSET_LOWER_BOUND = -(2**63)
+RELOCATABLE_OFFSET_UPPER_BOUND = 2**63
 
 
 @dataclasses.dataclass(frozen=True)
@@ -68,7 +70,7 @@ class RelocatableValue:
         return f"{self.segment_index}:{self.offset}"
 
     @staticmethod
-    def to_bytes(value: "MaybeRelocatable", n_bytes: int, byte_order: str) -> bytes:
+    def to_bytes(value: "MaybeRelocatable", n_bytes: int, byte_order: Endianness) -> bytes:
         """
         Serializes RelocatableValue as:
         1bit |   SEGMENT_BITS |   OFFSET_BITS
@@ -81,16 +83,16 @@ class RelocatableValue:
             assert value < 2 ** (8 * n_bytes - 1)
             return value.to_bytes(n_bytes, byte_order)
         assert n_bytes * 8 > value.SEGMENT_BITS + value.OFFSET_BITS
-        num = 2 ** (8 * n_bytes - 1) + value.segment_index * 2 ** value.OFFSET_BITS + value.offset
+        num = 2 ** (8 * n_bytes - 1) + value.segment_index * 2**value.OFFSET_BITS + value.offset
         return num.to_bytes(n_bytes, byte_order)
 
     @classmethod
-    def from_bytes(cls, data: bytes, byte_order: str) -> "MaybeRelocatable":
+    def from_bytes(cls, data: bytes, byte_order: Endianness) -> "MaybeRelocatable":
         n_bytes = len(data)
         num = int.from_bytes(data, byte_order)
         if num & (2 ** (8 * n_bytes - 1)):
-            offset = num & (2 ** cls.OFFSET_BITS - 1)
-            segment_index = (num >> cls.OFFSET_BITS) & (2 ** cls.SEGMENT_BITS - 1)
+            offset = num & (2**cls.OFFSET_BITS - 1)
+            segment_index = (num >> cls.OFFSET_BITS) & (2**cls.SEGMENT_BITS - 1)
             return RelocatableValue(segment_index, offset)
         return num
 

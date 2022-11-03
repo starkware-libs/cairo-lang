@@ -2,15 +2,17 @@ import dataclasses
 import re
 from typing import List, Optional, Tuple
 
-from lark import Transformer, v_args
+import lark
+from lark import Token, Transformer, v_args
 
 from starkware.cairo.lang.compiler.ast.aliased_identifier import AliasedIdentifier
 from starkware.cairo.lang.compiler.ast.arguments import IdentifierList
-from starkware.cairo.lang.compiler.ast.bool_expr import BoolExpr
+from starkware.cairo.lang.compiler.ast.bool_expr import BoolAndExpr, BoolEqExpr, BoolExpr
 from starkware.cairo.lang.compiler.ast.cairo_types import (
     CairoType,
     TypeCodeoffset,
     TypeFelt,
+    TypeIdentifier,
     TypePointer,
     TypeStruct,
     TypeTuple,
@@ -53,6 +55,7 @@ from starkware.cairo.lang.compiler.ast.expr import (
     ExprConst,
     ExprDeref,
     ExprDot,
+    Expression,
     ExprHint,
     ExprIdentifier,
     ExprNeg,
@@ -117,11 +120,6 @@ class ParserError(LocationError):
 
 
 @dataclasses.dataclass
-class Comma:
-    location: Optional[Location]
-
-
-@dataclasses.dataclass
 class CommaSeparatedWithNotes:
     """
     Represents a list of comma separated values, such as expressions or types.
@@ -144,12 +142,6 @@ class ParserTransformer(Transformer):
     def __default__(self, data: str, children, meta):
         raise TypeError(f"Unable to parse tree node of type {data}")
 
-    # Comma separated list with notes.
-
-    @v_args(meta=True)
-    def comma(self, value, meta):
-        return Comma(location=self.meta2loc(meta))
-
     def comma_separated_with_notes(self, value) -> CommaSeparatedWithNotes:
         saw_comma = True
         all_notes: List[Notes] = []
@@ -159,9 +151,9 @@ class ParserTransformer(Transformer):
             if isinstance(v, Notes):
                 # Join the notes before and after the comma.
                 current_notes.append(v)
-            elif isinstance(v, Comma):
+            elif isinstance(v, Token) and v.type == "COMMA":
                 if saw_comma:
-                    raise ParserError("Unexpected comma.", location=v.location)
+                    raise ParserError("Unexpected comma.", location=self.token2loc(v))
                 saw_comma = True
             else:
                 if not saw_comma:
@@ -186,7 +178,7 @@ class ParserTransformer(Transformer):
     # Types.
 
     @v_args(meta=True)
-    def named_type(self, value, meta) -> TypeTuple.Item:
+    def named_type(self, meta, value) -> TypeTuple.Item:
         name: Optional[str]
         if len(value) == 1:
             # Unnamed type.
@@ -210,35 +202,45 @@ class ParserTransformer(Transformer):
         return TypeTuple.Item(name=name, typ=typ, location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def type_felt(self, value, meta):
+    def type_felt(self, meta, value):
         return TypeFelt(location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def type_codeoffset(self, value, meta):
+    def type_codeoffset(self, meta, value):
         return TypeCodeoffset(location=self.meta2loc(meta))
 
     def type_struct(self, value):
         assert len(value) == 1 and isinstance(value[0], ExprIdentifier)
-        return TypeStruct(
-            scope=ScopedName.from_string(value[0].name),
-            is_fully_resolved=self.parser_context.resolved_types,
+        if self.parser_context.resolved_types:
+            # If parser_context.resolved_types is True, assume that the type is a struct.
+            return TypeStruct(
+                scope=ScopedName.from_string(value[0].name),
+                location=value[0].location,
+            )
+
+        return TypeIdentifier(
+            name=ScopedName.from_string(value[0].name),
             location=value[0].location,
         )
 
     @v_args(meta=True)
-    def type_pointer(self, value, meta):
+    def type_pointer(self, meta, value):
         return TypePointer(pointee=value[0], location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def type_pointer2(self, value, meta):
+    def type_pointer2(self, meta, value):
         location = self.meta2loc(meta)
-        inner_location = dataclasses.replace(location, end_col=location.end_col - 1)
+        inner_location = (
+            None
+            if location is None
+            else dataclasses.replace(location, end_col=location.end_col - 1)
+        )
         return TypePointer(
             pointee=TypePointer(pointee=value[0], location=inner_location), location=location
         )
 
     @v_args(meta=True)
-    def type_tuple(self, value: Tuple[CommaSeparatedWithNotes], meta):
+    def type_tuple(self, meta, value: Tuple[CommaSeparatedWithNotes]):
         (lst,) = value
         return TypeTuple(
             members=lst.args,
@@ -249,7 +251,7 @@ class ParserTransformer(Transformer):
 
     # Expression.
     @v_args(meta=True)
-    def arg_list(self, value: Tuple[CommaSeparatedWithNotes], meta):
+    def arg_list(self, meta, value: Tuple[CommaSeparatedWithNotes]):
         (lst,) = value
         return ArgList(
             args=lst.args,
@@ -259,7 +261,7 @@ class ParserTransformer(Transformer):
         )
 
     @v_args(meta=True)
-    def expr_assignment(self, value, meta):
+    def expr_assignment(self, meta, value):
         if len(value) == 1:
             identifier = None
             expr = value[0]
@@ -270,25 +272,25 @@ class ParserTransformer(Transformer):
         return ExprAssignment(identifier=identifier, expr=expr, location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def identifier(self, value, meta):
+    def identifier(self, meta, value):
         return ExprIdentifier(name=".".join(x.value for x in value), location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def identifier_def(self, value, meta):
+    def identifier_def(self, meta, value):
         return ExprIdentifier(name=value[0].value, location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def atom_number(self, value, meta):
+    def atom_number(self, meta, value):
         return ExprConst(val=int(value[0]), format_str=value[0].value, location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def atom_hex_number(self, value, meta):
+    def atom_hex_number(self, meta, value):
         return ExprConst(
             val=int(value[0], 16), format_str=value[0].value, location=self.meta2loc(meta)
         )
 
     @v_args(meta=True)
-    def atom_short_string(self, value, meta):
+    def atom_short_string(self, meta, value):
         location = self.meta2loc(meta)
         token_text = value[0].value
         assert token_text[0] == token_text[-1] == "'"
@@ -312,79 +314,79 @@ class ParserTransformer(Transformer):
         )
 
     @v_args(meta=True)
-    def atom_hint(self, value, meta):
+    def atom_hint(self, meta, value):
         return ExprHint.from_str(val=value[0], location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def atom_reg(self, value, meta):
+    def atom_reg(self, meta, value):
         return ExprReg(reg=value[0], location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def atom_func_call(self, value, meta):
+    def atom_func_call(self, meta, value):
         return ExprFuncCall(rvalue=value[0], location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def expr_add(self, value, meta):
+    def expr_add(self, meta, value):
         return ExprOperator(
             a=value[0], op="+", b=value[2], notes=value[1], location=self.meta2loc(meta)
         )
 
     @v_args(meta=True)
-    def expr_sub(self, value, meta):
+    def expr_sub(self, meta, value):
         return ExprOperator(
             a=value[0], op="-", b=value[2], notes=value[1], location=self.meta2loc(meta)
         )
 
     @v_args(meta=True)
-    def expr_mul(self, value, meta):
+    def expr_mul(self, meta, value):
         return ExprOperator(
             a=value[0], op="*", b=value[2], notes=value[1], location=self.meta2loc(meta)
         )
 
     @v_args(meta=True)
-    def expr_div(self, value, meta):
+    def expr_div(self, meta, value):
         return ExprOperator(
             a=value[0], op="/", b=value[2], notes=value[1], location=self.meta2loc(meta)
         )
 
     @v_args(meta=True)
-    def unary_addressof(self, value, meta):
+    def unary_addressof(self, meta, value):
         return ExprAddressOf(expr=value[0], location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def unary_neg(self, value, meta):
+    def unary_neg(self, meta, value):
         return ExprNeg(val=value[0], location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def unary_new_operator(self, value, meta):
+    def unary_new_operator(self, meta, value):
         return ExprNewOperator(expr=value[0], is_typed=True, location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def expr_pow(self, value, meta):
+    def expr_pow(self, meta, value):
         return ExprPow(a=value[0], b=value[2], notes=value[1], location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def atom_deref(self, value, meta):
+    def atom_deref(self, meta, value):
         return ExprDeref(addr=value[1], notes=value[0], location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def atom_subscript(self, value, meta):
+    def atom_subscript(self, meta, value):
         return ExprSubscript(
             expr=value[0], offset=value[2], notes=value[1], location=self.meta2loc(meta)
         )
 
     @v_args(meta=True)
-    def atom_dot(self, value, meta):
+    def atom_dot(self, meta, value):
         return ExprDot(expr=value[0], member=value[1], location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def atom_cast(self, value, meta):
+    def atom_cast(self, meta, value):
         return ExprCast(
             expr=value[1], notes=value[0], dest_type=value[2], location=self.meta2loc(meta)
         )
 
     @v_args(meta=True)
-    def atom_tuple_or_parentheses(self, value, meta):
+    def atom_tuple_or_parentheses(self, meta, value):
         (arg_list,) = value
         assert isinstance(arg_list, ArgList)
 
@@ -406,24 +408,28 @@ class ParserTransformer(Transformer):
     def reg_fp(self, value):
         return Register.FP
 
-    # Boolean expresions.
+    # Boolean expressions.
 
-    @v_args(meta=True)
-    def bool_expr_eq(self, value, meta):
-        return BoolExpr(a=value[0], b=value[1], eq=True, location=self.meta2loc(meta))
+    @v_args(inline=True, meta=True)
+    def bool_expr_eq(self, meta, a: Expression, notes: Notes, b: Expression):
+        return BoolEqExpr(a=a, b=b, eq=True, notes=notes, location=self.meta2loc(meta))
 
-    @v_args(meta=True)
-    def bool_expr_neq(self, value, meta):
-        return BoolExpr(a=value[0], b=value[1], eq=False, location=self.meta2loc(meta))
+    @v_args(inline=True, meta=True)
+    def bool_expr_neq(self, meta, a: Expression, notes: Notes, b: Expression):
+        return BoolEqExpr(a=a, b=b, eq=False, notes=notes, location=self.meta2loc(meta))
+
+    @v_args(inline=True, meta=True)
+    def bool_and_expr(self, meta, a: BoolExpr, notes: Notes, b: BoolEqExpr):
+        return BoolAndExpr(a=a, b=b, notes=notes, location=self.meta2loc(meta))
 
     # Types.
 
     @v_args(meta=True)
-    def modifier_local(self, value, meta):
+    def modifier_local(self, meta, value):
         return Modifier(name="local", location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def typed_identifier(self, value, meta):
+    def typed_identifier(self, meta, value):
         assert len(value) in [1, 2, 3], f"Unexpected argument: value={value}"
         modifier = None
         if isinstance(value[0], Modifier):
@@ -438,27 +444,27 @@ class ParserTransformer(Transformer):
     # Instructions.
 
     @v_args(meta=True)
-    def inst_assert_eq(self, value, meta):
+    def inst_assert_eq(self, meta, value):
         return AssertEqInstruction(a=value[0], b=value[1], location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def code_element_compound_assert_eq(self, value, meta):
+    def code_element_compound_assert_eq(self, meta, value):
         return CodeElementCompoundAssertEq(a=value[0], b=value[1], location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def inst_jmp_rel(self, value, meta):
+    def inst_jmp_rel(self, meta, value):
         return JumpInstruction(val=value[0], relative=True, location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def inst_jmp_abs(self, value, meta):
+    def inst_jmp_abs(self, meta, value):
         return JumpInstruction(val=value[0], relative=False, location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def inst_jmp_to_label(self, value, meta):
+    def inst_jmp_to_label(self, meta, value):
         return JumpToLabelInstruction(label=value[0], condition=None, location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def inst_jnz(self, value, meta):
+    def inst_jnz(self, meta, value):
         if value[2] != "0":
             raise ParserError('Invalid syntax, expected "!= 0".', location=self.meta2loc(meta))
         return JnzInstruction(
@@ -466,7 +472,7 @@ class ParserTransformer(Transformer):
         )
 
     @v_args(meta=True)
-    def inst_jnz_to_label(self, value, meta):
+    def inst_jnz_to_label(self, meta, value):
         if value[2] != "0":
             raise ParserError('Invalid syntax, expected "!= 0".', location=self.meta2loc(meta))
         return JumpToLabelInstruction(
@@ -474,41 +480,41 @@ class ParserTransformer(Transformer):
         )
 
     @v_args(meta=True)
-    def inst_call_rel(self, value, meta):
+    def inst_call_rel(self, meta, value):
         return CallInstruction(val=value[0], relative=True, location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def inst_call_abs(self, value, meta):
+    def inst_call_abs(self, meta, value):
         return CallInstruction(val=value[0], relative=False, location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def inst_call_label(self, value, meta):
+    def inst_call_label(self, meta, value):
         return CallLabelInstruction(label=value[0], location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def inst_add_ap(self, value, meta):
+    def inst_add_ap(self, meta, value):
         return AddApInstruction(expr=value[0], location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def inst_data_word(self, value, meta):
+    def inst_data_word(self, meta, value):
         return DefineWordInstruction(expr=value[0], location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def inst_ret(self, value, meta):
+    def inst_ret(self, meta, value):
         return RetInstruction(location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def instruction_noap(self, value, meta):
+    def instruction_noap(self, meta, value):
         return InstructionAst(body=value[0], inc_ap=False, location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def instruction_ap(self, value, meta):
+    def instruction_ap(self, meta, value):
         return InstructionAst(body=value[0], inc_ap=True, location=self.meta2loc(meta))
 
     # RValues.
 
     @v_args(meta=True)
-    def rvalue_expr(self, value, meta) -> Rvalue:
+    def rvalue_expr(self, meta, value) -> Rvalue:
         (expr,) = value
         if isinstance(expr, ExprFuncCall):
             return expr.rvalue
@@ -519,7 +525,7 @@ class ParserTransformer(Transformer):
         return RvalueCallInst(call_inst=call_inst)
 
     @v_args(meta=True)
-    def function_call(self, value, meta):
+    def function_call(self, meta, value):
         if len(value) == 2:
             func_ident, arg_list = value
             implicit_args = None
@@ -563,7 +569,7 @@ class ParserTransformer(Transformer):
         raise NotImplementedError(f"Unexpected argument: value={value}")
 
     @v_args(meta=True)
-    def code_element_local_var(self, value, meta):
+    def code_element_local_var(self, meta, value):
         if len(value) == 1:
             typed_identifier = value[0]
             expr = None
@@ -577,7 +583,7 @@ class ParserTransformer(Transformer):
         )
 
     @v_args(meta=True)
-    def code_element_temp_var(self, value, meta):
+    def code_element_temp_var(self, meta, value):
         typed_identifier, *maybe_expr = value
         (expr,) = maybe_expr if len(maybe_expr) > 0 else [None]
 
@@ -588,17 +594,16 @@ class ParserTransformer(Transformer):
         )
 
     @v_args(meta=True)
-    def code_element_static_assert(self, value, meta):
+    def code_element_static_assert(self, meta, value):
         return CodeElementStaticAssert(a=value[0], b=value[1], location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def code_element_return(self, value, meta):
-        (arglist,) = value
-        return CodeElementReturn(exprs=arglist.args, location=self.meta2loc(meta))
+    def code_element_return(self, meta, value):
+        (expr,) = value
+        if isinstance(expr, ExprFuncCall):
+            return CodeElementTailCall(func_call=expr.rvalue, location=self.meta2loc(meta))
 
-    @v_args(meta=True)
-    def code_element_tail_call(self, value, meta):
-        return CodeElementTailCall(func_call=value[0], location=self.meta2loc(meta))
+        return CodeElementReturn(expr=expr, location=self.meta2loc(meta))
 
     def code_element_func_call(self, value):
         return CodeElementFuncCall(func_call=value[0])
@@ -612,7 +617,7 @@ class ParserTransformer(Transformer):
         return CodeElementLabel(identifier=identifier)
 
     @v_args(meta=True)
-    def code_element_hint(self, value, meta):
+    def code_element_hint(self, meta, value):
         return CodeElementHint(
             hint=ExprHint.from_str(val=value[0], location=self.meta2loc(meta)),
             location=self.meta2loc(meta),
@@ -622,8 +627,8 @@ class ParserTransformer(Transformer):
         return CodeElementEmptyLine()
 
     @v_args(meta=True)
-    def commented_code_element(self, value, meta):
-        comment = value[1][1:] if len(value) == 2 else None
+    def commented_code_element(self, meta, value):
+        comment = value[1][2:] if value[1] is not None else None
         return CommentedCodeElement(
             code_elm=value[0], comment=comment, location=self.meta2loc(meta)
         )
@@ -632,7 +637,7 @@ class ParserTransformer(Transformer):
         return CodeBlock(code_elements=value)
 
     @v_args(meta=True)
-    def identifier_list(self, value, meta):
+    def identifier_list(self, meta, value):
         identifiers = value[1:-1:3]
         # Join the notes before and after the comma.
         notes = [value[0]] + [value[i] + value[i + 1] for i in range(2, len(value) - 1, 3)]
@@ -676,9 +681,21 @@ class ParserTransformer(Transformer):
         )
 
     def code_element_struct(self, value):
-        decorators, element_type, identifier, code_block = value
+        decorators, identifier, code_block = value
         return CodeElementFunction(
-            element_type=element_type.value,
+            element_type="struct",
+            identifier=identifier,
+            arguments=IdentifierList(identifiers=[], notes=[]),
+            implicit_arguments=None,
+            returns=None,
+            code_block=code_block,
+            decorators=decorators,
+        )
+
+    def code_element_namespace(self, value):
+        decorators, identifier, code_block = value
+        return CodeElementFunction(
+            element_type="namespace",
             identifier=identifier,
             arguments=IdentifierList(identifiers=[], notes=[]),
             implicit_arguments=None,
@@ -688,7 +705,7 @@ class ParserTransformer(Transformer):
         )
 
     @v_args(meta=True)
-    def code_element_typedef(self, value, meta):
+    def code_element_typedef(self, meta, value):
         return CodeElementTypeDef(
             identifier=value[0], cairo_type=value[1], location=self.meta2loc(meta)
         )
@@ -717,7 +734,7 @@ class ParserTransformer(Transformer):
         )
 
     @v_args(meta=True)
-    def code_element_if(self, value, meta):
+    def code_element_if(self, meta, value):
         condition = value[0]
         main_code_block = value[1]
         if len(value) == 2:
@@ -746,20 +763,20 @@ class ParserTransformer(Transformer):
         )
 
     @v_args(meta=True)
-    def code_element_directive(self, value, meta):
+    def code_element_directive(self, meta, value):
         return CodeElementDirective(directive=value[0], location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def directive_builtins(self, value, meta):
+    def directive_builtins(self, meta, value):
         builtins = [ident.name for ident in value[1:]]
         return BuiltinsDirective(builtins=builtins, location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def directive_lang(self, value, meta):
+    def directive_lang(self, meta, value):
         return LangDirective(name=value[1].name, location=self.meta2loc(meta))
 
     @v_args(meta=True)
-    def aliased_identifier(self, value, meta):
+    def aliased_identifier(self, meta, value):
         if len(value) == 1:
             # Element of the form: <identifier>.
             (identifier,) = value
@@ -775,7 +792,7 @@ class ParserTransformer(Transformer):
         )
 
     @v_args(meta=True)
-    def code_element_import(self, value, meta):
+    def code_element_import(self, meta, value):
         path = value[0]
         if isinstance(value[1], AliasedIdentifier):
             # Single line.
@@ -796,7 +813,7 @@ class ParserTransformer(Transformer):
         )
 
     @v_args(meta=True)
-    def code_element_alloc_locals(self, value, meta):
+    def code_element_alloc_locals(self, meta, value):
         return CodeElementAllocLocals(location=self.meta2loc(meta))
 
     def cairo_file(self, value):
@@ -808,7 +825,7 @@ class ParserTransformer(Transformer):
         return "\n"
 
     @v_args(meta=True)
-    def notes(self, value, meta):
+    def notes(self, meta, value):
         """
         Collects the comments in the AST node, marking whether the notes starts with a new line.
         """
@@ -830,7 +847,7 @@ class ParserTransformer(Transformer):
             comments=comments, starts_new_line=starts_new_line, location=self.meta2loc(meta)
         )
 
-    def meta2loc(self, meta):
+    def meta2loc(self, meta: lark.tree.Meta) -> Optional[Location]:
         if meta.empty:
             return None
         return Location(
@@ -842,11 +859,21 @@ class ParserTransformer(Transformer):
             parent_location=self.parser_context.parent_location,
         )
 
+    def token2loc(self, token: Token) -> Location:
+        return Location(
+            start_line=token.line,
+            start_col=token.column,
+            end_line=token.end_line,
+            end_col=token.end_column,
+            input_file=self.input_file,
+            parent_location=self.parser_context.parent_location,
+        )
+
 
 def backslash_to_hex(value: bytes) -> bytes:
     r"""
     Replaces substrings of the form '\x**' with the corresponding byte.
     """
-    pattern = br"\\x([0-9a-fA-F]{2})"
+    pattern = rb"\\x([0-9a-fA-F]{2})"
     replacer = lambda m: bytes.fromhex(m.group(1).decode("ascii"))
     return re.sub(pattern, replacer, value)

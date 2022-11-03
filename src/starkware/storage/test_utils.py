@@ -36,6 +36,9 @@ class DummyLockManager(LockManager):
             raise LockError()
         return await self.lock(name)
 
+    async def lock_exists(self, name: str) -> bool:
+        return name in self.locked.keys()
+
     async def lock(self, name: str) -> DummyLockObject:
         while name in self.locked:
             await self.locked[name]
@@ -122,7 +125,7 @@ def check_time(t0, min_t, max_t):
 
 
 @contextmanager
-def timed_call_range(min_t=0, max_t=2 ** 20):
+def timed_call_range(min_t=0, max_t=2**20):
     """
     Context manager that asserts that the code within took some amount of time, between
     min_t and max_t.

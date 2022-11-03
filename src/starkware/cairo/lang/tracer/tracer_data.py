@@ -265,10 +265,10 @@ def field_element_repr(val: int, prime: int) -> str:
     # Shift val to the range (-prime // 2, prime // 2).
     shifted_val = (val + prime // 2) % prime - (prime // 2)
     # If shifted_val is small, use decimal representation.
-    if abs(shifted_val) < 2 ** 40:
+    if abs(shifted_val) < 2**40:
         return str(shifted_val)
     # Otherwise, use hex representation (allowing a sign if the number is close to prime).
-    if abs(shifted_val) < 2 ** 100:
+    if abs(shifted_val) < 2**100:
         return hex(shifted_val)
     return hex(val)
 

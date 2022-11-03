@@ -30,12 +30,10 @@ def test_compile_and_run():
 
     cairo_program = """
 %builtins output
-func main(output_ptr : felt*) -> (output_ptr : felt*):
-    %{
-        memory[ids.output_ptr] = program_input['x'] ** 2
-    %}
-    return (output_ptr=output_ptr + 1)
-end
+func main(output_ptr: felt*) -> (output_ptr: felt*) {
+    %{ memory[ids.output_ptr] = program_input['x'] ** 2 %}
+    return (output_ptr=output_ptr + 1);
+}
 """
     program_input = {"x": 3}
 
@@ -48,7 +46,7 @@ end
             prog_input_file.flush()
             cairo_pie = client.run_program(compiled_program, prog_input_file.name)
 
-    assert get_program_output(cairo_pie) == [3 ** 2]
+    assert get_program_output(cairo_pie) == [3**2]
 
 
 def test_get_fact(monkeypatch: MonkeyPatch):

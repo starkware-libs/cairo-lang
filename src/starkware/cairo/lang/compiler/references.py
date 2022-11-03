@@ -24,6 +24,7 @@ from starkware.cairo.lang.compiler.preprocessor.reg_tracking import (
     RegChangeLike,
     RegTrackingData,
 )
+from starkware.starkware_utils.marshmallow_dataclass_fields import additional_metadata
 
 
 class FlowTrackingError(Exception):
@@ -64,15 +65,17 @@ class Reference:
     The reference may be evaluated for other locations in the program, as long as its value is well
     defined.
     For example,
-      let x = ap   # Defines a reference to ap, that is attached to the following instruction.
-      [ap] = 5; ap++
-      # Since ap increased, the reference evaluated now should be (ap - 1), rather than ap.
-      [ap] = [x] * 2; ap++ # Thus, this instruction will translate to '[ap] = [ap - 1] * 2; ap++'
-                           # and will set [ap] to 10.
+      let x = ap;   // Defines a reference to ap, that is attached to the following instruction.
+      [ap] = 5, ap++;
+      // Since ap increased, the reference evaluated now should be (ap - 1), rather than ap.
+      [ap] = [x] * 2, ap++; // Thus, this instruction will translate to '[ap] = [ap - 1] * 2, ap++;'
+                            // and will set [ap] to 10.
     """
 
     pc: int
-    value: Expression = field(metadata=dict(marshmallow_field=ExpressionAsStr(required=True)))
+    value: Expression = field(
+        metadata=additional_metadata(marshmallow_field=ExpressionAsStr(required=True))
+    )
     # The value of flow_tracking when this reference was defined.
     ap_tracking_data: RegTrackingData
 
@@ -82,13 +85,15 @@ class Reference:
     locations: List[Location] = field(
         default_factory=list,
         compare=False,
-        metadata=dict(marshmallow_field=marshmallow.fields.Field(load_only=True, dump_only=True)),
+        metadata=additional_metadata(
+            marshmallow_field=marshmallow.fields.Field(load_only=True, dump_only=True)
+        ),
     )
 
     # The code element responsible of creating this reference.
     definition_code_element: Optional[CodeElement] = field(
         default=None,
-        metadata=dict(
+        metadata=additional_metadata(
             marshmallow_field=marshmallow.fields.Nested(
                 marshmallow.Schema(),
                 dump_only=True,

@@ -11,7 +11,7 @@ def mock_starknet_contract(eth_test_utils):
 
 def test_mock_send_message_from_l2(eth_test_utils, mock_starknet_contract):
     l1_address = eth_test_utils.accounts[0].address
-    l2_address = 1
+    l2_address = 100
     payload = [56, 78]
 
     msg = StarknetMessageToL1(
@@ -31,7 +31,7 @@ def test_mock_send_message_from_l2(eth_test_utils, mock_starknet_contract):
 
 def test_mock_consume_message_to_l2(eth_test_utils, mock_starknet_contract):
     l1_address = eth_test_utils.accounts[0].address
-    l2_address = 1
+    l2_address = 100
     selector = 5
     payload = [56, 78]
 

@@ -456,11 +456,23 @@ class VirtualMachine(VirtualMachineBase):
             exec_locals["vm_enter_scope"] = self.enter_scope
             exec_locals["vm_exit_scope"] = self.exit_scope
             exec_locals.update(self.static_locals)
+            exec_locals["builtin_runners"] = self.builtin_runners
+            exec_locals.update(self.builtin_runners)
 
             self.exec_hint(hint.compiled, exec_locals, hint_index=hint_index)
 
-            # Clear ids (which will be rewritten by the next hint anyway) to make the VM instance
-            # smaller and faster to copy.
+            # There are memory leaks in 'exec_scopes'.
+            # So, we clear some fields in order to reduce the problem.
+            for name in self.builtin_runners:
+                del exec_locals[name]
+
+            del exec_locals["builtin_runners"]
+            for name in self.static_locals:
+                del exec_locals[name]
+
+            del exec_locals["vm_exit_scope"]
+            del exec_locals["vm_enter_scope"]
+            del exec_locals["vm_load_program"]
             del exec_locals["ids"]
             del exec_locals["memory"]
 

@@ -2,17 +2,18 @@ import dataclasses
 import string
 from abc import ABC, abstractmethod
 from dataclasses import field
-from typing import Dict, List, Optional, Type, Union
+from typing import Any, Dict, List, Optional, Type, Union
 
+import marshmallow
 import marshmallow.fields as mfields
 import marshmallow_dataclass
 
 from starkware.cairo.lang.compiler.debug_info import DebugInfo
 from starkware.cairo.lang.compiler.identifier_definition import (
     ConstDefinition,
-    IdentifierDefinition,
     LabelDefinition,
     ReferenceDefinition,
+    TIdentifierDefinition,
 )
 from starkware.cairo.lang.compiler.identifier_manager import (
     IdentifierManager,
@@ -23,7 +24,7 @@ from starkware.cairo.lang.compiler.preprocessor.flow import FlowTrackingDataActu
 from starkware.cairo.lang.compiler.preprocessor.preprocessor import AttributeScope
 from starkware.cairo.lang.compiler.references import Reference
 from starkware.cairo.lang.compiler.scoped_name import ScopedName, ScopedNameAsStr
-from starkware.starkware_utils.marshmallow_dataclass_fields import IntAsHex
+from starkware.starkware_utils.marshmallow_dataclass_fields import IntAsHex, additional_metadata
 from starkware.starkware_utils.serializable_dataclass import SerializableMarshmallowDataclass
 
 
@@ -31,7 +32,7 @@ from starkware.starkware_utils.serializable_dataclass import SerializableMarshma
 class CairoHint:
     code: str
     accessible_scopes: List[ScopedName] = field(
-        metadata=dict(marshmallow_field=mfields.List(ScopedNameAsStr))
+        metadata=additional_metadata(marshmallow_field=mfields.List(ScopedNameAsStr))
     )
     flow_tracking_data: FlowTrackingDataActual
 
@@ -65,7 +66,7 @@ class StrippedProgram(ProgramBase):
         return self
 
     def run_validity_checks(self):
-        assert isinstance(self.prime, int) and self.prime > 2 ** 63, "Invalid prime."
+        assert isinstance(self.prime, int) and self.prime > 2**63, "Invalid prime."
         assert isinstance(self.data, list) and all(
             isinstance(x, int) and 0 <= x < self.prime for x in self.data
         ), "Invalid program data."
@@ -81,20 +82,31 @@ class StrippedProgram(ProgramBase):
 
 @marshmallow_dataclass.dataclass(repr=False)
 class Program(ProgramBase, SerializableMarshmallowDataclass):
-    prime: int = field(metadata=dict(marshmallow_field=IntAsHex(required=True)))
+    prime: int = field(metadata=additional_metadata(marshmallow_field=IntAsHex(required=True)))
     data: List[int] = field(
-        metadata=dict(marshmallow_field=mfields.List(IntAsHex(), required=True))
+        metadata=additional_metadata(marshmallow_field=mfields.List(IntAsHex(), required=True))
     )
     hints: Dict[int, List[CairoHint]]
     builtins: List[str]
-    main_scope: ScopedName = field(metadata=dict(marshmallow_field=ScopedNameAsStr()))
+    main_scope: ScopedName = field(
+        metadata=additional_metadata(marshmallow_field=ScopedNameAsStr())
+    )
     identifiers: IdentifierManager = field(
-        metadata=dict(marshmallow_field=IdentifierManagerField())
+        metadata=additional_metadata(marshmallow_field=IdentifierManagerField())
     )
     # Holds all the allocated references in the program.
     reference_manager: ReferenceManager
+    compiler_version: Optional[str] = field(
+        metadata=dict(marshmallow_field=mfields.String(required=False, load_default=None))
+    )
     attributes: List[AttributeScope] = field(default_factory=list)
     debug_info: Optional[DebugInfo] = None
+
+    @marshmallow.post_dump
+    def remove_version(self, data: Dict[Any, Any], many: bool = False):
+        if data["compiler_version"] is None:
+            del data["compiler_version"]
+        return data
 
     def stripped(self) -> StrippedProgram:
         assert self.main is not None
@@ -108,9 +120,9 @@ class Program(ProgramBase, SerializableMarshmallowDataclass):
     def get_identifier(
         self,
         name: Union[str, ScopedName],
-        expected_type: Type[IdentifierDefinition],
+        expected_type: Type[TIdentifierDefinition],
         full_name_lookup: Optional[bool] = None,
-    ):
+    ) -> TIdentifierDefinition:
         scoped_name = name if isinstance(name, ScopedName) else ScopedName.from_string(name)
         if full_name_lookup is True:
             result = self.identifiers.root.get(scoped_name)
@@ -120,16 +132,20 @@ class Program(ProgramBase, SerializableMarshmallowDataclass):
         identifier_definition = result.identifier_definition
         assert isinstance(identifier_definition, expected_type), (
             f"'{scoped_name}' is expected to be {expected_type.TYPE}, "
-            + f"found {identifier_definition.TYPE}."  # type: ignore
-        )  # type: ignore
+            + f"found {identifier_definition.TYPE}."
+        )
         return identifier_definition
 
-    def get_label(self, name: Union[str, ScopedName], full_name_lookup: Optional[bool] = None):
+    def get_label(
+        self, name: Union[str, ScopedName], full_name_lookup: Optional[bool] = None
+    ) -> int:
         return self.get_identifier(
             name=name, expected_type=LabelDefinition, full_name_lookup=full_name_lookup
         ).pc
 
-    def get_const(self, name: Union[str, ScopedName], full_name_lookup: Optional[bool] = None):
+    def get_const(
+        self, name: Union[str, ScopedName], full_name_lookup: Optional[bool] = None
+    ) -> int:
         return self.get_identifier(
             name=name, expected_type=ConstDefinition, full_name_lookup=full_name_lookup
         ).value

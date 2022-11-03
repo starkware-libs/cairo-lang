@@ -1,5 +1,6 @@
 import pytest
 
+from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.cairo.lang.compiler.cairo_compile import compile_cairo
 from starkware.cairo.lang.vm.cairo_runner import CairoRunner
 from starkware.cairo.lang.vm.output_builtin_runner import OutputBuiltinRunner
@@ -8,15 +9,14 @@ from starkware.cairo.lang.vm.relocatable import RelocatableValue
 
 @pytest.fixture
 def runner_and_output_runner():
-    PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
     code = """
 %builtins output
 
-func main{output_ptr}():
-  ret
-end
+func main{output_ptr}() {
+    ret;
+}
 """
-    program = compile_cairo(code=[(code, "")], prime=PRIME, add_start=True)
+    program = compile_cairo(code=[(code, "")], prime=DEFAULT_PRIME, add_start=True)
     runner = CairoRunner(
         program=program, layout="plain", proof_mode=True, allow_missing_builtins=True
     )
