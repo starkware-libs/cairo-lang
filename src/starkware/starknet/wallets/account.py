@@ -29,7 +29,12 @@ class Account(ABC):
 
     @abstractmethod
     async def deploy_account(
-        self, max_fee: int, version: int, chain_id: int, dry_run: bool = False
+        self,
+        max_fee: int,
+        version: int,
+        chain_id: int,
+        dry_run: bool = False,
+        force_deploy: bool = False,
     ) -> Tuple[DeployAccount, int]:
         """
         Prepares the deployment of the initialized account contract to the network.

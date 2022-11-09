@@ -65,6 +65,22 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         )
         return FeeEstimationInfo.loads(data=raw_response)
 
+    async def estimate_fee_bulk(
+        self,
+        txs: List[AccountTransaction],
+        block_hash: Optional[CastableToHash] = None,
+        block_number: Optional[BlockIdentifier] = None,
+    ) -> List[FeeEstimationInfo]:
+        formatted_block_named_argument = get_formatted_block_named_argument(
+            block_hash=block_hash, block_number=block_number
+        )
+        raw_response = await self._send_request(
+            send_method="POST",
+            uri=f"/estimate_fee_bulk?{formatted_block_named_argument}",
+            data=AccountTransaction.Schema().dumps(obj=txs, many=True),
+        )
+        return FeeEstimationInfo.Schema().load(data=raw_response, many=True)
+
     async def estimate_message_fee(
         self,
         call_l1_handler: CallL1Handler,

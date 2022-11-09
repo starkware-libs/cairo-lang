@@ -1,8 +1,10 @@
 import contextlib
 import dataclasses
+import os
 from abc import ABC, abstractmethod
 from typing import (
     Callable,
+    Dict,
     Iterable,
     Iterator,
     List,
@@ -19,6 +21,7 @@ from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.common.structs import CairoStructFactory, CairoStructProxy
 from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypeFelt, TypePointer
 from starkware.cairo.lang.compiler.identifier_definition import StructDefinition
+from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.vm.memory_segments import MemorySegmentManager
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 from starkware.python.utils import assert_exhausted, camel_to_snake_case, safe_zip, to_bytes
@@ -40,7 +43,6 @@ from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
 from starkware.starknet.core.os.contract_address.contract_address import (
     calculate_contract_address_from_hash,
 )
-from starkware.starknet.core.os.os_program import get_os_program
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public.abi import CONSTRUCTOR_ENTRY_POINT_SELECTOR
@@ -49,6 +51,7 @@ from starkware.starknet.storage.starknet_storage import OsSingleStarknetStorage
 from starkware.starkware_utils.error_handling import StarkException, stark_assert
 
 TCallable = TypeVar("TCallable", bound=Callable)
+STARKNET_SYSCALLS_COMPILED_PATH = os.path.join(os.path.dirname(__file__), "starknet_syscalls.json")
 
 
 @dataclasses.dataclass
@@ -57,6 +60,115 @@ class SysCallInfo:
     syscall_request_struct: CairoStructProxy
     # The size of the system call struct including both the request and the response.
     syscall_size: int
+
+
+def get_syscall_structs_and_info() -> Tuple[CairoStructProxy, Dict[str, SysCallInfo]]:
+    with open(STARKNET_SYSCALLS_COMPILED_PATH, "r") as file:
+        syscall_program = Program.loads(data=file.read())
+
+    syscall_structs = CairoStructFactory.from_program(
+        program=syscall_program, additional_imports=[]
+    ).structs
+
+    def get_selector(syscall_name: str):
+        return syscall_program.get_const(
+            name=f"__main__.{syscall_name.upper()}_SELECTOR",
+            full_name_lookup=True,
+        )
+
+    syscall_info = {
+        "call_contract": SysCallInfo(
+            selector=get_selector("call_contract"),
+            syscall_request_struct=syscall_structs.CallContractRequest,
+            syscall_size=syscall_structs.CallContract.size,
+        ),
+        "delegate_call": SysCallInfo(
+            selector=get_selector("delegate_call"),
+            syscall_request_struct=syscall_structs.CallContractRequest,
+            syscall_size=syscall_structs.CallContract.size,
+        ),
+        "delegate_l1_handler": SysCallInfo(
+            selector=get_selector("delegate_l1_handler"),
+            syscall_request_struct=syscall_structs.CallContractRequest,
+            syscall_size=syscall_structs.CallContract.size,
+        ),
+        "deploy": SysCallInfo(
+            selector=get_selector("deploy"),
+            syscall_request_struct=syscall_structs.DeployRequest,
+            syscall_size=syscall_structs.Deploy.size,
+        ),
+        "emit_event": SysCallInfo(
+            selector=get_selector("emit_event"),
+            syscall_request_struct=syscall_structs.EmitEvent,
+            syscall_size=syscall_structs.EmitEvent.size,
+        ),
+        "get_caller_address": SysCallInfo(
+            selector=get_selector("get_caller_address"),
+            syscall_request_struct=syscall_structs.GetCallerAddressRequest,
+            syscall_size=syscall_structs.GetCallerAddress.size,
+        ),
+        "get_sequencer_address": SysCallInfo(
+            selector=get_selector("get_sequencer_address"),
+            syscall_request_struct=syscall_structs.GetSequencerAddressRequest,
+            syscall_size=syscall_structs.GetSequencerAddress.size,
+        ),
+        "get_block_number": SysCallInfo(
+            selector=get_selector("get_block_number"),
+            syscall_request_struct=syscall_structs.GetBlockNumberRequest,
+            syscall_size=syscall_structs.GetBlockNumber.size,
+        ),
+        "get_block_timestamp": SysCallInfo(
+            selector=get_selector("get_block_timestamp"),
+            syscall_request_struct=syscall_structs.GetBlockTimestampRequest,
+            syscall_size=syscall_structs.GetBlockTimestamp.size,
+        ),
+        "get_contract_address": SysCallInfo(
+            selector=get_selector("get_contract_address"),
+            syscall_request_struct=syscall_structs.GetContractAddressRequest,
+            syscall_size=syscall_structs.GetContractAddress.size,
+        ),
+        "get_tx_info": SysCallInfo(
+            selector=get_selector("get_tx_info"),
+            syscall_request_struct=syscall_structs.GetTxInfoRequest,
+            syscall_size=syscall_structs.GetTxInfo.size,
+        ),
+        "get_tx_signature": SysCallInfo(
+            selector=get_selector("get_tx_signature"),
+            syscall_request_struct=syscall_structs.GetTxSignatureRequest,
+            syscall_size=syscall_structs.GetTxSignature.size,
+        ),
+        "library_call": SysCallInfo(
+            selector=get_selector("library_call"),
+            syscall_request_struct=syscall_structs.LibraryCallRequest,
+            syscall_size=syscall_structs.LibraryCall.size,
+        ),
+        "library_call_l1_handler": SysCallInfo(
+            selector=get_selector("library_call_l1_handler"),
+            syscall_request_struct=syscall_structs.LibraryCallRequest,
+            syscall_size=syscall_structs.LibraryCall.size,
+        ),
+        "send_message_to_l1": SysCallInfo(
+            selector=get_selector("send_message_to_l1"),
+            syscall_request_struct=syscall_structs.SendMessageToL1SysCall,
+            syscall_size=syscall_structs.SendMessageToL1SysCall.size,
+        ),
+        "storage_read": SysCallInfo(
+            selector=get_selector("storage_read"),
+            syscall_request_struct=syscall_structs.StorageReadRequest,
+            syscall_size=syscall_structs.StorageRead.size,
+        ),
+        "storage_write": SysCallInfo(
+            selector=get_selector("storage_write"),
+            syscall_request_struct=syscall_structs.StorageWrite,
+            syscall_size=syscall_structs.StorageWrite.size,
+        ),
+    }
+
+    return syscall_structs, syscall_info
+
+
+# Global variables; cached at this point for child processes.
+SYSCALL_STRUCTS, SYSCALL_INFO = get_syscall_structs_and_info()
 
 
 @dataclasses.dataclass
@@ -75,145 +187,7 @@ class SysCallHandlerBase(ABC):
     """
 
     def __init__(self, block_info: BlockInfo):
-        os_program = get_os_program()
-
         self.block_info = block_info
-
-        self.structs = CairoStructFactory.from_program(
-            program=os_program,
-            additional_imports=[
-                "starkware.starknet.common.syscalls.CallContract",
-                "starkware.starknet.common.syscalls.CallContractRequest",
-                "starkware.starknet.common.syscalls.CallContractResponse",
-                "starkware.starknet.common.syscalls.Deploy",
-                "starkware.starknet.common.syscalls.DeployRequest",
-                "starkware.starknet.common.syscalls.DeployResponse",
-                "starkware.starknet.common.syscalls.EmitEvent",
-                "starkware.starknet.common.syscalls.GetCallerAddress",
-                "starkware.starknet.common.syscalls.GetCallerAddressRequest",
-                "starkware.starknet.common.syscalls.GetCallerAddressResponse",
-                "starkware.starknet.common.syscalls.GetSequencerAddress",
-                "starkware.starknet.common.syscalls.GetSequencerAddressRequest",
-                "starkware.starknet.common.syscalls.GetSequencerAddressResponse",
-                "starkware.starknet.common.syscalls.GetBlockNumber",
-                "starkware.starknet.common.syscalls.GetBlockNumberRequest",
-                "starkware.starknet.common.syscalls.GetBlockNumberResponse",
-                "starkware.starknet.common.syscalls.GetBlockTimestamp",
-                "starkware.starknet.common.syscalls.GetBlockTimestampRequest",
-                "starkware.starknet.common.syscalls.GetBlockTimestampResponse",
-                "starkware.starknet.common.syscalls.GetContractAddress",
-                "starkware.starknet.common.syscalls.GetContractAddressRequest",
-                "starkware.starknet.common.syscalls.GetContractAddressResponse",
-                "starkware.starknet.common.syscalls.GetTxInfo",
-                "starkware.starknet.common.syscalls.GetTxInfoRequest",
-                "starkware.starknet.common.syscalls.GetTxInfoResponse",
-                "starkware.starknet.common.syscalls.GetTxSignature",
-                "starkware.starknet.common.syscalls.GetTxSignatureRequest",
-                "starkware.starknet.common.syscalls.GetTxSignatureResponse",
-                "starkware.starknet.common.syscalls.LibraryCall",
-                "starkware.starknet.common.syscalls.LibraryCallRequest",
-                "starkware.starknet.common.syscalls.SendMessageToL1SysCall",
-                "starkware.starknet.common.syscalls.StorageRead",
-                "starkware.starknet.common.syscalls.StorageReadRequest",
-                "starkware.starknet.common.syscalls.StorageReadResponse",
-                "starkware.starknet.common.syscalls.StorageWrite",
-                "starkware.starknet.common.syscalls.TxInfo",
-            ],
-        ).structs
-
-        def get_selector(syscall_name: str):
-            return os_program.get_const(
-                name=f"starkware.starknet.common.syscalls.{syscall_name.upper()}_SELECTOR",
-                full_name_lookup=True,
-            )
-
-        self.syscall_info = {
-            "call_contract": SysCallInfo(
-                selector=get_selector("call_contract"),
-                syscall_request_struct=self.structs.CallContractRequest,
-                syscall_size=self.structs.CallContract.size,
-            ),
-            "delegate_call": SysCallInfo(
-                selector=get_selector("delegate_call"),
-                syscall_request_struct=self.structs.CallContractRequest,
-                syscall_size=self.structs.CallContract.size,
-            ),
-            "delegate_l1_handler": SysCallInfo(
-                selector=get_selector("delegate_l1_handler"),
-                syscall_request_struct=self.structs.CallContractRequest,
-                syscall_size=self.structs.CallContract.size,
-            ),
-            "deploy": SysCallInfo(
-                selector=get_selector("deploy"),
-                syscall_request_struct=self.structs.DeployRequest,
-                syscall_size=self.structs.Deploy.size,
-            ),
-            "emit_event": SysCallInfo(
-                selector=get_selector("emit_event"),
-                syscall_request_struct=self.structs.EmitEvent,
-                syscall_size=self.structs.EmitEvent.size,
-            ),
-            "get_caller_address": SysCallInfo(
-                selector=get_selector("get_caller_address"),
-                syscall_request_struct=self.structs.GetCallerAddressRequest,
-                syscall_size=self.structs.GetCallerAddress.size,
-            ),
-            "get_sequencer_address": SysCallInfo(
-                selector=get_selector("get_sequencer_address"),
-                syscall_request_struct=self.structs.GetSequencerAddressRequest,
-                syscall_size=self.structs.GetSequencerAddress.size,
-            ),
-            "get_block_number": SysCallInfo(
-                selector=get_selector("get_block_number"),
-                syscall_request_struct=self.structs.GetBlockNumberRequest,
-                syscall_size=self.structs.GetBlockNumber.size,
-            ),
-            "get_block_timestamp": SysCallInfo(
-                selector=get_selector("get_block_timestamp"),
-                syscall_request_struct=self.structs.GetBlockTimestampRequest,
-                syscall_size=self.structs.GetBlockTimestamp.size,
-            ),
-            "get_contract_address": SysCallInfo(
-                selector=get_selector("get_contract_address"),
-                syscall_request_struct=self.structs.GetContractAddressRequest,
-                syscall_size=self.structs.GetContractAddress.size,
-            ),
-            "get_tx_info": SysCallInfo(
-                selector=get_selector("get_tx_info"),
-                syscall_request_struct=self.structs.GetTxInfoRequest,
-                syscall_size=self.structs.GetTxInfo.size,
-            ),
-            "get_tx_signature": SysCallInfo(
-                selector=get_selector("get_tx_signature"),
-                syscall_request_struct=self.structs.GetTxSignatureRequest,
-                syscall_size=self.structs.GetTxSignature.size,
-            ),
-            "library_call": SysCallInfo(
-                selector=get_selector("library_call"),
-                syscall_request_struct=self.structs.LibraryCallRequest,
-                syscall_size=self.structs.LibraryCall.size,
-            ),
-            "library_call_l1_handler": SysCallInfo(
-                selector=get_selector("library_call_l1_handler"),
-                syscall_request_struct=self.structs.LibraryCallRequest,
-                syscall_size=self.structs.LibraryCall.size,
-            ),
-            "send_message_to_l1": SysCallInfo(
-                selector=get_selector("send_message_to_l1"),
-                syscall_request_struct=self.structs.SendMessageToL1SysCall,
-                syscall_size=self.structs.SendMessageToL1SysCall.size,
-            ),
-            "storage_read": SysCallInfo(
-                selector=get_selector("storage_read"),
-                syscall_request_struct=self.structs.StorageReadRequest,
-                syscall_size=self.structs.StorageRead.size,
-            ),
-            "storage_write": SysCallInfo(
-                selector=get_selector("storage_write"),
-                syscall_request_struct=self.structs.StorageWrite,
-                syscall_size=self.structs.StorageWrite.size,
-            ),
-        }
 
     # Public API.
 
@@ -243,7 +217,7 @@ class SysCallHandlerBase(ABC):
         Handles the deploy system call.
         """
         contract_address = self._deploy(segments=segments, syscall_ptr=syscall_ptr)
-        response = self.structs.DeployResponse(
+        response = SYSCALL_STRUCTS.DeployResponse(
             contract_address=contract_address,
             constructor_retdata_size=0,
             constructor_retdata=0,
@@ -264,7 +238,7 @@ class SysCallHandlerBase(ABC):
         """
         caller_address = self._get_caller_address(segments=segments, syscall_ptr=syscall_ptr)
 
-        response = self.structs.GetCallerAddressResponse(caller_address=caller_address)
+        response = SYSCALL_STRUCTS.GetCallerAddressResponse(caller_address=caller_address)
         self._write_syscall_response(
             syscall_name="GetCallerAddress",
             response=response,
@@ -275,7 +249,7 @@ class SysCallHandlerBase(ABC):
     def get_contract_address(self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue):
         contract_address = self._get_contract_address(segments=segments, syscall_ptr=syscall_ptr)
 
-        response = self.structs.GetContractAddressResponse(contract_address=contract_address)
+        response = SYSCALL_STRUCTS.GetContractAddressResponse(contract_address=contract_address)
         self._write_syscall_response(
             syscall_name="GetContractAddress",
             response=response,
@@ -293,7 +267,7 @@ class SysCallHandlerBase(ABC):
 
         block_number = self.block_info.block_number
 
-        response = self.structs.GetBlockNumberResponse(block_number=block_number)
+        response = SYSCALL_STRUCTS.GetBlockNumberResponse(block_number=block_number)
         self._write_syscall_response(
             syscall_name="GetBlockNumber",
             response=response,
@@ -309,7 +283,7 @@ class SysCallHandlerBase(ABC):
             syscall_name="get_sequencer_address", segments=segments, syscall_ptr=syscall_ptr
         )
 
-        response = self.structs.GetSequencerAddressResponse(
+        response = SYSCALL_STRUCTS.GetSequencerAddressResponse(
             sequencer_address=0
             if self.block_info.sequencer_address is None
             else self.block_info.sequencer_address
@@ -329,7 +303,9 @@ class SysCallHandlerBase(ABC):
             syscall_name="get_tx_info", segments=segments, syscall_ptr=syscall_ptr
         )
 
-        response = self.structs.GetTxInfoResponse(tx_info=self._get_tx_info_ptr(segments=segments))
+        response = SYSCALL_STRUCTS.GetTxInfoResponse(
+            tx_info=self._get_tx_info_ptr(segments=segments)
+        )
         self._write_syscall_response(
             syscall_name="GetTxInfo",
             response=response,
@@ -350,7 +326,7 @@ class SysCallHandlerBase(ABC):
 
         block_timestamp = self.block_info.block_timestamp
 
-        response = self.structs.GetBlockTimestampResponse(block_timestamp=block_timestamp)
+        response = SYSCALL_STRUCTS.GetBlockTimestampResponse(block_timestamp=block_timestamp)
         self._write_syscall_response(
             syscall_name="GetBlockTimestamp",
             response=response,
@@ -366,8 +342,8 @@ class SysCallHandlerBase(ABC):
             syscall_name="get_tx_signature", segments=segments, syscall_ptr=syscall_ptr
         )
         tx_info_ptr = self._get_tx_info_ptr(segments=segments)
-        tx_info = self.structs.TxInfo.from_ptr(memory=segments.memory, addr=tx_info_ptr)
-        response = self.structs.GetTxSignatureResponse(
+        tx_info = SYSCALL_STRUCTS.TxInfo.from_ptr(memory=segments.memory, addr=tx_info_ptr)
+        response = SYSCALL_STRUCTS.GetTxSignatureResponse(
             signature_len=tx_info.signature_len, signature=tx_info.signature
         )
 
@@ -415,7 +391,7 @@ class SysCallHandlerBase(ABC):
         )
 
         value = self._storage_read(cast(int, request.address))
-        response = self.structs.StorageReadResponse(value=value)
+        response = SYSCALL_STRUCTS.StorageReadResponse(value=value)
 
         self._write_syscall_response(
             syscall_name="StorageRead",
@@ -447,7 +423,7 @@ class SysCallHandlerBase(ABC):
         """
         Returns the system call request written in the syscall segment, starting at syscall_ptr.
         """
-        syscall_info = self.syscall_info[syscall_name]
+        syscall_info = SYSCALL_INFO[syscall_name]
         return syscall_info.syscall_request_struct.from_ptr(
             memory=segments.memory, addr=syscall_ptr
         )
@@ -469,10 +445,10 @@ class SysCallHandlerBase(ABC):
         syscall_ptr: RelocatableValue,
     ):
         assert (
-            camel_to_snake_case(syscall_name) in self.syscall_info
+            camel_to_snake_case(syscall_name) in SYSCALL_INFO
         ), f"Illegal system call {syscall_name}."
 
-        syscall_struct: CairoStructProxy = getattr(self.structs, syscall_name)
+        syscall_struct: CairoStructProxy = getattr(SYSCALL_STRUCTS, syscall_name)
         response_offset = syscall_struct.struct_definition_.members["response"].offset
         segments.write_arg(ptr=syscall_ptr + response_offset, arg=response)
 
@@ -499,7 +475,7 @@ class SysCallHandlerBase(ABC):
         retdata = self._call_contract(
             segments=segments, syscall_ptr=syscall_ptr, syscall_name=syscall_name
         )
-        response = self.structs.CallContractResponse(
+        response = SYSCALL_STRUCTS.CallContractResponse(
             retdata_size=len(retdata),
             retdata=self._allocate_segment(segments=segments, data=retdata),
         )
@@ -640,7 +616,7 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
             syscall_ptr == self.expected_syscall_ptr
         ), f"Bad syscall_ptr, Expected {self.expected_syscall_ptr}, got {syscall_ptr}."
 
-        syscall_info = self.syscall_info[syscall_name]
+        syscall_info = SYSCALL_INFO[syscall_name]
         self.expected_syscall_ptr += syscall_info.syscall_size
 
         selector = request.selector
@@ -852,7 +828,7 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
 
     def _get_tx_info_ptr(self, segments: MemorySegmentManager) -> RelocatableValue:
         if self.tx_info_ptr is None:
-            tx_info = self.structs.TxInfo(
+            tx_info = SYSCALL_STRUCTS.TxInfo(
                 version=self.tx_execution_context.version,
                 account_contract_address=self.tx_execution_context.account_contract_address,
                 max_fee=self.tx_execution_context.max_fee,

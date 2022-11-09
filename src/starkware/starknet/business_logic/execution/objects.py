@@ -410,7 +410,7 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
         return CallInfo.get_state_selector_of_many(call_infos=self.non_optional_calls)
 
     def get_executed_class_hashes(self) -> FrozenSet[bytes]:
-        return frozenset(self.get_state_selector().class_hashes)
+        return self.get_state_selector().class_hashes
 
     def get_visited_storage_entries(self) -> Set[StorageEntry]:
         return CallInfo.get_visited_storage_entries_of_many(call_infos=self.non_optional_calls)

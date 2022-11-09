@@ -8,6 +8,7 @@ from starkware.python.object_utils import generic_object_repr
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
 from starkware.starkware_utils.config_base import Config
 from starkware.starkware_utils.validated_dataclass import (
+    HashableMarshmallowDataclass,
     ValidatedDataclass,
     ValidatedMarshmallowDataclass,
 )
@@ -206,7 +207,7 @@ class SharedStateBase(ValidatedMarshmallowDataclass):
         pass
 
 
-class EverestStateDiff(ValidatedMarshmallowDataclass):
+class EverestStateDiff(HashableMarshmallowDataclass):
     """
     Represents uncommitted changes to a state.
     """

@@ -5,21 +5,21 @@
                 "range_check_builtin": 17
             },
             "n_memory_holes": 0,
-            "n_steps": 543
+            "n_steps": 545
         },
         "delegate_call": {
             "builtin_instance_counter": {
                 "range_check_builtin": 17
             },
             "n_memory_holes": 0,
-            "n_steps": 565
+            "n_steps": 567
         },
         "delegate_l1_handler": {
             "builtin_instance_counter": {
                 "range_check_builtin": 13
             },
             "n_memory_holes": 0,
-            "n_steps": 544
+            "n_steps": 546
         },
         "deploy": {
             "builtin_instance_counter": {
@@ -27,7 +27,7 @@
                 "range_check_builtin": 16
             },
             "n_memory_holes": 0,
-            "n_steps": 798
+            "n_steps": 800
         },
         "emit_event": {
             "builtin_instance_counter": {},
@@ -74,14 +74,14 @@
                 "range_check_builtin": 17
             },
             "n_memory_holes": 0,
-            "n_steps": 533
+            "n_steps": 535
         },
         "library_call_l1_handler": {
             "builtin_instance_counter": {
                 "range_check_builtin": 13
             },
             "n_memory_holes": 0,
-            "n_steps": 512
+            "n_steps": 514
         },
         "send_message_to_l1": {
             "builtin_instance_counter": {},
@@ -106,7 +106,7 @@
                 "range_check_builtin": 57
             },
             "n_memory_holes": 0,
-            "n_steps": 2334
+            "n_steps": 2336
         },
         "DEPLOY": {
             "builtin_instance_counter": {},
@@ -119,7 +119,7 @@
                 "range_check_builtin": 74
             },
             "n_memory_holes": 0,
-            "n_steps": 3096
+            "n_steps": 3098
         },
         "INVOKE_FUNCTION": {
             "builtin_instance_counter": {
@@ -127,7 +127,7 @@
                 "range_check_builtin": 70
             },
             "n_memory_holes": 0,
-            "n_steps": 2835
+            "n_steps": 2839
         },
         "L1_HANDLER": {
             "builtin_instance_counter": {
@@ -135,7 +135,7 @@
                 "range_check_builtin": 13
             },
             "n_memory_holes": 0,
-            "n_steps": 875
+            "n_steps": 877
         }
     }
 }

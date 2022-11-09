@@ -21,13 +21,6 @@ class StateReader(ABC):
         """
 
     @abstractmethod
-    async def _get_raw_contract_class(self, class_hash: bytes) -> bytes:
-        """
-        Returns the raw bytes of the contract class object of the given class hash.
-        Raises an exception if said class was not declared.
-        """
-
-    @abstractmethod
     async def get_class_hash_at(self, contract_address: int) -> bytes:
         """
         Returns the class hash of the contract class at the given address.
@@ -97,10 +90,6 @@ class SyncStateReader(ABC):
 
     @abstractmethod
     def get_contract_class(self, class_hash: bytes) -> ContractClass:
-        pass
-
-    @abstractmethod
-    def _get_raw_contract_class(self, class_hash: bytes) -> bytes:
         pass
 
     @abstractmethod

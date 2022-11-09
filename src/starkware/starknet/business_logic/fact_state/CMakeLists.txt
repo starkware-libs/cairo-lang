@@ -9,7 +9,6 @@ python_lib(starknet_business_logic_fact_state_lib
     everest_business_logic_lib
     starknet_business_logic_patricia_state_lib
     starknet_business_logic_state_lib
-    starknet_contract_class_lib
     starknet_definitions_lib
     starknet_general_config_lib
     starknet_storage_lib

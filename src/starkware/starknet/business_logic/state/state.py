@@ -1,7 +1,7 @@
 import asyncio
 import contextlib
 from collections import ChainMap
-from typing import Dict, Iterator, List, Mapping, Set, Tuple
+from typing import Dict, Iterator, List, Mapping, MutableMapping, Optional, Set, Tuple
 
 from starkware.python.utils import execute_coroutine_threadsafe
 from starkware.starknet.business_logic.state.state_api import (
@@ -11,11 +11,12 @@ from starkware.starknet.business_logic.state.state_api import (
     SyncStateReader,
 )
 from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
-from starkware.starknet.definitions import constants
+from starkware.starknet.definitions import constants, fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.services.api.contract_class import ContractClass
 from starkware.starkware_utils.error_handling import stark_assert
 
+ContractClassCache = MutableMapping[bytes, ContractClass]
 StorageEntry = Tuple[int, int]  # (contract_address, key).
 
 
@@ -42,12 +43,6 @@ class StateSyncifier(SyncState):
     def get_contract_class(self, class_hash: bytes) -> ContractClass:
         return execute_coroutine_threadsafe(
             coroutine=self.async_state.get_contract_class(class_hash=class_hash), loop=self.loop
-        )
-
-    def _get_raw_contract_class(self, class_hash: bytes) -> bytes:
-        return execute_coroutine_threadsafe(
-            coroutine=self.async_state._get_raw_contract_class(class_hash=class_hash),
-            loop=self.loop,
         )
 
     def get_class_hash_at(self, contract_address: int) -> bytes:
@@ -105,9 +100,6 @@ class StateCache:
     """
 
     def __init__(self):
-        self.contract_classes: Dict[bytes, ContractClass] = {}
-        self.raw_contract_classes: Dict[bytes, bytes] = {}
-
         # Reader's cached information; initial values, read before any write operation (per cell).
         self._class_hash_initial_values: Dict[int, bytes] = {}
         self._nonce_initial_values: Dict[int, int] = {}
@@ -133,19 +125,16 @@ class StateCache:
         )
 
     def update_writes_from_other(self, other: "StateCache"):
-        self.contract_classes.update(other.contract_classes)
         self._class_hash_writes.update(other._class_hash_writes)
         self._nonce_writes.update(other._nonce_writes)
         self._storage_writes.update(other._storage_writes)
 
     def update_writes(
         self,
-        contract_classes: Mapping[bytes, ContractClass],
         address_to_class_hash: Mapping[int, bytes],
         address_to_nonce: Mapping[int, int],
         storage_updates: Mapping[Tuple[int, int], int],
     ):
-        self.contract_classes.update(contract_classes)
         self._class_hash_writes.update(address_to_class_hash)
         self._nonce_writes.update(address_to_nonce)
         self._storage_writes.update(storage_updates)
@@ -157,39 +146,42 @@ class StateCache:
             *[address for address, _key in self.storage_view.keys()],
         }
 
-    def get_accessed_class_hashes(self) -> Set[bytes]:
-        return set(self.contract_classes.keys())
-
 
 class CachedState(State):
     """
     A cached implementation of the State API. See State's documentation.
     """
 
-    def __init__(self, block_info: BlockInfo, state_reader: StateReader):
+    def __init__(
+        self,
+        block_info: BlockInfo,
+        state_reader: StateReader,
+        contract_class_cache: Optional[ContractClassCache] = None,
+    ):
         self.block_info = block_info
         self.state_reader = state_reader
         self.cache = StateCache()
+        self._contract_classes: Optional[ContractClassCache] = contract_class_cache
+
+    @property
+    def contract_classes(self) -> ContractClassCache:
+        assert self._contract_classes is not None, "contract_classes mapping is not initialized."
+        return self._contract_classes
+
+    def set_contract_class_cache(self, contract_classes: ContractClassCache):
+        assert self._contract_classes is None, "contract_classes mapping is already initialized."
+        self._contract_classes = contract_classes
 
     def update_block_info(self, block_info: BlockInfo):
         self.block_info = block_info
 
     async def get_contract_class(self, class_hash: bytes) -> ContractClass:
-        if class_hash not in self.cache.contract_classes:
-            self.cache.contract_classes[class_hash] = await self.state_reader.get_contract_class(
+        if class_hash not in self.contract_classes:
+            self.contract_classes[class_hash] = await self.state_reader.get_contract_class(
                 class_hash=class_hash
             )
 
-        return self.cache.contract_classes[class_hash]
-
-    async def _get_raw_contract_class(self, class_hash: bytes) -> bytes:
-        if class_hash not in self.cache.raw_contract_classes:
-            raw_contract_class = await self.state_reader._get_raw_contract_class(
-                class_hash=class_hash
-            )
-            self.cache.raw_contract_classes[class_hash] = raw_contract_class
-
-        return self.cache.raw_contract_classes[class_hash]
+        return self.contract_classes[class_hash]
 
     async def get_class_hash_at(self, contract_address: int) -> bytes:
         if contract_address not in self.cache.address_to_class_hash:
@@ -218,7 +210,7 @@ class CachedState(State):
         return self.cache.storage_view[address_key_pair]
 
     async def set_contract_class(self, class_hash: bytes, contract_class: ContractClass):
-        self.cache.contract_classes[class_hash] = contract_class
+        self.contract_classes[class_hash] = contract_class
 
     async def deploy_contract(self, contract_address: int, class_hash: bytes):
         stark_assert(
@@ -231,7 +223,10 @@ class CachedState(State):
         stark_assert(
             current_class_hash == constants.UNINITIALIZED_CLASS_HASH,
             code=StarknetErrorCode.CONTRACT_ADDRESS_UNAVAILABLE,
-            message=f"Requested contract address {contract_address} is unavailable for deployment.",
+            message=(
+                f"Requested contract address {fields.L2AddressField.format(contract_address)} "
+                "is unavailable for deployment."
+            ),
         )
 
         self.cache._class_hash_writes[contract_address] = class_hash
@@ -245,7 +240,11 @@ class CachedState(State):
 
     def _copy(self) -> "CachedState":
         # Note that the reader's cache may be updated by this copy's read requests.
-        return CachedState(block_info=self.block_info, state_reader=self)
+        return CachedState(
+            block_info=self.block_info,
+            state_reader=self,
+            contract_class_cache=self.contract_classes,
+        )
 
     def _apply(self, parent: "CachedState"):
         """
@@ -269,33 +268,40 @@ class CachedSyncState(SyncState):
     A cached implementation of the SyncState API. See CachedState's documentation.
     """
 
-    def __init__(self, block_info: BlockInfo, state_reader: SyncStateReader):
+    def __init__(
+        self,
+        block_info: BlockInfo,
+        state_reader: SyncStateReader,
+        contract_class_cache: Optional[ContractClassCache] = None,
+    ):
         self._block_info = block_info
         self.state_reader = state_reader
         self.cache = StateCache()
+        self._contract_classes: Optional[ContractClassCache] = contract_class_cache
 
     @property
     def block_info(self) -> BlockInfo:
         return self._block_info
 
+    @property
+    def contract_classes(self) -> ContractClassCache:
+        assert self._contract_classes is not None, "contract_classes mapping is not initialized."
+        return self._contract_classes
+
     def update_block_info(self, block_info: BlockInfo):
         self._block_info = block_info
 
+    def set_contract_class_cache(self, contract_classes: ContractClassCache):
+        assert self._contract_classes is None, "contract_classes mapping is already initialized."
+        self._contract_classes = contract_classes
+
     def get_contract_class(self, class_hash: bytes) -> ContractClass:
-        if class_hash not in self.cache.contract_classes:
-            self.cache.contract_classes[class_hash] = self.state_reader.get_contract_class(
+        if class_hash not in self.contract_classes:
+            self.contract_classes[class_hash] = self.state_reader.get_contract_class(
                 class_hash=class_hash
             )
 
-        return self.cache.contract_classes[class_hash]
-
-    def _get_raw_contract_class(self, class_hash: bytes) -> bytes:
-        if class_hash not in self.cache.raw_contract_classes:
-            self.cache.raw_contract_classes[class_hash] = self.state_reader._get_raw_contract_class(
-                class_hash=class_hash
-            )
-
-        return self.cache.raw_contract_classes[class_hash]
+        return self.contract_classes[class_hash]
 
     def get_class_hash_at(self, contract_address: int) -> bytes:
         if contract_address not in self.cache.address_to_class_hash:
@@ -323,7 +329,7 @@ class CachedSyncState(SyncState):
         return self.cache.storage_view[address_key_pair]
 
     def set_contract_class(self, class_hash: bytes, contract_class: ContractClass):
-        self.cache.contract_classes[class_hash] = contract_class
+        self.contract_classes[class_hash] = contract_class
 
     def deploy_contract(self, contract_address: int, class_hash: bytes):
         stark_assert(
@@ -336,7 +342,10 @@ class CachedSyncState(SyncState):
         stark_assert(
             current_class_hash == constants.UNINITIALIZED_CLASS_HASH,
             code=StarknetErrorCode.CONTRACT_ADDRESS_UNAVAILABLE,
-            message=f"Requested contract address {contract_address} is unavailable for deployment.",
+            message=(
+                f"Requested contract address {fields.L2AddressField.format(contract_address)} "
+                "is unavailable for deployment."
+            ),
         )
 
         self.cache._class_hash_writes[contract_address] = class_hash
@@ -430,9 +439,6 @@ class UpdatesTrackerState(SyncState):
 
     def update_block_info(self, block_info: BlockInfo):
         return self.state.update_block_info(block_info=block_info)
-
-    def _get_raw_contract_class(self, class_hash: bytes) -> bytes:
-        return self.state._get_raw_contract_class(class_hash=class_hash)
 
     def get_contract_class(self, class_hash: bytes) -> ContractClass:
         return self.state.get_contract_class(class_hash=class_hash)

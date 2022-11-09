@@ -140,12 +140,17 @@ differently.
         return contract_address
 
     async def deploy_account(
-        self, max_fee: int, version: int, chain_id: int, dry_run: bool = False
+        self,
+        max_fee: int,
+        version: int,
+        chain_id: int,
+        dry_run: bool = False,
+        force_deploy: bool = False,
     ) -> Tuple[DeployAccount, int]:
         # Read the account file.
         accounts = self._get_accounts()
         account_to_deploy = self._get_account_given_accounts(accounts=accounts)
-        tx = sign_deploy_account_tx(
+        actual_address, tx = sign_deploy_account_tx(
             private_key=int(account_to_deploy["private_key"], 16),
             public_key=int(account_to_deploy["public_key"], 16),
             class_hash=compute_class_hash(account_contract),
@@ -155,14 +160,16 @@ differently.
             chain_id=chain_id,
         )
         contract_address = int(account_to_deploy["address"], 16)
+        assert contract_address == actual_address
 
         if dry_run:
             return tx, contract_address
 
-        assert account_to_deploy["deployed"] is False, (
-            f"Account '{self.account_name}' for network '{self.starknet_context.network_id}' "
-            "is already deployed."
-        )
+        if not force_deploy:
+            assert account_to_deploy.get("deployed", True) is False, (
+                f"Account '{self.account_name}' for network '{self.starknet_context.network_id}' "
+                "is already deployed."
+            )
         account_to_deploy["deployed"] = True
         os.makedirs(name=os.path.dirname(self.account_file), exist_ok=True)
         with open(self.account_file, "w") as f:
@@ -180,7 +187,7 @@ differently.
 
         accounts = self._get_accounts()
         account = self._get_account_given_accounts(accounts=accounts)
-        assert account["deployed"], (
+        assert account.get("deployed", True), (
             f"Account '{self.account_name}' for network '{self.starknet_context.network_id}' "
             "is not deployed; use 'starknet deploy_account' command."
         )
@@ -350,7 +357,7 @@ def sign_deploy_account_tx(
     version: int,
     chain_id: int,
     nonce: int = 0,
-) -> DeployAccount:
+) -> Tuple[int, DeployAccount]:
     contract_address = calculate_contract_address_from_hash(
         salt=salt,
         class_hash=class_hash,
@@ -368,7 +375,7 @@ def sign_deploy_account_tx(
         nonce=nonce,
     )
 
-    return DeployAccount(
+    return contract_address, DeployAccount(
         class_hash=class_hash,
         constructor_calldata=[public_key],
         contract_address_salt=salt,

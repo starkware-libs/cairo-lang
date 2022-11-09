@@ -98,6 +98,7 @@ from starkware.cairo.lang.compiler.error_handling import (
 )
 from starkware.cairo.lang.compiler.instruction import Register
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
+from starkware.python.utils import as_non_optional
 
 DEFAULT_SHORT_STRING_MAX_LENGTH = 31
 
@@ -861,10 +862,10 @@ class ParserTransformer(Transformer):
 
     def token2loc(self, token: Token) -> Location:
         return Location(
-            start_line=token.line,
-            start_col=token.column,
-            end_line=token.end_line,
-            end_col=token.end_column,
+            start_line=as_non_optional(token.line),
+            start_col=as_non_optional(token.column),
+            end_line=as_non_optional(token.end_line),
+            end_col=as_non_optional(token.end_column),
             input_file=self.input_file,
             parent_location=self.parser_context.parent_location,
         )

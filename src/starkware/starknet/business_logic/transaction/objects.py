@@ -52,6 +52,7 @@ from starkware.starknet.public import abi as starknet_abi
 from starkware.starknet.services.api.contract_class import ContractClass, EntryPointType
 from starkware.starknet.services.api.gateway.transaction import (
     DEFAULT_DECLARE_SENDER_ADDRESS,
+    AccountTransaction,
     Declare,
     Deploy,
     DeployAccount,
@@ -128,7 +129,7 @@ class InternalTransaction(InternalStateTransaction, EverestInternalTransaction):
     @abstractmethod
     def to_external(self) -> Transaction:
         """
-        Returns an external transaction genearated based on an internal one.
+        Returns an external transaction generated based on an internal one.
         """
 
     @classmethod
@@ -136,7 +137,7 @@ class InternalTransaction(InternalStateTransaction, EverestInternalTransaction):
         cls, external_tx: EverestTransaction, general_config: Config
     ) -> "InternalTransaction":
         """
-        Returns an internal transaction genearated based on an external one.
+        Returns an internal transaction generated based on an external one.
         """
         # Downcast arguments to application-specific types.
         assert isinstance(external_tx, Transaction)
@@ -156,7 +157,7 @@ class InternalTransaction(InternalStateTransaction, EverestInternalTransaction):
         cls, external_tx: Transaction, general_config: StarknetGeneralConfig
     ) -> "InternalTransaction":
         """
-        Returns an internal transaction genearated based on an external one, where the input
+        Returns an internal transaction generated based on an external one, where the input
         arguments are downcasted to application-specific types.
         """
 
@@ -278,6 +279,12 @@ class InternalAccountTransaction(InternalTransaction):
     def validate_entry_point_selector(cls) -> int:
         """
         The entry point selector of the transaction-specific validation function.
+        """
+
+    @abstractmethod
+    def to_external(self) -> AccountTransaction:
+        """
+        Returns an external transaction generated based on an internal one.
         """
 
     def verify_version(self):
@@ -490,9 +497,9 @@ class InternalDeclare(InternalAccountTransaction):
         cls,
         ffc: FactFetchingContext,
         contract_class: ContractClass,
+        sender_address: int,
         chain_id: Optional[int] = None,
         max_fee: int = 0,
-        sender_address: Optional[int] = None,
         signature: Optional[List[int]] = None,
     ) -> "InternalDeclare":
         """
@@ -500,18 +507,12 @@ class InternalDeclare(InternalAccountTransaction):
         This constructor should only be used in tests.
         """
         await write_contract_class_fact(contract_class=contract_class, ffc=ffc)
-        if sender_address is None:
-            version = 0
-            sender_address = DEFAULT_DECLARE_SENDER_ADDRESS
-        else:
-            version = constants.TRANSACTION_VERSION
-
         return InternalDeclare.create(
             contract_class=contract_class,
             chain_id=0 if chain_id is None else chain_id,
             sender_address=sender_address,
             max_fee=max_fee,
-            version=version,
+            version=constants.TRANSACTION_VERSION,
             signature=[] if signature is None else signature,
             nonce=0,
         )
@@ -1103,9 +1104,9 @@ class InternalInvokeFunction(InternalAccountTransaction):
         contract_address: int,
         calldata: List[int],
         entry_point_selector: int,
+        max_fee: int,
         nonce: Optional[int],
         signature: Optional[List[int]] = None,
-        max_fee: Optional[int] = None,
         chain_id: Optional[int] = None,
         version: Optional[int] = None,
     ):
@@ -1117,7 +1118,7 @@ class InternalInvokeFunction(InternalAccountTransaction):
         return cls.create(
             contract_address=account_address,
             entry_point_selector=starknet_abi.EXECUTE_ENTRY_POINT_SELECTOR,
-            max_fee=0 if max_fee is None else max_fee,
+            max_fee=max_fee,
             version=constants.TRANSACTION_VERSION if version is None else version,
             calldata=[contract_address, entry_point_selector, len(calldata), *calldata],
             nonce=nonce,

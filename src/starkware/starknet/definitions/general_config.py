@@ -14,7 +14,7 @@ from starkware.cairo.lang.builtins.all_builtins import (
     OUTPUT_BUILTIN,
     with_suffix,
 )
-from starkware.cairo.lang.instances import all_instance
+from starkware.cairo.lang.instances import perpetual_with_bitwise_instance
 from starkware.python.utils import from_bytes
 from starkware.starknet.definitions import constants, fields
 from starkware.starkware_utils.config_base import Config, load_config
@@ -29,6 +29,7 @@ GENERAL_CONFIG_FILE_NAME = "general_config.yml"
 DOCKER_GENERAL_CONFIG_PATH = os.path.join("/", GENERAL_CONFIG_FILE_NAME)
 GENERAL_CONFIG_PATH = os.path.join(os.path.dirname(__file__), GENERAL_CONFIG_FILE_NAME)
 N_STEPS_RESOURCE = "n_steps"
+STARKNET_LAYOUT_INSTANCE = perpetual_with_bitwise_instance
 
 # Reference to the default general config.
 default_general_config = load_config(
@@ -201,7 +202,8 @@ def build_general_config(raw_general_config: Dict[str, Any]) -> StarknetGeneralC
             N_STEPS_RESOURCE: n_steps_weight,
             # All other weights are deduced from n_steps.
             **{
-                with_suffix(builtin): n_steps_weight * all_instance.builtins[builtin].ratio
+                with_suffix(builtin): n_steps_weight
+                * STARKNET_LAYOUT_INSTANCE.builtins[builtin].ratio
                 for builtin in ALL_BUILTINS.except_for(OUTPUT_BUILTIN, KECCAK_BUILTIN)
             },
         }

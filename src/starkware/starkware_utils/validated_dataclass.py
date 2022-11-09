@@ -1,4 +1,5 @@
 import dataclasses
+import hashlib
 import inspect
 import random
 from typing import Any, Dict, Optional, Sequence, Tuple, Type, TypeVar
@@ -129,6 +130,19 @@ class ValidatedMarshmallowDataclass(ValidatedDataclass, SerializableMarshmallowD
     """
     Base class to classes decorated with marshmallow_dataclass.dataclass, containing validations.
     """
+
+
+class HashableMarshmallowDataclass(ValidatedMarshmallowDataclass):
+    """
+    Represents a Serializable object that could be hashed.
+    """
+
+    def calculate_hash(self) -> bytes:
+        """
+        Calculates the hash of the object. This value is used in order to distinguish between
+        different objects (for example, to avoid duplicating identical objects in the storage).
+        """
+        return hashlib.sha256(self.serialize()).digest()
 
 
 def get_validated_field(field: dataclasses.Field) -> Optional[Field]:

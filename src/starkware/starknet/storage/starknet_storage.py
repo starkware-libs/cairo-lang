@@ -7,6 +7,7 @@ from typing import Dict, List, Mapping, Optional, Set, Tuple, Type, TypeVar, Uni
 
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.python.utils import from_bytes, to_bytes
+from starkware.starknet.definitions import fields
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
 from starkware.starkware_utils.commitment_tree.leaf_fact import LeafFact
 from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import EmptyNodeFact
@@ -17,6 +18,7 @@ from starkware.storage.storage import HASH_BYTES, FactFetchingContext, HashFunct
 
 TStorageLeaf = TypeVar("TStorageLeaf", bound="StorageLeaf")
 ContractStorageMapping = Dict[int, "StorageLeaf"]
+address_formatter = fields.L2AddressField.format
 
 
 @dataclasses.dataclass(frozen=True)
@@ -134,7 +136,7 @@ class StarknetStorage(StarknetStorageInterface):
 
         assert (
             0 <= address < 2**self.commitment_tree.height
-        ), f"The address {address} is out of range."
+        ), f"The address {address_formatter(address)} is out of range."
         leaves = await self.commitment_tree.get_leaves(
             ffc=self.ffc, indices=[address], fact_cls=StorageLeaf
         )
@@ -142,7 +144,9 @@ class StarknetStorage(StarknetStorageInterface):
         return leaves[address].value
 
     def _update_init_value(self, address: int, value: int):
-        assert address not in self.initial_values, f"Trying to overwrite initial_values[{address}]."
+        assert (
+            address not in self.initial_values
+        ), f"Trying to overwrite initial_values[{address_formatter(address)}]."
         self.initial_values[address] = value
 
     def begin_read(self, address: int):
@@ -192,9 +196,10 @@ class StarknetStorage(StarknetStorageInterface):
 
         current_value = self.modifications.get(address)
         # Note that current_value == None is allowed.
-        assert not isinstance(
-            current_value, concurrent.futures.Future
-        ), f"Read operation for address {address} was not finalized using end_read."
+        assert not isinstance(current_value, concurrent.futures.Future), (
+            f"Read operation for address {address_formatter(address)} was not finalized "
+            "using end_read."
+        )
 
         self.modifications[address] = value
 
@@ -204,9 +209,10 @@ class StarknetStorage(StarknetStorageInterface):
         """
         modifications = {}
         for (address, value) in self.modifications.items():
-            assert isinstance(
-                value, int
-            ), f"Read operation for address {address} was not finalized using end_read."
+            assert isinstance(value, int), (
+                f"Read operation for address {address_formatter(address)} was not "
+                "finalized using end_read."
+            )
             modifications[address] = StorageLeaf(value=value)
 
         return modifications
@@ -225,18 +231,19 @@ class StarknetStorage(StarknetStorageInterface):
             key, prev_value, new_value = dict_accesses[i : i + 3]
             assert (
                 0 <= key < 2**self.commitment_tree.height
-            ), f"The address {key} is out of range."
+            ), f"The address {hex(key)} is out of range."
 
             curr_val = current_values.get(key)
             if curr_val is None:
                 curr_val = self.initial_values.get(key)
-                assert (
-                    curr_val is not None
-                ), f"Bad dict access at address {key}, prev_value was not read from storage."
+                assert curr_val is not None, (
+                    f"Bad dict access at address {hex(key)}, prev_value was not read "
+                    "from storage."
+                )
 
             assert curr_val == prev_value, (
-                f"Bad dict access at address {key}, expected prev_value to be {curr_val}, "
-                f"found {prev_value}."
+                f"Bad dict access at address {hex(key)}, expected prev_value to be "
+                f"{hex(curr_val)}, found {hex(prev_value)}."
             )
 
             current_values[key] = new_value

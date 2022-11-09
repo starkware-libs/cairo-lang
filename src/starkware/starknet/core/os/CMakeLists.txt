@@ -37,6 +37,7 @@ python_lib(starknet_os_utils_lib
 
     ARTIFACTS
     "${CMAKE_CURRENT_BINARY_DIR}/starknet_os_compiled.json starknet_os_compiled.json"
+    "${CMAKE_BINARY_DIR}/src/starkware/starknet/common/starknet_syscalls.json starknet_syscalls.json"
 
     LIBS
     cairo_common_lib
@@ -64,6 +65,7 @@ python_lib(starknet_os_utils_lib
 )
 
 add_dependencies(starknet_os_utils_lib starknet_os_program)
+add_dependencies(starknet_os_utils_lib starknet_syscalls)
 
 full_python_test(starknet_os_program_hash_test
     PREFIX starkware/starknet/core/os

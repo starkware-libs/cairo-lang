@@ -17,9 +17,9 @@ from starkware.starknet.business_logic.fact_state.contract_state_objects import 
 )
 from starkware.starknet.business_logic.fact_state.patricia_state import PatriciaStateReader
 from starkware.starknet.business_logic.state.state import CachedState, StorageEntry
+from starkware.starknet.business_logic.state.state_api import StateReader
 from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
-from starkware.starknet.services.api.contract_class import ContractClass
 from starkware.starknet.storage.starknet_storage import ContractStorageMapping, StorageLeaf
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
 from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
@@ -75,7 +75,7 @@ class CarriedState(CarriedStateBase):
     ):
         """
         Private constructor.
-        Should only be called by _create_from_parent_state and create_unfilled class methods.
+        Should only be called by _create_from_parent_state and empty_for_testing class methods.
         """
         super().__init__(parent_state=parent_state)
         self.state = state
@@ -99,26 +99,6 @@ class CarriedState(CarriedStateBase):
         )
 
     @classmethod
-    def create_unfilled(
-        cls, shared_state: "SharedState", ffc: FactFetchingContext
-    ) -> "CarriedState":
-        """
-        Creates a carried state based on the given shared state, where the fields related to the
-        commitment leaves (e.g., contract states) are kept unfilled.
-        """
-        state = CachedState(
-            block_info=shared_state.block_info,
-            state_reader=PatriciaStateReader(
-                global_state_root=shared_state.contract_states, ffc=ffc
-            ),
-        )
-
-        return cls(
-            parent_state=None,
-            state=state,
-        )
-
-    @classmethod
     async def empty_for_testing(
         cls,
         shared_state: Optional["SharedState"],
@@ -132,34 +112,14 @@ class CarriedState(CarriedStateBase):
         if shared_state is None:
             shared_state = await SharedState.empty(ffc=ffc, general_config=general_config)
 
-        return cls.create_unfilled(ffc=ffc, shared_state=shared_state)
-
-    @classmethod
-    def from_contracts(
-        cls,
-        shared_state: "SharedState",
-        ffc: FactFetchingContext,
-        contract_definitions: MutableMapping[bytes, ContractClass],
-        contract_states: ContractCarriedStateMapping,
-    ) -> "CarriedState":
-        """
-        Returns a carried state object, containing the given contracts.
-        Other members are initialized with the empty object values.
-        This is a utility function and should not be used in the regular flow.
-        """
-        state_reader = PatriciaStateReader(global_state_root=shared_state.contract_states, ffc=ffc)
-        state = CachedState(block_info=shared_state.block_info, state_reader=state_reader)
-        state.cache.update_writes(
-            contract_classes=contract_definitions,
-            address_to_class_hash={
-                address: state.state.contract_hash for address, state in contract_states.items()
-            },
-            address_to_nonce={address: state.nonce for address, state in contract_states.items()},
-            storage_updates={
-                (address, key): leaf.value
-                for address, state in contract_states.items()
-                for key, leaf in state.storage_updates.items()
-            },
+        state = CachedState(
+            block_info=shared_state.block_info,
+            state_reader=PatriciaStateReader(
+                global_state_root=shared_state.contract_states,
+                ffc=ffc,
+                contract_class_storage=ffc.storage,
+            ),
+            contract_class_cache={},
         )
         return cls(
             parent_state=None,
@@ -250,10 +210,15 @@ class SharedState(SharedStateBase):
         )
 
     def to_carried_state(self, ffc: FactFetchingContext) -> CarriedState:
-        """
-        Returns an unfilled CarriedState.
-        """
-        return CarriedState.create_unfilled(ffc=ffc, shared_state=self)
+        state = CachedState(
+            block_info=self.block_info,
+            state_reader=PatriciaStateReader(
+                global_state_root=self.contract_states,
+                ffc=ffc,
+                contract_class_storage=ffc.storage,
+            ),
+        )
+        return CarriedState(parent_state=None, state=state)
 
     async def get_filled_carried_state(
         self, ffc: FactFetchingContext, state_selector: StateSelectorBase
@@ -340,7 +305,6 @@ class StateDiff(EverestStateDiff):
     Holds uncommitted changes induced on StarkNet contracts.
     """
 
-    class_hash_to_class: Mapping[bytes, ContractClass]
     address_to_class_hash: Mapping[int, bytes]
     address_to_nonce: Mapping[int, int]
     storage_updates: Mapping[StorageEntry, int]
@@ -352,7 +316,6 @@ class StateDiff(EverestStateDiff):
         Returns an empty state diff object relative to the given block info.
         """
         return cls(
-            class_hash_to_class={},
             address_to_class_hash={},
             address_to_nonce={},
             storage_updates={},
@@ -363,20 +326,15 @@ class StateDiff(EverestStateDiff):
     def from_cached_state(cls, cached_state: CachedState) -> "StateDiff":
         state_cache = cached_state.cache
         return cls(
-            class_hash_to_class=state_cache.contract_classes,
             address_to_class_hash=state_cache._class_hash_writes,
             address_to_nonce=state_cache._nonce_writes,
             storage_updates=state_cache._storage_writes,
             block_info=cached_state.block_info,
         )
 
-    def to_cached_state(self, ffc: FactFetchingContext, state: SharedState) -> CachedState:
-        cached_state = CachedState(
-            block_info=self.block_info,
-            state_reader=PatriciaStateReader(global_state_root=state.contract_states, ffc=ffc),
-        )
+    def to_cached_state(self, state_reader: StateReader) -> CachedState:
+        cached_state = CachedState(block_info=self.block_info, state_reader=state_reader)
         cached_state.cache.update_writes(
-            contract_classes=self.class_hash_to_class,
             address_to_class_hash=self.address_to_class_hash,
             address_to_nonce=self.address_to_nonce,
             storage_updates=self.storage_updates,
@@ -385,14 +343,12 @@ class StateDiff(EverestStateDiff):
         return cached_state
 
     def squash(self, other: "StateDiff") -> "StateDiff":
-        class_hash_to_class = {**self.class_hash_to_class, **other.class_hash_to_class}
         address_to_class_hash = {**self.address_to_class_hash, **other.address_to_class_hash}
         address_to_nonce = {**self.address_to_nonce, **other.address_to_nonce}
         storage_updates = {**self.storage_updates, **other.storage_updates}
         self.block_info.validate_legal_progress(next_block_info=other.block_info)
 
         return StateDiff(
-            class_hash_to_class=class_hash_to_class,
             address_to_class_hash=address_to_class_hash,
             address_to_nonce=address_to_nonce,
             storage_updates=storage_updates,

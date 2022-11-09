@@ -8,10 +8,11 @@ from starkware.starknet.business_logic.state.state_api import (
     StateReader,
     get_stark_exception_on_undeclared_contract,
 )
+from starkware.starknet.definitions import fields
 from starkware.starknet.services.api.contract_class import ContractClass
 from starkware.starknet.storage.starknet_storage import StorageLeaf
 from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
-from starkware.storage.storage import FactFetchingContext
+from starkware.storage.storage import FactFetchingContext, Storage
 
 
 class PatriciaStateReader(StateReader):
@@ -19,9 +20,15 @@ class PatriciaStateReader(StateReader):
     A Patricia implementation of StateReader.
     """
 
-    def __init__(self, global_state_root: PatriciaTree, ffc: FactFetchingContext):
+    def __init__(
+        self,
+        global_state_root: PatriciaTree,
+        ffc: FactFetchingContext,
+        contract_class_storage: Storage,
+    ):
         # Members related to dynamic retrieval of facts during transaction execution.
         self.ffc = ffc
+        self.contract_class_storage = contract_class_storage
         # The last committed state; the one this state was created from.
         self.global_state_root = global_state_root
         # A mapping from contract address to its cached state.
@@ -31,7 +38,7 @@ class PatriciaStateReader(StateReader):
 
     async def get_contract_class(self, class_hash: bytes) -> ContractClass:
         contract_class_fact = await ContractClassFact.get(
-            storage=self.ffc.storage, suffix=class_hash
+            storage=self.contract_class_storage, suffix=class_hash
         )
 
         if contract_class_fact is None:
@@ -53,25 +60,16 @@ class PatriciaStateReader(StateReader):
         contract_state = await self._get_contract_state(contract_address=contract_address)
 
         contract_storage_tree_height = contract_state.storage_commitment_tree.height
-        assert (
-            0 <= key < 2**contract_storage_tree_height
-        ), f"The address {key} is out of range: [0, 2**{contract_storage_tree_height})."
+        assert 0 <= key < 2**contract_storage_tree_height, (
+            f"The address {fields.L2AddressField.format(key)} is out of range: [0, "
+            f"2**{contract_storage_tree_height})."
+        )
 
         storage_leaf = await self._fetch_storage_leaf(contract_state=contract_state, key=key)
 
         return storage_leaf.value
 
     # Internal utilities.
-
-    async def _get_raw_contract_class(self, class_hash: bytes) -> bytes:
-        raw_contract_class_fact = await self.ffc.storage.get_value(
-            key=ContractClassFact.db_key(suffix=class_hash)
-        )
-
-        if raw_contract_class_fact is None:
-            raise get_stark_exception_on_undeclared_contract(class_hash=class_hash)
-
-        return raw_contract_class_fact
 
     async def _get_contract_state(self, contract_address: int) -> ContractState:
         if contract_address not in self.contract_states:

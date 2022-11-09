@@ -8,8 +8,6 @@ python_lib(starknet_wallets_lib
     LIBS
     starknet_contract_class_lib
     starknet_definitions_lib
-    starknet_feeder_gateway_client_lib
-    starknet_gateway_client_lib
     starknet_transaction_lib
     starkware_crypto_lib
 )

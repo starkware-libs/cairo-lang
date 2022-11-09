@@ -402,6 +402,14 @@ def from_bytes(
     return int.from_bytes(value, byteorder=byte_order, signed=signed)
 
 
+def from_hex_str_to_bytes_str(hex_str: str) -> str:
+    return to_bytes(int(hex_str, 16)).hex()
+
+
+def from_hex_str_to_decimal_str(hex_str: str) -> str:
+    return str(int(hex_str, 16))
+
+
 def blockify(data, chunk_size: int) -> Iterable:
     """
     Returns the given data partitioned to chunks of chunks_size (last chunk might be smaller).
@@ -532,6 +540,9 @@ def execute_coroutine_threadsafe(
     """
     # Verify we are not inside the main thread (as this will block it).
     coroutine_name = coroutine.__name__  # type: ignore[attr-defined]
+    # NOTE: this is not accurate. A running event loop has an associated (unique)
+    #   thread, so running 'run_coroutine_threadsafe' will block if called from that thread, not
+    #   necessaily the main.
     assert (
         threading.current_thread() is not threading.main_thread()
     ), f"Cannot run {coroutine_name} synchronously in main thread."

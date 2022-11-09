@@ -1,3 +1,7 @@
+cairo_compile(starknet_syscalls
+    starknet_syscalls.json syscalls.cairo "--debug_info_with_source"
+)
+
 python_lib(starknet_common_lib
     PREFIX starkware/starknet/common
 

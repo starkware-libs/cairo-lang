@@ -53,7 +53,10 @@ python_lib(starknet_hints_whitelist_lib
     whitelists/cairo_sha256_arbitrary_input_length.json
     whitelists/ec_bigint.json
     whitelists/ec_recover.json
+    whitelists/encode_packed.json
     whitelists/latest.json
+    whitelists/uint256_improvements.json
+    whitelists/vrf.json
 
     LIBS
     starknet_security_lib

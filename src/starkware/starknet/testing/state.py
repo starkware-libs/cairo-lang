@@ -75,11 +75,14 @@ class StarknetState:
         ffc = FactFetchingContext(storage=DictStorage(), hash_func=pedersen_hash_func)
         empty_shared_state = await SharedState.empty(ffc=ffc, general_config=general_config)
         state_reader = PatriciaStateReader(
-            global_state_root=empty_shared_state.contract_states, ffc=ffc
+            global_state_root=empty_shared_state.contract_states,
+            ffc=ffc,
+            contract_class_storage=ffc.storage,
         )
         state = CachedState(
             block_info=BlockInfo.empty(sequencer_address=general_config.sequencer_address),
             state_reader=state_reader,
+            contract_class_cache={},
         )
 
         return cls(state=state, general_config=general_config)
