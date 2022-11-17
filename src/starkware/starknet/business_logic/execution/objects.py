@@ -377,7 +377,7 @@ class CallInfo(SerializableMarshmallowDataclass):
 @marshmallow_dataclass.dataclass(frozen=True)
 class TransactionExecutionInfo(EverestTransactionExecutionInfo):
     """
-    Contains the information gathered by the execution of a transation. Main usages:
+    Contains the information gathered by the execution of a transaction. Main usages:
     1. Supplies hints for the OS run on the corresponding transaction; e.g., internal call results.
     2. Stores useful information for users; e.g., L2-to-L1 messages and emitted events.
     """

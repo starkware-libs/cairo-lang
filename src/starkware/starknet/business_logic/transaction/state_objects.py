@@ -2,11 +2,15 @@ import asyncio
 import functools
 import logging
 from abc import ABC, abstractmethod
-from typing import Iterable, Optional, cast
+from typing import Iterable, Optional, Tuple, cast
 
 from services.everest.business_logic.internal_transaction import EverestInternalStateTransaction
 from services.everest.business_logic.state_api import StateProxy
-from starkware.starknet.business_logic.execution.objects import TransactionExecutionInfo
+from starkware.starknet.business_logic.execution.objects import (
+    CallInfo,
+    ResourcesMapping,
+    TransactionExecutionInfo,
+)
 from starkware.starknet.business_logic.fact_state.contract_state_objects import StateSelector
 from starkware.starknet.business_logic.state.state import StateSyncifier, UpdatesTrackerState
 from starkware.starknet.business_logic.state.state_api import State, SyncState
@@ -16,6 +20,8 @@ from starkware.starkware_utils.config_base import Config
 from starkware.starkware_utils.error_handling import wrap_with_stark_exception
 
 logger = logging.getLogger(__name__)
+
+FeeInfo = Tuple[Optional[CallInfo], int]
 
 
 class InternalStateTransaction(EverestInternalStateTransaction, ABC):
@@ -75,10 +81,16 @@ class InternalStateTransaction(EverestInternalStateTransaction, ABC):
         concurrent_execution_info = self.apply_concurrent_changes(
             state=state, general_config=general_config
         )
-        return self.apply_sequential_changes(
+        fee_transfer_info, actual_fee = self.apply_sequential_changes(
             state=state,
             general_config=general_config,
+            actual_resources=concurrent_execution_info.actual_resources,
+        )
+
+        return TransactionExecutionInfo.from_concurrent_stage_execution_info(
             concurrent_execution_info=concurrent_execution_info,
+            fee_transfer_info=fee_transfer_info,
+            actual_fee=actual_fee,
         )
 
     def apply_concurrent_changes(
@@ -101,8 +113,8 @@ class InternalStateTransaction(EverestInternalStateTransaction, ABC):
         self,
         state: SyncState,
         general_config: StarknetGeneralConfig,
-        concurrent_execution_info: TransactionExecutionInfo,
-    ) -> Optional[TransactionExecutionInfo]:
+        actual_resources: ResourcesMapping,
+    ) -> FeeInfo:
         """
         Applies the parts of the transaction needed to be executed sequentially to enable
         efficient concurrency, as they are likely to collide in a concurrent execution,
@@ -116,7 +128,7 @@ class InternalStateTransaction(EverestInternalStateTransaction, ABC):
             return self._apply_specific_sequential_changes(
                 state=state,
                 general_config=general_config,
-                concurrent_execution_info=concurrent_execution_info,
+                actual_resources=actual_resources,
             )
 
     @abstractmethod
@@ -133,8 +145,8 @@ class InternalStateTransaction(EverestInternalStateTransaction, ABC):
         self,
         state: SyncState,
         general_config: StarknetGeneralConfig,
-        concurrent_execution_info: TransactionExecutionInfo,
-    ) -> Optional[TransactionExecutionInfo]:
+        actual_resources: ResourcesMapping,
+    ) -> FeeInfo:
         """
         A specific implementation of apply_sequential_changes for each internal transaction.
         See apply_sequential_changes.

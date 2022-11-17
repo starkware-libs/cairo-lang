@@ -15,5 +15,6 @@ python_lib(starknet_sequencer_api_utils_lib
     starknet_transaction_fee_lib
     starknet_transaction_lib
     starknet_transaction_objects_lib
+    starknet_transaction_state_objects_lib
     starkware_config_utils_lib
 )

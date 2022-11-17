@@ -139,6 +139,23 @@ class StateCache:
         self._nonce_writes.update(address_to_nonce)
         self._storage_writes.update(storage_updates)
 
+    def set_initial_values(
+        self,
+        address_to_class_hash: Mapping[int, bytes],
+        address_to_nonce: Mapping[int, int],
+        storage_updates: Mapping[Tuple[int, int], int],
+    ):
+        mappings: Tuple[Mapping, ...] = (
+            self.address_to_class_hash,
+            self.address_to_nonce,
+            self.storage_view,
+        )
+        assert all(len(mapping) == 0 for mapping in mappings), "Cache already initialized."
+
+        self._class_hash_writes.update(address_to_class_hash)
+        self._nonce_writes.update(address_to_nonce)
+        self._storage_writes.update(storage_updates)
+
     def get_accessed_contract_addresses(self) -> Set[int]:
         return {
             *self.address_to_class_hash.keys(),

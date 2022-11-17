@@ -1,7 +1,7 @@
-from typing import Optional, Tuple, Type
+from typing import Type
 
 from services.everest.api.gateway.transaction import EverestTransaction
-from starkware.starknet.business_logic.execution.objects import CallInfo, ResourcesMapping
+from starkware.starknet.business_logic.execution.objects import ResourcesMapping
 from starkware.starknet.business_logic.state.state_api import SyncState
 from starkware.starknet.business_logic.transaction.fee import calculate_tx_fee
 from starkware.starknet.business_logic.transaction.objects import (
@@ -11,6 +11,7 @@ from starkware.starknet.business_logic.transaction.objects import (
     InternalInvokeFunction,
     InternalTransaction,
 )
+from starkware.starknet.business_logic.transaction.state_objects import FeeInfo
 from starkware.starknet.business_logic.utils import verify_version
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.services.api.feeder_gateway.response_objects import FeeEstimationInfo
@@ -64,7 +65,7 @@ class InternalAccountTransactionForSimulate(InternalAccountTransaction):
 
     def charge_fee(
         self, state: SyncState, resources: ResourcesMapping, general_config: StarknetGeneralConfig
-    ) -> Tuple[Optional[CallInfo], int]:
+    ) -> FeeInfo:
         """
         Overrides the charge fee method. Only calculates the actual fee and does not charge any fee.
         """

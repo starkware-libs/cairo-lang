@@ -2,7 +2,7 @@ import dataclasses
 import logging
 from abc import abstractmethod
 from dataclasses import field
-from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type
+from typing import Any, ClassVar, Dict, List, Optional, Type
 
 import marshmallow
 import marshmallow_dataclass
@@ -25,7 +25,10 @@ from starkware.starknet.business_logic.state.state import UpdatesTrackerState
 from starkware.starknet.business_logic.state.state_api import SyncState
 from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
 from starkware.starknet.business_logic.transaction.fee import calculate_tx_fee, execute_fee_transfer
-from starkware.starknet.business_logic.transaction.state_objects import InternalStateTransaction
+from starkware.starknet.business_logic.transaction.state_objects import (
+    FeeInfo,
+    InternalStateTransaction,
+)
 from starkware.starknet.business_logic.utils import (
     calculate_tx_resources,
     preprocess_invoke_function_fields,
@@ -178,15 +181,6 @@ class InternalTransaction(InternalStateTransaction, EverestInternalTransaction):
         assert isinstance(tx_execution_info, TransactionExecutionInfo)
         return tx_execution_info
 
-    @abstractmethod
-    def _apply_specific_sequential_changes(
-        self,
-        state: SyncState,
-        general_config: StarknetGeneralConfig,
-        concurrent_execution_info: TransactionExecutionInfo,
-    ) -> TransactionExecutionInfo:
-        pass
-
 
 class SyntheticTransaction(InternalStateTransaction):
     """
@@ -216,24 +210,33 @@ class InitializeBlockInfo(SyntheticTransaction):
     block_info: BlockInfo
     tx_type: ClassVar[TransactionType] = TransactionType.INITIALIZE_BLOCK_INFO
 
-    def _apply_specific_sequential_changes(
-        self,
-        state: SyncState,
-        general_config: StarknetGeneralConfig,
-        concurrent_execution_info: TransactionExecutionInfo,
-    ) -> Optional[TransactionExecutionInfo]:
+    def sync_apply_state_updates(self, state: StateProxy, general_config: Config) -> None:
+        # Downcast arguments to application-specific types.
+        assert isinstance(state, SyncState)
+
         # Validate progress is legal.
         state.block_info.validate_legal_progress(next_block_info=self.block_info)
 
         # Update entire block-related information.
         state.update_block_info(block_info=self.block_info)
-
         return None
+
+    def _apply_specific_sequential_changes(
+        self,
+        state: SyncState,
+        general_config: StarknetGeneralConfig,
+        actual_resources: ResourcesMapping,
+    ) -> FeeInfo:
+        raise NotImplementedError(
+            f"_apply_specific_sequential_changes is not implemented for {type(self).__name__}."
+        )
 
     def _apply_specific_concurrent_changes(
         self, state: UpdatesTrackerState, general_config: StarknetGeneralConfig
     ) -> TransactionExecutionInfo:
-        return TransactionExecutionInfo.empty()
+        raise NotImplementedError(
+            f"_apply_specific_concurrent_changes is not implemented for {type(self).__name__}."
+        )
 
     def get_state_selector(self, general_config: Config) -> StateSelector:
         return StateSelector.empty()
@@ -335,7 +338,7 @@ class InternalAccountTransaction(InternalTransaction):
 
     def charge_fee(
         self, state: SyncState, resources: ResourcesMapping, general_config: StarknetGeneralConfig
-    ) -> Tuple[Optional[CallInfo], int]:
+    ) -> FeeInfo:
         """
         Calculates and charges the actual fee.
         """
@@ -382,21 +385,14 @@ class InternalAccountTransaction(InternalTransaction):
         self,
         state: SyncState,
         general_config: StarknetGeneralConfig,
-        concurrent_execution_info: TransactionExecutionInfo,
-    ) -> TransactionExecutionInfo:
+        actual_resources: ResourcesMapping,
+    ) -> FeeInfo:
         self._handle_nonce(state=state)
 
-        # Handle fee.
-        fee_transfer_info, actual_fee = self.charge_fee(
+        return self.charge_fee(
             state=state,
             general_config=general_config,
-            resources=concurrent_execution_info.actual_resources,
-        )
-
-        return TransactionExecutionInfo.from_concurrent_stage_execution_info(
-            concurrent_execution_info=concurrent_execution_info,
-            fee_transfer_info=fee_transfer_info,
-            actual_fee=actual_fee,
+            resources=actual_resources,
         )
 
 
@@ -945,9 +941,10 @@ class InternalDeploy(InternalTransaction):
         self,
         state: SyncState,
         general_config: StarknetGeneralConfig,
-        concurrent_execution_info: TransactionExecutionInfo,
-    ) -> TransactionExecutionInfo:
-        return concurrent_execution_info
+        actual_resources: ResourcesMapping,
+    ) -> FeeInfo:
+        fee_transfer_info, actual_fee = None, 0
+        return fee_transfer_info, actual_fee
 
     def handle_empty_constructor(self, state: UpdatesTrackerState) -> TransactionExecutionInfo:
         stark_assert(
@@ -1462,9 +1459,10 @@ class InternalL1Handler(InternalTransaction):
         self,
         state: SyncState,
         general_config: StarknetGeneralConfig,
-        concurrent_execution_info: TransactionExecutionInfo,
-    ) -> TransactionExecutionInfo:
-        return concurrent_execution_info
+        actual_resources: ResourcesMapping,
+    ) -> FeeInfo:
+        fee_transfer_info, actual_fee = None, 0
+        return fee_transfer_info, actual_fee
 
     def get_execution_context(self, n_steps: int) -> TransactionExecutionContext:
         return TransactionExecutionContext.create(

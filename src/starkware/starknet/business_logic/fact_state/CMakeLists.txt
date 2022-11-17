@@ -7,6 +7,7 @@ python_lib(starknet_business_logic_fact_state_lib
     LIBS
     cairo_vm_lib
     everest_business_logic_lib
+    starknet_business_logic_fact_state_utils_lib
     starknet_business_logic_patricia_state_lib
     starknet_business_logic_state_lib
     starknet_definitions_lib
@@ -43,4 +44,14 @@ python_lib(starknet_business_logic_patricia_state_lib
     starkware_storage_lib
     starkware_utils_lib
     pip_marshmallow_dataclass
+)
+
+python_lib(starknet_business_logic_fact_state_utils_lib
+    PREFIX starkware/starknet/business_logic/fact_state
+
+    FILES
+    utils.py
+
+    LIBS
+    starknet_business_logic_state_lib
 )

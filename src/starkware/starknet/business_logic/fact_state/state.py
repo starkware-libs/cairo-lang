@@ -1,4 +1,5 @@
 import logging
+from dataclasses import field
 from typing import Dict, Mapping, MutableMapping, Optional
 
 import marshmallow_dataclass
@@ -16,15 +17,20 @@ from starkware.starknet.business_logic.fact_state.contract_state_objects import 
     ContractState,
 )
 from starkware.starknet.business_logic.fact_state.patricia_state import PatriciaStateReader
-from starkware.starknet.business_logic.state.state import CachedState, StorageEntry
+from starkware.starknet.business_logic.fact_state.utils import (
+    to_cached_state_storage_mapping,
+    to_state_diff_storage_mapping,
+)
+from starkware.starknet.business_logic.state.state import CachedState
 from starkware.starknet.business_logic.state.state_api import StateReader
 from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
+from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
-from starkware.starknet.storage.starknet_storage import ContractStorageMapping, StorageLeaf
+from starkware.starknet.storage.starknet_storage import StorageLeaf
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
 from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
 from starkware.starkware_utils.config_base import Config
-from starkware.storage.storage import FactFetchingContext
+from starkware.storage.storage import DBObject, FactFetchingContext
 
 logger = logging.getLogger(__name__)
 state_objects_logger = logging.getLogger(f"{__name__}:state_objects_logger")
@@ -252,7 +258,9 @@ class SharedState(SharedStateBase):
             ffc=ffc,
             address_to_class_hash=state_cache._class_hash_writes,
             address_to_nonce=state_cache._nonce_writes,
-            storage_updates=state_cache._storage_writes,
+            storage_updates=to_state_diff_storage_mapping(
+                storage_writes=state_cache._storage_writes
+            ),
             block_info=current_carried_state.state.block_info,
         )
 
@@ -261,18 +269,11 @@ class SharedState(SharedStateBase):
         ffc: FactFetchingContext,
         address_to_class_hash: Mapping[int, bytes],
         address_to_nonce: Mapping[int, int],
-        storage_updates: Mapping[StorageEntry, int],
+        storage_updates: Mapping[int, Mapping[int, int]],
         block_info: BlockInfo,
     ) -> "SharedState":
-        address_to_storage_updates: Dict[int, ContractStorageMapping] = {}
-        for (address, key), value in storage_updates.items():
-            contract_storage_updates = address_to_storage_updates.setdefault(address, {})
-            contract_storage_updates[key] = StorageLeaf(value=value)
-
         accessed_addresses = (
-            set(address_to_class_hash.keys())
-            | set(address_to_nonce.keys())
-            | {address for address, _ in storage_updates.keys()}
+            address_to_class_hash.keys() | address_to_nonce.keys() | storage_updates.keys()
         )
         current_contract_states = await self.contract_states.get_leaves(
             ffc=ffc, indices=accessed_addresses, fact_cls=ContractState
@@ -283,7 +284,10 @@ class SharedState(SharedStateBase):
             awaitables=(
                 current_contract_states[address].update(
                     ffc=ffc,
-                    updates=address_to_storage_updates.get(address, {}),
+                    updates={
+                        key: StorageLeaf(value=value)
+                        for key, value in storage_updates.get(address, {}).items()
+                    },
                     nonce=address_to_nonce.get(address, None),
                     class_hash=address_to_class_hash.get(address, None),
                 )
@@ -300,14 +304,18 @@ class SharedState(SharedStateBase):
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
-class StateDiff(EverestStateDiff):
+class StateDiff(EverestStateDiff, DBObject):
     """
     Holds uncommitted changes induced on StarkNet contracts.
     """
 
-    address_to_class_hash: Mapping[int, bytes]
-    address_to_nonce: Mapping[int, int]
-    storage_updates: Mapping[StorageEntry, int]
+    address_to_class_hash: Mapping[int, bytes] = field(
+        metadata=fields.address_to_class_hash_metadata
+    )
+    address_to_nonce: Mapping[int, int] = field(metadata=fields.address_to_nonce_metadata)
+    storage_updates: Mapping[int, Mapping[int, int]] = field(
+        metadata=fields.storage_updates_metadata
+    )
     block_info: BlockInfo
 
     @classmethod
@@ -328,16 +336,18 @@ class StateDiff(EverestStateDiff):
         return cls(
             address_to_class_hash=state_cache._class_hash_writes,
             address_to_nonce=state_cache._nonce_writes,
-            storage_updates=state_cache._storage_writes,
+            storage_updates=to_state_diff_storage_mapping(
+                storage_writes=state_cache._storage_writes
+            ),
             block_info=cached_state.block_info,
         )
 
     def to_cached_state(self, state_reader: StateReader) -> CachedState:
         cached_state = CachedState(block_info=self.block_info, state_reader=state_reader)
-        cached_state.cache.update_writes(
+        cached_state.cache.set_initial_values(
             address_to_class_hash=self.address_to_class_hash,
             address_to_nonce=self.address_to_nonce,
-            storage_updates=self.storage_updates,
+            storage_updates=to_cached_state_storage_mapping(storage_updates=self.storage_updates),
         )
 
         return cached_state
@@ -345,7 +355,12 @@ class StateDiff(EverestStateDiff):
     def squash(self, other: "StateDiff") -> "StateDiff":
         address_to_class_hash = {**self.address_to_class_hash, **other.address_to_class_hash}
         address_to_nonce = {**self.address_to_nonce, **other.address_to_nonce}
-        storage_updates = {**self.storage_updates, **other.storage_updates}
+        storage_updates: Dict[int, Dict[int, int]] = {}
+        for address in self.storage_updates.keys() | other.storage_updates.keys():
+            storage_updates[address] = {
+                **self.storage_updates.get(address, {}),
+                **other.storage_updates.get(address, {}),
+            }
         self.block_info.validate_legal_progress(next_block_info=other.block_info)
 
         return StateDiff(

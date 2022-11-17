@@ -216,6 +216,12 @@ optional_class_hash_metadata = dict(
     )
 )
 
+address_to_class_hash_metadata = dict(
+    marshmallow_field=FrozenDictField(
+        keys=L2AddressField.get_marshmallow_field(), values=ClassHashField
+    )
+)
+
 
 # Class hash (as integer).
 
@@ -308,6 +314,11 @@ optional_state_root_metadata = dict(
 )
 
 
+optional_state_diff_hash_metadata = dict(
+    marshmallow_field=BytesAsHex(required=False, load_default=None)
+)
+
+
 # Declared contracts.
 
 declared_contracts_metadata = dict(
@@ -367,6 +378,20 @@ address_to_nonce_metadata = dict(
         load_default=dict,
     )
 )
+
+
+# Storage.
+
+storage_updates_metadata = dict(
+    marshmallow_field=mfields.Dict(
+        keys=L2AddressField.get_marshmallow_field(),
+        values=mfields.Dict(
+            keys=everest_fields.FeltField.get_marshmallow_field(),
+            values=everest_fields.FeltField.get_marshmallow_field(),
+        ),
+    )
+)
+
 
 # ExecutionInfo.
 
