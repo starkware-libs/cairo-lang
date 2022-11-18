@@ -5,7 +5,7 @@
         ],
         "body": [
             "@storage_var",
-            "func ${1:name}() -> (${2:res: felt}) {",
+            "func ${1:name}(${2}) -> (${3:res: felt}) {",
             "}",
             "$0"
         ],
@@ -25,6 +25,77 @@
         ],
         "description": "A StarkNet contract external function."
     },
+    "View function": {
+        "prefix": [
+            "@view"
+        ],
+        "body": [
+            "@view",
+            "func ${1:name}{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(",
+            "\t${2:arguments}",
+            ") -> (${3:return}) {",
+            "\t$0",
+            "}"
+        ],
+        "description": "A StarkNet contract view function."
+    },
+    "Constructor function": {
+        "prefix": [
+            "@constructor"
+        ],
+        "body": [
+            "@constructor",
+            "func constructor{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(",
+            "\t${2:arguments}",
+            ") {",
+            "\t$0",
+            "}"
+        ],
+        "description": "A StarkNet contract constructor"
+    },
+    "Raw input function": {
+        "prefix": [
+            "@raw_input"
+        ],
+        "body": [
+            "@raw_input",
+            "func ${1:name}{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(",
+            "\tselector : felt, calldata_size : felt, calldata : felt*",
+            ") {",
+            "\t$0",
+            "}"
+        ],
+        "description": "A StarkNet contract raw_input function."
+    },
+    "Raw output function": {
+        "prefix": [
+            "@raw_output"
+        ],
+        "body": [
+            "@raw_output",
+            "func ${1:name}{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(",
+            "\t${2:arguments}",
+            ") -> (retdata_size : felt, retdata : felt*) {",
+            "\t$0",
+            "}"
+        ],
+        "description": "A StarkNet contract raw_output function."
+    },
+    "Raw input/output function": {
+        "prefix": [
+            "@raw_inout"
+        ],
+        "body": [
+            "@raw_input",
+            "@raw_output",
+            "func ${1:name}{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(",
+            "\tselector : felt, calldata_size : felt, calldata : felt*",
+            ") -> (retdata_size : felt, retdata : felt*) {",
+            "\t$0",
+            "}"
+        ],
+        "description": "A StarkNet contract raw_input and raw_output function."
+    },
     "StarkNet contract interface": {
         "prefix": [
             "@contract_interface"
@@ -36,5 +107,51 @@
             "}"
         ],
         "description": "A contract interface for another contract."
+    },
+    "Struct": {
+        "prefix": [
+            "struct"
+        ],
+        "body": [
+            "struct ${1:PascalCaseName} {",
+            "    ${2:first_member}: ${3:felt},",
+            "    ${4:second_member}: ${5:felt}",
+            "}"
+        ],
+        "description": "A Cairo struct"
+    },
+    "Allocation pointer": {
+        "prefix": [
+            "app"
+        ],
+        "body": [
+            "[ap${1}] = ${2}, ap++;"
+        ],
+        "description": "A snippet for the allocation point statement"
+    },
+    "Event": {
+        "prefix": [
+            "@event"
+        ],
+        "body": [
+            "@event",
+            "func ${1:name}(${2}) {",
+            "}"
+        ],
+        "description": "A snippet for the events"
+    },
+    "L1 handler": {
+        "prefix": [
+            "@l1_handler"
+        ],
+        "body": [
+            "@l1_handler",
+            "func ${1:name}{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(",
+            "\t${2}",
+            ") {",
+            "\t${3}",
+            "}"
+        ],
+        "description": "A function that receives message from the L1"
     }
 }
