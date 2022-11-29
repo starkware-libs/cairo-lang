@@ -145,6 +145,10 @@ class Deploy(Transaction):
 
     @staticmethod
     def compress_program(program_json: dict):
+        """
+        Deprecated.
+        Use starkware.starknet.services.api.gateway.transaction_utils.compress_program instead.
+        """
         return compress_program(program_json=program_json)
 
     @marshmallow.decorators.post_dump

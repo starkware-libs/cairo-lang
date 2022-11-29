@@ -78,7 +78,8 @@ func traces_eval_composition_polynomial{range_check_ptr}(
     // Periodic columns.
     let (n_steps) = pow(2, public_input.log_n_steps);
     tempvar n_pedersen_hash_copies = n_steps / (
-        PEDERSEN_BUILTIN_RATIO * PEDERSEN_BUILTIN_REPETITIONS);
+        PEDERSEN_BUILTIN_RATIO * PEDERSEN_BUILTIN_REPETITIONS
+    );
     assert_nn(n_pedersen_hash_copies);
     let (pedersen_point) = pow(point, n_pedersen_hash_copies);
     let (pedersen__points__x) = eval_pedersen_x(pedersen_point);
@@ -131,14 +132,16 @@ func traces_eval_composition_polynomial{range_check_ptr}(
         memory__multi_column_perm__hash_interaction_elm0=memory_alpha,
         rc16__perm__interaction_elm=interaction_elements.rc16__perm__interaction_elm,
         diluted_check__permutation__interaction_elm=(
-            interaction_elements.diluted_check__permutation__interaction_elm),
+            interaction_elements.diluted_check__permutation__interaction_elm
+        ),
         diluted_check__interaction_z=diluted_z,
         diluted_check__interaction_alpha=diluted_alpha,
         memory__multi_column_perm__perm__public_memory_prod=public_memory_prod_ratio,
         rc16__perm__public_memory_prod=1,
         diluted_check__first_elm=0,
         diluted_check__permutation__public_memory_prod=1,
-        diluted_check__final_cum_val=diluted_prod);
+        diluted_check__final_cum_val=diluted_prod,
+    );
 
     return eval_composition_polynomial(
         mask_values=mask_values,

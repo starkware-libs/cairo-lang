@@ -28,6 +28,8 @@ def test_expression_string():
     assert str(a**b**c) == "a^(b^c)"
     assert str(a ** ((b**c) ** (d**e)) ** f) == "a^(((b^c)^(d^e))^f)"
     assert str(a / b ** (c + d) * (e + f)) == "a / b^(c + d) * (e + f)"
+    assert str(a.double_star_pow(b.double_star_pow(c))) == "a ** (b ** c)"
+    assert str((a.double_star_pow(b)).double_star_pow(c)) == "(a ** b) ** c"
 
     assert str(-a) == "-a"
     assert str(-(a + b) + (-(a - b)) - (-(a - b))) == "(-(a + b)) + (-(a - b)) - (-(a - b))"

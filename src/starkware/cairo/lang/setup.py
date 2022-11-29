@@ -43,6 +43,7 @@ setuptools.setup(
         "starkware/cairo/lang/scripts/cairo-reconstruct-traceback",
         "starkware/cairo/lang/scripts/cairo-run",
         "starkware/cairo/lang/scripts/cairo-sharp",
+        "starkware/starknet/scripts/starknet-class-hash",
         "starkware/starknet/scripts/starknet-compile",
         "starkware/starknet/scripts/starknet",
     ],

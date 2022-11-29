@@ -39,3 +39,6 @@ starknet-compile ${root_dir}/src/starkware/starknet/apps/amm_sample/amm_sample.c
 
 # Test StarkNet CLI.
 starknet --help > /dev/null
+
+# Test starknet-class-hash.
+starknet-class-hash --help > /dev/null

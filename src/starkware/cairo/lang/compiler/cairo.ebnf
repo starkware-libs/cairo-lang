@@ -52,18 +52,18 @@ decorator_list: (decorator _NEWLINE*)*
     | atom _DBL_STAR notes pow -> expr_pow
 identifier: IDENTIFIER ("." IDENTIFIER)*
 identifier_def: IDENTIFIER
-?atom: INT                                    -> atom_number
-     | HEXINT                                 -> atom_hex_number
-     | SHORT_STRING                           -> atom_short_string
-     | "nondet" HINT                          -> atom_hint
-     | reg                                    -> atom_reg
-     | function_call                          -> atom_func_call
+?atom: INT                                                   -> atom_number
+     | HEXINT                                                -> atom_hex_number
+     | SHORT_STRING                                          -> atom_short_string
+     | "nondet" HINT                                         -> atom_hint
+     | reg                                                   -> atom_reg
+     | function_call                                         -> atom_func_call
      | identifier
-     | "[" notes expr "]"                     -> atom_deref
-     | atom "[" notes expr "]"                -> atom_subscript
-     | atom "." identifier_def                -> atom_dot
-     | "cast" "(" notes expr "," type ")"     -> atom_cast
-     | "(" arg_list ")"                       -> atom_tuple_or_parentheses
+     | "[" notes expr notes "]"                              -> atom_deref
+     | atom "[" notes expr notes "]"                         -> atom_subscript
+     | atom "." identifier_def                               -> atom_dot
+     | "cast" "(" notes expr "," notes type ","? notes ")"   -> atom_cast
+     | "(" arg_list ")"                                      -> atom_tuple_or_parentheses
 !reg: "ap" -> reg_ap
     | "fp" -> reg_fp
 

@@ -40,10 +40,8 @@ func modify_account{range_check_ptr}(state: AmmState, account_id, diff_a, diff_b
     let (local old_account: Account*) = dict_read{dict_ptr=account_dict_end}(key=account_id);
 
     // Compute the new account values.
-    tempvar new_token_a_balance = (
-        old_account.token_a_balance + diff_a);
-    tempvar new_token_b_balance = (
-        old_account.token_b_balance + diff_b);
+    tempvar new_token_a_balance = (old_account.token_a_balance + diff_a);
+    tempvar new_token_b_balance = (old_account.token_b_balance + diff_b);
 
     // Verify that the new balances are positive.
     assert_nn_le(new_token_a_balance, MAX_BALANCE);

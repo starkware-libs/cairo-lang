@@ -21,7 +21,10 @@ from starkware.cairo.lang.compiler.ast.code_elements import (
 from starkware.cairo.lang.compiler.ast.expr import (
     ArgList,
     ExprAssignment,
+    ExprCast,
+    ExprDeref,
     ExprParentheses,
+    ExprSubscript,
     ExprTuple,
 )
 from starkware.cairo.lang.compiler.ast.expr_func_call import ExprFuncCall
@@ -58,6 +61,22 @@ class MigratorParserTransformer(ParserTransformer):
 
     def __init__(self, input_file: InputFile, parser_context: Optional[ParserContext]):
         super().__init__(input_file, parser_context)
+
+    @lark.v_args(meta=True)
+    def atom_deref(self, meta, value):
+        return ExprDeref(addr=value[1], notes=value[0], location=self.meta2loc(meta))
+
+    @lark.v_args(meta=True)
+    def atom_subscript(self, meta, value):
+        return ExprSubscript(
+            expr=value[0], offset=value[2], notes=value[1], location=self.meta2loc(meta)
+        )
+
+    @lark.v_args(meta=True)
+    def atom_cast(self, meta, value):
+        return ExprCast(
+            expr=value[1], dest_type=value[2], notes=value[0], location=self.meta2loc(meta)
+        )
 
     def code_element_function(self, value):
         decorators, identifier, implicit_arguments, arguments = value[:4]

@@ -46,7 +46,8 @@ func run_simple_bootloader{
         ecdsa=ecdsa_ptr,
         bitwise=bitwise_ptr,
         ec_op=ec_op_ptr,
-        keccak=keccak_ptr);
+        keccak=keccak_ptr,
+    );
 
     // A struct containing the encoding of each builtin.
     local builtin_encodings: BuiltinData = BuiltinData(
@@ -56,10 +57,12 @@ func run_simple_bootloader{
         ecdsa='ecdsa',
         bitwise='bitwise',
         ec_op='ec_op',
-        keccak='keccak');
+        keccak='keccak',
+    );
 
     local builtin_instance_sizes: BuiltinData = BuiltinData(
-        output=1, pedersen=3, range_check=1, ecdsa=2, bitwise=5, ec_op=7, keccak=16);
+        output=1, pedersen=3, range_check=1, ecdsa=2, bitwise=5, ec_op=7, keccak=16
+    );
 
     // Call execute_tasks.
     let (__fp__, _) = get_fp_and_pc();

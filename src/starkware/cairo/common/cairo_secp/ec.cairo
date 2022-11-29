@@ -33,9 +33,8 @@ func ec_negate{range_check_ptr}(point: EcPoint) -> (point: EcPoint) {
     let (minus_y) = nondet_bigint3();
     verify_zero(
         UnreducedBigInt3(
-        d0=minus_y.d0 + point.y.d0,
-        d1=minus_y.d1 + point.y.d1,
-        d2=minus_y.d2 + point.y.d2),
+            d0=minus_y.d0 + point.y.d0, d1=minus_y.d1 + point.y.d1, d2=minus_y.d2 + point.y.d2
+        ),
     );
 
     return (point=EcPoint(x=point.x, y=minus_y));
@@ -70,9 +69,10 @@ func compute_doubling_slope{range_check_ptr}(point: EcPoint) -> (slope: BigInt3)
 
     verify_zero(
         UnreducedBigInt3(
-        d0=3 * x_sqr.d0 - 2 * slope_y.d0,
-        d1=3 * x_sqr.d1 - 2 * slope_y.d1,
-        d2=3 * x_sqr.d2 - 2 * slope_y.d2),
+            d0=3 * x_sqr.d0 - 2 * slope_y.d0,
+            d1=3 * x_sqr.d1 - 2 * slope_y.d1,
+            d2=3 * x_sqr.d2 - 2 * slope_y.d2,
+        ),
     );
 
     return (slope=slope);
@@ -111,9 +111,10 @@ func compute_slope{range_check_ptr}(point0: EcPoint, point1: EcPoint) -> (slope:
 
     verify_zero(
         UnreducedBigInt3(
-        d0=x_diff_slope.d0 - point0.y.d0 + point1.y.d0,
-        d1=x_diff_slope.d1 - point0.y.d1 + point1.y.d1,
-        d2=x_diff_slope.d2 - point0.y.d2 + point1.y.d2),
+            d0=x_diff_slope.d0 - point0.y.d0 + point1.y.d0,
+            d1=x_diff_slope.d1 - point0.y.d1 + point1.y.d1,
+            d2=x_diff_slope.d2 - point0.y.d2 + point1.y.d2,
+        ),
     );
 
     return (slope=slope);
@@ -155,9 +156,10 @@ func ec_double{range_check_ptr}(point: EcPoint) -> (res: EcPoint) {
 
     verify_zero(
         UnreducedBigInt3(
-        d0=slope_sqr.d0 - new_x.d0 - 2 * point.x.d0,
-        d1=slope_sqr.d1 - new_x.d1 - 2 * point.x.d1,
-        d2=slope_sqr.d2 - new_x.d2 - 2 * point.x.d2),
+            d0=slope_sqr.d0 - new_x.d0 - 2 * point.x.d0,
+            d1=slope_sqr.d1 - new_x.d1 - 2 * point.x.d1,
+            d2=slope_sqr.d2 - new_x.d2 - 2 * point.x.d2,
+        ),
     );
 
     let (x_diff_slope: UnreducedBigInt3) = unreduced_mul(
@@ -166,9 +168,10 @@ func ec_double{range_check_ptr}(point: EcPoint) -> (res: EcPoint) {
 
     verify_zero(
         UnreducedBigInt3(
-        d0=x_diff_slope.d0 - point.y.d0 - new_y.d0,
-        d1=x_diff_slope.d1 - point.y.d1 - new_y.d1,
-        d2=x_diff_slope.d2 - point.y.d2 - new_y.d2),
+            d0=x_diff_slope.d0 - point.y.d0 - new_y.d0,
+            d1=x_diff_slope.d1 - point.y.d1 - new_y.d1,
+            d2=x_diff_slope.d2 - point.y.d2 - new_y.d2,
+        ),
     );
 
     return (res=EcPoint(new_x, new_y));
@@ -224,9 +227,10 @@ func fast_ec_add{range_check_ptr}(point0: EcPoint, point1: EcPoint) -> (res: EcP
 
     verify_zero(
         UnreducedBigInt3(
-        d0=slope_sqr.d0 - new_x.d0 - point0.x.d0 - point1.x.d0,
-        d1=slope_sqr.d1 - new_x.d1 - point0.x.d1 - point1.x.d1,
-        d2=slope_sqr.d2 - new_x.d2 - point0.x.d2 - point1.x.d2),
+            d0=slope_sqr.d0 - new_x.d0 - point0.x.d0 - point1.x.d0,
+            d1=slope_sqr.d1 - new_x.d1 - point0.x.d1 - point1.x.d1,
+            d2=slope_sqr.d2 - new_x.d2 - point0.x.d2 - point1.x.d2,
+        ),
     );
 
     let (x_diff_slope: UnreducedBigInt3) = unreduced_mul(
@@ -236,9 +240,10 @@ func fast_ec_add{range_check_ptr}(point0: EcPoint, point1: EcPoint) -> (res: EcP
 
     verify_zero(
         UnreducedBigInt3(
-        d0=x_diff_slope.d0 - point0.y.d0 - new_y.d0,
-        d1=x_diff_slope.d1 - point0.y.d1 - new_y.d1,
-        d2=x_diff_slope.d2 - point0.y.d2 - new_y.d2),
+            d0=x_diff_slope.d0 - point0.y.d0 - new_y.d0,
+            d1=x_diff_slope.d1 - point0.y.d1 - new_y.d1,
+            d2=x_diff_slope.d2 - point0.y.d2 - new_y.d2,
+        ),
     );
 
     return (res=EcPoint(new_x, new_y));

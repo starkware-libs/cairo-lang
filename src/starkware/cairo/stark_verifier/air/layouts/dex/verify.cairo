@@ -41,7 +41,8 @@ func build_air() -> (air: AirWithLayout*) {
     );
     let (arg_eval_oods_polynomial) = get_label_location(eval_oods_polynomial);
 
-    tempvar air = new AirWithLayout(air=AirInstance(
+    tempvar air = new AirWithLayout(
+        air=AirInstance(
             public_input_hash=arg_public_input_hash,
             public_input_validate=arg_public_input_validate,
             traces_config_validate=arg_traces_config_validate,
@@ -52,14 +53,14 @@ func build_air() -> (air: AirWithLayout*) {
             n_constraints=N_CONSTRAINTS,
             constraint_degree=CONSTRAINT_DEGREE,
             mask_size=MASK_SIZE,
-            ),
+        ),
         layout=Layout(
             eval_oods_polynomial=arg_eval_oods_polynomial,
             n_original_columns=N_ORIGINAL_COLUMNS,
             n_interaction_columns=N_INTERACTION_COLUMNS,
             n_interaction_elements=InteractionElements.SIZE,
-            ),
-        );
+        ),
+    );
     return (air=air);
 }
 

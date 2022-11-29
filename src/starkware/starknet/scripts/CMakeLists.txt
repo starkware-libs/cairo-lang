@@ -2,6 +2,7 @@ python_lib(starknet_script_lib
     PREFIX starkware/starknet/scripts
     FILES
     starknet
+    starknet-class-hash
     starknet-compile
 
     LIBS

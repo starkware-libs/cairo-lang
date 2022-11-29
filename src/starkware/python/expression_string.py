@@ -97,7 +97,7 @@ class ExpressionString:
 
     def __pow__(self, other):
         other = to_expr_string(other)
-        # For the two expressions (a ** b) ** c and a ** (b ** c), parentheses will always be added.
+        # For the two expressions (a^b)^c and a^(b^c), parentheses will always be added.
         return ExpressionString(f"{self:HIGHEST}^{other:HIGHEST}", OperatorPrecedence.POW)
 
     def double_star_pow(self, other):

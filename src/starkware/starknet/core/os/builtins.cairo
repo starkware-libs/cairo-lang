@@ -46,17 +46,19 @@ func get_builtin_params() -> (builtin_params: BuiltinParams*) {
         range_check='range_check',
         ecdsa='ecdsa',
         bitwise='bitwise',
-        ec_op='ec_op');
+        ec_op='ec_op',
+    );
 
     local builtin_instance_sizes: BuiltinInstanceSizes = BuiltinInstanceSizes(
         pedersen=HashBuiltin.SIZE,
         range_check=1,
         ecdsa=SignatureBuiltin.SIZE,
         bitwise=BitwiseBuiltin.SIZE,
-        ec_op=EcOpBuiltin.SIZE);
+        ec_op=EcOpBuiltin.SIZE,
+    );
 
     local builtin_params: BuiltinParams = BuiltinParams(
-        builtin_encodings=&builtin_encodings,
-        builtin_instance_sizes=&builtin_instance_sizes);
+        builtin_encodings=&builtin_encodings, builtin_instance_sizes=&builtin_instance_sizes
+    );
     return (builtin_params=&builtin_params);
 }

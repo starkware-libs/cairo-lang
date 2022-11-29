@@ -2,6 +2,7 @@ python_lib(starknet_cli_lib
     PREFIX starkware/starknet/cli
 
     FILES
+    class_hash.py
     reconstruct_starknet_traceback.py
     starknet_cli.py
 
@@ -22,6 +23,7 @@ python_lib(starknet_cli_lib
     starknet_feeder_gateway_response_objects_lib
     starknet_gateway_client_lib
     starknet_general_config_lib
+    starknet_os_abi_lib
     starknet_standard_wallets_lib
     starknet_transaction_lib
     starknet_wallets_lib

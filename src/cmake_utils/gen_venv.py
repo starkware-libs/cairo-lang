@@ -123,10 +123,9 @@ def main():
 
     # Prepare an empty virtual environment in the background.
     # --symlinks prefers symlinks of copying.
-    # --without-pip installs a completely empty venv, with no pip.
     # --clear clears the old venv if exists.
     venv_proc = subprocess.Popen(
-        [python_exec, "-m", "venv", "--symlinks", "--without-pip", "--clear", args.venv_dir]
+        [python_exec, "-m", "venv", "--symlinks", "--clear", args.venv_dir]
     )
 
     # Find all libraries.

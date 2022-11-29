@@ -7,19 +7,17 @@ from typing import List, Optional, Sequence
 import marshmallow
 
 from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, CastType
-from starkware.cairo.lang.compiler.ast.formatting_utils import (
-    INDENTATION,
-    LocationField,
-    Particle,
+from starkware.cairo.lang.compiler.ast.formatting_utils import INDENTATION, LocationField
+from starkware.cairo.lang.compiler.ast.node import AstNode
+from starkware.cairo.lang.compiler.ast.notes import Notes, NotesField
+from starkware.cairo.lang.compiler.ast.particle import (
     ParticleList,
     SeparatedParticleList,
     SingleParticle,
 )
-from starkware.cairo.lang.compiler.ast.node import AstNode
-from starkware.cairo.lang.compiler.ast.notes import Notes, NotesField
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.instruction import Register
-from starkware.python.expression_string import ExpressionString
+from starkware.python.expression_string import ExpressionString, OperatorPrecedence
 from starkware.python.utils import indent, safe_zip
 from starkware.starkware_utils.marshmallow_dataclass_fields import additional_metadata
 
@@ -43,9 +41,15 @@ class Expression(AstNode):
         """
 
     @abstractmethod
-    def get_particles(self) -> List[Particle]:
+    def get_particles(self) -> ParticleList:
         """
-        Returns a list of particles representing the expression, for formatting purposes.
+        Returns a ParticleList representing the expression, for formatting purposes.
+        """
+
+    @abstractmethod
+    def get_outmost_operator_precedence(self) -> OperatorPrecedence:
+        """
+        Returns the outmost operator precedence of the expression.
         """
 
 
@@ -73,9 +77,15 @@ class ExprConst(Expression):
             return ExpressionString.highest(abs_format)
         return -ExpressionString.highest(abs_format)
 
-    def get_particles(self) -> List[Particle]:
+    def get_particles(self) -> ParticleList:
         abs_format = self.absolute_val_format()
-        return [SingleParticle(text=abs_format if self.val >= 0 else f"-{abs_format}")]
+        particle = SingleParticle(text=abs_format if self.val >= 0 else f"-{abs_format}")
+        return ParticleList(elements=[particle])
+
+    def get_outmost_operator_precedence(self) -> OperatorPrecedence:
+        if self.val >= 0:
+            return OperatorPrecedence.HIGHEST
+        return OperatorPrecedence.LOWEST
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return []
@@ -122,8 +132,12 @@ class ExprHint(Expression):
     def to_expr_str(self):
         return ExpressionString.highest(f"nondet {self.to_str()}")
 
-    def get_particles(self) -> List[Particle]:
-        return [SingleParticle(text=f"nondet {self.to_str()}")]
+    def get_particles(self) -> ParticleList:
+        particle = SingleParticle(text=f"nondet {self.to_str()}")
+        return ParticleList(elements=[particle])
+
+    def get_outmost_operator_precedence(self) -> OperatorPrecedence:
+        return OperatorPrecedence.HIGHEST
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return []
@@ -137,8 +151,12 @@ class ExprIdentifier(Expression):
     def to_expr_str(self):
         return ExpressionString.highest(self.name)
 
-    def get_particles(self) -> List[Particle]:
-        return [SingleParticle(text=self.name)]
+    def get_particles(self) -> ParticleList:
+        particle = SingleParticle(text=self.name)
+        return ParticleList(elements=[particle])
+
+    def get_outmost_operator_precedence(self) -> OperatorPrecedence:
+        return OperatorPrecedence.HIGHEST
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return []
@@ -158,6 +176,15 @@ class ExprAssignment(AstNode):
         if self.identifier is None:
             return self.expr.format()
         return f"{self.identifier.format()}={self.expr.format()}"
+
+    def get_particles(self) -> ParticleList:
+        expr_particles = self.expr.get_particles()
+        if self.identifier is None:
+            return expr_particles
+
+        identifier_particles = self.identifier.get_particles()
+        identifier_particles.add_suffix(f"={expr_particles.pop_prefix()}")
+        return identifier_particles + expr_particles
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.identifier, self.expr]
@@ -182,11 +209,18 @@ class ArgList(AstNode):
         for note in self.notes:
             note.assert_no_comments()
 
-    def format(self):
-        if len(self.args) == 0:
-            assert len(self.notes) == 1
-            return self.notes[0].format()
+    def to_particle(
+        self, start: str = "", end: str = "", is_tuple: bool = False
+    ) -> SeparatedParticleList:
+        has_trailing_comma = is_tuple and len(self.args) == 1 and self.args[0].identifier is None
+        return SeparatedParticleList(
+            elements=[x.get_particles() for x in self.args],
+            start=start,
+            end=end,
+            trailing_separator=has_trailing_comma,
+        )
 
+    def format(self):
         code = ""
         assert len(self.args) + 1 == len(self.notes)
         for notes, arg in safe_zip(self.notes[:-1], self.args):
@@ -214,8 +248,12 @@ class ExprReg(Expression):
     def to_expr_str(self):
         return ExpressionString.highest(self.reg.name.lower())
 
-    def get_particles(self) -> List[Particle]:
-        return [SingleParticle(text=self.reg.name.lower())]
+    def get_particles(self) -> ParticleList:
+        particle = SingleParticle(text=self.reg.name.lower())
+        return ParticleList(elements=[particle])
+
+    def get_outmost_operator_precedence(self) -> OperatorPrecedence:
+        return OperatorPrecedence.HIGHEST
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return []
@@ -246,12 +284,25 @@ class ExprOperator(Expression):
         else:
             raise NotImplementedError(f"Unexpected operator '{self.op}'")
 
-    def get_particles(self) -> List[Particle]:
+    def get_particles(self) -> ParticleList:
         self.notes.assert_no_comments()
 
         a_particles = self.a.get_particles()
-        a_particles[-1].add_suffix(f" {self.op} ")
-        return a_particles + self.b.get_particles()
+        a_particles.add_suffix(f" {self.op} ")
+        if self.op in ["+", "-"]:
+            return a_particles + self.b.get_particles()
+        elif self.op in ["*", "/"]:
+            return ParticleList(elements=[a_particles + self.b.get_particles()])
+        else:
+            raise NotImplementedError(f"Unexpected operator '{self.op}'.")
+
+    def get_outmost_operator_precedence(self) -> OperatorPrecedence:
+        if self.op in ["+", "-"]:
+            return OperatorPrecedence.PLUS
+        elif self.op in ["*", "/"]:
+            return OperatorPrecedence.MUL
+        else:
+            raise NotImplementedError(f"Unexpected operator '{self.op}'.")
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.a, self.b]
@@ -272,12 +323,15 @@ class ExprPow(Expression):
             b = b.prepend("\n")
         return a.double_star_pow(b)
 
-    def get_particles(self) -> List[Particle]:
+    def get_particles(self) -> ParticleList:
         self.notes.assert_no_comments()
 
         a_particles = self.a.get_particles()
-        a_particles[-1].add_suffix(f" ** ")
-        return a_particles + self.b.get_particles()
+        a_particles.add_suffix(f" ** ")
+        return ParticleList(elements=[a_particles + self.b.get_particles()])
+
+    def get_outmost_operator_precedence(self) -> OperatorPrecedence:
+        return OperatorPrecedence.POW
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.a, self.b]
@@ -295,10 +349,13 @@ class ExprAddressOf(Expression):
     def to_expr_str(self):
         return self.expr.to_expr_str().address_of()
 
-    def get_particles(self) -> List[Particle]:
+    def get_particles(self) -> ParticleList:
         particles = self.expr.get_particles()
-        particles[0].add_prefix("&")
+        particles.add_prefix("&")
         return particles
+
+    def get_outmost_operator_precedence(self) -> OperatorPrecedence:
+        return OperatorPrecedence.ADDROF
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.expr]
@@ -312,10 +369,16 @@ class ExprNeg(Expression):
     def to_expr_str(self):
         return -self.val.to_expr_str()
 
-    def get_particles(self) -> List[Particle]:
+    def get_particles(self) -> ParticleList:
         particles = self.val.get_particles()
-        particles[0].add_prefix("-")
+        particles.add_prefix("-")
         return particles
+
+    def get_outmost_operator_precedence(self) -> OperatorPrecedence:
+        # Use OperatorPrecedence.LOWEST (even though the actual precedence of the unary minus is
+        # higher) so that parentheses will be added even when lower-precedence operators are used.
+        # For example: `(-x) + y`.
+        return OperatorPrecedence.LOWEST
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.val]
@@ -330,16 +393,18 @@ class ExprParentheses(Expression):
     def to_expr_str(self):
         return ExpressionString.highest(f"({self.notes.format()}{str(self.val.to_expr_str())})")
 
-    def get_particles(self) -> List[Particle]:
+    def get_particles(self) -> ParticleList:
         self.notes.assert_no_comments()
-        return [
-            SeparatedParticleList(
-                elements=self.val.get_particles(),
-                start="(",
-                end=")",
-                separator="",
-            )
-        ]
+        particle = SeparatedParticleList(
+            elements=self.val.get_particles(),
+            start="(",
+            end=")",
+            separator="",
+        )
+        return ParticleList(elements=[particle])
+
+    def get_outmost_operator_precedence(self) -> OperatorPrecedence:
+        return OperatorPrecedence.HIGHEST
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.val]
@@ -360,13 +425,15 @@ class ExprDeref(Expression):
         notes = "" if self.notes.empty else "\n"
         return ExpressionString.highest(f"[{notes}{str(self.addr.to_expr_str())}]")
 
-    def get_particles(self) -> List[Particle]:
+    def get_particles(self) -> ParticleList:
         self.notes.assert_no_comments()
-        return [
-            SeparatedParticleList(
-                elements=self.addr.get_particles(), start="[", end="]", separator=""
-            )
-        ]
+        particle = SeparatedParticleList(
+            elements=self.addr.get_particles(), start="[", end="]", separator=""
+        )
+        return ParticleList(elements=[particle])
+
+    def get_outmost_operator_precedence(self) -> OperatorPrecedence:
+        return OperatorPrecedence.HIGHEST
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.addr]
@@ -391,16 +458,19 @@ class ExprSubscript(Expression):
             f"{self.expr.to_expr_str():HIGHEST}[{notes}{str(self.offset.to_expr_str())}]"
         )
 
-    def get_particles(self) -> List[Particle]:
+    def get_particles(self) -> ParticleList:
         self.notes.assert_no_comments()
 
         expr_particles = self.expr.get_particles()
-        expr_particles[-1].add_suffix("[")
+        start = expr_particles.pop_suffix() + "["
         offset_particle = SeparatedParticleList(
-            elements=self.offset.get_particles(), start="", end="]", separator=""
+            elements=self.offset.get_particles(), start=start, end="]", separator=""
         )
 
-        return expr_particles + [offset_particle]
+        return expr_particles + ParticleList(elements=[offset_particle])
+
+    def get_outmost_operator_precedence(self) -> OperatorPrecedence:
+        return OperatorPrecedence.HIGHEST
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.expr, self.offset]
@@ -422,12 +492,15 @@ class ExprDot(Expression):
             f"{self.expr.to_expr_str():HIGHEST}.{str(self.member.to_expr_str())}"
         )
 
-    def get_particles(self) -> List[Particle]:
+    def get_particles(self) -> ParticleList:
         expr_particles = self.expr.get_particles()
         member_str = "".join(str(particle) for particle in self.member.get_particles())
-        expr_particles[-1].add_suffix(f".{member_str}")
+        expr_particles.add_suffix(f".{member_str}")
 
         return expr_particles
+
+    def get_outmost_operator_precedence(self) -> OperatorPrecedence:
+        return OperatorPrecedence.HIGHEST
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.expr, self.member]
@@ -454,16 +527,19 @@ class ExprCast(Expression):
             f"cast({notes}{str(self.expr.to_expr_str())}, {self.dest_type.format()})"
         )
 
-    def get_particles(self) -> List[Particle]:
+    def get_particles(self) -> ParticleList:
+        self.notes.assert_no_comments()
         expr_particles = self.expr.get_particles()
         type_particle = self.dest_type.to_particle()
-        return [
-            SeparatedParticleList(
-                elements=[ParticleList(elements=expr_particles), type_particle],
-                start="cast(",
-                end=")",
-            )
-        ]
+        particle = SeparatedParticleList(
+            elements=[expr_particles, type_particle],
+            start="cast(",
+            end=")",
+        )
+        return ParticleList(elements=[particle])
+
+    def get_outmost_operator_precedence(self) -> OperatorPrecedence:
+        return OperatorPrecedence.HIGHEST
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.expr, self.dest_type]
@@ -478,12 +554,12 @@ class ExprTuple(Expression):
         code = self.members.format()
         return ExpressionString.highest(f"({code})")
 
-    def get_particles(self) -> List[Particle]:
-        return [
-            SeparatedParticleList(
-                elements=[x.format() for x in self.members.args], start="(", end=")"
-            )
-        ]
+    def get_particles(self) -> ParticleList:
+        particle = self.members.to_particle(start="(", end=")", is_tuple=True)
+        return ParticleList(elements=[particle])
+
+    def get_outmost_operator_precedence(self) -> OperatorPrecedence:
+        return OperatorPrecedence.HIGHEST
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.members]
@@ -503,8 +579,11 @@ class ExprFutureLabel(Expression):
     def to_expr_str(self):
         return self.identifier.to_expr_str()
 
-    def get_particles(self) -> List[Particle]:
+    def get_particles(self) -> ParticleList:
         return self.identifier.get_particles()
+
+    def get_outmost_operator_precedence(self) -> OperatorPrecedence:
+        return self.identifier.get_outmost_operator_precedence()
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.identifier]
@@ -526,10 +605,16 @@ class ExprNewOperator(Expression):
     def to_expr_str(self):
         return self.expr.to_expr_str().operator_new()
 
-    def get_particles(self) -> List[Particle]:
+    def get_particles(self) -> ParticleList:
         particles = self.expr.get_particles()
-        particles[0].add_prefix("new ")
+        particles.add_prefix("new ")
         return particles
+
+    def get_outmost_operator_precedence(self) -> OperatorPrecedence:
+        # Use OperatorPrecedence.LOWEST (even though the actual precedence of the new operator is
+        # higher) so that parentheses will be added even when lower-precedence operators are used.
+        # For example: `(new x) + y`.
+        return OperatorPrecedence.LOWEST
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.expr]

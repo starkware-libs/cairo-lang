@@ -3,14 +3,10 @@ from abc import ABC, abstractmethod
 from typing import Optional, Sequence
 
 from starkware.cairo.lang.compiler.ast.expr import Expression
-from starkware.cairo.lang.compiler.ast.formatting_utils import (
-    LocationField,
-    Particle,
-    ParticleList,
-    SingleParticle,
-)
+from starkware.cairo.lang.compiler.ast.formatting_utils import LocationField
 from starkware.cairo.lang.compiler.ast.node import AstNode
 from starkware.cairo.lang.compiler.ast.notes import Notes, NotesField
+from starkware.cairo.lang.compiler.ast.particle import Particle, ParticleList, SingleParticle
 from starkware.cairo.lang.compiler.error_handling import Location
 
 

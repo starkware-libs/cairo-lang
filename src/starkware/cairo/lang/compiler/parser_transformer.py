@@ -144,7 +144,7 @@ class ParserTransformer(Transformer):
         raise TypeError(f"Unable to parse tree node of type {data}")
 
     def comma_separated_with_notes(self, value) -> CommaSeparatedWithNotes:
-        saw_comma = True
+        saw_comma = None
         all_notes: List[Notes] = []
         current_notes: List[Notes] = []
         args: list = []
@@ -153,11 +153,11 @@ class ParserTransformer(Transformer):
                 # Join the notes before and after the comma.
                 current_notes.append(v)
             elif isinstance(v, Token) and v.type == "COMMA":
-                if saw_comma:
+                if saw_comma is not False:
                     raise ParserError("Unexpected comma.", location=self.token2loc(v))
                 saw_comma = True
             else:
-                if not saw_comma:
+                if saw_comma is False:
                     raise ParserError(
                         "Expected a comma before this expression.", location=v.location
                     )
@@ -169,6 +169,8 @@ class ParserTransformer(Transformer):
                 current_notes = []
 
         all_notes.append(Notes.merge(current_notes))
+        if saw_comma is None:
+            saw_comma = False
 
         return CommaSeparatedWithNotes(
             args=args,
@@ -368,12 +370,12 @@ class ParserTransformer(Transformer):
 
     @v_args(meta=True)
     def atom_deref(self, meta, value):
-        return ExprDeref(addr=value[1], notes=value[0], location=self.meta2loc(meta))
+        return ExprDeref(addr=value[1], notes=value[0] + value[2], location=self.meta2loc(meta))
 
     @v_args(meta=True)
     def atom_subscript(self, meta, value):
         return ExprSubscript(
-            expr=value[0], offset=value[2], notes=value[1], location=self.meta2loc(meta)
+            expr=value[0], offset=value[2], notes=value[1] + value[3], location=self.meta2loc(meta)
         )
 
     @v_args(meta=True)
@@ -383,7 +385,10 @@ class ParserTransformer(Transformer):
     @v_args(meta=True)
     def atom_cast(self, meta, value):
         return ExprCast(
-            expr=value[1], notes=value[0], dest_type=value[2], location=self.meta2loc(meta)
+            expr=value[1],
+            dest_type=value[3],
+            notes=value[0] + value[2] + value[4],
+            location=self.meta2loc(meta),
         )
 
     @v_args(meta=True)

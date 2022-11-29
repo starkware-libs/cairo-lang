@@ -1,67 +1,11 @@
 import pytest
 
-from starkware.cairo.lang.compiler.ast.ast_objects_test_utils import remove_parentheses
 from starkware.cairo.lang.compiler.ast.expr import ExprConst, ExprNeg, ExprOperator
 from starkware.cairo.lang.compiler.ast.formatting_utils import (
     FormattingError,
     set_one_item_per_line,
 )
 from starkware.cairo.lang.compiler.parser import parse_code_element, parse_expr, parse_file
-
-
-def test_format_parentheses():
-    """
-    Tests that format() adds parentheses where required.
-    """
-
-    # Call remove_parentheses(parse_expr()) to create an expression tree in the given structure
-    # without ExprParentheses.
-    assert (
-        remove_parentheses(parse_expr("(a + b) * (c - d) * (e * f)")).format()
-        == "(a + b) * (c - d) * e * f"
-    )
-    assert (
-        remove_parentheses(parse_expr("x - (a + b) - (c - d) - (e * f)")).format()
-        == "x - (a + b) - (c - d) - e * f"
-    )
-    assert (
-        remove_parentheses(parse_expr("(a + b) + (c - d) + (e * f)")).format()
-        == "a + b + c - d + e * f"
-    )
-    assert remove_parentheses(parse_expr("-(a + b + c)")).format() == "-(a + b + c)"
-    assert remove_parentheses(parse_expr("a + -b + c")).format() == "a + (-b) + c"
-    assert remove_parentheses(parse_expr("&(a + b)")).format() == "&(a + b)"
-    assert remove_parentheses(parse_expr("a ** b ** c ** d")).format() == "a ** (b ** (c ** d))"
-
-    # Test that parentheses are added to non-atomized Dot and Subscript expressions.
-    assert remove_parentheses(parse_expr("(x * y).z")).format() == "(x * y).z"
-    assert remove_parentheses(parse_expr("(-x).y")).format() == "(-x).y"
-    assert remove_parentheses(parse_expr("(&x).y")).format() == "(&x).y"
-    assert remove_parentheses(parse_expr("(x * y)[z]")).format() == "(x * y)[z]"
-    assert remove_parentheses(parse_expr("(-x)[y]")).format() == "(-x)[y]"
-    assert remove_parentheses(parse_expr("(&x)[y]")).format() == "(&x)[y]"
-
-    assert remove_parentheses(parse_expr("&(x.y)")).format() == "&x.y"
-    assert remove_parentheses(parse_expr("-(x.y)")).format() == "-x.y"
-    assert remove_parentheses(parse_expr("(x.y)*z")).format() == "x.y * z"
-    assert remove_parentheses(parse_expr("x-(y.z)")).format() == "x - y.z"
-
-    assert remove_parentheses(parse_expr("([x].y).z")).format() == "[x].y.z"
-    assert remove_parentheses(parse_expr("&(x[y])")).format() == "&x[y]"
-    assert remove_parentheses(parse_expr("-(x[y])")).format() == "-x[y]"
-    assert remove_parentheses(parse_expr("(x[y])*z")).format() == "x[y] * z"
-    assert remove_parentheses(parse_expr("x-(y[z])")).format() == "x - y[z]"
-    assert remove_parentheses(parse_expr("(([x][y])[z])")).format() == "[x][y][z]"
-    assert remove_parentheses(parse_expr("x[(y+z)]")).format() == "x[y + z]"
-
-    assert remove_parentheses(parse_expr("[((x+y) + z)]")).format() == "[x + y + z]"
-
-    assert remove_parentheses(parse_expr("new (2+3)")).format() == "new (2 + 3)"
-
-    # Test that parentheses are not added if they were already present.
-    assert parse_expr("(a * (b + c))").format() == "(a * (b + c))"
-    assert parse_expr("((a * ((b + c))))").format() == "((a * ((b + c))))"
-    assert parse_expr("(x + y)[z]").format() == "(x + y)[z]"
 
 
 def test_format_parentheses_notes():
@@ -133,7 +77,7 @@ ap+=[ fp ]  ;
 %lang starknet
 [ap + -1] = [fp]  *  3;
  const x=y  +  f(a=g(
-                      z) ,// test
+                      z) ,
                       b=0);
     struct  A{
 
@@ -187,9 +131,7 @@ with_attr error_message  (  "Attribute value " "with"
 ap += [fp];
 %lang starknet
 [ap + (-1)] = [fp] * 3;
-const x = y + f(a=g(
-        z),  // test
-    b=0);
+const x = y + f(a=g(z), b=0);
 struct A {
     x: T.S,
 }

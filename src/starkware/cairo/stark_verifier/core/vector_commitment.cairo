@@ -78,7 +78,8 @@ func vector_commitment_decommit{range_check_ptr, blake2s_ptr: felt*, bitwise_ptr
     // Make sure hash is truncated.
     assert_nn(expected_commitment.low / 2 ** 96);
     tempvar expected_truncated_hash = (
-        expected_commitment.low + expected_commitment.high * 2 ** 128) / 2 ** 96;
+        expected_commitment.low + expected_commitment.high * 2 ** 128
+    ) / 2 ** 96;
     assert expected_truncated_hash = commitment.commitment_hash.value;
     return ();
 }

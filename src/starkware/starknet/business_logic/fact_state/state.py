@@ -11,7 +11,7 @@ from services.everest.business_logic.state import (
     StateSelectorBase,
 )
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
-from starkware.python.utils import gather_in_chunks, safe_zip
+from starkware.python.utils import gather_in_chunks, safe_zip, subtract_mappings
 from starkware.starknet.business_logic.fact_state.contract_state_objects import (
     ContractCarriedState,
     ContractState,
@@ -333,12 +333,21 @@ class StateDiff(EverestStateDiff, DBObject):
     @classmethod
     def from_cached_state(cls, cached_state: CachedState) -> "StateDiff":
         state_cache = cached_state.cache
+        storage_updates = to_state_diff_storage_mapping(
+            storage_writes=subtract_mappings(
+                state_cache._storage_writes, state_cache._storage_initial_values
+            )
+        )
+        address_to_nonce = subtract_mappings(
+            state_cache._nonce_writes, state_cache._nonce_initial_values
+        )
+        address_to_class_hash = subtract_mappings(
+            state_cache._class_hash_writes, state_cache._class_hash_initial_values
+        )
         return cls(
-            address_to_class_hash=state_cache._class_hash_writes,
-            address_to_nonce=state_cache._nonce_writes,
-            storage_updates=to_state_diff_storage_mapping(
-                storage_writes=state_cache._storage_writes
-            ),
+            address_to_class_hash=address_to_class_hash,
+            address_to_nonce=address_to_nonce,
+            storage_updates=storage_updates,
             block_info=cached_state.block_info,
         )
 

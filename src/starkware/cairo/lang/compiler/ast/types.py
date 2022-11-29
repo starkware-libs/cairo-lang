@@ -3,12 +3,9 @@ from typing import Optional, Sequence
 
 from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypeFelt
 from starkware.cairo.lang.compiler.ast.expr import ExprIdentifier
-from starkware.cairo.lang.compiler.ast.formatting_utils import (
-    LocationField,
-    Particle,
-    SingleParticle,
-)
+from starkware.cairo.lang.compiler.ast.formatting_utils import LocationField
 from starkware.cairo.lang.compiler.ast.node import AstNode
+from starkware.cairo.lang.compiler.ast.particle import Particle, SingleParticle
 from starkware.cairo.lang.compiler.error_handling import Location
 
 

@@ -49,7 +49,8 @@ func traces_eval_composition_polynomial{range_check_ptr}(
     alloc_locals;
 
     tempvar interaction_elements: InteractionElements* = cast(
-        commitment.interaction_elements, InteractionElements*);
+        commitment.interaction_elements, InteractionElements*
+    );
     tempvar public_input = commitment.public_input;
     let (__fp__, _) = get_fp_and_pc();
 
@@ -68,14 +69,14 @@ func traces_eval_composition_polynomial{range_check_ptr}(
     // Periodic columns.
     let (n_steps) = pow(2, public_input.log_n_steps);
     tempvar n_pedersen_hash_copies = n_steps / (
-        PEDERSEN_BUILTIN_RATIO * PEDERSEN_BUILTIN_REPETITIONS);
+        PEDERSEN_BUILTIN_RATIO * PEDERSEN_BUILTIN_REPETITIONS
+    );
     assert_nn(n_pedersen_hash_copies);
     let (pedersen_point) = pow(point, n_pedersen_hash_copies);
     let (pedersen__points__x) = eval_pedersen_x(pedersen_point);
     let (pedersen__points__y) = eval_pedersen_y(pedersen_point);
 
-    tempvar n_ecdsa_signature_copies = n_steps / (
-        ECDSA_BUILTIN_RATIO * ECDSA_BUILTIN_REPETITIONS);
+    tempvar n_ecdsa_signature_copies = n_steps / (ECDSA_BUILTIN_RATIO * ECDSA_BUILTIN_REPETITIONS);
     assert_nn(n_ecdsa_signature_copies);
     let (ecdsa_point) = pow(point, n_ecdsa_signature_copies);
     let (ecdsa__generator_points__x) = eval_ecdsa_x(ecdsa_point);
@@ -99,7 +100,8 @@ func traces_eval_composition_polynomial{range_check_ptr}(
         ecdsa__sig_config=EcdsaSigConfig(
             alpha=StarkCurve.ALPHA,
             beta=StarkCurve.BETA,
-            shift_point=EcPoint(x=SHIFT_POINT_X, y=SHIFT_POINT_Y)),
+            shift_point=EcPoint(x=SHIFT_POINT_X, y=SHIFT_POINT_Y),
+        ),
         pedersen__points__x=pedersen__points__x,
         pedersen__points__y=pedersen__points__y,
         ecdsa__generator_points__x=ecdsa__generator_points__x,
@@ -109,7 +111,7 @@ func traces_eval_composition_polynomial{range_check_ptr}(
         rc16__perm__interaction_elm=interaction_elements.rc16__perm__interaction_elm,
         memory__multi_column_perm__perm__public_memory_prod=public_memory_prod_ratio,
         rc16__perm__public_memory_prod=1,
-        );
+    );
 
     return eval_composition_polynomial(
         mask_values=mask_values,

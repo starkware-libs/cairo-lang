@@ -104,8 +104,7 @@ tempvar __calldata_ptr = __calldata_ptr + __calldata_arg_a_len * 4;
 let __calldata_arg_b = [__calldata_ptr];
 let __calldata_ptr = __calldata_ptr + 1;
 
-let __calldata_arg_c = [
-    cast(__calldata_ptr, (felt, (felt, felt))*)];
+let __calldata_arg_c = [cast(__calldata_ptr, (felt, (felt, felt))*)];
 let __calldata_ptr = __calldata_ptr + 3;
 
 let __calldata_actual_size = __calldata_ptr - cast(data_ptr, felt*);

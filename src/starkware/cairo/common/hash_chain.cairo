@@ -16,9 +16,8 @@ func hash_chain{hash_ptr: HashBuiltin*}(data_ptr: felt*) -> (hash: felt) {
     tempvar data_ptr_end = data_ptr + data_length;
     // Prepare the loop_frame for the first iteration of the hash_loop.
     tempvar loop_frame = LoopLocals(
-        data_ptr=data_ptr_end,
-        hash_ptr=hash_ptr,
-        cur_hash=[data_ptr_end]);
+        data_ptr=data_ptr_end, hash_ptr=hash_ptr, cur_hash=[data_ptr_end]
+    );
 
     hash_loop:
     let curr_frame = cast(ap - LoopLocals.SIZE, LoopLocals*);
@@ -35,7 +34,8 @@ func hash_chain{hash_ptr: HashBuiltin*}(data_ptr: felt*) -> (hash: felt) {
     tempvar next_frame = LoopLocals(
         data_ptr=curr_frame.data_ptr - 1,
         hash_ptr=curr_frame.hash_ptr + HashBuiltin.SIZE,
-        cur_hash=current_hash.result);
+        cur_hash=current_hash.result,
+    );
 
     // Update n_elements_to_hash and loop accordingly. Note that the hash is calculated backwards.
     n_elements_to_hash = next_frame.data_ptr - data_ptr;

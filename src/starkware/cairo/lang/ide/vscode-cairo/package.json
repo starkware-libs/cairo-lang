@@ -2,7 +2,7 @@
     "name": "cairo",
     "displayName": "Cairo",
     "description": "Support Cairo syntax",
-    "version": "0.10.2",
+    "version": "0.10.3",
     "engines": {
         "vscode": "^1.30.0"
     },

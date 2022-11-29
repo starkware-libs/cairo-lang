@@ -333,8 +333,12 @@ def decode_data(
     )
     parser.run(arguments)
     args = parser.args
+    has_trailing_comma = len(args) > 0
     return parser.code_elements, ArgList(
-        args=args, notes=[Notes()] * (len(args) + 1), has_trailing_comma=True, location=location
+        args=args,
+        notes=[Notes()] * (len(args) + 1),
+        has_trailing_comma=has_trailing_comma,
+        location=location,
     )
 
 

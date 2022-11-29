@@ -168,9 +168,9 @@ func get_point_from_x{range_check_ptr}(x: BigInt3, v: felt) -> (point: EcPoint) 
     // Check that y_square = x_cube + BETA.
     verify_zero(
         UnreducedBigInt3(
-        d0=x_cube.d0 + BETA - y_square.d0,
-        d1=x_cube.d1 - y_square.d1,
-        d2=x_cube.d2 - y_square.d2,
+            d0=x_cube.d0 + BETA - y_square.d0,
+            d1=x_cube.d1 - y_square.d1,
+            d2=x_cube.d2 - y_square.d2,
         ),
     );
 

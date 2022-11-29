@@ -111,6 +111,7 @@ feeder_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
         StarknetErrorCode.TRANSACTION_NOT_FOUND,
         StarknetErrorCode.UNINITIALIZED_CONTRACT,
         # Function call errors.
+        StarknetErrorCode.CONTRACT_ADDRESS_UNAVAILABLE,
         StarknetErrorCode.ENTRY_POINT_NOT_FOUND_IN_CONTRACT,
         StarknetErrorCode.FEE_TRANSFER_FAILURE,
         StarknetErrorCode.INVALID_RETURN_DATA,

@@ -361,17 +361,31 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar cpu__decode__opcode_rc__bit_2 = column0_row2 - (column0_row3 + column0_row3);
     tempvar cpu__decode__opcode_rc__bit_4 = column0_row4 - (column0_row5 + column0_row5);
     tempvar cpu__decode__opcode_rc__bit_3 = column0_row3 - (column0_row4 + column0_row4);
-    tempvar cpu__decode__flag_op1_base_op0_0 = 1 - (cpu__decode__opcode_rc__bit_2 + cpu__decode__opcode_rc__bit_4 + cpu__decode__opcode_rc__bit_3);
+    tempvar cpu__decode__flag_op1_base_op0_0 = 1 - (
+        cpu__decode__opcode_rc__bit_2 +
+        cpu__decode__opcode_rc__bit_4 +
+        cpu__decode__opcode_rc__bit_3
+    );
     tempvar cpu__decode__opcode_rc__bit_5 = column0_row5 - (column0_row6 + column0_row6);
     tempvar cpu__decode__opcode_rc__bit_6 = column0_row6 - (column0_row7 + column0_row7);
     tempvar cpu__decode__opcode_rc__bit_9 = column0_row9 - (column0_row10 + column0_row10);
-    tempvar cpu__decode__flag_res_op1_0 = 1 - (cpu__decode__opcode_rc__bit_5 + cpu__decode__opcode_rc__bit_6 + cpu__decode__opcode_rc__bit_9);
+    tempvar cpu__decode__flag_res_op1_0 = 1 - (
+        cpu__decode__opcode_rc__bit_5 +
+        cpu__decode__opcode_rc__bit_6 +
+        cpu__decode__opcode_rc__bit_9
+    );
     tempvar cpu__decode__opcode_rc__bit_7 = column0_row7 - (column0_row8 + column0_row8);
     tempvar cpu__decode__opcode_rc__bit_8 = column0_row8 - (column0_row9 + column0_row9);
-    tempvar cpu__decode__flag_pc_update_regular_0 = 1 - (cpu__decode__opcode_rc__bit_7 + cpu__decode__opcode_rc__bit_8 + cpu__decode__opcode_rc__bit_9);
+    tempvar cpu__decode__flag_pc_update_regular_0 = 1 - (
+        cpu__decode__opcode_rc__bit_7 +
+        cpu__decode__opcode_rc__bit_8 +
+        cpu__decode__opcode_rc__bit_9
+    );
     tempvar cpu__decode__opcode_rc__bit_12 = column0_row12 - (column0_row13 + column0_row13);
     tempvar cpu__decode__opcode_rc__bit_13 = column0_row13 - (column0_row14 + column0_row14);
-    tempvar cpu__decode__fp_update_regular_0 = 1 - (cpu__decode__opcode_rc__bit_12 + cpu__decode__opcode_rc__bit_13);
+    tempvar cpu__decode__fp_update_regular_0 = 1 - (
+        cpu__decode__opcode_rc__bit_12 + cpu__decode__opcode_rc__bit_13
+    );
     tempvar cpu__decode__opcode_rc__bit_1 = column0_row1 - (column0_row2 + column0_row2);
     tempvar npc_reg_0 = column5_row0 + cpu__decode__opcode_rc__bit_2 + 1;
     tempvar cpu__decode__opcode_rc__bit_10 = column0_row10 - (column0_row11 + column0_row11);
@@ -384,18 +398,39 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar rc_builtin__value0_0 = column7_row12;
     tempvar rc_builtin__value1_0 = rc_builtin__value0_0 * global_values.offset_size + column7_row44;
     tempvar rc_builtin__value2_0 = rc_builtin__value1_0 * global_values.offset_size + column7_row76;
-    tempvar rc_builtin__value3_0 = rc_builtin__value2_0 * global_values.offset_size + column7_row108;
-    tempvar rc_builtin__value4_0 = rc_builtin__value3_0 * global_values.offset_size + column7_row140;
-    tempvar rc_builtin__value5_0 = rc_builtin__value4_0 * global_values.offset_size + column7_row172;
-    tempvar rc_builtin__value6_0 = rc_builtin__value5_0 * global_values.offset_size + column7_row204;
-    tempvar rc_builtin__value7_0 = rc_builtin__value6_0 * global_values.offset_size + column7_row236;
+    tempvar rc_builtin__value3_0 = rc_builtin__value2_0 * global_values.offset_size +
+        column7_row108;
+    tempvar rc_builtin__value4_0 = rc_builtin__value3_0 * global_values.offset_size +
+        column7_row140;
+    tempvar rc_builtin__value5_0 = rc_builtin__value4_0 * global_values.offset_size +
+        column7_row172;
+    tempvar rc_builtin__value6_0 = rc_builtin__value5_0 * global_values.offset_size +
+        column7_row204;
+    tempvar rc_builtin__value7_0 = rc_builtin__value6_0 * global_values.offset_size +
+        column7_row236;
     tempvar ecdsa__signature0__doubling_key__x_squared = column8_row4 * column8_row4;
-    tempvar ecdsa__signature0__exponentiate_generator__bit_0 = column8_row38 - (column8_row166 + column8_row166);
-    tempvar ecdsa__signature0__exponentiate_generator__bit_neg_0 = 1 - ecdsa__signature0__exponentiate_generator__bit_0;
-    tempvar ecdsa__signature0__exponentiate_key__bit_0 = column8_row12 - (column8_row76 + column8_row76);
-    tempvar ecdsa__signature0__exponentiate_key__bit_neg_0 = 1 - ecdsa__signature0__exponentiate_key__bit_0;
-    tempvar bitwise__sum_var_0_0 = column7_row1 + column7_row17 * 2 + column7_row33 * 4 + column7_row49 * 8 + column7_row65 * 18446744073709551616 + column7_row81 * 36893488147419103232 + column7_row97 * 73786976294838206464 + column7_row113 * 147573952589676412928;
-    tempvar bitwise__sum_var_8_0 = column7_row129 * 340282366920938463463374607431768211456 + column7_row145 * 680564733841876926926749214863536422912 + column7_row161 * 1361129467683753853853498429727072845824 + column7_row177 * 2722258935367507707706996859454145691648 + column7_row193 * 6277101735386680763835789423207666416102355444464034512896 + column7_row209 * 12554203470773361527671578846415332832204710888928069025792 + column7_row225 * 25108406941546723055343157692830665664409421777856138051584 + column7_row241 * 50216813883093446110686315385661331328818843555712276103168;
+    tempvar ecdsa__signature0__exponentiate_generator__bit_0 = column8_row38 - (
+        column8_row166 + column8_row166
+    );
+    tempvar ecdsa__signature0__exponentiate_generator__bit_neg_0 = 1 -
+        ecdsa__signature0__exponentiate_generator__bit_0;
+    tempvar ecdsa__signature0__exponentiate_key__bit_0 = column8_row12 - (
+        column8_row76 + column8_row76
+    );
+    tempvar ecdsa__signature0__exponentiate_key__bit_neg_0 = 1 -
+        ecdsa__signature0__exponentiate_key__bit_0;
+    tempvar bitwise__sum_var_0_0 = column7_row1 + column7_row17 * 2 + column7_row33 * 4 +
+        column7_row49 * 8 + column7_row65 * 18446744073709551616 + column7_row81 *
+        36893488147419103232 + column7_row97 * 73786976294838206464 + column7_row113 *
+        147573952589676412928;
+    tempvar bitwise__sum_var_8_0 = column7_row129 * 340282366920938463463374607431768211456 +
+        column7_row145 * 680564733841876926926749214863536422912 + column7_row161 *
+        1361129467683753853853498429727072845824 + column7_row177 *
+        2722258935367507707706996859454145691648 + column7_row193 *
+        6277101735386680763835789423207666416102355444464034512896 + column7_row209 *
+        12554203470773361527671578846415332832204710888928069025792 + column7_row225 *
+        25108406941546723055343157692830665664409421777856138051584 + column7_row241 *
+        50216813883093446110686315385661331328818843555712276103168;
     tempvar ec_op__doubling_q__x_squared_0 = column8_row44 * column8_row44;
     tempvar ec_op__ec_subset_sum__bit_0 = column8_row18 - (column8_row82 + column8_row82);
     tempvar ec_op__ec_subset_sum__bit_neg_0 = 1 - ec_op__ec_subset_sum__bit_0;
@@ -404,7 +439,10 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = 0;
 
     // Constraint: cpu/decode/opcode_rc/bit.
-    tempvar value = (cpu__decode__opcode_rc__bit_0 * cpu__decode__opcode_rc__bit_0 - cpu__decode__opcode_rc__bit_0) * domain4 / domain0;
+    tempvar value = (
+        cpu__decode__opcode_rc__bit_0 * cpu__decode__opcode_rc__bit_0 -
+        cpu__decode__opcode_rc__bit_0
+    ) * domain4 / domain0;
     tempvar total_sum = total_sum + constraint_coefficients[0] * value;
 
     // Constraint: cpu/decode/opcode_rc/zero.
@@ -412,35 +450,82 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[1] * value;
 
     // Constraint: cpu/decode/opcode_rc_input.
-    tempvar value = (column5_row1 - (((column0_row0 * global_values.offset_size + column7_row4) * global_values.offset_size + column7_row8) * global_values.offset_size + column7_row0)) / domain5;
+    tempvar value = (
+        column5_row1 -
+        (
+            (
+                (column0_row0 * global_values.offset_size + column7_row4) *
+                global_values.offset_size +
+                column7_row8
+            ) * global_values.offset_size +
+            column7_row0
+        )
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[2] * value;
 
     // Constraint: cpu/decode/flag_op1_base_op0_bit.
-    tempvar value = (cpu__decode__flag_op1_base_op0_0 * cpu__decode__flag_op1_base_op0_0 - cpu__decode__flag_op1_base_op0_0) / domain5;
+    tempvar value = (
+        cpu__decode__flag_op1_base_op0_0 * cpu__decode__flag_op1_base_op0_0 -
+        cpu__decode__flag_op1_base_op0_0
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[3] * value;
 
     // Constraint: cpu/decode/flag_res_op1_bit.
-    tempvar value = (cpu__decode__flag_res_op1_0 * cpu__decode__flag_res_op1_0 - cpu__decode__flag_res_op1_0) / domain5;
+    tempvar value = (
+        cpu__decode__flag_res_op1_0 * cpu__decode__flag_res_op1_0 - cpu__decode__flag_res_op1_0
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[4] * value;
 
     // Constraint: cpu/decode/flag_pc_update_regular_bit.
-    tempvar value = (cpu__decode__flag_pc_update_regular_0 * cpu__decode__flag_pc_update_regular_0 - cpu__decode__flag_pc_update_regular_0) / domain5;
+    tempvar value = (
+        cpu__decode__flag_pc_update_regular_0 * cpu__decode__flag_pc_update_regular_0 -
+        cpu__decode__flag_pc_update_regular_0
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[5] * value;
 
     // Constraint: cpu/decode/fp_update_regular_bit.
-    tempvar value = (cpu__decode__fp_update_regular_0 * cpu__decode__fp_update_regular_0 - cpu__decode__fp_update_regular_0) / domain5;
+    tempvar value = (
+        cpu__decode__fp_update_regular_0 * cpu__decode__fp_update_regular_0 -
+        cpu__decode__fp_update_regular_0
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[6] * value;
 
     // Constraint: cpu/operands/mem_dst_addr.
-    tempvar value = (column5_row8 + global_values.half_offset_size - (cpu__decode__opcode_rc__bit_0 * column7_row11 + (1 - cpu__decode__opcode_rc__bit_0) * column7_row3 + column7_row0)) / domain5;
+    tempvar value = (
+        column5_row8 +
+        global_values.half_offset_size -
+        (
+            cpu__decode__opcode_rc__bit_0 * column7_row11 +
+            (1 - cpu__decode__opcode_rc__bit_0) * column7_row3 +
+            column7_row0
+        )
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[7] * value;
 
     // Constraint: cpu/operands/mem0_addr.
-    tempvar value = (column5_row4 + global_values.half_offset_size - (cpu__decode__opcode_rc__bit_1 * column7_row11 + (1 - cpu__decode__opcode_rc__bit_1) * column7_row3 + column7_row8)) / domain5;
+    tempvar value = (
+        column5_row4 +
+        global_values.half_offset_size -
+        (
+            cpu__decode__opcode_rc__bit_1 * column7_row11 +
+            (1 - cpu__decode__opcode_rc__bit_1) * column7_row3 +
+            column7_row8
+        )
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[8] * value;
 
     // Constraint: cpu/operands/mem1_addr.
-    tempvar value = (column5_row12 + global_values.half_offset_size - (cpu__decode__opcode_rc__bit_2 * column5_row0 + cpu__decode__opcode_rc__bit_4 * column7_row3 + cpu__decode__opcode_rc__bit_3 * column7_row11 + cpu__decode__flag_op1_base_op0_0 * column5_row5 + column7_row4)) / domain5;
+    tempvar value = (
+        column5_row12 +
+        global_values.half_offset_size -
+        (
+            cpu__decode__opcode_rc__bit_2 * column5_row0 +
+            cpu__decode__opcode_rc__bit_4 * column7_row3 +
+            cpu__decode__opcode_rc__bit_3 * column7_row11 +
+            cpu__decode__flag_op1_base_op0_0 * column5_row5 +
+            column7_row4
+        )
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[9] * value;
 
     // Constraint: cpu/operands/ops_mul.
@@ -448,11 +533,19 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[10] * value;
 
     // Constraint: cpu/operands/res.
-    tempvar value = ((1 - cpu__decode__opcode_rc__bit_9) * column7_row15 - (cpu__decode__opcode_rc__bit_5 * (column5_row5 + column5_row13) + cpu__decode__opcode_rc__bit_6 * column7_row7 + cpu__decode__flag_res_op1_0 * column5_row13)) / domain5;
+    tempvar value = (
+        (1 - cpu__decode__opcode_rc__bit_9) * column7_row15 -
+        (
+            cpu__decode__opcode_rc__bit_5 * (column5_row5 + column5_row13) +
+            cpu__decode__opcode_rc__bit_6 * column7_row7 +
+            cpu__decode__flag_res_op1_0 * column5_row13
+        )
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[11] * value;
 
     // Constraint: cpu/update_registers/update_pc/tmp0.
-    tempvar value = (column8_row0 - cpu__decode__opcode_rc__bit_9 * column5_row9) * domain23 / domain5;
+    tempvar value = (column8_row0 - cpu__decode__opcode_rc__bit_9 * column5_row9) * domain23 /
+        domain5;
     tempvar total_sum = total_sum + constraint_coefficients[12] * value;
 
     // Constraint: cpu/update_registers/update_pc/tmp1.
@@ -460,19 +553,43 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[13] * value;
 
     // Constraint: cpu/update_registers/update_pc/pc_cond_negative.
-    tempvar value = ((1 - cpu__decode__opcode_rc__bit_9) * column5_row16 + column8_row0 * (column5_row16 - (column5_row0 + column5_row13)) - (cpu__decode__flag_pc_update_regular_0 * npc_reg_0 + cpu__decode__opcode_rc__bit_7 * column7_row15 + cpu__decode__opcode_rc__bit_8 * (column5_row0 + column7_row15))) * domain23 / domain5;
+    tempvar value = (
+        (1 - cpu__decode__opcode_rc__bit_9) * column5_row16 +
+        column8_row0 * (column5_row16 - (column5_row0 + column5_row13)) -
+        (
+            cpu__decode__flag_pc_update_regular_0 * npc_reg_0 +
+            cpu__decode__opcode_rc__bit_7 * column7_row15 +
+            cpu__decode__opcode_rc__bit_8 * (column5_row0 + column7_row15)
+        )
+    ) * domain23 / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[14] * value;
 
     // Constraint: cpu/update_registers/update_pc/pc_cond_positive.
-    tempvar value = ((column8_row8 - cpu__decode__opcode_rc__bit_9) * (column5_row16 - npc_reg_0)) * domain23 / domain5;
+    tempvar value = ((column8_row8 - cpu__decode__opcode_rc__bit_9) * (column5_row16 - npc_reg_0)) *
+        domain23 / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[15] * value;
 
     // Constraint: cpu/update_registers/update_ap/ap_update.
-    tempvar value = (column7_row19 - (column7_row3 + cpu__decode__opcode_rc__bit_10 * column7_row15 + cpu__decode__opcode_rc__bit_11 + cpu__decode__opcode_rc__bit_12 * 2)) * domain23 / domain5;
+    tempvar value = (
+        column7_row19 -
+        (
+            column7_row3 +
+            cpu__decode__opcode_rc__bit_10 * column7_row15 +
+            cpu__decode__opcode_rc__bit_11 +
+            cpu__decode__opcode_rc__bit_12 * 2
+        )
+    ) * domain23 / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[16] * value;
 
     // Constraint: cpu/update_registers/update_fp/fp_update.
-    tempvar value = (column7_row27 - (cpu__decode__fp_update_regular_0 * column7_row11 + cpu__decode__opcode_rc__bit_13 * column5_row9 + cpu__decode__opcode_rc__bit_12 * (column7_row3 + 2))) * domain23 / domain5;
+    tempvar value = (
+        column7_row27 -
+        (
+            cpu__decode__fp_update_regular_0 * column7_row11 +
+            cpu__decode__opcode_rc__bit_13 * column5_row9 +
+            cpu__decode__opcode_rc__bit_12 * (column7_row3 + 2)
+        )
+    ) * domain23 / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[17] * value;
 
     // Constraint: cpu/opcodes/call/push_fp.
@@ -480,31 +597,59 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[18] * value;
 
     // Constraint: cpu/opcodes/call/push_pc.
-    tempvar value = (cpu__decode__opcode_rc__bit_12 * (column5_row5 - (column5_row0 + cpu__decode__opcode_rc__bit_2 + 1))) / domain5;
+    tempvar value = (
+        cpu__decode__opcode_rc__bit_12 * (
+            column5_row5 - (column5_row0 + cpu__decode__opcode_rc__bit_2 + 1)
+        )
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[19] * value;
 
     // Constraint: cpu/opcodes/call/off0.
-    tempvar value = (cpu__decode__opcode_rc__bit_12 * (column7_row0 - global_values.half_offset_size)) / domain5;
+    tempvar value = (
+        cpu__decode__opcode_rc__bit_12 * (column7_row0 - global_values.half_offset_size)
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[20] * value;
 
     // Constraint: cpu/opcodes/call/off1.
-    tempvar value = (cpu__decode__opcode_rc__bit_12 * (column7_row8 - (global_values.half_offset_size + 1))) / domain5;
+    tempvar value = (
+        cpu__decode__opcode_rc__bit_12 * (column7_row8 - (global_values.half_offset_size + 1))
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[21] * value;
 
     // Constraint: cpu/opcodes/call/flags.
-    tempvar value = (cpu__decode__opcode_rc__bit_12 * (cpu__decode__opcode_rc__bit_12 + cpu__decode__opcode_rc__bit_12 + 1 + 1 - (cpu__decode__opcode_rc__bit_0 + cpu__decode__opcode_rc__bit_1 + 4))) / domain5;
+    tempvar value = (
+        cpu__decode__opcode_rc__bit_12 * (
+            cpu__decode__opcode_rc__bit_12 +
+            cpu__decode__opcode_rc__bit_12 +
+            1 +
+            1 -
+            (cpu__decode__opcode_rc__bit_0 + cpu__decode__opcode_rc__bit_1 + 4)
+        )
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[22] * value;
 
     // Constraint: cpu/opcodes/ret/off0.
-    tempvar value = (cpu__decode__opcode_rc__bit_13 * (column7_row0 + 2 - global_values.half_offset_size)) / domain5;
+    tempvar value = (
+        cpu__decode__opcode_rc__bit_13 * (column7_row0 + 2 - global_values.half_offset_size)
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[23] * value;
 
     // Constraint: cpu/opcodes/ret/off2.
-    tempvar value = (cpu__decode__opcode_rc__bit_13 * (column7_row4 + 1 - global_values.half_offset_size)) / domain5;
+    tempvar value = (
+        cpu__decode__opcode_rc__bit_13 * (column7_row4 + 1 - global_values.half_offset_size)
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[24] * value;
 
     // Constraint: cpu/opcodes/ret/flags.
-    tempvar value = (cpu__decode__opcode_rc__bit_13 * (cpu__decode__opcode_rc__bit_7 + cpu__decode__opcode_rc__bit_0 + cpu__decode__opcode_rc__bit_3 + cpu__decode__flag_res_op1_0 - 4)) / domain5;
+    tempvar value = (
+        cpu__decode__opcode_rc__bit_13 * (
+            cpu__decode__opcode_rc__bit_7 +
+            cpu__decode__opcode_rc__bit_0 +
+            cpu__decode__opcode_rc__bit_3 +
+            cpu__decode__flag_res_op1_0 -
+            4
+        )
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[25] * value;
 
     // Constraint: cpu/opcodes/assert_eq/assert_eq.
@@ -536,23 +681,53 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[32] * value;
 
     // Constraint: memory/multi_column_perm/perm/init0.
-    tempvar value = ((global_values.memory__multi_column_perm__perm__interaction_elm - (column6_row0 + global_values.memory__multi_column_perm__hash_interaction_elm0 * column6_row1)) * column9_inter1_row0 + column5_row0 + global_values.memory__multi_column_perm__hash_interaction_elm0 * column5_row1 - global_values.memory__multi_column_perm__perm__interaction_elm) / domain24;
+    tempvar value = (
+        (
+            global_values.memory__multi_column_perm__perm__interaction_elm -
+            (
+                column6_row0 +
+                global_values.memory__multi_column_perm__hash_interaction_elm0 * column6_row1
+            )
+        ) * column9_inter1_row0 +
+        column5_row0 +
+        global_values.memory__multi_column_perm__hash_interaction_elm0 * column5_row1 -
+        global_values.memory__multi_column_perm__perm__interaction_elm
+    ) / domain24;
     tempvar total_sum = total_sum + constraint_coefficients[33] * value;
 
     // Constraint: memory/multi_column_perm/perm/step0.
-    tempvar value = ((global_values.memory__multi_column_perm__perm__interaction_elm - (column6_row2 + global_values.memory__multi_column_perm__hash_interaction_elm0 * column6_row3)) * column9_inter1_row2 - (global_values.memory__multi_column_perm__perm__interaction_elm - (column5_row2 + global_values.memory__multi_column_perm__hash_interaction_elm0 * column5_row3)) * column9_inter1_row0) * domain25 / domain1;
+    tempvar value = (
+        (
+            global_values.memory__multi_column_perm__perm__interaction_elm -
+            (
+                column6_row2 +
+                global_values.memory__multi_column_perm__hash_interaction_elm0 * column6_row3
+            )
+        ) * column9_inter1_row2 -
+        (
+            global_values.memory__multi_column_perm__perm__interaction_elm -
+            (
+                column5_row2 +
+                global_values.memory__multi_column_perm__hash_interaction_elm0 * column5_row3
+            )
+        ) * column9_inter1_row0
+    ) * domain25 / domain1;
     tempvar total_sum = total_sum + constraint_coefficients[34] * value;
 
     // Constraint: memory/multi_column_perm/perm/last.
-    tempvar value = (column9_inter1_row0 - global_values.memory__multi_column_perm__perm__public_memory_prod) / domain25;
+    tempvar value = (
+        column9_inter1_row0 - global_values.memory__multi_column_perm__perm__public_memory_prod
+    ) / domain25;
     tempvar total_sum = total_sum + constraint_coefficients[35] * value;
 
     // Constraint: memory/diff_is_bit.
-    tempvar value = (memory__address_diff_0 * memory__address_diff_0 - memory__address_diff_0) * domain25 / domain1;
+    tempvar value = (memory__address_diff_0 * memory__address_diff_0 - memory__address_diff_0) *
+        domain25 / domain1;
     tempvar total_sum = total_sum + constraint_coefficients[36] * value;
 
     // Constraint: memory/is_func.
-    tempvar value = ((memory__address_diff_0 - 1) * (column6_row1 - column6_row3)) * domain25 / domain1;
+    tempvar value = ((memory__address_diff_0 - 1) * (column6_row1 - column6_row3)) * domain25 /
+        domain1;
     tempvar total_sum = total_sum + constraint_coefficients[37] * value;
 
     // Constraint: memory/initial_addr.
@@ -568,11 +743,18 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[40] * value;
 
     // Constraint: rc16/perm/init0.
-    tempvar value = ((global_values.rc16__perm__interaction_elm - column7_row2) * column9_inter1_row1 + column7_row0 - global_values.rc16__perm__interaction_elm) / domain24;
+    tempvar value = (
+        (global_values.rc16__perm__interaction_elm - column7_row2) * column9_inter1_row1 +
+        column7_row0 -
+        global_values.rc16__perm__interaction_elm
+    ) / domain24;
     tempvar total_sum = total_sum + constraint_coefficients[41] * value;
 
     // Constraint: rc16/perm/step0.
-    tempvar value = ((global_values.rc16__perm__interaction_elm - column7_row6) * column9_inter1_row5 - (global_values.rc16__perm__interaction_elm - column7_row4) * column9_inter1_row1) * domain26 / domain2;
+    tempvar value = (
+        (global_values.rc16__perm__interaction_elm - column7_row6) * column9_inter1_row5 -
+        (global_values.rc16__perm__interaction_elm - column7_row4) * column9_inter1_row1
+    ) * domain26 / domain2;
     tempvar total_sum = total_sum + constraint_coefficients[42] * value;
 
     // Constraint: rc16/perm/last.
@@ -592,15 +774,27 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[46] * value;
 
     // Constraint: diluted_check/permutation/init0.
-    tempvar value = ((global_values.diluted_check__permutation__interaction_elm - column7_row5) * column9_inter1_row7 + column7_row1 - global_values.diluted_check__permutation__interaction_elm) / domain24;
+    tempvar value = (
+        (global_values.diluted_check__permutation__interaction_elm - column7_row5) *
+        column9_inter1_row7 +
+        column7_row1 -
+        global_values.diluted_check__permutation__interaction_elm
+    ) / domain24;
     tempvar total_sum = total_sum + constraint_coefficients[47] * value;
 
     // Constraint: diluted_check/permutation/step0.
-    tempvar value = ((global_values.diluted_check__permutation__interaction_elm - column7_row13) * column9_inter1_row15 - (global_values.diluted_check__permutation__interaction_elm - column7_row9) * column9_inter1_row7) * domain27 / domain3;
+    tempvar value = (
+        (global_values.diluted_check__permutation__interaction_elm - column7_row13) *
+        column9_inter1_row15 -
+        (global_values.diluted_check__permutation__interaction_elm - column7_row9) *
+        column9_inter1_row7
+    ) * domain27 / domain3;
     tempvar total_sum = total_sum + constraint_coefficients[48] * value;
 
     // Constraint: diluted_check/permutation/last.
-    tempvar value = (column9_inter1_row7 - global_values.diluted_check__permutation__public_memory_prod) / domain27;
+    tempvar value = (
+        column9_inter1_row7 - global_values.diluted_check__permutation__public_memory_prod
+    ) / domain27;
     tempvar total_sum = total_sum + constraint_coefficients[49] * value;
 
     // Constraint: diluted_check/init.
@@ -612,7 +806,17 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[51] * value;
 
     // Constraint: diluted_check/step.
-    tempvar value = (column9_inter1_row11 - (column9_inter1_row3 * (1 + global_values.diluted_check__interaction_z * (column7_row13 - column7_row5)) + global_values.diluted_check__interaction_alpha * (column7_row13 - column7_row5) * (column7_row13 - column7_row5))) * domain27 / domain3;
+    tempvar value = (
+        column9_inter1_row11 -
+        (
+            column9_inter1_row3 * (
+                1 + global_values.diluted_check__interaction_z * (column7_row13 - column7_row5)
+            ) +
+            global_values.diluted_check__interaction_alpha * (column7_row13 - column7_row5) * (
+                column7_row13 - column7_row5
+            )
+        )
+    ) * domain27 / domain3;
     tempvar total_sum = total_sum + constraint_coefficients[52] * value;
 
     // Constraint: diluted_check/last.
@@ -624,11 +828,18 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[54] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/bit_unpacking/zeroes_between_ones0.
-    tempvar value = (column8_row86 * (column3_row1 - 3138550867693340381917894711603833208051177722232017256448 * column3_row192)) / domain8;
+    tempvar value = (
+        column8_row86 * (
+            column3_row1 -
+            3138550867693340381917894711603833208051177722232017256448 * column3_row192
+        )
+    ) / domain8;
     tempvar total_sum = total_sum + constraint_coefficients[55] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/bit_unpacking/cumulative_bit192.
-    tempvar value = (column8_row86 - column4_row255 * (column3_row192 - (column3_row193 + column3_row193))) / domain8;
+    tempvar value = (
+        column8_row86 - column4_row255 * (column3_row192 - (column3_row193 + column3_row193))
+    ) / domain8;
     tempvar total_sum = total_sum + constraint_coefficients[56] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/bit_unpacking/zeroes_between_ones192.
@@ -636,15 +847,26 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[57] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/bit_unpacking/cumulative_bit196.
-    tempvar value = (column4_row255 - (column3_row251 - (column3_row252 + column3_row252)) * (column3_row196 - (column3_row197 + column3_row197))) / domain8;
+    tempvar value = (
+        column4_row255 -
+        (column3_row251 - (column3_row252 + column3_row252)) * (
+            column3_row196 - (column3_row197 + column3_row197)
+        )
+    ) / domain8;
     tempvar total_sum = total_sum + constraint_coefficients[58] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/bit_unpacking/zeroes_between_ones196.
-    tempvar value = ((column3_row251 - (column3_row252 + column3_row252)) * (column3_row197 - 18014398509481984 * column3_row251)) / domain8;
+    tempvar value = (
+        (column3_row251 - (column3_row252 + column3_row252)) * (
+            column3_row197 - 18014398509481984 * column3_row251
+        )
+    ) / domain8;
     tempvar total_sum = total_sum + constraint_coefficients[59] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/booleanity_test.
-    tempvar value = (pedersen__hash0__ec_subset_sum__bit_0 * (pedersen__hash0__ec_subset_sum__bit_0 - 1)) * domain9 / domain0;
+    tempvar value = (
+        pedersen__hash0__ec_subset_sum__bit_0 * (pedersen__hash0__ec_subset_sum__bit_0 - 1)
+    ) * domain9 / domain0;
     tempvar total_sum = total_sum + constraint_coefficients[60] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/bit_extraction_end.
@@ -656,23 +878,36 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[62] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/add_points/slope.
-    tempvar value = (pedersen__hash0__ec_subset_sum__bit_0 * (column2_row0 - global_values.pedersen__points__y) - column4_row0 * (column1_row0 - global_values.pedersen__points__x)) * domain9 / domain0;
+    tempvar value = (
+        pedersen__hash0__ec_subset_sum__bit_0 * (column2_row0 - global_values.pedersen__points__y) -
+        column4_row0 * (column1_row0 - global_values.pedersen__points__x)
+    ) * domain9 / domain0;
     tempvar total_sum = total_sum + constraint_coefficients[63] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/add_points/x.
-    tempvar value = (column4_row0 * column4_row0 - pedersen__hash0__ec_subset_sum__bit_0 * (column1_row0 + global_values.pedersen__points__x + column1_row1)) * domain9 / domain0;
+    tempvar value = (
+        column4_row0 * column4_row0 -
+        pedersen__hash0__ec_subset_sum__bit_0 * (
+            column1_row0 + global_values.pedersen__points__x + column1_row1
+        )
+    ) * domain9 / domain0;
     tempvar total_sum = total_sum + constraint_coefficients[64] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/add_points/y.
-    tempvar value = (pedersen__hash0__ec_subset_sum__bit_0 * (column2_row0 + column2_row1) - column4_row0 * (column1_row0 - column1_row1)) * domain9 / domain0;
+    tempvar value = (
+        pedersen__hash0__ec_subset_sum__bit_0 * (column2_row0 + column2_row1) -
+        column4_row0 * (column1_row0 - column1_row1)
+    ) * domain9 / domain0;
     tempvar total_sum = total_sum + constraint_coefficients[65] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/copy_point/x.
-    tempvar value = (pedersen__hash0__ec_subset_sum__bit_neg_0 * (column1_row1 - column1_row0)) * domain9 / domain0;
+    tempvar value = (pedersen__hash0__ec_subset_sum__bit_neg_0 * (column1_row1 - column1_row0)) *
+        domain9 / domain0;
     tempvar total_sum = total_sum + constraint_coefficients[66] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/copy_point/y.
-    tempvar value = (pedersen__hash0__ec_subset_sum__bit_neg_0 * (column2_row1 - column2_row0)) * domain9 / domain0;
+    tempvar value = (pedersen__hash0__ec_subset_sum__bit_neg_0 * (column2_row1 - column2_row0)) *
+        domain9 / domain0;
     tempvar total_sum = total_sum + constraint_coefficients[67] * value;
 
     // Constraint: pedersen/hash0/copy_point/x.
@@ -732,19 +967,33 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[81] * value;
 
     // Constraint: ecdsa/signature0/doubling_key/slope.
-    tempvar value = (ecdsa__signature0__doubling_key__x_squared + ecdsa__signature0__doubling_key__x_squared + ecdsa__signature0__doubling_key__x_squared + global_values.ecdsa__sig_config.alpha - (column8_row36 + column8_row36) * column8_row50) * domain16 / domain6;
+    tempvar value = (
+        ecdsa__signature0__doubling_key__x_squared +
+        ecdsa__signature0__doubling_key__x_squared +
+        ecdsa__signature0__doubling_key__x_squared +
+        global_values.ecdsa__sig_config.alpha -
+        (column8_row36 + column8_row36) * column8_row50
+    ) * domain16 / domain6;
     tempvar total_sum = total_sum + constraint_coefficients[82] * value;
 
     // Constraint: ecdsa/signature0/doubling_key/x.
-    tempvar value = (column8_row50 * column8_row50 - (column8_row4 + column8_row4 + column8_row68)) * domain16 / domain6;
+    tempvar value = (
+        column8_row50 * column8_row50 - (column8_row4 + column8_row4 + column8_row68)
+    ) * domain16 / domain6;
     tempvar total_sum = total_sum + constraint_coefficients[83] * value;
 
     // Constraint: ecdsa/signature0/doubling_key/y.
-    tempvar value = (column8_row36 + column8_row100 - column8_row50 * (column8_row4 - column8_row68)) * domain16 / domain6;
+    tempvar value = (
+        column8_row36 + column8_row100 - column8_row50 * (column8_row4 - column8_row68)
+    ) * domain16 / domain6;
     tempvar total_sum = total_sum + constraint_coefficients[84] * value;
 
     // Constraint: ecdsa/signature0/exponentiate_generator/booleanity_test.
-    tempvar value = (ecdsa__signature0__exponentiate_generator__bit_0 * (ecdsa__signature0__exponentiate_generator__bit_0 - 1)) * domain20 / domain7;
+    tempvar value = (
+        ecdsa__signature0__exponentiate_generator__bit_0 * (
+            ecdsa__signature0__exponentiate_generator__bit_0 - 1
+        )
+    ) * domain20 / domain7;
     tempvar total_sum = total_sum + constraint_coefficients[85] * value;
 
     // Constraint: ecdsa/signature0/exponentiate_generator/bit_extraction_end.
@@ -756,31 +1005,54 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[87] * value;
 
     // Constraint: ecdsa/signature0/exponentiate_generator/add_points/slope.
-    tempvar value = (ecdsa__signature0__exponentiate_generator__bit_0 * (column8_row70 - global_values.ecdsa__generator_points__y) - column8_row102 * (column8_row6 - global_values.ecdsa__generator_points__x)) * domain20 / domain7;
+    tempvar value = (
+        ecdsa__signature0__exponentiate_generator__bit_0 * (
+            column8_row70 - global_values.ecdsa__generator_points__y
+        ) -
+        column8_row102 * (column8_row6 - global_values.ecdsa__generator_points__x)
+    ) * domain20 / domain7;
     tempvar total_sum = total_sum + constraint_coefficients[88] * value;
 
     // Constraint: ecdsa/signature0/exponentiate_generator/add_points/x.
-    tempvar value = (column8_row102 * column8_row102 - ecdsa__signature0__exponentiate_generator__bit_0 * (column8_row6 + global_values.ecdsa__generator_points__x + column8_row134)) * domain20 / domain7;
+    tempvar value = (
+        column8_row102 * column8_row102 -
+        ecdsa__signature0__exponentiate_generator__bit_0 * (
+            column8_row6 + global_values.ecdsa__generator_points__x + column8_row134
+        )
+    ) * domain20 / domain7;
     tempvar total_sum = total_sum + constraint_coefficients[89] * value;
 
     // Constraint: ecdsa/signature0/exponentiate_generator/add_points/y.
-    tempvar value = (ecdsa__signature0__exponentiate_generator__bit_0 * (column8_row70 + column8_row198) - column8_row102 * (column8_row6 - column8_row134)) * domain20 / domain7;
+    tempvar value = (
+        ecdsa__signature0__exponentiate_generator__bit_0 * (column8_row70 + column8_row198) -
+        column8_row102 * (column8_row6 - column8_row134)
+    ) * domain20 / domain7;
     tempvar total_sum = total_sum + constraint_coefficients[90] * value;
 
     // Constraint: ecdsa/signature0/exponentiate_generator/add_points/x_diff_inv.
-    tempvar value = (column8_row22 * (column8_row6 - global_values.ecdsa__generator_points__x) - 1) * domain20 / domain7;
+    tempvar value = (
+        column8_row22 * (column8_row6 - global_values.ecdsa__generator_points__x) - 1
+    ) * domain20 / domain7;
     tempvar total_sum = total_sum + constraint_coefficients[91] * value;
 
     // Constraint: ecdsa/signature0/exponentiate_generator/copy_point/x.
-    tempvar value = (ecdsa__signature0__exponentiate_generator__bit_neg_0 * (column8_row134 - column8_row6)) * domain20 / domain7;
+    tempvar value = (
+        ecdsa__signature0__exponentiate_generator__bit_neg_0 * (column8_row134 - column8_row6)
+    ) * domain20 / domain7;
     tempvar total_sum = total_sum + constraint_coefficients[92] * value;
 
     // Constraint: ecdsa/signature0/exponentiate_generator/copy_point/y.
-    tempvar value = (ecdsa__signature0__exponentiate_generator__bit_neg_0 * (column8_row198 - column8_row70)) * domain20 / domain7;
+    tempvar value = (
+        ecdsa__signature0__exponentiate_generator__bit_neg_0 * (column8_row198 - column8_row70)
+    ) * domain20 / domain7;
     tempvar total_sum = total_sum + constraint_coefficients[93] * value;
 
     // Constraint: ecdsa/signature0/exponentiate_key/booleanity_test.
-    tempvar value = (ecdsa__signature0__exponentiate_key__bit_0 * (ecdsa__signature0__exponentiate_key__bit_0 - 1)) * domain16 / domain6;
+    tempvar value = (
+        ecdsa__signature0__exponentiate_key__bit_0 * (
+            ecdsa__signature0__exponentiate_key__bit_0 - 1
+        )
+    ) * domain16 / domain6;
     tempvar total_sum = total_sum + constraint_coefficients[94] * value;
 
     // Constraint: ecdsa/signature0/exponentiate_key/bit_extraction_end.
@@ -792,15 +1064,24 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[96] * value;
 
     // Constraint: ecdsa/signature0/exponentiate_key/add_points/slope.
-    tempvar value = (ecdsa__signature0__exponentiate_key__bit_0 * (column8_row52 - column8_row36) - column8_row10 * (column8_row20 - column8_row4)) * domain16 / domain6;
+    tempvar value = (
+        ecdsa__signature0__exponentiate_key__bit_0 * (column8_row52 - column8_row36) -
+        column8_row10 * (column8_row20 - column8_row4)
+    ) * domain16 / domain6;
     tempvar total_sum = total_sum + constraint_coefficients[97] * value;
 
     // Constraint: ecdsa/signature0/exponentiate_key/add_points/x.
-    tempvar value = (column8_row10 * column8_row10 - ecdsa__signature0__exponentiate_key__bit_0 * (column8_row20 + column8_row4 + column8_row84)) * domain16 / domain6;
+    tempvar value = (
+        column8_row10 * column8_row10 -
+        ecdsa__signature0__exponentiate_key__bit_0 * (column8_row20 + column8_row4 + column8_row84)
+    ) * domain16 / domain6;
     tempvar total_sum = total_sum + constraint_coefficients[98] * value;
 
     // Constraint: ecdsa/signature0/exponentiate_key/add_points/y.
-    tempvar value = (ecdsa__signature0__exponentiate_key__bit_0 * (column8_row52 + column8_row116) - column8_row10 * (column8_row20 - column8_row84)) * domain16 / domain6;
+    tempvar value = (
+        ecdsa__signature0__exponentiate_key__bit_0 * (column8_row52 + column8_row116) -
+        column8_row10 * (column8_row20 - column8_row84)
+    ) * domain16 / domain6;
     tempvar total_sum = total_sum + constraint_coefficients[99] * value;
 
     // Constraint: ecdsa/signature0/exponentiate_key/add_points/x_diff_inv.
@@ -808,11 +1089,15 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[100] * value;
 
     // Constraint: ecdsa/signature0/exponentiate_key/copy_point/x.
-    tempvar value = (ecdsa__signature0__exponentiate_key__bit_neg_0 * (column8_row84 - column8_row20)) * domain16 / domain6;
+    tempvar value = (
+        ecdsa__signature0__exponentiate_key__bit_neg_0 * (column8_row84 - column8_row20)
+    ) * domain16 / domain6;
     tempvar total_sum = total_sum + constraint_coefficients[101] * value;
 
     // Constraint: ecdsa/signature0/exponentiate_key/copy_point/y.
-    tempvar value = (ecdsa__signature0__exponentiate_key__bit_neg_0 * (column8_row116 - column8_row52)) * domain16 / domain6;
+    tempvar value = (
+        ecdsa__signature0__exponentiate_key__bit_neg_0 * (column8_row116 - column8_row52)
+    ) * domain16 / domain6;
     tempvar total_sum = total_sum + constraint_coefficients[102] * value;
 
     // Constraint: ecdsa/signature0/init_gen/x.
@@ -832,15 +1117,25 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[106] * value;
 
     // Constraint: ecdsa/signature0/add_results/slope.
-    tempvar value = (column8_row32710 - (column8_row16372 + column8_row32742 * (column8_row32646 - column8_row16340))) / domain22;
+    tempvar value = (
+        column8_row32710 -
+        (column8_row16372 + column8_row32742 * (column8_row32646 - column8_row16340))
+    ) / domain22;
     tempvar total_sum = total_sum + constraint_coefficients[107] * value;
 
     // Constraint: ecdsa/signature0/add_results/x.
-    tempvar value = (column8_row32742 * column8_row32742 - (column8_row32646 + column8_row16340 + column8_row16388)) / domain22;
+    tempvar value = (
+        column8_row32742 * column8_row32742 -
+        (column8_row32646 + column8_row16340 + column8_row16388)
+    ) / domain22;
     tempvar total_sum = total_sum + constraint_coefficients[108] * value;
 
     // Constraint: ecdsa/signature0/add_results/y.
-    tempvar value = (column8_row32710 + column8_row16420 - column8_row32742 * (column8_row32646 - column8_row16388)) / domain22;
+    tempvar value = (
+        column8_row32710 +
+        column8_row16420 -
+        column8_row32742 * (column8_row32646 - column8_row16388)
+    ) / domain22;
     tempvar total_sum = total_sum + constraint_coefficients[109] * value;
 
     // Constraint: ecdsa/signature0/add_results/x_diff_inv.
@@ -848,15 +1143,24 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[110] * value;
 
     // Constraint: ecdsa/signature0/extract_r/slope.
-    tempvar value = (column8_row32756 + global_values.ecdsa__sig_config.shift_point.y - column8_row16346 * (column8_row32724 - global_values.ecdsa__sig_config.shift_point.x)) / domain22;
+    tempvar value = (
+        column8_row32756 +
+        global_values.ecdsa__sig_config.shift_point.y -
+        column8_row16346 * (column8_row32724 - global_values.ecdsa__sig_config.shift_point.x)
+    ) / domain22;
     tempvar total_sum = total_sum + constraint_coefficients[111] * value;
 
     // Constraint: ecdsa/signature0/extract_r/x.
-    tempvar value = (column8_row16346 * column8_row16346 - (column8_row32724 + global_values.ecdsa__sig_config.shift_point.x + column8_row12)) / domain22;
+    tempvar value = (
+        column8_row16346 * column8_row16346 -
+        (column8_row32724 + global_values.ecdsa__sig_config.shift_point.x + column8_row12)
+    ) / domain22;
     tempvar total_sum = total_sum + constraint_coefficients[112] * value;
 
     // Constraint: ecdsa/signature0/extract_r/x_diff_inv.
-    tempvar value = (column8_row32730 * (column8_row32724 - global_values.ecdsa__sig_config.shift_point.x) - 1) / domain22;
+    tempvar value = (
+        column8_row32730 * (column8_row32724 - global_values.ecdsa__sig_config.shift_point.x) - 1
+    ) / domain22;
     tempvar total_sum = total_sum + constraint_coefficients[113] * value;
 
     // Constraint: ecdsa/signature0/z_nonzero.
@@ -872,7 +1176,14 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[116] * value;
 
     // Constraint: ecdsa/signature0/q_on_curve/on_curve.
-    tempvar value = (column8_row36 * column8_row36 - (column8_row4 * column8_row32762 + global_values.ecdsa__sig_config.alpha * column8_row4 + global_values.ecdsa__sig_config.beta)) / domain22;
+    tempvar value = (
+        column8_row36 * column8_row36 -
+        (
+            column8_row4 * column8_row32762 +
+            global_values.ecdsa__sig_config.alpha * column8_row4 +
+            global_values.ecdsa__sig_config.beta
+        )
+    ) / domain22;
     tempvar total_sum = total_sum + constraint_coefficients[117] * value;
 
     // Constraint: ecdsa/init_addr.
@@ -920,7 +1231,9 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[128] * value;
 
     // Constraint: bitwise/addition_is_xor_with_and.
-    tempvar value = (column7_row1 + column7_row257 - (column7_row769 + column7_row513 + column7_row513)) / domain15;
+    tempvar value = (
+        column7_row1 + column7_row257 - (column7_row769 + column7_row513 + column7_row513)
+    ) / domain15;
     tempvar total_sum = total_sum + constraint_coefficients[129] * value;
 
     // Constraint: bitwise/unique_unpacking192.
@@ -972,15 +1285,25 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[141] * value;
 
     // Constraint: ec_op/doubling_q/slope.
-    tempvar value = (ec_op__doubling_q__x_squared_0 + ec_op__doubling_q__x_squared_0 + ec_op__doubling_q__x_squared_0 + global_values.ec_op__curve_config.alpha - (column8_row28 + column8_row28) * column8_row60) * domain16 / domain6;
+    tempvar value = (
+        ec_op__doubling_q__x_squared_0 +
+        ec_op__doubling_q__x_squared_0 +
+        ec_op__doubling_q__x_squared_0 +
+        global_values.ec_op__curve_config.alpha -
+        (column8_row28 + column8_row28) * column8_row60
+    ) * domain16 / domain6;
     tempvar total_sum = total_sum + constraint_coefficients[142] * value;
 
     // Constraint: ec_op/doubling_q/x.
-    tempvar value = (column8_row60 * column8_row60 - (column8_row44 + column8_row44 + column8_row108)) * domain16 / domain6;
+    tempvar value = (
+        column8_row60 * column8_row60 - (column8_row44 + column8_row44 + column8_row108)
+    ) * domain16 / domain6;
     tempvar total_sum = total_sum + constraint_coefficients[143] * value;
 
     // Constraint: ec_op/doubling_q/y.
-    tempvar value = (column8_row28 + column8_row92 - column8_row60 * (column8_row44 - column8_row108)) * domain16 / domain6;
+    tempvar value = (
+        column8_row28 + column8_row92 - column8_row60 * (column8_row44 - column8_row108)
+    ) * domain16 / domain6;
     tempvar total_sum = total_sum + constraint_coefficients[144] * value;
 
     // Constraint: ec_op/get_q_x.
@@ -992,15 +1315,24 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[146] * value;
 
     // Constraint: ec_op/ec_subset_sum/bit_unpacking/last_one_is_zero.
-    tempvar value = (column8_row16362 * (column8_row18 - (column8_row82 + column8_row82))) / domain18;
+    tempvar value = (column8_row16362 * (column8_row18 - (column8_row82 + column8_row82))) /
+        domain18;
     tempvar total_sum = total_sum + constraint_coefficients[147] * value;
 
     // Constraint: ec_op/ec_subset_sum/bit_unpacking/zeroes_between_ones0.
-    tempvar value = (column8_row16362 * (column8_row82 - 3138550867693340381917894711603833208051177722232017256448 * column8_row12306)) / domain18;
+    tempvar value = (
+        column8_row16362 * (
+            column8_row82 -
+            3138550867693340381917894711603833208051177722232017256448 * column8_row12306
+        )
+    ) / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[148] * value;
 
     // Constraint: ec_op/ec_subset_sum/bit_unpacking/cumulative_bit192.
-    tempvar value = (column8_row16362 - column8_row16330 * (column8_row12306 - (column8_row12370 + column8_row12370))) / domain18;
+    tempvar value = (
+        column8_row16362 -
+        column8_row16330 * (column8_row12306 - (column8_row12370 + column8_row12370))
+    ) / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[149] * value;
 
     // Constraint: ec_op/ec_subset_sum/bit_unpacking/zeroes_between_ones192.
@@ -1008,15 +1340,25 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[150] * value;
 
     // Constraint: ec_op/ec_subset_sum/bit_unpacking/cumulative_bit196.
-    tempvar value = (column8_row16330 - (column8_row16082 - (column8_row16146 + column8_row16146)) * (column8_row12562 - (column8_row12626 + column8_row12626))) / domain18;
+    tempvar value = (
+        column8_row16330 -
+        (column8_row16082 - (column8_row16146 + column8_row16146)) * (
+            column8_row12562 - (column8_row12626 + column8_row12626)
+        )
+    ) / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[151] * value;
 
     // Constraint: ec_op/ec_subset_sum/bit_unpacking/zeroes_between_ones196.
-    tempvar value = ((column8_row16082 - (column8_row16146 + column8_row16146)) * (column8_row12626 - 18014398509481984 * column8_row16082)) / domain18;
+    tempvar value = (
+        (column8_row16082 - (column8_row16146 + column8_row16146)) * (
+            column8_row12626 - 18014398509481984 * column8_row16082
+        )
+    ) / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[152] * value;
 
     // Constraint: ec_op/ec_subset_sum/booleanity_test.
-    tempvar value = (ec_op__ec_subset_sum__bit_0 * (ec_op__ec_subset_sum__bit_0 - 1)) * domain16 / domain6;
+    tempvar value = (ec_op__ec_subset_sum__bit_0 * (ec_op__ec_subset_sum__bit_0 - 1)) * domain16 /
+        domain6;
     tempvar total_sum = total_sum + constraint_coefficients[153] * value;
 
     // Constraint: ec_op/ec_subset_sum/bit_extraction_end.
@@ -1028,15 +1370,24 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[155] * value;
 
     // Constraint: ec_op/ec_subset_sum/add_points/slope.
-    tempvar value = (ec_op__ec_subset_sum__bit_0 * (column8_row34 - column8_row28) - column8_row26 * (column8_row2 - column8_row44)) * domain16 / domain6;
+    tempvar value = (
+        ec_op__ec_subset_sum__bit_0 * (column8_row34 - column8_row28) -
+        column8_row26 * (column8_row2 - column8_row44)
+    ) * domain16 / domain6;
     tempvar total_sum = total_sum + constraint_coefficients[156] * value;
 
     // Constraint: ec_op/ec_subset_sum/add_points/x.
-    tempvar value = (column8_row26 * column8_row26 - ec_op__ec_subset_sum__bit_0 * (column8_row2 + column8_row44 + column8_row66)) * domain16 / domain6;
+    tempvar value = (
+        column8_row26 * column8_row26 -
+        ec_op__ec_subset_sum__bit_0 * (column8_row2 + column8_row44 + column8_row66)
+    ) * domain16 / domain6;
     tempvar total_sum = total_sum + constraint_coefficients[157] * value;
 
     // Constraint: ec_op/ec_subset_sum/add_points/y.
-    tempvar value = (ec_op__ec_subset_sum__bit_0 * (column8_row34 + column8_row98) - column8_row26 * (column8_row2 - column8_row66)) * domain16 / domain6;
+    tempvar value = (
+        ec_op__ec_subset_sum__bit_0 * (column8_row34 + column8_row98) -
+        column8_row26 * (column8_row2 - column8_row66)
+    ) * domain16 / domain6;
     tempvar total_sum = total_sum + constraint_coefficients[158] * value;
 
     // Constraint: ec_op/ec_subset_sum/add_points/x_diff_inv.
@@ -1044,11 +1395,13 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[159] * value;
 
     // Constraint: ec_op/ec_subset_sum/copy_point/x.
-    tempvar value = (ec_op__ec_subset_sum__bit_neg_0 * (column8_row66 - column8_row2)) * domain16 / domain6;
+    tempvar value = (ec_op__ec_subset_sum__bit_neg_0 * (column8_row66 - column8_row2)) * domain16 /
+        domain6;
     tempvar total_sum = total_sum + constraint_coefficients[160] * value;
 
     // Constraint: ec_op/ec_subset_sum/copy_point/y.
-    tempvar value = (ec_op__ec_subset_sum__bit_neg_0 * (column8_row98 - column8_row34)) * domain16 / domain6;
+    tempvar value = (ec_op__ec_subset_sum__bit_neg_0 * (column8_row98 - column8_row34)) * domain16 /
+        domain6;
     tempvar total_sum = total_sum + constraint_coefficients[161] * value;
 
     // Constraint: ec_op/get_m.

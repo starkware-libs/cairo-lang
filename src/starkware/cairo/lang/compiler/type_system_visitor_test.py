@@ -3,9 +3,9 @@ from typing import Optional
 
 import pytest
 
+from starkware.cairo.lang.compiler.ast.ast_objects_test_utils import remove_parentheses
 from starkware.cairo.lang.compiler.ast.cairo_types import TypeFelt, TypePointer, TypeStruct
 from starkware.cairo.lang.compiler.ast.expr import ExprFutureLabel, ExprNewOperator
-from starkware.cairo.lang.compiler.ast_objects_test import remove_parentheses
 from starkware.cairo.lang.compiler.expression_transformer import ExpressionTransformer
 from starkware.cairo.lang.compiler.identifier_definition import MemberDefinition, StructDefinition
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager

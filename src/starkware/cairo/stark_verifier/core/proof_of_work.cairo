@@ -59,15 +59,13 @@ func verify_proof_of_work{range_check_ptr, blake2s_ptr: felt*, bitwise_ptr: Bitw
     let data_start = data;
     blake2s_add_uint256_bigend{data=data}(
         Uint256(
-        low=digest_hl * WORD_UPPER_BOUND + digest_lh,
-        high=0x123456789abcded * WORD_UPPER_BOUND + digest_hh),
+            low=digest_hl * WORD_UPPER_BOUND + digest_lh,
+            high=0x123456789abcded * WORD_UPPER_BOUND + digest_hh,
+        ),
     );
     // Align 72 bit value to MSB.
     blake2s_add_uint256_bigend{data=data}(
-        Uint256(
-        low=0,
-        high=(digest_ll * BYTE_UPPER_BOUND + n_bits) * 2 ** 56
-        )
+        Uint256(low=0, high=(digest_ll * BYTE_UPPER_BOUND + n_bits) * 2 ** 56)
     );
     let (init_hash) = blake2s_bigend(data=data_start, n_bytes=0x29);
 
@@ -79,10 +77,7 @@ func verify_proof_of_work{range_check_ptr, blake2s_ptr: felt*, bitwise_ptr: Bitw
     blake2s_add_uint256_bigend{data=data}(init_hash);
     // Align 64 bit value to MSB.
     static_assert MAX_NONCE == 2 ** 64 - 1;
-    blake2s_add_uint256_bigend{data=data}(Uint256(
-        low=0,
-        high=nonce.value * 2 ** 64
-        ));
+    blake2s_add_uint256_bigend{data=data}(Uint256(low=0, high=nonce.value * 2 ** 64));
     let (result) = blake2s_bigend(data=data_start, n_bytes=0x28);
     let (work_limit) = pow(2, 128 - n_bits);
 

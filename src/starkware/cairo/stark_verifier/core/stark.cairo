@@ -255,8 +255,7 @@ func stark_commit{
     // Generate interaction values after OODS.
     let (oods_coefficients: felt*) = alloc();
     random_felts_to_prover(n_elements=n_oods_values, elements=oods_coefficients);
-    tempvar interaction_after_oods = new InteractionValuesAfterOods(
-        coefficients=oods_coefficients);
+    tempvar interaction_after_oods = new InteractionValuesAfterOods(coefficients=oods_coefficients);
 
     // Read fri commitment.
     let (fri_commitment) = fri_commit(unsent_commitment=unsent_commitment.fri, config=config.fri);
@@ -302,7 +301,8 @@ func verify_oods{range_check_ptr}(
     // This verification is currently only implemented for constraint degree 2.
     assert air.constraint_degree = 2;
     tempvar claimed_composition = (
-        oods_values[air.mask_size + 0].value + oods_values[air.mask_size + 1].value * oods_point);
+        oods_values[air.mask_size + 0].value + oods_values[air.mask_size + 1].value * oods_point
+    );
 
     assert composition_from_trace_values = claimed_composition;
 
@@ -349,7 +349,7 @@ func stark_decommit{range_check_ptr, blake2s_ptr: felt*, bitwise_ptr: BitwiseBui
         oods_point=commitment.interaction_after_composition.oods_point,
         trace_generator=stark_domains.trace_generator,
         constraint_coefficients=commitment.interaction_after_oods.coefficients,
-        );
+    );
     let (oods_poly_evals) = eval_oods_boundary_poly_at_points(
         air=air,
         eval_info=eval_info,
@@ -361,9 +361,8 @@ func stark_decommit{range_check_ptr, blake2s_ptr: felt*, bitwise_ptr: BitwiseBui
 
     // Decommit FRI.
     tempvar fri_decommitment = new FriDecommitment(
-        n_values=n_queries,
-        values=oods_poly_evals,
-        points=points);
+        n_values=n_queries, values=oods_poly_evals, points=points
+    );
     fri_decommit(
         n_queries=n_queries,
         queries=queries,

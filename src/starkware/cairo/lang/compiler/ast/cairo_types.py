@@ -5,14 +5,14 @@ from contextvars import ContextVar
 from enum import Enum, auto
 from typing import List, Optional, Sequence
 
-from starkware.cairo.lang.compiler.ast.formatting_utils import (
-    LocationField,
+from starkware.cairo.lang.compiler.ast.formatting_utils import LocationField
+from starkware.cairo.lang.compiler.ast.node import AstNode
+from starkware.cairo.lang.compiler.ast.notes import Notes
+from starkware.cairo.lang.compiler.ast.particle import (
     Particle,
     SeparatedParticleList,
     SingleParticle,
 )
-from starkware.cairo.lang.compiler.ast.node import AstNode
-from starkware.cairo.lang.compiler.ast.notes import Notes
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 
@@ -179,14 +179,14 @@ class TypeTuple(CairoType):
         for note in self.notes:
             note.assert_no_comments()
 
-    def get_particles(self) -> List[Particle]:
-        self.assert_no_comments()
-        return [member.to_particle() for member in self.members]
-
     def to_particle(self) -> Particle:
+        self.assert_no_comments()
         has_trailing_comma = len(self.members) == 1 and self.members[0].name is None
         return SeparatedParticleList(
-            elements=self.get_particles(), start="(", end=")", trailing_separator=has_trailing_comma
+            elements=[member.to_particle() for member in self.members],
+            start="(",
+            end=")",
+            trailing_separator=has_trailing_comma,
         )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:

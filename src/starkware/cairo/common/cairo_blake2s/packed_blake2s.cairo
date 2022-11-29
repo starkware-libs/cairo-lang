@@ -4,8 +4,9 @@ from starkware.cairo.common.registers import get_fp_and_pc
 
 const N_PACKED_INSTANCES = 7;
 const ALL_ONES = 2 ** 251 - 1;
-const SHIFTS = 1 + 2 ** 35 + 2 ** (35 * 2) + 2 ** (35 * 3) + 2 ** (35 * 4) + 2 ** (35 * 5) +
-    2 ** (35 * 6);
+const SHIFTS = (
+    1 + 2 ** 35 + 2 ** (35 * 2) + 2 ** (35 * 3) + 2 ** (35 * 4) + 2 ** (35 * 5) + 2 ** (35 * 6)
+);
 
 func mix{bitwise_ptr: BitwiseBuiltin*}(a: felt, b: felt, c: felt, d: felt, m0: felt, m1: felt) -> (
     a: felt, b: felt, c: felt, d: felt
@@ -27,8 +28,9 @@ func mix{bitwise_ptr: BitwiseBuiltin*}(a: felt, b: felt, c: felt, d: felt, m0: f
     tempvar a_xor_d = bitwise_ptr[0].x_xor_y;
     assert bitwise_ptr[1].x = a_xor_d;
     assert bitwise_ptr[1].y = SHIFTS * (2 ** 32 - 2 ** 16);
-    tempvar d = (2 ** (32 - 16)) * a_xor_d +
-        (1 / 2 ** 16 - 2 ** (32 - 16)) * bitwise_ptr[1].x_and_y;
+    tempvar d = (
+        (2 ** (32 - 16)) * a_xor_d + (1 / 2 ** 16 - 2 ** (32 - 16)) * bitwise_ptr[1].x_and_y
+    );
     let bitwise_ptr = bitwise_ptr + 2 * BitwiseBuiltin.SIZE;
 
     // c = (c + d) % 2**32.
@@ -43,8 +45,9 @@ func mix{bitwise_ptr: BitwiseBuiltin*}(a: felt, b: felt, c: felt, d: felt, m0: f
     tempvar b_xor_c = bitwise_ptr[0].x_xor_y;
     assert bitwise_ptr[1].x = b_xor_c;
     assert bitwise_ptr[1].y = SHIFTS * (2 ** 32 - 2 ** 12);
-    tempvar b = (2 ** (32 - 12)) * b_xor_c +
-        (1 / 2 ** 12 - 2 ** (32 - 12)) * bitwise_ptr[1].x_and_y;
+    tempvar b = (
+        (2 ** (32 - 12)) * b_xor_c + (1 / 2 ** 12 - 2 ** (32 - 12)) * bitwise_ptr[1].x_and_y
+    );
     let bitwise_ptr = bitwise_ptr + 2 * BitwiseBuiltin.SIZE;
 
     // a = (a + b + m1) % 2**32.

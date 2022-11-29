@@ -104,7 +104,8 @@ func execute_task{builtin_ptrs: BuiltinData*, self_range_check_ptr}(
         ecdsa=input_builtin_ptrs.ecdsa,
         bitwise=input_builtin_ptrs.bitwise,
         ec_op=input_builtin_ptrs.ec_op,
-        keccak=input_builtin_ptrs.keccak);
+        keccak=input_builtin_ptrs.keccak,
+    );
 
     // Call select_input_builtins to get the relevant input builtin pointers for the task.
     select_input_builtins(

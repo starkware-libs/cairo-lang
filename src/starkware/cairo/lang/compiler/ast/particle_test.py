@@ -1,12 +1,12 @@
 import pytest
 
-from starkware.cairo.lang.compiler.ast.formatting_utils import (
+from starkware.cairo.lang.compiler.ast.formatting_utils import set_one_item_per_line
+from starkware.cairo.lang.compiler.ast.particle import (
     Particle,
     ParticleFormattingConfig,
     ParticleList,
     SeparatedParticleList,
     particles_in_lines,
-    set_one_item_per_line,
 )
 
 
@@ -40,37 +40,119 @@ def test_particles_in_lines(trailing_separator: bool):
     particles = ParticleList(
         elements=[
             "start ",
-            "foo ",
-            "bar ",
+            "+++ ",
+            "ba( ",
             SeparatedParticleList(
                 elements=["a", "b", "c", "dddd", "e", "f"],
-                end="*",
+                end=")",
                 trailing_separator=trailing_separator,
             ),
-            " asdf",
+            " + df",
         ]
     )
     expected = f"""\
-start foo
-  bar
-  a, b, c,
-  dddd, e,
-  f{maybe_comma}* asdf\
+start +++
+    ba(
+    a, b, c,
+    dddd, e,
+    f{maybe_comma}) + df\
 """
     expected_one_per_line = """\
-start foo
-  bar
-  a,
-  b,
-  c,
-  dddd,
-  e,
-  f,
-* asdf\
+start +++
+    ba(
+        a,
+        b,
+        c,
+        dddd,
+        e,
+        f,
+    ) + df\
 """
     run_test_particles_in_lines(
         particles=particles,
-        config=ParticleFormattingConfig(allowed_line_length=12, line_indent=2),
+        config=ParticleFormattingConfig(allowed_line_length=12, line_indent=4),
+        expected=expected,
+        expected_one_per_line=expected_one_per_line,
+    )
+
+    # Formatting of SeparatedParticleList with non-trivial starts.
+
+    particles = ParticleList(
+        elements=[
+            "let x = ",
+            "a ",
+            "- ",
+            SeparatedParticleList(
+                elements=["b + ", "c"],
+                separator="",
+                start="(",
+                end=")",
+                trailing_separator=trailing_separator,
+            ),
+        ]
+    )
+
+    expected = """\
+let x = a -
+    (b + c)\
+"""
+
+    expected_one_per_line = """\
+let x = a - (
+    b + c
+)\
+"""
+
+    run_test_particles_in_lines(
+        particles=particles,
+        config=ParticleFormattingConfig(allowed_line_length=15, line_indent=4),
+        expected=expected,
+        expected_one_per_line=expected_one_per_line,
+    )
+
+    particles = ParticleList(
+        elements=[
+            "let uvwxyz = ",
+            SeparatedParticleList(
+                elements=["a", "b"],
+                separator=", ",
+                start="foobar(",
+                end=")",
+                trailing_separator=trailing_separator,
+            ),
+        ]
+    )
+
+    expected = expected_one_per_line = f"""\
+let uvwxyz =
+    foobar(a, b{maybe_comma})\
+"""
+
+    run_test_particles_in_lines(
+        particles=particles,
+        config=ParticleFormattingConfig(allowed_line_length=18, line_indent=4),
+        expected=expected,
+        expected_one_per_line=expected_one_per_line,
+    )
+
+    # Same particles, shorter line length.
+
+    expected = f"""\
+let uvwxyz =
+    foobar(a,
+        b{maybe_comma})\
+"""
+
+    expected_one_per_line = f"""\
+let uvwxyz =
+    foobar(
+        a, b{maybe_comma}
+    )\
+"""
+
+    run_test_particles_in_lines(
+        particles=particles,
+        config=ParticleFormattingConfig(allowed_line_length=15, line_indent=4),
         expected=expected,
         expected_one_per_line=expected_one_per_line,
     )

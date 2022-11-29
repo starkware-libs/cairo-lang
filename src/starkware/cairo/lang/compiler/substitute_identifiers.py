@@ -62,7 +62,10 @@ class SubstituteIdentifiers(ExpressionTransformer):
         # The reason is that the exponent shouldn't be taken modulo PRIME, so we don't allow
         # using identifiers in the exponent.
         return ExprPow(
-            a=self.visit(expr.a), b=expr.b, location=self.location_modifier(expr.location)
+            a=self.visit(expr.a),
+            b=expr.b,
+            notes=expr.notes,
+            location=self.location_modifier(expr.location),
         )
 
     def visit_RvalueFuncCall(self, rvalue: RvalueFuncCall):

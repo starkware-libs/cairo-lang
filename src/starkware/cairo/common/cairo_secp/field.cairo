@@ -116,10 +116,7 @@ func is_zero{range_check_ptr}(x: BigInt3) -> (res: felt) {
     let (x_x_inv) = unreduced_mul(x, x_inv);
 
     // Check that x * x_inv = 1 to verify that x != 0.
-    verify_zero(UnreducedBigInt3(
-        d0=x_x_inv.d0 - 1,
-        d1=x_x_inv.d1,
-        d2=x_x_inv.d2));
+    verify_zero(UnreducedBigInt3(d0=x_x_inv.d0 - 1, d1=x_x_inv.d1, d2=x_x_inv.d2));
     return (res=0);
 }
 
@@ -137,10 +134,7 @@ func reduce{range_check_ptr}(x: UnreducedBigInt3) -> (reduced_x: BigInt3) {
     let (reduced_x: BigInt3) = nondet_bigint3();
 
     verify_zero(
-        UnreducedBigInt3(
-        d0=x.d0 - reduced_x.d0,
-        d1=x.d1 - reduced_x.d1,
-        d2=x.d2 - reduced_x.d2),
+        UnreducedBigInt3(d0=x.d0 - reduced_x.d0, d1=x.d1 - reduced_x.d1, d2=x.d2 - reduced_x.d2)
     );
     return (reduced_x=reduced_x);
 }

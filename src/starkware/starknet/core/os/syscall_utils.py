@@ -17,6 +17,8 @@ from typing import (
     cast,
 )
 
+import cachetools
+
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.common.structs import CairoStructFactory, CairoStructProxy
 from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypeFelt, TypePointer
@@ -62,6 +64,7 @@ class SysCallInfo:
     syscall_size: int
 
 
+@cachetools.cached(cache={})
 def get_syscall_structs_and_info() -> Tuple[CairoStructProxy, Dict[str, SysCallInfo]]:
     with open(STARKNET_SYSCALLS_COMPILED_PATH, "r") as file:
         syscall_program = Program.loads(data=file.read())
@@ -167,10 +170,6 @@ def get_syscall_structs_and_info() -> Tuple[CairoStructProxy, Dict[str, SysCallI
     return syscall_structs, syscall_info
 
 
-# Global variables; cached at this point for child processes.
-SYSCALL_STRUCTS, SYSCALL_INFO = get_syscall_structs_and_info()
-
-
 @dataclasses.dataclass
 class HandlerException(Exception):
     """
@@ -188,6 +187,8 @@ class SysCallHandlerBase(ABC):
 
     def __init__(self, block_info: BlockInfo):
         self.block_info = block_info
+
+        self.syscall_structs, self.syscall_info = get_syscall_structs_and_info()
 
     # Public API.
 
@@ -217,7 +218,7 @@ class SysCallHandlerBase(ABC):
         Handles the deploy system call.
         """
         contract_address = self._deploy(segments=segments, syscall_ptr=syscall_ptr)
-        response = SYSCALL_STRUCTS.DeployResponse(
+        response = self.syscall_structs.DeployResponse(
             contract_address=contract_address,
             constructor_retdata_size=0,
             constructor_retdata=0,
@@ -238,7 +239,7 @@ class SysCallHandlerBase(ABC):
         """
         caller_address = self._get_caller_address(segments=segments, syscall_ptr=syscall_ptr)
 
-        response = SYSCALL_STRUCTS.GetCallerAddressResponse(caller_address=caller_address)
+        response = self.syscall_structs.GetCallerAddressResponse(caller_address=caller_address)
         self._write_syscall_response(
             syscall_name="GetCallerAddress",
             response=response,
@@ -249,7 +250,9 @@ class SysCallHandlerBase(ABC):
     def get_contract_address(self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue):
         contract_address = self._get_contract_address(segments=segments, syscall_ptr=syscall_ptr)
 
-        response = SYSCALL_STRUCTS.GetContractAddressResponse(contract_address=contract_address)
+        response = self.syscall_structs.GetContractAddressResponse(
+            contract_address=contract_address
+        )
         self._write_syscall_response(
             syscall_name="GetContractAddress",
             response=response,
@@ -267,7 +270,7 @@ class SysCallHandlerBase(ABC):
 
         block_number = self.block_info.block_number
 
-        response = SYSCALL_STRUCTS.GetBlockNumberResponse(block_number=block_number)
+        response = self.syscall_structs.GetBlockNumberResponse(block_number=block_number)
         self._write_syscall_response(
             syscall_name="GetBlockNumber",
             response=response,
@@ -283,7 +286,7 @@ class SysCallHandlerBase(ABC):
             syscall_name="get_sequencer_address", segments=segments, syscall_ptr=syscall_ptr
         )
 
-        response = SYSCALL_STRUCTS.GetSequencerAddressResponse(
+        response = self.syscall_structs.GetSequencerAddressResponse(
             sequencer_address=0
             if self.block_info.sequencer_address is None
             else self.block_info.sequencer_address
@@ -303,7 +306,7 @@ class SysCallHandlerBase(ABC):
             syscall_name="get_tx_info", segments=segments, syscall_ptr=syscall_ptr
         )
 
-        response = SYSCALL_STRUCTS.GetTxInfoResponse(
+        response = self.syscall_structs.GetTxInfoResponse(
             tx_info=self._get_tx_info_ptr(segments=segments)
         )
         self._write_syscall_response(
@@ -326,7 +329,7 @@ class SysCallHandlerBase(ABC):
 
         block_timestamp = self.block_info.block_timestamp
 
-        response = SYSCALL_STRUCTS.GetBlockTimestampResponse(block_timestamp=block_timestamp)
+        response = self.syscall_structs.GetBlockTimestampResponse(block_timestamp=block_timestamp)
         self._write_syscall_response(
             syscall_name="GetBlockTimestamp",
             response=response,
@@ -342,8 +345,8 @@ class SysCallHandlerBase(ABC):
             syscall_name="get_tx_signature", segments=segments, syscall_ptr=syscall_ptr
         )
         tx_info_ptr = self._get_tx_info_ptr(segments=segments)
-        tx_info = SYSCALL_STRUCTS.TxInfo.from_ptr(memory=segments.memory, addr=tx_info_ptr)
-        response = SYSCALL_STRUCTS.GetTxSignatureResponse(
+        tx_info = self.syscall_structs.TxInfo.from_ptr(memory=segments.memory, addr=tx_info_ptr)
+        response = self.syscall_structs.GetTxSignatureResponse(
             signature_len=tx_info.signature_len, signature=tx_info.signature
         )
 
@@ -391,7 +394,7 @@ class SysCallHandlerBase(ABC):
         )
 
         value = self._storage_read(cast(int, request.address))
-        response = SYSCALL_STRUCTS.StorageReadResponse(value=value)
+        response = self.syscall_structs.StorageReadResponse(value=value)
 
         self._write_syscall_response(
             syscall_name="StorageRead",
@@ -423,7 +426,7 @@ class SysCallHandlerBase(ABC):
         """
         Returns the system call request written in the syscall segment, starting at syscall_ptr.
         """
-        syscall_info = SYSCALL_INFO[syscall_name]
+        syscall_info = self.syscall_info[syscall_name]
         return syscall_info.syscall_request_struct.from_ptr(
             memory=segments.memory, addr=syscall_ptr
         )
@@ -445,10 +448,10 @@ class SysCallHandlerBase(ABC):
         syscall_ptr: RelocatableValue,
     ):
         assert (
-            camel_to_snake_case(syscall_name) in SYSCALL_INFO
+            camel_to_snake_case(syscall_name) in self.syscall_info
         ), f"Illegal system call {syscall_name}."
 
-        syscall_struct: CairoStructProxy = getattr(SYSCALL_STRUCTS, syscall_name)
+        syscall_struct: CairoStructProxy = getattr(self.syscall_structs, syscall_name)
         response_offset = syscall_struct.struct_definition_.members["response"].offset
         segments.write_arg(ptr=syscall_ptr + response_offset, arg=response)
 
@@ -475,7 +478,7 @@ class SysCallHandlerBase(ABC):
         retdata = self._call_contract(
             segments=segments, syscall_ptr=syscall_ptr, syscall_name=syscall_name
         )
-        response = SYSCALL_STRUCTS.CallContractResponse(
+        response = self.syscall_structs.CallContractResponse(
             retdata_size=len(retdata),
             retdata=self._allocate_segment(segments=segments, data=retdata),
         )
@@ -616,7 +619,7 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
             syscall_ptr == self.expected_syscall_ptr
         ), f"Bad syscall_ptr, Expected {self.expected_syscall_ptr}, got {syscall_ptr}."
 
-        syscall_info = SYSCALL_INFO[syscall_name]
+        syscall_info = self.syscall_info[syscall_name]
         self.expected_syscall_ptr += syscall_info.syscall_size
 
         selector = request.selector
@@ -828,7 +831,7 @@ class BusinessLogicSysCallHandler(SysCallHandlerBase):
 
     def _get_tx_info_ptr(self, segments: MemorySegmentManager) -> RelocatableValue:
         if self.tx_info_ptr is None:
-            tx_info = SYSCALL_STRUCTS.TxInfo(
+            tx_info = self.syscall_structs.TxInfo(
                 version=self.tx_execution_context.version,
                 account_contract_address=self.tx_execution_context.account_contract_address,
                 max_fee=self.tx_execution_context.max_fee,

@@ -23,6 +23,7 @@ from starkware.python.utils import (
     iter_blockify,
     multiply_counter_by_scalar,
     safe_zip,
+    subtract_mappings,
     to_ascii_string,
     unique,
 )
@@ -269,3 +270,9 @@ async def test_aclosing():
 
     assert not is_closed.value
     await gen.aclose()  # Close properly.
+
+
+def test_subtract_mappings():
+    a = {"red": 1, "green": 2, "blue": 3}
+    b = {"yellow": 1, "green": 2, "blue": 4}
+    assert subtract_mappings(a, b) == {"red": 1, "blue": 3}

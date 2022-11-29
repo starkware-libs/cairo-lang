@@ -19,6 +19,8 @@ python_lib(cairo_compile_lib
     ast/module.py
     ast/node.py
     ast/notes.py
+    ast/parentheses_expr_wrapper.py
+    ast/particle.py
     ast/rvalue.py
     ast/types.py
     ast/visitor.py

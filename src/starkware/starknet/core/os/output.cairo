@@ -67,8 +67,8 @@ func os_output_serialize{output_ptr: felt*}(
     serialize_word(starknet_os_config_hash);
 
     let messages_to_l1_segment_size = (
-        final_carried_outputs.messages_to_l1 -
-        initial_carried_outputs.messages_to_l1);
+        final_carried_outputs.messages_to_l1 - initial_carried_outputs.messages_to_l1
+    );
     serialize_word(messages_to_l1_segment_size);
 
     // Relocate 'messages_to_l1_segment' to the correct place in the output segment.
@@ -76,8 +76,8 @@ func os_output_serialize{output_ptr: felt*}(
     let output_ptr = cast(final_carried_outputs.messages_to_l1, felt*);
 
     let messages_to_l2_segment_size = (
-        final_carried_outputs.messages_to_l2 -
-        initial_carried_outputs.messages_to_l2);
+        final_carried_outputs.messages_to_l2 - initial_carried_outputs.messages_to_l2
+    );
     serialize_word(messages_to_l2_segment_size);
 
     // Relocate 'messages_to_l2_segment' to the correct place in the output segment.
@@ -88,8 +88,8 @@ func os_output_serialize{output_ptr: felt*}(
     let da_start = output_ptr;
 
     let deployment_info_segment_size = (
-        final_carried_outputs.deployment_info -
-        initial_carried_outputs.deployment_info);
+        final_carried_outputs.deployment_info - initial_carried_outputs.deployment_info
+    );
     serialize_word(deployment_info_segment_size);
 
     // Relocate 'deployment_info_segment' to the correct place in the output segment.

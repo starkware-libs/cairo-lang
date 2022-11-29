@@ -137,12 +137,7 @@ func read_uint64_from_prover{
         Uint256(low=channel.digest.low + 1, high=channel.digest.high)
     );
     // Align 64 bit value to MSB.
-    blake2s_add_uint256_bigend{data=data}(
-        Uint256(
-        low=0,
-        high=value.value * 2 ** 64,
-        )
-    );
+    blake2s_add_uint256_bigend{data=data}(Uint256(low=0, high=value.value * 2 ** 64));
     let (digest) = blake2s_bigend(data=data_start, n_bytes=0x28);
     let channel = Channel(digest=digest, counter=0);
     return (value=ChannelSentFelt(value.value));

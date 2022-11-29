@@ -59,6 +59,7 @@ python_lib(starknet_execute_entry_point_lib
     starknet_storage_lib
     starknet_transaction_execution_objects_lib
     starkware_error_handling_lib
+    starkware_python_utils_lib
 )
 
 python_lib(starknet_execution_usage_lib

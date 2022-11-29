@@ -7613,17 +7613,31 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar cpu__decode__opcode_rc__bit_2 = column0_row2 - (column0_row3 + column0_row3);
     tempvar cpu__decode__opcode_rc__bit_4 = column0_row4 - (column0_row5 + column0_row5);
     tempvar cpu__decode__opcode_rc__bit_3 = column0_row3 - (column0_row4 + column0_row4);
-    tempvar cpu__decode__flag_op1_base_op0_0 = 1 - (cpu__decode__opcode_rc__bit_2 + cpu__decode__opcode_rc__bit_4 + cpu__decode__opcode_rc__bit_3);
+    tempvar cpu__decode__flag_op1_base_op0_0 = 1 - (
+        cpu__decode__opcode_rc__bit_2 +
+        cpu__decode__opcode_rc__bit_4 +
+        cpu__decode__opcode_rc__bit_3
+    );
     tempvar cpu__decode__opcode_rc__bit_5 = column0_row5 - (column0_row6 + column0_row6);
     tempvar cpu__decode__opcode_rc__bit_6 = column0_row6 - (column0_row7 + column0_row7);
     tempvar cpu__decode__opcode_rc__bit_9 = column0_row9 - (column0_row10 + column0_row10);
-    tempvar cpu__decode__flag_res_op1_0 = 1 - (cpu__decode__opcode_rc__bit_5 + cpu__decode__opcode_rc__bit_6 + cpu__decode__opcode_rc__bit_9);
+    tempvar cpu__decode__flag_res_op1_0 = 1 - (
+        cpu__decode__opcode_rc__bit_5 +
+        cpu__decode__opcode_rc__bit_6 +
+        cpu__decode__opcode_rc__bit_9
+    );
     tempvar cpu__decode__opcode_rc__bit_7 = column0_row7 - (column0_row8 + column0_row8);
     tempvar cpu__decode__opcode_rc__bit_8 = column0_row8 - (column0_row9 + column0_row9);
-    tempvar cpu__decode__flag_pc_update_regular_0 = 1 - (cpu__decode__opcode_rc__bit_7 + cpu__decode__opcode_rc__bit_8 + cpu__decode__opcode_rc__bit_9);
+    tempvar cpu__decode__flag_pc_update_regular_0 = 1 - (
+        cpu__decode__opcode_rc__bit_7 +
+        cpu__decode__opcode_rc__bit_8 +
+        cpu__decode__opcode_rc__bit_9
+    );
     tempvar cpu__decode__opcode_rc__bit_12 = column0_row12 - (column0_row13 + column0_row13);
     tempvar cpu__decode__opcode_rc__bit_13 = column0_row13 - (column0_row14 + column0_row14);
-    tempvar cpu__decode__fp_update_regular_0 = 1 - (cpu__decode__opcode_rc__bit_12 + cpu__decode__opcode_rc__bit_13);
+    tempvar cpu__decode__fp_update_regular_0 = 1 - (
+        cpu__decode__opcode_rc__bit_12 + cpu__decode__opcode_rc__bit_13
+    );
     tempvar cpu__decode__opcode_rc__bit_1 = column0_row1 - (column0_row2 + column0_row2);
     tempvar npc_reg_0 = column4_row0 + cpu__decode__opcode_rc__bit_2 + 1;
     tempvar cpu__decode__opcode_rc__bit_10 = column0_row10 - (column0_row11 + column0_row11);
@@ -7639,36 +7653,82 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar rc_builtin__value3_0 = rc_builtin__value2_0 * global_values.offset_size + column6_row60;
     tempvar rc_builtin__value4_0 = rc_builtin__value3_0 * global_values.offset_size + column6_row76;
     tempvar rc_builtin__value5_0 = rc_builtin__value4_0 * global_values.offset_size + column6_row92;
-    tempvar rc_builtin__value6_0 = rc_builtin__value5_0 * global_values.offset_size + column6_row108;
-    tempvar rc_builtin__value7_0 = rc_builtin__value6_0 * global_values.offset_size + column6_row124;
-    tempvar bitwise__sum_var_0_0 = column1_row0 + column1_row4 * 2 + column1_row8 * 4 + column1_row12 * 8 + column1_row16 * 18446744073709551616 + column1_row20 * 36893488147419103232 + column1_row24 * 73786976294838206464 + column1_row28 * 147573952589676412928;
-    tempvar bitwise__sum_var_8_0 = column1_row32 * 340282366920938463463374607431768211456 + column1_row36 * 680564733841876926926749214863536422912 + column1_row40 * 1361129467683753853853498429727072845824 + column1_row44 * 2722258935367507707706996859454145691648 + column1_row48 * 6277101735386680763835789423207666416102355444464034512896 + column1_row52 * 12554203470773361527671578846415332832204710888928069025792 + column1_row56 * 25108406941546723055343157692830665664409421777856138051584 + column1_row60 * 50216813883093446110686315385661331328818843555712276103168;
-    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances0_0 = column3_row16 - column3_row66320 * 1606938044258990275541962092341162602522202993782792835301376;
-    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances0_2 = column3_row32 - column3_row66336 * 1606938044258990275541962092341162602522202993782792835301376;
-    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances1_0 = column3_row66320 - column3_row132624 * 1606938044258990275541962092341162602522202993782792835301376;
-    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances1_2 = column3_row66336 - column3_row132640 * 1606938044258990275541962092341162602522202993782792835301376;
-    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances2_0 = column3_row132624 - column3_row198928 * 1606938044258990275541962092341162602522202993782792835301376;
-    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances2_2 = column3_row132640 - column3_row198944 * 1606938044258990275541962092341162602522202993782792835301376;
-    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances3_0 = column3_row198928 - column3_row265232 * 1606938044258990275541962092341162602522202993782792835301376;
-    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances3_2 = column3_row198944 - column3_row265248 * 1606938044258990275541962092341162602522202993782792835301376;
-    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances4_0 = column3_row265232 - column3_row331536 * 1606938044258990275541962092341162602522202993782792835301376;
-    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances4_2 = column3_row265248 - column3_row331552 * 1606938044258990275541962092341162602522202993782792835301376;
-    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances5_0 = column3_row331536 - column3_row397840 * 1606938044258990275541962092341162602522202993782792835301376;
-    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances5_2 = column3_row331552 - column3_row397856 * 1606938044258990275541962092341162602522202993782792835301376;
-    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances6_0 = column3_row397840 - column3_row464144 * 1606938044258990275541962092341162602522202993782792835301376;
-    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances6_2 = column3_row397856 - column3_row464160 * 1606938044258990275541962092341162602522202993782792835301376;
-    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances7_0 = column3_row464144 - column3_row6416 * 1606938044258990275541962092341162602522202993782792835301376;
-    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances7_2 = column3_row464160 - column3_row6432 * 1606938044258990275541962092341162602522202993782792835301376;
-    tempvar keccak__keccak__parse_to_diluted__partial_diluted1_0 = column3_row516112 - (column3_row272 + column3_row272);
-    tempvar keccak__keccak__parse_to_diluted__partial_diluted1_2 = column3_row516128 - (column3_row288 + column3_row288);
-    tempvar keccak__keccak__parse_to_diluted__bit_other1_0 = keccak__keccak__parse_to_diluted__partial_diluted1_2 - 16 * keccak__keccak__parse_to_diluted__partial_diluted1_0;
-    tempvar keccak__keccak__parse_to_diluted__partial_diluted1_30 = column3_row516352 - (column3_row512 + column3_row512);
-    tempvar keccak__keccak__parse_to_diluted__partial_diluted1_31 = column3_row516360 - (column3_row520 + column3_row520);
-    tempvar keccak__keccak__parse_to_diluted__partial_diluted0_0 = column3_row16 - (column3_row8208 + column3_row8208);
-    tempvar keccak__keccak__parse_to_diluted__partial_diluted0_2 = column3_row32 - (column3_row8224 + column3_row8224);
-    tempvar keccak__keccak__parse_to_diluted__bit_other0_0 = keccak__keccak__parse_to_diluted__partial_diluted0_2 - 16 * keccak__keccak__parse_to_diluted__partial_diluted0_0;
-    tempvar keccak__keccak__parse_to_diluted__partial_diluted0_30 = column3_row256 - (column3_row8448 + column3_row8448);
-    tempvar keccak__keccak__parse_to_diluted__partial_diluted0_31 = column3_row264 - (column3_row8456 + column3_row8456);
+    tempvar rc_builtin__value6_0 = rc_builtin__value5_0 * global_values.offset_size +
+        column6_row108;
+    tempvar rc_builtin__value7_0 = rc_builtin__value6_0 * global_values.offset_size +
+        column6_row124;
+    tempvar bitwise__sum_var_0_0 = column1_row0 + column1_row4 * 2 + column1_row8 * 4 +
+        column1_row12 * 8 + column1_row16 * 18446744073709551616 + column1_row20 *
+        36893488147419103232 + column1_row24 * 73786976294838206464 + column1_row28 *
+        147573952589676412928;
+    tempvar bitwise__sum_var_8_0 = column1_row32 * 340282366920938463463374607431768211456 +
+        column1_row36 * 680564733841876926926749214863536422912 + column1_row40 *
+        1361129467683753853853498429727072845824 + column1_row44 *
+        2722258935367507707706996859454145691648 + column1_row48 *
+        6277101735386680763835789423207666416102355444464034512896 + column1_row52 *
+        12554203470773361527671578846415332832204710888928069025792 + column1_row56 *
+        25108406941546723055343157692830665664409421777856138051584 + column1_row60 *
+        50216813883093446110686315385661331328818843555712276103168;
+    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances0_0 = column3_row16 -
+        column3_row66320 * 1606938044258990275541962092341162602522202993782792835301376;
+    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances0_2 = column3_row32 -
+        column3_row66336 * 1606938044258990275541962092341162602522202993782792835301376;
+    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances1_0 = column3_row66320 -
+        column3_row132624 * 1606938044258990275541962092341162602522202993782792835301376;
+    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances1_2 = column3_row66336 -
+        column3_row132640 * 1606938044258990275541962092341162602522202993782792835301376;
+    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances2_0 = column3_row132624 -
+        column3_row198928 * 1606938044258990275541962092341162602522202993782792835301376;
+    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances2_2 = column3_row132640 -
+        column3_row198944 * 1606938044258990275541962092341162602522202993782792835301376;
+    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances3_0 = column3_row198928 -
+        column3_row265232 * 1606938044258990275541962092341162602522202993782792835301376;
+    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances3_2 = column3_row198944 -
+        column3_row265248 * 1606938044258990275541962092341162602522202993782792835301376;
+    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances4_0 = column3_row265232 -
+        column3_row331536 * 1606938044258990275541962092341162602522202993782792835301376;
+    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances4_2 = column3_row265248 -
+        column3_row331552 * 1606938044258990275541962092341162602522202993782792835301376;
+    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances5_0 = column3_row331536 -
+        column3_row397840 * 1606938044258990275541962092341162602522202993782792835301376;
+    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances5_2 = column3_row331552 -
+        column3_row397856 * 1606938044258990275541962092341162602522202993782792835301376;
+    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances6_0 = column3_row397840 -
+        column3_row464144 * 1606938044258990275541962092341162602522202993782792835301376;
+    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances6_2 = column3_row397856 -
+        column3_row464160 * 1606938044258990275541962092341162602522202993782792835301376;
+    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances7_0 = column3_row464144 -
+        column3_row6416 * 1606938044258990275541962092341162602522202993782792835301376;
+    tempvar keccak__keccak__parse_to_diluted__sum_words_over_instances7_2 = column3_row464160 -
+        column3_row6432 * 1606938044258990275541962092341162602522202993782792835301376;
+    tempvar keccak__keccak__parse_to_diluted__partial_diluted1_0 = column3_row516112 - (
+        column3_row272 + column3_row272
+    );
+    tempvar keccak__keccak__parse_to_diluted__partial_diluted1_2 = column3_row516128 - (
+        column3_row288 + column3_row288
+    );
+    tempvar keccak__keccak__parse_to_diluted__bit_other1_0 = keccak__keccak__parse_to_diluted__partial_diluted1_2 -
+        16 * keccak__keccak__parse_to_diluted__partial_diluted1_0;
+    tempvar keccak__keccak__parse_to_diluted__partial_diluted1_30 = column3_row516352 - (
+        column3_row512 + column3_row512
+    );
+    tempvar keccak__keccak__parse_to_diluted__partial_diluted1_31 = column3_row516360 - (
+        column3_row520 + column3_row520
+    );
+    tempvar keccak__keccak__parse_to_diluted__partial_diluted0_0 = column3_row16 - (
+        column3_row8208 + column3_row8208
+    );
+    tempvar keccak__keccak__parse_to_diluted__partial_diluted0_2 = column3_row32 - (
+        column3_row8224 + column3_row8224
+    );
+    tempvar keccak__keccak__parse_to_diluted__bit_other0_0 = keccak__keccak__parse_to_diluted__partial_diluted0_2 -
+        16 * keccak__keccak__parse_to_diluted__partial_diluted0_0;
+    tempvar keccak__keccak__parse_to_diluted__partial_diluted0_30 = column3_row256 - (
+        column3_row8448 + column3_row8448
+    );
+    tempvar keccak__keccak__parse_to_diluted__partial_diluted0_31 = column3_row264 - (
+        column3_row8456 + column3_row8456
+    );
     tempvar keccak__keccak__sum_parities0_0 = column1_row6593 + column3_row7760;
     tempvar keccak__keccak__sum_parities1_0 = column1_row6406 + column3_row1876;
     tempvar keccak__keccak__sum_parities1_64512 = column1_row522502 + column3_row517972;
@@ -7716,11 +7776,16 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar keccak__keccak__sum_parities4_51200 = column1_row416198 + column3_row413524;
     tempvar keccak__keccak__after_theta_rho_pi_xor_one_32 = 1229782938247303441 - column1_row259;
     tempvar keccak__keccak__after_theta_rho_pi_xor_one_1056 = 1229782938247303441 - column1_row8451;
-    tempvar keccak__keccak__after_theta_rho_pi_xor_one_3104 = 1229782938247303441 - column1_row24835;
-    tempvar keccak__keccak__after_theta_rho_pi_xor_one_7200 = 1229782938247303441 - column1_row57603;
-    tempvar keccak__keccak__after_theta_rho_pi_xor_one_15392 = 1229782938247303441 - column1_row123139;
-    tempvar keccak__keccak__after_theta_rho_pi_xor_one_31776 = 1229782938247303441 - column1_row254211;
-    tempvar keccak__keccak__after_theta_rho_pi_xor_one_64544 = 1229782938247303441 - column1_row516355;
+    tempvar keccak__keccak__after_theta_rho_pi_xor_one_3104 = 1229782938247303441 -
+        column1_row24835;
+    tempvar keccak__keccak__after_theta_rho_pi_xor_one_7200 = 1229782938247303441 -
+        column1_row57603;
+    tempvar keccak__keccak__after_theta_rho_pi_xor_one_15392 = 1229782938247303441 -
+        column1_row123139;
+    tempvar keccak__keccak__after_theta_rho_pi_xor_one_31776 = 1229782938247303441 -
+        column1_row254211;
+    tempvar keccak__keccak__after_theta_rho_pi_xor_one_64544 = 1229782938247303441 -
+        column1_row516355;
     tempvar keccak__keccak__after_theta_rho_pi_xor_one_0 = 1229782938247303441 - column1_row3;
     tempvar keccak__keccak__after_theta_rho_pi_xor_one_128 = 1229782938247303441 - column1_row1027;
 
@@ -7728,7 +7793,10 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = 0;
 
     // Constraint: cpu/decode/opcode_rc/bit.
-    tempvar value = (cpu__decode__opcode_rc__bit_0 * cpu__decode__opcode_rc__bit_0 - cpu__decode__opcode_rc__bit_0) * domain4 / domain0;
+    tempvar value = (
+        cpu__decode__opcode_rc__bit_0 * cpu__decode__opcode_rc__bit_0 -
+        cpu__decode__opcode_rc__bit_0
+    ) * domain4 / domain0;
     tempvar total_sum = total_sum + constraint_coefficients[0] * value;
 
     // Constraint: cpu/decode/opcode_rc/zero.
@@ -7736,35 +7804,82 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[1] * value;
 
     // Constraint: cpu/decode/opcode_rc_input.
-    tempvar value = (column4_row1 - (((column0_row0 * global_values.offset_size + column6_row4) * global_values.offset_size + column6_row8) * global_values.offset_size + column6_row0)) / domain5;
+    tempvar value = (
+        column4_row1 -
+        (
+            (
+                (column0_row0 * global_values.offset_size + column6_row4) *
+                global_values.offset_size +
+                column6_row8
+            ) * global_values.offset_size +
+            column6_row0
+        )
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[2] * value;
 
     // Constraint: cpu/decode/flag_op1_base_op0_bit.
-    tempvar value = (cpu__decode__flag_op1_base_op0_0 * cpu__decode__flag_op1_base_op0_0 - cpu__decode__flag_op1_base_op0_0) / domain5;
+    tempvar value = (
+        cpu__decode__flag_op1_base_op0_0 * cpu__decode__flag_op1_base_op0_0 -
+        cpu__decode__flag_op1_base_op0_0
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[3] * value;
 
     // Constraint: cpu/decode/flag_res_op1_bit.
-    tempvar value = (cpu__decode__flag_res_op1_0 * cpu__decode__flag_res_op1_0 - cpu__decode__flag_res_op1_0) / domain5;
+    tempvar value = (
+        cpu__decode__flag_res_op1_0 * cpu__decode__flag_res_op1_0 - cpu__decode__flag_res_op1_0
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[4] * value;
 
     // Constraint: cpu/decode/flag_pc_update_regular_bit.
-    tempvar value = (cpu__decode__flag_pc_update_regular_0 * cpu__decode__flag_pc_update_regular_0 - cpu__decode__flag_pc_update_regular_0) / domain5;
+    tempvar value = (
+        cpu__decode__flag_pc_update_regular_0 * cpu__decode__flag_pc_update_regular_0 -
+        cpu__decode__flag_pc_update_regular_0
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[5] * value;
 
     // Constraint: cpu/decode/fp_update_regular_bit.
-    tempvar value = (cpu__decode__fp_update_regular_0 * cpu__decode__fp_update_regular_0 - cpu__decode__fp_update_regular_0) / domain5;
+    tempvar value = (
+        cpu__decode__fp_update_regular_0 * cpu__decode__fp_update_regular_0 -
+        cpu__decode__fp_update_regular_0
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[6] * value;
 
     // Constraint: cpu/operands/mem_dst_addr.
-    tempvar value = (column4_row8 + global_values.half_offset_size - (cpu__decode__opcode_rc__bit_0 * column7_row8 + (1 - cpu__decode__opcode_rc__bit_0) * column7_row0 + column6_row0)) / domain5;
+    tempvar value = (
+        column4_row8 +
+        global_values.half_offset_size -
+        (
+            cpu__decode__opcode_rc__bit_0 * column7_row8 +
+            (1 - cpu__decode__opcode_rc__bit_0) * column7_row0 +
+            column6_row0
+        )
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[7] * value;
 
     // Constraint: cpu/operands/mem0_addr.
-    tempvar value = (column4_row4 + global_values.half_offset_size - (cpu__decode__opcode_rc__bit_1 * column7_row8 + (1 - cpu__decode__opcode_rc__bit_1) * column7_row0 + column6_row8)) / domain5;
+    tempvar value = (
+        column4_row4 +
+        global_values.half_offset_size -
+        (
+            cpu__decode__opcode_rc__bit_1 * column7_row8 +
+            (1 - cpu__decode__opcode_rc__bit_1) * column7_row0 +
+            column6_row8
+        )
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[8] * value;
 
     // Constraint: cpu/operands/mem1_addr.
-    tempvar value = (column4_row12 + global_values.half_offset_size - (cpu__decode__opcode_rc__bit_2 * column4_row0 + cpu__decode__opcode_rc__bit_4 * column7_row0 + cpu__decode__opcode_rc__bit_3 * column7_row8 + cpu__decode__flag_op1_base_op0_0 * column4_row5 + column6_row4)) / domain5;
+    tempvar value = (
+        column4_row12 +
+        global_values.half_offset_size -
+        (
+            cpu__decode__opcode_rc__bit_2 * column4_row0 +
+            cpu__decode__opcode_rc__bit_4 * column7_row0 +
+            cpu__decode__opcode_rc__bit_3 * column7_row8 +
+            cpu__decode__flag_op1_base_op0_0 * column4_row5 +
+            column6_row4
+        )
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[9] * value;
 
     // Constraint: cpu/operands/ops_mul.
@@ -7772,11 +7887,19 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[10] * value;
 
     // Constraint: cpu/operands/res.
-    tempvar value = ((1 - cpu__decode__opcode_rc__bit_9) * column7_row12 - (cpu__decode__opcode_rc__bit_5 * (column4_row5 + column4_row13) + cpu__decode__opcode_rc__bit_6 * column7_row4 + cpu__decode__flag_res_op1_0 * column4_row13)) / domain5;
+    tempvar value = (
+        (1 - cpu__decode__opcode_rc__bit_9) * column7_row12 -
+        (
+            cpu__decode__opcode_rc__bit_5 * (column4_row5 + column4_row13) +
+            cpu__decode__opcode_rc__bit_6 * column7_row4 +
+            cpu__decode__flag_res_op1_0 * column4_row13
+        )
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[11] * value;
 
     // Constraint: cpu/update_registers/update_pc/tmp0.
-    tempvar value = (column7_row2 - cpu__decode__opcode_rc__bit_9 * column4_row9) * domain131 / domain5;
+    tempvar value = (column7_row2 - cpu__decode__opcode_rc__bit_9 * column4_row9) * domain131 /
+        domain5;
     tempvar total_sum = total_sum + constraint_coefficients[12] * value;
 
     // Constraint: cpu/update_registers/update_pc/tmp1.
@@ -7784,19 +7907,44 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[13] * value;
 
     // Constraint: cpu/update_registers/update_pc/pc_cond_negative.
-    tempvar value = ((1 - cpu__decode__opcode_rc__bit_9) * column4_row16 + column7_row2 * (column4_row16 - (column4_row0 + column4_row13)) - (cpu__decode__flag_pc_update_regular_0 * npc_reg_0 + cpu__decode__opcode_rc__bit_7 * column7_row12 + cpu__decode__opcode_rc__bit_8 * (column4_row0 + column7_row12))) * domain131 / domain5;
+    tempvar value = (
+        (1 - cpu__decode__opcode_rc__bit_9) * column4_row16 +
+        column7_row2 * (column4_row16 - (column4_row0 + column4_row13)) -
+        (
+            cpu__decode__flag_pc_update_regular_0 * npc_reg_0 +
+            cpu__decode__opcode_rc__bit_7 * column7_row12 +
+            cpu__decode__opcode_rc__bit_8 * (column4_row0 + column7_row12)
+        )
+    ) * domain131 / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[14] * value;
 
     // Constraint: cpu/update_registers/update_pc/pc_cond_positive.
-    tempvar value = ((column7_row10 - cpu__decode__opcode_rc__bit_9) * (column4_row16 - npc_reg_0)) * domain131 / domain5;
+    tempvar value = (
+        (column7_row10 - cpu__decode__opcode_rc__bit_9) * (column4_row16 - npc_reg_0)
+    ) * domain131 / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[15] * value;
 
     // Constraint: cpu/update_registers/update_ap/ap_update.
-    tempvar value = (column7_row16 - (column7_row0 + cpu__decode__opcode_rc__bit_10 * column7_row12 + cpu__decode__opcode_rc__bit_11 + cpu__decode__opcode_rc__bit_12 * 2)) * domain131 / domain5;
+    tempvar value = (
+        column7_row16 -
+        (
+            column7_row0 +
+            cpu__decode__opcode_rc__bit_10 * column7_row12 +
+            cpu__decode__opcode_rc__bit_11 +
+            cpu__decode__opcode_rc__bit_12 * 2
+        )
+    ) * domain131 / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[16] * value;
 
     // Constraint: cpu/update_registers/update_fp/fp_update.
-    tempvar value = (column7_row24 - (cpu__decode__fp_update_regular_0 * column7_row8 + cpu__decode__opcode_rc__bit_13 * column4_row9 + cpu__decode__opcode_rc__bit_12 * (column7_row0 + 2))) * domain131 / domain5;
+    tempvar value = (
+        column7_row24 -
+        (
+            cpu__decode__fp_update_regular_0 * column7_row8 +
+            cpu__decode__opcode_rc__bit_13 * column4_row9 +
+            cpu__decode__opcode_rc__bit_12 * (column7_row0 + 2)
+        )
+    ) * domain131 / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[17] * value;
 
     // Constraint: cpu/opcodes/call/push_fp.
@@ -7804,31 +7952,59 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[18] * value;
 
     // Constraint: cpu/opcodes/call/push_pc.
-    tempvar value = (cpu__decode__opcode_rc__bit_12 * (column4_row5 - (column4_row0 + cpu__decode__opcode_rc__bit_2 + 1))) / domain5;
+    tempvar value = (
+        cpu__decode__opcode_rc__bit_12 * (
+            column4_row5 - (column4_row0 + cpu__decode__opcode_rc__bit_2 + 1)
+        )
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[19] * value;
 
     // Constraint: cpu/opcodes/call/off0.
-    tempvar value = (cpu__decode__opcode_rc__bit_12 * (column6_row0 - global_values.half_offset_size)) / domain5;
+    tempvar value = (
+        cpu__decode__opcode_rc__bit_12 * (column6_row0 - global_values.half_offset_size)
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[20] * value;
 
     // Constraint: cpu/opcodes/call/off1.
-    tempvar value = (cpu__decode__opcode_rc__bit_12 * (column6_row8 - (global_values.half_offset_size + 1))) / domain5;
+    tempvar value = (
+        cpu__decode__opcode_rc__bit_12 * (column6_row8 - (global_values.half_offset_size + 1))
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[21] * value;
 
     // Constraint: cpu/opcodes/call/flags.
-    tempvar value = (cpu__decode__opcode_rc__bit_12 * (cpu__decode__opcode_rc__bit_12 + cpu__decode__opcode_rc__bit_12 + 1 + 1 - (cpu__decode__opcode_rc__bit_0 + cpu__decode__opcode_rc__bit_1 + 4))) / domain5;
+    tempvar value = (
+        cpu__decode__opcode_rc__bit_12 * (
+            cpu__decode__opcode_rc__bit_12 +
+            cpu__decode__opcode_rc__bit_12 +
+            1 +
+            1 -
+            (cpu__decode__opcode_rc__bit_0 + cpu__decode__opcode_rc__bit_1 + 4)
+        )
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[22] * value;
 
     // Constraint: cpu/opcodes/ret/off0.
-    tempvar value = (cpu__decode__opcode_rc__bit_13 * (column6_row0 + 2 - global_values.half_offset_size)) / domain5;
+    tempvar value = (
+        cpu__decode__opcode_rc__bit_13 * (column6_row0 + 2 - global_values.half_offset_size)
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[23] * value;
 
     // Constraint: cpu/opcodes/ret/off2.
-    tempvar value = (cpu__decode__opcode_rc__bit_13 * (column6_row4 + 1 - global_values.half_offset_size)) / domain5;
+    tempvar value = (
+        cpu__decode__opcode_rc__bit_13 * (column6_row4 + 1 - global_values.half_offset_size)
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[24] * value;
 
     // Constraint: cpu/opcodes/ret/flags.
-    tempvar value = (cpu__decode__opcode_rc__bit_13 * (cpu__decode__opcode_rc__bit_7 + cpu__decode__opcode_rc__bit_0 + cpu__decode__opcode_rc__bit_3 + cpu__decode__flag_res_op1_0 - 4)) / domain5;
+    tempvar value = (
+        cpu__decode__opcode_rc__bit_13 * (
+            cpu__decode__opcode_rc__bit_7 +
+            cpu__decode__opcode_rc__bit_0 +
+            cpu__decode__opcode_rc__bit_3 +
+            cpu__decode__flag_res_op1_0 -
+            4
+        )
+    ) / domain5;
     tempvar total_sum = total_sum + constraint_coefficients[25] * value;
 
     // Constraint: cpu/opcodes/assert_eq/assert_eq.
@@ -7860,23 +8036,53 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[32] * value;
 
     // Constraint: memory/multi_column_perm/perm/init0.
-    tempvar value = ((global_values.memory__multi_column_perm__perm__interaction_elm - (column5_row0 + global_values.memory__multi_column_perm__hash_interaction_elm0 * column5_row1)) * column10_inter1_row0 + column4_row0 + global_values.memory__multi_column_perm__hash_interaction_elm0 * column4_row1 - global_values.memory__multi_column_perm__perm__interaction_elm) / domain132;
+    tempvar value = (
+        (
+            global_values.memory__multi_column_perm__perm__interaction_elm -
+            (
+                column5_row0 +
+                global_values.memory__multi_column_perm__hash_interaction_elm0 * column5_row1
+            )
+        ) * column10_inter1_row0 +
+        column4_row0 +
+        global_values.memory__multi_column_perm__hash_interaction_elm0 * column4_row1 -
+        global_values.memory__multi_column_perm__perm__interaction_elm
+    ) / domain132;
     tempvar total_sum = total_sum + constraint_coefficients[33] * value;
 
     // Constraint: memory/multi_column_perm/perm/step0.
-    tempvar value = ((global_values.memory__multi_column_perm__perm__interaction_elm - (column5_row2 + global_values.memory__multi_column_perm__hash_interaction_elm0 * column5_row3)) * column10_inter1_row2 - (global_values.memory__multi_column_perm__perm__interaction_elm - (column4_row2 + global_values.memory__multi_column_perm__hash_interaction_elm0 * column4_row3)) * column10_inter1_row0) * domain133 / domain1;
+    tempvar value = (
+        (
+            global_values.memory__multi_column_perm__perm__interaction_elm -
+            (
+                column5_row2 +
+                global_values.memory__multi_column_perm__hash_interaction_elm0 * column5_row3
+            )
+        ) * column10_inter1_row2 -
+        (
+            global_values.memory__multi_column_perm__perm__interaction_elm -
+            (
+                column4_row2 +
+                global_values.memory__multi_column_perm__hash_interaction_elm0 * column4_row3
+            )
+        ) * column10_inter1_row0
+    ) * domain133 / domain1;
     tempvar total_sum = total_sum + constraint_coefficients[34] * value;
 
     // Constraint: memory/multi_column_perm/perm/last.
-    tempvar value = (column10_inter1_row0 - global_values.memory__multi_column_perm__perm__public_memory_prod) / domain133;
+    tempvar value = (
+        column10_inter1_row0 - global_values.memory__multi_column_perm__perm__public_memory_prod
+    ) / domain133;
     tempvar total_sum = total_sum + constraint_coefficients[35] * value;
 
     // Constraint: memory/diff_is_bit.
-    tempvar value = (memory__address_diff_0 * memory__address_diff_0 - memory__address_diff_0) * domain133 / domain1;
+    tempvar value = (memory__address_diff_0 * memory__address_diff_0 - memory__address_diff_0) *
+        domain133 / domain1;
     tempvar total_sum = total_sum + constraint_coefficients[36] * value;
 
     // Constraint: memory/is_func.
-    tempvar value = ((memory__address_diff_0 - 1) * (column5_row1 - column5_row3)) * domain133 / domain1;
+    tempvar value = ((memory__address_diff_0 - 1) * (column5_row1 - column5_row3)) * domain133 /
+        domain1;
     tempvar total_sum = total_sum + constraint_coefficients[37] * value;
 
     // Constraint: memory/initial_addr.
@@ -7892,15 +8098,23 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[40] * value;
 
     // Constraint: rc16/perm/init0.
-    tempvar value = ((global_values.rc16__perm__interaction_elm - column6_row2) * column10_inter1_row1 + column6_row0 - global_values.rc16__perm__interaction_elm) / domain132;
+    tempvar value = (
+        (global_values.rc16__perm__interaction_elm - column6_row2) * column10_inter1_row1 +
+        column6_row0 -
+        global_values.rc16__perm__interaction_elm
+    ) / domain132;
     tempvar total_sum = total_sum + constraint_coefficients[41] * value;
 
     // Constraint: rc16/perm/step0.
-    tempvar value = ((global_values.rc16__perm__interaction_elm - column6_row6) * column10_inter1_row5 - (global_values.rc16__perm__interaction_elm - column6_row4) * column10_inter1_row1) * domain134 / domain2;
+    tempvar value = (
+        (global_values.rc16__perm__interaction_elm - column6_row6) * column10_inter1_row5 -
+        (global_values.rc16__perm__interaction_elm - column6_row4) * column10_inter1_row1
+    ) * domain134 / domain2;
     tempvar total_sum = total_sum + constraint_coefficients[42] * value;
 
     // Constraint: rc16/perm/last.
-    tempvar value = (column10_inter1_row1 - global_values.rc16__perm__public_memory_prod) / domain134;
+    tempvar value = (column10_inter1_row1 - global_values.rc16__perm__public_memory_prod) /
+        domain134;
     tempvar total_sum = total_sum + constraint_coefficients[43] * value;
 
     // Constraint: rc16/diff_is_bit.
@@ -7916,15 +8130,27 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[46] * value;
 
     // Constraint: diluted_check/permutation/init0.
-    tempvar value = ((global_values.diluted_check__permutation__interaction_elm - column2_row0) * column9_inter1_row0 + column1_row0 - global_values.diluted_check__permutation__interaction_elm) / domain132;
+    tempvar value = (
+        (global_values.diluted_check__permutation__interaction_elm - column2_row0) *
+        column9_inter1_row0 +
+        column1_row0 -
+        global_values.diluted_check__permutation__interaction_elm
+    ) / domain132;
     tempvar total_sum = total_sum + constraint_coefficients[47] * value;
 
     // Constraint: diluted_check/permutation/step0.
-    tempvar value = ((global_values.diluted_check__permutation__interaction_elm - column2_row1) * column9_inter1_row1 - (global_values.diluted_check__permutation__interaction_elm - column1_row1) * column9_inter1_row0) * domain135 / domain0;
+    tempvar value = (
+        (global_values.diluted_check__permutation__interaction_elm - column2_row1) *
+        column9_inter1_row1 -
+        (global_values.diluted_check__permutation__interaction_elm - column1_row1) *
+        column9_inter1_row0
+    ) * domain135 / domain0;
     tempvar total_sum = total_sum + constraint_coefficients[48] * value;
 
     // Constraint: diluted_check/permutation/last.
-    tempvar value = (column9_inter1_row0 - global_values.diluted_check__permutation__public_memory_prod) / domain135;
+    tempvar value = (
+        column9_inter1_row0 - global_values.diluted_check__permutation__public_memory_prod
+    ) / domain135;
     tempvar total_sum = total_sum + constraint_coefficients[49] * value;
 
     // Constraint: diluted_check/init.
@@ -7936,7 +8162,17 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[51] * value;
 
     // Constraint: diluted_check/step.
-    tempvar value = (column8_inter1_row1 - (column8_inter1_row0 * (1 + global_values.diluted_check__interaction_z * (column2_row1 - column2_row0)) + global_values.diluted_check__interaction_alpha * (column2_row1 - column2_row0) * (column2_row1 - column2_row0))) * domain135 / domain0;
+    tempvar value = (
+        column8_inter1_row1 -
+        (
+            column8_inter1_row0 * (
+                1 + global_values.diluted_check__interaction_z * (column2_row1 - column2_row0)
+            ) +
+            global_values.diluted_check__interaction_alpha * (column2_row1 - column2_row0) * (
+                column2_row1 - column2_row0
+            )
+        )
+    ) * domain135 / domain0;
     tempvar total_sum = total_sum + constraint_coefficients[52] * value;
 
     // Constraint: diluted_check/last.
@@ -7948,11 +8184,18 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[54] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/bit_unpacking/zeroes_between_ones0.
-    tempvar value = (column3_row20 * (column6_row11 - 3138550867693340381917894711603833208051177722232017256448 * column6_row1539)) / domain12;
+    tempvar value = (
+        column3_row20 * (
+            column6_row11 -
+            3138550867693340381917894711603833208051177722232017256448 * column6_row1539
+        )
+    ) / domain12;
     tempvar total_sum = total_sum + constraint_coefficients[55] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/bit_unpacking/cumulative_bit192.
-    tempvar value = (column3_row20 - column6_row2047 * (column6_row1539 - (column6_row1547 + column6_row1547))) / domain12;
+    tempvar value = (
+        column3_row20 - column6_row2047 * (column6_row1539 - (column6_row1547 + column6_row1547))
+    ) / domain12;
     tempvar total_sum = total_sum + constraint_coefficients[56] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/bit_unpacking/zeroes_between_ones192.
@@ -7960,15 +8203,26 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[57] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/bit_unpacking/cumulative_bit196.
-    tempvar value = (column6_row2047 - (column6_row2011 - (column6_row2019 + column6_row2019)) * (column6_row1571 - (column6_row1579 + column6_row1579))) / domain12;
+    tempvar value = (
+        column6_row2047 -
+        (column6_row2011 - (column6_row2019 + column6_row2019)) * (
+            column6_row1571 - (column6_row1579 + column6_row1579)
+        )
+    ) / domain12;
     tempvar total_sum = total_sum + constraint_coefficients[58] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/bit_unpacking/zeroes_between_ones196.
-    tempvar value = ((column6_row2011 - (column6_row2019 + column6_row2019)) * (column6_row1579 - 18014398509481984 * column6_row2011)) / domain12;
+    tempvar value = (
+        (column6_row2011 - (column6_row2019 + column6_row2019)) * (
+            column6_row1579 - 18014398509481984 * column6_row2011
+        )
+    ) / domain12;
     tempvar total_sum = total_sum + constraint_coefficients[59] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/booleanity_test.
-    tempvar value = (pedersen__hash0__ec_subset_sum__bit_0 * (pedersen__hash0__ec_subset_sum__bit_0 - 1)) * domain13 / domain3;
+    tempvar value = (
+        pedersen__hash0__ec_subset_sum__bit_0 * (pedersen__hash0__ec_subset_sum__bit_0 - 1)
+    ) * domain13 / domain3;
     tempvar total_sum = total_sum + constraint_coefficients[60] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/bit_extraction_end.
@@ -7980,23 +8234,36 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[62] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/add_points/slope.
-    tempvar value = (pedersen__hash0__ec_subset_sum__bit_0 * (column6_row5 - global_values.pedersen__points__y) - column6_row7 * (column6_row1 - global_values.pedersen__points__x)) * domain13 / domain3;
+    tempvar value = (
+        pedersen__hash0__ec_subset_sum__bit_0 * (column6_row5 - global_values.pedersen__points__y) -
+        column6_row7 * (column6_row1 - global_values.pedersen__points__x)
+    ) * domain13 / domain3;
     tempvar total_sum = total_sum + constraint_coefficients[63] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/add_points/x.
-    tempvar value = (column6_row7 * column6_row7 - pedersen__hash0__ec_subset_sum__bit_0 * (column6_row1 + global_values.pedersen__points__x + column6_row9)) * domain13 / domain3;
+    tempvar value = (
+        column6_row7 * column6_row7 -
+        pedersen__hash0__ec_subset_sum__bit_0 * (
+            column6_row1 + global_values.pedersen__points__x + column6_row9
+        )
+    ) * domain13 / domain3;
     tempvar total_sum = total_sum + constraint_coefficients[64] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/add_points/y.
-    tempvar value = (pedersen__hash0__ec_subset_sum__bit_0 * (column6_row5 + column6_row13) - column6_row7 * (column6_row1 - column6_row9)) * domain13 / domain3;
+    tempvar value = (
+        pedersen__hash0__ec_subset_sum__bit_0 * (column6_row5 + column6_row13) -
+        column6_row7 * (column6_row1 - column6_row9)
+    ) * domain13 / domain3;
     tempvar total_sum = total_sum + constraint_coefficients[65] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/copy_point/x.
-    tempvar value = (pedersen__hash0__ec_subset_sum__bit_neg_0 * (column6_row9 - column6_row1)) * domain13 / domain3;
+    tempvar value = (pedersen__hash0__ec_subset_sum__bit_neg_0 * (column6_row9 - column6_row1)) *
+        domain13 / domain3;
     tempvar total_sum = total_sum + constraint_coefficients[66] * value;
 
     // Constraint: pedersen/hash0/ec_subset_sum/copy_point/y.
-    tempvar value = (pedersen__hash0__ec_subset_sum__bit_neg_0 * (column6_row13 - column6_row5)) * domain13 / domain3;
+    tempvar value = (pedersen__hash0__ec_subset_sum__bit_neg_0 * (column6_row13 - column6_row5)) *
+        domain13 / domain3;
     tempvar total_sum = total_sum + constraint_coefficients[67] * value;
 
     // Constraint: pedersen/hash0/copy_point/x.
@@ -8080,7 +8347,9 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[87] * value;
 
     // Constraint: bitwise/addition_is_xor_with_and.
-    tempvar value = (column1_row0 + column1_row64 - (column1_row192 + column1_row128 + column1_row128)) / domain11;
+    tempvar value = (
+        column1_row0 + column1_row64 - (column1_row192 + column1_row128 + column1_row128)
+    ) / domain11;
     tempvar total_sum = total_sum + constraint_coefficients[88] * value;
 
     // Constraint: bitwise/unique_unpacking192.
@@ -8240,119 +8509,222 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[127] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/init_first_invocation0.
-    tempvar value = (column3_row16144 - keccak__keccak__parse_to_diluted__sum_words_over_instances0_0) / domain23;
+    tempvar value = (
+        column3_row16144 - keccak__keccak__parse_to_diluted__sum_words_over_instances0_0
+    ) / domain23;
     tempvar total_sum = total_sum + constraint_coefficients[128] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/init_other_invocations0.
-    tempvar value = (column3_row16160 + keccak__keccak__parse_to_diluted__sum_words_over_instances0_0 * 16 - keccak__keccak__parse_to_diluted__sum_words_over_instances0_2) / domain27;
+    tempvar value = (
+        column3_row16160 +
+        keccak__keccak__parse_to_diluted__sum_words_over_instances0_0 * 16 -
+        keccak__keccak__parse_to_diluted__sum_words_over_instances0_2
+    ) / domain27;
     tempvar total_sum = total_sum + constraint_coefficients[129] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/init_first_invocation1.
-    tempvar value = (column3_row16145 - keccak__keccak__parse_to_diluted__sum_words_over_instances1_0) / domain23;
+    tempvar value = (
+        column3_row16145 - keccak__keccak__parse_to_diluted__sum_words_over_instances1_0
+    ) / domain23;
     tempvar total_sum = total_sum + constraint_coefficients[130] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/init_other_invocations1.
-    tempvar value = (column3_row16161 + keccak__keccak__parse_to_diluted__sum_words_over_instances1_0 * 16 - keccak__keccak__parse_to_diluted__sum_words_over_instances1_2) / domain27;
+    tempvar value = (
+        column3_row16161 +
+        keccak__keccak__parse_to_diluted__sum_words_over_instances1_0 * 16 -
+        keccak__keccak__parse_to_diluted__sum_words_over_instances1_2
+    ) / domain27;
     tempvar total_sum = total_sum + constraint_coefficients[131] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/init_first_invocation2.
-    tempvar value = (column3_row16146 - keccak__keccak__parse_to_diluted__sum_words_over_instances2_0) / domain23;
+    tempvar value = (
+        column3_row16146 - keccak__keccak__parse_to_diluted__sum_words_over_instances2_0
+    ) / domain23;
     tempvar total_sum = total_sum + constraint_coefficients[132] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/init_other_invocations2.
-    tempvar value = (column3_row16162 + keccak__keccak__parse_to_diluted__sum_words_over_instances2_0 * 16 - keccak__keccak__parse_to_diluted__sum_words_over_instances2_2) / domain27;
+    tempvar value = (
+        column3_row16162 +
+        keccak__keccak__parse_to_diluted__sum_words_over_instances2_0 * 16 -
+        keccak__keccak__parse_to_diluted__sum_words_over_instances2_2
+    ) / domain27;
     tempvar total_sum = total_sum + constraint_coefficients[133] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/init_first_invocation3.
-    tempvar value = (column3_row16147 - keccak__keccak__parse_to_diluted__sum_words_over_instances3_0) / domain23;
+    tempvar value = (
+        column3_row16147 - keccak__keccak__parse_to_diluted__sum_words_over_instances3_0
+    ) / domain23;
     tempvar total_sum = total_sum + constraint_coefficients[134] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/init_other_invocations3.
-    tempvar value = (column3_row16163 + keccak__keccak__parse_to_diluted__sum_words_over_instances3_0 * 16 - keccak__keccak__parse_to_diluted__sum_words_over_instances3_2) / domain27;
+    tempvar value = (
+        column3_row16163 +
+        keccak__keccak__parse_to_diluted__sum_words_over_instances3_0 * 16 -
+        keccak__keccak__parse_to_diluted__sum_words_over_instances3_2
+    ) / domain27;
     tempvar total_sum = total_sum + constraint_coefficients[135] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/init_first_invocation4.
-    tempvar value = (column3_row16148 - keccak__keccak__parse_to_diluted__sum_words_over_instances4_0) / domain23;
+    tempvar value = (
+        column3_row16148 - keccak__keccak__parse_to_diluted__sum_words_over_instances4_0
+    ) / domain23;
     tempvar total_sum = total_sum + constraint_coefficients[136] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/init_other_invocations4.
-    tempvar value = (column3_row16164 + keccak__keccak__parse_to_diluted__sum_words_over_instances4_0 * 16 - keccak__keccak__parse_to_diluted__sum_words_over_instances4_2) / domain27;
+    tempvar value = (
+        column3_row16164 +
+        keccak__keccak__parse_to_diluted__sum_words_over_instances4_0 * 16 -
+        keccak__keccak__parse_to_diluted__sum_words_over_instances4_2
+    ) / domain27;
     tempvar total_sum = total_sum + constraint_coefficients[137] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/init_first_invocation5.
-    tempvar value = (column3_row16149 - keccak__keccak__parse_to_diluted__sum_words_over_instances5_0) / domain23;
+    tempvar value = (
+        column3_row16149 - keccak__keccak__parse_to_diluted__sum_words_over_instances5_0
+    ) / domain23;
     tempvar total_sum = total_sum + constraint_coefficients[138] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/init_other_invocations5.
-    tempvar value = (column3_row16165 + keccak__keccak__parse_to_diluted__sum_words_over_instances5_0 * 16 - keccak__keccak__parse_to_diluted__sum_words_over_instances5_2) / domain27;
+    tempvar value = (
+        column3_row16165 +
+        keccak__keccak__parse_to_diluted__sum_words_over_instances5_0 * 16 -
+        keccak__keccak__parse_to_diluted__sum_words_over_instances5_2
+    ) / domain27;
     tempvar total_sum = total_sum + constraint_coefficients[139] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/init_first_invocation6.
-    tempvar value = (column3_row16150 - keccak__keccak__parse_to_diluted__sum_words_over_instances6_0) / domain23;
+    tempvar value = (
+        column3_row16150 - keccak__keccak__parse_to_diluted__sum_words_over_instances6_0
+    ) / domain23;
     tempvar total_sum = total_sum + constraint_coefficients[140] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/init_other_invocations6.
-    tempvar value = (column3_row16166 + keccak__keccak__parse_to_diluted__sum_words_over_instances6_0 * 16 - keccak__keccak__parse_to_diluted__sum_words_over_instances6_2) / domain27;
+    tempvar value = (
+        column3_row16166 +
+        keccak__keccak__parse_to_diluted__sum_words_over_instances6_0 * 16 -
+        keccak__keccak__parse_to_diluted__sum_words_over_instances6_2
+    ) / domain27;
     tempvar total_sum = total_sum + constraint_coefficients[141] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/init_first_invocation7.
-    tempvar value = (column3_row16151 - keccak__keccak__parse_to_diluted__sum_words_over_instances7_0) / domain23;
+    tempvar value = (
+        column3_row16151 - keccak__keccak__parse_to_diluted__sum_words_over_instances7_0
+    ) / domain23;
     tempvar total_sum = total_sum + constraint_coefficients[142] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/init_other_invocations7.
-    tempvar value = (column3_row16167 + keccak__keccak__parse_to_diluted__sum_words_over_instances7_0 * 16 - keccak__keccak__parse_to_diluted__sum_words_over_instances7_2) / domain27;
+    tempvar value = (
+        column3_row16167 +
+        keccak__keccak__parse_to_diluted__sum_words_over_instances7_0 * 16 -
+        keccak__keccak__parse_to_diluted__sum_words_over_instances7_2
+    ) / domain27;
     tempvar total_sum = total_sum + constraint_coefficients[143] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/extract_bit_first_invocation1.
-    tempvar value = (keccak__keccak__parse_to_diluted__partial_diluted1_0 * keccak__keccak__parse_to_diluted__partial_diluted1_0 - keccak__keccak__parse_to_diluted__partial_diluted1_0) / domain31;
+    tempvar value = (
+        keccak__keccak__parse_to_diluted__partial_diluted1_0 *
+        keccak__keccak__parse_to_diluted__partial_diluted1_0 -
+        keccak__keccak__parse_to_diluted__partial_diluted1_0
+    ) / domain31;
     tempvar total_sum = total_sum + constraint_coefficients[144] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/extract_bit_other_invocations1.
-    tempvar value = (keccak__keccak__parse_to_diluted__bit_other1_0 * keccak__keccak__parse_to_diluted__bit_other1_0 - keccak__keccak__parse_to_diluted__bit_other1_0) / domain32;
+    tempvar value = (
+        keccak__keccak__parse_to_diluted__bit_other1_0 *
+        keccak__keccak__parse_to_diluted__bit_other1_0 -
+        keccak__keccak__parse_to_diluted__bit_other1_0
+    ) / domain32;
     tempvar total_sum = total_sum + constraint_coefficients[145] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/to_diluted0_p1.
-    tempvar value = (keccak__keccak__parse_to_diluted__partial_diluted1_30 - column1_row516102) / domain33;
+    tempvar value = (keccak__keccak__parse_to_diluted__partial_diluted1_30 - column1_row516102) /
+        domain33;
     tempvar total_sum = total_sum + constraint_coefficients[146] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/to_diluted1_p1.
-    tempvar value = (keccak__keccak__parse_to_diluted__partial_diluted1_31 - column1_row516294) / domain33;
+    tempvar value = (keccak__keccak__parse_to_diluted__partial_diluted1_31 - column1_row516294) /
+        domain33;
     tempvar total_sum = total_sum + constraint_coefficients[147] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/extract_bit_first_invocation0.
-    tempvar value = (keccak__keccak__parse_to_diluted__partial_diluted0_0 * keccak__keccak__parse_to_diluted__partial_diluted0_0 - keccak__keccak__parse_to_diluted__partial_diluted0_0) * domain37 / domain10;
+    tempvar value = (
+        keccak__keccak__parse_to_diluted__partial_diluted0_0 *
+        keccak__keccak__parse_to_diluted__partial_diluted0_0 -
+        keccak__keccak__parse_to_diluted__partial_diluted0_0
+    ) * domain37 / domain10;
     tempvar total_sum = total_sum + constraint_coefficients[148] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/extract_bit_other_invocations0.
-    tempvar value = (keccak__keccak__parse_to_diluted__bit_other0_0 * keccak__keccak__parse_to_diluted__bit_other0_0 - keccak__keccak__parse_to_diluted__bit_other0_0) * domain40 / domain3;
+    tempvar value = (
+        keccak__keccak__parse_to_diluted__bit_other0_0 *
+        keccak__keccak__parse_to_diluted__bit_other0_0 -
+        keccak__keccak__parse_to_diluted__bit_other0_0
+    ) * domain40 / domain3;
     tempvar total_sum = total_sum + constraint_coefficients[149] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/to_diluted0_p0.
-    tempvar value = (keccak__keccak__parse_to_diluted__partial_diluted0_30 - column1_row6) * domain41 / domain9;
+    tempvar value = (keccak__keccak__parse_to_diluted__partial_diluted0_30 - column1_row6) *
+        domain41 / domain9;
     tempvar total_sum = total_sum + constraint_coefficients[150] * value;
 
     // Constraint: keccak/keccak/parse_to_diluted/to_diluted1_p0.
-    tempvar value = (keccak__keccak__parse_to_diluted__partial_diluted0_31 - column1_row198) * domain41 / domain9;
+    tempvar value = (keccak__keccak__parse_to_diluted__partial_diluted0_31 - column1_row198) *
+        domain41 / domain9;
     tempvar total_sum = total_sum + constraint_coefficients[151] * value;
 
     // Constraint: keccak/keccak/parity0.
-    tempvar value = (column1_row6 + column1_row1286 + column1_row2566 + column1_row3846 + column1_row5126 - (column1_row6406 + column1_row6597 + column1_row6597 + column1_row6977 * 4)) / domain18;
+    tempvar value = (
+        column1_row6 +
+        column1_row1286 +
+        column1_row2566 +
+        column1_row3846 +
+        column1_row5126 -
+        (column1_row6406 + column1_row6597 + column1_row6597 + column1_row6977 * 4)
+    ) / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[152] * value;
 
     // Constraint: keccak/keccak/parity1.
-    tempvar value = (column1_row262 + column1_row1542 + column1_row2822 + column1_row4102 + column1_row5382 - (column1_row6401 + column1_row6790 + column1_row6790 + column1_row6981 * 4)) / domain18;
+    tempvar value = (
+        column1_row262 +
+        column1_row1542 +
+        column1_row2822 +
+        column1_row4102 +
+        column1_row5382 -
+        (column1_row6401 + column1_row6790 + column1_row6790 + column1_row6981 * 4)
+    ) / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[153] * value;
 
     // Constraint: keccak/keccak/parity2.
-    tempvar value = (column1_row518 + column1_row1798 + column1_row3078 + column1_row4358 + column1_row5638 - (column1_row6405 + column1_row6785 + column1_row6785 + column1_row7174 * 4)) / domain18;
+    tempvar value = (
+        column1_row518 +
+        column1_row1798 +
+        column1_row3078 +
+        column1_row4358 +
+        column1_row5638 -
+        (column1_row6405 + column1_row6785 + column1_row6785 + column1_row7174 * 4)
+    ) / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[154] * value;
 
     // Constraint: keccak/keccak/parity3.
-    tempvar value = (column1_row774 + column1_row2054 + column1_row3334 + column1_row4614 + column1_row5894 - (column1_row6598 + column1_row6789 + column1_row6789 + column1_row7169 * 4)) / domain18;
+    tempvar value = (
+        column1_row774 +
+        column1_row2054 +
+        column1_row3334 +
+        column1_row4614 +
+        column1_row5894 -
+        (column1_row6598 + column1_row6789 + column1_row6789 + column1_row7169 * 4)
+    ) / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[155] * value;
 
     // Constraint: keccak/keccak/parity4.
-    tempvar value = (column1_row1030 + column1_row2310 + column1_row3590 + column1_row4870 + column1_row6150 - (column1_row6593 + column1_row6982 + column1_row6982 + column1_row7173 * 4)) / domain18;
+    tempvar value = (
+        column1_row1030 +
+        column1_row2310 +
+        column1_row3590 +
+        column1_row4870 +
+        column1_row6150 -
+        (column1_row6593 + column1_row6982 + column1_row6982 + column1_row7173 * 4)
+    ) / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[156] * value;
 
     // Constraint: keccak/keccak/rotate_parity0/n0.
@@ -8396,303 +8768,630 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[166] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i0_j0.
-    tempvar value = (keccak__keccak__sum_parities0_0 + column1_row6 - (column1_row3 + column1_row7366 + column1_row7366)) / domain18;
+    tempvar value = (
+        keccak__keccak__sum_parities0_0 +
+        column1_row6 -
+        (column1_row3 + column1_row7366 + column1_row7366)
+    ) / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[167] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i0_j1/n0.
-    tempvar value = (keccak__keccak__sum_parities1_0 + column1_row262 - (column1_row10755 + column1_row15941 + column1_row15941)) * domain43 / domain18;
+    tempvar value = (
+        keccak__keccak__sum_parities1_0 +
+        column1_row262 -
+        (column1_row10755 + column1_row15941 + column1_row15941)
+    ) * domain43 / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[168] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i0_j1/n1.
-    tempvar value = (keccak__keccak__sum_parities1_64512 + column1_row516358 - (column1_row2563 + column1_row7749 + column1_row7749)) / domain26;
+    tempvar value = (
+        keccak__keccak__sum_parities1_64512 +
+        column1_row516358 -
+        (column1_row2563 + column1_row7749 + column1_row7749)
+    ) / domain26;
     tempvar total_sum = total_sum + constraint_coefficients[169] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i0_j2/n0.
-    tempvar value = (keccak__keccak__sum_parities2_0 + column1_row518 - (column1_row513027 + column1_row515843 + column1_row515843)) / domain45;
+    tempvar value = (
+        keccak__keccak__sum_parities2_0 +
+        column1_row518 -
+        (column1_row513027 + column1_row515843 + column1_row515843)
+    ) / domain45;
     tempvar total_sum = total_sum + constraint_coefficients[170] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i0_j2/n1.
-    tempvar value = (keccak__keccak__sum_parities2_2048 + column1_row16902 - (column1_row5123 + column1_row7939 + column1_row7939)) * domain47 / domain18;
+    tempvar value = (
+        keccak__keccak__sum_parities2_2048 +
+        column1_row16902 -
+        (column1_row5123 + column1_row7939 + column1_row7939)
+    ) * domain47 / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[171] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i0_j3/n0.
-    tempvar value = (keccak__keccak__sum_parities3_0 + column1_row774 - (column1_row230659 + column1_row236929 + column1_row236929)) * domain73 / domain18;
+    tempvar value = (
+        keccak__keccak__sum_parities3_0 +
+        column1_row774 -
+        (column1_row230659 + column1_row236929 + column1_row236929)
+    ) * domain73 / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[172] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i0_j3/n1.
-    tempvar value = (keccak__keccak__sum_parities3_36864 + column1_row295686 - (column1_row1283 + column1_row7553 + column1_row7553)) / domain105;
+    tempvar value = (
+        keccak__keccak__sum_parities3_36864 +
+        column1_row295686 -
+        (column1_row1283 + column1_row7553 + column1_row7553)
+    ) / domain105;
     tempvar total_sum = total_sum + constraint_coefficients[173] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i0_j4/n0.
-    tempvar value = (keccak__keccak__sum_parities4_0 + column1_row1030 - (column1_row225027 + column1_row228163 + column1_row228163)) * domain72 / domain18;
+    tempvar value = (
+        keccak__keccak__sum_parities4_0 +
+        column1_row1030 -
+        (column1_row225027 + column1_row228163 + column1_row228163)
+    ) * domain72 / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[174] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i0_j4/n1.
-    tempvar value = (keccak__keccak__sum_parities4_37888 + column1_row304134 - (column1_row3843 + column1_row6979 + column1_row6979)) / domain104;
+    tempvar value = (
+        keccak__keccak__sum_parities4_37888 +
+        column1_row304134 -
+        (column1_row3843 + column1_row6979 + column1_row6979)
+    ) / domain104;
     tempvar total_sum = total_sum + constraint_coefficients[175] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i1_j0/n0.
-    tempvar value = (keccak__keccak__sum_parities0_0 + column1_row1286 - (column1_row299011 + column1_row302083 + column1_row302083)) / domain105;
+    tempvar value = (
+        keccak__keccak__sum_parities0_0 +
+        column1_row1286 -
+        (column1_row299011 + column1_row302083 + column1_row302083)
+    ) / domain105;
     tempvar total_sum = total_sum + constraint_coefficients[176] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i1_j0/n1.
-    tempvar value = (keccak__keccak__sum_parities0_28672 + column1_row230662 - (column1_row4099 + column1_row7171 + column1_row7171)) * domain73 / domain18;
+    tempvar value = (
+        keccak__keccak__sum_parities0_28672 +
+        column1_row230662 -
+        (column1_row4099 + column1_row7171 + column1_row7171)
+    ) * domain73 / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[177] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i1_j1/n0.
-    tempvar value = (keccak__keccak__sum_parities1_0 + column1_row1542 - (column1_row360707 + column1_row367809 + column1_row367809)) / domain98;
+    tempvar value = (
+        keccak__keccak__sum_parities1_0 +
+        column1_row1542 -
+        (column1_row360707 + column1_row367809 + column1_row367809)
+    ) / domain98;
     tempvar total_sum = total_sum + constraint_coefficients[178] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i1_j1/n1.
-    tempvar value = (keccak__keccak__sum_parities1_20480 + column1_row165382 - (column1_row259 + column1_row7361 + column1_row7361)) * domain66 / domain18;
+    tempvar value = (
+        keccak__keccak__sum_parities1_20480 +
+        column1_row165382 -
+        (column1_row259 + column1_row7361 + column1_row7361)
+    ) * domain66 / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[179] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i1_j2/n0.
-    tempvar value = (keccak__keccak__sum_parities2_0 + column1_row1798 - (column1_row51971 + column1_row55939 + column1_row55939)) * domain51 / domain18;
+    tempvar value = (
+        keccak__keccak__sum_parities2_0 +
+        column1_row1798 -
+        (column1_row51971 + column1_row55939 + column1_row55939)
+    ) * domain51 / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[180] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i1_j2/n1.
-    tempvar value = (keccak__keccak__sum_parities2_59392 + column1_row476934 - (column1_row2819 + column1_row6787 + column1_row6787)) / domain79;
+    tempvar value = (
+        keccak__keccak__sum_parities2_59392 +
+        column1_row476934 -
+        (column1_row2819 + column1_row6787 + column1_row6787)
+    ) / domain79;
     tempvar total_sum = total_sum + constraint_coefficients[181] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i1_j3/n0.
-    tempvar value = (keccak__keccak__sum_parities3_0 + column1_row2054 - (column1_row455939 + column1_row450755 + column1_row450755)) / domain108;
+    tempvar value = (
+        keccak__keccak__sum_parities3_0 +
+        column1_row2054 -
+        (column1_row455939 + column1_row450755 + column1_row450755)
+    ) / domain108;
     tempvar total_sum = total_sum + constraint_coefficients[182] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i1_j3/n1.
-    tempvar value = (keccak__keccak__sum_parities3_8 + column1_row2118 - (column1_row456003 + column1_row451011 + column1_row451011)) / domain108;
+    tempvar value = (
+        keccak__keccak__sum_parities3_8 +
+        column1_row2118 -
+        (column1_row456003 + column1_row451011 + column1_row451011)
+    ) / domain108;
     tempvar total_sum = total_sum + constraint_coefficients[183] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i1_j3/n2.
-    tempvar value = (keccak__keccak__sum_parities3_16 + column1_row2182 - (column1_row456067 + column1_row451267 + column1_row451267)) / domain108;
+    tempvar value = (
+        keccak__keccak__sum_parities3_16 +
+        column1_row2182 -
+        (column1_row456067 + column1_row451267 + column1_row451267)
+    ) / domain108;
     tempvar total_sum = total_sum + constraint_coefficients[184] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i1_j3/n3.
-    tempvar value = (keccak__keccak__sum_parities3_9216 + column1_row75782 - (column1_row5379 + column1_row195 + column1_row195)) * domain111 / domain17;
+    tempvar value = (
+        keccak__keccak__sum_parities3_9216 +
+        column1_row75782 -
+        (column1_row5379 + column1_row195 + column1_row195)
+    ) * domain111 / domain17;
     tempvar total_sum = total_sum + constraint_coefficients[185] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i1_j3/n4.
-    tempvar value = (keccak__keccak__sum_parities3_9224 + column1_row75846 - (column1_row5443 + column1_row451 + column1_row451)) * domain111 / domain17;
+    tempvar value = (
+        keccak__keccak__sum_parities3_9224 +
+        column1_row75846 -
+        (column1_row5443 + column1_row451 + column1_row451)
+    ) * domain111 / domain17;
     tempvar total_sum = total_sum + constraint_coefficients[186] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i1_j3/n5.
-    tempvar value = (keccak__keccak__sum_parities3_9232 + column1_row75910 - (column1_row5507 + column1_row707 + column1_row707)) * domain111 / domain17;
+    tempvar value = (
+        keccak__keccak__sum_parities3_9232 +
+        column1_row75910 -
+        (column1_row5507 + column1_row707 + column1_row707)
+    ) * domain111 / domain17;
     tempvar total_sum = total_sum + constraint_coefficients[187] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i1_j4/n0.
-    tempvar value = (keccak__keccak__sum_parities4_0 + column1_row2310 - (column1_row165379 + column1_row171397 + column1_row171397)) * domain66 / domain18;
+    tempvar value = (
+        keccak__keccak__sum_parities4_0 +
+        column1_row2310 -
+        (column1_row165379 + column1_row171397 + column1_row171397)
+    ) * domain66 / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[188] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i1_j4/n1.
-    tempvar value = (keccak__keccak__sum_parities4_45056 + column1_row362758 - (column1_row1539 + column1_row7557 + column1_row7557)) / domain98;
+    tempvar value = (
+        keccak__keccak__sum_parities4_45056 +
+        column1_row362758 -
+        (column1_row1539 + column1_row7557 + column1_row7557)
+    ) / domain98;
     tempvar total_sum = total_sum + constraint_coefficients[189] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i2_j0/n0.
-    tempvar value = (keccak__keccak__sum_parities0_0 + column1_row2566 - (column1_row26371 + column1_row31171 + column1_row31171)) * domain112 / domain18;
+    tempvar value = (
+        keccak__keccak__sum_parities0_0 +
+        column1_row2566 -
+        (column1_row26371 + column1_row31171 + column1_row31171)
+    ) * domain112 / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[190] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i2_j0/n1.
-    tempvar value = (keccak__keccak__sum_parities0_62464 + column1_row502278 - (column1_row1795 + column1_row6595 + column1_row6595)) / domain113;
+    tempvar value = (
+        keccak__keccak__sum_parities0_62464 +
+        column1_row502278 -
+        (column1_row1795 + column1_row6595 + column1_row6595)
+    ) / domain113;
     tempvar total_sum = total_sum + constraint_coefficients[191] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i2_j1/n0.
-    tempvar value = (keccak__keccak__sum_parities1_0 + column1_row2822 - (column1_row86275 + column1_row89283 + column1_row89283)) * domain56 / domain18;
+    tempvar value = (
+        keccak__keccak__sum_parities1_0 +
+        column1_row2822 -
+        (column1_row86275 + column1_row89283 + column1_row89283)
+    ) * domain56 / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[192] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i2_j1/n1.
-    tempvar value = (keccak__keccak__sum_parities1_55296 + column1_row445190 - (column1_row4355 + column1_row7363 + column1_row7363)) / domain86;
+    tempvar value = (
+        keccak__keccak__sum_parities1_55296 +
+        column1_row445190 -
+        (column1_row4355 + column1_row7363 + column1_row7363)
+    ) / domain86;
     tempvar total_sum = total_sum + constraint_coefficients[193] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i2_j2/n0.
-    tempvar value = (keccak__keccak__sum_parities2_0 + column1_row3078 - (column1_row352771 + column1_row359621 + column1_row359621)) / domain100;
+    tempvar value = (
+        keccak__keccak__sum_parities2_0 +
+        column1_row3078 -
+        (column1_row352771 + column1_row359621 + column1_row359621)
+    ) / domain100;
     tempvar total_sum = total_sum + constraint_coefficients[194] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i2_j2/n1.
-    tempvar value = (keccak__keccak__sum_parities2_21504 + column1_row175110 - (column1_row515 + column1_row7365 + column1_row7365)) * domain68 / domain18;
+    tempvar value = (
+        keccak__keccak__sum_parities2_21504 +
+        column1_row175110 -
+        (column1_row515 + column1_row7365 + column1_row7365)
+    ) * domain68 / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[195] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i2_j3/n0.
-    tempvar value = (keccak__keccak__sum_parities3_0 + column1_row3334 - (column1_row207875 + column1_row212742 + column1_row212742)) * domain71 / domain18;
+    tempvar value = (
+        keccak__keccak__sum_parities3_0 +
+        column1_row3334 -
+        (column1_row207875 + column1_row212742 + column1_row212742)
+    ) * domain71 / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[196] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i2_j3/n1.
-    tempvar value = (keccak__keccak__sum_parities3_39936 + column1_row322822 - (column1_row3075 + column1_row7942 + column1_row7942)) / domain103;
+    tempvar value = (
+        keccak__keccak__sum_parities3_39936 +
+        column1_row322822 -
+        (column1_row3075 + column1_row7942 + column1_row7942)
+    ) / domain103;
     tempvar total_sum = total_sum + constraint_coefficients[197] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i2_j4/n0.
-    tempvar value = (keccak__keccak__sum_parities4_0 + column1_row3590 - (column1_row325123 + column1_row320451 + column1_row320451)) / domain115;
+    tempvar value = (
+        keccak__keccak__sum_parities4_0 +
+        column1_row3590 -
+        (column1_row325123 + column1_row320451 + column1_row320451)
+    ) / domain115;
     tempvar total_sum = total_sum + constraint_coefficients[198] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i2_j4/n1.
-    tempvar value = (keccak__keccak__sum_parities4_8 + column1_row3654 - (column1_row325187 + column1_row320707 + column1_row320707)) / domain115;
+    tempvar value = (
+        keccak__keccak__sum_parities4_8 +
+        column1_row3654 -
+        (column1_row325187 + column1_row320707 + column1_row320707)
+    ) / domain115;
     tempvar total_sum = total_sum + constraint_coefficients[199] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i2_j4/n2.
-    tempvar value = (keccak__keccak__sum_parities4_16 + column1_row3718 - (column1_row325251 + column1_row320963 + column1_row320963)) / domain115;
+    tempvar value = (
+        keccak__keccak__sum_parities4_16 +
+        column1_row3718 -
+        (column1_row325251 + column1_row320963 + column1_row320963)
+    ) / domain115;
     tempvar total_sum = total_sum + constraint_coefficients[200] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i2_j4/n3.
-    tempvar value = (keccak__keccak__sum_parities4_25600 + column1_row208390 - (column1_row5635 + column1_row963 + column1_row963)) * domain117 / domain17;
+    tempvar value = (
+        keccak__keccak__sum_parities4_25600 +
+        column1_row208390 -
+        (column1_row5635 + column1_row963 + column1_row963)
+    ) * domain117 / domain17;
     tempvar total_sum = total_sum + constraint_coefficients[201] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i2_j4/n4.
-    tempvar value = (keccak__keccak__sum_parities4_25608 + column1_row208454 - (column1_row5699 + column1_row1219 + column1_row1219)) * domain117 / domain17;
+    tempvar value = (
+        keccak__keccak__sum_parities4_25608 +
+        column1_row208454 -
+        (column1_row5699 + column1_row1219 + column1_row1219)
+    ) * domain117 / domain17;
     tempvar total_sum = total_sum + constraint_coefficients[202] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i2_j4/n5.
-    tempvar value = (keccak__keccak__sum_parities4_25616 + column1_row208518 - (column1_row5763 + column1_row1475 + column1_row1475)) * domain117 / domain17;
+    tempvar value = (
+        keccak__keccak__sum_parities4_25616 +
+        column1_row208518 -
+        (column1_row5763 + column1_row1475 + column1_row1475)
+    ) * domain117 / domain17;
     tempvar total_sum = total_sum + constraint_coefficients[203] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i3_j0/n0.
-    tempvar value = (keccak__keccak__sum_parities0_0 + column1_row3846 - (column1_row341763 + column1_row337603 + column1_row337603)) / domain118;
+    tempvar value = (
+        keccak__keccak__sum_parities0_0 +
+        column1_row3846 -
+        (column1_row341763 + column1_row337603 + column1_row337603)
+    ) / domain118;
     tempvar total_sum = total_sum + constraint_coefficients[204] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i3_j0/n1.
-    tempvar value = (keccak__keccak__sum_parities0_8 + column1_row3910 - (column1_row341827 + column1_row337859 + column1_row337859)) / domain118;
+    tempvar value = (
+        keccak__keccak__sum_parities0_8 +
+        column1_row3910 -
+        (column1_row341827 + column1_row337859 + column1_row337859)
+    ) / domain118;
     tempvar total_sum = total_sum + constraint_coefficients[205] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i3_j0/n2.
-    tempvar value = (keccak__keccak__sum_parities0_16 + column1_row3974 - (column1_row341891 + column1_row338115 + column1_row338115)) / domain118;
+    tempvar value = (
+        keccak__keccak__sum_parities0_16 +
+        column1_row3974 -
+        (column1_row341891 + column1_row338115 + column1_row338115)
+    ) / domain118;
     tempvar total_sum = total_sum + constraint_coefficients[206] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i3_j0/n3.
-    tempvar value = (keccak__keccak__sum_parities0_23552 + column1_row192262 - (column1_row5891 + column1_row1731 + column1_row1731)) * domain119 / domain17;
+    tempvar value = (
+        keccak__keccak__sum_parities0_23552 +
+        column1_row192262 -
+        (column1_row5891 + column1_row1731 + column1_row1731)
+    ) * domain119 / domain17;
     tempvar total_sum = total_sum + constraint_coefficients[207] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i3_j0/n4.
-    tempvar value = (keccak__keccak__sum_parities0_23560 + column1_row192326 - (column1_row5955 + column1_row1987 + column1_row1987)) * domain119 / domain17;
+    tempvar value = (
+        keccak__keccak__sum_parities0_23560 +
+        column1_row192326 -
+        (column1_row5955 + column1_row1987 + column1_row1987)
+    ) * domain119 / domain17;
     tempvar total_sum = total_sum + constraint_coefficients[208] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i3_j0/n5.
-    tempvar value = (keccak__keccak__sum_parities0_23568 + column1_row192390 - (column1_row6019 + column1_row2243 + column1_row2243)) * domain119 / domain17;
+    tempvar value = (
+        keccak__keccak__sum_parities0_23568 +
+        column1_row192390 -
+        (column1_row6019 + column1_row2243 + column1_row2243)
+    ) * domain119 / domain17;
     tempvar total_sum = total_sum + constraint_coefficients[209] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i3_j1/n0.
-    tempvar value = (keccak__keccak__sum_parities1_0 + column1_row4102 - (column1_row370691 + column1_row376390 + column1_row376390)) / domain120;
+    tempvar value = (
+        keccak__keccak__sum_parities1_0 +
+        column1_row4102 -
+        (column1_row370691 + column1_row376390 + column1_row376390)
+    ) / domain120;
     tempvar total_sum = total_sum + constraint_coefficients[210] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i3_j1/n1.
-    tempvar value = (keccak__keccak__sum_parities1_19456 + column1_row159750 - (column1_row2051 + column1_row7750 + column1_row7750)) * domain121 / domain18;
+    tempvar value = (
+        keccak__keccak__sum_parities1_19456 +
+        column1_row159750 -
+        (column1_row2051 + column1_row7750 + column1_row7750)
+    ) * domain121 / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[211] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i3_j2/n0.
-    tempvar value = (keccak__keccak__sum_parities2_0 + column1_row4358 - (column1_row127491 + column1_row130435 + column1_row130435)) * domain122 / domain18;
+    tempvar value = (
+        keccak__keccak__sum_parities2_0 +
+        column1_row4358 -
+        (column1_row127491 + column1_row130435 + column1_row130435)
+    ) * domain122 / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[212] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i3_j2/n1.
-    tempvar value = (keccak__keccak__sum_parities2_50176 + column1_row405766 - (column1_row4611 + column1_row7555 + column1_row7555)) / domain123;
+    tempvar value = (
+        keccak__keccak__sum_parities2_50176 +
+        column1_row405766 -
+        (column1_row4611 + column1_row7555 + column1_row7555)
+    ) / domain123;
     tempvar total_sum = total_sum + constraint_coefficients[213] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i3_j3/n0.
-    tempvar value = (keccak__keccak__sum_parities3_0 + column1_row4614 - (column1_row172803 + column1_row178435 + column1_row178435)) * domain68 / domain18;
+    tempvar value = (
+        keccak__keccak__sum_parities3_0 +
+        column1_row4614 -
+        (column1_row172803 + column1_row178435 + column1_row178435)
+    ) * domain68 / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[214] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i3_j3/n1.
-    tempvar value = (keccak__keccak__sum_parities3_44032 + column1_row356870 - (column1_row771 + column1_row6403 + column1_row6403)) / domain100;
+    tempvar value = (
+        keccak__keccak__sum_parities3_44032 +
+        column1_row356870 -
+        (column1_row771 + column1_row6403 + column1_row6403)
+    ) / domain100;
     tempvar total_sum = total_sum + constraint_coefficients[215] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i3_j4/n0.
-    tempvar value = (keccak__keccak__sum_parities4_0 + column1_row4870 - (column1_row68867 + column1_row73473 + column1_row73473)) * domain124 / domain18;
+    tempvar value = (
+        keccak__keccak__sum_parities4_0 +
+        column1_row4870 -
+        (column1_row68867 + column1_row73473 + column1_row73473)
+    ) * domain124 / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[216] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i3_j4/n1.
-    tempvar value = (keccak__keccak__sum_parities4_57344 + column1_row463622 - (column1_row3331 + column1_row7937 + column1_row7937)) / domain125;
+    tempvar value = (
+        keccak__keccak__sum_parities4_57344 +
+        column1_row463622 -
+        (column1_row3331 + column1_row7937 + column1_row7937)
+    ) / domain125;
     tempvar total_sum = total_sum + constraint_coefficients[217] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i4_j0/n0.
-    tempvar value = (keccak__keccak__sum_parities0_0 + column1_row5126 - (column1_row151043 + column1_row155397 + column1_row155397)) * domain126 / domain18;
+    tempvar value = (
+        keccak__keccak__sum_parities0_0 +
+        column1_row5126 -
+        (column1_row151043 + column1_row155397 + column1_row155397)
+    ) * domain126 / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[218] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i4_j0/n1.
-    tempvar value = (keccak__keccak__sum_parities0_47104 + column1_row381958 - (column1_row3587 + column1_row7941 + column1_row7941)) / domain127;
+    tempvar value = (
+        keccak__keccak__sum_parities0_47104 +
+        column1_row381958 -
+        (column1_row3587 + column1_row7941 + column1_row7941)
+    ) / domain127;
     tempvar total_sum = total_sum + constraint_coefficients[219] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i4_j1/n0.
-    tempvar value = (keccak__keccak__sum_parities1_0 + column1_row5382 - (column1_row22531 + column1_row18883 + column1_row18883)) * domain109 / domain17;
+    tempvar value = (
+        keccak__keccak__sum_parities1_0 +
+        column1_row5382 -
+        (column1_row22531 + column1_row18883 + column1_row18883)
+    ) * domain109 / domain17;
     tempvar total_sum = total_sum + constraint_coefficients[220] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i4_j1/n1.
-    tempvar value = (keccak__keccak__sum_parities1_8 + column1_row5446 - (column1_row22595 + column1_row19139 + column1_row19139)) * domain109 / domain17;
+    tempvar value = (
+        keccak__keccak__sum_parities1_8 +
+        column1_row5446 -
+        (column1_row22595 + column1_row19139 + column1_row19139)
+    ) * domain109 / domain17;
     tempvar total_sum = total_sum + constraint_coefficients[221] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i4_j1/n2.
-    tempvar value = (keccak__keccak__sum_parities1_16 + column1_row5510 - (column1_row22659 + column1_row19395 + column1_row19395)) * domain109 / domain17;
+    tempvar value = (
+        keccak__keccak__sum_parities1_16 +
+        column1_row5510 -
+        (column1_row22659 + column1_row19395 + column1_row19395)
+    ) * domain109 / domain17;
     tempvar total_sum = total_sum + constraint_coefficients[222] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i4_j1/n3.
-    tempvar value = (keccak__keccak__sum_parities1_63488 + column1_row513286 - (column1_row6147 + column1_row2499 + column1_row2499)) / domain106;
+    tempvar value = (
+        keccak__keccak__sum_parities1_63488 +
+        column1_row513286 -
+        (column1_row6147 + column1_row2499 + column1_row2499)
+    ) / domain106;
     tempvar total_sum = total_sum + constraint_coefficients[223] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i4_j1/n4.
-    tempvar value = (keccak__keccak__sum_parities1_63496 + column1_row513350 - (column1_row6211 + column1_row2755 + column1_row2755)) / domain106;
+    tempvar value = (
+        keccak__keccak__sum_parities1_63496 +
+        column1_row513350 -
+        (column1_row6211 + column1_row2755 + column1_row2755)
+    ) / domain106;
     tempvar total_sum = total_sum + constraint_coefficients[224] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i4_j1/n5.
-    tempvar value = (keccak__keccak__sum_parities1_63504 + column1_row513414 - (column1_row6275 + column1_row3011 + column1_row3011)) / domain106;
+    tempvar value = (
+        keccak__keccak__sum_parities1_63504 +
+        column1_row513414 -
+        (column1_row6275 + column1_row3011 + column1_row3011)
+    ) / domain106;
     tempvar total_sum = total_sum + constraint_coefficients[225] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i4_j2/n0.
-    tempvar value = (keccak__keccak__sum_parities2_0 + column1_row5638 - (column1_row502019 + column1_row507457 + column1_row507457)) / domain113;
+    tempvar value = (
+        keccak__keccak__sum_parities2_0 +
+        column1_row5638 -
+        (column1_row502019 + column1_row507457 + column1_row507457)
+    ) / domain113;
     tempvar total_sum = total_sum + constraint_coefficients[226] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i4_j2/n1.
-    tempvar value = (keccak__keccak__sum_parities2_3072 + column1_row30214 - (column1_row2307 + column1_row7745 + column1_row7745)) * domain112 / domain18;
+    tempvar value = (
+        keccak__keccak__sum_parities2_3072 +
+        column1_row30214 -
+        (column1_row2307 + column1_row7745 + column1_row7745)
+    ) * domain112 / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[227] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i4_j3/n0.
-    tempvar value = (keccak__keccak__sum_parities3_0 + column1_row5894 - (column1_row463619 + column1_row466499 + column1_row466499)) / domain125;
+    tempvar value = (
+        keccak__keccak__sum_parities3_0 +
+        column1_row5894 -
+        (column1_row463619 + column1_row466499 + column1_row466499)
+    ) / domain125;
     tempvar total_sum = total_sum + constraint_coefficients[228] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i4_j3/n1.
-    tempvar value = (keccak__keccak__sum_parities3_8192 + column1_row71430 - (column1_row4867 + column1_row7747 + column1_row7747)) * domain124 / domain18;
+    tempvar value = (
+        keccak__keccak__sum_parities3_8192 +
+        column1_row71430 -
+        (column1_row4867 + column1_row7747 + column1_row7747)
+    ) * domain124 / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[229] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i4_j4/n0.
-    tempvar value = (keccak__keccak__sum_parities4_0 + column1_row6150 - (column1_row115715 + column1_row122246 + column1_row122246)) * domain128 / domain18;
+    tempvar value = (
+        keccak__keccak__sum_parities4_0 +
+        column1_row6150 -
+        (column1_row115715 + column1_row122246 + column1_row122246)
+    ) * domain128 / domain18;
     tempvar total_sum = total_sum + constraint_coefficients[230] * value;
 
     // Constraint: keccak/keccak/theta_rho_pi_i4_j4/n1.
-    tempvar value = (keccak__keccak__sum_parities4_51200 + column1_row415750 - (column1_row1027 + column1_row7558 + column1_row7558)) / domain129;
+    tempvar value = (
+        keccak__keccak__sum_parities4_51200 +
+        column1_row415750 -
+        (column1_row1027 + column1_row7558 + column1_row7558)
+    ) / domain129;
     tempvar total_sum = total_sum + constraint_coefficients[231] * value;
 
     // Constraint: keccak/keccak/chi_iota0.
-    tempvar value = (global_values.keccak__keccak__keccak_round_key0 + column1_row3 + column1_row3 + keccak__keccak__after_theta_rho_pi_xor_one_32 + column1_row515 - (column1_row1 + column1_row14 + column1_row14 + column1_row5 * 4)) / domain26;
+    tempvar value = (
+        global_values.keccak__keccak__keccak_round_key0 +
+        column1_row3 +
+        column1_row3 +
+        keccak__keccak__after_theta_rho_pi_xor_one_32 +
+        column1_row515 -
+        (column1_row1 + column1_row14 + column1_row14 + column1_row5 * 4)
+    ) / domain26;
     tempvar total_sum = total_sum + constraint_coefficients[232] * value;
 
     // Constraint: keccak/keccak/chi_iota1.
-    tempvar value = (global_values.keccak__keccak__keccak_round_key1 + column1_row8195 + column1_row8195 + keccak__keccak__after_theta_rho_pi_xor_one_1056 + column1_row8707 - (column1_row8193 + column1_row8206 + column1_row8206 + column1_row8197 * 4)) / domain26;
+    tempvar value = (
+        global_values.keccak__keccak__keccak_round_key1 +
+        column1_row8195 +
+        column1_row8195 +
+        keccak__keccak__after_theta_rho_pi_xor_one_1056 +
+        column1_row8707 -
+        (column1_row8193 + column1_row8206 + column1_row8206 + column1_row8197 * 4)
+    ) / domain26;
     tempvar total_sum = total_sum + constraint_coefficients[233] * value;
 
     // Constraint: keccak/keccak/chi_iota3.
-    tempvar value = (global_values.keccak__keccak__keccak_round_key3 + column1_row24579 + column1_row24579 + keccak__keccak__after_theta_rho_pi_xor_one_3104 + column1_row25091 - (column1_row24577 + column1_row24590 + column1_row24590 + column1_row24581 * 4)) / domain26;
+    tempvar value = (
+        global_values.keccak__keccak__keccak_round_key3 +
+        column1_row24579 +
+        column1_row24579 +
+        keccak__keccak__after_theta_rho_pi_xor_one_3104 +
+        column1_row25091 -
+        (column1_row24577 + column1_row24590 + column1_row24590 + column1_row24581 * 4)
+    ) / domain26;
     tempvar total_sum = total_sum + constraint_coefficients[234] * value;
 
     // Constraint: keccak/keccak/chi_iota7.
-    tempvar value = (global_values.keccak__keccak__keccak_round_key7 + column1_row57347 + column1_row57347 + keccak__keccak__after_theta_rho_pi_xor_one_7200 + column1_row57859 - (column1_row57345 + column1_row57358 + column1_row57358 + column1_row57349 * 4)) / domain26;
+    tempvar value = (
+        global_values.keccak__keccak__keccak_round_key7 +
+        column1_row57347 +
+        column1_row57347 +
+        keccak__keccak__after_theta_rho_pi_xor_one_7200 +
+        column1_row57859 -
+        (column1_row57345 + column1_row57358 + column1_row57358 + column1_row57349 * 4)
+    ) / domain26;
     tempvar total_sum = total_sum + constraint_coefficients[235] * value;
 
     // Constraint: keccak/keccak/chi_iota15.
-    tempvar value = (global_values.keccak__keccak__keccak_round_key15 + column1_row122883 + column1_row122883 + keccak__keccak__after_theta_rho_pi_xor_one_15392 + column1_row123395 - (column1_row122881 + column1_row122894 + column1_row122894 + column1_row122885 * 4)) / domain26;
+    tempvar value = (
+        global_values.keccak__keccak__keccak_round_key15 +
+        column1_row122883 +
+        column1_row122883 +
+        keccak__keccak__after_theta_rho_pi_xor_one_15392 +
+        column1_row123395 -
+        (column1_row122881 + column1_row122894 + column1_row122894 + column1_row122885 * 4)
+    ) / domain26;
     tempvar total_sum = total_sum + constraint_coefficients[236] * value;
 
     // Constraint: keccak/keccak/chi_iota31.
-    tempvar value = (global_values.keccak__keccak__keccak_round_key31 + column1_row253955 + column1_row253955 + keccak__keccak__after_theta_rho_pi_xor_one_31776 + column1_row254467 - (column1_row253953 + column1_row253966 + column1_row253966 + column1_row253957 * 4)) / domain26;
+    tempvar value = (
+        global_values.keccak__keccak__keccak_round_key31 +
+        column1_row253955 +
+        column1_row253955 +
+        keccak__keccak__after_theta_rho_pi_xor_one_31776 +
+        column1_row254467 -
+        (column1_row253953 + column1_row253966 + column1_row253966 + column1_row253957 * 4)
+    ) / domain26;
     tempvar total_sum = total_sum + constraint_coefficients[237] * value;
 
     // Constraint: keccak/keccak/chi_iota63.
-    tempvar value = (global_values.keccak__keccak__keccak_round_key63 + column1_row516099 + column1_row516099 + keccak__keccak__after_theta_rho_pi_xor_one_64544 + column1_row516611 - (column1_row516097 + column1_row516110 + column1_row516110 + column1_row516101 * 4)) / domain26;
+    tempvar value = (
+        global_values.keccak__keccak__keccak_round_key63 +
+        column1_row516099 +
+        column1_row516099 +
+        keccak__keccak__after_theta_rho_pi_xor_one_64544 +
+        column1_row516611 -
+        (column1_row516097 + column1_row516110 + column1_row516110 + column1_row516101 * 4)
+    ) / domain26;
     tempvar total_sum = total_sum + constraint_coefficients[238] * value;
 
     // Constraint: keccak/keccak/chi0.
-    tempvar value = (column1_row3 + column1_row3 + keccak__keccak__after_theta_rho_pi_xor_one_32 + column1_row515 - (column1_row1 + column1_row14 + column1_row14 + column1_row5 * 4)) * domain130 / domain20;
+    tempvar value = (
+        column1_row3 +
+        column1_row3 +
+        keccak__keccak__after_theta_rho_pi_xor_one_32 +
+        column1_row515 -
+        (column1_row1 + column1_row14 + column1_row14 + column1_row5 * 4)
+    ) * domain130 / domain20;
     tempvar total_sum = total_sum + constraint_coefficients[239] * value;
 
     // Constraint: keccak/keccak/chi1.
-    tempvar value = (column1_row1027 + column1_row1027 + keccak__keccak__after_theta_rho_pi_xor_one_0 + column1_row259 - (column1_row1025 + column1_row1038 + column1_row1038 + column1_row1029 * 4)) / domain19;
+    tempvar value = (
+        column1_row1027 +
+        column1_row1027 +
+        keccak__keccak__after_theta_rho_pi_xor_one_0 +
+        column1_row259 -
+        (column1_row1025 + column1_row1038 + column1_row1038 + column1_row1029 * 4)
+    ) / domain19;
     tempvar total_sum = total_sum + constraint_coefficients[240] * value;
 
     // Constraint: keccak/keccak/chi2.
-    tempvar value = (column1_row771 + column1_row771 + keccak__keccak__after_theta_rho_pi_xor_one_128 + column1_row3 - (column1_row769 + column1_row782 + column1_row782 + column1_row773 * 4)) / domain19;
+    tempvar value = (
+        column1_row771 +
+        column1_row771 +
+        keccak__keccak__after_theta_rho_pi_xor_one_128 +
+        column1_row3 -
+        (column1_row769 + column1_row782 + column1_row782 + column1_row773 * 4)
+    ) / domain19;
     tempvar total_sum = total_sum + constraint_coefficients[241] * value;
 
     return (res=total_sum);

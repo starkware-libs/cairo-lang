@@ -43,11 +43,13 @@ func get_block_context{pedersen_ptr: HashBuiltin*, range_check_ptr}() -> (
         sequencer_address=nondet %{ os_input.general_config.sequencer_address %},
         block_info=BlockInfo(
             block_timestamp=nondet %{ syscall_handler.block_info.block_timestamp %},
-            block_number=nondet %{ syscall_handler.block_info.block_number %}),
+            block_number=nondet %{ syscall_handler.block_info.block_number %},
+        ),
         starknet_os_config=StarknetOsConfig(
             chain_id=nondet %{ os_input.general_config.chain_id.value %},
-            fee_token_address=nondet %{ os_input.general_config.fee_token_address %}
-            ));
+            fee_token_address=nondet %{ os_input.general_config.fee_token_address %},
+        ),
+    );
 
     let (__fp__, _) = get_fp_and_pc();
     return (block_context=&block_context);

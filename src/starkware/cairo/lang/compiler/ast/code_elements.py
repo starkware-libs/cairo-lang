@@ -7,23 +7,42 @@ from starkware.cairo.lang.compiler.ast.arguments import IdentifierList
 from starkware.cairo.lang.compiler.ast.bool_expr import BoolExpr
 from starkware.cairo.lang.compiler.ast.cairo_types import CairoType
 from starkware.cairo.lang.compiler.ast.expr import Expression, ExprHint, ExprIdentifier, ExprTuple
-from starkware.cairo.lang.compiler.ast.formatting_utils import (
-    INDENTATION,
-    LocationField,
+from starkware.cairo.lang.compiler.ast.formatting_utils import INDENTATION, LocationField
+from starkware.cairo.lang.compiler.ast.instructions import InstructionAst
+from starkware.cairo.lang.compiler.ast.node import AstNode
+from starkware.cairo.lang.compiler.ast.notes import NoteListField, Notes
+from starkware.cairo.lang.compiler.ast.parentheses_expr_wrapper import parenthesize_expression
+from starkware.cairo.lang.compiler.ast.particle import (
     Particle,
     ParticleFormattingConfig,
     ParticleList,
     SeparatedParticleList,
     particles_in_lines,
 )
-from starkware.cairo.lang.compiler.ast.instructions import InstructionAst
-from starkware.cairo.lang.compiler.ast.node import AstNode
-from starkware.cairo.lang.compiler.ast.notes import NoteListField, Notes
 from starkware.cairo.lang.compiler.ast.rvalue import Rvalue, RvalueCall, RvalueFuncCall
 from starkware.cairo.lang.compiler.ast.types import TypedIdentifier
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.python.utils import indent
+
+
+def code_particles_in_lines(
+    particles: Particle,
+    allowed_line_length: int,
+    one_per_line: bool = False,
+    double_indentation: bool = False,
+    force_one_per_line: bool = False,
+):
+    return particles_in_lines(
+        particles=particles,
+        config=ParticleFormattingConfig(
+            allowed_line_length=allowed_line_length,
+            line_indent=INDENTATION,
+            one_per_line=one_per_line,
+            double_indentation=double_indentation,
+            force_one_per_line=force_one_per_line,
+        ),
+    )
 
 
 class CodeElement(AstNode):
@@ -38,8 +57,8 @@ class CodeElement(AstNode):
 class CodeElementInstruction(CodeElement):
     instruction: InstructionAst
 
-    def get_particles(self):
-        return [self.instruction.format()]
+    def get_particles(self) -> ParticleList:
+        return ParticleList(elements=[self.instruction.format()])
 
     def format(self, allowed_line_length):
         return self.instruction.format() + ";"
@@ -54,7 +73,17 @@ class CodeElementConst(CodeElement):
     expr: Expression
 
     def format(self, allowed_line_length):
-        return f"const {self.identifier.format()} = {self.expr.format()};"
+        identifier_particles = self.identifier.get_particles()
+        expr_particles = parenthesize_expression(self.expr).get_particles()
+
+        identifier_particles.add_prefix("const ")
+        identifier_particles.add_suffix(f" = {expr_particles.pop_prefix()}")
+        expr_particles.add_suffix(";")
+
+        return code_particles_in_lines(
+            particles=identifier_particles + expr_particles,
+            allowed_line_length=allowed_line_length,
+        )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.identifier, self.expr]
@@ -67,12 +96,7 @@ class CodeElementMember(CodeElement):
     def format(self, allowed_line_length):
         particle = self.typed_identifier.to_particle()
         particle.add_suffix(",")
-        return particles_in_lines(
-            particles=particle,
-            config=ParticleFormattingConfig(
-                allowed_line_length=allowed_line_length, line_indent=INDENTATION
-            ),
-        )
+        return code_particles_in_lines(particles=particle, allowed_line_length=allowed_line_length)
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.typed_identifier]
@@ -84,14 +108,16 @@ class CodeElementReference(CodeElement):
     expr: Expression
 
     def format(self, allowed_line_length):
-        particle = self.typed_identifier.to_particle()
-        particle.add_prefix("let ")
-        particle.add_suffix(f" = {self.expr.format()};")
-        return particles_in_lines(
-            particles=particle,
-            config=ParticleFormattingConfig(
-                allowed_line_length=allowed_line_length, line_indent=INDENTATION
-            ),
+        identifier_particle = self.typed_identifier.to_particle()
+        expr_particles = parenthesize_expression(self.expr).get_particles()
+
+        identifier_particle.add_prefix("let ")
+        identifier_particle.add_suffix(f" = {expr_particles.pop_prefix()}")
+        expr_particles.add_suffix(";")
+
+        return code_particles_in_lines(
+            particles=ParticleList(elements=[identifier_particle]) + expr_particles,
+            allowed_line_length=allowed_line_length,
         )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
@@ -112,17 +138,17 @@ class CodeElementLocalVariable(CodeElement):
     location: Optional[Location] = LocationField
 
     def format(self, allowed_line_length):
-        particle = self.typed_identifier.to_particle()
-        particle.add_prefix("local ")
+        identifier_particle = self.typed_identifier.to_particle()
+        identifier_particle.add_prefix("local ")
+        particles = ParticleList(elements=[identifier_particle])
+
         if self.expr is not None:
-            particle.add_suffix(f" = {self.expr.format()}")
-        particle.add_suffix(";")
-        return particles_in_lines(
-            particles=particle,
-            config=ParticleFormattingConfig(
-                allowed_line_length=allowed_line_length, line_indent=INDENTATION
-            ),
-        )
+            expr_particles = parenthesize_expression(self.expr).get_particles()
+            particles.add_suffix(f" = {expr_particles.pop_prefix()}")
+            particles += expr_particles
+
+        particles.add_suffix(";")
+        return code_particles_in_lines(particles=particles, allowed_line_length=allowed_line_length)
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.typed_identifier, self.expr]
@@ -140,17 +166,17 @@ class CodeElementTemporaryVariable(CodeElement):
     location: Optional[Location] = LocationField
 
     def format(self, allowed_line_length):
-        particle = self.typed_identifier.to_particle()
-        particle.add_prefix("tempvar ")
+        identifier_particle = self.typed_identifier.to_particle()
+        identifier_particle.add_prefix("tempvar ")
+        particles = ParticleList(elements=[identifier_particle])
+
         if self.expr is not None:
-            particle.add_suffix(f" = {self.expr.format()}")
-        particle.add_suffix(";")
-        return particles_in_lines(
-            particles=particle,
-            config=ParticleFormattingConfig(
-                allowed_line_length=allowed_line_length, line_indent=INDENTATION
-            ),
-        )
+            expr_particles = parenthesize_expression(self.expr).get_particles()
+            particles.add_suffix(f" = {expr_particles.pop_prefix()}")
+            particles += expr_particles
+
+        particles.add_suffix(";")
+        return code_particles_in_lines(particles=particles, allowed_line_length=allowed_line_length)
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.typed_identifier, self.expr]
@@ -206,20 +232,17 @@ class CodeElementReturn(CodeElement):
 
             trailing_comma = self.expr.members.has_trailing_comma and len(args) > 0
 
-            return particles_in_lines(
-                particles=ParticleList(
-                    elements=[
-                        "return (",
-                        SeparatedParticleList(
-                            elements=expr_codes, end=");", trailing_separator=trailing_comma
-                        ),
-                    ]
-                ),
-                config=ParticleFormattingConfig(
-                    allowed_line_length=allowed_line_length,
-                    line_indent=INDENTATION,
-                    one_per_line=True,
-                ),
+            particles = ParticleList(
+                elements=[
+                    "return (",
+                    SeparatedParticleList(
+                        elements=expr_codes, end=");", trailing_separator=trailing_comma
+                    ),
+                ]
+            )
+
+            return code_particles_in_lines(
+                particles=particles, allowed_line_length=allowed_line_length, one_per_line=True
             )
 
         return "return " + self.expr.format() + ";"
@@ -238,18 +261,17 @@ class CodeElementTailCall(CodeElement):
     func_call: RvalueFuncCall
     location: Optional[Location] = LocationField
 
-    def get_particles(self):
+    def get_particles(self) -> ParticleList:
         particles = self.func_call.get_particles()
-        particles[0].add_prefix("return ")
-        particles[-1].add_suffix(";")
+        particles.add_prefix("return ")
+        particles.add_suffix(";")
         return particles
 
     def format(self, allowed_line_length):
-        return particles_in_lines(
-            particles=ParticleList(elements=self.get_particles()),
-            config=ParticleFormattingConfig(
-                allowed_line_length=allowed_line_length, line_indent=INDENTATION, one_per_line=True
-            ),
+        return code_particles_in_lines(
+            particles=self.get_particles(),
+            allowed_line_length=allowed_line_length,
+            one_per_line=True,
         )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
@@ -265,7 +287,7 @@ class CodeElementFuncCall(CodeElement):
 
     func_call: RvalueFuncCall
 
-    def get_particles(self):
+    def get_particles(self) -> ParticleList:
         return self.func_call.get_particles()
 
     def format(self, allowed_line_length):
@@ -292,18 +314,16 @@ class CodeElementReturnValueReference(CodeElement):
 
     def format(self, allowed_line_length):
         call_particles = self.func_call.get_particles()
+        call_prefix = call_particles.pop_prefix()
         first_particle = self.typed_identifier.to_particle()
         first_particle.add_prefix("let ")
-        first_particle.add_suffix(f" = {call_particles[0]}")
+        first_particle.add_suffix(f" = {call_prefix}")
 
-        particles = ParticleList(elements=[first_particle] + call_particles[1:])
+        particles = ParticleList(elements=[first_particle]) + call_particles
         particles.add_suffix(";")
 
-        return particles_in_lines(
-            particles=particles,
-            config=ParticleFormattingConfig(
-                allowed_line_length=allowed_line_length, line_indent=INDENTATION, one_per_line=True
-            ),
+        return code_particles_in_lines(
+            particles=particles, allowed_line_length=allowed_line_length, one_per_line=True
         )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
@@ -325,23 +345,19 @@ class CodeElementUnpackBinding(CodeElement):
 
     def format(self, allowed_line_length):
         rvalue_particles = self.rvalue.get_particles()
-        rvalue_particles[0].add_prefix(") = ")
-        unpacking_list_particles: List[Particle] = [
-            SeparatedParticleList(
-                elements=self.unpacking_list.get_particles(),
-                start="let (",
-                end=str(rvalue_particles[0]),
-            )
-        ]
+        rvalue_particles.add_prefix(") = ")
+        rvalue_prefix = rvalue_particles.pop_prefix()
+        unpacking_list_particles = SeparatedParticleList(
+            elements=self.unpacking_list.get_particles(),
+            start="let (",
+            end=rvalue_prefix,
+        )
 
-        particles = ParticleList(elements=unpacking_list_particles + rvalue_particles[1:])
+        particles = ParticleList(elements=[unpacking_list_particles]) + rvalue_particles
         particles.add_suffix(";")
 
-        return particles_in_lines(
-            particles=particles,
-            config=ParticleFormattingConfig(
-                allowed_line_length=allowed_line_length, line_indent=INDENTATION, one_per_line=True
-            ),
+        return code_particles_in_lines(
+            particles=particles, allowed_line_length=allowed_line_length, one_per_line=True
         )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
@@ -533,8 +549,7 @@ class CodeElementFunction(CodeElement):
                 return_particle.add_suffix(" {")
                 args_suffix = ") -> "
                 if isinstance(return_particle, SeparatedParticleList):
-                    args_suffix += return_particle.start
-                    return_particle.start = ""
+                    args_suffix += return_particle.pop_prefix()
                     return_particles = [return_particle]
                 else:
                     # If return_particle is not a SeparatedParticleList we add the entire
@@ -552,13 +567,10 @@ class CodeElementFunction(CodeElement):
             ]
 
         decorators = "".join(f"@{decorator.format()}\n" for decorator in self.decorators)
-        header = particles_in_lines(
+        header = code_particles_in_lines(
             particles=ParticleList(elements=particles),
-            config=ParticleFormattingConfig(
-                allowed_line_length=allowed_line_length,
-                line_indent=INDENTATION,
-                double_indentation=True,
-            ),
+            allowed_line_length=allowed_line_length,
+            double_indentation=True,
         )
         return f"{decorators}{header}\n{code}}}"
 
@@ -586,7 +598,17 @@ class CodeElementTypeDef(CodeElement):
     location: Optional[Location] = LocationField
 
     def format(self, allowed_line_length):
-        return f"using {self.identifier.format()} = {self.cairo_type.format()};"
+        identifier_particles = self.identifier.get_particles()
+        type_particle = self.cairo_type.to_particle()
+
+        identifier_particles.add_prefix("using ")
+        identifier_particles.add_suffix(f" = {type_particle.pop_prefix()}")
+        type_particle.add_suffix(";")
+
+        return code_particles_in_lines(
+            particles=identifier_particles + ParticleList(elements=[type_particle]),
+            allowed_line_length=allowed_line_length,
+        )
 
     @property
     def name(self) -> str:
@@ -659,11 +681,8 @@ class CodeElementIf(CodeElement):
         cond_particle = self.condition.to_particle()
         cond_particle.add_prefix("if (")
         cond_particle.add_suffix(") {")
-        code = particles_in_lines(
-            particles=cond_particle,
-            config=ParticleFormattingConfig(
-                allowed_line_length=allowed_line_length, line_indent=INDENTATION
-            ),
+        code = code_particles_in_lines(
+            particles=cond_particle, allowed_line_length=allowed_line_length
         )
         main_code = self.main_code_block.format(
             allowed_line_length=allowed_line_length - INDENTATION
@@ -744,16 +763,13 @@ class CodeElementImport(CodeElement):
         if len(one_liner) <= allowed_line_length:
             return one_liner
 
-        return particles_in_lines(
+        return code_particles_in_lines(
             particles=ParticleList(
                 elements=[f"{prefix}(", SeparatedParticleList(elements=items, end=")")]
             ),
-            config=ParticleFormattingConfig(
-                allowed_line_length=allowed_line_length,
-                line_indent=INDENTATION,
-                one_per_line=False,
-                force_one_per_line=True,
-            ),
+            allowed_line_length=allowed_line_length,
+            one_per_line=False,
+            force_one_per_line=True,
         )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:

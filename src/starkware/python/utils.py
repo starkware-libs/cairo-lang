@@ -38,6 +38,8 @@ from typing_extensions import Literal, Protocol
 from starkware.python.utils_stub_module import *  # noqa
 
 T = TypeVar("T")
+K = TypeVar("K")
+V = TypeVar("V")
 TAsyncGenerator = TypeVar("TAsyncGenerator", bound=AsyncGenerator)
 NumType = TypeVar("NumType", int, float)
 HASH_BYTES = 32
@@ -592,3 +594,12 @@ async def aenumerate(aiterable: AsyncIterable[T], start: int = 0) -> AsyncIterat
     counter = itertools.count(start)
     async for element in aiterable:
         yield next(counter), element
+
+
+def subtract_mappings(a: Mapping[K, V], b: Mapping[K, V]) -> Mapping[K, V]:
+    """
+    Returns a mapping containing key-value pairs from a that are not included in b (if
+    a key appears in b with a different value, it will be part of the output).
+    Uses to take only updated cells from a mapping.
+    """
+    return dict(a.items() - b.items())

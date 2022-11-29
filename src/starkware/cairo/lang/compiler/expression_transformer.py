@@ -77,6 +77,7 @@ class ExpressionTransformer:
             a=self.visit(expr.a),
             op=expr.op,
             b=self.visit(expr.b),
+            notes=expr.notes,
             location=self.location_modifier(expr.location),
         )
 
@@ -84,6 +85,7 @@ class ExpressionTransformer:
         return ExprPow(
             a=self.visit(expr.a),
             b=self.visit(expr.b),
+            notes=expr.notes,
             location=self.location_modifier(expr.location),
         )
 
@@ -92,16 +94,23 @@ class ExpressionTransformer:
 
     def visit_ExprParentheses(self, expr: ExprParentheses):
         return ExprParentheses(
-            val=self.visit(expr.val), location=self.location_modifier(expr.location)
+            val=self.visit(expr.val),
+            notes=expr.notes,
+            location=self.location_modifier(expr.location),
         )
 
     def visit_ExprDeref(self, expr: ExprDeref):
-        return ExprDeref(addr=self.visit(expr.addr), location=self.location_modifier(expr.location))
+        return ExprDeref(
+            addr=self.visit(expr.addr),
+            notes=expr.notes,
+            location=self.location_modifier(expr.location),
+        )
 
     def visit_ExprSubscript(self, expr: ExprSubscript):
         return ExprSubscript(
             expr=self.visit(expr.expr),
             offset=self.visit(expr.offset),
+            notes=expr.notes,
             location=self.location_modifier(expr.location),
         )
 
@@ -115,28 +124,30 @@ class ExpressionTransformer:
         )
 
     def visit_ExprAddressOf(self, expr: ExprAddressOf):
-        inner_expr = self.visit(expr.expr)
-        return ExprAddressOf(expr=inner_expr, location=self.location_modifier(expr.location))
+        return ExprAddressOf(
+            expr=self.visit(expr.expr),
+            location=self.location_modifier(expr.location),
+        )
 
     def visit_ExprCast(self, expr: ExprCast):
-        inner_expr = self.visit(expr.expr)
         return ExprCast(
-            expr=inner_expr,
+            expr=self.visit(expr.expr),
             dest_type=expr.dest_type,
             cast_type=expr.cast_type,
+            notes=expr.notes,
             location=self.location_modifier(expr.location),
+        )
+
+    def visit_ExprAssignment(self, expr_assignment: ExprAssignment):
+        return ExprAssignment(
+            identifier=expr_assignment.identifier,
+            expr=self.visit(expr_assignment.expr),
+            location=self.location_modifier(expr_assignment.location),
         )
 
     def visit_ArgList(self, arg_list: ArgList):
         return ArgList(
-            args=[
-                ExprAssignment(
-                    identifier=item.identifier,
-                    expr=self.visit(item.expr),
-                    location=self.location_modifier(item.location),
-                )
-                for item in arg_list.args
-            ],
+            args=[self.visit_ExprAssignment(item) for item in arg_list.args],
             notes=arg_list.notes,
             has_trailing_comma=arg_list.has_trailing_comma,
             location=self.location_modifier(arg_list.location),

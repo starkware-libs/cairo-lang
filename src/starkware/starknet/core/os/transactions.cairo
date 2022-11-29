@@ -93,27 +93,33 @@ const L1_HANDLER_VERSION = 0;
 
 // get_selector_from_name('constructor').
 const CONSTRUCTOR_ENTRY_POINT_SELECTOR = (
-    0x28ffe4ff0f226a9107253e17a904099aa4f63a02a5621de0576e5aa71bc5194);
+    0x28ffe4ff0f226a9107253e17a904099aa4f63a02a5621de0576e5aa71bc5194
+);
 
 // get_selector_from_name('__execute__').
 const EXECUTE_ENTRY_POINT_SELECTOR = (
-    0x15d40a3d6ca2ac30f4031e42be28da9b056fef9bb7357ac5e85627ee876e5ad);
+    0x15d40a3d6ca2ac30f4031e42be28da9b056fef9bb7357ac5e85627ee876e5ad
+);
 
 // get_selector_from_name('__validate__').
 const VALIDATE_ENTRY_POINT_SELECTOR = (
-    0x162da33a4585851fe8d3af3c2a9c60b557814e221e0d4f30ff0b2189d9c7775);
+    0x162da33a4585851fe8d3af3c2a9c60b557814e221e0d4f30ff0b2189d9c7775
+);
 
 // get_selector_from_name('__validate_declare__').
 const VALIDATE_DECLARE_ENTRY_POINT_SELECTOR = (
-    0x289da278a8dc833409cabfdad1581e8e7d40e42dcaed693fa4008dcdb4963b3);
+    0x289da278a8dc833409cabfdad1581e8e7d40e42dcaed693fa4008dcdb4963b3
+);
 
 // get_selector_from_name('__validate_deploy__').
 const VALIDATE_DEPLOY_ENTRY_POINT_SELECTOR = (
-    0x36fcbf06cd96843058359e1a75928beacfac10727dab22a3972f0af8aa92895);
+    0x36fcbf06cd96843058359e1a75928beacfac10727dab22a3972f0af8aa92895
+);
 
 // get_selector_from_name('transfer').
 const TRANSFER_ENTRY_POINT_SELECTOR = (
-    0x83afd3f4caedc6eebf44246fe54e38c95e3179a5ec9ea81740eca5b482d12e);
+    0x83afd3f4caedc6eebf44246fe54e38c95e3179a5ec9ea81740eca5b482d12e
+);
 
 const DEFAULT_ENTRY_POINT_SELECTOR = 0;
 
@@ -181,7 +187,8 @@ func execute_transactions{
         range_check=nondet %{ segments.add_temp_segment() %},
         ecdsa=ecdsa_ptr,
         bitwise=bitwise_ptr,
-        ec_op=ec_op_ptr);
+        ec_op=ec_op_ptr,
+    );
 
     let builtin_ptrs = &local_builtin_ptrs;
     %{
@@ -310,7 +317,8 @@ func charge_fee{
 
     local calldata: TransferCallData = TransferCallData(
         recipient=block_context.sequencer_address,
-        amount=Uint256(low=nondet %{ syscall_handler.tx_execution_info.actual_fee %}, high=0));
+        amount=Uint256(low=nondet %{ syscall_handler.tx_execution_info.actual_fee %}, high=0),
+    );
 
     // Verify that the charged amount is not larger than the transaction's max_fee field.
     assert_nn_le(calldata.amount.low, max_fee);
@@ -329,7 +337,7 @@ func charge_fee{
         calldata_size=TransferCallData.SIZE,
         calldata=&calldata,
         original_tx_info=original_tx_info,
-        );
+    );
 
     execute_entry_point(block_context=block_context, execution_context=&execution_context);
 
@@ -490,7 +498,7 @@ func get_invoke_tx_execution_context{global_state_changes: DictAccess*}(entry_po
         calldata_size=nondet %{ len(tx.calldata) %},
         calldata=cast(nondet %{ segments.gen_arg(tx.calldata) %}, felt*),
         original_tx_info=cast(nondet %{ segments.add() %}, TxInfo*),
-        );
+    );
 
     return (tx_execution_context=tx_execution_context);
 }
@@ -524,7 +532,8 @@ func check_and_increment_nonce{global_state_changes: DictAccess*}(
     tempvar new_state_entry = new StateEntry(
         class_hash=state_entry.class_hash,
         storage_ptr=state_entry.storage_ptr,
-        nonce=current_nonce + 1);
+        nonce=current_nonce + 1,
+    );
     dict_update{dict_ptr=global_state_changes}(
         key=contract_address,
         prev_value=cast(state_entry, felt),
@@ -562,7 +571,7 @@ func run_validate{
         calldata_size=tx_execution_context.calldata_size,
         calldata=tx_execution_context.calldata,
         original_tx_info=tx_execution_context.original_tx_info,
-        );
+    );
 
     execute_entry_point(block_context=block_context, execution_context=validate_execution_context);
     return ();
@@ -629,7 +638,7 @@ func execute_contract_call_syscall{
         calldata_size=call_req.calldata_size,
         calldata=call_req.calldata,
         original_tx_info=original_tx_info,
-        );
+    );
 
     return contract_call_helper(
         block_context=block_context,
@@ -663,7 +672,7 @@ func execute_library_call_syscall{
         calldata_size=call_req.calldata_size,
         calldata=call_req.calldata,
         original_tx_info=caller_execution_context.original_tx_info,
-        );
+    );
 
     return contract_call_helper(
         block_context=block_context,
@@ -683,7 +692,8 @@ func execute_deploy_syscall{
     assert request.deploy_from_zero * (request.deploy_from_zero - 1) = 0;
     // Set deployer_address to 0 if request.deploy_from_zero is TRUE.
     let deployer_address = (
-        (1 - request.deploy_from_zero) * caller_execution_context.contract_address);
+        (1 - request.deploy_from_zero) * caller_execution_context.contract_address
+    );
 
     let hash_ptr = builtin_ptrs.pedersen;
     with hash_ptr {
@@ -701,7 +711,7 @@ func execute_deploy_syscall{
         ecdsa=builtin_ptrs.ecdsa,
         bitwise=builtin_ptrs.bitwise,
         ec_op=builtin_ptrs.ec_op,
-        );
+    );
 
     // Fill the syscall response, before contract_address is revoked.
     assert syscall_ptr.response = DeployResponse(
@@ -719,7 +729,7 @@ func execute_deploy_syscall{
         calldata_size=request.constructor_calldata_size,
         calldata=request.constructor_calldata,
         original_tx_info=caller_execution_context.original_tx_info,
-        );
+    );
 
     deploy_contract(
         block_context=block_context, constructor_execution_context=constructor_execution_context
@@ -1221,8 +1231,7 @@ func execute_entry_point{
     // Note that returned_builtin_ptrs_subset cannot be set in a hint because doing so will allow a
     // malicious prover to lie about the storage changes of a valid contract.
     let (ap_val) = get_ap();
-    local returned_builtin_ptrs_subset: felt* = cast(
-        ap_val - contract_class.n_builtins - 2, felt*);
+    local returned_builtin_ptrs_subset: felt* = cast(ap_val - contract_class.n_builtins - 2, felt*);
     local retdata_size: felt = [ap_val - 2];
     local retdata: felt* = cast([ap_val - 1], felt*);
 
@@ -1304,7 +1313,8 @@ func deploy_contract{
     tempvar new_state_entry = new StateEntry(
         class_hash=constructor_execution_context.class_hash,
         storage_ptr=state_entry.storage_ptr,
-        nonce=0);
+        nonce=0,
+    );
 
     dict_update{dict_ptr=global_state_changes}(
         key=contract_address,
@@ -1371,7 +1381,7 @@ func prepare_constructor_execution_context{range_check_ptr, builtin_ptrs: Builti
         ecdsa=builtin_ptrs.ecdsa,
         bitwise=builtin_ptrs.bitwise,
         ec_op=builtin_ptrs.ec_op,
-        );
+    );
 
     tempvar constructor_execution_context = new ExecutionContext(
         entry_point_type=ENTRY_POINT_TYPE_CONSTRUCTOR,
@@ -1382,7 +1392,7 @@ func prepare_constructor_execution_context{range_check_ptr, builtin_ptrs: Builti
         calldata_size=constructor_calldata_size,
         calldata=constructor_calldata,
         original_tx_info=cast(nondet %{ segments.add() %}, TxInfo*),
-        );
+    );
 
     return (
         constructor_execution_context=constructor_execution_context, salt=contract_address_salt
@@ -1423,7 +1433,7 @@ func execute_deploy_account_transaction{
         calldata_size=constructor_execution_context.calldata_size + 2,
         calldata=validate_deploy_calldata,
         original_tx_info=original_tx_info,
-        );
+    );
 
     // Compute transaction hash and prepare transaction info.
     let tx_version = TRANSACTION_VERSION;
@@ -1570,7 +1580,7 @@ func execute_declare_transaction{
         calldata_size=1,
         calldata=declared_class_hash_ptr,
         original_tx_info=cast(nondet %{ segments.add() %}, TxInfo*),
-        );
+    );
     let (transaction_hash) = compute_transaction_hash(
         tx_hash_prefix=DECLARE_HASH_PREFIX,
         version=tx_version,
@@ -1657,7 +1667,7 @@ func compute_transaction_hash{builtin_ptrs: BuiltinPointers*}(
         ecdsa=builtin_ptrs.ecdsa,
         bitwise=builtin_ptrs.bitwise,
         ec_op=builtin_ptrs.ec_op,
-        );
+    );
 
     return (transaction_hash=transaction_hash);
 }
