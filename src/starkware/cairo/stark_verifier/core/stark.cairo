@@ -221,7 +221,8 @@ func stark_commit{
     random_felts_to_prover(n_elements=air.n_constraints, elements=traces_coefficients);
     let (interaction_after_traces: InteractionValuesAfterTraces*) = alloc();
     assert [interaction_after_traces] = InteractionValuesAfterTraces(
-        coefficients=traces_coefficients);
+        coefficients=traces_coefficients
+    );
 
     // Read composition commitment.
     let (composition_commitment: TableCommitment*) = table_commit(
@@ -268,12 +269,13 @@ func stark_commit{
     // Return commitment.
     return (
         res=new StarkCommitment(
-        traces=traces_commitment,
-        composition=composition_commitment,
-        interaction_after_composition=interaction_after_composition,
-        oods_values=sent_oods_values,
-        interaction_after_oods=interaction_after_oods,
-        fri=fri_commitment),
+            traces=traces_commitment,
+            composition=composition_commitment,
+            interaction_after_composition=interaction_after_composition,
+            oods_values=sent_oods_values,
+            interaction_after_oods=interaction_after_oods,
+            fri=fri_commitment,
+        ),
     );
 }
 

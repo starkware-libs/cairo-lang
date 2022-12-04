@@ -527,7 +527,8 @@ func patricia_update_using_update_constants{hash_ptr: HashBuiltin*, range_check_
     let original_siblings = siblings;
     let (local globals_prev: ParticiaGlobals*) = alloc();
     assert [globals_prev] = ParticiaGlobals(
-        pow2=patricia_update_constants.globals_pow2, access_offset=DictAccess.prev_value);
+        pow2=patricia_update_constants.globals_pow2, access_offset=DictAccess.prev_value
+    );
 
     assert_le(height, MAX_LENGTH);
     %{ vm_enter_scope(dict(node=node, **common_args)) %}
@@ -543,7 +544,8 @@ func patricia_update_using_update_constants{hash_ptr: HashBuiltin*, range_check_
     let siblings = original_siblings;
     let (local globals_new: ParticiaGlobals*) = alloc();
     assert [globals_new] = ParticiaGlobals(
-        pow2=patricia_update_constants.globals_pow2, access_offset=DictAccess.new_value);
+        pow2=patricia_update_constants.globals_pow2, access_offset=DictAccess.new_value
+    );
 
     %{ vm_enter_scope(dict(node=node, **common_args)) %}
     with update_ptr, siblings {

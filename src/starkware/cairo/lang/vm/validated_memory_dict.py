@@ -10,10 +10,13 @@ class ValidatedMemoryDict:
     """
     A proxy to MemoryDict which validates memory values in specific segments upon writing to it.
     Validation is done according to the validation rules.
+
+    In addition, all values that are written through it are taken modulo the program's prime.
     """
 
-    def __init__(self, memory):
-        self.__memory: MemoryDict = memory
+    def __init__(self, memory: MemoryDict, prime: int):
+        self.__memory = memory
+        self.prime = prime
         # validation_rules contains a mapping from a segment index to a list of functions
         # (and a tuple of additional arguments) that may try to validate the value of memory cells
         # in the segment (sometimes based on other memory cells).
@@ -25,6 +28,7 @@ class ValidatedMemoryDict:
         return self.__memory[addr]
 
     def __setitem__(self, addr: MaybeRelocatable, value: MaybeRelocatable):
+        value %= self.prime
         self.__memory[addr] = value
         self._validate_memory_cell(addr, value)
 

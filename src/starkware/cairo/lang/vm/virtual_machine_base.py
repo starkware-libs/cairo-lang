@@ -167,7 +167,7 @@ class VirtualMachineBase(ABC):
         self.debug_file_contents: Dict[str, str] = {}
         self.error_message_attributes: List[VmAttributeScope] = []
         self.program = program
-        self.validated_memory = ValidatedMemoryDict(memory=run_context.memory)
+        self.validated_memory = ValidatedMemoryDict(memory=run_context.memory, prime=self.prime)
 
         # If program is a StrippedProgram, there are no hints or debug information to load.
         if isinstance(program, Program):

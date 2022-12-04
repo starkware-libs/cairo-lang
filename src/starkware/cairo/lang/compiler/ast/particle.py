@@ -115,6 +115,12 @@ class Particle(ABC):
         """
 
     @abstractmethod
+    def is_empty(self) -> bool:
+        """
+        Returns True if and only if the particle contains only empty strings.
+        """
+
+    @abstractmethod
     def add_prefix(self, prefix: str):
         """
         Adds a prefix to the beginning of the particle.
@@ -162,6 +168,9 @@ class SingleParticle(Particle):
     def is_splitable(self) -> bool:
         return False
 
+    def is_empty(self) -> bool:
+        return self.text == ""
+
     def add_prefix(self, prefix: str):
         self.text = prefix + self.text
 
@@ -202,23 +211,38 @@ class ParticleList(Particle):
     def is_splitable(self) -> bool:
         return len(self.elements) > 0
 
+    def is_empty(self) -> bool:
+        return all(particle.is_empty() for particle in self.elements)
+
     def add_prefix(self, prefix: str):
-        assert len(self.elements) > 0
+        if prefix == "":
+            return
+        if len(self.elements) == 0:
+            self.elements.append(SingleParticle(text=""))
         self.elements[0].add_prefix(prefix)
 
     def add_suffix(self, suffix: str):
-        assert len(self.elements) > 0
+        if suffix == "":
+            return
+        if len(self.elements) == 0:
+            self.elements.append(SingleParticle(text=""))
         self.elements[-1].add_suffix(suffix)
 
     def pop_prefix(self) -> str:
         if len(self.elements) == 0:
             return ""
-        return self.elements[0].pop_prefix()
+        prefix = self.elements[0].pop_prefix()
+        if self.elements[0].is_empty():
+            del self.elements[0]
+        return prefix
 
     def pop_suffix(self) -> str:
         if len(self.elements) == 0:
             return ""
-        return self.elements[-1].pop_suffix()
+        suffix = self.elements[-1].pop_suffix()
+        if self.elements[-1].is_empty():
+            del self.elements[-1]
+        return suffix
 
     def add_to_builder(self, builder: ParticleLineBuilder, suffix: str = ""):
         for i, particle in enumerate(self.elements):
@@ -271,6 +295,14 @@ class SeparatedParticleList(Particle):
 
     def is_splitable(self) -> bool:
         return len(self.elements) > 0
+
+    def is_empty(self) -> bool:
+        return (
+            all(particle.is_empty() for particle in self.elements)
+            and self.start == ""
+            and self.end == ""
+            and self.separator == ""
+        )
 
     def add_prefix(self, prefix: str):
         self.start = prefix + self.start

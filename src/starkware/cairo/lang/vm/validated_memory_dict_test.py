@@ -9,7 +9,8 @@ from starkware.cairo.lang.vm.validated_memory_dict import ValidatedMemoryDict, V
 
 def test_validated_memory_dict():
     memory = MemoryDict()
-    memory_validator = ValidatedMemoryDict(memory=memory)
+    prime = 23
+    memory_validator = ValidatedMemoryDict(memory=memory, prime=prime)
 
     def rule_identical_pairs(mem, addr):
         """
@@ -61,3 +62,7 @@ def test_validated_memory_dict():
     # Test validation of existing invalid memory.
     with pytest.raises(AssertionError, match="Expected value in address 4:0 to be 0, got 1."):
         memory_validator.validate_existing_memory()
+
+    # Test insertion of a value bigger than prime.
+    memory_validator[7] = prime + 2
+    assert memory_validator[7] == 2

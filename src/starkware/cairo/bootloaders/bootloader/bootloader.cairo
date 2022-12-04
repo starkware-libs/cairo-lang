@@ -288,7 +288,8 @@ func unpack_composite_packed_task{
     // Verify task output.
     assert [cast(task_output, CairoVerifierOutput*)] = CairoVerifierOutput(
         program_hash=bootloader_config.simple_bootloader_program_hash,
-        output_hash=subtasks_output_hash);
+        output_hash=subtasks_output_hash,
+    );
     local task_output: felt* = task_output + CairoVerifierOutput.SIZE;
 
     // Call recursively to parse the composite task's subtasks.

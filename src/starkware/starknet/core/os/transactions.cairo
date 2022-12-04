@@ -311,9 +311,9 @@ func charge_fee{
 
     // Transactions with fee should go through an account contract.
     tempvar selector = tx_execution_context.selector;
-    assert (selector - EXECUTE_ENTRY_POINT_SELECTOR) *
-        (selector - VALIDATE_DECLARE_ENTRY_POINT_SELECTOR) *
-        (selector - VALIDATE_DEPLOY_ENTRY_POINT_SELECTOR) = 0;
+    assert (selector - EXECUTE_ENTRY_POINT_SELECTOR) * (
+        selector - VALIDATE_DECLARE_ENTRY_POINT_SELECTOR
+    ) * (selector - VALIDATE_DEPLOY_ENTRY_POINT_SELECTOR) = 0;
 
     local calldata: TransferCallData = TransferCallData(
         recipient=block_context.sequencer_address,
@@ -411,7 +411,7 @@ func execute_invoke_function_transaction{
         transaction_hash=transaction_hash,
         chain_id=chain_id,
         nonce=nonce,
-        );
+    );
 
     check_and_increment_nonce(execution_context=tx_execution_context, nonce=nonce);
 
@@ -468,7 +468,7 @@ func execute_l1_handler_transaction{
         transaction_hash=transaction_hash,
         chain_id=chain_id,
         nonce=nonce,
-        );
+    );
 
     // Consume L1-to-L2 message.
     consume_l1_to_l2_message(execution_context=tx_execution_context, nonce=nonce);
@@ -601,9 +601,7 @@ func contract_call_helper{
     %}
     relocate_segment(src_ptr=call_response.retdata, dest_ptr=retdata);
 
-    assert [call_response] = CallContractResponse(
-        retdata_size=retdata_size,
-        retdata=retdata);
+    assert [call_response] = CallContractResponse(retdata_size=retdata_size, retdata=retdata);
     return ();
 }
 
@@ -718,7 +716,7 @@ func execute_deploy_syscall{
         contract_address=contract_address,
         constructor_retdata_size=0,
         constructor_retdata=cast(0, felt*),
-        );
+    );
 
     tempvar constructor_execution_context = new ExecutionContext(
         entry_point_type=ENTRY_POINT_TYPE_CONSTRUCTOR,
@@ -757,14 +755,14 @@ func execute_storage_read{global_state_changes: DictAccess*}(
     // Update the contract's storage.
     tempvar storage_ptr = state_entry.storage_ptr;
     assert [storage_ptr] = DictAccess(
-        key=syscall_ptr.request.address, prev_value=value, new_value=value);
+        key=syscall_ptr.request.address, prev_value=value, new_value=value
+    );
     let storage_ptr = storage_ptr + DictAccess.SIZE;
 
     // Update global_state_changes.
     assert [new_state_entry] = StateEntry(
-        class_hash=state_entry.class_hash,
-        storage_ptr=storage_ptr,
-        nonce=state_entry.nonce);
+        class_hash=state_entry.class_hash, storage_ptr=storage_ptr, nonce=state_entry.nonce
+    );
     dict_update{dict_ptr=global_state_changes}(
         key=contract_address,
         prev_value=cast(state_entry, felt),
@@ -798,14 +796,14 @@ func execute_storage_write{global_state_changes: DictAccess*}(
     // Update the contract's storage.
     tempvar storage_ptr = state_entry.storage_ptr;
     assert [storage_ptr] = DictAccess(
-        key=syscall_ptr.address, prev_value=prev_value, new_value=syscall_ptr.value);
+        key=syscall_ptr.address, prev_value=prev_value, new_value=syscall_ptr.value
+    );
     let storage_ptr = storage_ptr + DictAccess.SIZE;
 
     // Update global_state_changes.
     assert [new_state_entry] = StateEntry(
-        class_hash=state_entry.class_hash,
-        storage_ptr=storage_ptr,
-        nonce=state_entry.nonce);
+        class_hash=state_entry.class_hash, storage_ptr=storage_ptr, nonce=state_entry.nonce
+    );
     dict_update{dict_ptr=global_state_changes}(
         key=contract_address,
         prev_value=cast(state_entry, felt),
@@ -925,7 +923,8 @@ func execute_syscalls{
 
     if (selector == GET_TX_INFO_SELECTOR) {
         assert cast(syscall_ptr, GetTxInfo*).response = GetTxInfoResponse(
-            tx_info=execution_context.original_tx_info);
+            tx_info=execution_context.original_tx_info
+        );
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -936,7 +935,8 @@ func execute_syscalls{
 
     if (selector == GET_CALLER_ADDRESS_SELECTOR) {
         assert [cast(syscall_ptr, GetCallerAddress*)].response = GetCallerAddressResponse(
-            caller_address=execution_context.caller_address);
+            caller_address=execution_context.caller_address
+        );
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -947,7 +947,8 @@ func execute_syscalls{
 
     if (selector == GET_SEQUENCER_ADDRESS_SELECTOR) {
         assert [cast(syscall_ptr, GetSequencerAddress*)].response = GetSequencerAddressResponse(
-            sequencer_address=block_context.sequencer_address);
+            sequencer_address=block_context.sequencer_address
+        );
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -958,7 +959,8 @@ func execute_syscalls{
 
     if (selector == GET_CONTRACT_ADDRESS_SELECTOR) {
         assert [cast(syscall_ptr, GetContractAddress*)].response = GetContractAddressResponse(
-            contract_address=execution_context.contract_address);
+            contract_address=execution_context.contract_address
+        );
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -969,7 +971,8 @@ func execute_syscalls{
 
     if (selector == GET_BLOCK_TIMESTAMP_SELECTOR) {
         assert [cast(syscall_ptr, GetBlockTimestamp*)].response = GetBlockTimestampResponse(
-            block_timestamp=block_context.block_info.block_timestamp);
+            block_timestamp=block_context.block_info.block_timestamp
+        );
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -980,7 +983,8 @@ func execute_syscalls{
 
     if (selector == GET_BLOCK_NUMBER_SELECTOR) {
         assert [cast(syscall_ptr, GetBlockNumber*)].response = GetBlockNumberResponse(
-            block_number=block_context.block_info.block_number);
+            block_number=block_context.block_info.block_number
+        );
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -992,9 +996,8 @@ func execute_syscalls{
     if (selector == GET_TX_SIGNATURE_SELECTOR) {
         tempvar original_tx_info: TxInfo* = execution_context.original_tx_info;
         assert [cast(syscall_ptr, GetTxSignature*)].response = GetTxSignatureResponse(
-            signature_len=original_tx_info.signature_len,
-            signature=original_tx_info.signature
-            );
+            signature_len=original_tx_info.signature_len, signature=original_tx_info.signature
+        );
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -1061,7 +1064,8 @@ func execute_syscalls{
     assert [outputs.messages_to_l1] = MessageToL1Header(
         from_address=execution_context.contract_address,
         to_address=syscall.to_address,
-        payload_size=syscall.payload_size);
+        payload_size=syscall.payload_size,
+    );
     memcpy(
         dst=outputs.messages_to_l1 + MessageToL1Header.SIZE,
         src=syscall.payload_ptr,
@@ -1096,7 +1100,8 @@ func consume_l1_to_l2_message{outputs: OsCarriedOutputs*}(
         to_address=execution_context.contract_address,
         nonce=nonce,
         selector=execution_context.selector,
-        payload_size=payload_size);
+        payload_size=payload_size,
+    );
 
     let message_payload = cast(outputs.messages_to_l2 + MessageToL2Header.SIZE, felt*);
     memcpy(dst=message_payload, src=payload, len=payload_size);
@@ -1324,9 +1329,8 @@ func deploy_contract{
 
     // Write the contract address and hash to the output.
     assert [outputs.deployment_info] = DeploymentInfo(
-        contract_address=contract_address,
-        class_hash=new_state_entry.class_hash,
-        );
+        contract_address=contract_address, class_hash=new_state_entry.class_hash
+    );
 
     // Advance outputs.deployment_info.
     let (outputs) = os_carried_outputs_new(
@@ -1462,7 +1466,7 @@ func execute_deploy_account_transaction{
         transaction_hash=transaction_hash,
         chain_id=block_context.starknet_os_config.chain_id,
         nonce=[nonce_ptr],
-        );
+    );
 
     %{ syscall_handler.start_tx(tx_info_ptr=ids.original_tx_info.address_) %}
 
@@ -1524,7 +1528,7 @@ func execute_deploy_transaction{
         transaction_hash=transaction_hash,
         chain_id=chain_id,
         nonce=0,
-        );
+    );
 
     %{
         syscall_handler.start_tx(
@@ -1600,7 +1604,7 @@ func execute_declare_transaction{
         transaction_hash=transaction_hash,
         chain_id=chain_id,
         nonce=[nonce_ptr],
-        );
+    );
 
     check_and_increment_nonce(
         execution_context=validate_declare_execution_context, nonce=[nonce_ptr]

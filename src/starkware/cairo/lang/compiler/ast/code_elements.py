@@ -6,7 +6,7 @@ from starkware.cairo.lang.compiler.ast.aliased_identifier import AliasedIdentifi
 from starkware.cairo.lang.compiler.ast.arguments import IdentifierList
 from starkware.cairo.lang.compiler.ast.bool_expr import BoolExpr
 from starkware.cairo.lang.compiler.ast.cairo_types import CairoType
-from starkware.cairo.lang.compiler.ast.expr import Expression, ExprHint, ExprIdentifier, ExprTuple
+from starkware.cairo.lang.compiler.ast.expr import Expression, ExprHint, ExprIdentifier
 from starkware.cairo.lang.compiler.ast.formatting_utils import INDENTATION, LocationField
 from starkware.cairo.lang.compiler.ast.instructions import InstructionAst
 from starkware.cairo.lang.compiler.ast.node import AstNode
@@ -195,7 +195,17 @@ class CodeElementCompoundAssertEq(CodeElement):
     location: Optional[Location] = LocationField
 
     def format(self, allowed_line_length):
-        return f"assert {self.a.format()} = {self.b.format()};"
+        a_particles = parenthesize_expression(self.a).get_particles()
+        b_particles = parenthesize_expression(self.b).get_particles()
+
+        a_particles.add_prefix("assert ")
+        a_particles.add_suffix(" = ")
+        a_particles.add_suffix(b_particles.pop_prefix())
+        b_particles.add_suffix(";")
+
+        return code_particles_in_lines(
+            particles=a_particles + b_particles, allowed_line_length=allowed_line_length
+        )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.a, self.b]
@@ -208,7 +218,17 @@ class CodeElementStaticAssert(CodeElement):
     location: Optional[Location] = LocationField
 
     def format(self, allowed_line_length):
-        return f"static_assert {self.a.format()} == {self.b.format()};"
+        a_particles = parenthesize_expression(self.a).get_particles()
+        b_particles = parenthesize_expression(self.b).get_particles()
+
+        a_particles.add_prefix("static_assert ")
+        a_particles.add_suffix(" == ")
+        a_particles.add_suffix(b_particles.pop_prefix())
+        b_particles.add_suffix(";")
+
+        return code_particles_in_lines(
+            particles=a_particles + b_particles, allowed_line_length=allowed_line_length
+        )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.a, self.b]
@@ -225,27 +245,14 @@ class CodeElementReturn(CodeElement):
     location: Optional[Location] = LocationField
 
     def format(self, allowed_line_length):
-        if isinstance(self.expr, ExprTuple):
-            self.expr.members.assert_no_comments()
-            args = self.expr.members.args
-            expr_codes = [arg.format() for arg in args]
-
-            trailing_comma = self.expr.members.has_trailing_comma and len(args) > 0
-
-            particles = ParticleList(
-                elements=[
-                    "return (",
-                    SeparatedParticleList(
-                        elements=expr_codes, end=");", trailing_separator=trailing_comma
-                    ),
-                ]
-            )
-
-            return code_particles_in_lines(
-                particles=particles, allowed_line_length=allowed_line_length, one_per_line=True
-            )
-
-        return "return " + self.expr.format() + ";"
+        particles = parenthesize_expression(self.expr).get_particles()
+        particles.add_prefix("return ")
+        particles.add_suffix(";")
+        return code_particles_in_lines(
+            particles=particles,
+            allowed_line_length=allowed_line_length,
+            one_per_line=True,
+        )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.expr]
@@ -288,10 +295,16 @@ class CodeElementFuncCall(CodeElement):
     func_call: RvalueFuncCall
 
     def get_particles(self) -> ParticleList:
-        return self.func_call.get_particles()
+        particles = self.func_call.get_particles()
+        particles.add_suffix(";")
+        return particles
 
     def format(self, allowed_line_length):
-        return self.func_call.format_ex(allowed_line_length, semicolon=True)
+        return code_particles_in_lines(
+            particles=self.get_particles(),
+            allowed_line_length=allowed_line_length,
+            one_per_line=True,
+        )
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.func_call]

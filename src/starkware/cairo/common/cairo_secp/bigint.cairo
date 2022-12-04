@@ -44,11 +44,12 @@ struct UnreducedBigInt5 {
 func bigint_mul(x: BigInt3, y: BigInt3) -> (res: UnreducedBigInt5) {
     return (
         UnreducedBigInt5(
-        d0=x.d0 * y.d0,
-        d1=x.d0 * y.d1 + x.d1 * y.d0,
-        d2=x.d0 * y.d2 + x.d1 * y.d1 + x.d2 * y.d0,
-        d3=x.d1 * y.d2 + x.d2 * y.d1,
-        d4=x.d2 * y.d2),
+            d0=x.d0 * y.d0,
+            d1=x.d0 * y.d1 + x.d1 * y.d0,
+            d2=x.d0 * y.d2 + x.d1 * y.d1 + x.d2 * y.d0,
+            d3=x.d1 * y.d2 + x.d2 * y.d1,
+            d4=x.d2 * y.d2,
+        ),
     );
 }
 

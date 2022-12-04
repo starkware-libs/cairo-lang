@@ -124,10 +124,11 @@ func fri_commit{
 
     return (
         commitment=new FriCommitment(
-        config=config,
-        inner_layers=inner_layer_commitments,
-        eval_points=eval_points,
-        last_layer_coefficients=coefficients),
+            config=config,
+            inner_layers=inner_layer_commitments,
+            eval_points=eval_points,
+            last_layer_coefficients=coefficients,
+        ),
     );
 }
 
@@ -228,10 +229,8 @@ func gather_first_layer_queries(
     // Translate the coset to the homogenous group to have simple FRI equations.
     let shifted_x_value = x_values[0] / FIELD_GENERATOR;
     assert fri_queries[0] = FriLayerQuery(
-        index=queries[0],
-        y_value=evaluations[0],
-        x_inv_value=1 / shifted_x_value,
-        );
+        index=queries[0], y_value=evaluations[0], x_inv_value=1 / shifted_x_value
+    );
 
     return gather_first_layer_queries(
         n_queries=n_queries - 1,

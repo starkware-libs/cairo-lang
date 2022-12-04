@@ -62,7 +62,8 @@ func serialize_da_changes{storage_updates: StorageUpdateEntry*}(
         tempvar storage_updates = storage_updates;
     } else {
         assert [storage_updates] = StorageUpdateEntry(
-            key=update_ptr.key, value=update_ptr.new_value);
+            key=update_ptr.key, value=update_ptr.new_value
+        );
         tempvar storage_updates = storage_updates + StorageUpdateEntry.SIZE;
     }
     return serialize_da_changes(update_ptr=update_ptr + DictAccess.SIZE, n_updates=n_updates - 1);

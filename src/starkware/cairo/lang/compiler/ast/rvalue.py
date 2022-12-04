@@ -121,12 +121,13 @@ class RvalueFuncCall(RvalueCall):
         particles = self.func_ident.get_particles()
 
         if self.implicit_arguments is not None:
-            particles.add_suffix("{")
-            particles.append(self.implicit_arguments.to_particle(end="}("))
+            start = particles.pop_suffix() + "{"
+            particles.append(self.implicit_arguments.to_particle(start=start, end="}("))
+            particles.append(self.arguments.to_particle(end=")"))
         else:
-            particles.add_suffix("(")
+            start = particles.pop_suffix() + "("
+            particles.append(self.arguments.to_particle(start=start, end=")"))
 
-        particles.append(self.arguments.to_particle(end=")"))
         return particles
 
     def format(self, allowed_line_length):

@@ -93,9 +93,7 @@ func shift_queries{range_check_ptr}(
         return ();
     }
     assert_nn_le(queries.index, shift - 1);
-    assert [shifted_queries] = VectorQuery(
-        index=queries.index + shift,
-        value=queries.value);
+    assert [shifted_queries] = VectorQuery(index=queries.index + shift, value=queries.value);
     return shift_queries(
         n_queries=n_queries - 1,
         queries=&queries[1],

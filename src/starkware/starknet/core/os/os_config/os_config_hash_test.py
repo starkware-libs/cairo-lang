@@ -65,14 +65,9 @@ def test_get_starknet_config_hash(seed: int):
 
 def run_starknet_os_config_hash_test(fix: bool):
     configs = {
-        "mainnet": StarknetOsConfig(
-            chain_id=StarknetChainId.MAINNET, fee_token_address=FEE_TOKEN_ADDRESS
-        ),
-        "testnet": StarknetOsConfig(
-            chain_id=StarknetChainId.TESTNET, fee_token_address=FEE_TOKEN_ADDRESS
-        ),
+        chain_id.name: StarknetOsConfig(chain_id=chain_id, fee_token_address=FEE_TOKEN_ADDRESS)
+        for chain_id in StarknetChainId
     }
-
     config_hashes = {
         config_name: hex(calculate_starknet_config_hash(starknet_os_config=config))
         for config_name, config in configs.items()

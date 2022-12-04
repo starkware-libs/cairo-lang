@@ -450,8 +450,15 @@ func _pack_ints{range_check_ptr, blake2s_ptr: felt*}(m, packed_values: felt*) {
     tempvar x6 = blake2s_ptr[6 * INSTANCE_SIZE];
     assert [range_check_ptr + 12] = x6;
     assert [range_check_ptr + 13] = MAX_VALUE - x6;
-    assert packed_values[0] = x0 + 2 ** 35 * x1 + 2 ** (35 * 2) * x2 + 2 ** (35 * 3) * x3 +
-        2 ** (35 * 4) * x4 + 2 ** (35 * 5) * x5 + 2 ** (35 * 6) * x6;
+    assert packed_values[0] = (
+        x0 +
+        2 ** 35 * x1 +
+        2 ** (35 * 2) * x2 +
+        2 ** (35 * 3) * x3 +
+        2 ** (35 * 4) * x4 +
+        2 ** (35 * 5) * x5 +
+        2 ** (35 * 6) * x6
+    );
 
     tempvar packed_values = packed_values + 1;
     tempvar blake2s_ptr = blake2s_ptr + 1;

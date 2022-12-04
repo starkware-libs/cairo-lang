@@ -129,7 +129,7 @@ class ContractState(ValidatedMarshmallowDataclass, LeafFact):
     async def update(
         self,
         ffc: FactFetchingContext,
-        updates: Mapping[int, StorageLeaf],
+        updates: Mapping[int, int],
         nonce: Optional[int],
         class_hash: Optional[bytes] = None,
     ) -> "ContractState":
@@ -151,8 +151,10 @@ class ContractState(ValidatedMarshmallowDataclass, LeafFact):
                 class_hash != ContractState.UNINITIALIZED_CLASS_HASH
             ), "Cannot update the state of an uninitialized contract."
 
+        modifications = [(key, StorageLeaf(value=value)) for key, value in updates.items()]
+
         updated_storage_commitment_tree = await self.storage_commitment_tree.update(
-            ffc=ffc, modifications=updates.items()
+            ffc=ffc, modifications=modifications
         )
 
         return ContractState(
@@ -170,7 +172,7 @@ class ContractCarriedState(ValidatedDataclass):
     """
 
     state: ContractState
-    storage_updates: Mapping[int, StorageLeaf]
+    storage_updates: Mapping[int, int]
     nonce: int
 
     @property

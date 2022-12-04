@@ -23,11 +23,14 @@ func test_to{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: felt*}(
         let (local elements) = alloc();
         random_felts_to_prover(n_elements=3, elements=elements);
         assert elements[0] = (
-            3199910790894706855027093840383592257502485581126271436027309705477370004002);
+            3199910790894706855027093840383592257502485581126271436027309705477370004002
+        );
         assert elements[1] = (
-            2678311171676075552444787698918310126938416157877134200897080931937186268438);
+            2678311171676075552444787698918310126938416157877134200897080931937186268438
+        );
         assert elements[2] = (
-            2409925148191156067407217062797240658947927224212800962983204460004996362724);
+            2409925148191156067407217062797240658947927224212800962983204460004996362724
+        );
     }
     return ();
 }
@@ -46,7 +49,8 @@ func test_from{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: felt*
         let (value) = read_truncated_hash_from_prover(ChannelUnsentFelt(2 ** 160 - 1));
         assert value = ChannelSentFelt(2 ** 160 - 1);
         assert channel.digest = Uint256(
-            264245158129643438725130805500698377532, 273487178329072845015974259185110443467);
+            264245158129643438725130805500698377532, 273487178329072845015974259185110443467
+        );
         assert channel.counter = 0;
 
         // Read multiple felts.
@@ -54,7 +58,8 @@ func test_from{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: felt*
         %{ segments.write_arg(ids.unsent_values.address_, [2, 3, -1]) %}
         let (values: ChannelSentFelt*) = read_felts_from_prover(n_values=3, values=unsent_values);
         assert channel.digest = Uint256(
-            242546666571867849760234496042176867468, 276032264349006147573126117370612632439);
+            242546666571867849760234496042176867468, 276032264349006147573126117370612632439
+        );
         assert channel.counter = 0;
         %{
             assert memory[ids.values.address_ + 0] == 2
@@ -67,7 +72,8 @@ func test_from{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: felt*
             n_values=3, values=unsent_values
         );
         assert channel.digest = Uint256(
-            47489586150803289593519442158772964707, 295510913258162813848457591889478884574);
+            47489586150803289593519442158772964707, 295510913258162813848457591889478884574
+        );
         assert channel.counter = 0;
         %{
             assert memory[ids.values.address_ + 0] == 2

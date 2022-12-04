@@ -88,12 +88,12 @@ func stark_domains_create{range_check_ptr}(config: StarkConfig*) -> (stark_domai
 
     return (
         stark_domains=new StarkDomains(
-        log_eval_domain_size=log_eval_domain_size,
-        eval_domain_size=eval_domain_size,
-        eval_generator=eval_generator,
-        log_trace_domain_size=config.log_trace_domain_size,
-        trace_domain_size=trace_domain_size,
-        trace_generator=trace_generator,
+            log_eval_domain_size=log_eval_domain_size,
+            eval_domain_size=eval_domain_size,
+            eval_generator=eval_generator,
+            log_trace_domain_size=config.log_trace_domain_size,
+            trace_domain_size=trace_domain_size,
+            trace_generator=trace_generator,
         ),
     );
 }

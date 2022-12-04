@@ -40,6 +40,7 @@ default_general_config = load_config(
 class StarknetChainId(Enum):
     MAINNET = from_bytes(b"SN_MAIN")
     TESTNET = from_bytes(b"SN_GOERLI")
+    TESTNET2 = from_bytes(b"SN_GOERLI2")
 
 
 # Fee token account constants.

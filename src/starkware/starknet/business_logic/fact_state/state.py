@@ -26,7 +26,6 @@ from starkware.starknet.business_logic.state.state_api import StateReader
 from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
-from starkware.starknet.storage.starknet_storage import StorageLeaf
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
 from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
 from starkware.starkware_utils.config_base import Config
@@ -284,10 +283,7 @@ class SharedState(SharedStateBase):
             awaitables=(
                 current_contract_states[address].update(
                     ffc=ffc,
-                    updates={
-                        key: StorageLeaf(value=value)
-                        for key, value in storage_updates.get(address, {}).items()
-                    },
+                    updates=storage_updates.get(address, {}),
                     nonce=address_to_nonce.get(address, None),
                     class_hash=address_to_class_hash.get(address, None),
                 )

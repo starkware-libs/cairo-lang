@@ -140,9 +140,8 @@ func compute_next_layer{
     // Write next layer query.
     let (next_x_inv) = pow([coset_x_inv], params.coset_size);
     assert next_queries[0] = FriLayerQuery(
-        index=coset_index,
-        y_value=fri_formula_res,
-        x_inv_value=next_x_inv);
+        index=coset_index, y_value=fri_formula_res, x_inv_value=next_x_inv
+    );
     let next_queries = &next_queries[1];
 
     return compute_next_layer(params=params);

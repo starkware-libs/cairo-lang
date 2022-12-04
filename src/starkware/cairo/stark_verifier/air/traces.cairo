@@ -94,10 +94,10 @@ func traces_commit{
 
     return (
         commitment=new TracesCommitment(
-        public_input=public_input,
-        original=original_commitment,
-        interaction_elements=interaction_elements,
-        interaction=interaction_commitment,
+            public_input=public_input,
+            original=original_commitment,
+            interaction_elements=interaction_elements,
+            interaction=interaction_commitment,
         ),
     );
 }

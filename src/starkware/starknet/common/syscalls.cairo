@@ -48,7 +48,8 @@ func call_contract{syscall_ptr: felt*}(
         contract_address=contract_address,
         function_selector=function_selector,
         calldata_size=calldata_size,
-        calldata=calldata);
+        calldata=calldata,
+    );
     %{ syscall_handler.call_contract(segments=segments, syscall_ptr=ids.syscall_ptr) %}
     let response = syscall.response;
 
@@ -90,7 +91,8 @@ func library_call{syscall_ptr: felt*}(
         class_hash=class_hash,
         function_selector=function_selector,
         calldata_size=calldata_size,
-        calldata=calldata);
+        calldata=calldata,
+    );
     %{ syscall_handler.library_call(segments=segments, syscall_ptr=ids.syscall_ptr) %}
     let response = syscall.response;
 
@@ -111,7 +113,8 @@ func library_call_l1_handler{syscall_ptr: felt*}(
         class_hash=class_hash,
         function_selector=function_selector,
         calldata_size=calldata_size,
-        calldata=calldata);
+        calldata=calldata,
+    );
     %{ syscall_handler.library_call_l1_handler(segments=segments, syscall_ptr=ids.syscall_ptr) %}
     let response = syscall.response;
 
@@ -165,7 +168,8 @@ func deploy{syscall_ptr: felt*}(
         contract_address_salt=contract_address_salt,
         constructor_calldata_size=constructor_calldata_size,
         constructor_calldata=constructor_calldata,
-        deploy_from_zero=deploy_from_zero);
+        deploy_from_zero=deploy_from_zero,
+    );
 
     %{ syscall_handler.deploy(segments=segments, syscall_ptr=ids.syscall_ptr) %}
     let response = syscall.response;
@@ -365,7 +369,8 @@ struct StorageWrite {
 
 func storage_write{syscall_ptr: felt*}(address: felt, value: felt) {
     assert [cast(syscall_ptr, StorageWrite*)] = StorageWrite(
-        selector=STORAGE_WRITE_SELECTOR, address=address, value=value);
+        selector=STORAGE_WRITE_SELECTOR, address=address, value=value
+    );
     %{ syscall_handler.storage_write(segments=segments, syscall_ptr=ids.syscall_ptr) %}
     let syscall_ptr = syscall_ptr + StorageWrite.SIZE;
     return ();
@@ -384,7 +389,8 @@ struct EmitEvent {
 
 func emit_event{syscall_ptr: felt*}(keys_len: felt, keys: felt*, data_len: felt, data: felt*) {
     assert [cast(syscall_ptr, EmitEvent*)] = EmitEvent(
-        selector=EMIT_EVENT_SELECTOR, keys_len=keys_len, keys=keys, data_len=data_len, data=data);
+        selector=EMIT_EVENT_SELECTOR, keys_len=keys_len, keys=keys, data_len=data_len, data=data
+    );
     %{ syscall_handler.emit_event(segments=segments, syscall_ptr=ids.syscall_ptr) %}
     let syscall_ptr = syscall_ptr + EmitEvent.SIZE;
     return ();

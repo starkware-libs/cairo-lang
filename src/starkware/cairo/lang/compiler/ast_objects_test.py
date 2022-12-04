@@ -147,7 +147,7 @@ local z: T* = x;
 assert x * z + x = y + y;
 static_assert ap + (3 + 7) + ap == fp;
 let () = foo();
-return (1, [fp], [ap + 3],);
+return (1, [fp], [ap + 3]);
 fibonacci(a=3, b=[fp + 1]);
 [ap - 1] = [fp];  // This is a comment.
 
@@ -415,7 +415,7 @@ def test_return_splitting():
 return (a, b, c, foo, bar,
         variable_name_which_is_way_too_long_but_has_to_be_supported, g);
 """
-    after = """\
+    after_not_one_per_line = """\
 return (
     a,
     b,
@@ -425,8 +425,23 @@ return (
     variable_name_which_is_way_too_long_but_has_to_be_supported,
     g);
 """
+
+    after_one_per_line = """\
+return (
+    a,
+    b,
+    c,
+    foo,
+    bar,
+    variable_name_which_is_way_too_long_but_has_to_be_supported,
+    g,
+);
+"""
     with set_one_item_per_line(False):
-        assert parse_file(before).format(allowed_line_length=20) == after
+        assert parse_file(before).format(allowed_line_length=20) == after_not_one_per_line
+
+    with set_one_item_per_line(True):
+        assert parse_file(before).format(allowed_line_length=20) == after_one_per_line
 
 
 def test_func_arg_ret_splitting():

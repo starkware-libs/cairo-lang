@@ -28,9 +28,10 @@ func unreduced_mul(a: BigInt3, b: BigInt3) -> (res_low: UnreducedBigInt3) {
     // since BASE ** 3 = 4 * SECP_REM (mod secp256k1_prime).
     return (
         UnreducedBigInt3(
-        d0=a.d0 * b.d0 + (a.d1 * b.d2 + a.d2 * b.d1) * (4 * SECP_REM),
-        d1=a.d0 * b.d1 + a.d1 * b.d0 + (a.d2 * b.d2) * (4 * SECP_REM),
-        d2=a.d0 * b.d2 + a.d1 * b.d1 + a.d2 * b.d0),
+            d0=a.d0 * b.d0 + (a.d1 * b.d2 + a.d2 * b.d1) * (4 * SECP_REM),
+            d1=a.d0 * b.d1 + a.d1 * b.d0 + (a.d2 * b.d2) * (4 * SECP_REM),
+            d2=a.d0 * b.d2 + a.d1 * b.d1 + a.d2 * b.d0,
+        ),
     );
 }
 
@@ -42,9 +43,10 @@ func unreduced_sqr(a: BigInt3) -> (res_low: UnreducedBigInt3) {
     tempvar twice_d0 = a.d0 * 2;
     return (
         UnreducedBigInt3(
-        d0=a.d0 * a.d0 + (a.d1 * a.d2) * (2 * 4 * SECP_REM),
-        d1=twice_d0 * a.d1 + (a.d2 * a.d2) * (4 * SECP_REM),
-        d2=twice_d0 * a.d2 + a.d1 * a.d1),
+            d0=a.d0 * a.d0 + (a.d1 * a.d2) * (2 * 4 * SECP_REM),
+            d1=twice_d0 * a.d1 + (a.d2 * a.d2) * (4 * SECP_REM),
+            d2=twice_d0 * a.d2 + a.d1 * a.d1,
+        ),
     );
 }
 

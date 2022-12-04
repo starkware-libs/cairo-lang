@@ -740,8 +740,9 @@ def test_code_element_return():
     code = """\
 return (
     res=Point(
-    x=points[0].x + points[1].x,
-    y=points[0].y + points[1].y),
+        x=points[0].x + points[1].x,
+        y=points[0].y + points[1].y,
+    ),
 );"""
 
     res = parse_code_element(code)
@@ -756,21 +757,44 @@ def test_func_call():
     assert res.format(allowed_line_length=100) == "fibonacci{a=b, c=d}(1, a=2);"
     assert res.format(allowed_line_length=20) == "fibonacci{a=b, c=d}(\n    1, a=2\n);"
     assert res.format(allowed_line_length=15) == "fibonacci{\n    a=b, c=d\n}(1, a=2);"
+    assert (
+        res.format(allowed_line_length=5)
+        == """\
+fibonacci{
+    a=b,
+    c=d,
+}(
+    1,
+    a=2,
+);"""
+    )
 
 
 def test_tail_call():
     res = parse_code_element("return    fibonacci(  1, \na= 2  );")
     assert isinstance(res, CodeElementTailCall)
     assert res.format(allowed_line_length=100) == "return fibonacci(1, a=2);"
+    assert (
+        res.format(allowed_line_length=10)
+        == """\
+return fibonacci(
+    1, a=2
+);"""
+    )
 
     res = parse_code_element("return    (fibonacci(  1, \na= 2  ));")
     assert isinstance(res, CodeElementReturn)
     assert isinstance(res.expr, ExprParentheses)
+    assert res.format(allowed_line_length=100) == "return (fibonacci(1, a=2));"
     assert (
-        res.format(allowed_line_length=100)
+        res.format(allowed_line_length=10)
         == """\
-return (fibonacci(1,
-    a=2));"""
+return (
+    fibonacci(
+        1,
+        a=2,
+    )
+);"""
     )
 
 

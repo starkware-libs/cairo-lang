@@ -198,8 +198,8 @@ func main{
 
     // Write program_hash and output_hash to output.
     assert [cast(output_ptr, CairoVerifierOutput*)] = CairoVerifierOutput(
-        program_hash=program_hash,
-        output_hash=output_hash);
+        program_hash=program_hash, output_hash=output_hash
+    );
     let output_ptr = output_ptr + CairoVerifierOutput.SIZE;
 
     return ();
