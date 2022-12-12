@@ -1044,6 +1044,9 @@ def validate_call_function_args(
                 )
 
             if abi_entry["name"] == args.function:
+                if args.raw:
+                    break
+
                 validate_arguments(
                     inputs=inputs,
                     abi_entry=abi_entry,
@@ -1392,7 +1395,7 @@ def add_declare_tx_arguments(parser: argparse.ArgumentParser):
 
 def add_call_function_arguments(parser: argparse.ArgumentParser):
     """
-    Adds the arguments: address, abi, function, inputs.
+    Adds the arguments: address, abi, function, inputs, raw.
     """
     parser.add_argument(
         "--address", type=str, required=True, help="The address of the invoked contract."
@@ -1405,6 +1408,9 @@ def add_call_function_arguments(parser: argparse.ArgumentParser):
     )
     parser.add_argument(
         "--inputs", type=str, nargs="*", default=[], help="The inputs to the invoked function."
+    )
+    parser.add_argument(
+        "--raw", action="store_true", help="Function inputs are in raw format."
     )
 
 
