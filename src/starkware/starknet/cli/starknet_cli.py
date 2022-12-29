@@ -233,6 +233,11 @@ Contract address: 0x{contract_address:064x}
 Transaction hash: {gateway_response['transaction_hash']}"""
     )
 
+async def get_accounts(args, command_args):
+    parser = argparse.ArgumentParser(description="Lists all accounts.")
+    parser.parse_args(command_args, namespace=args)
+    account = await load_account_from_args(args)
+    await account.list_accounts()
 
 async def new_account(args, command_args):
     parser = argparse.ArgumentParser(description="Initializes an account contract.")
@@ -1491,6 +1496,7 @@ async def main():
         "invoke": invoke,
         "new_account": new_account,
         "tx_status": tx_status,
+        "get_accounts": get_accounts,
     }
     parser = argparse.ArgumentParser(description="A tool to communicate with StarkNet.")
     parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
