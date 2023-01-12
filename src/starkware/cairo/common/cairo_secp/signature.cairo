@@ -197,7 +197,7 @@ func get_point_from_x{range_check_ptr}(x: BigInt3, v: felt) -> (point: EcPoint) 
 // * r is the x coordinate of some nonzero point on the curve.
 // * All the limbs of s and msg_hash are in the range (-2 ** 210.99, 2 ** 210.99).
 // * All the limbs of r are in the range (-2 ** 124.99, 2 ** 124.99).
-func recover_public_key_opti{range_check_ptr}(msg_hash: BigInt3, r: BigInt3, s: BigInt3, v: felt) -> (
+func recover_public_key{range_check_ptr}(msg_hash: BigInt3, r: BigInt3, s: BigInt3, v: felt) -> (
     public_key_point: EcPoint
 ) {
     alloc_locals;
@@ -243,7 +243,7 @@ func verify_eth_signature{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_
     }
 
     with_attr error_message("Invalid signature.") {
-        let (public_key_point: EcPoint) = recover_public_key_opti(msg_hash=msg_hash, r=r, s=s, v=v);
+        let (public_key_point: EcPoint) = recover_public_key(msg_hash=msg_hash, r=r, s=s, v=v);
         let (calculated_eth_address) = public_key_point_to_eth_address(
             public_key_point=public_key_point
         );
