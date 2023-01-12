@@ -1,3 +1,13 @@
+//*************************************************************************************/
+///* Copyright (C) 2022 - Renaud Dubois - This file is part of Cairo_musig2 project	 */
+///* License: This software is licensed under a dual BSD and GPL v2 license. 	 */
+///* See LICENSE file at the root folder of the project.				 */
+///* FILE: signature_opti.cairo							         */
+///* 											 */
+///* 											 */
+///* DESCRIPTION: optimization of dual base multiplication*/
+///* the algorithm combines the so called Shamir's trick with Windowing method	  */
+//**************************************************************************************/
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.cairo_builtins import BitwiseBuiltin
 from starkware.cairo.common.cairo_keccak.keccak import finalize_keccak, keccak_uint256s_bigend
@@ -22,8 +32,8 @@ from starkware.cairo.common.cairo_secp.field import (
 from starkware.cairo.common.math import assert_nn, assert_nn_le, assert_not_zero, unsigned_div_rem
 from starkware.cairo.common.math_cmp import RC_BOUND
 from starkware.cairo.common.uint256 import Uint256
+from cairo_secp.ec_mulmuladd_secp256k1 import ec_mulmuladdW_bg3
 
-@known_ap_change
 func get_generator_point() -> (point: EcPoint) {
     // generator_point = (
     //     0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798,
@@ -187,7 +197,7 @@ func get_point_from_x{range_check_ptr}(x: BigInt3, v: felt) -> (point: EcPoint) 
 // * r is the x coordinate of some nonzero point on the curve.
 // * All the limbs of s and msg_hash are in the range (-2 ** 210.99, 2 ** 210.99).
 // * All the limbs of r are in the range (-2 ** 124.99, 2 ** 124.99).
-func recover_public_key{range_check_ptr}(msg_hash: BigInt3, r: BigInt3, s: BigInt3, v: felt) -> (
+func recover_public_key_opti{range_check_ptr}(msg_hash: BigInt3, r: BigInt3, s: BigInt3, v: felt) -> (
     public_key_point: EcPoint
 ) {
     alloc_locals;
@@ -199,15 +209,19 @@ func recover_public_key{range_check_ptr}(msg_hash: BigInt3, r: BigInt3, s: BigIn
 
     let (u1: BigInt3) = div_mod_n(msg_hash, r);
     let (u2: BigInt3) = div_mod_n(s, r);
-
-    let (point1) = ec_mul(generator_point, u1);
+    
     // We prefer negating the point over negating the scalar because negating mod SECP_P is
+    let (minus_point: EcPoint) = ec_negate(generator_point);//-G
+    //let (point1) = ec_mul(generator_point, u1);
     // computationally easier than mod N.
-    let (minus_point1) = ec_negate(point1);
+   
+    //let (point2) = ec_mul(r_point, u2);
+    //let (public_key_point) = ec_add(minus_point1, point2);
 
-    let (point2) = ec_mul(r_point, u2);
-
-    let (public_key_point) = ec_add(minus_point1, point2);
+    // replace original code by optimized mulmuladd	
+    let (public_key_point:EcPoint)=ec_mulmuladdW_bg3(minus_point, r_point, u1, u2);
+    
+    
     return (public_key_point=public_key_point);
 }
 
@@ -229,7 +243,7 @@ func verify_eth_signature{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_
     }
 
     with_attr error_message("Invalid signature.") {
-        let (public_key_point: EcPoint) = recover_public_key(msg_hash=msg_hash, r=r, s=s, v=v);
+        let (public_key_point: EcPoint) = recover_public_key_opti(msg_hash=msg_hash, r=r, s=s, v=v);
         let (calculated_eth_address) = public_key_point_to_eth_address(
             public_key_point=public_key_point
         );
