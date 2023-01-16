@@ -62,8 +62,8 @@ func uint256_fast_add{range_check_ptr}(a: Uint256, b: Uint256) -> (res: Uint256,
         ids.has_carry_high = 1 if ids.res_high >= ids.SHIFT else 0
     %}
 
-    if (has_carry_low == 1) {
-        if (has_carry_high == 1) {
+    if (has_carry_low != 0) {
+        if (has_carry_high != 0) {
             assert res.low = res_low - SHIFT;
             assert res.high = res_high + 1 - SHIFT;
             assert [range_check_ptr] = res.low;
@@ -79,7 +79,7 @@ func uint256_fast_add{range_check_ptr}(a: Uint256, b: Uint256) -> (res: Uint256,
             return (res, 0);
         }
     } else {
-        if (has_carry_high == 1) {
+        if (has_carry_high != 0) {
             assert res.low = res_low;
             assert res.high = res_high - SHIFT;
             assert [range_check_ptr] = res.low;
