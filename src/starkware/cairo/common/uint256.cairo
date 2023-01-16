@@ -58,8 +58,9 @@ func uint256_fast_add{range_check_ptr}(a: Uint256, b: Uint256) -> (res: Uint256,
     let res_low = a.low + b.low;
     let res_high = a.high + b.high;
     %{
-        ids.has_carry_low = 1 if ids.res_low >= ids.SHIFT else 0
-        ids.has_carry_high = 1 if ids.res_high >= ids.SHIFT else 0
+        has_carry_low = 1 if ids.res_low >= ids.SHIFT else 0
+        ids.has_carry_low=has_carry_low
+        ids.has_carry_high = 1 if (ids.res_high+has_carry_low) >= ids.SHIFT else 0
     %}
 
     if (has_carry_low != 0) {
