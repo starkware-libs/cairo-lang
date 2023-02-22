@@ -9,7 +9,7 @@ import marshmallow.exceptions
 import marshmallow.fields as mfields
 import marshmallow.utils
 import marshmallow_dataclass
-from marshmallow.decorators import pre_load
+from marshmallow.decorators import post_dump, pre_load
 from marshmallow_oneofschema import OneOfSchema
 from typing_extensions import Literal
 from web3 import Web3
@@ -39,10 +39,14 @@ from starkware.starknet.business_logic.transaction.objects import (
 )
 from starkware.starknet.definitions import constants, fields
 from starkware.starknet.definitions.transaction_type import TransactionType
-from starkware.starknet.services.api.contract_class import EntryPointType
+from starkware.starknet.services.api.contract_class.contract_class import EntryPointType
+from starkware.starknet.services.api.gateway.transaction_utils import (
+    rename_contract_address_to_sender_address_pre_load,
+)
 from starkware.starkware_utils.marshmallow_dataclass_fields import (
     VariadicLengthTupleField,
     additional_metadata,
+    nonrequired_list_metadata,
     nonrequired_optional_metadata,
 )
 from starkware.starkware_utils.marshmallow_fields_metadata import sequential_id_metadata
@@ -271,6 +275,9 @@ class AccountTransactionSpecificInfo(TransactionSpecificInfo):
 @marshmallow_dataclass.dataclass(frozen=True)
 class DeclareSpecificInfo(AccountTransactionSpecificInfo):
     class_hash: int = field(metadata=fields.ClassHashIntField.metadata())
+    compiled_class_hash: Optional[int] = field(
+        metadata=fields.optional_compiled_class_hash_metadata
+    )
     sender_address: int = field(metadata=fields.contract_address_metadata)
     # Repeat `nonce` to narrow its type to non-optional int.
     nonce: int = field(metadata=fields.nonce_metadata)
@@ -284,7 +291,8 @@ class DeclareSpecificInfo(AccountTransactionSpecificInfo):
     @classmethod
     def from_internal_declare(cls, internal_tx: InternalDeclare) -> "DeclareSpecificInfo":
         return cls(
-            class_hash=from_bytes(internal_tx.class_hash),
+            class_hash=internal_tx.class_hash,
+            compiled_class_hash=internal_tx.compiled_class_hash,
             sender_address=internal_tx.sender_address,
             nonce=as_non_optional(internal_tx.nonce),
             max_fee=internal_tx.max_fee,
@@ -336,9 +344,11 @@ class DeployAccountSpecificInfo(AccountTransactionSpecificInfo):
         cls, internal_tx: InternalDeployAccount
     ) -> "DeployAccountSpecificInfo":
         return cls(
-            contract_address=internal_tx.contract_address,
+            # Currently, we keep the old field name `contract_address` in the response object to not
+            # break API.
+            contract_address=internal_tx.sender_address,
             contract_address_salt=internal_tx.contract_address_salt,
-            class_hash=from_bytes(internal_tx.class_hash),
+            class_hash=internal_tx.class_hash,
             constructor_calldata=internal_tx.constructor_calldata,
             nonce=internal_tx.nonce,
             max_fee=internal_tx.max_fee,
@@ -350,7 +360,7 @@ class DeployAccountSpecificInfo(AccountTransactionSpecificInfo):
 
 @marshmallow_dataclass.dataclass(frozen=True)
 class InvokeSpecificInfo(AccountTransactionSpecificInfo):
-    contract_address: int = field(metadata=fields.contract_address_metadata)
+    sender_address: int = field(metadata=fields.contract_address_metadata)
     entry_point_selector: Optional[int] = field(
         metadata=fields.optional_entry_point_selector_metadata
     )
@@ -360,7 +370,7 @@ class InvokeSpecificInfo(AccountTransactionSpecificInfo):
 
     @property
     def account_contract_address(self) -> int:
-        return self.contract_address
+        return self.sender_address
 
     @pre_load
     def remove_entry_point_type_and_make_selector_optional(
@@ -374,10 +384,26 @@ class InvokeSpecificInfo(AccountTransactionSpecificInfo):
             data["entry_point_selector"] = None
         return data
 
+    @pre_load
+    def rename_contract_address_to_sender_address(
+        self, data: Dict[str, Any], many: bool, **kwargs
+    ) -> Dict[str, List[str]]:
+        return rename_contract_address_to_sender_address_pre_load(data=data)
+
+    @post_dump
+    def rename_sender_address_for_old_versions(
+        self, data: Dict[str, Any], many: bool, **kwargs
+    ) -> Dict[str, Any]:
+        version = fields.TransactionVersionField.load_value(data["version"])
+        if version == 0 and "sender_address" in data:
+            assert "contract_address" not in data
+            data["contract_address"] = data.pop("sender_address")
+        return data
+
     @classmethod
     def from_internal_invoke(cls, internal_tx: InternalInvokeFunction) -> "InvokeSpecificInfo":
         return cls(
-            contract_address=internal_tx.contract_address,
+            sender_address=internal_tx.sender_address,
             entry_point_selector=(
                 None if internal_tx.version != 0 else internal_tx.entry_point_selector
             ),
@@ -416,7 +442,7 @@ class L1HandlerSpecificInfo(TransactionSpecificInfo):
             internal_tx.entry_point_type is EntryPointType.L1_HANDLER
         ), "This method only accepts InternalInvokeFunction objects that represent L1 Handlers"
         return cls(
-            contract_address=internal_tx.contract_address,
+            contract_address=internal_tx.sender_address,
             entry_point_selector=internal_tx.entry_point_selector,
             nonce=internal_tx.nonce,
             calldata=internal_tx.calldata,
@@ -593,7 +619,7 @@ class StorageEntry(ValidatedResponseObject):
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
-class DeployedContract(ValidatedResponseObject):
+class ContractAddressHashPair(ValidatedResponseObject):
     """
     Represents a newly deployed contract in a block state update.
     """
@@ -620,6 +646,16 @@ class DeployedContract(ValidatedResponseObject):
         return data
 
 
+@dataclasses.dataclass(frozen=True)
+class ClassHashPair(ValidatedResponseObject):
+    """
+    Represents a newly declared contract in a block state update.
+    """
+
+    class_hash: int = field(metadata=fields.ClassHashIntField.metadata())
+    compiled_class_hash: int = field(metadata=fields.CompiledClassHashField.metadata())
+
+
 @marshmallow_dataclass.dataclass(frozen=True)
 class StateDiff(ValidatedResponseObject):
     """
@@ -636,8 +672,23 @@ class StateDiff(ValidatedResponseObject):
     )
 
     nonces: Dict[int, int] = field(metadata=fields.address_to_nonce_metadata)
-    deployed_contracts: List[DeployedContract]
-    declared_contracts: Tuple[int, ...] = field(metadata=fields.declared_contracts_metadata)
+    deployed_contracts: List[ContractAddressHashPair]
+    old_declared_contracts: Tuple[int, ...] = field(metadata=fields.declared_contracts_metadata)
+    declared_classes: List[ClassHashPair] = field(metadata=nonrequired_list_metadata)
+    replaced_classes: List[ContractAddressHashPair] = field(metadata=nonrequired_list_metadata)
+
+    @marshmallow.decorators.pre_load
+    def replace_declared_contracts_with_old_declared_contracts(
+        self, data: Dict[str, Any], many: bool, **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Renames the variable "declared_contracts" to "old_declared_contracts".
+        """
+        if "declared_contracts" in data:
+            assert "old_declared_contracts" not in data
+            data["old_declared_contracts"] = data.pop("declared_contracts")
+
+        return data
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -726,7 +777,7 @@ class FunctionInvocation(BaseResponseObject, SerializableMarshmallowDataclass):
             caller_address=call_info.caller_address,
             call_type=call_info.call_type,
             contract_address=call_info.contract_address,
-            class_hash=None if call_info.class_hash is None else from_bytes(call_info.class_hash),
+            class_hash=call_info.class_hash,
             selector=call_info.entry_point_selector,
             entry_point_type=call_info.entry_point_type,
             calldata=call_info.calldata,

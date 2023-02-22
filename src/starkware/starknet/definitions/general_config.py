@@ -14,12 +14,13 @@ from starkware.cairo.lang.builtins.all_builtins import (
     OUTPUT_BUILTIN,
     with_suffix,
 )
-from starkware.cairo.lang.instances import perpetual_with_bitwise_instance
+from starkware.cairo.lang.instances import starknet_instance
 from starkware.python.utils import from_bytes
 from starkware.starknet.definitions import constants, fields
 from starkware.starkware_utils.config_base import Config, load_config
 from starkware.starkware_utils.field_validators import validate_dict, validate_non_negative
 from starkware.starkware_utils.marshmallow_dataclass_fields import (
+    RequiredBoolean,
     StrictRequiredInteger,
     additional_metadata,
     load_int_value,
@@ -29,7 +30,7 @@ GENERAL_CONFIG_FILE_NAME = "general_config.yml"
 DOCKER_GENERAL_CONFIG_PATH = os.path.join("/", GENERAL_CONFIG_FILE_NAME)
 GENERAL_CONFIG_PATH = os.path.join(os.path.dirname(__file__), GENERAL_CONFIG_FILE_NAME)
 N_STEPS_RESOURCE = "n_steps"
-STARKNET_LAYOUT_INSTANCE = perpetual_with_bitwise_instance
+STARKNET_LAYOUT_INSTANCE = starknet_instance
 
 # Reference to the default general config.
 default_general_config = load_config(
@@ -54,7 +55,7 @@ TOKEN_DECIMALS = 18
 # In order to be able to use Keccak builtin, which uses bitwise, which is sparse.
 DEFAULT_MAX_STEPS = 10**6
 DEFAULT_VALIDATE_MAX_STEPS = DEFAULT_MAX_STEPS
-DEFAULT_CHAIN_ID = StarknetChainId.TESTNET
+DEFAULT_CHAIN_ID = StarknetChainId.TESTNET.value
 DEFAULT_FEE_TOKEN_ADDRESS = load_int_value(
     field_metadata=fields.fee_token_address_metadata,
     value=default_general_config["starknet_os_config"]["fee_token_address"],
@@ -63,6 +64,7 @@ DEFAULT_SEQUENCER_ADDRESS = load_int_value(
     field_metadata=fields.fee_token_address_metadata,
     value=default_general_config["sequencer_address"],
 )
+DEFAULT_ENFORCE_L1_FEE = True
 
 # Given in units of wei.
 DEFAULT_GAS_PRICE = 100 * 10**9
@@ -77,7 +79,7 @@ DEFAULT_CAIRO_RESOURCE_FEE_WEIGHTS = {
 
 @marshmallow_dataclass.dataclass(frozen=True)
 class StarknetOsConfig(Config):
-    chain_id: StarknetChainId = field(default=DEFAULT_CHAIN_ID)
+    chain_id: int = field(default=DEFAULT_CHAIN_ID)
 
     fee_token_address: int = field(
         metadata=additional_metadata(
@@ -94,6 +96,11 @@ class StarknetGeneralConfig(EverestGeneralConfig):
     contract_storage_commitment_tree_height: int = field(
         metadata=fields.contract_storage_commitment_tree_height_metadata,
         default=constants.CONTRACT_STATES_COMMITMENT_TREE_HEIGHT,
+    )
+
+    compiled_class_hash_commitment_tree_height: int = field(
+        metadata=fields.compiled_class_hash_commitment_tree_height_metadata,
+        default=constants.COMPILED_CLASS_HASH_COMMITMENT_TREE_HEIGHT,
     )
 
     global_state_commitment_tree_height: int = field(
@@ -168,9 +175,16 @@ class StarknetGeneralConfig(EverestGeneralConfig):
         default_factory=lambda: DEFAULT_CAIRO_RESOURCE_FEE_WEIGHTS.copy(),
     )
 
+    enforce_l1_handler_fee: bool = field(
+        metadata=additional_metadata(
+            marshmallow_field=RequiredBoolean(), description="Enabler for L1 fee enforcement."
+        ),
+        default=DEFAULT_ENFORCE_L1_FEE,
+    )
+
     @property
     def chain_id(self) -> StarknetChainId:
-        return self.starknet_os_config.chain_id
+        return StarknetChainId(self.starknet_os_config.chain_id)
 
     @property
     def fee_token_address(self) -> int:

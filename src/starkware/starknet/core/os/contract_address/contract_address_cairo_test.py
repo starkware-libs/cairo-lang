@@ -10,6 +10,7 @@ from starkware.cairo.lang.compiler.program import Program
 from starkware.starknet.core.os.contract_address.contract_address import (
     calculate_contract_address_from_hash,
 )
+from starkware.starknet.definitions.general_config import STARKNET_LAYOUT_INSTANCE
 
 CAIRO_FILE = os.path.join(os.path.dirname(__file__), "contract_address.cairo")
 
@@ -26,7 +27,7 @@ def run_cairo_contract_address(
     constructor_calldata: Sequence[int],
     deployer_address: int,
 ) -> int:
-    runner = CairoFunctionRunner(program, layout="all")
+    runner = CairoFunctionRunner(program, layout=STARKNET_LAYOUT_INSTANCE.layout_name)
     runner.run(
         func_name="get_contract_address",
         hash_ptr=runner.pedersen_builtin.base,

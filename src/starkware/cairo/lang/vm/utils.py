@@ -14,7 +14,7 @@ class IntAsHex(mfields.Field):
     field elements.
     """
 
-    default_error_messages = {"invalid": 'Expected hex string, got: "{input}".'}
+    default_error_messages = {"invalid": 'Expected all-lowercase hex string, got: "{input}".'}
 
     def _serialize(self, value, attr, obj, **kwargs):
         if value is None:

@@ -75,7 +75,9 @@ func traces_commit{
     jmp abs air.traces_commit;
 }
 
-func traces_decommit{range_check_ptr, blake2s_ptr: felt*, bitwise_ptr: BitwiseBuiltin*}(
+func traces_decommit{
+    range_check_ptr, blake2s_ptr: felt*, pedersen_ptr: HashBuiltin*, bitwise_ptr: BitwiseBuiltin*
+}(
     air: AirInstance*,
     n_queries: felt,
     queries: felt*,

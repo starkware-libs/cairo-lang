@@ -52,4 +52,5 @@ class CallL1Handler(ValidatedMarshmallowDataclass):
             calldata=[self.from_address, *self.payload],
             nonce=0,
             chain_id=chain_id,
+            paid_fee_on_l1=None,
         )

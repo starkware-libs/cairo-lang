@@ -29,8 +29,36 @@ class FeederGatewayClient(EverestFeederGatewayClient):
     A client class for the StarkNet FeederGateway.
     """
 
+    async def get_number_of_transactions_in_backlog(self) -> JsonObject:
+        raw_response = await self._send_request(
+            send_method="GET", uri="/get_number_of_transactions_in_backlog"
+        )
+        return json.loads(raw_response)
+
+    async def get_oldest_transaction_age(self) -> JsonObject:
+        raw_response = await self._send_request(
+            send_method="GET", uri="/get_oldest_transaction_age"
+        )
+        return json.loads(raw_response)
+
+    async def get_compiled_class_by_class_hash(
+        self,
+        class_hash: str,
+        block_hash: Optional[CastableToHash] = None,
+        block_number: Optional[BlockIdentifier] = None,
+    ) -> JsonObject:
+        formatted_block_named_argument = get_formatted_block_named_argument(
+            block_hash=block_hash, block_number=block_number
+        )
+        uri = (
+            "/get_compiled_class_by_class_hash?"
+            f"classHash={class_hash}&{formatted_block_named_argument}"
+        )
+        raw_response = await self._send_request(send_method="GET", uri=uri)
+        return json.loads(raw_response)
+
     async def get_contract_addresses(self) -> Dict[str, str]:
-        raw_response = await self._send_request(send_method="GET", uri=f"/get_contract_addresses")
+        raw_response = await self._send_request(send_method="GET", uri="/get_contract_addresses")
         return json.loads(raw_response)
 
     async def call_contract(
@@ -79,7 +107,7 @@ class FeederGatewayClient(EverestFeederGatewayClient):
             uri=f"/estimate_fee_bulk?{formatted_block_named_argument}",
             data=AccountTransaction.Schema().dumps(obj=txs, many=True),
         )
-        return FeeEstimationInfo.Schema().load(data=raw_response, many=True)
+        return FeeEstimationInfo.Schema().loads(json_data=raw_response, many=True)
 
     async def estimate_message_fee(
         self,
@@ -212,12 +240,20 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         raw_response = await self._send_request(send_method="GET", uri=uri)
         return json.loads(raw_response)
 
-    async def get_class_by_hash(self, class_hash: str) -> JsonObject:
+    async def get_class_by_hash(
+        self,
+        class_hash: str,
+        block_hash: Optional[CastableToHash] = None,
+        block_number: Optional[BlockIdentifier] = None,
+    ) -> JsonObject:
         """
         Returns the contract class deployed under the given class hash.
         A plain JSON is returned, rather than the Python object, to save loading time.
         """
-        uri = f"/get_class_by_hash?classHash={class_hash}"
+        formatted_block_named_argument = get_formatted_block_named_argument(
+            block_hash=block_hash, block_number=block_number
+        )
+        uri = f"/get_class_by_hash?classHash={class_hash}&{formatted_block_named_argument}"
         raw_response = await self._send_request(send_method="GET", uri=uri)
         return json.loads(raw_response)
 

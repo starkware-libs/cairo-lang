@@ -19,12 +19,12 @@ full_python_test(cairo_builtin_selection_test
 
     LIBS
     cairo_builtin_selection_lib
+    cairo_function_runner_lib
     cairo_common_lib
-    cairo_common_test_utils_lib
     cairo_compile_lib
-    cairo_test_utils
     cairo_vm_lib
     starkware_crypto_lib
+    starkware_python_test_utils_lib
     starkware_python_utils_lib
     pip_pytest
 )

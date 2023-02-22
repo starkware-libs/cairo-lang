@@ -51,8 +51,8 @@ def starknet_pass_manager(
                 "starkware.cairo.common.hash",
                 "starkware.cairo.common.memcpy",
                 "starkware.cairo.lang.compiler.lib.registers",
-                "starkware.starknet.common.storage",
                 "starkware.starknet.common.syscalls",
+                "starkware.starknet.common.storage",
             ],
         ),
     )

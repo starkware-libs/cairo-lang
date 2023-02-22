@@ -27,6 +27,7 @@ full_python_test(starknet_contract_address_cairo_test
     cairo_common_lib
     cairo_function_runner_lib
     starknet_contract_address_lib
+    starknet_general_config_lib
     starknet_os_utils_lib
     starknet_transaction_hash_lib
     starkware_crypto_lib

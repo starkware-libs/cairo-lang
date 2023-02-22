@@ -16,30 +16,6 @@ function(cairo_verifier_layout LAYOUT_NAME)
     add_dependencies(cairo_verifier_program_all_layouts cairo_verifier_program_${LAYOUT_NAME})
 endfunction()
 
-cairo_verifier_layout(recursive)
+cairo_verifier_layout(all_cairo)
 
-full_python_test(cairo_verifier_program_hash_recursive_test
-    PREFIX starkware/cairo/cairo_verifier/
-    PYTHON ${PYTHON_COMMAND}
-    TESTED_MODULES starkware/cairo/cairo_verifier/
-
-    FILES
-    layouts/recursive/program_hash_test.py
-    layouts/recursive/program_hash.json
-
-    LIBS
-    cairo_hash_program_lib
-    program_hash_test_utils_lib
-    starkware_python_utils_lib
-    pip_pytest
-
-    ARTIFACTS
-    "${CMAKE_CURRENT_BINARY_DIR}/cairo_verifier_compiled_recursive.json cairo_verifier_compiled_recursive.json"
-)
-add_dependencies(cairo_verifier_program_hash_recursive_test_venv cairo_verifier_program_recursive)
-
-python_exe(generate_cairo_verifier_program_hash_recursive
-    VENV cairo_verifier_program_hash_recursive_test_venv
-    MODULE starkware.cairo.cairo_verifier.layouts.recursive.program_hash_test
-    ARGS "--fix"
-)
+add_subdirectory(layouts/all_cairo)

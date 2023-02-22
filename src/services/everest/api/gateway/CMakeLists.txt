@@ -12,6 +12,7 @@ python_lib(everest_transaction_lib
     transaction.py
 
     LIBS
+    everest_transaction_type_lib
     starkware_dataclasses_field_utils_lib
     pip_marshmallow_enum
     pip_marshmallow_oneofschema

@@ -3,7 +3,7 @@ import os
 
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.common.structs import CairoStructFactory
-from starkware.python.random_test import random_test
+from starkware.python.random_test_utils import random_test
 from starkware.python.utils import get_source_dir_path
 from starkware.starknet.core.os.os_config.os_config_hash import (
     STARKNET_OS_CONFIG_HASH_VERSION,
@@ -11,7 +11,11 @@ from starkware.starknet.core.os.os_config.os_config_hash import (
 )
 from starkware.starknet.core.os.os_program import get_os_program
 from starkware.starknet.definitions import fields
-from starkware.starknet.definitions.general_config import StarknetChainId, StarknetOsConfig
+from starkware.starknet.definitions.general_config import (
+    STARKNET_LAYOUT_INSTANCE,
+    StarknetChainId,
+    StarknetOsConfig,
+)
 
 HASH_PATH = get_source_dir_path(
     "src/starkware/starknet/core/os/os_config/os_config_hash.json",
@@ -34,7 +38,7 @@ def test_get_starknet_config_hash(seed: int):
     )
     assert config_version == STARKNET_OS_CONFIG_HASH_VERSION
 
-    runner = CairoFunctionRunner(os_program, layout="all")
+    runner = CairoFunctionRunner(os_program, layout=STARKNET_LAYOUT_INSTANCE.layout_name)
     starknet_os_config = StarknetOsConfig(
         fee_token_address=fields.AddressField.get_random_value(),
     )
@@ -48,7 +52,7 @@ def test_get_starknet_config_hash(seed: int):
         "starkware.starknet.core.os.os_config.os_config.get_starknet_os_config_hash",
         hash_ptr=runner.pedersen_builtin.base,
         starknet_os_config=structs.StarknetOsConfig(
-            chain_id=starknet_os_config.chain_id.value,
+            chain_id=starknet_os_config.chain_id,
             fee_token_address=starknet_os_config.fee_token_address,
         ),
         use_full_name=True,
@@ -65,7 +69,9 @@ def test_get_starknet_config_hash(seed: int):
 
 def run_starknet_os_config_hash_test(fix: bool):
     configs = {
-        chain_id.name: StarknetOsConfig(chain_id=chain_id, fee_token_address=FEE_TOKEN_ADDRESS)
+        chain_id.name: StarknetOsConfig(
+            chain_id=chain_id.value, fee_token_address=FEE_TOKEN_ADDRESS
+        )
         for chain_id in StarknetChainId
     }
     config_hashes = {

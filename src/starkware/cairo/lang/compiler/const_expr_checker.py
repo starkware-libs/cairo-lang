@@ -6,6 +6,7 @@ from starkware.cairo.lang.compiler.ast.expr import (
     ExprOperator,
     ExprReg,
 )
+from starkware.cairo.lang.compiler.ast.expr_func_call import ExprFuncCall
 
 
 class ConstExprChecker:
@@ -33,6 +34,9 @@ class ConstExprChecker:
         return self.visit(expr.val)
 
     def visit_ExprDeref(self, expr: ExprDeref):
+        return False
+
+    def visit_ExprFuncCall(self, expr: ExprFuncCall):
         return False
 
 

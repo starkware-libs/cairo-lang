@@ -10,12 +10,12 @@ from starkware.starkware_utils.marshmallow_dataclass_fields import (
     IntAsHex,
     IntAsStr,
 )
-from starkware.starkware_utils.validated_fields import Field
+from starkware.starkware_utils.validated_fields import ValidatedField
 
 
 def _generate_metadata(
     marshmallow_field_cls: Type[mfields.Field],
-    validated_field: Optional[Field],
+    validated_field: Optional[ValidatedField],
     required: Optional[bool] = None,
 ) -> Dict[str, Any]:
     if required is None:
@@ -29,7 +29,7 @@ def _generate_metadata(
 
 
 def int_metadata(
-    validated_field: Optional[Field], required: Optional[bool] = None
+    validated_field: Optional[ValidatedField], required: Optional[bool] = None
 ) -> Dict[str, Any]:
     return _generate_metadata(
         marshmallow_field_cls=mfields.Integer, validated_field=validated_field, required=required
@@ -37,7 +37,7 @@ def int_metadata(
 
 
 def int_as_hex_metadata(
-    validated_field: Optional[Field], required: Optional[bool] = None
+    validated_field: Optional[ValidatedField], required: Optional[bool] = None
 ) -> Dict[str, Any]:
     return _generate_metadata(
         marshmallow_field_cls=IntAsHex, validated_field=validated_field, required=required
@@ -45,7 +45,7 @@ def int_as_hex_metadata(
 
 
 def int_as_str_metadata(
-    validated_field: Optional[Field], required: Optional[bool] = None
+    validated_field: Optional[ValidatedField], required: Optional[bool] = None
 ) -> Dict[str, Any]:
     return _generate_metadata(
         marshmallow_field_cls=IntAsStr, validated_field=validated_field, required=required
@@ -53,7 +53,7 @@ def int_as_str_metadata(
 
 
 def bytes_as_hex_metadata(
-    validated_field: Optional[Field], required: Optional[bool] = None
+    validated_field: Optional[ValidatedField], required: Optional[bool] = None
 ) -> Dict[str, Any]:
     return _generate_metadata(
         marshmallow_field_cls=BytesAsHex, validated_field=validated_field, required=required
@@ -61,7 +61,7 @@ def bytes_as_hex_metadata(
 
 
 def bytes_as_base64_str_metadata(
-    validated_field: Optional[Field], required: Optional[bool] = None
+    validated_field: Optional[ValidatedField], required: Optional[bool] = None
 ) -> Dict[str, Any]:
     return _generate_metadata(
         marshmallow_field_cls=BytesAsBase64Str, validated_field=validated_field, required=required

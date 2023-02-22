@@ -40,6 +40,7 @@ python_venv(cairo_lang_package_venv
     starknet_business_logic_state_lib
     starknet_script_lib
     starknet_sequencer_api_utils_lib
+    starknet_test_external_contract_test_utils_lib
     starknet_testing_lib
     starkware_eth_test_utils_lib
 )
@@ -60,4 +61,11 @@ python_lib(cairo_constants_lib
 
     FILES
     cairo_constants.py
+)
+
+python_lib(dynamic_layout_params_lib
+    PREFIX starkware/cairo/lang
+
+    FILES
+    dynamic_layout_params.py
 )

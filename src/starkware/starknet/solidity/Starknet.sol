@@ -159,6 +159,10 @@ contract Starknet is
         uint256 onchainDataHash,
         uint256 onchainDataSize
     ) external onlyOperator {
+        // We protect against re-entrancy attacks by reading the block number at the beginning
+        // and validating that we have the expected block number at the end.
+        int256 initialBlockNumber = state().blockNumber;
+
         // Validate program output.
         StarknetOutput.validate(programOutput);
 
@@ -176,6 +180,13 @@ contract Starknet is
         require(IFactRegistry(verifier()).isValid(sharpFact), "NO_STATE_TRANSITION_PROOF");
         emit LogStateTransitionFact(stateTransitionFact);
 
+        // Perform state update.
+        state().update(programOutput);
+
+        // Process the messages after updating the state.
+        // This is safer, as there is a call to transfer the fees during
+        // the processing of the L1 -> L2 messages.
+
         // Process L2 -> L1 messages.
         uint256 outputOffset = StarknetOutput.HEADER_SIZE;
         outputOffset += StarknetOutput.processMessages(
@@ -192,12 +203,13 @@ contract Starknet is
             programOutput[outputOffset:],
             l1ToL2Messages()
         );
-
         require(outputOffset == programOutput.length, "STARKNET_OUTPUT_TOO_LONG");
+        // Note that processing L1 -> L2 messages does an external call, and it shouldn't be
+        // followed by storage changes.
 
-        // Perform state update.
-        state().update(programOutput);
         StarknetState.State storage state_ = state();
         emit LogStateUpdate(state_.globalRoot, state_.blockNumber);
+        // Re-entrancy protection (see above).
+        require(state_.blockNumber == initialBlockNumber + 1, "INVALID_FINAL_BLOCK_NUMBER");
     }
 }

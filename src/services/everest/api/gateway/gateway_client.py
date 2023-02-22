@@ -2,10 +2,10 @@ import json
 from typing import ClassVar, Dict
 
 from services.everest.api.gateway.transaction import EverestAddTransactionRequest
-from services.external_api.client import ClientBase
+from services.external_api.client import BaseRestClient
 
 
-class EverestGatewayClient(ClientBase):
+class EverestGatewayClient(BaseRestClient):
     """
     Base class to GatewayClient classes.
     """

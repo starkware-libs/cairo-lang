@@ -1,6 +1,7 @@
 from starkware.cairo.common.math import assert_in_range, assert_nn, assert_nn_le
 from starkware.cairo.common.pow import pow
 from starkware.cairo.stark_verifier.core.table_commitment import TableCommitmentConfig
+from starkware.cairo.stark_verifier.core.vector_commitment import validate_vector_commitment
 
 // Constants.
 const MAX_LAST_LAYER_LOG_DEGREE_BOUND = 15;
@@ -57,7 +58,7 @@ func fri_layers_config_validate{range_check_ptr}(
         log_input_size=log_input_size - fri_step,
     );
     let (n_columns) = pow(2, fri_step);
-    assert layers.n_columns = n_columns;
-    assert layers.vector.height = log_input_size - fri_step;
+    assert layers[0].n_columns = n_columns;
+    validate_vector_commitment(config=layers[0].vector, expected_height=log_input_size - fri_step);
     return (sum_of_step_sizes=sum_of_step_sizes + fri_step);
 }

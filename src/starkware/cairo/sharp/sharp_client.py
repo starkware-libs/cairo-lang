@@ -76,7 +76,7 @@ class SharpClient:
                     None,
                     [
                         self.cairo_run_path,
-                        "--layout=all",
+                        "--layout=all_solidity",
                         f"--program={program_file.name}",
                         f"--program_input={program_input_path}"
                         if program_input_path is not None

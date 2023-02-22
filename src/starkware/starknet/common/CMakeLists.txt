@@ -1,6 +1,9 @@
 cairo_compile(starknet_syscalls
     starknet_syscalls.json syscalls.cairo "--debug_info_with_source"
 )
+cairo_compile(starknet_new_syscalls
+    starknet_new_syscalls.json new_syscalls.cairo "--debug_info_with_source"
+)
 
 python_lib(starknet_common_lib
     PREFIX starkware/starknet/common
@@ -9,8 +12,9 @@ python_lib(starknet_common_lib
     constants.cairo
     eth_utils.cairo
     messages.cairo
-    storage.cairo
     syscalls.cairo
+    storage.cairo
+    new_syscalls.cairo
 
     LIBS
     cairo_common_lib

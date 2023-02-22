@@ -11,6 +11,7 @@ full_python_test(starknet_transaction_hash_test
     cairo_function_runner_lib
     starknet_abi_lib
     starknet_definitions_lib
+    starknet_general_config_lib
     starknet_os_abi_lib
     starknet_os_utils_lib
     starknet_test_external_contract_test_utils_lib

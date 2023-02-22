@@ -1,4 +1,4 @@
-%builtins output pedersen range_check ecdsa bitwise ec_op keccak
+%builtins output pedersen range_check ecdsa bitwise ec_op keccak poseidon
 
 from starkware.cairo.bootloaders.simple_bootloader.run_simple_bootloader import (
     run_simple_bootloader,
@@ -34,6 +34,7 @@ func main{
     bitwise_ptr,
     ec_op_ptr,
     keccak_ptr,
+    poseidon_ptr,
 }() {
     ap += SIZEOF_LOCALS;
 
@@ -62,6 +63,7 @@ func main{
     local bitwise_ptr = bitwise_ptr;
     local ec_op_ptr = ec_op_ptr;
     local keccak_ptr = keccak_ptr;
+    local poseidon_ptr = poseidon_ptr;
     local simple_bootloader_output_end: felt* = simple_bootloader_output_ptr;
 
     %{

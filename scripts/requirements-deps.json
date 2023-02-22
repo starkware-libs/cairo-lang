@@ -10,7 +10,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "1.2.0",
+                "installed_version": "1.3.1",
                 "key": "aiosignal",
                 "package_name": "aiosignal",
                 "required_version": ">=1.1.2"
@@ -34,7 +34,7 @@
                 "required_version": ">=2.0,<3.0"
             },
             {
-                "installed_version": "1.3.1",
+                "installed_version": "1.3.3",
                 "key": "frozenlist",
                 "package_name": "frozenlist",
                 "required_version": ">=1.1.1"
@@ -53,7 +53,7 @@
             }
         ],
         "package": {
-            "installed_version": "3.8.1",
+            "installed_version": "3.8.3",
             "key": "aiohttp",
             "package_name": "aiohttp"
         }
@@ -61,14 +61,14 @@
     {
         "dependencies": [
             {
-                "installed_version": "1.3.1",
+                "installed_version": "1.3.3",
                 "key": "frozenlist",
                 "package_name": "frozenlist",
                 "required_version": ">=1.1.0"
             }
         ],
         "package": {
-            "installed_version": "1.2.0",
+            "installed_version": "1.3.1",
             "key": "aiosignal",
             "package_name": "aiosignal"
         }
@@ -116,7 +116,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "2022.6.15",
+            "installed_version": "2022.9.24",
             "key": "certifi",
             "package_name": "certifi"
         }
@@ -246,7 +246,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "0.5.0",
+            "installed_version": "0.5.1",
             "key": "eth-hash",
             "package_name": "eth-hash"
         }
@@ -272,7 +272,7 @@
                 "required_version": ">=1.0.0-beta.1,<2.0.0"
             },
             {
-                "installed_version": "3.15.0",
+                "installed_version": "3.16.0",
                 "key": "pycryptodome",
                 "package_name": "pycryptodome",
                 "required_version": ">=3.4.7,<4.0.0"
@@ -349,7 +349,7 @@
                 "required_version": ">=0.10.1,<1.0.0"
             },
             {
-                "installed_version": "0.5.0",
+                "installed_version": "0.5.1",
                 "key": "eth-hash",
                 "package_name": "eth-hash",
                 "required_version": ">=0.1.0,<1.0.0"
@@ -370,6 +370,14 @@
     {
         "dependencies": [],
         "package": {
+            "installed_version": "1.0.4",
+            "key": "exceptiongroup",
+            "package_name": "exceptiongroup"
+        }
+    },
+    {
+        "dependencies": [],
+        "package": {
             "installed_version": "2.2.3",
             "key": "fastecdsa",
             "package_name": "fastecdsa"
@@ -378,7 +386,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "1.2",
+            "installed_version": "2.3.4",
             "key": "frozendict",
             "package_name": "frozendict"
         }
@@ -386,7 +394,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "1.3.1",
+            "installed_version": "1.3.3",
             "key": "frozenlist",
             "package_name": "frozenlist"
         }
@@ -402,7 +410,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "3.3",
+            "installed_version": "3.4",
             "key": "idna",
             "package_name": "idna"
         }
@@ -445,26 +453,14 @@
                 "required_version": ">=17.4.0"
             },
             {
-                "installed_version": "0.18.1",
+                "installed_version": "0.19.2",
                 "key": "pyrsistent",
                 "package_name": "pyrsistent",
-                "required_version": ">=0.14.0"
-            },
-            {
-                "installed_version": "63.2.0",
-                "key": "setuptools",
-                "package_name": "setuptools",
-                "required_version": null
-            },
-            {
-                "installed_version": "1.16.0",
-                "key": "six",
-                "package_name": "six",
-                "required_version": ">=1.11.0"
+                "required_version": ">=0.14.0,!=0.17.2,!=0.17.1,!=0.17.0"
             }
         ],
         "package": {
-            "installed_version": "3.2.0",
+            "installed_version": "4.17.1",
             "key": "jsonschema",
             "package_name": "jsonschema"
         }
@@ -472,7 +468,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "1.1.2",
+            "installed_version": "1.1.4",
             "key": "lark",
             "package_name": "lark"
         }
@@ -495,7 +491,7 @@
             }
         ],
         "package": {
-            "installed_version": "3.17.1",
+            "installed_version": "3.19.0",
             "key": "marshmallow",
             "package_name": "marshmallow"
         }
@@ -503,7 +499,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "3.17.1",
+                "installed_version": "3.19.0",
                 "key": "marshmallow",
                 "package_name": "marshmallow",
                 "required_version": ">=3.13.0,<4.0"
@@ -516,7 +512,7 @@
             }
         ],
         "package": {
-            "installed_version": "8.5.8",
+            "installed_version": "8.5.10",
             "key": "marshmallow-dataclass",
             "package_name": "marshmallow-dataclass"
         }
@@ -524,7 +520,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "3.17.1",
+                "installed_version": "3.19.0",
                 "key": "marshmallow",
                 "package_name": "marshmallow",
                 "required_version": ">=2.0.0"
@@ -539,7 +535,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "3.17.1",
+                "installed_version": "3.19.0",
                 "key": "marshmallow",
                 "package_name": "marshmallow",
                 "required_version": ">=3.0.0,<4.0.0"
@@ -619,7 +615,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "1.23.2",
+            "installed_version": "1.23.5",
             "key": "numpy",
             "package_name": "numpy"
         }
@@ -657,22 +653,15 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "22.2.2",
+            "installed_version": "22.3.1",
             "key": "pip",
             "package_name": "pip"
         }
     },
     {
-        "dependencies": [
-            {
-                "installed_version": "22.2.2",
-                "key": "pip",
-                "package_name": "pip",
-                "required_version": ">=6.0.0"
-            }
-        ],
+        "dependencies": [],
         "package": {
-            "installed_version": "2.2.1",
+            "installed_version": "2.3.3",
             "key": "pipdeptree",
             "package_name": "pipdeptree"
         }
@@ -688,7 +677,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "0.14.1",
+            "installed_version": "0.15.0",
             "key": "prometheus-client",
             "package_name": "prometheus-client"
         }
@@ -696,7 +685,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "3.20.1",
+            "installed_version": "3.19.5",
             "key": "protobuf",
             "package_name": "protobuf"
         }
@@ -704,15 +693,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "1.11.0",
-            "key": "py",
-            "package_name": "py"
-        }
-    },
-    {
-        "dependencies": [],
-        "package": {
-            "installed_version": "3.15.0",
+            "installed_version": "3.16.0",
             "key": "pycryptodome",
             "package_name": "pycryptodome"
         }
@@ -728,7 +709,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "0.18.1",
+            "installed_version": "0.19.2",
             "key": "pyrsistent",
             "package_name": "pyrsistent"
         }
@@ -740,6 +721,12 @@
                 "key": "attrs",
                 "package_name": "attrs",
                 "required_version": ">=19.2.0"
+            },
+            {
+                "installed_version": "1.0.4",
+                "key": "exceptiongroup",
+                "package_name": "exceptiongroup",
+                "required_version": ">=1.0.0rc8"
             },
             {
                 "installed_version": "1.1.1",
@@ -760,12 +747,6 @@
                 "required_version": ">=0.12,<2.0"
             },
             {
-                "installed_version": "1.11.0",
-                "key": "py",
-                "package_name": "py",
-                "required_version": ">=1.8.2"
-            },
-            {
                 "installed_version": "2.0.1",
                 "key": "tomli",
                 "package_name": "tomli",
@@ -773,7 +754,7 @@
             }
         ],
         "package": {
-            "installed_version": "7.1.2",
+            "installed_version": "7.2.0",
             "key": "pytest",
             "package_name": "pytest"
         }
@@ -781,14 +762,14 @@
     {
         "dependencies": [
             {
-                "installed_version": "7.1.2",
+                "installed_version": "7.2.0",
                 "key": "pytest",
                 "package_name": "pytest",
                 "required_version": ">=6.1.0"
             }
         ],
         "package": {
-            "installed_version": "0.19.0",
+            "installed_version": "0.20.2",
             "key": "pytest-asyncio",
             "package_name": "pytest-asyncio"
         }
@@ -796,7 +777,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "2022.6.15",
+                "installed_version": "2022.9.24",
                 "key": "certifi",
                 "package_name": "certifi",
                 "required_version": ">=2017.4.17"
@@ -808,13 +789,13 @@
                 "required_version": ">=2,<3"
             },
             {
-                "installed_version": "3.3",
+                "installed_version": "3.4",
                 "key": "idna",
                 "package_name": "idna",
                 "required_version": ">=2.5,<4"
             },
             {
-                "installed_version": "1.26.12",
+                "installed_version": "1.26.13",
                 "key": "urllib3",
                 "package_name": "urllib3",
                 "required_version": ">=1.21.1,<1.27"
@@ -844,7 +825,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "63.2.0",
+            "installed_version": "65.5.1",
             "key": "setuptools",
             "package_name": "setuptools"
         }
@@ -867,7 +848,7 @@
             }
         ],
         "package": {
-            "installed_version": "1.10.1",
+            "installed_version": "1.11.1",
             "key": "sympy",
             "package_name": "sympy"
         }
@@ -899,7 +880,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "4.3.0",
+            "installed_version": "4.4.0",
             "key": "typing-extensions",
             "package_name": "typing-extensions"
         }
@@ -913,7 +894,7 @@
                 "required_version": ">=0.3.0"
             },
             {
-                "installed_version": "4.3.0",
+                "installed_version": "4.4.0",
                 "key": "typing-extensions",
                 "package_name": "typing-extensions",
                 "required_version": ">=3.7.4"
@@ -928,7 +909,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "1.26.12",
+            "installed_version": "1.26.13",
             "key": "urllib3",
             "package_name": "urllib3"
         }
@@ -944,7 +925,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "3.8.1",
+                "installed_version": "3.8.3",
                 "key": "aiohttp",
                 "package_name": "aiohttp",
                 "required_version": ">=3.7.4.post0,<4"
@@ -959,13 +940,19 @@
                 "installed_version": "0.5.9",
                 "key": "eth-account",
                 "package_name": "eth-account",
-                "required_version": ">=0.5.7,<0.6.0"
+                "required_version": ">=0.5.9,<0.6.0"
             },
             {
-                "installed_version": "0.5.0",
+                "installed_version": "0.5.1",
                 "key": "eth-hash",
                 "package_name": "eth-hash",
                 "required_version": ">=0.2.0,<1.0.0"
+            },
+            {
+                "installed_version": "0.2.1",
+                "key": "eth-rlp",
+                "package_name": "eth-rlp",
+                "required_version": "<0.3"
             },
             {
                 "installed_version": "2.3.0",
@@ -992,10 +979,10 @@
                 "required_version": "==0.8.0a2"
             },
             {
-                "installed_version": "3.2.0",
+                "installed_version": "4.17.1",
                 "key": "jsonschema",
                 "package_name": "jsonschema",
-                "required_version": ">=3.2.0,<4.0.0"
+                "required_version": ">=3.2.0,<5"
             },
             {
                 "installed_version": "1.1.8",
@@ -1004,10 +991,10 @@
                 "required_version": ">=1.1.6,<2.0.0"
             },
             {
-                "installed_version": "3.20.1",
+                "installed_version": "3.19.5",
                 "key": "protobuf",
                 "package_name": "protobuf",
-                "required_version": ">=3.10.0,<4"
+                "required_version": "==3.19.5"
             },
             {
                 "installed_version": "2.28.1",
@@ -1023,7 +1010,7 @@
             }
         ],
         "package": {
-            "installed_version": "5.28.0",
+            "installed_version": "5.31.1",
             "key": "web3",
             "package_name": "web3"
         }
@@ -1039,7 +1026,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "0.37.1",
+            "installed_version": "0.38.4",
             "key": "wheel",
             "package_name": "wheel"
         }
@@ -1047,7 +1034,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "3.3",
+                "installed_version": "3.4",
                 "key": "idna",
                 "package_name": "idna",
                 "required_version": ">=2.0"

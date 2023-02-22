@@ -6,6 +6,8 @@ import marshmallow.exceptions
 import marshmallow.validate
 from eth_utils import is_checksum_address
 
+from starkware.crypto.signature.signature import is_valid_stark_key
+
 DNS_REGEX = r"^((\*)|(\*\.))?([a-z0-9-]){1,62}(\.[a-z0-9-]{1,62})*\.?$"
 
 T = TypeVar("T")
@@ -51,14 +53,26 @@ validate_optional_hex_str = validate_regex_match(
 
 
 def validate_url(
-    *, url_name: str, schemes: marshmallow.types.StrSequenceOrSet, require_full_url: bool
+    *,
+    url_name: str,
+    schemes: marshmallow.types.StrSequenceOrSet,
+    require_full_url: bool,
+    allow_none: bool = False,
 ) -> ValidatorType:
     error_message = (
         "Invalid {url_name} URL: {{input}}; " "must be a legal URL starting with {schemes}"
     ).format(url_name=url_name, schemes=",".join(schemes))
-    return marshmallow.validate.URL(
+    url_validator = marshmallow.validate.URL(
         schemes=schemes, require_tld=require_full_url, error=error_message
     )
+
+    def validator(value):
+        if allow_none and value is None:
+            return True
+
+        return url_validator(value)
+
+    return validator
 
 
 validate_feeder_gateway_url = validate_url(
@@ -82,7 +96,14 @@ validate_node_endpoint = validate_url(
 )
 
 validate_alternative_endpoint = validate_url(
-    url_name="Alternative transactions endpoint", schemes={"http", "https"}, require_full_url=True
+    url_name="Alternative transactions endpoint", schemes={"http", "https"}, require_full_url=False
+)
+
+validate_failure_description_endpoint = validate_url(
+    url_name="Failure description endpoint",
+    schemes={"http", "https"},
+    require_full_url=False,
+    allow_none=True,
 )
 
 
@@ -208,7 +229,24 @@ def validate_probability(field_name: str, *, allow_none: bool = False) -> Valida
     )
 
 
-def validate_public_key(field_name: str) -> ValidatorType:
+def validate_stark_key(field_name: str) -> ValidatorType:
+    error_message = (
+        "Invalid {field_name}: {{input}}; must be a legal Starknet stark key. The given "
+        "coordinate does not represent a valid x coordinate on the elliptic curve.".format(
+            field_name=field_name
+        )
+    )
+
+    def validator(stark_key: int) -> bool:
+        if not is_valid_stark_key(stark_key=stark_key):
+            raise ValueError(error_message.format(input=stark_key))
+
+        return True
+
+    return validator
+
+
+def validate_eth_address(field_name: str) -> ValidatorType:
     error_message = "Invalid {field_name}: {{input}}; must be a legal Ethereum address".format(
         field_name=field_name
     )

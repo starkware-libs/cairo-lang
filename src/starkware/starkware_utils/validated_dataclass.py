@@ -10,7 +10,7 @@ import marshmallow_dataclass
 import typeguard
 
 from starkware.starkware_utils.serializable_dataclass import SerializableMarshmallowDataclass
-from starkware.starkware_utils.validated_fields import Field
+from starkware.starkware_utils.validated_fields import ValidatedField
 
 TValidatedDataclass = TypeVar("TValidatedDataclass", bound="ValidatedDataclass")
 T = TypeVar("T")
@@ -145,7 +145,7 @@ class HashableMarshmallowDataclass(ValidatedMarshmallowDataclass):
         return hashlib.sha256(self.serialize()).digest()
 
 
-def get_validated_field(field: dataclasses.Field) -> Optional[Field]:
+def get_validated_field(field: dataclasses.Field) -> Optional[ValidatedField]:
     """
     Checks if the dataclass field has a validated_field attribute in its metadata.
     If so returns it, otherwise returns None.

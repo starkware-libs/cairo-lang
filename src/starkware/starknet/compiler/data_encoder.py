@@ -412,7 +412,6 @@ def encode_data(
     identifiers: IdentifierManager,
     arg_name_func: Callable[[ArgumentInfo], str] = lambda arg_info: arg_info.name,
 ) -> List[CommentedCodeElement]:
-
     parser = DataEncoder(
         arg_name_func=arg_name_func,
         encoding_type=encoding_type,

@@ -11,6 +11,8 @@ from starkware.cairo.common.math import (
     assert_not_zero,
 )
 
+// ADDITIONAL_IMPORTS_MACRO()
+
 // Maximum length of an edge.
 const MAX_LENGTH = 251;
 
@@ -59,6 +61,7 @@ func open_edge{hash_ptr: HashBuiltin*, range_check_ptr}(globals: ParticiaGlobals
     // verified later in the algorithm if necessary.
     assert hash_ptr.x = edge.bottom;
     assert hash_ptr.y = edge.path;
+    // PREPARE_ADDITIONAL_HASH_INPUTS_MACRO(hash_ptr)
     assert node = hash_ptr.result + edge.length;
     let hash_ptr = hash_ptr + HashBuiltin.SIZE;
     return (edge=edge);
@@ -262,6 +265,7 @@ func traverse_edge{
         if (height != 1) {
             // This check should only be done on the new tree.
             if (globals.access_offset == 2) {
+                // PREPARE_ADDITIONAL_HASH_INPUTS_MACRO(hash_ptr)
                 hash_ptr.result = edge.bottom;
                 %{
                     ids.hash_ptr.x, ids.hash_ptr.y = preimage[ids.edge.bottom]
@@ -336,6 +340,7 @@ func traverse_binary_or_leaf{
     // Binary.
     let current_hash = hash_ptr;
     let hash_ptr = hash_ptr + HashBuiltin.SIZE;
+    // PREPARE_ADDITIONAL_HASH_INPUTS_MACRO(current_hash)
     assert current_hash.result = node;
 
     %{

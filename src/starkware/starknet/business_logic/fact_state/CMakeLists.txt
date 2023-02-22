@@ -5,14 +5,17 @@ python_lib(starknet_business_logic_fact_state_lib
     state.py
 
     LIBS
+    cairo_vm_crypto_lib
     cairo_vm_lib
     everest_business_logic_lib
+    poseidon_utils_lib
     starknet_business_logic_fact_state_utils_lib
     starknet_business_logic_patricia_state_lib
     starknet_business_logic_state_lib
     starknet_definitions_lib
     starknet_general_config_lib
     starknet_transaction_lib
+    starkware_abstract_storage_lib
     starkware_config_utils_lib
     starkware_error_handling_lib
     starkware_python_utils_lib
@@ -25,10 +28,12 @@ python_lib(starknet_business_logic_patricia_state_lib
     PREFIX starkware/starknet/business_logic/fact_state
 
     FILES
+    contract_class_objects.py
     contract_state_objects.py
     patricia_state.py
 
     LIBS
+    cairo_vm_crypto_lib
     everest_business_logic_lib
     starknet_business_logic_state_lib
     starknet_contract_class_lib
@@ -36,6 +41,7 @@ python_lib(starknet_business_logic_patricia_state_lib
     starknet_general_config_lib
     starknet_os_abi_lib
     starknet_storage_lib
+    starkware_abstract_storage_lib
     starkware_commitment_tree_facts_lib
     starkware_dataclasses_utils_lib
     starkware_error_handling_lib

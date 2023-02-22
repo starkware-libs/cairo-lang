@@ -17,6 +17,7 @@ python_lib(cairo_vm_crypto_lib
     crypto.py
 
     LIBS
+    poseidon_utils_lib
     starkware_crypto_lib
     ${CAIRO_VM_CRYPTO_ADDITIONAL_LIBS}
 )
@@ -47,6 +48,7 @@ python_lib(cairo_vm_lib
     cairo_compile_lib
     cairo_relocatable_lib
     cairo_vm_crypto_lib
+    dynamic_layout_params_lib
     starknet_security_lib
     starkware_python_utils_lib
 )
@@ -65,6 +67,7 @@ python_lib(cairo_run_lib
     cairo_tracer_lib
     cairo_version_lib
     cairo_vm_lib
+    dynamic_layout_params_lib
     starkware_utils_lib
     starkware_python_utils_lib
 )

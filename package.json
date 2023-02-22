@@ -1,0 +1,12 @@
+{
+    "name": "workspace",
+    "version": "1.0.0",
+    "private": true,
+    "description": "",
+    "dependencies": {
+        "ganache": "7.4.4"
+    },
+    "devDependencies": {},
+    "author": "",
+    "license": "ISC"
+}

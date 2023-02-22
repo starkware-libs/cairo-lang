@@ -11,7 +11,15 @@ from services.everest.business_logic.state import (
     StateSelectorBase,
 )
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
-from starkware.python.utils import gather_in_chunks, safe_zip, subtract_mappings
+from starkware.cairo.lang.vm.crypto import poseidon_hash_func, poseidon_hash_many
+from starkware.python.utils import (
+    from_bytes,
+    gather_in_chunks,
+    safe_zip,
+    subtract_mappings,
+    to_bytes,
+)
+from starkware.starknet.business_logic.fact_state.contract_class_objects import ContractClassLeaf
 from starkware.starknet.business_logic.fact_state.contract_state_objects import (
     ContractCarriedState,
     ContractState,
@@ -24,7 +32,7 @@ from starkware.starknet.business_logic.fact_state.utils import (
 from starkware.starknet.business_logic.state.state import CachedState
 from starkware.starknet.business_logic.state.state_api import StateReader
 from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
-from starkware.starknet.definitions import fields
+from starkware.starknet.definitions import constants, fields
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
 from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
@@ -121,6 +129,7 @@ class CarriedState(CarriedStateBase):
             block_info=shared_state.block_info,
             state_reader=PatriciaStateReader(
                 global_state_root=shared_state.contract_states,
+                contract_class_root=shared_state.contract_classes,
                 ffc=ffc,
                 contract_class_storage=ffc.storage,
             ),
@@ -189,7 +198,43 @@ class SharedState(SharedStateBase):
     """
 
     contract_states: PatriciaTree
+    # Leaf addresses are class hashes; leaf values contain compiled class hashes.
+    contract_classes: Optional[PatriciaTree]
     block_info: BlockInfo
+
+    @property
+    def state_version(self) -> int:
+        return constants.GLOBAL_STATE_VERSION
+
+    @classmethod
+    async def create_empty_contract_states(
+        cls, ffc: FactFetchingContext, general_config: StarknetGeneralConfig
+    ) -> PatriciaTree:
+        """
+        Returns an empty contract state tree.
+        """
+        empty_contract_state = await ContractState.empty(
+            storage_commitment_tree_height=general_config.contract_storage_commitment_tree_height,
+            ffc=ffc,
+        )
+        return await PatriciaTree.empty_tree(
+            ffc=ffc,
+            height=general_config.global_state_commitment_tree_height,
+            leaf_fact=empty_contract_state,
+        )
+
+    @classmethod
+    async def create_empty_contract_class_tree(
+        cls, ffc: FactFetchingContext, general_config: StarknetGeneralConfig
+    ) -> PatriciaTree:
+        """
+        Returns an empty contract class tree.
+        """
+        return await PatriciaTree.empty_tree(
+            ffc=ffc,
+            height=general_config.compiled_class_hash_commitment_tree_height,
+            leaf_fact=ContractClassLeaf.empty(),
+        )
 
     @classmethod
     async def empty(cls, ffc: FactFetchingContext, general_config: Config) -> "SharedState":
@@ -199,26 +244,72 @@ class SharedState(SharedStateBase):
         # Downcast arguments to application-specific types.
         assert isinstance(general_config, StarknetGeneralConfig)
 
-        empty_contract_state = await ContractState.empty(
-            storage_commitment_tree_height=general_config.contract_storage_commitment_tree_height,
-            ffc=ffc,
+        empty_contract_states = await cls.create_empty_contract_states(
+            ffc=ffc, general_config=general_config
         )
-        empty_contract_states = await PatriciaTree.empty_tree(
-            ffc=ffc,
-            height=general_config.global_state_commitment_tree_height,
-            leaf_fact=empty_contract_state,
+        empty_contract_classes = await cls.create_empty_contract_class_tree(
+            ffc=ffc, general_config=general_config
         )
 
         return cls(
             contract_states=empty_contract_states,
+            contract_classes=empty_contract_classes,
             block_info=BlockInfo.empty(sequencer_address=general_config.sequencer_address),
         )
+
+    async def get_contract_class_tree(
+        self, ffc: FactFetchingContext, general_config: StarknetGeneralConfig
+    ) -> PatriciaTree:
+        """
+        Returns the state's contract class Patricia tree if it exists;
+        Otherwise returns an empty tree.
+        """
+        return (
+            self.contract_classes
+            if self.contract_classes is not None
+            else await self.create_empty_contract_class_tree(ffc=ffc, general_config=general_config)
+        )
+
+    def get_global_state_root(self) -> bytes:
+        """
+        Returns the global state root.
+        If both the contract class and contract state trees are empty, the global root is set to 0.
+        If no contract class state exists or if it is empty, the global state root is equal to the
+        contract state root (for backward compatibility);
+        Otherwise, the global root is obtained by:
+            global_root =  H(state_version, contract_state_root, contract_class_root).
+        """
+        contract_states_root = self.contract_states.root
+        contract_classes_root = (
+            self.contract_classes.root if self.contract_classes is not None else to_bytes(0)
+        )
+
+        if contract_states_root == to_bytes(0) and contract_classes_root == to_bytes(0):
+            # The shared state is empty.
+            return to_bytes(0)
+
+        # Backward compatibility; Used during the migration from a state without a
+        # contract class tree to a state with a contract class tree.
+        if contract_classes_root == to_bytes(0):
+            # The contract classes' state is empty.
+            return contract_states_root
+
+        # Return H(contract_state_root, contract_class_root, state_version).
+        hash_value = poseidon_hash_many(
+            [
+                self.state_version,
+                from_bytes(contract_states_root),
+                from_bytes(contract_classes_root),
+            ]
+        )
+        return to_bytes(hash_value)
 
     def to_carried_state(self, ffc: FactFetchingContext) -> CarriedState:
         state = CachedState(
             block_info=self.block_info,
             state_reader=PatriciaStateReader(
                 global_state_root=self.contract_states,
+                contract_class_root=self.contract_classes,
                 ffc=ffc,
                 contract_class_storage=ffc.storage,
             ),
@@ -257,6 +348,7 @@ class SharedState(SharedStateBase):
             ffc=ffc,
             address_to_class_hash=state_cache._class_hash_writes,
             address_to_nonce=state_cache._nonce_writes,
+            class_hash_to_compiled_class_hash=state_cache._compiled_class_hash_writes,
             storage_updates=to_state_diff_storage_mapping(
                 storage_writes=state_cache._storage_writes
             ),
@@ -266,8 +358,9 @@ class SharedState(SharedStateBase):
     async def apply_updates(
         self,
         ffc: FactFetchingContext,
-        address_to_class_hash: Mapping[int, bytes],
+        address_to_class_hash: Mapping[int, int],
         address_to_nonce: Mapping[int, int],
+        class_hash_to_compiled_class_hash: Mapping[int, int],
         storage_updates: Mapping[int, Mapping[int, int]],
         block_info: BlockInfo,
     ) -> "SharedState":
@@ -296,7 +389,28 @@ class SharedState(SharedStateBase):
             ffc=ffc, modifications=list(safe_zip(accessed_addresses, updated_contract_states))
         )
 
-        return SharedState(contract_states=updated_global_contract_root, block_info=block_info)
+        ffc_for_contract_class = FactFetchingContext(
+            storage=ffc.storage, hash_func=poseidon_hash_func, n_workers=ffc.n_workers
+        )
+        updated_contract_classes: Optional[PatriciaTree] = None
+        if self.contract_classes is not None:
+            updated_contract_classes = await self.contract_classes.update(
+                ffc=ffc_for_contract_class,
+                modifications=[
+                    (key, ContractClassLeaf.create(compiled_class_hash=value))
+                    for key, value in class_hash_to_compiled_class_hash.items()
+                ],
+            )
+        else:
+            assert (
+                len(class_hash_to_compiled_class_hash) == 0
+            ), "contract_classes must be concrete before update."
+
+        return SharedState(
+            contract_states=updated_global_contract_root,
+            contract_classes=updated_contract_classes,
+            block_info=block_info,
+        )
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -305,10 +419,11 @@ class StateDiff(EverestStateDiff, DBObject):
     Holds uncommitted changes induced on StarkNet contracts.
     """
 
-    address_to_class_hash: Mapping[int, bytes] = field(
-        metadata=fields.address_to_class_hash_metadata
-    )
+    address_to_class_hash: Mapping[int, int] = field(metadata=fields.address_to_class_hash_metadata)
     address_to_nonce: Mapping[int, int] = field(metadata=fields.address_to_nonce_metadata)
+    class_hash_to_compiled_class_hash: Mapping[int, int] = field(
+        metadata=fields.class_hash_to_compiled_class_hash_metadata
+    )
     storage_updates: Mapping[int, Mapping[int, int]] = field(
         metadata=fields.storage_updates_metadata
     )
@@ -323,6 +438,7 @@ class StateDiff(EverestStateDiff, DBObject):
             address_to_class_hash={},
             address_to_nonce={},
             storage_updates={},
+            class_hash_to_compiled_class_hash={},
             block_info=block_info,
         )
 
@@ -340,9 +456,13 @@ class StateDiff(EverestStateDiff, DBObject):
         address_to_class_hash = subtract_mappings(
             state_cache._class_hash_writes, state_cache._class_hash_initial_values
         )
+        class_hash_to_compiled_class_hash = subtract_mappings(
+            state_cache._compiled_class_hash_writes, state_cache._compiled_class_hash_initial_values
+        )
         return cls(
             address_to_class_hash=address_to_class_hash,
             address_to_nonce=address_to_nonce,
+            class_hash_to_compiled_class_hash=class_hash_to_compiled_class_hash,
             storage_updates=storage_updates,
             block_info=cached_state.block_info,
         )
@@ -352,6 +472,7 @@ class StateDiff(EverestStateDiff, DBObject):
         cached_state.cache.set_initial_values(
             address_to_class_hash=self.address_to_class_hash,
             address_to_nonce=self.address_to_nonce,
+            class_hash_to_compiled_class_hash=self.class_hash_to_compiled_class_hash,
             storage_updates=to_cached_state_storage_mapping(storage_updates=self.storage_updates),
         )
 
@@ -360,6 +481,10 @@ class StateDiff(EverestStateDiff, DBObject):
     def squash(self, other: "StateDiff") -> "StateDiff":
         address_to_class_hash = {**self.address_to_class_hash, **other.address_to_class_hash}
         address_to_nonce = {**self.address_to_nonce, **other.address_to_nonce}
+        class_hash_to_compiled_class_hash = {
+            **self.class_hash_to_compiled_class_hash,
+            **other.class_hash_to_compiled_class_hash,
+        }
         storage_updates: Dict[int, Dict[int, int]] = {}
         for address in self.storage_updates.keys() | other.storage_updates.keys():
             storage_updates[address] = {
@@ -371,6 +496,7 @@ class StateDiff(EverestStateDiff, DBObject):
         return StateDiff(
             address_to_class_hash=address_to_class_hash,
             address_to_nonce=address_to_nonce,
+            class_hash_to_compiled_class_hash=class_hash_to_compiled_class_hash,
             storage_updates=storage_updates,
             block_info=other.block_info,
         )
@@ -385,6 +511,7 @@ class StateDiff(EverestStateDiff, DBObject):
             ffc=ffc,
             address_to_class_hash=self.address_to_class_hash,
             address_to_nonce=self.address_to_nonce,
+            class_hash_to_compiled_class_hash=self.class_hash_to_compiled_class_hash,
             storage_updates=self.storage_updates,
             block_info=self.block_info,
         )

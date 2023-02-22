@@ -5,6 +5,7 @@ python_lib(starknet_transaction_execution_objects_lib
     objects.py
 
     LIBS
+    cairo_relocatable_lib
     cairo_vm_lib
     everest_definitions_lib
     everest_transaction_execution_objects_lib
@@ -16,6 +17,7 @@ python_lib(starknet_transaction_execution_objects_lib
     starknet_transaction_lib
     starkware_dataclasses_field_utils_lib
     starkware_dataclasses_utils_lib
+    starkware_error_handling_lib
     starkware_python_utils_lib
     pip_marshmallow
     pip_marshmallow_dataclass
@@ -31,7 +33,6 @@ python_lib(starknet_execute_entry_point_base_lib
     starknet_business_logic_fact_state_lib
     starknet_business_logic_state_lib
     starknet_contract_class_lib
-    starknet_definitions_lib
     starknet_general_config_lib
     starknet_transaction_execution_objects_lib
     starkware_dataclasses_utils_lib
@@ -47,6 +48,7 @@ python_lib(starknet_execute_entry_point_lib
     cairo_function_runner_lib
     cairo_relocatable_lib
     cairo_vm_lib
+    everest_definitions_lib
     starknet_abi_lib
     starknet_business_logic_fact_state_lib
     starknet_business_logic_state_lib

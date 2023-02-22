@@ -28,6 +28,20 @@ python_lib(starknet_mock_messaging_contracts_lib
 )
 add_dependencies(starknet_mock_messaging_contracts_lib mock_starknet_messaging_sol_env)
 
+python_lib(starknet_testing_test_utils_lib
+    PREFIX starkware/starknet/testing
+
+    FILES
+    test_utils.py
+
+    LIBS
+    starknet_abi_lib
+    starknet_contract_address_lib
+    starknet_contract_class_lib
+    starknet_os_abi_lib
+    starknet_transaction_objects_lib
+)
+
 python_lib(starknet_testing_lib
     PREFIX starkware/starknet/testing
 
@@ -54,13 +68,18 @@ python_lib(starknet_testing_lib
     starknet_execute_entry_point_lib
     starknet_feeder_gateway_response_objects_lib
     starknet_general_config_lib
+    starknet_test_external_contract_test_utils_lib
+    starknet_testing_test_utils_lib
     starknet_transaction_objects_lib
     starknet_messages_lib
     starknet_mock_messaging_contracts_lib
     starknet_os_abi_lib
+    starknet_test_external_contract_test_utils_lib
     starknet_transaction_execution_objects_lib
     starknet_transaction_lib
+    starkware_abstract_storage_lib
     starkware_dataclasses_utils_lib
+    starkware_dict_storage_lib
     starkware_eth_test_utils_lib
     starkware_python_utils_lib
     starkware_storage_lib
@@ -84,7 +103,6 @@ full_python_test(starknet_testing_test
     LIBS
     cairo_common_lib
     starknet_mock_messaging_contracts_lib
-    starknet_test_external_contract_test_utils_lib
     starknet_testing_lib
     starkware_eth_test_utils_lib
     pip_pytest

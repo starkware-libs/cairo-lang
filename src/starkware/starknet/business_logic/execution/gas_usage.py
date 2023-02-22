@@ -10,7 +10,7 @@ def calculate_tx_gas_usage(
     n_modified_contracts: int,
     n_storage_changes: int,
     l1_handler_payload_size: Optional[int],
-    n_deployments: int,
+    n_class_updates: int,
 ) -> int:
     """
     Returns an estimation of the L1 gas amount that will be used (by StarkNet's update state and
@@ -20,9 +20,9 @@ def calculate_tx_gas_usage(
 
     Arguments:
     l1_handler_payload_size should be an int if and only if we calculate the gas usage of an
-    InternalInvokeFunction of type L1 handler. Otherwise the payload size is irrelevant, and should
-    be None.
-    n_deployments is the number of the contracts deployed by the transaction.
+    L1 handler. Otherwise the payload size is irrelevant, and should be None.
+    n_class_updates is the number of contracts which got assigned a class hash by the transaction;
+    this can happen through either a deploy or a replace class request.
     """
     # Calculate the addition of the transaction to the output messages segment.
     residual_message_segment_length = get_message_segment_length(
@@ -34,7 +34,7 @@ def calculate_tx_gas_usage(
     residual_onchain_data_segment_length = get_onchain_data_segment_length(
         n_modified_contracts=n_modified_contracts,
         n_storage_changes=n_storage_changes,
-        n_deployments=n_deployments,
+        n_class_updates=n_class_updates,
     )
 
     n_l2_to_l1_messages = len(l2_to_l1_messages)
@@ -89,7 +89,7 @@ def get_message_segment_length(
 def get_onchain_data_segment_length(
     n_modified_contracts: int,
     n_storage_changes: int,
-    n_deployments: int,
+    n_class_updates: int,
 ) -> int:
     """
     Returns the number of felts added to the output data availability segment as a result of adding
@@ -100,10 +100,10 @@ def get_onchain_data_segment_length(
     """
     # For each newly modified contract: contract address, number of modified storage cells.
     onchain_data_segment_length = n_modified_contracts * 2
+    # For each class updated (through a deploy or a class replacement).
+    onchain_data_segment_length += n_class_updates * constants.CLASS_UPDATE_SIZE
     # For each modified storage cell: key, new value.
     onchain_data_segment_length += n_storage_changes * 2
-    # Add size of deployment info.
-    onchain_data_segment_length += n_deployments * constants.DEPLOYMENT_INFO_SIZE
 
     return onchain_data_segment_length
 

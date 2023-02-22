@@ -149,7 +149,7 @@ The former has {n_src_members} members while the latter has {n_dest_members} mem
         else itertools.repeat(None, times=n_src_members)
     )
 
-    for (src_expr, src_member, dest_member) in safe_zip(src_exprs, src_members, dest_members):
+    for src_expr, src_member, dest_member in safe_zip(src_exprs, src_members, dest_members):
         item_location = location
         if src_expr is not None and src_expr.location is not None:
             item_location = src_expr.location

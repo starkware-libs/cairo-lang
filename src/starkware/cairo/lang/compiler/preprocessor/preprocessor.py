@@ -1654,8 +1654,8 @@ Cannot convert the return type of {func_name} to the return type of {self.curren
 
             raise PreprocessorError(
                 f"""\
-Cannot convert the implicit arguments of {func_name} to the implicit arguments of \
-{self.current_scope[-1:]}.""",
+Tail calls require the implicit arguments of the callee to match the caller. \
+Consider separating the function call and the return statement.""",
                 location=elm.location,
                 notes=notes,
             )

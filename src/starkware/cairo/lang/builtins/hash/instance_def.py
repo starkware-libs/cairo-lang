@@ -10,7 +10,8 @@ INPUT_CELLS_PER_HASH = 2
 class PedersenInstanceDef:
     # Defines the ratio between the number of steps to the number of pedersen instances.
     # For every ratio steps, we have one instance.
-    ratio: int
+    # None means dynamic ratio.
+    ratio: Optional[int]
 
     # Split to this many different components - for optimization.
     repetitions: int

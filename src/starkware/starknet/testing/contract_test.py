@@ -6,7 +6,7 @@ import pytest
 import pytest_asyncio
 
 from starkware.starknet.business_logic.execution.objects import Event
-from starkware.starknet.core.test_contract.test_utils import get_contract_class
+from starkware.starknet.core.test_contract.test_utils import get_deprecated_compiled_class
 from starkware.starknet.public.abi import AbiType, get_selector_from_name
 from starkware.starknet.testing.contract import DeclaredClass, StarknetContract
 from starkware.starknet.testing.starknet import Starknet
@@ -38,7 +38,7 @@ async def test_class(starknet: Starknet) -> DeclaredClass:
 
 @pytest_asyncio.fixture
 async def proxy_contract(starknet: Starknet) -> StarknetContract:
-    contract_class = get_contract_class("delegate_proxy")
+    contract_class = get_deprecated_compiled_class("delegate_proxy")
     return await starknet.deploy(
         constructor_calldata=[],
         contract_class=contract_class,
@@ -47,7 +47,7 @@ async def proxy_contract(starknet: Starknet) -> StarknetContract:
 
 @pytest_asyncio.fixture
 async def account_contract(starknet: Starknet) -> StarknetContract:
-    contract_class = get_contract_class("dummy_account")
+    contract_class = get_deprecated_compiled_class("dummy_account")
     return await starknet.deploy(
         constructor_calldata=[],
         contract_class=contract_class,

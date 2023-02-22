@@ -19,7 +19,6 @@ the leaf or the hash corresponding to that subtree.
 
 from typing import Any, Iterable, List, Optional, Tuple
 
-from starkware.cairo.lang.vm.crypto import pedersen_hash
 from starkware.python.math_utils import is_power_of_2
 from starkware.starkware_utils.commitment_tree.update_tree import UpdateTree
 
@@ -78,11 +77,11 @@ def compute_patricia_from_leaves_for_test(leaves, hash_func):
     return hash_node(root), preimage, node_at_path
 
 
-def hash_node(e: Triplet) -> int:
+def hash_node(e: Triplet, hash_func) -> int:
     length, path, bottom = e
     if length == 0:
         return bottom
-    return pedersen_hash(bottom, path) + length
+    return hash_func(bottom, path) + length
 
 
 def get_children(preimage, node: Triplet) -> Tuple[Triplet, Triplet]:
@@ -185,7 +184,9 @@ def get_descents(height: int, path: int, nodes: List[NodeType]):
     return res
 
 
-def compute_siblings_from_tree(height, node: UpdateTree, node_at_path, descent_map, path=0):
+def compute_siblings_from_tree(
+    height, node: UpdateTree, node_at_path, descent_map, hash_func, path=0
+):
     """
     Returns the encoding of the list of untraversed siblings. See the documentation in
     patricia.cairo for more details.
@@ -196,17 +197,23 @@ def compute_siblings_from_tree(height, node: UpdateTree, node_at_path, descent_m
         return []
     left, right = node
     if left is None:
-        res = [hash_node(node_at_path[height - 1, path * 2])] + compute_siblings_from_tree(
-            height - 1, right, node_at_path, descent_map, path * 2 + 1
+        res = [
+            hash_node(node_at_path[height - 1, path * 2], hash_func)
+        ] + compute_siblings_from_tree(
+            height - 1, right, node_at_path, descent_map, hash_func, path * 2 + 1
         )
     elif right is None:
-        res = [hash_node(node_at_path[height - 1, path * 2 + 1])] + compute_siblings_from_tree(
-            height - 1, left, node_at_path, descent_map, path * 2
+        res = [
+            hash_node(node_at_path[height - 1, path * 2 + 1], hash_func)
+        ] + compute_siblings_from_tree(
+            height - 1, left, node_at_path, descent_map, hash_func, path * 2
         )
     else:
         res = compute_siblings_from_tree(
-            height - 1, left, node_at_path, descent_map, path * 2
-        ) + compute_siblings_from_tree(height - 1, right, node_at_path, descent_map, path * 2 + 1)
+            height - 1, left, node_at_path, descent_map, hash_func, path * 2
+        ) + compute_siblings_from_tree(
+            height - 1, right, node_at_path, descent_map, hash_func, path * 2 + 1
+        )
 
     descend = descent_map.get((height, path))
     if descend is None:

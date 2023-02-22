@@ -12,7 +12,7 @@ def calculate_starknet_config_hash(starknet_os_config: StarknetOsConfig) -> int:
     return compute_hash_on_elements(
         data=[
             STARKNET_OS_CONFIG_HASH_VERSION,
-            starknet_os_config.chain_id.value,
+            starknet_os_config.chain_id,
             starknet_os_config.fee_token_address,
         ]
     )

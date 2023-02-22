@@ -1,5 +1,5 @@
 from starkware.cairo.common.alloc import alloc
-from starkware.cairo.common.cairo_builtins import BitwiseBuiltin
+from starkware.cairo.common.cairo_builtins import BitwiseBuiltin, HashBuiltin
 from starkware.cairo.common.math import horner_eval
 from starkware.cairo.common.pow import pow
 from starkware.cairo.stark_verifier.core.channel import (
@@ -167,7 +167,9 @@ func fri_commit_rounds{
 }
 
 // FRI protocol component decommitment.
-func fri_decommit{range_check_ptr, blake2s_ptr: felt*, bitwise_ptr: BitwiseBuiltin*}(
+func fri_decommit{
+    range_check_ptr, blake2s_ptr: felt*, pedersen_ptr: HashBuiltin*, bitwise_ptr: BitwiseBuiltin*
+}(
     n_queries: felt,
     queries: felt*,
     commitment: FriCommitment*,
@@ -241,7 +243,9 @@ func gather_first_layer_queries(
     );
 }
 
-func fri_decommit_layers{range_check_ptr, blake2s_ptr: felt*, bitwise_ptr: BitwiseBuiltin*}(
+func fri_decommit_layers{
+    range_check_ptr, blake2s_ptr: felt*, pedersen_ptr: HashBuiltin*, bitwise_ptr: BitwiseBuiltin*
+}(
     fri_group: felt*,
     n_layers: felt,
     commitment: TableCommitment**,

@@ -1,9 +1,8 @@
-import functools
-import operator
 from abc import abstractmethod
 from typing import Iterable, Iterator, Optional, Type
 
 from services.everest.api.gateway.transaction import EverestTransaction
+from services.everest.api.gateway.transaction_type import TransactionTypeBase
 from services.everest.business_logic.state import StateSelectorBase
 from services.everest.business_logic.state_api import StateProxy
 from services.everest.business_logic.transaction_execution_objects import (
@@ -56,11 +55,10 @@ class EverestInternalStateTransaction(SubclassSchemaTracker):
         general_config: Config,
         state_selector_cls: Type[StateSelectorBase],
     ) -> StateSelectorBase:
-        return functools.reduce(
-            operator.__or__,
-            (tx.get_state_selector(general_config=general_config) for tx in txs),
-            state_selector_cls.empty(),
-        )
+        state_selector = state_selector_cls.empty()
+        for tx in txs:
+            state_selector.update(other=tx.get_state_selector(general_config=general_config))
+        return state_selector
 
 
 class EverestInternalTransaction(EverestInternalStateTransaction):
@@ -69,6 +67,15 @@ class EverestInternalTransaction(EverestInternalStateTransaction):
     Contains the API of an internal transaction that can apply changes on the state
     and be converted from/to an external transaction.
     """
+
+    @property
+    @classmethod
+    @abstractmethod
+    def tx_type(cls) -> TransactionTypeBase:
+        """
+        Returns the corresponding TransactionType enum. Used in TransactionSchema.
+        Subclasses should define it as a class variable.
+        """
 
     @property
     @classmethod

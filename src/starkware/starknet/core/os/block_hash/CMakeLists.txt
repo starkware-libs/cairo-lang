@@ -8,6 +8,8 @@ python_lib(starknet_block_hash_lib
     cairo_common_lib
     cairo_vm_crypto_lib
     starknet_general_config_lib
+    starkware_abstract_storage_lib
+    starkware_dict_storage_lib
     starkware_python_utils_lib
     starkware_storage_lib
     starkware_storage_utils_lib

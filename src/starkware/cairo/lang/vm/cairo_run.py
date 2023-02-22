@@ -12,7 +12,8 @@ from typing import IO, Dict, List, Optional, Tuple
 import starkware.python.python_dependencies as python_dependencies
 from starkware.cairo.lang.compiler.debug_info import DebugInfo
 from starkware.cairo.lang.compiler.program import Program, ProgramBase
-from starkware.cairo.lang.instances import LAYOUTS
+from starkware.cairo.lang.dynamic_layout_params import DYNAMIC_LAYOUT_NAME, DynamicLayoutParams
+from starkware.cairo.lang.instances import LAYOUTS, CairoLayout, build_dynamic_layout
 from starkware.cairo.lang.version import __version__
 from starkware.cairo.lang.vm.air_public_input import PublicInput, PublicMemoryEntry
 from starkware.cairo.lang.vm.cairo_pie import CairoPie
@@ -143,7 +144,7 @@ def main():
     )
     parser.add_argument(
         "--layout",
-        choices=LAYOUTS.keys(),
+        choices=[*LAYOUTS.keys(), DYNAMIC_LAYOUT_NAME],
         default="plain",
         help="The layout of the Cairo AIR.",
     )
@@ -271,9 +272,17 @@ def cairo_run(args):
         initial_memory = cairo_pie_input.memory
         steps_input = cairo_pie_input.execution_resources.n_steps
 
+    layout: CairoLayout
+    layout_params: Optional[DynamicLayoutParams] = None
+    if args.layout == DYNAMIC_LAYOUT_NAME:
+        layout_params = DynamicLayoutParams()
+        layout = build_dynamic_layout(**layout_params.builtin_ratios)
+    else:
+        layout = LAYOUTS[args.layout]
+
     runner = CairoRunner(
         program=program,
-        layout=args.layout,
+        layout=layout,
         memory=initial_memory,
         proof_mode=args.proof_mode,
         allow_missing_builtins=args.proof_mode,
@@ -383,21 +392,11 @@ def cairo_run(args):
         field_bytes = math.ceil(program.prime.bit_length() / 8)
         write_binary_memory(memory_file, runner.relocated_memory, field_bytes)
 
-    def select_builtin_ratios(runner):
-        """
-        Temporary fucntion that returns the ratios of the bitwise builtin until actual desirable
-        dynamic ratios can be computed from the runner.
-        """
-        return {
-            f"{builtin}_ratio": instance_def.ratio
-            for builtin, instance_def in LAYOUTS["bitwise"].builtins.items()
-        }
-
     if args.air_public_input is not None:
         rc_min, rc_max = runner.get_perm_range_check_limits()
         write_air_public_input(
             layout=args.layout,
-            layout_params=select_builtin_ratios(runner) if args.layout == "dynamic" else None,
+            layout_params=layout_params,
             public_input_file=args.air_public_input,
             memory=runner.relocated_memory,
             public_memory_addresses=runner.segments.get_public_memory_addresses(
@@ -499,7 +498,7 @@ def write_air_public_input(
     public_input_file: IO[str],
     memory: MemoryDict,
     layout: str,
-    layout_params: Optional[Dict[str, int]],
+    layout_params: Optional[DynamicLayoutParams],
     public_memory_addresses: List[Tuple[int, int]],
     memory_segment_addresses: Dict[str, MemorySegmentAddresses],
     trace: List[TraceEntry[int]],

@@ -12,6 +12,7 @@ python_lib(starknet_definitions_lib
     cairo_vm_crypto_lib
     everest_definitions_lib
     everest_transaction_type_lib
+    starkware_abstract_storage_lib
     starkware_crypto_lib
     starkware_dataclasses_field_utils_lib
     starkware_dataclasses_utils_lib

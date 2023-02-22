@@ -1,10 +1,12 @@
 import dataclasses
+import inspect
 import re
 from abc import abstractmethod
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from typing import ContextManager, Optional, Type, TypeVar
 
 import pytest
+from pytest import MonkeyPatch
 
 
 def maybe_raises(
@@ -67,3 +69,41 @@ def without_validations(base: Type[T]) -> Type[T]:
                     field.perform_validations()
 
     return _WithoutValidations
+
+
+class FunctionComplete(Exception):
+    pass
+
+
+def raise_after_applying(func):
+    """
+    Returns a function that applies the given function and then raises an exception.
+    """
+    if inspect.iscoroutinefunction(func):
+
+        async def async_apply_and_raise(*args, **kwargs):
+            await func(*args, **kwargs)
+            raise FunctionComplete()
+
+        return async_apply_and_raise
+
+    def apply_and_raise(*args, **kwargs):
+        func(*args, **kwargs)
+        raise FunctionComplete()
+
+    return apply_and_raise
+
+
+@contextmanager
+def apply_and_stop(obj, last_func, monkeypatch: MonkeyPatch):
+    """
+    Stops the flow in the context after applying `last_func`, a member of `obj`.
+    Useful for testing a function within a process, without considering the behavior after it.
+    """
+    monkeypatch.setattr(obj, last_func.__name__, raise_after_applying(func=last_func))
+    try:
+        yield
+    except FunctionComplete:
+        pass
+    finally:
+        monkeypatch.setattr(obj, last_func.__name__, last_func)

@@ -4,10 +4,16 @@ from typing import Callable, Sequence
 from starkware.cairo.common.hash_state import compute_hash_on_elements
 from starkware.cairo.lang.vm.crypto import pedersen_hash
 from starkware.python.utils import from_bytes
-from starkware.starknet.core.os.class_hash import compute_class_hash
+from starkware.starknet.core.os.contract_class.class_hash import compute_class_hash
+from starkware.starknet.core.os.contract_class.deprecated_class_hash import (
+    compute_deprecated_class_hash,
+)
 from starkware.starknet.definitions import constants
 from starkware.starknet.public.abi import CONSTRUCTOR_ENTRY_POINT_SELECTOR
-from starkware.starknet.services.api.contract_class import ContractClass
+from starkware.starknet.services.api.contract_class.contract_class import (
+    ContractClass,
+    DeprecatedCompiledClass,
+)
 
 
 class TransactionHashPrefix(Enum):
@@ -109,6 +115,7 @@ def calculate_deploy_account_transaction_hash(
 
 def calculate_declare_transaction_hash(
     contract_class: ContractClass,
+    compiled_class_hash: int,
     chain_id: int,
     sender_address: int,
     max_fee: int,
@@ -116,7 +123,36 @@ def calculate_declare_transaction_hash(
     nonce: int,
     hash_function: Callable[[int, int], int] = pedersen_hash,
 ) -> int:
-    class_hash = compute_class_hash(contract_class=contract_class, hash_func=hash_function)
+    class_hash = compute_class_hash(contract_class=contract_class)
+
+    calldata = [class_hash]
+    additional_data = [nonce, compiled_class_hash]
+
+    return calculate_transaction_hash_common(
+        tx_hash_prefix=TransactionHashPrefix.DECLARE,
+        version=version,
+        contract_address=sender_address,
+        entry_point_selector=0,
+        calldata=calldata,
+        max_fee=max_fee,
+        chain_id=chain_id,
+        additional_data=additional_data,
+        hash_function=hash_function,
+    )
+
+
+def calculate_deprecated_declare_transaction_hash(
+    contract_class: DeprecatedCompiledClass,
+    chain_id: int,
+    sender_address: int,
+    max_fee: int,
+    version: int,
+    nonce: int,
+    hash_function: Callable[[int, int], int] = pedersen_hash,
+) -> int:
+    class_hash = compute_deprecated_class_hash(
+        contract_class=contract_class, hash_func=hash_function
+    )
 
     if version in [0, constants.QUERY_VERSION_BASE]:
         calldata = []

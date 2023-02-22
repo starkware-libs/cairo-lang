@@ -20,6 +20,7 @@ library Addresses {
     }
 
     function performEthTransfer(address recipient, uint256 amount) internal {
+        if (amount == 0) return;
         (bool success, ) = recipient.call{value: amount}(""); // NOLINT: low-level-calls.
         require(success, "ETH_TRANSFER_FAILED");
     }

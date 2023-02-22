@@ -1,6 +1,5 @@
 import dataclasses
 from abc import ABC, abstractmethod
-from dataclasses import field
 from typing import List, Optional
 
 from starkware.starknet.business_logic.execution.objects import (
@@ -10,9 +9,8 @@ from starkware.starknet.business_logic.execution.objects import (
 )
 from starkware.starknet.business_logic.fact_state.state import ExecutionResourcesManager
 from starkware.starknet.business_logic.state.state_api import SyncState
-from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
-from starkware.starknet.services.api.contract_class import EntryPointType
+from starkware.starknet.services.api.contract_class.contract_class import EntryPointType
 from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 
 
@@ -27,24 +25,26 @@ class ExecuteEntryPointBase(ABC, ValidatedDataclass):
 
     # For fields that are shared with InternalInvokeFunction, see documentation there.
     call_type: CallType
-    contract_address: int = field(metadata=fields.contract_address_metadata)
+    contract_address: int
     # The address that holds the code to execute.
     # It may differ from contract_address in the case of delegate call.
-    code_address: Optional[int] = field(metadata=fields.OptionalCodeAddressField.metadata())
-    class_hash: Optional[bytes] = field(metadata=fields.optional_class_hash_metadata)
-    entry_point_selector: int = field(metadata=fields.entry_point_selector_metadata)
+    code_address: Optional[int]
+    class_hash: Optional[int]
+    entry_point_selector: int
     entry_point_type: EntryPointType
-    calldata: List[int] = field(metadata=fields.call_data_metadata)
+    calldata: List[int]
     # The caller contract address.
-    caller_address: int = field(metadata=fields.caller_address_metadata)
+    caller_address: int
+    # The amount of gas allocated to this execution on initiation.
+    initial_gas: int
 
     @abstractmethod
     def execute(
         self,
         state: SyncState,
         resources_manager: ExecutionResourcesManager,
-        general_config: StarknetGeneralConfig,
         tx_execution_context: TransactionExecutionContext,
+        general_config: StarknetGeneralConfig,
     ) -> CallInfo:
         """
         Executes the entry point.

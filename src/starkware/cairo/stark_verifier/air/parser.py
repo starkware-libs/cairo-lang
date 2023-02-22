@@ -6,14 +6,21 @@ from starkware.cairo.common.structs import CairoStructFactory
 from starkware.cairo.lang.compiler.identifier_definition import ConstDefinition
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
-from starkware.cairo.lang.instances import recursive_instance as INSTANCE
+from starkware.cairo.lang.instances import all_cairo_instance as INSTANCE
 from starkware.cairo.lang.vm.air_public_input import PublicInput, extract_z_and_alpha
 from starkware.cairo.stark_verifier.air.utils import public_input_to_cairo
 from starkware.python.math_utils import safe_log2
 from starkware.python.utils import safe_zip
 
 COMPONENT_HEIGHT = 16
-SUPPORTED_LAYOUTS = ["bitwise", "dex", "perpetual_with_bitwise", "recursive"]
+SUPPORTED_LAYOUTS = [
+    "recursive",
+    "dex",
+    "small",
+    "starknet",
+    "all_cairo",
+    "starknet_with_keccak",
+]
 ADDITIONAL_IMPORTS = [
     "starkware.cairo.stark_verifier.air.config.TracesConfig",
     "starkware.cairo.stark_verifier.air.public_input.PublicInput",
@@ -57,15 +64,8 @@ def extract_annotations(annotations: Sequence[str], prefix: str, kind: str) -> L
             res += [int(x, 16) for x in str_value.split(",")]
             continue
         value = int(str_value, 16)
-        if kind == "Hash":
-            # Make sure hash is truncated.
-            assert value % 2**96 == 0
         res.append(value)
     return res
-
-
-def to_uint256(x):
-    return (x % (2**128), x >> 128)
 
 
 def parse_proof(identifiers: IdentifierManager, proof_json: dict):
@@ -92,15 +92,15 @@ def parse_proof(identifiers: IdentifierManager, proof_json: dict):
         "STARK/Out Of Domain Sampling/Commit on Trace", "Hash"
     )
     oods_values = annotations("STARK/Out Of Domain Sampling/OODS values", "Field Element")
-    fri_layers_commitments = [
-        x >> 96 for x in annotations("STARK/FRI/Commitment/Layer [0-9]+", "Hash")
-    ]
+    fri_layers_commitments = annotations("STARK/FRI/Commitment/Layer [0-9]+", "Hash")
     fri_last_layer_coefficients = annotations("STARK/FRI/Commitment/Last Layer", "Field Elements")
     (proof_of_work_nonce,) = annotations("STARK/FRI/Proof of Work", "Data")
 
     def get_authentications(prefix: str):
-        # Collect authentication (siblings) values.
-        # In the case of 1 column, the first authentication values come as Data.
+        """
+        Collects authentication (siblings) values.
+        In the case of 1 column, the first authentication values come as Data.
+        """
         return annotations(prefix, "Data") + annotations(prefix, "Hash")
 
     original_witness_leaves = annotations(
@@ -135,7 +135,7 @@ def parse_proof(identifiers: IdentifierManager, proof_json: dict):
                 table_witness=structs.TableCommitmentWitness(
                     vector=structs.VectorCommitmentWitness(
                         n_authentications=len(authentications),
-                        authentications=list(itertools.chain(*map(to_uint256, authentications))),
+                        authentications=authentications,
                     ),
                 ),
             )
@@ -147,6 +147,9 @@ def parse_proof(identifiers: IdentifierManager, proof_json: dict):
     log_n_cosets = proof_json["proof_parameters"]["stark"]["log_n_cosets"]
     log_last_layer_degree_bound = safe_log2(
         proof_json["proof_parameters"]["stark"]["fri"]["last_layer_degree_bound"]
+    )
+    n_verifier_friendly_commitment_layers = proof_json["proof_parameters"].get(
+        "n_verifier_friendly_commitment_layers", 0
     )
 
     # FRI layers.
@@ -177,12 +180,14 @@ def parse_proof(identifiers: IdentifierManager, proof_json: dict):
                 n_columns=N_ORIGINAL_COLUMNS,
                 vector=structs.VectorCommitmentConfig(
                     height=log_eval_domain_size,
+                    n_verifier_friendly_commitment_layers=n_verifier_friendly_commitment_layers,
                 ),
             ),
             interaction=structs.TableCommitmentConfig(
                 n_columns=N_INTERACTION_COLUMNS,
                 vector=structs.VectorCommitmentConfig(
                     height=log_eval_domain_size,
+                    n_verifier_friendly_commitment_layers=n_verifier_friendly_commitment_layers,
                 ),
             ),
         ),
@@ -190,6 +195,7 @@ def parse_proof(identifiers: IdentifierManager, proof_json: dict):
             n_columns=CONSTRAINT_DEGREE,
             vector=structs.VectorCommitmentConfig(
                 height=log_eval_domain_size,
+                n_verifier_friendly_commitment_layers=n_verifier_friendly_commitment_layers,
             ),
         ),
         fri=structs.FriConfig(
@@ -202,6 +208,9 @@ def parse_proof(identifiers: IdentifierManager, proof_json: dict):
                             n_columns=2**layer_steps,
                             vector=structs.VectorCommitmentConfig(
                                 height=layer_log_rows,
+                                n_verifier_friendly_commitment_layers=(
+                                    n_verifier_friendly_commitment_layers
+                                ),
                             ),
                         )
                         for layer_steps, layer_log_rows in safe_zip(
@@ -222,10 +231,10 @@ def parse_proof(identifiers: IdentifierManager, proof_json: dict):
     )
     stark_unsent_commitment = structs.StarkUnsentCommitment(
         traces=structs.TracesUnsentCommitment(
-            original=original_commitment_hash >> 96,
-            interaction=interaction_commitment_hash >> 96,
+            original=original_commitment_hash,
+            interaction=interaction_commitment_hash,
         ),
-        composition=composition_commitment_hash >> 96,
+        composition=composition_commitment_hash,
         oods_values=oods_values,
         fri=structs.FriUnsentCommitment(
             inner_layers=fri_layers_commitments, last_layer_coefficients=fri_last_layer_coefficients
@@ -249,17 +258,13 @@ def parse_proof(identifiers: IdentifierManager, proof_json: dict):
             original=structs.TableCommitmentWitness(
                 vector=structs.VectorCommitmentWitness(
                     n_authentications=len(original_witness_authentications),
-                    authentications=list(
-                        itertools.chain(*map(to_uint256, original_witness_authentications))
-                    ),
+                    authentications=original_witness_authentications,
                 ),
             ),
             interaction=structs.TableCommitmentWitness(
                 vector=structs.VectorCommitmentWitness(
                     n_authentications=len(interaction_witness_authentications),
-                    authentications=list(
-                        itertools.chain(*map(to_uint256, interaction_witness_authentications))
-                    ),
+                    authentications=interaction_witness_authentications,
                 ),
             ),
         ),
@@ -270,9 +275,7 @@ def parse_proof(identifiers: IdentifierManager, proof_json: dict):
         composition_witness=structs.TableCommitmentWitness(
             vector=structs.VectorCommitmentWitness(
                 n_authentications=len(composition_witness_authentications),
-                authentications=list(
-                    itertools.chain(*map(to_uint256, composition_witness_authentications))
-                ),
+                authentications=composition_witness_authentications,
             ),
         ),
         fri_witness=structs.FriWitness(

@@ -1,4 +1,4 @@
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, Tuple
 
 from starkware.cairo.lang.builtins.ec.instance_def import (
     CELLS_PER_EC_OP,
@@ -6,7 +6,7 @@ from starkware.cairo.lang.builtins.ec.instance_def import (
     EcOpInstanceDef,
 )
 from starkware.cairo.lang.vm.builtin_runner import SimpleBuiltinRunner
-from starkware.cairo.lang.vm.relocatable import RelocatableValue
+from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 from starkware.crypto.signature.signature import ALPHA, BETA, FIELD_PRIME
 from starkware.python.math_utils import ec_add, ec_double
 
@@ -30,7 +30,7 @@ def point_on_curve(x: int, y: int, alpha: int, beta: int, p: int) -> bool:
 
 def ec_op_impl(
     p_x: int, p_y: int, q_x: int, q_y: int, m: int, alpha: int, prime: int, height: int
-) -> Union[Tuple[int, int], str]:
+) -> Tuple[int, int]:
     """
     Returns the result of the EC operation P + m * Q.
     where P = (p_x, p_y), Q = (q_x, q_y) are points on the elliptic curve defined as
@@ -70,16 +70,20 @@ class EcOpBuiltinRunner(SimpleBuiltinRunner):
             n_input_cells=INPUT_CELLS_PER_EC_OP,
         )
         self.ec_op_builtin: EcOpInstanceDef = ec_op_builtin
+        self.cache: Dict[MaybeRelocatable, int] = {}
 
     def add_auto_deduction_rules(self, runner):
         def rule(vm, addr):
             memory = vm.run_context.memory
             index = addr.offset % CELLS_PER_EC_OP
             instance = addr - index
+            x_addr = instance + INPUT_CELLS_PER_EC_OP
 
             # If the index is not an output cell or not all input cells are filled, return None.
             if index not in OUTPUT_INDICES:
                 return None
+            if addr in self.cache:
+                return self.cache[addr]
             if not all(instance + i in memory for i in range(INPUT_CELLS_PER_EC_OP)):
                 return None
 
@@ -115,6 +119,8 @@ class EcOpBuiltinRunner(SimpleBuiltinRunner):
                 height=self.ec_op_builtin.scalar_height,
             )
 
+            self.cache[x_addr] = res[0]
+            self.cache[x_addr + 1] = res[1]
             return res[index - INPUT_CELLS_PER_EC_OP]
 
         runner.vm.add_auto_deduction_rule(self.base.segment_index, rule)

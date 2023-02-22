@@ -2,6 +2,7 @@ import copy
 from typing import List, MutableMapping, Optional, Tuple, Union
 
 from starkware.cairo.lang.vm.crypto import pedersen_hash_func
+from starkware.python.utils import from_bytes
 from starkware.starknet.business_logic.execution.execute_entry_point import ExecuteEntryPoint
 from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
@@ -22,7 +23,10 @@ from starkware.starknet.business_logic.transaction.objects import (
 from starkware.starknet.definitions import constants, fields
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public.abi import get_selector_from_name
-from starkware.starknet.services.api.contract_class import ContractClass, EntryPointType
+from starkware.starknet.services.api.contract_class.contract_class import (
+    DeprecatedCompiledClass,
+    EntryPointType,
+)
 from starkware.starknet.services.api.gateway.transaction import DEFAULT_DECLARE_SENDER_ADDRESS
 from starkware.starknet.services.api.messages import StarknetMessageToL1
 from starkware.storage.dict_storage import DictStorage
@@ -76,6 +80,7 @@ class StarknetState:
         empty_shared_state = await SharedState.empty(ffc=ffc, general_config=general_config)
         state_reader = PatriciaStateReader(
             global_state_root=empty_shared_state.contract_states,
+            contract_class_root=empty_shared_state.contract_classes,
             ffc=ffc,
             contract_class_storage=ffc.storage,
         )
@@ -88,8 +93,8 @@ class StarknetState:
         return cls(state=state, general_config=general_config)
 
     async def declare(
-        self, contract_class: ContractClass
-    ) -> Tuple[bytes, TransactionExecutionInfo]:
+        self, contract_class: DeprecatedCompiledClass
+    ) -> Tuple[int, TransactionExecutionInfo]:
         """
         Declares a contract class.
         Returns the class hash and the execution info.
@@ -97,7 +102,7 @@ class StarknetState:
         Args:
         contract_class - a compiled StarkNet contract returned by compile_starknet_files().
         """
-        tx = InternalDeclare.create(
+        tx = InternalDeclare.create_deprecated(
             contract_class=contract_class,
             chain_id=self.general_config.chain_id.value,
             sender_address=DEFAULT_DECLARE_SENDER_ADDRESS,
@@ -106,7 +111,7 @@ class StarknetState:
             signature=[],
             nonce=0,
         )
-        await self.state.set_contract_class(class_hash=tx.class_hash, contract_class=contract_class)
+        self.state.contract_classes[tx.class_hash] = contract_class
 
         with self.state.copy_and_apply() as state_copy:
             tx_execution_info = await tx.apply_state_updates(
@@ -117,7 +122,7 @@ class StarknetState:
 
     async def deploy(
         self,
-        contract_class: ContractClass,
+        contract_class: DeprecatedCompiledClass,
         constructor_calldata: List[int],
         contract_address_salt: Optional[CastableToAddressSalt] = None,
     ) -> Tuple[int, TransactionExecutionInfo]:
@@ -142,10 +147,8 @@ class StarknetState:
             chain_id=self.general_config.chain_id.value,
             version=constants.TRANSACTION_VERSION,
         )
-        await self.state.set_contract_class(
-            class_hash=tx.contract_hash, contract_class=contract_class
-        )
 
+        self.state.contract_classes[from_bytes(tx.contract_hash)] = contract_class
         tx_execution_info = await self.execute_tx(tx=tx)
 
         return tx.contract_address, tx_execution_info
@@ -203,6 +206,7 @@ class StarknetState:
         call = ExecuteEntryPoint.create(
             contract_address=contract_address,
             entry_point_selector=selector,
+            initial_gas=constants.GasCost.INITIAL.value,
             entry_point_type=EntryPointType.EXTERNAL,
             calldata=calldata,
             caller_address=caller_address,
@@ -282,7 +286,7 @@ async def create_invoke_function(
         nonce = await state.get_nonce_at(contract_address=contract_address)
 
     return InternalInvokeFunction.create(
-        contract_address=contract_address,
+        sender_address=contract_address,
         entry_point_selector=selector,
         calldata=calldata,
         max_fee=max_fee,

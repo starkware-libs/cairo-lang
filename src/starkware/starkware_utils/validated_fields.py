@@ -19,6 +19,7 @@ from starkware.starkware_utils.marshmallow_dataclass_fields import (
 T = TypeVar("T")
 
 
+
 # Mypy has a problem with dataclasses that contain unimplemented abstract methods.
 # See https://github.com/python/mypy/issues/5374 for details on this problem.
 @dataclasses.dataclass(frozen=True)  # type: ignore
@@ -29,28 +30,11 @@ class Field(ABC, Generic[T]):
     1.  Data needed for @dataclasses.dataclass fields: 'description', 'default',
         'default_factory', etc. ,
     2.  Data needed for marshmallow: in 'marshmallow_field',
-    3.  An object implementing this Field class: in 'validated_field',
-    4.  A name for messages: in 'name',
-    5.  An error-code: in 'error_code'.
+    3.  An object implementing this Field class: in 'field',
+    4.  A name for messages: in 'name'.
     """
 
     name: str
-    error_code: ErrorCode
-
-    @property
-    @classmethod
-    @abstractmethod
-    def error_message(cls) -> str:
-        """
-        The default error message that appears when the value is invalid.
-        Subclasses should define it as a class variable.
-        """
-
-    @abstractmethod
-    def format(self, value: T) -> str:
-        """
-        The formatted value that appears in messages.
-        """
 
     # Randomization.
 
@@ -58,33 +42,6 @@ class Field(ABC, Generic[T]):
     def get_random_value(self, random_object: Optional[random.Random] = None) -> T:
         """
         Returns a random valid value for this field.
-        """
-
-    # Validation.
-
-    @abstractmethod
-    def is_valid(self, value: T) -> bool:
-        """
-        Checks and returns if the given value is valid.
-        """
-
-    def validate(self, value: T, name: Optional[str] = None):
-        """
-        Raises an exception if the value is not valid.
-        """
-        error_message = self.format_invalid_value_error_message(value=value, name=name)
-        stark_assert(self.is_valid(value=value), code=self.error_code, message=error_message)
-
-    @abstractmethod
-    def get_invalid_values(self) -> List[T]:
-        """
-        Returns a list of invalid values for this field.
-        """
-
-    @abstractmethod
-    def format_invalid_value_error_message(self, value: T, name: Optional[str] = None) -> str:
-        """
-        Constructs the error message for invalid values.
         """
 
     # Serialization.
@@ -127,7 +84,80 @@ class Field(ABC, Generic[T]):
         )
 
 
-class OptionalField(Field[Optional[T]]):
+# Mypy has a problem with dataclasses that contain unimplemented abstract methods.
+# See https://github.com/python/mypy/issues/5374 for details on this problem.
+@dataclasses.dataclass(frozen=True)  # type: ignore[misc]
+class BooleanField(Field[bool]):
+    """
+    A class that represents a boolean field.
+    """
+
+    def get_marshmallow_field(
+        self, required: bool = True, load_default: Any = marshmallow.utils.missing
+    ) -> mfields.Field:
+        return mfields.Boolean(required=required, load_default=load_default)
+
+    def get_random_value(self, random_object: Optional[random.Random] = None) -> bool:
+        r = initialize_random(random_object=random_object)
+        return bool(r.getrandbits(1))
+
+
+# Mypy has a problem with dataclasses that contain unimplemented abstract methods.
+# See https://github.com/python/mypy/issues/5374 for details on this problem.
+@dataclasses.dataclass(frozen=True)  # type: ignore
+class ValidatedField(Field[T]):
+    """
+    A class representing data types for validated fields in ValidatedMarshmallowDataclass.
+    This class adds on top of Field[T] an error-code in 'error_code', to be used when the
+    field validation fails.
+    """
+
+    error_code: ErrorCode
+
+    @property
+    @classmethod
+    @abstractmethod
+    def error_message(cls) -> str:
+        """
+        The default error message that appears when the value is invalid.
+        Subclasses should define it as a class variable.
+        """
+
+    @abstractmethod
+    def format(self, value: T) -> str:
+        """
+        The formatted value that appears in messages.
+        """
+
+    # Validation.
+
+    @abstractmethod
+    def is_valid(self, value: T) -> bool:
+        """
+        Checks and returns if the given value is valid.
+        """
+
+    def validate(self, value: T, name: Optional[str] = None):
+        """
+        Raises an exception if the value is not valid.
+        """
+        error_message = self.format_invalid_value_error_message(value=value, name=name)
+        stark_assert(self.is_valid(value=value), code=self.error_code, message=error_message)
+
+    @abstractmethod
+    def get_invalid_values(self) -> List[T]:
+        """
+        Returns a list of invalid values for this field.
+        """
+
+    @abstractmethod
+    def format_invalid_value_error_message(self, value: T, name: Optional[str] = None) -> str:
+        """
+        Constructs the error message for invalid values.
+        """
+
+
+class OptionalField(ValidatedField[Optional[T]]):
     """
     A wrapper class for a field, allowing it to be None.
     Loading a class with an optional field, where the serialized data for that class doesn't contain
@@ -137,7 +167,7 @@ class OptionalField(Field[Optional[T]]):
     # Class variables:
     error_message: ClassVar[str] = "Invalid OptionalField value {value}"
 
-    def __init__(self, field: Field[T], none_probability: float):
+    def __init__(self, field: ValidatedField[T], none_probability: float):
         """
         Wraps the given field as an optional field. The probability to get None in
         get_random_value is going to be none_probability. Otherwise, it returns a random value from
@@ -193,14 +223,14 @@ class OptionalField(Field[Optional[T]]):
     ) -> mfields.Field:
         assert not required, "Optional field must not be required."
         assert load_default is None, "Optional field must have default value None."
-        # Field is created with allow_none=True if load_default is None.
+        # ValidatedField is created with allow_none=True if load_default is None.
         return self.field.get_marshmallow_field(required=required, load_default=load_default)
 
 
 # Mypy has a problem with dataclasses that contain unimplemented abstract methods.
 # See https://github.com/python/mypy/issues/5374 for details on this problem.
 @dataclasses.dataclass(frozen=True)  # type: ignore[misc]
-class BaseRangeValidatedField(Field[int]):
+class BaseRangeValidatedField(ValidatedField[int]):
     """
     Abstract class that represents a range-validated integer field.
     """
@@ -232,7 +262,7 @@ class BaseRangeValidatedField(Field[int]):
         if self.formatter == str:
             return IntAsStr(required=required, load_default=load_default)
         if self.formatter is None:
-            return mfields.Integer(required=required, load_default=load_default)
+            return mfields.Integer(required=required, load_default=load_default, strict=True)
         raise NotImplementedError(
             f"{self.name}: The given formatter {self.formatter.__name__} "
             "does not have a suitable metadata."
@@ -286,7 +316,7 @@ class MultiRangeValidatedField(BaseRangeValidatedField):
         return [min(multirange_min_values) - 1, max(multirange_max_values) + 1]
 
 
-class BytesLengthField(Field[bytes]):
+class BytesLengthField(ValidatedField[bytes]):
     """
     Represents a field with value of type bytes, of a given length.
     """
@@ -308,7 +338,7 @@ class BytesLengthField(Field[bytes]):
         return len(value) == self.length
 
     def get_invalid_values(self) -> List[bytes]:
-        return [b"\x00" * (self.length - 1), b"\x00" * (self.length + 1)]
+        return [bytes(self.length - 1), bytes(self.length + 1)]
 
     def format_invalid_value_error_message(self, value: bytes, name: Optional[str] = None) -> str:
         name = self.name if name is None else name

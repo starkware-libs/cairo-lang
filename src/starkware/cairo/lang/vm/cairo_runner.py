@@ -4,6 +4,7 @@ from starkware.cairo.lang.builtins.bitwise.bitwise_builtin_runner import Bitwise
 from starkware.cairo.lang.builtins.ec.ec_op_builtin_runner import EcOpBuiltinRunner
 from starkware.cairo.lang.builtins.hash.hash_builtin_runner import HashBuiltinRunner
 from starkware.cairo.lang.builtins.keccak.keccak_builtin_runner import KeccakBuiltinRunner
+from starkware.cairo.lang.builtins.poseidon.poseidon_builtin_runner import PoseidonBuiltinRunner
 from starkware.cairo.lang.builtins.range_check.range_check_builtin_runner import (
     RangeCheckBuiltinRunner,
 )
@@ -18,7 +19,7 @@ from starkware.cairo.lang.compiler.expression_simplifier import to_field_element
 from starkware.cairo.lang.compiler.preprocessor.default_pass_manager import default_pass_manager
 from starkware.cairo.lang.compiler.preprocessor.preprocessor import Preprocessor
 from starkware.cairo.lang.compiler.program import Program, ProgramBase
-from starkware.cairo.lang.instances import LAYOUTS
+from starkware.cairo.lang.instances import LAYOUTS, CairoLayout
 from starkware.cairo.lang.vm.builtin_runner import BuiltinRunner, InsufficientAllocatedCells
 from starkware.cairo.lang.vm.cairo_pie import (
     CairoPie,
@@ -69,13 +70,17 @@ class CairoRunner:
     def __init__(
         self,
         program: ProgramBase,
-        layout: str = "plain",
+        layout: Union[str, CairoLayout] = "plain",
         memory: MemoryDict = None,
         proof_mode: Optional[bool] = None,
         allow_missing_builtins: Optional[bool] = None,
     ):
         self.program = program
-        self.layout = layout
+        self.layout: CairoLayout
+        if isinstance(layout, CairoLayout):
+            self.layout = layout
+        else:
+            self.layout = LAYOUTS[layout]
         self.builtin_runners: Dict[str, BuiltinRunner] = {}
         self.original_steps = None
         self.proof_mode = False if proof_mode is None else proof_mode
@@ -83,47 +88,49 @@ class CairoRunner:
             False if allow_missing_builtins is None else allow_missing_builtins
         )
 
-        instance = LAYOUTS[self.layout]
-
         if not allow_missing_builtins:
-            non_existing_builtins = set(self.program.builtins) - set(instance.builtins.keys())
+            non_existing_builtins = set(self.program.builtins) - set(self.layout.builtins.keys())
+            layout_name = self.layout.layout_name
             assert (
                 len(non_existing_builtins) == 0
-            ), f'Builtins {non_existing_builtins} are not present in layout "{self.layout}"'
+            ), f'Builtins {non_existing_builtins} are not present in layout "{layout_name}"'
 
         builtin_factories = dict(
             output=lambda name, included: OutputBuiltinRunner(included=included),
             pedersen=lambda name, included: HashBuiltinRunner(
                 name=name,
                 included=included,
-                ratio=instance.builtins["pedersen"].ratio,
+                ratio=self.layout.builtins["pedersen"].ratio,
                 hash_func=pedersen_hash,
             ),
             range_check=lambda name, included: RangeCheckBuiltinRunner(
                 included=included,
-                ratio=instance.builtins["range_check"].ratio,
+                ratio=self.layout.builtins["range_check"].ratio,
                 inner_rc_bound=2**16,
-                n_parts=instance.builtins["range_check"].n_parts,
+                n_parts=self.layout.builtins["range_check"].n_parts,
             ),
             ecdsa=lambda name, included: SignatureBuiltinRunner(
                 name=name,
                 included=included,
-                ratio=instance.builtins["ecdsa"].ratio,
+                ratio=self.layout.builtins["ecdsa"].ratio,
                 process_signature=process_ecdsa,
                 verify_signature=verify_ecdsa_sig,
             ),
             bitwise=lambda name, included: BitwiseBuiltinRunner(
-                included=included, bitwise_builtin=instance.builtins["bitwise"]
+                included=included, bitwise_builtin=self.layout.builtins["bitwise"]
             ),
             ec_op=lambda name, included: EcOpBuiltinRunner(
-                included=included, ec_op_builtin=instance.builtins["ec_op"]
+                included=included, ec_op_builtin=self.layout.builtins["ec_op"]
             ),
             keccak=lambda name, included: KeccakBuiltinRunner(
-                included=included, instance_def=instance.builtins["keccak"]
+                included=included, instance_def=self.layout.builtins["keccak"]
+            ),
+            poseidon=lambda name, included: PoseidonBuiltinRunner(
+                included=included, instance_def=self.layout.builtins["poseidon"]
             ),
         )
 
-        for name in instance.builtins:
+        for name in self.layout.builtins:
             factory = builtin_factories.get(name)
             assert factory is not None, f"The {name} builtin is not supported."
             included = name in self.program.builtins
@@ -473,13 +480,14 @@ class CairoRunner:
         Checks that there are enough trace cells to fill the entire range checks range.
         """
         rc_min, rc_max = self.get_perm_range_check_limits()
-        instance = LAYOUTS[self.layout]
         rc_units_used_by_builtins = sum(
             builtin_runner.get_used_perm_range_check_units(self)
             for builtin_runner in self.builtin_runners.values()
         )
         # Out of the range check units allowed per step three are used for the instruction.
-        unused_rc_units = (instance.rc_units - 3) * self.vm.current_step - rc_units_used_by_builtins
+        unused_rc_units = (
+            self.layout.rc_units - 3
+        ) * self.vm.current_step - rc_units_used_by_builtins
         rc_usage_upper_bound = rc_max - rc_min
         if unused_rc_units < rc_usage_upper_bound:
             raise InsufficientAllocatedCells(
@@ -504,15 +512,14 @@ class CairoRunner:
         """
         Checks that there are enough trace cells to fill the entire memory range.
         """
-        instance = LAYOUTS[self.layout]
         builtins_memory_units = sum(
             builtin_runner.get_allocated_memory_units(self)
             for builtin_runner in self.builtin_runners.values()
         )
         # Out of the memory units available per step, a fraction is used for public memory, and
         # four are used for the instruction.
-        total_memory_units = instance.memory_units_per_step * self.vm.current_step
-        public_memory_units = safe_div(total_memory_units, instance.public_memory_fraction)
+        total_memory_units = self.layout.memory_units_per_step * self.vm.current_step
+        public_memory_units = safe_div(total_memory_units, self.layout.public_memory_fraction)
         instruction_memory_units = 4 * self.vm.current_step
         unused_memory_units = total_memory_units - (
             public_memory_units + instruction_memory_units + builtins_memory_units
@@ -528,14 +535,13 @@ class CairoRunner:
         """
         Checks that there are enough trace cells to fill the entire diluted checks.
         """
-        instance = LAYOUTS[self.layout]
-        if instance.diluted_pool_instance_def is None:
+        if self.layout.diluted_pool_instance_def is None:
             return
 
         diluted_units_used_by_builtins = sum(
             builtin_runner.get_used_diluted_check_units(
-                diluted_spacing=instance.diluted_pool_instance_def.spacing,
-                diluted_n_bits=instance.diluted_pool_instance_def.n_bits,
+                diluted_spacing=self.layout.diluted_pool_instance_def.spacing,
+                diluted_n_bits=self.layout.diluted_pool_instance_def.n_bits,
             )
             * safe_div(
                 self.vm.current_step,
@@ -544,9 +550,9 @@ class CairoRunner:
             for builtin_runner in self.builtin_runners.values()
         )
 
-        diluted_units = instance.diluted_pool_instance_def.units_per_step * self.vm.current_step
+        diluted_units = self.layout.diluted_pool_instance_def.units_per_step * self.vm.current_step
         unused_diluted_units = diluted_units - diluted_units_used_by_builtins
-        diluted_usage_upper_bound = 2**instance.diluted_pool_instance_def.n_bits
+        diluted_usage_upper_bound = 2**self.layout.diluted_pool_instance_def.n_bits
         if unused_diluted_units < diluted_usage_upper_bound:
             raise InsufficientAllocatedCells(
                 f"There are only {unused_diluted_units} cells to fill the diluted check holes, but "
@@ -828,20 +834,23 @@ def get_runner_from_code(
     return get_main_runner(program=program, hint_locals={}, layout=layout)
 
 
-def get_main_runner(
-    program: Program,
-    hint_locals: Dict[str, Any],
-    layout: str,
-    allow_missing_builtins: Optional[bool] = None,
-):
+def get_main_runner(program: Program, hint_locals: Dict[str, Any], layout: str) -> CairoRunner:
     """
-    Runs a main-entrypoint program using Cairo runner and returns the runner.
+    Creates a Cairo runner and runs its main-entrypoint.
+    Returns the runner.
     """
-    runner = CairoRunner(program, layout=layout, allow_missing_builtins=allow_missing_builtins)
+    runner = CairoRunner(program=program, layout=layout)
+    run_main_entrypoint(runner=runner, hint_locals=hint_locals)
+    return runner
+
+
+def run_main_entrypoint(runner: CairoRunner, hint_locals: Dict[str, Any]):
+    """
+    Runs a main-entrypoint program using the given Cairo runner.
+    """
     runner.initialize_segments()
     end = runner.initialize_main_entrypoint()
     runner.initialize_vm(hint_locals=hint_locals)
     runner.run_until_pc(end)
     runner.end_run()
     runner.read_return_values()
-    return runner

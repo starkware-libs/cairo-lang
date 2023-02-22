@@ -3,8 +3,9 @@ import dataclasses
 import logging
 import os
 import ssl
+from abc import abstractmethod
 from http import HTTPStatus
-from typing import Any, Dict, Optional, Sequence, Union
+from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Union
 from urllib.parse import urljoin
 
 import aiohttp
@@ -15,6 +16,58 @@ from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 
 logger = logging.getLogger(__name__)
 JsonObject = Dict[str, Any]
+FlexibleJsonObject = Union[str, List[Any], JsonObject]
+
+
+class JrpcOk(NamedTuple):
+    """
+    Result object of a successful JRPC query.
+    """
+
+    result: Any
+    response_id: Any
+
+
+class JrpcError(NamedTuple):
+    """
+    Error object of a failed JRPC query.
+    """
+
+    code: int
+    message: str
+    data: Any
+    response_id: Any
+
+
+TJrpcResult = Union[JrpcOk, JrpcError]
+
+
+def to_jrpc_result_single(response: JsonObject) -> TJrpcResult:
+    """
+    Parses a single dictionary into a JRPC result.
+    """
+    return (
+        JrpcOk(result=response["result"], response_id=response["id"])
+        if "result" in response
+        else JrpcError(
+            code=response["error"]["code"],
+            message=response["error"]["message"],
+            data=response["error"].get("data"),
+            response_id=response["id"],
+        )
+    )
+
+
+def to_jrpc_result(
+    response: Union[JsonObject, List[JsonObject]]
+) -> Union[TJrpcResult, List[TJrpcResult]]:
+    """
+    Parses the JSON response of a JRPC request into result(s). If a list of dicts is provided, each
+    element in the list is treated as a different result and is parsed separately.
+    """
+    if isinstance(response, list):
+        return [to_jrpc_result_single(response=resp) for resp in response]
+    return to_jrpc_result_single(response=response)
 
 
 class BadRequest(Exception):
@@ -86,8 +139,27 @@ class ClientBase(HasUriPrefix):
     def __repr__(self) -> str:
         return generic_object_repr(obj=self)
 
+    @abstractmethod
+    async def _parse_response(
+        self,
+        request_url: str,
+        request_data: Optional[FlexibleJsonObject],
+        response: aiohttp.ClientResponse,
+    ) -> str:
+        """
+        Parses the request response and returns a string.
+        """
+
+    @abstractmethod
+    def _prepare_data(
+        self, data: Optional[FlexibleJsonObject]
+    ) -> Optional[Union[FlexibleJsonObject, aiohttp.payload.JsonPayload]]:
+        """
+        Performs conversions of data before sending the request.
+        """
+
     async def _send_request(
-        self, send_method: str, uri: str, data: Optional[Union[str, Dict[str, Any]]] = None
+        self, send_method: str, uri: str, data: Optional[FlexibleJsonObject] = None
     ) -> str:
         """
         Sends an HTTP request to the target URI.
@@ -110,13 +182,13 @@ class ClientBase(HasUriPrefix):
                 async with aiohttp.TCPConnector(ssl=self.ssl_context) as connector:
                     async with aiohttp.ClientSession(connector=connector) as session:
                         async with session.request(
-                            method=send_method, url=url, data=data
+                            method=send_method, url=url, data=self._prepare_data(data=data)
                         ) as response:
-                            text = await response.text()
-                            if response.status != HTTPStatus.OK:
-                                raise BadRequest(status_code=response.status, text=text)
-
-                            return text
+                            return await self._parse_response(
+                                request_url=url,
+                                request_data=data,
+                                response=response,
+                            )
             except aiohttp.ClientError as exception:
                 error_message = f"Got {type(exception).__name__} while trying to access {url}."
 
@@ -145,3 +217,66 @@ class ClientBase(HasUriPrefix):
 
     async def is_alive(self) -> str:
         return await self._send_request(send_method="GET", uri="/is_alive")
+
+
+class BaseRestClient(ClientBase):
+    async def _parse_response(
+        self,
+        request_url: str,
+        request_data: Optional[FlexibleJsonObject],
+        response: aiohttp.ClientResponse,
+    ) -> str:
+        text = await response.text()
+        if response.status != HTTPStatus.OK:
+            raise BadRequest(status_code=response.status, text=text)
+
+        return text
+
+    def _prepare_data(
+        self, data: Optional[FlexibleJsonObject]
+    ) -> Optional[Union[FlexibleJsonObject, aiohttp.payload.JsonPayload]]:
+        return data
+
+
+class BaseJRPCClient(ClientBase):
+    async def _parse_response(
+        self,
+        request_url: str,
+        request_data: Optional[FlexibleJsonObject],
+        response: aiohttp.ClientResponse,
+    ) -> str:
+        """
+        Parses and returns the result (or results) JSON string of the JRPC query.
+        If the single response is an error, or if multiple responses are given and at least one of
+        them is an error response, raises a BadRequest exception.
+        """
+        response_json = await response.json()
+        if response_json is None:
+            raise BadRequest(
+                status_code=response.status,
+                text=(
+                    f"Response JSON is empty for {response}. Request: {request_url}, "
+                    f"json={request_data}."
+                ),
+            )
+        parsed = to_jrpc_result(response=response_json)
+        if isinstance(parsed, list):
+            result = []
+            for single_result in parsed:
+                if isinstance(single_result, JrpcError):
+                    raise BadRequest(status_code=response.status, text=single_result.message)
+                assert isinstance(single_result, JrpcOk)
+                result += [single_result.result]
+        else:
+            if isinstance(parsed, JrpcError):
+                raise BadRequest(status_code=response.status, text=parsed.message)
+            assert isinstance(parsed, JrpcOk)
+            result = parsed.result
+        return str(result)
+
+    def _prepare_data(
+        self, data: Optional[FlexibleJsonObject]
+    ) -> Optional[Union[FlexibleJsonObject, aiohttp.payload.JsonPayload]]:
+        if data is None:
+            return None
+        return aiohttp.payload.JsonPayload(data)

@@ -2,7 +2,7 @@ import dataclasses
 import sys
 import types
 from collections import namedtuple
-from typing import Any, Callable, Dict, Iterator, List, Tuple, Union
+from typing import Any, Callable, Dict, List, Tuple
 
 from typeguard import check_type
 
@@ -15,17 +15,17 @@ from starkware.cairo.lang.compiler.ast.cairo_types import (
 )
 from starkware.cairo.lang.compiler.parser import parse_type
 from starkware.cairo.lang.compiler.type_system import mark_type_resolved
-from starkware.python.utils import assert_exhausted, safe_zip
-from starkware.starknet.business_logic.execution.objects import OrderedEvent
+from starkware.python.utils import safe_zip
 from starkware.starknet.public.abi import AbiType
 from starkware.starknet.testing.contract_utils import (
     RAW_OUTPUT_ARG_LIST,
     EventManager,
     StructManager,
+    build_arguments,
     flatten,
     parse_arguments,
 )
-from starkware.starknet.testing.objects import Dataclass, StarknetCallInfo
+from starkware.starknet.testing.objects import StarknetCallInfo
 from starkware.starknet.testing.state import CastableToAddress, StarknetState
 from starkware.starknet.utils.api_utils import cast_to_felts
 
@@ -250,10 +250,6 @@ class StarknetContract:
         )
 
 
-class ArgumentParsingFailed(Exception):
-    pass
-
-
 @dataclasses.dataclass
 class StarknetContractFunctionInvocation:
     """
@@ -311,104 +307,20 @@ class StarknetContractFunctionInvocation:
             # Return the result as a raw tuple.
             result = tuple(call_info.retdata)
         else:
-            args = self._build_arguments(
+            args = build_arguments(
                 arg_values=call_info.retdata,
                 arg_types=self.retdata_arg_types,
+                struct_manager=self.struct_manager,
             )
             result = self.retdata_tuple(*args)
-
-        main_call_raw_events = call_info.events
 
         return StarknetCallInfo.from_internal(
             call_info=call_info,
             result=result,
-            main_call_events=self._build_events(raw_events=main_call_raw_events),
+            main_call_events=self.event_manager.build_events(
+                raw_events=call_info.get_sorted_events(), struct_manager=self.struct_manager
+            ),
         )
-
-    def _build_events(self, raw_events: List[OrderedEvent]) -> List[Dataclass]:
-        """
-        Given a list of low-level events, builds contract events (i.e., a dynamic dataclass) from
-        those corresponding to high-level ones.
-        """
-        events: List[Dataclass] = []
-        for raw_event in raw_events:
-            if len(raw_event.keys) == 0 or raw_event.keys[0] not in self.event_manager:
-                # It is a low-level event emitted using directly the emit_event syscall.
-                continue
-
-            selector = raw_event.keys[0]
-            arg_values = raw_event.keys[1:] + raw_event.data
-
-            # Try to parse the low-level event as a high-level one (note it is possible for a
-            # low-level event to contain a valid selector in its keys without being a valid high
-            # level event - i.e., without the exact amount of data).
-            try:
-                args = self._build_arguments(
-                    arg_values=arg_values,
-                    arg_types=self.event_manager.get_event_argument_types(identifier=selector),
-                )
-                args_dataclass = self.event_manager.get_contract_event(identifier=selector)
-                events.append(args_dataclass(*args))
-            except ArgumentParsingFailed:
-                pass
-
-        return events
-
-    def _build_arguments(self, arg_values: List[int], arg_types: List[CairoType]) -> List[Any]:
-        """
-        Reconstructs a Pythonic variant of the original Cairo structure of the arguments, deduced by
-        their Cairo types, and fills it with the given (flat list of) values.
-        """
-
-        def build_arg(
-            arg_type: CairoType, arg_value_iterator: Iterator[int]
-        ) -> Union[int, tuple, List[Any]]:
-            """
-            Reconstructs a Pythonic variant of the original Cairo structure of the given argument.
-            """
-            if isinstance(arg_type, TypeFelt):
-                return next(arg_value_iterator)
-            if isinstance(arg_type, TypeTuple):
-                return tuple(
-                    build_arg(arg_type=cairo_type, arg_value_iterator=arg_value_iterator)
-                    for cairo_type in arg_type.types
-                )
-            if isinstance(arg_type, TypeStruct):
-                struct_name = arg_type.scope.path[-1]
-                struct_def = self.struct_manager.get_struct_definition(name=struct_name)
-                contract_struct = self.struct_manager.get_contract_struct(name=struct_name)
-                return contract_struct(
-                    *(
-                        build_arg(arg_type=member.cairo_type, arg_value_iterator=arg_value_iterator)
-                        for member in struct_def.members.values()
-                    )
-                )
-            if isinstance(arg_type, TypePointer):
-                arr_len = next(arg_value_iterator)
-                return [
-                    build_arg(arg_type=arg_type.pointee, arg_value_iterator=arg_value_iterator)
-                    for _ in range(arr_len)
-                ]
-
-            raise NotImplementedError
-
-        arg_value_iterator = iter(arg_values)
-
-        try:
-            res = [
-                build_arg(arg_type=arg_type, arg_value_iterator=arg_value_iterator)
-                for arg_type in arg_types
-            ]
-        except StopIteration as exception:
-            raise ArgumentParsingFailed("Too few argument values.") from exception
-
-        # Make sure the iterator is empty.
-        try:
-            assert_exhausted(iterator=arg_value_iterator)
-        except AssertionError as exception:
-            raise ArgumentParsingFailed("Too many argument values.") from exception
-
-        return res
 
 
 @dataclasses.dataclass(frozen=True)

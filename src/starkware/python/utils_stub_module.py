@@ -2,7 +2,8 @@ import itertools
 from typing import Any, Iterable
 
 # This file contains functions of utils.py, for which stubs exist in the corresponding *.pyi file.
-# It is needed since mypy looks for all definitions in *.pyi files, without fallingback to the *.py.
+# It is needed since mypy looks for all definitions in *.pyi files, without falling back to the
+# *.py.
 
 
 def safe_zip(*iterables: Iterable[Any]) -> Iterable:

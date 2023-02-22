@@ -1,6 +1,7 @@
 from collections.abc import Iterable
 from typing import Any, Dict, Optional, Tuple, Union, cast
 
+from starkware.cairo.common.poseidon_utils import PoseidonParams
 from starkware.cairo.common.structs import CairoStructFactory
 from starkware.cairo.lang.builtins.bitwise.bitwise_builtin_runner import BitwiseBuiltinRunner
 from starkware.cairo.lang.builtins.bitwise.instance_def import BitwiseInstanceDef
@@ -9,6 +10,8 @@ from starkware.cairo.lang.builtins.ec.instance_def import EcOpInstanceDef
 from starkware.cairo.lang.builtins.hash.hash_builtin_runner import HashBuiltinRunner
 from starkware.cairo.lang.builtins.keccak.instance_def import KeccakInstanceDef
 from starkware.cairo.lang.builtins.keccak.keccak_builtin_runner import KeccakBuiltinRunner
+from starkware.cairo.lang.builtins.poseidon.instance_def import PoseidonInstanceDef
+from starkware.cairo.lang.builtins.poseidon.poseidon_builtin_runner import PoseidonBuiltinRunner
 from starkware.cairo.lang.builtins.range_check.range_check_builtin_runner import (
     RangeCheckBuiltinRunner,
 )
@@ -71,6 +74,15 @@ class CairoFunctionRunner(CairoRunner):
             ),
         )
         self.builtin_runners["keccak_builtin"] = keccak_builtin
+        poseidon_builtin = PoseidonBuiltinRunner(
+            included=True,
+            instance_def=PoseidonInstanceDef(
+                ratio=1,
+                params=PoseidonParams.get_default_poseidon_params(),
+                partial_rounds_partition=[64, 22],
+            ),
+        )
+        self.builtin_runners["poseidon_builtin"] = poseidon_builtin
 
         self.initialize_segments()
 
@@ -101,6 +113,10 @@ class CairoFunctionRunner(CairoRunner):
     @property
     def keccak_builtin(self) -> KeccakBuiltinRunner:
         return cast(KeccakBuiltinRunner, self.builtin_runners["keccak_builtin"])
+
+    @property
+    def poseidon_builtin(self) -> PoseidonBuiltinRunner:
+        return cast(PoseidonBuiltinRunner, self.builtin_runners["poseidon_builtin"])
 
     def assert_eq(self, arg: MaybeRelocatable, expected_value, apply_modulo: bool = True):
         """
@@ -138,7 +154,7 @@ class CairoFunctionRunner(CairoRunner):
         Runs func_name(*args).
         args are converted to Cairo-friendly ones using gen_arg.
 
-        Returns the return values of the function, splitted into 2 tuples of implicit values and
+        Returns the return values of the function, split into 2 tuples of implicit values and
         explicit values. Structs will be flattened to a sequence of felts as part of the returned
         tuple.
 
@@ -228,6 +244,7 @@ Got {type(ex).__name__} exception during the execution of {func_name}:
         static_locals: Optional[Dict[str, Any]] = None,
         run_resources: Optional[RunResources] = None,
         verify_secure: Optional[bool] = None,
+        program_segment_size: Optional[int] = None,
         apply_modulo_to_args: Optional[bool] = None,
     ):
         """
@@ -262,7 +279,9 @@ Got {type(ex).__name__} exception during the execution of {func_name}:
         self.end_run()
 
         if verify_secure:
-            verify_secure_runner(runner=self, verify_builtins=False)
+            verify_secure_runner(
+                runner=self, verify_builtins=False, program_segment_size=program_segment_size
+            )
 
     def get_return_values(self, n_ret: int):
         return self.vm_memory.get_range(addr=self.vm.run_context.ap - n_ret, size=n_ret)

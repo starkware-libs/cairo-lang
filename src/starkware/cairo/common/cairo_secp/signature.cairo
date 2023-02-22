@@ -1,6 +1,6 @@
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.cairo_builtins import BitwiseBuiltin
-from starkware.cairo.common.cairo_keccak.keccak import finalize_keccak, keccak_uint256s_bigend
+from starkware.cairo.common.cairo_keccak.keccak import cairo_keccak_uint256s_bigend, finalize_keccak
 from starkware.cairo.common.cairo_secp.bigint import (
     BASE,
     BigInt3,
@@ -122,7 +122,7 @@ func public_key_point_to_eth_address{
     assert elements[0] = x_uint256;
     let (y_uint256: Uint256) = bigint_to_uint256(public_key_point.y);
     assert elements[1] = y_uint256;
-    let (point_hash: Uint256) = keccak_uint256s_bigend(n_elements=2, elements=elements);
+    let (point_hash: Uint256) = cairo_keccak_uint256s_bigend(n_elements=2, elements=elements);
 
     // The Ethereum address is the 20 least significant bytes of the keccak of the public key.
     let (high_high, high_low) = unsigned_div_rem(point_hash.high, 2 ** 32);

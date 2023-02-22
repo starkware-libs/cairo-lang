@@ -1,10 +1,6 @@
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.bitwise import bitwise_and, bitwise_operations, bitwise_or, bitwise_xor
-from starkware.cairo.common.cairo_keccak.keccak import (
-    finalize_keccak,
-    keccak_add_uint256,
-    keccak_as_words,
-)
+from starkware.cairo.common.cairo_keccak.keccak import cairo_keccak_as_words, finalize_keccak
 from starkware.cairo.common.cairo_secp.bigint import bigint_to_uint256
 from starkware.cairo.common.cairo_secp.ec import (
     compute_doubling_slope,
@@ -26,7 +22,7 @@ from starkware.cairo.common.default_dict import default_dict_finalize, default_d
 from starkware.cairo.common.dict import dict_read, dict_squash, dict_update, dict_write
 from starkware.cairo.common.ec import chained_ec_op, ec_op, recover_y
 from starkware.cairo.common.find_element import find_element, search_sorted, search_sorted_lower
-from starkware.cairo.common.keccak import unsafe_keccak
+from starkware.cairo.common.keccak_utils.keccak_utils import keccak_add_uint256
 from starkware.cairo.common.math import (
     abs_value,
     assert_250_bit,
@@ -100,6 +96,7 @@ from starkware.starknet.common.syscalls import (
     get_tx_signature,
     library_call,
     library_call_l1_handler,
+    replace_class,
     storage_read,
     storage_write,
 )

@@ -14,15 +14,18 @@ from services.everest.business_logic.transaction_execution_objects import (
 )
 from services.everest.definitions import fields as everest_fields
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
+from starkware.cairo.lang.vm.relocatable import MaybeRelocatable
 from starkware.cairo.lang.vm.utils import RunResources
 from starkware.python.utils import as_non_optional
 from starkware.starknet.business_logic.fact_state.contract_state_objects import StateSelector
 from starkware.starknet.business_logic.state.state import StorageEntry
 from starkware.starknet.definitions import constants, fields
+from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.transaction_type import TransactionType
 from starkware.starknet.public.abi import CONSTRUCTOR_ENTRY_POINT_SELECTOR
-from starkware.starknet.services.api.contract_class import EntryPointType
+from starkware.starknet.services.api.contract_class.contract_class import EntryPointType
 from starkware.starknet.services.api.gateway.transaction import DEFAULT_DECLARE_SENDER_ADDRESS
+from starkware.starkware_utils.error_handling import stark_assert
 from starkware.starkware_utils.marshmallow_dataclass_fields import (
     SetField,
     additional_metadata,
@@ -184,6 +187,54 @@ class L2ToL1MessageInfo(ValidatedDataclass):
         )
 
 
+@dataclasses.dataclass(frozen=True)
+class CallResult(ValidatedDataclass):
+    """
+    Contains the return values of a contract call.
+    """
+
+    gas_consumed: int
+    # The result selector corresponds to the Rust panic result:
+    #   0 if the syscall succeeded; a non-zero otherwise.
+    failure_flag: int
+    retdata: List[int]
+
+    @classmethod
+    def create(
+        cls,
+        initial_gas: int,
+        updated_gas: MaybeRelocatable,
+        failure_flag: MaybeRelocatable,
+        retdata: List[MaybeRelocatable],
+    ) -> "CallResult":
+        stark_assert(
+            all(isinstance(value, int) for value in retdata),
+            code=StarknetErrorCode.INVALID_RETURN_DATA,
+            message="Return data expected to be non-relocatable.",
+        )
+        stark_assert(
+            failure_flag in (0, 1),
+            code=StarknetErrorCode.INVALID_RETURN_DATA,
+            message="failure_flag field expected to be either 0 or 1.",
+        )
+        updated_gas = cast(int, updated_gas)
+        stark_assert(
+            isinstance(updated_gas, int) and 0 <= updated_gas <= initial_gas,
+            code=StarknetErrorCode.INVALID_RETURN_DATA,
+            message=f"Unexpected remaining gas: {updated_gas}.",
+        )
+
+        return cls(
+            gas_consumed=initial_gas - updated_gas,
+            failure_flag=cast(int, failure_flag),
+            retdata=cast(List[int], retdata),
+        )
+
+    @property
+    def succeeded(self) -> bool:
+        return self.failure_flag == 0
+
+
 # NOTE: This dataclass isn't validated due to a forward-declaration issue.
 @marshmallow_dataclass.dataclass(frozen=True)
 class CallInfo(SerializableMarshmallowDataclass):
@@ -193,19 +244,24 @@ class CallInfo(SerializableMarshmallowDataclass):
     No need for validations here, as the fields are taken from validated objects.
     """
 
-    # Static info.
+    # Call params.
 
     caller_address: int  # Should be zero if the call represents an external transaction.
     call_type: Optional[CallType] = field(metadata=nonrequired_optional_metadata)
     contract_address: int
     # Holds the hash of the executed class; in the case of a library call, it may differ from the
     # class hash of the called contract state.
-    class_hash: Optional[bytes] = field(metadata=fields.optional_class_hash_metadata)
+    class_hash: Optional[int] = field(metadata=fields.optional_new_class_hash_metadata)
     entry_point_selector: Optional[int]
     entry_point_type: Optional[EntryPointType]
     calldata: List[int]
-    # Execution info.
+
+    # Call results.
+
+    gas_consumed: int = field(metadata=fields.gas_consumed_metadata)
+    failure_flag: int = field(metadata=fields.failure_flag_metadata)
     retdata: List[int]
+
     execution_resources: ExecutionResources
     # Note that the order starts from a transaction-global offset.
     events: List[OrderedEvent]
@@ -237,6 +293,13 @@ class CallInfo(SerializableMarshmallowDataclass):
     # The address that holds the executed code; relevant just for delegate calls (version 1), where
     # it may differ from the code of the to_address contract.
     code_address: Optional[int]
+
+    def result(self) -> CallResult:
+        return CallResult(
+            gas_consumed=self.gas_consumed,
+            failure_flag=self.failure_flag,
+            retdata=self.retdata,
+        )
 
     def get_visited_storage_entries(self) -> Set[StorageEntry]:
         storage_entries = {(self.contract_address, key) for key in self.accessed_storage_keys}
@@ -285,7 +348,7 @@ class CallInfo(SerializableMarshmallowDataclass):
         cls,
         contract_address: int,
         caller_address: int,
-        class_hash: Optional[bytes],
+        class_hash: Optional[int],
         call_type: Optional[CallType] = None,
         entry_point_type: Optional[EntryPointType] = None,
         entry_point_selector: Optional[int] = None,
@@ -299,6 +362,7 @@ class CallInfo(SerializableMarshmallowDataclass):
             entry_point_type=entry_point_type,
             entry_point_selector=entry_point_selector,
             calldata=[],
+            failure_flag=0,
             retdata=[],
             execution_resources=ExecutionResources.empty(),
             events=[],
@@ -306,6 +370,7 @@ class CallInfo(SerializableMarshmallowDataclass):
             storage_read_values=[],
             accessed_storage_keys=set(),
             internal_calls=[],
+            gas_consumed=0,
         )
 
     @classmethod
@@ -314,7 +379,7 @@ class CallInfo(SerializableMarshmallowDataclass):
 
     @classmethod
     def empty_constructor_call(
-        cls, contract_address: int, caller_address: int, class_hash: bytes
+        cls, contract_address: int, caller_address: int, class_hash: int
     ) -> "CallInfo":
         return cls.empty(
             contract_address=contract_address,
@@ -409,7 +474,7 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
     def get_state_selector(self) -> StateSelector:
         return CallInfo.get_state_selector_of_many(call_infos=self.non_optional_calls)
 
-    def get_executed_class_hashes(self) -> FrozenSet[bytes]:
+    def get_executed_class_hashes(self) -> FrozenSet[int]:
         return self.get_state_selector().class_hashes
 
     def get_visited_storage_entries(self) -> Set[StorageEntry]:

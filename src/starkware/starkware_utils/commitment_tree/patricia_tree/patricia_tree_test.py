@@ -6,7 +6,7 @@ import pytest
 from queue import Queue
 
 from starkware.crypto.signature.fast_pedersen_hash import pedersen_hash_func
-from starkware.python.random_test import parametrize_random_object
+from starkware.python.random_test_utils import parametrize_random_object
 from starkware.python.utils import from_bytes, to_bytes
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
 from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import (

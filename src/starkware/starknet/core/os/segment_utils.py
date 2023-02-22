@@ -5,7 +5,7 @@ from starkware.cairo.lang.vm.memory_dict import UnknownMemoryError
 from starkware.cairo.lang.vm.memory_segments import MemorySegmentManager
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
-from starkware.starknet.public.abi import SYSCALL_PTR_OFFSET
+from starkware.starknet.public.abi import SYSCALL_PTR_OFFSET_IN_VERSION0
 from starkware.starkware_utils.error_handling import stark_assert, wrap_with_stark_exception
 
 
@@ -15,7 +15,7 @@ def get_os_segment_ptr_range(
     """
     Returns the base and stop ptr of the OS-designated segment that starts at ptr_offset.
     """
-    allowed_offsets = (SYSCALL_PTR_OFFSET,)
+    allowed_offsets = (SYSCALL_PTR_OFFSET_IN_VERSION0,)
     assert (
         ptr_offset in allowed_offsets
     ), f"Illegal OS ptr offset; must be one of: {allowed_offsets}."

@@ -279,31 +279,7 @@
         {
             "allowed_expressions": [],
             "hint_lines": [
-                "from eth_hash.auto import keccak",
-                "",
-                "data, length = ids.data, ids.length",
-                "",
-                "if '__keccak_max_size' in globals():",
-                "    assert length <= __keccak_max_size, \\",
-                "        f'unsafe_keccak() can only be used with length<={__keccak_max_size}. ' \\",
-                "        f'Got: length={length}.'",
-                "",
-                "keccak_input = bytearray()",
-                "for word_i, byte_i in enumerate(range(0, length, 16)):",
-                "    word = memory[data + word_i]",
-                "    n_bytes = min(16, length - byte_i)",
-                "    assert 0 <= word < 2 ** (8 * n_bytes)",
-                "    keccak_input += word.to_bytes(n_bytes, 'big')",
-                "",
-                "hashed = keccak(keccak_input)",
-                "ids.high = int.from_bytes(hashed[:16], 'big')",
-                "ids.low = int.from_bytes(hashed[16:32], 'big')"
-            ]
-        },
-        {
-            "allowed_expressions": [],
-            "hint_lines": [
-                "from starkware.cairo.common.cairo_keccak.keccak_utils import keccak_func",
+                "from starkware.cairo.common.keccak_utils.keccak_utils import keccak_func",
                 "_keccak_state_size_felts = int(ids.KECCAK_STATE_SIZE_FELTS)",
                 "assert 0 <= _keccak_state_size_felts < 100",
                 "",
@@ -912,6 +888,12 @@
             "allowed_expressions": [],
             "hint_lines": [
                 "syscall_handler.send_message_to_l1(segments=segments, syscall_ptr=ids.syscall_ptr)"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "syscall_handler.replace_class(segments=segments, syscall_ptr=ids.syscall_ptr)"
             ]
         },
         {

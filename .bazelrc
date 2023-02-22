@@ -1,0 +1,12 @@
+# Put all output in build directory.
+build --symlink_prefix=build/bazel
+
+# Don't inherit the user environment as that trashes the cache.
+build --incompatible_strict_action_env
+build --profile=bazel_build.profile
+
+# Prevent Bazel from adding empty __init__.py files. Those files prevent the packages from becoming
+# a namespace package and can cause an import collision.
+build --incompatible_default_to_explicit_init_py
+
+build --test_output=errors

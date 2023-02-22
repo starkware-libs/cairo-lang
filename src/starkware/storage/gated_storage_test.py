@@ -1,6 +1,6 @@
 import pytest
 
-from starkware.storage.gated_storage import MAGIC_HEADER, GatedStorage
+from starkware.storage.gated_storage import MAGIC_HEADER, RECORD_LENGTH_BUFFER, GatedStorage
 from starkware.storage.test_utils import MockStorage
 
 
@@ -8,7 +8,7 @@ from starkware.storage.test_utils import MockStorage
 async def test_gated_storage():
     storage0 = MockStorage()
     storage1 = MockStorage()
-    storage = GatedStorage(limit=10, storage0=storage0, storage1=storage1)
+    storage = GatedStorage(limit=10 + RECORD_LENGTH_BUFFER, storage0=storage0, storage1=storage1)
 
     keys_values = [(b"k0", b"v0"), (b"k1", b"v1" * 6)]
     for k, v in keys_values:

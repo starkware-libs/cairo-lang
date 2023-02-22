@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
 from typing import Awaitable, Callable, List, Tuple
 
-from starkware.starknet.services.api.contract_class import ContractClass
+from starkware.starknet.services.api.contract_class.contract_class import DeprecatedCompiledClass
 from starkware.starknet.services.api.gateway.transaction import (
-    Declare,
     DeployAccount,
+    DeprecatedDeclare,
     InvokeFunction,
 )
 from starkware.starknet.wallets.starknet_context import StarknetContext
@@ -80,15 +80,15 @@ class Account(ABC):
         """
 
     @abstractmethod
-    async def declare(
+    async def deprecated_declare(
         self,
-        contract_class: ContractClass,
+        contract_class: DeprecatedCompiledClass,
         chain_id: int,
         max_fee: int,
         version: int,
         nonce_callback: Callable[[int], Awaitable[int]],
         dry_run: bool = False,
-    ) -> Declare:
+    ) -> DeprecatedDeclare:
         """
         Prepares the required information for declaring a contract class through the account
         contract.

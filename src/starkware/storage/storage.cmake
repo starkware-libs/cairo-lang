@@ -1,32 +1,20 @@
-python_lib(starkware_storage_metric_lib
-    PREFIX starkware/storage
+include(storage_base.cmake)
 
-    FILES
-    metrics.py
 
-    LIBS
-    pip_prometheus_client
-)
 
 python_lib(starkware_storage_lib
     PREFIX starkware/storage
 
     FILES
-    __init__.py
-    dict_storage.py
     gated_storage.py
-    imm_storage.py
     names.py
-    storage.py
 
     LIBS
-    starkware_config_utils_lib
-    starkware_python_utils_lib
-    starkware_serializability_utils_lib
+    starkware_abstract_storage_lib
+    starkware_imm_storage_lib
     starkware_storage_metric_lib
     starkware_utils_time_lib
     pip_cachetools
-    pip_marshmallow
 )
 
 python_lib(starkware_storage_utils_lib
@@ -41,16 +29,6 @@ python_lib(starkware_storage_utils_lib
     starkware_storage_lib
 )
 
-python_lib(starkware_storage_test_utils_lib
-    PREFIX starkware/storage
-
-    FILES
-    test_utils.py
-
-    LIBS
-    starkware_storage_lib
-)
-
 full_python_test(starkware_storage_test
     PREFIX starkware/storage
     PYTHON ${PYTHON_COMMAND}
@@ -58,7 +36,6 @@ full_python_test(starkware_storage_test
 
     FILES
     gated_storage_test.py
-    storage_test.py
 
     LIBS
     starkware_storage_lib

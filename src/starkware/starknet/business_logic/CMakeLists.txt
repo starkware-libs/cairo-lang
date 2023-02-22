@@ -22,6 +22,7 @@ python_lib(starknet_business_logic_utils_lib
     starknet_general_config_lib
     starknet_transaction_execution_objects_lib
     starknet_transaction_hash_lib
+    starkware_abstract_storage_lib
     starkware_error_handling_lib
     starkware_python_utils_lib
     starkware_storage_lib

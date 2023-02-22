@@ -14,6 +14,8 @@ python_lib(cairo_run_builtins_lib
     hash/instance_def.py
     keccak/keccak_builtin_runner.py
     keccak/instance_def.py
+    poseidon/instance_def.py
+    poseidon/poseidon_builtin_runner.py
     range_check/instance_def.py
     range_check/range_check_builtin_runner.py
     signature/instance_def.py

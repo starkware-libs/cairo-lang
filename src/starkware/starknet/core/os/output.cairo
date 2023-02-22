@@ -2,7 +2,7 @@ from starkware.cairo.common.registers import get_fp_and_pc
 from starkware.cairo.common.segments import relocate_segment
 from starkware.cairo.common.serialize import serialize_word
 from starkware.starknet.core.os.block_context import BlockContext, BlockInfo
-from starkware.starknet.core.os.state import CommitmentTreeUpdateOutput
+from starkware.starknet.core.os.state import StateUpdateOutput
 
 // An L2 to L1 message header, the message payload is concatenated to the end of the header.
 struct MessageToL1Header {
@@ -24,24 +24,14 @@ struct MessageToL2Header {
     payload_size: felt,
 }
 
-// Contract deployment information.
-struct DeploymentInfo {
-    contract_address: felt,
-    class_hash: felt,
-}
-
 // Holds all the information that StarkNet's OS needs to output.
 struct OsCarriedOutputs {
     messages_to_l1: MessageToL1Header*,
     messages_to_l2: MessageToL2Header*,
-    // A concatenated list of deployment infos.
-    deployment_info: DeploymentInfo*,
 }
 
 func os_carried_outputs_new(
-    messages_to_l1: MessageToL1Header*,
-    messages_to_l2: MessageToL2Header*,
-    deployment_info: DeploymentInfo*,
+    messages_to_l1: MessageToL1Header*, messages_to_l2: MessageToL2Header*
 ) -> (os_carried_outputs: OsCarriedOutputs*) {
     let (fp_val, pc_val) = get_fp_and_pc();
     static_assert OsCarriedOutputs.SIZE == Args.SIZE;
@@ -50,18 +40,18 @@ func os_carried_outputs_new(
 
 func os_output_serialize{output_ptr: felt*}(
     block_context: BlockContext*,
-    commitment_tree_update_output: CommitmentTreeUpdateOutput*,
+    state_update_output: StateUpdateOutput*,
     initial_carried_outputs: OsCarriedOutputs*,
     final_carried_outputs: OsCarriedOutputs*,
-    storage_updates_ptr_start: felt*,
-    storage_updates_ptr_end: felt*,
+    state_updates_ptr_start: felt*,
+    state_updates_ptr_end: felt*,
     starknet_os_config_hash: felt,
 ) {
     // Serialize program output.
 
     // Serialize roots.
-    serialize_word(commitment_tree_update_output.initial_storage_root);
-    serialize_word(commitment_tree_update_output.final_storage_root);
+    serialize_word(state_update_output.initial_root);
+    serialize_word(state_update_output.final_root);
 
     serialize_word(block_context.block_info.block_number);
     serialize_word(starknet_os_config_hash);
@@ -87,18 +77,9 @@ func os_output_serialize{output_ptr: felt*}(
     // Serialize data availability.
     let da_start = output_ptr;
 
-    let deployment_info_segment_size = (
-        final_carried_outputs.deployment_info - initial_carried_outputs.deployment_info
-    );
-    serialize_word(deployment_info_segment_size);
-
-    // Relocate 'deployment_info_segment' to the correct place in the output segment.
-    relocate_segment(src_ptr=initial_carried_outputs.deployment_info, dest_ptr=output_ptr);
-    let output_ptr = cast(final_carried_outputs.deployment_info, felt*);
-
-    // Relocate 'storage_updates_segment' to the correct place in the output segment.
-    relocate_segment(src_ptr=storage_updates_ptr_start, dest_ptr=output_ptr);
-    let output_ptr = storage_updates_ptr_end;
+    // Relocate 'state_updates_segment' to the correct place in the output segment.
+    relocate_segment(src_ptr=state_updates_ptr_start, dest_ptr=output_ptr);
+    let output_ptr = state_updates_ptr_end;
 
     %{
         from starkware.python.math_utils import div_ceil

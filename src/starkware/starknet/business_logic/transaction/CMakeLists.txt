@@ -26,6 +26,8 @@ python_lib(starknet_transaction_objects_lib
     starknet_transaction_fee_lib
     starknet_transaction_hash_lib
     starknet_transaction_lib
+    starknet_transaction_utils_lib
+    starkware_abstract_storage_lib
     starkware_config_utils_lib
     starkware_dataclasses_field_utils_lib
     starkware_error_handling_lib

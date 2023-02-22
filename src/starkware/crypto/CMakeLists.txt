@@ -9,6 +9,7 @@ python_lib(starkware_crypto_lib
     signature/signature.py
 
     LIBS
+    starkware_python_utils_lib
     pip_ecdsa
     pip_fastecdsa
     pip_mpmath

@@ -1,19 +1,31 @@
 from collections import namedtuple
 from dataclasses import make_dataclass
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple, Union
 
-from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypeFelt, TypePointer
+from starkware.cairo.lang.compiler.ast.cairo_types import (
+    CairoType,
+    TypeFelt,
+    TypePointer,
+    TypeStruct,
+    TypeTuple,
+)
 from starkware.cairo.lang.compiler.identifier_definition import StructDefinition
 from starkware.cairo.lang.compiler.parser import parse_type
 from starkware.cairo.lang.compiler.type_system import mark_type_resolved
+from starkware.python.utils import as_non_optional, assert_exhausted
+from starkware.starknet.business_logic.execution.objects import Event, TransactionExecutionInfo
 from starkware.starknet.compiler.compile import compile_starknet_files
 from starkware.starknet.public.abi import AbiType, get_selector_from_name
 from starkware.starknet.public.abi_structs import struct_definition_from_abi_entry
-from starkware.starknet.services.api.contract_class import ContractClass
-from starkware.starknet.testing.objects import Dataclass
+from starkware.starknet.services.api.contract_class.contract_class import DeprecatedCompiledClass
+from starkware.starknet.testing.objects import Dataclass, StarknetCallInfo
 
 EventIdentifier = Union[str, int]
 RAW_OUTPUT_ARG_LIST = ["retdata_size", "retdata"]
+
+
+class ArgumentParsingFailed(Exception):
+    pass
 
 
 class StructManager:
@@ -107,6 +119,110 @@ class EventManager:
     def _get_event_name(self, identifier: EventIdentifier) -> str:
         return identifier if isinstance(identifier, str) else self._selector_to_name[identifier]
 
+    def build_events(
+        self, raw_events: List[Event], struct_manager: StructManager
+    ) -> List[Dataclass]:
+        """
+        Given a list of low-level events, builds contract events (i.e., a dynamic dataclass) from
+        those corresponding to high-level ones.
+        """
+        events: List[Dataclass] = []
+        for raw_event in raw_events:
+            if len(raw_event.keys) == 0 or raw_event.keys[0] not in self:
+                # It is a low-level event emitted using directly the emit_event syscall.
+                continue
+
+            selector = raw_event.keys[0]
+            arg_values = raw_event.keys[1:] + raw_event.data
+
+            # Try to parse the low-level event as a high-level one (note it is possible for a
+            # low-level event to contain a valid selector in its keys without being a valid high
+            # level event - i.e., without the exact amount of data).
+            try:
+                args = build_arguments(
+                    arg_values=arg_values,
+                    arg_types=self.get_event_argument_types(identifier=selector),
+                    struct_manager=struct_manager,
+                )
+                args_dataclass = self.get_contract_event(identifier=selector)
+                events.append(args_dataclass(*args))
+            except ArgumentParsingFailed:
+                pass
+
+        return events
+
+
+def build_arguments(
+    arg_values: List[int], arg_types: List[CairoType], struct_manager: StructManager
+) -> List[Any]:
+    """
+    Reconstructs a Pythonic variant of the original Cairo structure of the arguments, deduced by
+    their Cairo types, and fills it with the given (flat list of) values.
+    """
+
+    def build_arg(
+        arg_type: CairoType, arg_value_iterator: Iterator[int]
+    ) -> Union[int, tuple, List[Any]]:
+        """
+        Reconstructs a Pythonic variant of the original Cairo structure of the given argument.
+        """
+        if isinstance(arg_type, TypeFelt):
+            return next(arg_value_iterator)
+        if isinstance(arg_type, TypeTuple):
+            return tuple(
+                build_arg(arg_type=cairo_type, arg_value_iterator=arg_value_iterator)
+                for cairo_type in arg_type.types
+            )
+        if isinstance(arg_type, TypeStruct):
+            struct_name = arg_type.scope.path[-1]
+            struct_def = struct_manager.get_struct_definition(name=struct_name)
+            contract_struct = struct_manager.get_contract_struct(name=struct_name)
+            return contract_struct(
+                *(
+                    build_arg(arg_type=member.cairo_type, arg_value_iterator=arg_value_iterator)
+                    for member in struct_def.members.values()
+                )
+            )
+        if isinstance(arg_type, TypePointer):
+            arr_len = next(arg_value_iterator)
+            return [
+                build_arg(arg_type=arg_type.pointee, arg_value_iterator=arg_value_iterator)
+                for _ in range(arr_len)
+            ]
+
+        raise NotImplementedError
+
+    arg_value_iterator = iter(arg_values)
+
+    try:
+        res = [
+            build_arg(arg_type=arg_type, arg_value_iterator=arg_value_iterator)
+            for arg_type in arg_types
+        ]
+    except StopIteration as exception:
+        raise ArgumentParsingFailed("Too few argument values.") from exception
+
+    # Make sure the iterator is empty.
+    try:
+        assert_exhausted(iterator=arg_value_iterator)
+    except AssertionError as exception:
+        raise ArgumentParsingFailed("Too many argument values.") from exception
+
+    return res
+
+
+def execution_info_to_call_info(
+    execution_info: TransactionExecutionInfo, abi: AbiType
+) -> StarknetCallInfo:
+    event_manager = EventManager(abi=abi)
+    struct_manager = StructManager(abi=abi)
+    call_info = as_non_optional(execution_info.call_info)
+    events = call_info.get_sorted_events()
+    main_events = event_manager.build_events(raw_events=events, struct_manager=struct_manager)
+    return StarknetCallInfo.from_internal(
+        call_info=call_info, result=tuple(call_info.retdata), main_call_events=main_events
+    )
+
 
 def parse_arguments(arguments_abi: List) -> Tuple[List[str], List[CairoType]]:
     """
@@ -165,20 +281,20 @@ def flatten(name: str, value: Union[Any, Iterable], max_depth: int = 30) -> List
     return res
 
 
-def get_abi(contract_class: ContractClass) -> AbiType:
+def get_deprecated_compiled_class_abi(contract_class: DeprecatedCompiledClass) -> AbiType:
     assert contract_class.abi is not None, "Missing ABI."
     return contract_class.abi
 
 
-def get_contract_class(
+def gather_deprecated_compiled_class(
     source: Optional[str] = None,
-    contract_class: Optional[ContractClass] = None,
+    contract_class: Optional[DeprecatedCompiledClass] = None,
     cairo_path: Optional[List[str]] = None,
     disable_hint_validation: bool = False,
-) -> ContractClass:
+) -> DeprecatedCompiledClass:
     """
-    Given either a ContractClass instance or a source file path, returns the respective
-    ContractClass instance.
+    Given either a DeprecatedCompiledClass instance or a source file path, returns the respective
+    DeprecatedCompiledClass instance.
     """
     assert (source is None) != (
         contract_class is None

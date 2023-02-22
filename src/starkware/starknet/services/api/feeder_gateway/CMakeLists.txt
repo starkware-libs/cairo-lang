@@ -30,6 +30,7 @@ python_lib(starknet_feeder_gateway_response_objects_lib
     starknet_definitions_lib
     starknet_transaction_objects_lib
     starknet_transaction_execution_objects_lib
+    starknet_transaction_utils_lib
     starkware_dataclasses_field_utils_lib
     starkware_dataclasses_utils_lib
     starkware_python_utils_lib

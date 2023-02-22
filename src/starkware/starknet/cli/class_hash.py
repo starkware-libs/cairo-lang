@@ -2,8 +2,10 @@ import argparse
 
 from starkware.cairo.lang.version import __version__
 from starkware.cairo.lang.vm.crypto import get_crypto_lib_context_manager
-from starkware.starknet.core.os.class_hash import compute_class_hash
-from starkware.starknet.services.api.contract_class import ContractClass
+from starkware.starknet.core.os.contract_class.deprecated_class_hash import (
+    compute_deprecated_class_hash,
+)
+from starkware.starknet.services.api.contract_class.contract_class import DeprecatedCompiledClass
 
 
 def main():
@@ -26,8 +28,8 @@ def main():
     args = parser.parse_args()
 
     with get_crypto_lib_context_manager(args.flavor):
-        compiled_contract = ContractClass.loads(data=args.compiled_contract.read())
-        print(hex(compute_class_hash(compiled_contract)))
+        compiled_contract = DeprecatedCompiledClass.loads(data=args.compiled_contract.read())
+        print(hex(compute_deprecated_class_hash(compiled_contract)))
 
 
 if __name__ == "__main__":

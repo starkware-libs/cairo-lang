@@ -3,7 +3,7 @@ cachetools
 ecdsa
 eth-hash[pycryptodome]
 fastecdsa
-frozendict==1.2
+frozendict
 lark
 marshmallow-dataclass>=7.1.0
 marshmallow-enum
@@ -16,6 +16,6 @@ prometheus-client
 pytest
 pytest-asyncio
 PyYAML
-sympy
 typeguard
+sympy
 Web3

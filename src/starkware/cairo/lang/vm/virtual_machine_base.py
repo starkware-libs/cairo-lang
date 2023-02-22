@@ -17,7 +17,7 @@ from starkware.cairo.lang.compiler.instruction import decode_instruction_values
 from starkware.cairo.lang.compiler.preprocessor.flow import FlowTrackingDataActual
 from starkware.cairo.lang.compiler.preprocessor.preprocessor import AttributeBase, AttributeScope
 from starkware.cairo.lang.compiler.preprocessor.reg_tracking import RegTrackingData
-from starkware.cairo.lang.compiler.program import Program, ProgramBase
+from starkware.cairo.lang.compiler.program import HintedProgram, Program, ProgramBase
 from starkware.cairo.lang.compiler.references import ApDeductionError
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.vm.builtin_runner import BuiltinRunner
@@ -170,7 +170,8 @@ class VirtualMachineBase(ABC):
         self.validated_memory = ValidatedMemoryDict(memory=run_context.memory, prime=self.prime)
 
         # If program is a StrippedProgram, there are no hints or debug information to load.
-        if isinstance(program, Program):
+        if isinstance(program, HintedProgram):
+            assert isinstance(program, Program), "A bare HintedProgram cannot be loaded."
             self.load_program(program=program, program_base=program_base)
 
         # auto_deduction contains a mapping from a memory segment index to a list of functions

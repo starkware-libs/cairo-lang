@@ -14,7 +14,7 @@ from starkware.python.utils import initialize_random
 from starkware.starkware_utils.error_handling import StarkErrorCode
 from starkware.starkware_utils.field_validators import validate_non_negative
 from starkware.starkware_utils.marshmallow_dataclass_fields import StrictRequiredInteger
-from starkware.starkware_utils.validated_fields import Field, RangeValidatedField
+from starkware.starkware_utils.validated_fields import RangeValidatedField, ValidatedField
 
 # Fields data: validation data, dataclass metadata.
 tx_id_marshmallow_field = StrictRequiredInteger(validate=validate_non_negative("tx_id"))
@@ -22,7 +22,7 @@ tx_id_field_metadata = dict(marshmallow_field=tx_id_marshmallow_field)
 
 
 # Fact Registry Address.
-class EthAddressTypeField(Field[str]):
+class EthAddressTypeField(ValidatedField[str]):
     """
     A field representation of an Ethereum address.
     """
@@ -102,3 +102,7 @@ def felt(name_in_error_message: str) -> RangeValidatedField:
 
 def felt_metadata(name_in_error_message: str) -> Dict[str, Any]:
     return felt(name_in_error_message=name_in_error_message).metadata()
+
+
+def format_felt_list(felts: List[int]) -> str:
+    return f"[{', '.join([FeltField.format(felt) for felt in felts])}]"

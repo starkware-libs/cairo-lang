@@ -1,6 +1,8 @@
 import contextlib
+import distutils.spawn
 import logging
 import os
+import pathlib
 import random
 import signal
 import subprocess
@@ -19,10 +21,19 @@ TIMEOUT_FOR_WEB3_REQUESTS = 120  # Seconds.
 
 # Max number of attempts to check web3.isConnected().
 GANACHE_MAX_TRIES = 100
-
 logger = logging.getLogger(__name__)
 
 Abi = List[dict]
+
+
+def get_ganache_bin_path() -> str:
+    files = list(pathlib.Path().rglob(pattern="ganache.sh"))
+    assert len(files) <= 1, f"Found multiple ganache.sh files: {files}"
+    if len(files) == 1:
+        return str(files[0])
+    ganache_cli_bin = distutils.spawn.find_executable("ganache")
+    assert ganache_cli_bin is not None, "Failed to find suitable ganache binary."
+    return ganache_cli_bin
 
 
 class EthTestUtils:
@@ -61,6 +72,28 @@ class EthTestUtils:
     def get_balance(self, address: str) -> int:
         return self.w3.eth.getBalance(address)
 
+    def get_contract(
+        self,
+        contract_json,
+        contract_address: str,
+        default_from: "EthAccount",
+    ) -> "EthContract":
+        """
+        Creates a "EthContract" object.
+        """
+        abi = contract_json["abi"]
+        bytecode = contract_json["bytecode"]
+
+        return EthContract(
+            w3=self.w3,
+            address=contract_address,
+            w3_contract=self.w3.eth.contract(  # type: ignore
+                abi=abi, bytecode=bytecode, address=contract_address
+            ),
+            abi=abi,
+            default_from=default_from,
+        )
+
     def set_account_balance(self, address: str, balance: int):
         assert balance >= 0, "Cannot set a negative balance."
         self.w3.provider.make_request(
@@ -80,12 +113,16 @@ class Ganache:
         """
         self.port = random.randrange(1024, 8192)
         self.ganache_proc = subprocess.Popen(
-            f"ganache -p {self.port} --chain.chainId 32 --chain.networkId 32 "
-            "--miner.blockGasLimit 8000000 --chain.allow-unlimited-contract-size",
+            f"{get_ganache_bin_path()} \
+                -p {self.port} \
+                --chain.chainId 32 \
+                --chain.networkId 32 \
+                --miner.blockGasLimit 8000000 \
+                --chain.allow-unlimited-contract-size",
             shell=True,
             stdout=subprocess.DEVNULL,
             # Open the process in a new process group.
-            preexec_fn=os.setsid,
+            start_new_session=True,
         )
         request_kwargs = {"timeout": TIMEOUT_FOR_WEB3_REQUESTS}
         self.w3 = Web3(
@@ -136,7 +173,7 @@ class EthAccount:
 
         # Get transaction hash from deployed contract.
         tx_hash = contract.constructor(*constructor_args).transact({"from": self.address})
-        logger.info(f"Submitted {tx_hash.hex()}.")
+        logger.info(f"Submitted {tx_hash.hex()}")
 
         # Get tx receipt to get contract address.
         tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
@@ -145,14 +182,14 @@ class EthAccount:
         assert contract_address is not None
         assert (
             tx_receipt["status"] == 1
-        ), f"Failed to deploy contract. Transaction hash: {tx_hash.hex()}."
+        ), f"Failed to deploy contract. Transaction hash: {tx_hash.hex()}"
 
         return EthContract(
             w3=self.w3,
             address=contract_address,
             w3_contract=self.w3.eth.contract(address=contract_address, abi=abi),
             abi=abi,
-            deployer=self,
+            default_from=self,
         )
 
     def transfer(self, to: "EthAccount", value: int):
@@ -171,13 +208,13 @@ class EthContract:
     """
 
     def __init__(
-        self, w3: Web3, address: str, w3_contract: Contract, abi: Abi, deployer: EthAccount
+        self, w3: Web3, address: str, w3_contract: Contract, abi: Abi, default_from: EthAccount
     ):
         self.w3 = w3
         self.address = address
         self.w3_contract = w3_contract
         self.abi = abi
-        self.deployer = deployer
+        self.default_from = default_from
 
     def __getattr__(self, name: str) -> "EthContractFunction":
         return EthContractFunction(contract=self, name=name)
@@ -190,7 +227,7 @@ class EthContract:
             address=self.address,
             w3_contract=w3_contract,  # type: ignore[arg-type]
             abi=abi,
-            deployer=self.deployer,
+            default_from=self.default_from,
         )
 
     def get_events(self, tx: "EthReceipt", name: str) -> List[dict]:
@@ -224,7 +261,7 @@ class EthContractFunction:
 
     def transact(self, *args, transact_args: Optional[Dict[str, Any]] = None) -> "EthReceipt":
         transact_args = prepare_transact_args(
-            transact_args=transact_args, default_from=self.contract.deployer.address
+            transact_args=transact_args, default_from=self.contract.default_from.address
         )
         args = fix_tx_args(args)
 
@@ -237,7 +274,7 @@ class EthContractFunction:
 
     def call(self, *args, transact_args=None):
         transact_args = prepare_transact_args(
-            transact_args, default_from=self.contract.deployer.address
+            transact_args, default_from=self.contract.default_from.address
         )
         args = fix_tx_args(args)
         try:

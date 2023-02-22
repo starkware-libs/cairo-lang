@@ -31,6 +31,7 @@ struct BuiltinData {
     bitwise: felt,
     ec_op: felt,
     keccak: felt,
+    poseidon: felt,
 }
 
 // Executes a single task.
@@ -105,12 +106,14 @@ func execute_task{builtin_ptrs: BuiltinData*, self_range_check_ptr}(
         bitwise=input_builtin_ptrs.bitwise,
         ec_op=input_builtin_ptrs.ec_op,
         keccak=input_builtin_ptrs.keccak,
+        poseidon=input_builtin_ptrs.poseidon,
     );
 
     // Call select_input_builtins to get the relevant input builtin pointers for the task.
     select_input_builtins(
         all_encodings=builtin_encodings,
         all_ptrs=&pre_execution_builtin_ptrs,
+        n_all_builtins=BuiltinData.SIZE,
         selected_encodings=builtin_list,
         n_selected_builtins=n_builtins,
     );

@@ -10,7 +10,8 @@ INPUT_CELLS_PER_EC_OP = 5
 class EcOpInstanceDef:
     # Defines the ratio between the number of steps to the number of EC op instances.
     # For every ratio steps, we have one instance.
-    ratio: int
+    # None means dynamic ratio.
+    ratio: Optional[int]
 
     # Size of coefficient.
     scalar_height: int

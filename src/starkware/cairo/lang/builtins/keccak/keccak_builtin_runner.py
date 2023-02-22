@@ -1,6 +1,6 @@
-from typing import Any, Dict, Set
+from typing import Any, Dict
 
-from starkware.cairo.common.cairo_keccak.keccak_utils import keccak_f
+from starkware.cairo.common.keccak_utils.keccak_utils import keccak_f
 from starkware.cairo.lang.builtins.keccak.instance_def import KeccakInstanceDef
 from starkware.cairo.lang.vm.builtin_runner import SimpleBuiltinRunner
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
@@ -19,20 +19,21 @@ class KeccakBuiltinRunner(SimpleBuiltinRunner):
             n_input_cells=safe_div(instance_def.cells_per_builtin, 2),
         )
         self.instance_def: KeccakInstanceDef = instance_def
-        self.verified_addresses: Set[MaybeRelocatable] = set()
+        self.cache: Dict[MaybeRelocatable, int] = {}
 
     def is_input_cell(self, index: int) -> bool:
         return index < self.n_input_cells
 
     def add_auto_deduction_rules(self, runner):
-        def rule(vm, addr, verified_addresses):
+        def rule(vm, addr):
             memory = vm.run_context.memory
             index = addr.offset % self.cells_per_instance
             if self.is_input_cell(index):
                 return
+            if addr in self.cache:
+                return self.cache[addr]
             first_input_addr = addr - index
-            if first_input_addr in verified_addresses:
-                return
+            first_output_addr = first_input_addr + self.n_input_cells
             if not all(first_input_addr + i in memory for i in range(self.n_input_cells)):
                 return
 
@@ -56,13 +57,13 @@ class KeccakBuiltinRunner(SimpleBuiltinRunner):
             start_index = 0
             for i, bits in enumerate(self.instance_def.state_rep):
                 end_index = start_index + safe_div(bits, 8)
-                memory[first_input_addr + self.n_input_cells + i] = from_bytes(
+                self.cache[first_output_addr + i] = from_bytes(
                     output_bytes[start_index:end_index], byte_order="little"
                 )
                 start_index = end_index
-            return memory[addr]
+            return self.cache[addr]
 
-        runner.vm.add_auto_deduction_rule(self.base.segment_index, rule, self.verified_addresses)
+        runner.vm.add_auto_deduction_rule(self.base.segment_index, rule)
 
     def air_private_input(self, runner) -> Dict[str, Any]:
         assert self.base is not None, "Uninitialized self.base."

@@ -1,4 +1,5 @@
 add_subdirectory(bootloaders)
+add_subdirectory(builtin_selection)
 add_subdirectory(cairo_verifier)
 add_subdirectory(common)
 add_subdirectory(lang)

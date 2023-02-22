@@ -21,6 +21,8 @@ python_lib(starknet_test_external_contract_test_utils_lib
     test_utils.py
 
     LIBS
+    cairo_compile_lib
+    cairo_constants_lib
     starknet_contract_class_lib
     starknet_external_compiled_contracts_lib
 )

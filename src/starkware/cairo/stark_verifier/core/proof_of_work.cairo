@@ -11,6 +11,7 @@ from starkware.cairo.stark_verifier.core.channel import (
     read_uint64_from_prover,
 )
 
+const MIN_PROOF_OF_WORK_BITS = 30;
 const MAX_PROOF_OF_WORK_BITS = 50;
 const MAX_NONCE = 2 ** 64 - 1;
 const BYTE_UPPER_BOUND = 256;
@@ -26,7 +27,7 @@ struct ProofOfWorkUnsentCommitment {
 }
 
 func proof_of_work_config_validate{range_check_ptr}(config: ProofOfWorkConfig*) {
-    assert_in_range(config.n_bits, 1, MAX_PROOF_OF_WORK_BITS + 1);
+    assert_in_range(config.n_bits, MIN_PROOF_OF_WORK_BITS, MAX_PROOF_OF_WORK_BITS + 1);
     return ();
 }
 

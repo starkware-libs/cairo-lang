@@ -71,6 +71,7 @@ python_lib(starkware_dataclasses_field_utils_lib
     marshmallow_fields_metadata.py
 
     LIBS
+    starkware_crypto_lib
     starkware_dataclasses_utils_lib
     pip_eth_utils
     pip_marshmallow
@@ -97,5 +98,5 @@ python_lib(starkware_commitment_tree_facts_lib
     commitment_tree/leaf_fact.py
 
     LIBS
-    starkware_storage_lib
+    starkware_abstract_storage_lib
 )

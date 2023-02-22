@@ -6,6 +6,8 @@ python_lib(cairo_common_lib
     alloc.cairo
     bitwise.cairo
     bool.cairo
+    builtin_keccak/keccak.cairo
+    builtin_poseidon/poseidon.cairo
     cairo_blake2s/blake2s.cairo
     cairo_blake2s/blake2s_utils.py
     cairo_blake2s/packed_blake2s.cairo
@@ -17,6 +19,7 @@ python_lib(cairo_common_lib
     cairo_secp/constants.cairo
     cairo_secp/ec.cairo
     cairo_secp/field.cairo
+    cairo_secp/secp256r1_utils.py
     cairo_secp/secp_utils.py
     cairo_secp/signature.cairo
     cairo_sha256/sha256_utils.py
@@ -30,11 +33,14 @@ python_lib(cairo_common_lib
     hash_chain.cairo
     hash_chain.py
     hash_state.cairo
+    hash_state_poseidon.cairo
     hash_state.py
     hash.cairo
     invoke.cairo
     keccak.cairo
     keccak_state.cairo
+    keccak_utils/keccak_utils.py
+    keccak_utils/keccak_utils.cairo
     math_cmp.cairo
     math_utils.py
     math.cairo
@@ -43,7 +49,9 @@ python_lib(cairo_common_lib
     merkle_multi_update.cairo
     merkle_update.cairo
     patricia_utils.py
+    patricia_with_sponge.cairo
     patricia.cairo
+    poseidon_state.cairo
     pow.cairo
     registers.cairo
     segments.cairo
@@ -52,6 +60,7 @@ python_lib(cairo_common_lib
     signature.cairo
     small_merkle_tree.cairo
     small_merkle_tree.py
+    sponge_as_hash.cairo
     squash_dict.cairo
     structs.py
     uint256.cairo
@@ -59,7 +68,9 @@ python_lib(cairo_common_lib
     ${CAIRO_COMMON_LIB_ADDITIONAL_FILES}
 
     LIBS
+    cairo_constants_lib
     cairo_vm_crypto_lib
+    poseidon_utils_lib
     starkware_python_utils_lib
     starkware_merkle_tree_lib
     ${CAIRO_COMMON_LIB_ADDITIONAL_LIBS}
@@ -91,4 +102,16 @@ python_lib(cairo_function_runner_lib
     cairo_tracer_lib
     cairo_vm_crypto_lib
     cairo_vm_lib
+)
+
+python_lib(poseidon_utils_lib
+    PREFIX starkware/cairo/common
+
+    FILES
+    poseidon_hash.py
+    poseidon_utils.py
+
+    LIBS
+    cairo_constants_lib
+    starkware_python_utils_lib
 )

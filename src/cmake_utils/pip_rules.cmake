@@ -55,9 +55,16 @@ function(python_pip TARGET)
           COMMENT "Building wheel ${REQ} for ${INTERPRETER}"
           COMMAND ${CMAKE_COMMAND} -E make_directory ${LIB_DIR}
           COMMAND ${CMAKE_COMMAND} -E make_directory ${DOWNLOAD_DIR}
-          COMMAND
-            ${INTERPRETER} -m pip wheel --no-deps -w ${DOWNLOAD_DIR}/ ${REQ} ${PIP_INSTALL_ARGS_${INTERPRETER}}
           # Extract wheel.
+          COMMAND
+            ${INTERPRETER} -m pip wheel
+            --retries 10
+            --disable-pip-version-check
+            --no-deps
+            -w ${DOWNLOAD_DIR}/
+            ${REQ}
+            ${PIP_INSTALL_ARGS_${INTERPRETER}}
+            || exit 1  # Failure to fetch package should abort the build.
           COMMAND cd ${LIB_DIR} && ${CMAKE_COMMAND} -E tar xzf ${DOWNLOAD_DIR}/*.whl
           # Some wheels may put their files at /{name}-{version}.data/(pure|plat)lib/, instead of
           # under the root directory. See https://www.python.org/dev/peps/pep-0427/#id24.

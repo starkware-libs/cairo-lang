@@ -1,17 +1,28 @@
 import copy
 from typing import List, Optional, Union
 
-from starkware.python.utils import as_non_optional, from_bytes
 from starkware.starknet.business_logic.execution.objects import TransactionExecutionInfo
-from starkware.starknet.business_logic.transaction.objects import InternalL1Handler
+from starkware.starknet.business_logic.transaction.objects import (
+    InternalDeployAccount,
+    InternalL1Handler,
+)
+from starkware.starknet.core.os.contract_class.deprecated_class_hash import (
+    compute_deprecated_class_hash,
+)
+from starkware.starknet.core.test_contract.test_utils import get_deprecated_compiled_class
+from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public.abi import get_selector_from_name
-from starkware.starknet.services.api.contract_class import ContractClass
+from starkware.starknet.services.api.contract_class.contract_class import DeprecatedCompiledClass
 from starkware.starknet.services.api.messages import StarknetMessageToL1
 from starkware.starknet.testing.contract import DeclaredClass, StarknetContract
-from starkware.starknet.testing.contract_utils import get_abi, get_contract_class
-from starkware.starknet.testing.objects import StarknetCallInfo
+from starkware.starknet.testing.contract_utils import (
+    execution_info_to_call_info,
+    gather_deprecated_compiled_class,
+    get_deprecated_compiled_class_abi,
+)
 from starkware.starknet.testing.state import CastableToAddress, CastableToAddressSalt, StarknetState
+from starkware.starknet.testing.test_utils import create_internal_deploy_tx_for_testing
 
 
 class Starknet:
@@ -40,15 +51,15 @@ class Starknet:
     async def declare(
         self,
         source: Optional[str] = None,
-        contract_class: Optional[ContractClass] = None,
+        contract_class: Optional[DeprecatedCompiledClass] = None,
         cairo_path: Optional[List[str]] = None,
         disable_hint_validation: bool = False,
     ) -> DeclaredClass:
         """
-        Declares a ContractClass in the StarkNet network.
+        Declares a DeprecatedCompiledClass in the StarkNet network.
         Returns the class hash and the ABI of the contract.
         """
-        contract_class = get_contract_class(
+        contract_class = gather_deprecated_compiled_class(
             source=source,
             contract_class=contract_class,
             cairo_path=cairo_path,
@@ -57,19 +68,20 @@ class Starknet:
         class_hash, _ = await self.state.declare(contract_class=contract_class)
         assert class_hash is not None
         return DeclaredClass(
-            class_hash=from_bytes(class_hash), abi=get_abi(contract_class=contract_class)
+            class_hash=class_hash,
+            abi=get_deprecated_compiled_class_abi(contract_class=contract_class),
         )
 
     async def deploy(
         self,
         source: Optional[str] = None,
-        contract_class: Optional[ContractClass] = None,
+        contract_class: Optional[DeprecatedCompiledClass] = None,
         contract_address_salt: Optional[CastableToAddressSalt] = None,
         cairo_path: Optional[List[str]] = None,
         constructor_calldata: Optional[List[int]] = None,
         disable_hint_validation: bool = False,
     ) -> StarknetContract:
-        contract_class = get_contract_class(
+        contract_class = gather_deprecated_compiled_class(
             source=source,
             contract_class=contract_class,
             cairo_path=cairo_path,
@@ -81,12 +93,11 @@ class Starknet:
             constructor_calldata=[] if constructor_calldata is None else constructor_calldata,
         )
 
-        deploy_call_info = StarknetCallInfo.from_internal(
-            call_info=as_non_optional(execution_info.call_info), result=(), main_call_events=[]
-        )
+        abi = get_deprecated_compiled_class_abi(contract_class=contract_class)
+        deploy_call_info = execution_info_to_call_info(execution_info=execution_info, abi=abi)
         return StarknetContract(
             state=self.state,
-            abi=get_abi(contract_class=contract_class),
+            abi=abi,
             contract_address=address,
             deploy_call_info=deploy_call_info,
         )
@@ -110,6 +121,7 @@ class Starknet:
         payload: List[int],
         max_fee: int = 0,
         nonce: Optional[int] = None,
+        paid_fee_on_l1: Optional[int] = None,
     ) -> TransactionExecutionInfo:
         """
         Mocks the L1 contract function sendMessageToL2.
@@ -135,6 +147,70 @@ class Starknet:
             calldata=[from_address, *payload],
             nonce=nonce,
             chain_id=self.state.general_config.chain_id.value,
+            paid_fee_on_l1=paid_fee_on_l1,
         )
 
         return await self.state.execute_tx(tx=tx)
+
+    async def deploy_mock_account(self) -> int:
+        """
+        Declares and deploys a mock/dummy account contract and returns its address.
+        """
+        # Declare the dummy_account contract class.
+        dummy_account_contract_class = get_deprecated_compiled_class("dummy_account")
+        await self.declare(contract_class=dummy_account_contract_class)
+        general_config = self.state.general_config
+        salt = fields.ContractAddressSalt.get_random_value()
+        # Deploy the dummy_account contract.
+        deploy_account_tx = InternalDeployAccount.create(
+            class_hash=compute_deprecated_class_hash(contract_class=dummy_account_contract_class),
+            constructor_calldata=[],
+            contract_address_salt=salt,
+            nonce=0,
+            max_fee=0,
+            version=general_config.tx_version,
+            chain_id=general_config.chain_id.value,
+            signature=[],
+        )
+
+        await self.state.execute_tx(tx=deploy_account_tx)
+        return deploy_account_tx.sender_address
+
+    async def deploy_contract_from(
+        self,
+        contract_class: DeprecatedCompiledClass,
+        constructor_calldata: List[int],
+        deploy_from: int,
+        nonce: int,
+        signature: Optional[List[int]] = None,
+    ) -> StarknetContract:
+        """
+        Declares and deploys a contract from a given address.
+        Note: deploy_from is currently assumed to be controlled by a mock account, so signing is not
+        required.
+        """
+        # Declare contract class.
+        await self.declare(contract_class=contract_class)
+        # Construct the deployment tx.
+        salt = fields.ContractAddressSalt.get_random_value()
+        deployed_contract_address, deploy_tx = create_internal_deploy_tx_for_testing(
+            account_address=deploy_from,
+            contract_class=contract_class,
+            constructor_calldata=constructor_calldata,
+            salt=salt,
+            max_fee=0,
+            nonce=nonce,
+            signature=signature,
+        )
+        # Execute the deployment tx.
+        execution_info = await self.state.execute_tx(tx=deploy_tx)
+        # Wrap and return the deployed contract.
+        abi = get_deprecated_compiled_class_abi(contract_class=contract_class)
+        deploy_call_info = execution_info_to_call_info(execution_info=execution_info, abi=abi)
+        deployed_contract = StarknetContract(
+            state=self.state,
+            abi=abi,
+            contract_address=deployed_contract_address,
+            deploy_call_info=deploy_call_info,
+        )
+        return deployed_contract

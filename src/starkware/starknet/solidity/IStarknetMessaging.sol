@@ -5,6 +5,11 @@ import "./IStarknetMessagingEvents.sol";
 
 interface IStarknetMessaging is IStarknetMessagingEvents {
     /**
+      Returns the max fee (in Wei) that StarkNet will accept per single message.
+    */
+    function getMaxL1MsgFee() external pure returns (uint256);
+
+    /**
       Sends a message to an L2 contract.
       This function is payable, the payed amount is the message fee.
 
@@ -40,8 +45,10 @@ interface IStarknetMessaging is IStarknetMessagingEvents {
     ) external returns (bytes32);
 
     /**
-      Cancels an L1 to L2 message, this function should be called messageCancellationDelay() seconds
-      after the call to startL1ToL2MessageCancellation().
+      Cancels an L1 to L2 message, this function should be called at least
+      messageCancellationDelay() seconds after the call to startL1ToL2MessageCancellation().
+      A message may only be cancelled by its sender.
+      If the message is missing, the call will revert.
 
       Note that the message fee is not refunded.
     */

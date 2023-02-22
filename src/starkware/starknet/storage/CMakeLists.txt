@@ -5,9 +5,10 @@ python_lib(starknet_storage_lib
     starknet_storage.py
 
     LIBS
-    cairo_constants_lib
     starknet_definitions_lib
+    starkware_abstract_storage_lib
     starkware_commitment_tree_facts_lib
+    starkware_commitment_tree_leaf_fact_utils_lib
     starkware_dataclasses_utils_lib
     starkware_python_utils_lib
     starkware_storage_lib

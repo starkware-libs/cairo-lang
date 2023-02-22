@@ -11,16 +11,12 @@ from starkware.python.utils import from_bytes
 from starkware.starknet.definitions import constants
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.transaction_type import TransactionType
-from starkware.starkware_utils.field_validators import (
-    validate_length,
-    validate_non_negative,
-    validate_positive,
-)
+from starkware.starkware_utils.field_validators import validate_non_negative, validate_positive
 from starkware.starkware_utils.marshmallow_dataclass_fields import (
+    BackwardCompatibleIntAsHex,
     BytesAsHex,
     EnumField,
     FrozenDictField,
-    IntAsHex,
     IntAsStr,
     StrictRequiredInteger,
     VariadicLengthTupleField,
@@ -39,7 +35,9 @@ felt_as_hex_list_metadata = dict(
 
 felt_as_hex_or_str_list_metadata = dict(
     marshmallow_field=mfields.List(
-        IntAsHex(support_decimal_loading=True, validate=everest_fields.FeltField.validate)
+        BackwardCompatibleIntAsHex(
+            allow_decimal_loading=True, validate=everest_fields.FeltField.validate
+        )
     )
 )
 
@@ -56,13 +54,12 @@ def felt_formatter_from_int(int_felt: int) -> str:
     return field_element_repr(val=int_felt, prime=everest_fields.FeltField.upper_bound)
 
 
-def bytes_as_hex_dict_keys_metadata(
+def new_class_hash_dict_keys_metadata(
     values_schema: Type[marshmallow.Schema],
 ) -> Dict[str, mfields.Dict]:
-    width_validator = validate_length(field_name="class_hash", length=constants.CLASS_HASH_BYTES)
     return dict(
         marshmallow_field=mfields.Dict(
-            keys=BytesAsHex(required=True, validate=width_validator),
+            keys=NewClassHashField,
             values=mfields.Nested(values_schema),
         )
     )
@@ -216,12 +213,6 @@ optional_class_hash_metadata = dict(
     )
 )
 
-address_to_class_hash_metadata = dict(
-    marshmallow_field=FrozenDictField(
-        keys=L2AddressField.get_marshmallow_field(), values=ClassHashField
-    )
-)
-
 
 # Class hash (as integer).
 
@@ -240,6 +231,67 @@ OptionalClassHashIntField = OptionalField(field=ClassHashIntField, none_probabil
 def class_hash_from_bytes(class_hash: bytes) -> str:
     return ClassHashIntField.format(from_bytes(class_hash))
 
+
+# Class hash.
+
+
+NewClassHashField = BackwardCompatibleIntAsHex(
+    allow_decimal_loading=False,
+    allow_bytes_hex_loading=True,
+    required=True,
+    validate=ClassHashIntField.validate,
+)
+
+
+new_class_hash_metadata = dict(marshmallow_field=NewClassHashField)
+
+
+address_to_class_hash_metadata = dict(
+    marshmallow_field=FrozenDictField(
+        keys=L2AddressField.get_marshmallow_field(), values=NewClassHashField
+    )
+)
+
+
+def validate_optional_new_class_hash(class_hash: Optional[int]):
+    if class_hash is not None:
+        ClassHashIntField.validate(class_hash)
+
+
+OptionalNewClassHashField = BackwardCompatibleIntAsHex(
+    allow_decimal_loading=False,
+    allow_bytes_hex_loading=True,
+    required=False,
+    load_default=None,
+    validate=validate_optional_new_class_hash,
+)
+
+optional_new_class_hash_metadata = dict(marshmallow_field=OptionalNewClassHashField)
+
+
+class_hash_to_compiled_class_hash_metadata = dict(
+    marshmallow_field=FrozenDictField(
+        keys=ClassHashIntField.get_marshmallow_field(),
+        values=ClassHashIntField.get_marshmallow_field(),
+        load_default=dict,
+    )
+)
+
+
+# Compiled Class hash.
+
+
+CompiledClassHashField = RangeValidatedField(
+    lower_bound=0,
+    upper_bound=constants.COMPILED_CLASS_HASH_UPPER_BOUND,
+    name="compiled_class_hash",
+    error_code=StarknetErrorCode.OUT_OF_RANGE_COMPILED_CLASS_HASH,
+    formatter=hex,
+)
+compiled_class_hash_metadata = CompiledClassHashField.metadata()
+
+OptionalCompiledClassHashField = OptionalField(field=CompiledClassHashField, none_probability=0)
+optional_compiled_class_hash_metadata = OptionalCompiledClassHashField.metadata()
 
 # Entry point.
 
@@ -264,6 +316,14 @@ EntryPointOffsetField = RangeValidatedField(
 )
 entry_point_offset_metadata = EntryPointOffsetField.metadata()
 
+EntryPointFunctionIdxField = RangeValidatedField(
+    lower_bound=constants.ENTRY_POINT_FUNCTION_IDX_LOWER_BOUND,
+    upper_bound=constants.ENTRY_POINT_FUNCTION_IDX_UPPER_BOUND,
+    name="Entry point function_idx",
+    error_code=StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_FUNCTION_IDX,
+    formatter=None,
+)
+entry_point_function_idx_metadata = EntryPointFunctionIdxField.metadata()
 
 # Fee.
 
@@ -350,6 +410,12 @@ contract_storage_commitment_tree_height_metadata = dict(
     )
 )
 
+compiled_class_hash_commitment_tree_height_metadata = dict(
+    marshmallow_field=StrictRequiredInteger(
+        validate=validate_positive("compiled_class_hash_commitment_tree_height")
+    )
+)
+
 global_state_commitment_tree_height_metadata = dict(
     marshmallow_field=StrictRequiredInteger(
         validate=validate_non_negative("global_state_commitment_tree_height"),
@@ -406,5 +472,23 @@ name_to_resources_metadata = dict(
 optional_tx_type_metadata = dict(
     marshmallow_field=EnumField(
         enum_cls=TransactionType, required=False, load_default=None, allow_none=True
+    )
+)
+
+failure_flag_metadata = everest_fields.FeltField.metadata(
+    field_name="failure_flag", required=False, load_default=0
+)
+gas_consumed_metadata = everest_fields.FeltField.metadata(
+    field_name="gas_consumed", required=False, load_default=0
+)
+
+# Commitment info.
+
+
+commitment_facts_metadata = dict(
+    marshmallow_field=FrozenDictField(
+        keys=everest_fields.FeltField.get_marshmallow_field(),
+        values=VariadicLengthTupleField(everest_fields.FeltField.get_marshmallow_field()),
+        load_default=dict,
     )
 )

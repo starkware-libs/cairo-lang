@@ -2,7 +2,7 @@ import asyncio
 import functools
 import logging
 from abc import ABC, abstractmethod
-from typing import Iterable, Optional, Tuple, cast
+from typing import Iterable, Optional, Set, Tuple, cast
 
 from services.everest.business_logic.internal_transaction import EverestInternalStateTransaction
 from services.everest.business_logic.state_api import StateProxy
@@ -14,6 +14,7 @@ from starkware.starknet.business_logic.execution.objects import (
 from starkware.starknet.business_logic.fact_state.contract_state_objects import StateSelector
 from starkware.starknet.business_logic.state.state import StateSyncifier, UpdatesTrackerState
 from starkware.starknet.business_logic.state.state_api import State, SyncState
+from starkware.starknet.definitions.constants import GasCost
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starkware_utils.config_base import Config
@@ -42,10 +43,20 @@ class InternalStateTransaction(EverestInternalStateTransaction, ABC):
         # Downcast arguments to application-specific types.
         assert isinstance(general_config, StarknetGeneralConfig)
 
-        state_selector = EverestInternalStateTransaction._get_state_selector_of_many(
-            txs=txs, general_config=general_config, state_selector_cls=StateSelector
+        contract_addresses: Set[int] = set()
+        class_hashes: Set[int] = set()
+
+        for tx in txs:
+            state_selector = tx.get_state_selector(general_config=general_config)
+            state_selector = cast(StateSelector, state_selector)
+            contract_addresses.update(state_selector.contract_addresses)
+            class_hashes.update(state_selector.class_hashes)
+
+        frozen_contract_addresses = frozenset(contract_addresses)
+        frozen_class_hashes = frozenset(class_hashes)
+        return StateSelector(
+            contract_addresses=frozen_contract_addresses, class_hashes=frozen_class_hashes
         )
-        return cast(StateSelector, state_selector)
 
     async def apply_state_updates(
         self, state: StateProxy, general_config: Config
@@ -100,13 +111,16 @@ class InternalStateTransaction(EverestInternalStateTransaction, ABC):
         Applies changes that can be efficiently done in concurrent execution.
         Returns a partial execution info.
         """
+        initial_gas = self.get_initial_gas()
         with wrap_with_stark_exception(
             code=StarknetErrorCode.UNEXPECTED_FAILURE,
             logger=logger,
             exception_types=[Exception],
         ):
             return self._apply_specific_concurrent_changes(
-                state=UpdatesTrackerState(state=state), general_config=general_config
+                state=UpdatesTrackerState(state=state),
+                general_config=general_config,
+                remaining_gas=initial_gas,
             )
 
     def apply_sequential_changes(
@@ -133,7 +147,7 @@ class InternalStateTransaction(EverestInternalStateTransaction, ABC):
 
     @abstractmethod
     def _apply_specific_concurrent_changes(
-        self, state: UpdatesTrackerState, general_config: StarknetGeneralConfig
+        self, state: UpdatesTrackerState, general_config: StarknetGeneralConfig, remaining_gas: int
     ) -> TransactionExecutionInfo:
         """
         A specific implementation of apply_concurrent_changes for each internal transaction.
@@ -151,3 +165,9 @@ class InternalStateTransaction(EverestInternalStateTransaction, ABC):
         A specific implementation of apply_sequential_changes for each internal transaction.
         See apply_sequential_changes.
         """
+
+    def get_initial_gas(self) -> int:
+        """
+        Returns the initial gas of the transaction to run with.
+        """
+        return GasCost.INITIAL.value - GasCost.TRANSACTION.value
