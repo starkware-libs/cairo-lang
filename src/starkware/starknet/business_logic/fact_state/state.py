@@ -11,7 +11,7 @@ from services.everest.business_logic.state import (
     StateSelectorBase,
 )
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
-from starkware.cairo.lang.vm.crypto import poseidon_hash_func, poseidon_hash_many
+from starkware.cairo.lang.vm.crypto import poseidon_hash_many
 from starkware.python.utils import (
     from_bytes,
     gather_in_chunks,
@@ -19,7 +19,10 @@ from starkware.python.utils import (
     subtract_mappings,
     to_bytes,
 )
-from starkware.starknet.business_logic.fact_state.contract_class_objects import ContractClassLeaf
+from starkware.starknet.business_logic.fact_state.contract_class_objects import (
+    ContractClassLeaf,
+    get_ffc_for_contract_class_facts,
+)
 from starkware.starknet.business_logic.fact_state.contract_state_objects import (
     ContractCarriedState,
     ContractState,
@@ -389,9 +392,7 @@ class SharedState(SharedStateBase):
             ffc=ffc, modifications=list(safe_zip(accessed_addresses, updated_contract_states))
         )
 
-        ffc_for_contract_class = FactFetchingContext(
-            storage=ffc.storage, hash_func=poseidon_hash_func, n_workers=ffc.n_workers
-        )
+        ffc_for_contract_class = get_ffc_for_contract_class_facts(ffc=ffc)
         updated_contract_classes: Optional[PatriciaTree] = None
         if self.contract_classes is not None:
             updated_contract_classes = await self.contract_classes.update(

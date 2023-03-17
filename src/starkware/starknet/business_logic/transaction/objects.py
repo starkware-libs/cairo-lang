@@ -279,6 +279,7 @@ class InternalAccountTransaction(InternalTransaction):
     # The address of the account contract who sent the transaction.
     sender_address: int = field(metadata=fields.contract_address_metadata)
 
+    # Forbid by default query-version transactions.
     only_query: ClassVar[bool] = False
 
     @property
@@ -457,44 +458,46 @@ class InternalDeclare(InternalAccountTransaction):
         verify_version(
             version=self.version,
             expected_version=constants.DECLARE_VERSION,
-            only_query=False,
+            only_query=self.only_query,
             old_supported_versions=[0, 1],
         )
         if self.version not in constants.DEPRECATED_DECLARE_VERSIONS:
             assert (
                 self.compiled_class_hash is not None
-            ), "The compiled_class_hash field must not be None."
+            ), "The compiled_class_hash field must not be None for Cairo 1.0 declare."
+        else:
+            assert (
+                self.compiled_class_hash is None
+            ), "The compiled_class_hash field must be None for deprecated declare."
 
-        if self.version not in [0, constants.QUERY_VERSION_BASE]:
-            return
-
-        stark_assert_eq(
-            DEFAULT_DECLARE_SENDER_ADDRESS,
-            self.sender_address,
-            code=StarknetErrorCode.OUT_OF_RANGE_CONTRACT_ADDRESS,
-            message=(
-                "The sender_address field in Declare transactions of version 0 "
-                f"must be {DEFAULT_DECLARE_SENDER_ADDRESS}."
-            ),
-        )
-        stark_assert_eq(
-            0,
-            self.max_fee,
-            code=StarknetErrorCode.OUT_OF_RANGE_FEE,
-            message="The max_fee field in Declare transactions of version 0 must be 0.",
-        )
-        stark_assert_eq(
-            0,
-            self.nonce,
-            code=StarknetErrorCode.OUT_OF_RANGE_NONCE,
-            message="The nonce field in Declare transactions of version 0 must be 0.",
-        )
-        stark_assert_eq(
-            0,
-            len(self.signature),
-            code=StarknetErrorCode.NON_EMPTY_SIGNATURE,
-            message="The signature field in Declare transactions must be an empty list.",
-        )
+        if self.version in [0, constants.QUERY_VERSION_BASE]:
+            stark_assert_eq(
+                DEFAULT_DECLARE_SENDER_ADDRESS,
+                self.sender_address,
+                code=StarknetErrorCode.OUT_OF_RANGE_CONTRACT_ADDRESS,
+                message=(
+                    "The sender_address field in Declare transactions of version 0 "
+                    f"must be {DEFAULT_DECLARE_SENDER_ADDRESS}."
+                ),
+            )
+            stark_assert_eq(
+                0,
+                self.max_fee,
+                code=StarknetErrorCode.OUT_OF_RANGE_FEE,
+                message="The max_fee field in Declare transactions of version 0 must be 0.",
+            )
+            stark_assert_eq(
+                0,
+                self.nonce,
+                code=StarknetErrorCode.OUT_OF_RANGE_NONCE,
+                message="The nonce field in Declare transactions of version 0 must be 0.",
+            )
+            stark_assert_eq(
+                0,
+                len(self.signature),
+                code=StarknetErrorCode.NON_EMPTY_SIGNATURE,
+                message="The signature field in Declare transactions must be an empty list.",
+            )
 
     @classmethod
     def create(
@@ -683,7 +686,7 @@ class InternalDeployAccount(InternalAccountTransaction):
 
     contract_address_salt: int = field(metadata=fields.contract_address_salt_metadata)
     class_hash: int = field(metadata=fields.new_class_hash_metadata)
-    constructor_calldata: List[int] = field(metadata=fields.call_data_metadata)
+    constructor_calldata: List[int] = field(metadata=fields.calldata_metadata)
     version: int = field(metadata=fields.tx_version_metadata)
     # Repeat `nonce` to narrow its type to non-optional int.
     nonce: int = field(metadata=fields.nonce_metadata)
@@ -713,7 +716,7 @@ class InternalDeployAccount(InternalAccountTransaction):
         verify_version(
             version=self.version,
             expected_version=constants.TRANSACTION_VERSION,
-            only_query=False,
+            only_query=self.only_query,
             old_supported_versions=[],
         )
 
@@ -942,7 +945,7 @@ class InternalDeploy(InternalTransaction):
     # is accessed as an integer, the property 'class_hash' is used.
     contract_hash: bytes = field(metadata=fields.non_required_class_hash_metadata)
 
-    constructor_calldata: List[int] = field(metadata=fields.call_data_metadata)
+    constructor_calldata: List[int] = field(metadata=fields.calldata_metadata)
 
     # Class variables.
     tx_type: ClassVar[TransactionType] = TransactionType.DEPLOY
@@ -1167,7 +1170,7 @@ class InternalInvokeFunction(InternalAccountTransaction):
     # The decorator type of the called function. Note that a single function may be decorated with
     # multiple decorators and this member specifies which one.
     entry_point_type: EntryPointType
-    calldata: List[int] = field(metadata=fields.call_data_metadata)
+    calldata: List[int] = field(metadata=fields.calldata_metadata)
 
     # Class variables.
     tx_type: ClassVar[TransactionType] = TransactionType.INVOKE_FUNCTION
@@ -1454,7 +1457,7 @@ class InternalL1Handler(InternalTransaction):
 
     contract_address: int = field(metadata=fields.contract_address_metadata)
     entry_point_selector: int = field(metadata=fields.entry_point_selector_metadata)
-    calldata: List[int] = field(metadata=fields.call_data_metadata)
+    calldata: List[int] = field(metadata=fields.calldata_metadata)
     # A unique nonce, added by the StarkNet core contract on L1. Guarantees a unique
     # hash_value of transactions.
     nonce: Optional[int] = field(metadata=fields.optional_nonce_metadata)

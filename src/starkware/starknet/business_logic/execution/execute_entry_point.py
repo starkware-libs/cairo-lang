@@ -1,4 +1,5 @@
 import asyncio
+import dataclasses
 import functools
 import logging
 from typing import Any, Dict, List, Optional, Union, cast
@@ -11,6 +12,9 @@ from starkware.cairo.lang.vm.security import SecurityError
 from starkware.cairo.lang.vm.utils import ResourcesError, RunResources
 from starkware.cairo.lang.vm.vm_exceptions import HintException, VmException, VmExceptionBase
 from starkware.python.utils import as_non_optional
+from starkware.starknet.builtins.segment_arena.segment_arena_builtin_runner import (
+    SegmentArenaBuiltinRunner,
+)
 from starkware.starknet.business_logic.execution.execute_entry_point_base import (
     ExecuteEntryPointBase,
 )
@@ -37,6 +41,7 @@ from starkware.starknet.core.os.syscall_handler import (
     DeprecatedBlSyscallHandler,
 )
 from starkware.starknet.definitions import fields
+from starkware.starknet.definitions.constants import GasCost
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import (
     STARKNET_LAYOUT_INSTANCE,
@@ -101,7 +106,7 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
         entry_point_selector: int,
         entry_point_type: Optional[EntryPointType] = None,
         caller_address: int = 0,
-        initial_gas: int = 0,
+        initial_gas: int = GasCost.INITIAL.value,
         call_type: Optional[CallType] = None,
         class_hash: Optional[int] = None,
     ):
@@ -206,6 +211,7 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
             resources_manager=resources_manager,
             general_config=general_config,
             tx_execution_context=tx_execution_context,
+            support_reverted=support_reverted,
         )
         if support_reverted or call_info.failure_flag == 0:
             return call_info
@@ -226,9 +232,16 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
         resources_manager: ExecutionResourcesManager,
         general_config: StarknetGeneralConfig,
         tx_execution_context: TransactionExecutionContext,
+        support_reverted: bool,
     ) -> CallInfo:
         # Fix the current resources usage, in order to calculate the usage of this run at the end.
         previous_cairo_usage = resources_manager.cairo_usage
+
+        # Create a dummy layout.
+        layout = dataclasses.replace(
+            STARKNET_LAYOUT_INSTANCE,
+            builtins={**STARKNET_LAYOUT_INSTANCE.builtins, "segment_arena": {}},
+        )
 
         # Prepare runner.
         entry_point = self._get_selected_entry_point(
@@ -239,7 +252,13 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
         )
         with wrap_with_stark_exception(code=StarknetErrorCode.SECURITY_ERROR):
             runner = CairoFunctionRunner(
-                program=program, layout=STARKNET_LAYOUT_INSTANCE.layout_name
+                program=program,
+                layout=layout,
+                additional_builtin_factories=dict(
+                    segment_arena=lambda name, included: SegmentArenaBuiltinRunner(
+                        included=included
+                    )
+                ),
             )
 
         # Prepare implicit arguments.
@@ -249,11 +268,13 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
         initial_syscall_ptr = cast(RelocatableValue, implicit_args[-1])
         syscall_handler = BusinessLogicSyscallHandler(
             state=state,
+            resources_manager=resources_manager,
             segments=runner.segments,
             tx_execution_context=tx_execution_context,
             initial_syscall_ptr=initial_syscall_ptr,
-            caller_address=self.caller_address,
-            contract_address=self.contract_address,
+            general_config=general_config,
+            entry_point=self,
+            support_reverted=support_reverted,
         )
 
         # Load the builtin costs; Cairo 1.0 programs are expected to end with a `ret` opcode
@@ -285,6 +306,7 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
             hint_locals={"syscall_handler": syscall_handler},
             run_resources=tx_execution_context.run_resources,
             program_segment_size=len(runner.program.data) + len(program_extra_data),
+            allow_tmp_segments=True,
         )
 
         # We should not count (possibly) unsued code as holes.
@@ -308,7 +330,7 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
             result=get_call_result(runner=runner, initial_gas=self.initial_gas),
             events=syscall_handler.events,
             l2_to_l1_messages=[],
-            internal_calls=[],
+            internal_calls=syscall_handler.internal_calls,
         )
 
     def _run(
@@ -318,6 +340,7 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
         entry_point_args: EntryPointArgs,
         hint_locals: Dict[str, Any],
         run_resources: RunResources,
+        allow_tmp_segments: bool,
         program_segment_size: Optional[int] = None,
     ):
         """
@@ -340,6 +363,7 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
                 run_resources=run_resources,
                 verify_secure=True,
                 program_segment_size=program_segment_size,
+                allow_tmp_segments=allow_tmp_segments,
             )
         except VmException as exception:
             code: ErrorCode = StarknetErrorCode.TRANSACTION_FAILED
@@ -545,6 +569,7 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
             entry_point_args=entry_point_args,
             hint_locals={"syscall_handler": syscall_handler},
             run_resources=tx_execution_context.run_resources,
+            allow_tmp_segments=False,
         )
 
         # Complete validations.

@@ -50,6 +50,8 @@ python_lib(cairo_common_lib
     merkle_update.cairo
     patricia_utils.py
     patricia_with_sponge.cairo
+    patricia_with_poseidon.cairo
+    patricia_utils.cairo
     patricia.cairo
     poseidon_state.cairo
     pow.cairo

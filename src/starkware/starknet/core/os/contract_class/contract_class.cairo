@@ -6,6 +6,7 @@ from starkware.cairo.common.hash_state_poseidon import (
     hash_update_single,
     hash_update_with_nested_hash,
 )
+from starkware.starknet.common.storage import normalize_address
 
 const CONTRACT_CLASS_VERSION = 'CONTRACT_CLASS_V0.1.0';
 
@@ -39,7 +40,11 @@ struct ContractClass {
     sierra_program_ptr: felt*,
 }
 
-func class_hash{poseidon_ptr: PoseidonBuiltin*}(contract_class: ContractClass*) -> (hash: felt) {
+func class_hash{poseidon_ptr: PoseidonBuiltin*, range_check_ptr: felt}(
+    contract_class: ContractClass*
+) -> (hash: felt) {
+    assert contract_class.contract_class_version = CONTRACT_CLASS_VERSION;
+
     let hash_state: HashState = hash_init();
     with hash_state {
         hash_update_single(item=contract_class.contract_class_version);
@@ -70,8 +75,9 @@ func class_hash{poseidon_ptr: PoseidonBuiltin*}(contract_class: ContractClass*) 
             data_ptr=contract_class.sierra_program_ptr,
             data_length=contract_class.sierra_program_length,
         );
-
-        let hash: felt = hash_finalize(hash_state=hash_state);
     }
-    return (hash=hash);
+
+    let hash: felt = hash_finalize(hash_state=hash_state);
+    let (normalized_hash) = normalize_address(addr=hash);
+    return (hash=normalized_hash);
 }

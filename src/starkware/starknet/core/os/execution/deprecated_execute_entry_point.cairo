@@ -59,7 +59,7 @@ func get_entry_point_offset{range_check_ptr}(
         array_ptr=cast(entry_points, felt*),
         elm_size=DeprecatedContractEntryPoint.SIZE,
         n_elms=n_entry_points,
-        key=execution_context.selector,
+        key=execution_context.execution_info.selector,
     );
     if (success != 0) {
         return (entry_point_offset=entry_point_desc.offset);
@@ -90,7 +90,7 @@ func call_execute_deprecated_syscalls{
 
 // Executes an entry point in a contract.
 // The contract entry point is selected based on execution_context.entry_point_type
-// and execution_context.selector.
+// and execution_context.execution_info.selector.
 //
 // Arguments:
 // block_context - a global context that is fixed throughout the block.
@@ -120,11 +120,10 @@ func deprecated_execute_entry_point{
         compiled_class=compiled_class, execution_context=execution_context
     );
 
-    %{ execution_helper.enter_call() %}
     if (entry_point_offset == NOP_ENTRY_POINT_OFFSET) {
         // Assert that there is no call data in the case of NOP entry point.
         assert execution_context.calldata_size = 0;
-        %{ execution_helper.exit_call() %}
+        %{ execution_helper.skip_call() %}
         return (retdata_size=0, retdata=cast(0, felt*));
     }
 
@@ -152,13 +151,20 @@ func deprecated_execute_entry_point{
     );
 
     // Use tempvar to pass arguments to contract_entry_point().
-    tempvar selector = execution_context.selector;
+    tempvar selector = execution_context.execution_info.selector;
     tempvar context = os_context;
     tempvar calldata_size = execution_context.calldata_size;
     tempvar calldata = execution_context.calldata;
+
+    %{
+        execution_helper.enter_call(
+            execution_info_ptr=ids.execution_context.execution_info.address_)
+    %}
     %{ vm_enter_scope({'syscall_handler': deprecated_syscall_handler}) %}
     call abs contract_entry_point;
     %{ vm_exit_scope() %}
+    %{ execution_helper.exit_call() %}
+
     // Retrieve returned_builtin_ptrs_subset.
     // Note that returned_builtin_ptrs_subset cannot be set in a hint because doing so will allow a
     // malicious prover to lie about the storage changes of a valid contract.
@@ -201,6 +207,9 @@ func deprecated_execute_entry_point{
         n_builtins=n_builtins,
     );
 
+    // Validate that segment_arena builtin was not used.
+    assert builtin_ptrs.segment_arena = return_builtin_ptrs.segment_arena;
+
     let syscall_end = cast([returned_builtin_ptrs_subset - 1], felt*);
 
     let builtin_ptrs = return_builtin_ptrs;
@@ -211,7 +220,6 @@ func deprecated_execute_entry_point{
         syscall_ptr=syscall_ptr,
     );
 
-    %{ execution_helper.exit_call() %}
     return (retdata_size=retdata_size, retdata=retdata);
 }
 

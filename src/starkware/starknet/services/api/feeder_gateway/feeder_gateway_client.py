@@ -24,6 +24,10 @@ from starkware.starkware_utils.validated_fields import RangeValidatedField
 CastableToHash = Union[int, str]
 
 
+# Simulation-related.
+SKIP_VALIDATE = "skipValidate"
+
+
 class FeederGatewayClient(EverestFeederGatewayClient):
     """
     A client class for the StarkNet FeederGateway.
@@ -82,13 +86,14 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         tx: AccountTransaction,
         block_hash: Optional[CastableToHash] = None,
         block_number: Optional[BlockIdentifier] = None,
+        skip_validate: bool = False,
     ) -> FeeEstimationInfo:
-        formatted_block_named_argument = get_formatted_block_named_argument(
-            block_hash=block_hash, block_number=block_number
+        formatted_simulate_tx_arguments = get_formatted_simulate_tx_arguments(
+            block_hash=block_hash, block_number=block_number, skip_validate=skip_validate
         )
         raw_response = await self._send_request(
             send_method="POST",
-            uri=f"/estimate_fee?{formatted_block_named_argument}",
+            uri=f"/estimate_fee?{formatted_simulate_tx_arguments}",
             data=AccountTransaction.Schema().dumps(obj=tx),
         )
         return FeeEstimationInfo.loads(data=raw_response)
@@ -98,13 +103,14 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         txs: List[AccountTransaction],
         block_hash: Optional[CastableToHash] = None,
         block_number: Optional[BlockIdentifier] = None,
+        skip_validate: bool = False,
     ) -> List[FeeEstimationInfo]:
-        formatted_block_named_argument = get_formatted_block_named_argument(
-            block_hash=block_hash, block_number=block_number
+        formatted_simulate_tx_arguments = get_formatted_simulate_tx_arguments(
+            block_hash=block_hash, block_number=block_number, skip_validate=skip_validate
         )
         raw_response = await self._send_request(
             send_method="POST",
-            uri=f"/estimate_fee_bulk?{formatted_block_named_argument}",
+            uri=f"/estimate_fee_bulk?{formatted_simulate_tx_arguments}",
             data=AccountTransaction.Schema().dumps(obj=txs, many=True),
         )
         return FeeEstimationInfo.Schema().loads(json_data=raw_response, many=True)
@@ -130,13 +136,14 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         tx: AccountTransaction,
         block_hash: Optional[CastableToHash] = None,
         block_number: Optional[BlockIdentifier] = None,
+        skip_validate: bool = False,
     ) -> TransactionSimulationInfo:
-        formatted_block_named_argument = get_formatted_block_named_argument(
-            block_hash=block_hash, block_number=block_number
+        formatted_simulate_tx_arguments = get_formatted_simulate_tx_arguments(
+            block_hash=block_hash, block_number=block_number, skip_validate=skip_validate
         )
         raw_response = await self._send_request(
             send_method="POST",
-            uri=f"/simulate_transaction?{formatted_block_named_argument}",
+            uri=f"/simulate_transaction?{formatted_simulate_tx_arguments}",
             data=AccountTransaction.Schema().dumps(obj=tx),
         )
         return TransactionSimulationInfo.loads(data=raw_response)
@@ -374,3 +381,19 @@ def get_formatted_block_named_argument(
         return f"blockNumber={block_number_str}"
     else:
         return f"blockHash={format_hash(hash_value=block_hash, hash_field=fields.BlockHashField)}"
+
+
+def get_formatted_simulate_tx_arguments(
+    block_hash: Optional[CastableToHash],
+    block_number: Optional[BlockIdentifier],
+    skip_validate: bool,
+) -> str:
+    """
+    Returns formatted simulate transaction arguments, corresponding to the request's arguments.
+    """
+    formatted_block_named_argument = get_formatted_block_named_argument(
+        block_hash=block_hash, block_number=block_number
+    )
+    formatted_simulation_flags = f"{SKIP_VALIDATE}={json.dumps(skip_validate)}"
+
+    return "&".join([formatted_block_named_argument, formatted_simulation_flags])

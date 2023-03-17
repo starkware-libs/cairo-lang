@@ -14,14 +14,19 @@ from starkware.starknet.core.os.contract_class.deprecated_class_hash import (
 )
 from starkware.starknet.core.os.transaction_hash.transaction_hash import (
     TransactionHashPrefix,
+    calculate_declare_transaction_hash,
     calculate_deploy_account_transaction_hash,
     calculate_deprecated_declare_transaction_hash,
     calculate_transaction_hash_common,
 )
 from starkware.starknet.definitions import fields
 from starkware.starknet.public.abi import get_selector_from_name
-from starkware.starknet.services.api.contract_class.contract_class import DeprecatedCompiledClass
+from starkware.starknet.services.api.contract_class.contract_class import (
+    ContractClass,
+    DeprecatedCompiledClass,
+)
 from starkware.starknet.services.api.gateway.transaction import (
+    Declare,
     DeployAccount,
     DeprecatedDeclare,
     InvokeFunction,
@@ -32,7 +37,6 @@ from starkware.starknet.wallets.starknet_context import StarknetContext
 
 ACCOUNT_FILE_NAME = "starknet_open_zeppelin_accounts.json"
 DEPLOY_CONTRACT_SELECTOR = get_selector_from_name("deploy_contract")
-GET_NONCE_SELECTOR = get_selector_from_name("get_nonce")
 
 
 class AccountNotFoundException(Exception):
@@ -52,6 +56,28 @@ class OpenZeppelinAccount(Account):
     def account_file(self):
         return os.path.join(
             os.path.expanduser(self.starknet_context.account_dir), ACCOUNT_FILE_NAME
+        )
+
+    async def declare(
+        self,
+        contract_class: ContractClass,
+        compiled_class_hash: int,
+        chain_id: int,
+        max_fee: int,
+        version: int,
+        nonce_callback: Callable[[int], Awaitable[int]],
+        dry_run: bool = False,
+    ) -> Declare:
+        account_address, private_key = self._get_account_address_and_private_key(dry_run=dry_run)
+        return sign_declare_tx(
+            contract_class=contract_class,
+            compiled_class_hash=compiled_class_hash,
+            private_key=private_key,
+            sender_address=account_address,
+            chain_id=chain_id,
+            max_fee=max_fee,
+            version=version,
+            nonce=await nonce_callback(account_address),
         )
 
     async def deprecated_declare(
@@ -273,6 +299,39 @@ differently.
             private_key = None
 
         return account_address, private_key
+
+
+def sign_declare_tx(
+    contract_class: ContractClass,
+    private_key: Optional[int],
+    sender_address: int,
+    chain_id: int,
+    compiled_class_hash: int,
+    max_fee: int,
+    version: int,
+    nonce: int,
+) -> Declare:
+    hash_value = calculate_declare_transaction_hash(
+        contract_class=contract_class,
+        compiled_class_hash=compiled_class_hash,
+        chain_id=chain_id,
+        sender_address=sender_address,
+        max_fee=max_fee,
+        version=version,
+        nonce=nonce,
+    )
+
+    return Declare(
+        contract_class=contract_class,
+        compiled_class_hash=compiled_class_hash,
+        sender_address=sender_address,
+        max_fee=max_fee,
+        signature=(
+            [] if private_key is None else list(sign(msg_hash=hash_value, priv_key=private_key))
+        ),
+        nonce=nonce,
+        version=version,
+    )
 
 
 def sign_deprecated_declare_tx(

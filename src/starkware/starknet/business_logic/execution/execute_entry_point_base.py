@@ -45,6 +45,7 @@ class ExecuteEntryPointBase(ABC, ValidatedDataclass):
         resources_manager: ExecutionResourcesManager,
         tx_execution_context: TransactionExecutionContext,
         general_config: StarknetGeneralConfig,
+        support_reverted: bool = False,
     ) -> CallInfo:
         """
         Executes the entry point.

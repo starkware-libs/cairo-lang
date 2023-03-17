@@ -18,7 +18,10 @@ from starkware.starknet.public.abi import (
     get_selector_from_name,
 )
 from starkware.starknet.public.abi_structs import identifier_manager_from_abi
-from starkware.starknet.services.api.contract_class.contract_class import DeprecatedCompiledClass
+from starkware.starknet.services.api.contract_class.contract_class import (
+    ContractClass,
+    DeprecatedCompiledClass,
+)
 from starkware.starknet.services.api.feeder_gateway.feeder_gateway_client import (
     CastableToHash,
     FeederGatewayClient,
@@ -35,6 +38,7 @@ from starkware.starknet.services.api.feeder_gateway.response_objects import (
 from starkware.starknet.services.api.gateway.gateway_client import GatewayClient
 from starkware.starknet.services.api.gateway.transaction import (
     AccountTransaction,
+    Declare,
     DeployAccount,
     DeprecatedDeclare,
     InvokeFunction,
@@ -124,6 +128,14 @@ class InvokeFunctionArgs:
 @dataclasses.dataclass
 class DeprecatedDeclareArgs:
     contract_class: DeprecatedCompiledClass
+    sender: Optional[int]
+    signature: List[int]
+
+
+@dataclasses.dataclass
+class DeclareArgs:
+    contract_class: ContractClass
+    compiled_class_hash: int
     sender: Optional[int]
     signature: List[int]
 
@@ -305,20 +317,25 @@ async def load_account(
 
 
 async def simulate_tx_at_pending_block(
-    feeder_client: FeederGatewayClient, tx: AccountTransaction
+    feeder_client: FeederGatewayClient, tx: AccountTransaction, skip_validate: bool
 ) -> TransactionSimulationInfo:
     """
     Simulates a transaction with the given parameters, relative to the state of the latest PENDING
     block.
     """
     return await simulate_tx_at_block(
-        feeder_client=feeder_client, tx=tx, block_hash=None, block_number=PENDING_BLOCK_ID
+        feeder_client=feeder_client,
+        tx=tx,
+        block_hash=None,
+        block_number=PENDING_BLOCK_ID,
+        skip_validate=skip_validate,
     )
 
 
 async def simulate_tx_at_block(
     feeder_client: FeederGatewayClient,
     tx: AccountTransaction,
+    skip_validate: bool,
     block_hash: Optional[CastableToHash] = None,
     block_number: Optional[BlockIdentifier] = None,
 ) -> TransactionSimulationInfo:
@@ -327,15 +344,19 @@ async def simulate_tx_at_block(
     Returns a TransactionSimulationInfo object.
     """
     return await feeder_client.simulate_transaction(
-        tx=tx, block_hash=block_hash, block_number=block_number
+        tx=tx, block_hash=block_hash, block_number=block_number, skip_validate=skip_validate
     )
 
 
-async def compute_max_fee_for_tx(feeder_client: FeederGatewayClient, tx: AccountTransaction) -> int:
+async def compute_max_fee_for_tx(
+    feeder_client: FeederGatewayClient, tx: AccountTransaction, skip_validate: bool
+) -> int:
     """
     Given a transaction, estimates and returns the max fee.
     """
-    simulate_tx_info = await simulate_tx_at_pending_block(feeder_client=feeder_client, tx=tx)
+    simulate_tx_info = await simulate_tx_at_pending_block(
+        feeder_client=feeder_client, tx=tx, skip_validate=skip_validate
+    )
     return math.ceil(simulate_tx_info.fee_estimation.overall_fee * FEE_MARGIN_OF_ESTIMATION)
 
 
@@ -356,14 +377,15 @@ def construct_nonce_callback(
 
 
 def create_call_function(
-    contract_address: int, abi: AbiType, function_name: str, inputs: List[int]
+    contract_address: int, abi: Optional[AbiType], function_name: str, inputs: List[int]
 ) -> CallFunction:
     """
     Constructs a CallFunction object for the given parameters.
     """
-    validate_call_args(
-        abi=abi, abi_entry_name=function_name, abi_entry_type="function", inputs=inputs
-    )
+    if abi is not None:
+        validate_call_args(
+            abi=abi, abi_entry_name=function_name, abi_entry_type="function", inputs=inputs
+        )
 
     return CallFunction(
         contract_address=contract_address,
@@ -373,17 +395,22 @@ def create_call_function(
 
 
 def create_call_l1_handler(
-    abi: AbiType, handler_name: str, from_address: int, to_address: int, payload: List[int]
+    abi: Optional[AbiType],
+    handler_name: str,
+    from_address: int,
+    to_address: int,
+    payload: List[int],
 ) -> CallL1Handler:
     """
     Constructs a CallL1Handler object for the given parameters.
     """
-    validate_call_args(
-        abi=abi,
-        abi_entry_name=handler_name,
-        abi_entry_type="l1_handler",
-        inputs=[from_address] + payload,
-    )
+    if abi is not None:
+        validate_call_args(
+            abi=abi,
+            abi_entry_name=handler_name,
+            abi_entry_type="l1_handler",
+            inputs=[from_address] + payload,
+        )
 
     return CallL1Handler(
         from_address=from_address,
@@ -473,6 +500,57 @@ async def construct_invoke_tx(
 
 
 async def construct_declare_tx(
+    feeder_client: FeederGatewayClient,
+    declare_tx_args: DeclareArgs,
+    chain_id: int,
+    max_fee: int,
+    account: Optional[Account],
+    explicit_nonce: Optional[int],
+    simulate: bool,
+) -> Declare:
+    """
+    Creates and returns a DeprecatedDeclare transaction with the given parameters.
+    If an account is provided, that transaction will be wrapped and signed.
+    """
+    version = constants.QUERY_DECLARE_VERSION if simulate else constants.DECLARE_VERSION
+    nonce_callback = construct_nonce_callback(
+        feeder_client=feeder_client, explicit_nonce=explicit_nonce
+    )
+    if account is None:
+        # Declare directly.
+        assert (
+            declare_tx_args.sender is not None
+        ), "Sender must be passed explicitly when making a direct declaration using --no_wallet."
+        return Declare(
+            contract_class=declare_tx_args.contract_class,
+            compiled_class_hash=declare_tx_args.compiled_class_hash,
+            sender_address=declare_tx_args.sender,
+            max_fee=max_fee,
+            version=version,
+            signature=declare_tx_args.signature,
+            nonce=await nonce_callback(declare_tx_args.sender),
+        )
+
+    # Declare through the account contract.
+    assert declare_tx_args.sender is None, (
+        "Sender cannot be passed explicitly when using an account contract. "
+        "Consider making a direct declaration using --no_wallet."
+    )
+    assert declare_tx_args.signature == [], (
+        "Signature cannot be passed explicitly when using an account contract. "
+        "Consider making a direct declaration using --no_wallet."
+    )
+    return await account.declare(
+        contract_class=declare_tx_args.contract_class,
+        compiled_class_hash=declare_tx_args.compiled_class_hash,
+        chain_id=chain_id,
+        max_fee=max_fee,
+        version=version,
+        nonce_callback=nonce_callback,
+    )
+
+
+async def construct_deprecated_declare_tx(
     feeder_client: FeederGatewayClient,
     declare_tx_args: DeprecatedDeclareArgs,
     chain_id: int,

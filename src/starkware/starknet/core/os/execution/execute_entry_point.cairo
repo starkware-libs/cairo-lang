@@ -7,7 +7,12 @@ from starkware.cairo.common.dict_access import DictAccess
 from starkware.cairo.common.find_element import find_element, search_sorted
 from starkware.cairo.common.math import assert_not_zero
 from starkware.cairo.common.registers import get_ap
-from starkware.starknet.common.syscalls import TxInfo
+from starkware.starknet.builtins.segment_arena.segment_arena import (
+    SegmentArenaBuiltin,
+    validate_segment_arena,
+)
+from starkware.starknet.common.new_syscalls import ExecutionInfo
+from starkware.starknet.common.syscalls import TxInfo as DeprecatedTxInfo
 from starkware.starknet.core.os.block_context import BlockContext
 from starkware.starknet.core.os.builtins import BuiltinEncodings, BuiltinParams, BuiltinPointers
 from starkware.starknet.core.os.constants import (
@@ -28,17 +33,14 @@ from starkware.starknet.core.os.output import OsCarriedOutputs
 // Represents the execution context during the execution of contract code.
 struct ExecutionContext {
     entry_point_type: felt,
-    caller_address: felt,
-    // The execution is done in the context of the contract at 'contract_address'.
-    // This address controls the storage being used, messages sent to L1, calling contracts, etc.
-    contract_address: felt,
     // The hash of the contract class to execute.
     class_hash: felt,
-    selector: felt,
     calldata_size: felt,
     calldata: felt*,
+    // Additional information about the execution.
+    execution_info: ExecutionInfo*,
     // Information about the transaction that triggered the execution.
-    original_tx_info: TxInfo*,
+    deprecated_tx_info: DeprecatedTxInfo*,
 }
 
 // Represents the arguments pushed to the stack before calling an entry point.
@@ -106,7 +108,7 @@ func get_entry_point{range_check_ptr}(
         array_ptr=cast(entry_points, felt*),
         elm_size=CompiledClassEntryPoint.SIZE,
         n_elms=n_entry_points,
-        key=execution_context.selector,
+        key=execution_context.execution_info.selector,
     );
     if (success != 0) {
         return (entry_point=entry_point_desc);
@@ -121,7 +123,7 @@ func get_entry_point{range_check_ptr}(
 
 // Executes an entry point in a contract.
 // The contract entry point is selected based on execution_context.entry_point_type
-// and execution_context.selector.
+// and execution_context.execution_info.selector.
 //
 // Arguments:
 // block_context - a global context that is fixed throughout the block.
@@ -137,11 +139,10 @@ func execute_entry_point{
     retdata_size: felt, retdata: felt*
 ) {
     alloc_locals;
-    %{ execution_helper.enter_call() %}
-
     let (compiled_class_hash: felt) = dict_read{dict_ptr=contract_class_changes}(
         key=execution_context.class_hash
     );
+
     // The key must be at offset 0.
     static_assert CompiledClassFact.hash == 0;
     let (compiled_class_fact: CompiledClassFact*) = find_element(
@@ -158,7 +159,7 @@ func execute_entry_point{
     if (compiled_class_entry_point == cast(0, CompiledClassEntryPoint*)) {
         // Assert that there is no call data in the case of NOP entry point.
         assert execution_context.calldata_size = 0;
-        %{ execution_helper.exit_call() %}
+        %{ execution_helper.skip_call() %}
         return (retdata_size=0, retdata=cast(0, felt*));
     }
 
@@ -176,6 +177,8 @@ func execute_entry_point{
         syscall_handler.set_syscall_ptr(syscall_ptr=ids.syscall_ptr)
     %}
     assert [os_context] = cast(syscall_ptr, felt);
+
+    let builtin_ptrs: BuiltinPointers* = prepare_builtin_ptrs_for_execute(builtin_ptrs);
 
     let n_builtins = BuiltinEncodings.SIZE;
     local builtin_params: BuiltinParams* = block_context.builtin_params;
@@ -202,9 +205,14 @@ func execute_entry_point{
     );
     static_assert ap == current_ap + EntryPointCallArguments.SIZE;
 
+    %{
+        execution_helper.enter_call(
+            execution_info_ptr=ids.execution_context.execution_info.address_)
+    %}
     %{ vm_enter_scope({'syscall_handler': syscall_handler}) %}
     call abs contract_entry_point;
     %{ vm_exit_scope() %}
+
     // Retrieve returned_builtin_ptrs_subset.
     // Note that returned_builtin_ptrs_subset cannot be set in a hint because doing so will allow a
     // malicious prover to lie about the storage changes of a valid contract.
@@ -218,6 +226,7 @@ func execute_entry_point{
         syscall_handler.validate_and_discard_syscall_ptr(
             syscall_ptr_end=ids.entry_point_return_values.syscall_ptr
         )
+        execution_helper.exit_call()
     %}
 
     // Check that the execution was successful.
@@ -261,6 +270,14 @@ func execute_entry_point{
         n_builtins=n_builtins,
     );
 
+    // Validate the segment_arena builtin.
+    // Note that as the segment_arena pointer points to the first unused element, we need to
+    // take segment_arena[-1] to get the actual values.
+    tempvar prev_segment_arena = &builtin_ptrs.segment_arena[-1];
+    tempvar current_segment_arena = &return_builtin_ptrs.segment_arena[-1];
+    assert prev_segment_arena.infos = current_segment_arena.infos;
+    validate_segment_arena(segment_arena=current_segment_arena);
+
     let builtin_ptrs = return_builtin_ptrs;
     with syscall_ptr {
         call_execute_syscalls(
@@ -270,6 +287,32 @@ func execute_entry_point{
         );
     }
 
-    %{ execution_helper.exit_call() %}
     return (retdata_size=retdata_end - retdata_start, retdata=retdata_start);
+}
+
+// Prepares the builtin pointer for the execution of an entry point.
+// In particular, restarts the SegmentArenaBuiltin struct if it was previously used.
+func prepare_builtin_ptrs_for_execute(builtin_ptrs: BuiltinPointers*) -> BuiltinPointers* {
+    tempvar segment_arena_ptr = builtin_ptrs.segment_arena;
+    tempvar prev_segment_arena = &segment_arena_ptr[-1];
+
+    // If no segment was allocated, we don't need to restart the struct.
+    tempvar prev_n_segments = prev_segment_arena.n_segments;
+    if (prev_n_segments == 0) {
+        return builtin_ptrs;
+    }
+
+    assert segment_arena_ptr[0] = SegmentArenaBuiltin(
+        infos=&prev_segment_arena.infos[prev_n_segments], n_segments=0, n_finalized=0
+    );
+    let segment_arena_ptr = &segment_arena_ptr[1];
+    return new BuiltinPointers(
+        pedersen=builtin_ptrs.pedersen,
+        range_check=builtin_ptrs.range_check,
+        ecdsa=builtin_ptrs.ecdsa,
+        bitwise=builtin_ptrs.bitwise,
+        ec_op=builtin_ptrs.ec_op,
+        poseidon=builtin_ptrs.poseidon,
+        segment_arena=segment_arena_ptr,
+    );
 }

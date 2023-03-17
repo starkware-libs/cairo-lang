@@ -16,6 +16,6 @@ prometheus-client
 pytest
 pytest-asyncio
 PyYAML
-typeguard
+typeguard<3.0.0
 sympy
 Web3

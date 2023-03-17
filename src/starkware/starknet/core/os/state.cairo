@@ -6,22 +6,19 @@ from starkware.cairo.common.hash import hash2
 from starkware.cairo.common.math import assert_nn_le
 from starkware.cairo.common.math_cmp import is_not_zero
 from starkware.cairo.common.patricia import (
-    PatriciaUpdateConstants,
     patricia_update_constants_new,
     patricia_update_using_update_constants,
 )
-from starkware.cairo.common.patricia_with_sponge import (
-    PatriciaUpdateConstants as PatriciaUpdateConstantsWithSponge,
-)
-from starkware.cairo.common.patricia_with_sponge import (
-    patricia_update_using_update_constants as patricia_update_using_update_constants_with_sponge,
+from starkware.cairo.common.patricia_utils import PatriciaUpdateConstants
+from starkware.cairo.common.patricia_with_poseidon import (
+    patricia_update_using_update_constants as patricia_update_using_update_constants_with_poseidon,
 )
 from starkware.cairo.common.segments import relocate_segment
-from starkware.cairo.common.sponge_as_hash import SpongeHashBuiltin
 
 const MERKLE_HEIGHT = 251;  // PRIME.bit_length() - 1.
 const UNINITIALIZED_CLASS_HASH = 0;
 const GLOBAL_STATE_VERSION = 'STARKNET_STATE_V0';
+const CONTRACT_CLASS_LEAF_VERSION = 'CONTRACT_CLASS_LEAF_V0';
 
 // The on-chain data for contract state changes has the following format:
 //
@@ -241,27 +238,16 @@ func contract_class_update{
         hashed_class_changes=hashed_class_changes,
     );
 
-    // Perform casts to work with sponge hashes.
-    let patricia_update_constants_with_sponge = cast(
-        patricia_update_constants, PatriciaUpdateConstantsWithSponge*
-    );
-    let hash_ptr = cast(poseidon_ptr, SpongeHashBuiltin*);
-
     // Call patricia_update_using_update_constants() instead of patricia_update()
     // in order not to repeat globals_pow2 calculation.
-    with hash_ptr {
-        patricia_update_using_update_constants_with_sponge(
-            patricia_update_constants=patricia_update_constants_with_sponge,
-            update_ptr=hashed_class_changes,
-            n_updates=n_class_updates,
-            height=MERKLE_HEIGHT,
-            prev_root=initial_root,
-            new_root=final_root,
-        );
-    }
-
-    // Update poseidon_ptr.
-    let poseidon_ptr = cast(hash_ptr, PoseidonBuiltin*);
+    patricia_update_using_update_constants_with_poseidon(
+        patricia_update_constants=patricia_update_constants,
+        update_ptr=hashed_class_changes,
+        n_updates=n_class_updates,
+        height=MERKLE_HEIGHT,
+        prev_root=initial_root,
+        new_root=final_root,
+    );
 
     serialize_contract_class_da_changes(update_ptr=squashed_dict, n_updates=n_class_updates);
 
@@ -305,13 +291,12 @@ func hash_class_changes{poseidon_ptr: PoseidonBuiltin*}(
 func get_contract_class_leaf_hash{poseidon_ptr: PoseidonBuiltin*}(compiled_class_hash: felt) -> (
     hash: felt
 ) {
-    const CONTRACT_CLASS_HASH_VERSION = 'CONTRACT_CLASS_LEAF_V0';
     if (compiled_class_hash == UNINITIALIZED_CLASS_HASH) {
         return (hash=0);
     }
 
-    // Return H(CONTRACT_CLASS_HASH_VERSION, compiled_class_hash).
-    let (hash_value) = poseidon_hash(CONTRACT_CLASS_HASH_VERSION, compiled_class_hash);
+    // Return H(CONTRACT_CLASS_LEAF_VERSION, compiled_class_hash).
+    let (hash_value) = poseidon_hash(CONTRACT_CLASS_LEAF_VERSION, compiled_class_hash);
     return (hash=hash_value);
 }
 

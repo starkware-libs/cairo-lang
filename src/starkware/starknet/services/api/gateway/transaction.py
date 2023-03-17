@@ -173,7 +173,7 @@ class Deploy(Transaction):
 
     contract_address_salt: int = field(metadata=fields.contract_address_salt_metadata)
     contract_definition: DeprecatedCompiledClass
-    constructor_calldata: List[int] = field(metadata=fields.call_data_metadata)
+    constructor_calldata: List[int] = field(metadata=fields.calldata_metadata)
 
     # Class variables.
     tx_type: ClassVar[TransactionType] = TransactionType.DEPLOY
@@ -213,7 +213,7 @@ class DeployAccount(AccountTransaction):
 
     class_hash: int = field(metadata=fields.ClassHashIntField.metadata())
     contract_address_salt: int = field(metadata=fields.contract_address_salt_metadata)
-    constructor_calldata: List[int] = field(metadata=fields.call_data_metadata)
+    constructor_calldata: List[int] = field(metadata=fields.calldata_metadata)
     version: int = field(metadata=fields.tx_version_metadata)
     # Repeat `nonce` to narrow its type to non-optional int.
     nonce: int = field(metadata=fields.nonce_metadata)
@@ -251,7 +251,7 @@ class InvokeFunction(AccountTransaction):
     """
 
     sender_address: int = field(metadata=fields.contract_address_metadata)
-    calldata: List[int] = field(metadata=fields.call_data_metadata)
+    calldata: List[int] = field(metadata=fields.calldata_metadata)
 
     # Class variables.
     tx_type: ClassVar[TransactionType] = TransactionType.INVOKE_FUNCTION

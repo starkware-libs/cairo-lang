@@ -20,7 +20,7 @@ from web3.contract import Contract
 TIMEOUT_FOR_WEB3_REQUESTS = 120  # Seconds.
 
 # Max number of attempts to check web3.isConnected().
-GANACHE_MAX_TRIES = 100
+GANACHE_MAX_TRIES = 60
 logger = logging.getLogger(__name__)
 
 Abi = List[dict]
@@ -130,7 +130,7 @@ class Ganache:
         )
 
         for i in range(GANACHE_MAX_TRIES):
-            time.sleep(0.1)
+            time.sleep(1)
             if self.w3.isConnected():
                 break
         else:

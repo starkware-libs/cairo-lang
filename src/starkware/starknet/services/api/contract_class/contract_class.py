@@ -1,21 +1,25 @@
 import dataclasses
+import re
+from abc import abstractmethod
 from dataclasses import field
 from enum import Enum, auto
 from typing import Any, Dict, List, Optional
 
 import marshmallow
+import marshmallow.fields as mfields
 import marshmallow_dataclass
 
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.preprocessor.flow import ReferenceManager
-from starkware.cairo.lang.compiler.program import HintedProgram, Program
+from starkware.cairo.lang.compiler.program import CairoHint, Program
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.python.utils import as_non_optional
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.public.abi import AbiType
 from starkware.starkware_utils.error_handling import stark_assert
+from starkware.starkware_utils.marshmallow_dataclass_fields import IntAsHex, additional_metadata
 from starkware.starkware_utils.subsequence import is_subsequence
 from starkware.starkware_utils.validated_dataclass import (
     ValidatedDataclass,
@@ -23,7 +27,15 @@ from starkware.starkware_utils.validated_dataclass import (
 )
 
 # An ordered list of the supported builtins.
-SUPPORTED_BUILTINS = ["pedersen", "range_check", "ecdsa", "bitwise", "ec_op", "poseidon"]
+SUPPORTED_BUILTINS = [
+    "pedersen",
+    "range_check",
+    "ecdsa",
+    "bitwise",
+    "ec_op",
+    "poseidon",
+    "segment_arena",
+]
 
 # Utilites.
 
@@ -67,7 +79,7 @@ class ContractClass(ValidatedMarshmallowDataclass):
     abi: str
 
 
-@dataclasses.dataclass(frozen=True)
+@marshmallow_dataclass.dataclass(frozen=True)
 class CompiledClassEntryPoint(ValidatedDataclass):
     # A field element that encodes the signature of the called function.
     selector: int = field(metadata=fields.entry_point_selector_metadata)
@@ -76,11 +88,43 @@ class CompiledClassEntryPoint(ValidatedDataclass):
     # Builtins used by the entry point.
     builtins: Optional[List[str]]
 
+    @marshmallow.decorators.pre_load
+    def load_offset_formatted_as_hex(
+        self, data: Dict[str, Any], many: bool, **kwargs
+    ) -> Dict[str, Any]:
+        offset = data["offset"]
+        if isinstance(offset, str):
+            assert (
+                re.match("^0x[0-9a-f]+$", offset) is not None
+            ), f"offset field is of unexpected format: {offset}."
+            data["offset"] = int(offset, 16)
 
-@marshmallow_dataclass.dataclass(frozen=True)
+        return data
+
+
+# Mypy has a problem with dataclasses that contain unimplemented abstract methods.
+# See https://github.com/python/mypy/issues/5374 for details on this problem.
+@marshmallow_dataclass.dataclass(frozen=True)  # type: ignore[misc]
 class CompiledClassBase(ValidatedMarshmallowDataclass):
-    program: HintedProgram
     entry_points_by_type: Dict[EntryPointType, List[CompiledClassEntryPoint]]
+
+    @abstractmethod
+    def get_builtins(self) -> List[str]:
+        """
+        Returns the "builtins" attribute of the compiled class.
+        """
+
+    @abstractmethod
+    def get_prime(self) -> int:
+        """
+        Returns the "prime" attribute of the compiled class.
+        """
+
+    @abstractmethod
+    def get_bytecode(self) -> List[int]:
+        """
+        Returns the "bytecode" attribute of the compiled class.
+        """
 
     def __post_init__(self):
         super().__post_init__()
@@ -109,16 +153,16 @@ class CompiledClassBase(ValidatedMarshmallowDataclass):
         )
 
     def validate(self):
-        validate_builtins(builtins=self.program.builtins)
+        validate_builtins(builtins=self.get_builtins())
         for entry_points in self.entry_points_by_type.values():
             for entry_point in entry_points:
                 validate_builtins(builtins=entry_point.builtins)
 
         stark_assert(
-            self.program.prime == DEFAULT_PRIME,
+            self.get_prime() == DEFAULT_PRIME,
             code=StarknetErrorCode.INVALID_CONTRACT_CLASS,
             message=(
-                f"Invalid value for field prime: {self.program.prime}. Expected: {DEFAULT_PRIME}."
+                f"Invalid value for field prime: {self.get_prime()}. Expected: {DEFAULT_PRIME}."
             ),
         )
 
@@ -137,14 +181,70 @@ class CompiledClass(CompiledClassBase):
     Represents a compiled contract class in the StarkNet network.
     """
 
+    prime: int = field(metadata=additional_metadata(marshmallow_field=IntAsHex(required=True)))
+    bytecode: List[int] = field(
+        metadata=additional_metadata(marshmallow_field=mfields.List(IntAsHex(), required=True))
+    )
+    # Rust hints.
+    hints: List[Any]
+    pythonic_hints: Dict[int, List[CairoHint]]
+    compiler_version: str = field(
+        metadata=dict(marshmallow_field=mfields.String(required=False, load_default=None))
+    )
+
+    def get_builtins(self) -> List[str]:
+        return []
+
+    def get_prime(self) -> int:
+        return self.prime
+
+    def get_bytecode(self) -> List[int]:
+        return self.bytecode
+
+    @marshmallow.decorators.pre_load
+    def parse_pythonic_hints(self, data: Dict[str, Any], many: bool, **kwargs) -> Dict[str, Any]:
+        """
+        Parses Cairo 1.0 casm hints.
+        Each hint comprises a two-item List: an ID (int) and a List of hint codes (strings).
+        The returned CairoHint object takes empty "accessible_scopes" and "flow_tracking_data"
+        values as these are only relevant to Cairo 0 programs.
+        """
+        assert "program" not in data, (
+            "Unsupported compiled class format. "
+            "Cairo 1.0 compiled class must not contain the attribute `program`."
+        )
+
+        pythonic_hints = data["pythonic_hints"]
+        empty_accessible_scope: List = []
+        empty_flow_tracking_data: Dict[str, Any] = {
+            "ap_tracking": {"group": 0, "offset": 0},
+            "reference_ids": {},
+        }
+
+        data["pythonic_hints"] = {
+            hint_id: [
+                {
+                    "code": hint_code,
+                    "accessible_scopes": empty_accessible_scope,
+                    "flow_tracking_data": empty_flow_tracking_data,
+                }
+                for hint_code in hint_codes
+            ]
+            for hint_id, hint_codes in pythonic_hints
+        }
+
+        return data
+
+    @marshmallow.decorators.post_dump
+    def dump_pythonic_hints(self, data: Dict[str, Any], many: bool, **kwargs) -> Dict[str, Any]:
+        data["pythonic_hints"] = [
+            [hint_id, [hint_obj["code"] for hint_obj in hint_obj_list]]
+            for hint_id, hint_obj_list in data["pythonic_hints"].items()
+        ]
+        return data
+
     def __post_init__(self):
         super().__post_init__()
-
-        stark_assert(
-            len(self.program.builtins) == 0,
-            code=StarknetErrorCode.INVALID_CONTRACT_CLASS,
-            message="Builtins should be specified per entry point.",
-        )
 
         for entry_points in self.entry_points_by_type.values():
             for entry_point in entry_points:
@@ -159,12 +259,12 @@ class CompiledClass(CompiledClassBase):
         Converts the HintedProgram into a Program object that can be run by the Python CairoRunner.
         """
         return Program(
-            prime=self.program.prime,
-            data=self.program.data,
+            prime=self.prime,
+            data=self.bytecode,
             # Buitlins for the entrypoint to execute.
             builtins=entrypoint_builtins,
-            hints=self.program.hints,
-            compiler_version=self.program.compiler_version,
+            hints=self.pythonic_hints,
+            compiler_version=self.compiler_version,
             # Fill missing fields with empty values.
             main_scope=ScopedName(),
             identifiers=IdentifierManager(),
@@ -182,6 +282,15 @@ class DeprecatedCompiledClass(CompiledClassBase):
 
     program: Program
     abi: Optional[AbiType] = None
+
+    def get_builtins(self) -> List[str]:
+        return self.program.builtins
+
+    def get_prime(self) -> int:
+        return self.program.prime
+
+    def get_bytecode(self) -> List[int]:
+        return self.program.data
 
     @marshmallow.decorators.post_dump
     def remove_none_builtins(self, data: Dict[str, Any], many: bool, **kwargs) -> Dict[str, Any]:

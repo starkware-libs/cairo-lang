@@ -1,7 +1,6 @@
 from collections.abc import Iterable
 from typing import Any, Dict, Optional, Tuple, Union, cast
 
-from starkware.cairo.common.poseidon_utils import PoseidonParams
 from starkware.cairo.common.structs import CairoStructFactory
 from starkware.cairo.lang.builtins.bitwise.bitwise_builtin_runner import BitwiseBuiltinRunner
 from starkware.cairo.lang.builtins.bitwise.instance_def import BitwiseInstanceDef
@@ -78,7 +77,6 @@ class CairoFunctionRunner(CairoRunner):
             included=True,
             instance_def=PoseidonInstanceDef(
                 ratio=1,
-                params=PoseidonParams.get_default_poseidon_params(),
                 partial_rounds_partition=[64, 22],
             ),
         )
@@ -246,6 +244,7 @@ Got {type(ex).__name__} exception during the execution of {func_name}:
         verify_secure: Optional[bool] = None,
         program_segment_size: Optional[int] = None,
         apply_modulo_to_args: Optional[bool] = None,
+        allow_tmp_segments: bool = False,
     ):
         """
         Runs the program from the given entrypoint.
@@ -276,7 +275,7 @@ Got {type(ex).__name__} exception during the execution of {func_name}:
         self.initialize_vm(hint_locals=hint_locals, static_locals=static_locals)
 
         self.run_until_pc(addr=end, run_resources=run_resources)
-        self.end_run()
+        self.end_run(allow_tmp_segments=allow_tmp_segments)
 
         if verify_secure:
             verify_secure_runner(

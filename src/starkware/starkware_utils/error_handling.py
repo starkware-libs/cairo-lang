@@ -22,7 +22,7 @@ class ErrorCode(Enum):
 class StarkErrorCode(ErrorCode):
     #: Api function temporarily disabled.
     API_FUNCTION_TEMPORARILY_DISABLED = 0
-    #: Bach was aborted.
+    #: Batch was aborted.
     BATCH_ABORTED = auto()
     #: Batch creation failure; batch currently cannot be created.
     BATCH_CREATION_FAILURE = auto()

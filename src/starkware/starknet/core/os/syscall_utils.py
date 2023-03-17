@@ -1,3 +1,4 @@
+import contextlib
 import dataclasses
 import functools
 import os
@@ -11,6 +12,10 @@ from starkware.cairo.lang.compiler.identifier_definition import StructDefinition
 from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
 from starkware.python.utils import safe_zip
+from starkware.starknet.business_logic.execution.execute_entry_point_base import (
+    ExecuteEntryPointBase,
+)
+from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starkware_utils.error_handling import StarkException
 
 STARKNET_OLD_SYSCALLS_COMPILED_PATH = os.path.join(
@@ -159,6 +164,26 @@ class HandlerException(Exception):
 
     called_contract_address: int
     stark_exception: StarkException
+
+
+@contextlib.contextmanager
+def wrap_with_handler_exception(call: ExecuteEntryPointBase):
+    try:
+        yield
+    except StarkException as exception:
+        raise HandlerException(
+            called_contract_address=call.contract_address, stark_exception=exception
+        ) from exception
+    except Exception as exception:
+        # Exceptions caught here that are not StarkException, are necessarily caused due to
+        # security issues, since every exception raised from a Cairo run (in _run) is already
+        # wrapped with StarkException.
+        stark_exception = StarkException(
+            code=StarknetErrorCode.SECURITY_ERROR, message=str(exception)
+        )
+        raise HandlerException(
+            called_contract_address=call.contract_address, stark_exception=stark_exception
+        ) from exception
 
 
 def get_selector_from_program(syscall_name: str, syscalls_program: Program) -> int:

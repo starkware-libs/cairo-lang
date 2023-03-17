@@ -1,8 +1,19 @@
-import contextlib
 import dataclasses
 import functools
 from abc import ABC, abstractmethod
-from typing import Callable, Dict, Iterable, Iterator, List, Mapping, Optional, Tuple, Type, cast
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Tuple,
+    Type,
+    cast,
+)
 
 import cachetools
 
@@ -10,7 +21,7 @@ from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.common.structs import CairoStructProxy
 from starkware.cairo.lang.vm.memory_segments import MemorySegmentManager
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
-from starkware.python.utils import assert_exhausted, camel_to_snake_case
+from starkware.python.utils import as_non_optional, assert_exhausted, camel_to_snake_case
 from starkware.starknet.business_logic.execution.execute_entry_point_base import (
     ExecuteEntryPointBase,
 )
@@ -32,13 +43,13 @@ from starkware.starknet.core.os.contract_address.contract_address import (
 )
 from starkware.starknet.core.os.syscall_utils import (
     STARKNET_SYSCALLS_COMPILED_PATH,
-    HandlerException,
     cast_to_int,
     get_deprecated_syscall_structs_and_info,
     get_selector_from_program,
     get_syscall_structs,
     load_program,
     validate_runtime_request_type,
+    wrap_with_handler_exception,
 )
 from starkware.starknet.definitions.constants import GasCost
 from starkware.starknet.definitions.error_codes import CairoErrorCode, StarknetErrorCode
@@ -46,7 +57,7 @@ from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public.abi import CONSTRUCTOR_ENTRY_POINT_SELECTOR
 from starkware.starknet.services.api.contract_class.contract_class import EntryPointType
 from starkware.starknet.storage.starknet_storage import OsSingleStarknetStorage
-from starkware.starkware_utils.error_handling import StarkException, stark_assert
+from starkware.starkware_utils.error_handling import stark_assert
 
 SyscallFullResponse = Tuple[tuple, tuple]  # Response header + specific syscall response.
 ExecuteSyscallCallback = Callable[
@@ -85,6 +96,26 @@ class SyscallHandlerBase(ABC):
             get_selector_from_program, syscalls_program=syscalls_program
         )
         return {
+            get_selector("call_contract"): SyscallInfo(
+                name="call_contract",
+                execute_callback=cls.call_contract,
+                request_struct=structs.CallContractRequest,
+            ),
+            get_selector("deploy"): SyscallInfo(
+                name="deploy",
+                execute_callback=cls.deploy,
+                request_struct=structs.DeployRequest,
+            ),
+            get_selector("get_execution_info"): SyscallInfo(
+                name="get_execution_info",
+                execute_callback=cls.get_execution_info,
+                request_struct=structs.EmptyRequest,
+            ),
+            get_selector("library_call"): SyscallInfo(
+                name="library_call",
+                execute_callback=cls.library_call,
+                request_struct=structs.LibraryCallRequest,
+            ),
             get_selector("storage_read"): SyscallInfo(
                 name="storage_read",
                 execute_callback=cls.storage_read,
@@ -95,15 +126,20 @@ class SyscallHandlerBase(ABC):
                 execute_callback=cls.storage_write,
                 request_struct=structs.StorageWriteRequest,
             ),
-            get_selector("get_caller_address"): SyscallInfo(
-                name="get_caller_address",
-                execute_callback=cls.get_caller_address,
-                request_struct=structs.EmptyRequest,
-            ),
             get_selector("emit_event"): SyscallInfo(
                 name="emit_event",
                 execute_callback=cls.emit_event,
                 request_struct=structs.EmitEventRequest,
+            ),
+            get_selector("replace_class"): SyscallInfo(
+                name="replace_class",
+                execute_callback=cls.replace_class,
+                request_struct=structs.ReplaceClassRequest,
+            ),
+            get_selector("send_message_to_l1"): SyscallInfo(
+                name="send_message_to_l1",
+                execute_callback=cls.send_message_to_l1,
+                request_struct=structs.SendMessageToL1Request,
             ),
         }
 
@@ -149,8 +185,69 @@ class SyscallHandlerBase(ABC):
 
     # Syscalls.
 
+    def call_contract(self, remaining_gas: int, request: CairoStructProxy) -> SyscallFullResponse:
+        return self.call_contract_helper(
+            remaining_gas=remaining_gas, request=request, syscall_name="call_contract"
+        )
+
+    def library_call(self, remaining_gas: int, request: CairoStructProxy) -> SyscallFullResponse:
+        return self.call_contract_helper(
+            remaining_gas=remaining_gas, request=request, syscall_name="library_call"
+        )
+
+    def call_contract_helper(
+        self, remaining_gas: int, request: CairoStructProxy, syscall_name: str
+    ) -> SyscallFullResponse:
+        result = self._call_contract_helper(
+            remaining_gas=remaining_gas, request=request, syscall_name=syscall_name
+        )
+
+        remaining_gas -= result.gas_consumed
+        response_header = self.structs.ResponseHeader(
+            gas=remaining_gas, failure_flag=result.failure_flag
+        )
+        retdata_start = self._allocate_segment_for_retdata(retdata=result.retdata)
+        retdata_end = retdata_start + len(result.retdata)
+        if response_header.failure_flag == 0:
+            response = self.structs.CallContractResponse(
+                retdata_start=retdata_start, retdata_end=retdata_end
+            )
+        else:
+            response = self.structs.FailureReason(start=retdata_start, end=retdata_end)
+
+        return response_header, response
+
+    def deploy(self, remaining_gas: int, request: CairoStructProxy) -> SyscallFullResponse:
+        contract_address, result = self._deploy(remaining_gas=remaining_gas, request=request)
+
+        remaining_gas -= result.gas_consumed
+        response_header = self.structs.ResponseHeader(
+            gas=remaining_gas, failure_flag=result.failure_flag
+        )
+        retdata_start = self._allocate_segment_for_retdata(retdata=result.retdata)
+        retdata_end = retdata_start + len(result.retdata)
+        if response_header.failure_flag == 0:
+            response = self.structs.DeployResponse(
+                contract_address=contract_address,
+                constructor_retdata_start=retdata_start,
+                constructor_retdata_end=retdata_end,
+            )
+        else:
+            response = self.structs.FailureReason(start=retdata_start, end=retdata_end)
+
+        return response_header, response
+
+    def get_execution_info(
+        self, remaining_gas: int, request: CairoStructProxy
+    ) -> SyscallFullResponse:
+        execution_info_ptr = self._get_execution_info_ptr()
+
+        response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
+        response = self.structs.GetExecutionInfoResponse(execution_info=execution_info_ptr)
+        return response_header, response
+
     def storage_read(self, remaining_gas: int, request: CairoStructProxy) -> SyscallFullResponse:
-        assert request.reserved == 0, "Unexpected reserved value."
+        assert request.reserved == 0, f"Unsupported address domain: {request.reserved}."
         value = self._storage_read(key=cast_to_int(request.key))
 
         response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
@@ -158,36 +255,63 @@ class SyscallHandlerBase(ABC):
         return response_header, response
 
     def storage_write(self, remaining_gas: int, request: CairoStructProxy) -> SyscallFullResponse:
-        assert request.reserved == 0, "Unexpected reserved value."
+        assert request.reserved == 0, f"Unsupported address domain: {request.reserved}."
         self._storage_write(key=cast_to_int(request.key), value=cast_to_int(request.value))
 
         response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
         return response_header, tuple()
 
-    def get_caller_address(
-        self, remaining_gas: int, request: CairoStructProxy
-    ) -> SyscallFullResponse:
-        caller_address = self._get_caller_address()
-
-        response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
-        response = self.structs.GetCallerAddressResponse(caller_address=caller_address)
-        return response_header, response
-
     def emit_event(self, remaining_gas: int, request: CairoStructProxy) -> SyscallFullResponse:
-        keys = self._get_felt_range(
-            start_addr=cast(RelocatableValue, request.keys_start),
-            end_addr=cast(RelocatableValue, request.keys_end),
-        )
-        data = self._get_felt_range(
-            start_addr=cast(RelocatableValue, request.data_start),
-            end_addr=cast(RelocatableValue, request.data_end),
-        )
+        keys = self._get_felt_range(start_addr=request.keys_start, end_addr=request.keys_end)
+        data = self._get_felt_range(start_addr=request.data_start, end_addr=request.data_end)
         self._emit_event(keys=keys, data=data)
 
         response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
         return response_header, tuple()
 
+    def replace_class(self, remaining_gas: int, request: CairoStructProxy) -> SyscallFullResponse:
+        self._replace_class(class_hash=cast_to_int(request.class_hash))
+
+        response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
+        return response_header, tuple()
+
+    def send_message_to_l1(
+        self, remaining_gas: int, request: CairoStructProxy
+    ) -> SyscallFullResponse:
+        payload = self._get_felt_range(
+            start_addr=cast(RelocatableValue, request.payload_start),
+            end_addr=cast(RelocatableValue, request.payload_end),
+        )
+        self._send_message_to_l1(to_address=cast_to_int(request.to_address), payload=payload)
+
+        response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
+        return response_header, tuple()
+
     # Application-specific syscall implementation.
+
+    @abstractmethod
+    def _call_contract_helper(
+        self, remaining_gas: int, request: CairoStructProxy, syscall_name: str
+    ) -> CallResult:
+        """
+        Returns the call's result.
+
+        syscall_name can be "call_contract" or "library_call".
+        """
+
+    @abstractmethod
+    def _deploy(self, remaining_gas: int, request: CairoStructProxy) -> Tuple[int, CallResult]:
+        """
+        Returns the address of the newly deployed contract and the constructor call's result.
+        Note that the result may contain failures that preceded the constructor invocation, such
+        as undeclared class.
+        """
+
+    @abstractmethod
+    def _get_execution_info_ptr(self) -> RelocatableValue:
+        """
+        Returns a pointer to the ExecutionInfo struct.
+        """
 
     @abstractmethod
     def _storage_read(self, key: int) -> int:
@@ -202,15 +326,21 @@ class SyscallHandlerBase(ABC):
         """
 
     @abstractmethod
-    def _get_caller_address(self) -> int:
-        """
-        Returns the address of the caller contract.
-        """
-
-    @abstractmethod
     def _emit_event(self, keys: List[int], data: List[int]):
         """
         Specific implementation of the emit_event syscall.
+        """
+
+    @abstractmethod
+    def _replace_class(self, class_hash: int):
+        """
+        Specific implementation of the replace_class syscall.
+        """
+
+    @abstractmethod
+    def _send_message_to_l1(self, to_address: int, payload: List[int]):
+        """
+        Specific implementation of the send_message_to_l1 syscall.
         """
 
     # Internal utilities.
@@ -231,9 +361,9 @@ class SyscallHandlerBase(ABC):
 
         return response_header, failure_reason
 
-    def _get_felt_range(
-        self, start_addr: RelocatableValue, end_addr: RelocatableValue
-    ) -> List[int]:
+    def _get_felt_range(self, start_addr: Any, end_addr: Any) -> List[int]:
+        assert isinstance(start_addr, RelocatableValue)
+        assert isinstance(end_addr, RelocatableValue)
         assert start_addr.segment_index == end_addr.segment_index, (
             "Inconsistent start and end segment indices "
             f"({start_addr.segment_index} != {end_addr.segment_index})."
@@ -253,6 +383,12 @@ class SyscallHandlerBase(ABC):
         Allocates and returns a new (read-only) segment with the given data.
         Note that unlike MemorySegmentManager.write_arg, this function doesn't work well with
         recursive input - call allocate_segment for the inner items if needed.
+        """
+
+    @abstractmethod
+    def _allocate_segment_for_retdata(self, retdata: Iterable[int]) -> RelocatableValue:
+        """
+        Allocates and returns a new (read-only) segment with the given retdata.
         """
 
     def _validate_syscall_ptr(self, actual_syscall_ptr: RelocatableValue):
@@ -284,36 +420,150 @@ class BusinessLogicSyscallHandler(SyscallHandlerBase):
     def __init__(
         self,
         state: SyncState,
+        resources_manager: ExecutionResourcesManager,
         segments: MemorySegmentManager,
         tx_execution_context: TransactionExecutionContext,
         initial_syscall_ptr: RelocatableValue,
-        caller_address: int,
-        contract_address: int,
+        general_config: StarknetGeneralConfig,
+        entry_point: ExecuteEntryPointBase,
+        support_reverted: bool,
     ):
         super().__init__(segments=segments, initial_syscall_ptr=initial_syscall_ptr)
 
+        # Entry point info.
+        self.entry_point = entry_point
+        self.execute_entry_point_cls: Type[ExecuteEntryPointBase] = type(entry_point)
+
+        # Configuration objects.
+        self.general_config = general_config
+
+        # Execution-related objects.
         self.tx_execution_context = tx_execution_context
-        self.caller_address = caller_address
+        self.resources_manager = resources_manager
+        self.state = state
+        self.support_reverted = support_reverted
 
         # The storage which the current call acts on.
-        self.storage = ContractStorageState(state=state, contract_address=contract_address)
+        self.storage = ContractStorageState(
+            state=state, contract_address=self.entry_point.contract_address
+        )
 
         # A list of dynamically allocated segments that are expected to be read-only.
         self.read_only_segments: List[Tuple[RelocatableValue, int]] = []
 
+        # Internal calls executed by the current contract call.
+        self.internal_calls: List[CallInfo] = []
+
         # Events emitted by the current contract call.
         self.events: List[OrderedEvent] = []
 
+        # Messages sent by the current contract call to L1.
+        self.l2_to_l1_messages: List[OrderedL2ToL1Message] = []
+
+        # A pointer to the Cairo ExecutionInfo struct.
+        self._execution_info_ptr: Optional[RelocatableValue] = None
+
     # Syscalls.
+
+    def _call_contract_helper(
+        self, remaining_gas: int, request: CairoStructProxy, syscall_name: str
+    ) -> CallResult:
+        calldata = self._get_felt_range(
+            start_addr=request.calldata_start, end_addr=request.calldata_end
+        )
+        class_hash: Optional[int] = None
+        if syscall_name == "call_contract":
+            contract_address = cast_to_int(request.contract_address)
+            caller_address = self.entry_point.contract_address
+            call_type = CallType.CALL
+        elif syscall_name == "library_call":
+            contract_address = self.entry_point.contract_address
+            caller_address = self.entry_point.caller_address
+            call_type = CallType.DELEGATE
+            class_hash = cast_to_int(request.class_hash)
+        else:
+            raise NotImplementedError(f"Unsupported call type {syscall_name}.")
+
+        call = self.execute_entry_point_cls(
+            call_type=call_type,
+            contract_address=contract_address,
+            entry_point_selector=cast_to_int(request.selector),
+            entry_point_type=EntryPointType.EXTERNAL,
+            calldata=calldata,
+            caller_address=caller_address,
+            initial_gas=remaining_gas,
+            class_hash=class_hash,
+            code_address=None,
+        )
+
+        return self.execute_entry_point(call=call)
+
+    def _deploy(self, remaining_gas: int, request: CairoStructProxy) -> Tuple[int, CallResult]:
+        assert request.deploy_from_zero in [0, 1], "The deploy_from_zero field must be 0 or 1."
+        constructor_calldata = self._get_felt_range(
+            start_addr=request.constructor_calldata_start, end_addr=request.constructor_calldata_end
+        )
+        class_hash = cast_to_int(request.class_hash)
+
+        # Calculate contract address.
+        deployer_address = self.entry_point.contract_address if request.deploy_from_zero == 0 else 0
+        contract_address = calculate_contract_address_from_hash(
+            salt=cast_to_int(request.contract_address_salt),
+            class_hash=class_hash,
+            constructor_calldata=constructor_calldata,
+            deployer_address=deployer_address,
+        )
+        # Instantiate the contract (may raise UNDECLARED_CLASS and CONTRACT_ADDRESS_UNAVAILABLE).
+        self.state.deploy_contract(contract_address=contract_address, class_hash=class_hash)
+
+        # Invoke constructor.
+        result = self.execute_constructor_entry_point(
+            contract_address=contract_address,
+            class_hash=class_hash,
+            constructor_calldata=constructor_calldata,
+            remaining_gas=remaining_gas,
+        )
+        return contract_address, result
+
+    def _get_execution_info_ptr(self) -> RelocatableValue:
+        if self._execution_info_ptr is None:
+            # Prepare block info.
+            python_block_info = self.storage.state.block_info
+            block_info = self.structs.BlockInfo(
+                block_number=python_block_info.block_number,
+                block_timestamp=python_block_info.block_timestamp,
+                sequencer_address=as_non_optional(python_block_info.sequencer_address),
+            )
+            # Prepare transaction info.
+            signature = self.tx_execution_context.signature
+            signature_start = self.allocate_segment(data=signature)
+            tx_info = self.structs.TxInfo(
+                version=self.tx_execution_context.version,
+                account_contract_address=self.tx_execution_context.account_contract_address,
+                max_fee=self.tx_execution_context.max_fee,
+                signature_start=signature_start,
+                signature_end=signature_start + len(signature),
+                transaction_hash=self.tx_execution_context.transaction_hash,
+                chain_id=self.general_config.chain_id.value,
+                nonce=self.tx_execution_context.nonce,
+            )
+            # Gather all info.
+            execution_info = self.structs.ExecutionInfo(
+                block_info=self.allocate_segment(data=block_info),
+                tx_info=self.allocate_segment(data=tx_info),
+                caller_address=self.entry_point.caller_address,
+                contract_address=self.entry_point.contract_address,
+                selector=self.entry_point.entry_point_selector,
+            )
+            self._execution_info_ptr = self.allocate_segment(data=execution_info)
+
+        return self._execution_info_ptr
 
     def _storage_read(self, key: int) -> int:
         return self.storage.read(address=key)
 
     def _storage_write(self, key: int, value: int):
         self.storage.write(address=key, value=value)
-
-    def _get_caller_address(self) -> int:
-        return self.caller_address
 
     def _emit_event(self, keys: List[int], data: List[int]):
         self.events.append(
@@ -323,13 +573,94 @@ class BusinessLogicSyscallHandler(SyscallHandlerBase):
         # Update events count.
         self.tx_execution_context.n_emitted_events += 1
 
+    def _replace_class(self, class_hash: int):
+        compiled_class_hash = self.storage.state.get_compiled_class_hash(class_hash=class_hash)
+        stark_assert(
+            compiled_class_hash != 0,
+            code=StarknetErrorCode.UNDECLARED_CLASS,
+            message=f"Class with hash {class_hash} is not declared.",
+        )
+
+        # Replace the class.
+        self.state.set_class_hash_at(
+            contract_address=self.entry_point.contract_address, class_hash=class_hash
+        )
+
+    def _send_message_to_l1(self, to_address: int, payload: List[int]):
+        self.l2_to_l1_messages.append(
+            # Note that the constructor of OrderedL2ToL1Message might fail as it is
+            # more restrictive than the Cairo code.
+            OrderedL2ToL1Message(
+                order=self.tx_execution_context.n_sent_messages,
+                to_address=to_address,
+                payload=payload,
+            )
+        )
+
+        # Update messages count.
+        self.tx_execution_context.n_sent_messages += 1
+
     # Utilities.
+
+    def execute_entry_point(self, call: ExecuteEntryPointBase) -> CallResult:
+        with wrap_with_handler_exception(call=call):
+            call_info = call.execute(
+                state=self.state,
+                resources_manager=self.resources_manager,
+                tx_execution_context=self.tx_execution_context,
+                general_config=self.general_config,
+                support_reverted=self.support_reverted,
+            )
+
+        self.internal_calls.append(call_info)
+        return call_info.result()
+
+    def execute_constructor_entry_point(
+        self,
+        contract_address: int,
+        class_hash: int,
+        constructor_calldata: List[int],
+        remaining_gas: int,
+    ) -> CallResult:
+        contract_class = self.state.get_compiled_class_by_class_hash(class_hash=class_hash)
+        constructor_entry_points = contract_class.entry_points_by_type[EntryPointType.CONSTRUCTOR]
+        if len(constructor_entry_points) == 0:
+            # Contract has no constructor.
+            assert (
+                len(constructor_calldata) == 0
+            ), "Cannot pass calldata to a contract with no constructor."
+
+            call_info = CallInfo.empty_constructor_call(
+                contract_address=contract_address,
+                caller_address=self.entry_point.contract_address,
+                class_hash=class_hash,
+            )
+            self.internal_calls.append(call_info)
+
+            return call_info.result()
+
+        call = self.execute_entry_point_cls(
+            call_type=CallType.CALL,
+            contract_address=contract_address,
+            entry_point_selector=CONSTRUCTOR_ENTRY_POINT_SELECTOR,
+            entry_point_type=EntryPointType.CONSTRUCTOR,
+            calldata=constructor_calldata,
+            caller_address=self.entry_point.contract_address,
+            initial_gas=remaining_gas,
+            class_hash=None,
+            code_address=None,
+        )
+
+        return self.execute_entry_point(call=call)
 
     def allocate_segment(self, data: Iterable[MaybeRelocatable]) -> RelocatableValue:
         segment_start = self.segments.add()
         segment_end = self.segments.write_arg(ptr=segment_start, arg=data)
         self.read_only_segments.append((segment_start, segment_end - segment_start))
         return segment_start
+
+    def _allocate_segment_for_retdata(self, retdata: Iterable[int]) -> RelocatableValue:
+        return self.allocate_segment(data=retdata)
 
     def post_run(self, runner: CairoFunctionRunner, syscall_end_ptr: MaybeRelocatable):
         """
@@ -379,10 +710,8 @@ class OsExecutionHelper:
         )
         self.call_iterator: Iterator[CallInfo] = iter([])
 
-        # A stack that keeps track of the state of the calls being executed now.
-        # The last item is the state of the current call; the one before it, is the
-        # state of the caller (the call the called the current call); and so on.
-        self.call_stack: List[CallInfo] = []
+        # The CallInfo for the call currently being executed.
+        self._call_info: Optional[CallInfo] = None
 
         # An iterator over contract addresses that were deployed during that call.
         self.deployed_contracts_iterator: Iterator[int] = iter([])
@@ -394,19 +723,30 @@ class OsExecutionHelper:
         # code is executed.
         self.execute_code_read_iterator: Iterator[int] = iter([])
 
-        # A pointer to the Cairo TxInfo struct.
-        # This pointer needs to match the TxInfo pointer that is going to be used during the system
-        # call validation by the StarkNet OS.
-        # Set during enter_tx.
-        self.tx_info_ptr: Optional[RelocatableValue] = None
-
         # The TransactionExecutionInfo for the transaction currently being executed.
         self.tx_execution_info: Optional[TransactionExecutionInfo] = None
 
-        # StarkNet storage-related members.
+        # Starknet storage-related members.
         self.storage_by_address = storage_by_address
 
-    def start_tx(self, tx_info_ptr: RelocatableValue):
+        # A pointer to the Cairo (deprecated) TxInfo struct.
+        # This pointer needs to match the DeprecatedTxInfo pointer that is going to be used during
+        # the system call validation by the Starknet OS.
+        # Set during enter_tx.
+        self.tx_info_ptr: Optional[RelocatableValue] = None
+
+        # A pointer to the Cairo ExecutionInfo struct of the current call.
+        # This pointer needs to match the ExecutionInfo pointer that is going to be used during the
+        # system call validation by the StarkNet OS.
+        # Set during enter_call.
+        self.call_execution_info_ptr: Optional[RelocatableValue] = None
+
+    @property
+    def call_info(self) -> CallInfo:
+        assert self._call_info is not None
+        return self._call_info
+
+    def start_tx(self, tx_info_ptr: Optional[RelocatableValue]):
         """
         Called when starting the execution of a transaction.
 
@@ -424,7 +764,6 @@ class OsExecutionHelper:
         Called after the execution of the current transaction complete.
         """
         assert_exhausted(iterator=self.call_iterator)
-        assert self.tx_info_ptr is not None
         self.tx_info_ptr = None
         assert self.tx_execution_info is not None
         self.tx_execution_info = None
@@ -434,30 +773,45 @@ class OsExecutionHelper:
         assert_exhausted(iterator=self.result_iterator)
         assert_exhausted(iterator=self.execute_code_read_iterator)
 
-    def enter_call(self):
+    def enter_call(self, execution_info_ptr: Optional[RelocatableValue]):
+        assert self.call_execution_info_ptr is None
+        self.call_execution_info_ptr = execution_info_ptr
+
         self.assert_interators_exhausted()
 
-        call_info = next(self.call_iterator)
-        self.call_stack.append(call_info)
+        assert self._call_info is None
+        self._call_info = next(self.call_iterator)
 
         self.deployed_contracts_iterator = (
             call.contract_address
-            for call in call_info.internal_calls
+            for call in self.call_info.internal_calls
             if call.entry_point_type is EntryPointType.CONSTRUCTOR
         )
-        self.result_iterator = (call.result() for call in call_info.internal_calls)
-        self.execute_code_read_iterator = iter(call_info.storage_read_values)
+        self.result_iterator = (call.result() for call in self.call_info.internal_calls)
+        self.execute_code_read_iterator = iter(self.call_info.storage_read_values)
 
     def exit_call(self):
+        self.call_execution_info_ptr = None
+
         self.assert_interators_exhausted()
-        self.call_stack.pop()
+        assert self._call_info is not None
+        self._call_info = None
+
+    def skip_call(self):
+        """
+        Called when skipping the execution of a call.
+        It replaces a call to enter_call and exit_call.
+        """
+        self.enter_call(execution_info_ptr=None)
+        self.exit_call()
 
     def skip_tx(self):
         """
         Called when skipping the execution of a transaction.
         It replaces a call to start_tx and end_tx.
         """
-        next(self.tx_execution_info_iterator)
+        self.start_tx(tx_info_ptr=None)
+        self.end_tx()
 
 
 class OsSyscallHandler(SyscallHandlerBase):
@@ -491,7 +845,28 @@ class OsSyscallHandler(SyscallHandlerBase):
         self.segments.write_arg(ptr=segment_start, arg=data)
         return segment_start
 
+    def _allocate_segment_for_retdata(self, retdata: Iterable[int]) -> RelocatableValue:
+        segment_start = self.segments.add_temp_segment()
+        self.segments.write_arg(ptr=segment_start, arg=retdata)
+        return segment_start
+
     # Syscalls.
+
+    def _call_contract_helper(
+        self, remaining_gas: int, request: CairoStructProxy, syscall_name: str
+    ) -> CallResult:
+        return next(self.execution_helper.result_iterator)
+
+    def _deploy(self, remaining_gas: int, request: CairoStructProxy) -> Tuple[int, CallResult]:
+        constructor_result = next(self.execution_helper.result_iterator)
+        contract_address = next(self.execution_helper.deployed_contracts_iterator)
+        return contract_address, constructor_result
+
+    def _get_execution_info_ptr(self) -> RelocatableValue:
+        assert (
+            self.execution_helper.call_execution_info_ptr is not None
+        ), "ExecutionInfo pointer is not set."
+        return self.execution_helper.call_execution_info_ptr
 
     def _storage_read(self, key: int) -> int:
         return next(self.execution_helper.execute_code_read_iterator)
@@ -499,10 +874,13 @@ class OsSyscallHandler(SyscallHandlerBase):
     def _storage_write(self, key: int, value: int):
         return
 
-    def _get_caller_address(self) -> int:
-        return self.execution_helper.call_stack[-1].caller_address
-
     def _emit_event(self, keys: List[int], data: List[int]):
+        return
+
+    def _replace_class(self, class_hash: int):
+        return
+
+    def _send_message_to_l1(self, to_address: int, payload: List[int]):
         return
 
 
@@ -1041,7 +1419,7 @@ class DeprecatedBlSyscallHandler(DeprecatedSysCallHandlerBase):
         self.execute_entry_point(call=call)
 
     def execute_entry_point(self, call: ExecuteEntryPointBase) -> CallResult:
-        with self.entry_point_execution_context(call=call):
+        with wrap_with_handler_exception(call=call):
             # Execute contract call.
             call_info = call.execute(
                 state=self.sync_state,
@@ -1054,25 +1432,6 @@ class DeprecatedBlSyscallHandler(DeprecatedSysCallHandlerBase):
         self.internal_calls.append(call_info)
 
         return call_info.result()
-
-    @contextlib.contextmanager
-    def entry_point_execution_context(self, call: ExecuteEntryPointBase):
-        try:
-            yield
-        except StarkException as exception:
-            raise HandlerException(
-                called_contract_address=call.contract_address, stark_exception=exception
-            ) from exception
-        except Exception as exception:
-            # Exceptions caught here that are not StarkException, are necessarily caused due to
-            # security issues, since every exception raised from a Cairo run (in _run) is already
-            # wrapped with StarkException.
-            stark_exception = StarkException(
-                code=StarknetErrorCode.SECURITY_ERROR, message=str(exception)
-            )
-            raise HandlerException(
-                called_contract_address=call.contract_address, stark_exception=stark_exception
-            ) from exception
 
     def emit_event(self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue):
         """
@@ -1240,10 +1599,10 @@ class DeprecatedOsSysCallHandler(DeprecatedSysCallHandlerBase):
         return next(self.execution_helper.deployed_contracts_iterator)
 
     def _get_caller_address(self, syscall_ptr: RelocatableValue) -> int:
-        return self.execution_helper.call_stack[-1].caller_address
+        return self.execution_helper.call_info.caller_address
 
     def _get_contract_address(self, syscall_ptr: RelocatableValue) -> int:
-        return self.execution_helper.call_stack[-1].contract_address
+        return self.execution_helper.call_info.contract_address
 
     def _get_tx_info_ptr(self) -> RelocatableValue:
         assert self.execution_helper.tx_info_ptr is not None

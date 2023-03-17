@@ -11,11 +11,13 @@ from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.python.utils import from_bytes, to_bytes
+from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.public.abi import starknet_keccak
 from starkware.starknet.services.api.contract_class.contract_class import (
     ContractClass,
     EntryPointType,
 )
+from starkware.starkware_utils.error_handling import StarkException
 
 CAIRO_FILE = os.path.join(os.path.dirname(__file__), "contract_class.cairo")
 CONTRACT_CLASS_MODULE = "starkware.starknet.core.os.contract_class.contract_class"
@@ -26,9 +28,7 @@ def load_contract_class_cairo_program() -> Program:
     return compile_cairo_files(
         [CAIRO_FILE],
         prime=DEFAULT_PRIME,
-        main_scope=ScopedName.from_string(
-            "starkware.starknet.core.os.contract_class.contract_class"
-        ),
+        main_scope=ScopedName.from_string(CONTRACT_CLASS_MODULE),
     )
 
 
@@ -71,14 +71,20 @@ def get_contract_class_struct(
     )
     assert isinstance(CONTRACT_CLASS_VERSION_IDENT, ConstDefinition)
 
-    contract_class_version_ident_str = to_bytes(CONTRACT_CLASS_VERSION_IDENT.value).decode("ascii")
-    assert CONTRACT_CLASS_VERSION_IDENT.value == from_bytes(
+    if CONTRACT_CLASS_VERSION_IDENT.value != from_bytes(
         ("CONTRACT_CLASS_V" + contract_class.contract_class_version).encode("ascii")
-    ), (
-        "Unexpected contract class version. "
-        f"Expected {contract_class_version_ident_str}; "
-        f"got CONTRACT_CLASS_V{contract_class.contract_class_version}."
-    )
+    ):
+        contract_class_version_ident_str = to_bytes(CONTRACT_CLASS_VERSION_IDENT.value).decode(
+            "ascii"
+        )
+        raise StarkException(
+            code=StarknetErrorCode.INVALID_CONTRACT_CLASS_VERSION,
+            message=(
+                "Unexpected contract class version. "
+                f"Expected {contract_class_version_ident_str}; "
+                f"got CONTRACT_CLASS_V{contract_class.contract_class_version}."
+            ),
+        )
 
     external_functions, l1_handlers, constructors = (
         _get_contract_entry_points(

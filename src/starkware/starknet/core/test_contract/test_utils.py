@@ -2,7 +2,6 @@ import functools
 import os
 
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
-from starkware.cairo.lang.compiler.program import HintedProgram
 from starkware.starknet.services.api.contract_class.contract_class import (
     CompiledClass,
     CompiledClassEntryPoint,
@@ -26,13 +25,11 @@ def get_test_deprecated_compiled_class() -> DeprecatedCompiledClass:
 
 def get_test_compiled_class() -> CompiledClass:
     return CompiledClass(
-        program=HintedProgram(
-            prime=DEFAULT_PRIME,
-            data=[1, 2, 3],
-            builtins=[],
-            hints={},
-            compiler_version="",
-        ),
+        prime=DEFAULT_PRIME,
+        bytecode=[1, 2, 3],
+        hints=[],
+        pythonic_hints={},
+        compiler_version="",
         entry_points_by_type={
             EntryPointType.EXTERNAL: [
                 CompiledClassEntryPoint(selector=1, offset=1, builtins=["237"])

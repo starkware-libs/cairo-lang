@@ -1,8 +1,8 @@
 from typing import Any, Dict, Set
 
-from starkware.cairo.common.poseidon_utils import hades_permutation
 from starkware.cairo.lang.builtins.poseidon.instance_def import PoseidonInstanceDef
 from starkware.cairo.lang.vm.builtin_runner import SimpleBuiltinRunner
+from starkware.cairo.lang.vm.crypto import poseidon_perm
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 from starkware.python.math_utils import safe_div
 
@@ -45,7 +45,7 @@ class PoseidonBuiltinRunner(SimpleBuiltinRunner):
                     + f"Got: {value}."
                 )
             input_state = memory.get_range(first_input_addr, self.n_input_cells)
-            output_state = hades_permutation(input_state, self.instance_def.params)
+            output_state = poseidon_perm(*input_state)
             for i in range(self.n_input_cells):
                 self.cache[first_output_addr + i] = output_state[i]
             return self.cache[addr]

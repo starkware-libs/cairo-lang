@@ -98,6 +98,9 @@ class IntAsHex(mfields.Field):
         super().__init__(**kwargs)
 
     def _serialize(self, value, attr, obj, **kwargs):
+        """
+        Used during dump.
+        """
         if value is None:
             return None
         assert isinstance(value, int)
@@ -105,6 +108,9 @@ class IntAsHex(mfields.Field):
         return hex(value)
 
     def _deserialize(self, value, attr, data, **kwargs):
+        """
+        Used during load.
+        """
         if re.match("^0x[0-9a-f]+$", value) is not None:
             return int(value, 16)
 
@@ -121,6 +127,7 @@ class BackwardCompatibleIntAsHex(IntAsHex):
         self,
         allow_decimal_loading: bool = False,
         allow_bytes_hex_loading: bool = False,
+        allow_int_loading: bool = False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -130,8 +137,12 @@ class BackwardCompatibleIntAsHex(IntAsHex):
         )
         self._allow_decimal_loading = allow_decimal_loading
         self._allow_bytes_hex_loading = allow_bytes_hex_loading
+        self._allow_int_loading = allow_int_loading
 
     def _deserialize(self, value, attr, data, **kwargs):
+        if self._allow_int_loading and isinstance(value, int):
+            return value
+
         if self._allow_decimal_loading and re.match("^[0-9]+$", value) is not None:
             # Load non-negative int string.
             return int(value)

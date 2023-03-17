@@ -24,6 +24,7 @@ python_lib(cairo_run_builtins_lib
     LIBS
     cairo_common_lib
     cairo_relocatable_lib
+    cairo_vm_crypto_lib
     cairo_vm_lib
     starkware_python_utils_lib
 )

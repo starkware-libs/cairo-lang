@@ -26,6 +26,7 @@ python_lib(starknet_cli_lib
 
     FILES
     class_hash.py
+    compiled_class_hash.py
     reconstruct_starknet_traceback.py
     starknet_cli.py
 
@@ -40,6 +41,7 @@ python_lib(starknet_cli_lib
     starknet_cli_utils_lib
     starknet_compile_lib
     starknet_contract_class_lib
+    starknet_contract_class_utils_lib
     starknet_definitions_lib
     starknet_feeder_gateway_client_lib
     starknet_feeder_gateway_request_objects_lib

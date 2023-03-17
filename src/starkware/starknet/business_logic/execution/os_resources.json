@@ -2,32 +2,32 @@
     "execute_syscalls": {
         "call_contract": {
             "builtin_instance_counter": {
-                "range_check_builtin": 18
+                "range_check_builtin": 19
             },
             "n_memory_holes": 0,
-            "n_steps": 617
+            "n_steps": 677
         },
         "delegate_call": {
             "builtin_instance_counter": {
-                "range_check_builtin": 18
+                "range_check_builtin": 19
             },
             "n_memory_holes": 0,
-            "n_steps": 639
+            "n_steps": 699
         },
         "delegate_l1_handler": {
             "builtin_instance_counter": {
-                "range_check_builtin": 14
+                "range_check_builtin": 15
             },
             "n_memory_holes": 0,
-            "n_steps": 618
+            "n_steps": 678
         },
         "deploy": {
             "builtin_instance_counter": {
                 "pedersen_builtin": 7,
-                "range_check_builtin": 17
+                "range_check_builtin": 18
             },
             "n_memory_holes": 0,
-            "n_steps": 864
+            "n_steps": 926
         },
         "emit_event": {
             "builtin_instance_counter": {},
@@ -37,27 +37,27 @@
         "get_block_number": {
             "builtin_instance_counter": {},
             "n_memory_holes": 0,
-            "n_steps": 39
+            "n_steps": 40
         },
         "get_block_timestamp": {
             "builtin_instance_counter": {},
             "n_memory_holes": 0,
-            "n_steps": 37
+            "n_steps": 38
         },
         "get_caller_address": {
             "builtin_instance_counter": {},
             "n_memory_holes": 0,
-            "n_steps": 31
+            "n_steps": 32
         },
         "get_contract_address": {
             "builtin_instance_counter": {},
             "n_memory_holes": 0,
-            "n_steps": 35
+            "n_steps": 36
         },
         "get_sequencer_address": {
             "builtin_instance_counter": {},
             "n_memory_holes": 0,
-            "n_steps": 33
+            "n_steps": 34
         },
         "get_tx_info": {
             "builtin_instance_counter": {},
@@ -71,47 +71,47 @@
         },
         "library_call": {
             "builtin_instance_counter": {
-                "range_check_builtin": 18
+                "range_check_builtin": 19
             },
             "n_memory_holes": 0,
-            "n_steps": 607
+            "n_steps": 666
         },
         "library_call_l1_handler": {
             "builtin_instance_counter": {
-                "range_check_builtin": 14
+                "range_check_builtin": 15
             },
             "n_memory_holes": 0,
-            "n_steps": 586
+            "n_steps": 645
         },
         "replace_class": {
             "builtin_instance_counter": {},
             "n_memory_holes": 0,
-            "n_steps": 72
+            "n_steps": 73
         },
         "send_message_to_l1": {
             "builtin_instance_counter": {},
             "n_memory_holes": 0,
-            "n_steps": 83
+            "n_steps": 84
         },
         "storage_read": {
             "builtin_instance_counter": {},
             "n_memory_holes": 0,
-            "n_steps": 43
+            "n_steps": 44
         },
         "storage_write": {
             "builtin_instance_counter": {},
             "n_memory_holes": 0,
-            "n_steps": 45
+            "n_steps": 46
         }
     },
     "execute_txs_inner": {
         "DECLARE": {
             "builtin_instance_counter": {
                 "pedersen_builtin": 15,
-                "range_check_builtin": 59
+                "range_check_builtin": 63
             },
             "n_memory_holes": 0,
-            "n_steps": 2508
+            "n_steps": 2676
         },
         "DEPLOY": {
             "builtin_instance_counter": {},
@@ -121,26 +121,26 @@
         "DEPLOY_ACCOUNT": {
             "builtin_instance_counter": {
                 "pedersen_builtin": 23,
-                "range_check_builtin": 77
+                "range_check_builtin": 83
             },
             "n_memory_holes": 0,
-            "n_steps": 3327
+            "n_steps": 3577
         },
         "INVOKE_FUNCTION": {
             "builtin_instance_counter": {
                 "pedersen_builtin": 16,
-                "range_check_builtin": 73
+                "range_check_builtin": 80
             },
             "n_memory_holes": 0,
-            "n_steps": 3073
+            "n_steps": 3323
         },
         "L1_HANDLER": {
             "builtin_instance_counter": {
                 "pedersen_builtin": 11,
-                "range_check_builtin": 14
+                "range_check_builtin": 17
             },
             "n_memory_holes": 0,
-            "n_steps": 953
+            "n_steps": 1054
         }
     }
 }

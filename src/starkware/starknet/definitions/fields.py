@@ -41,6 +41,8 @@ felt_as_hex_or_str_list_metadata = dict(
     )
 )
 
+calldata_metadata = felt_as_hex_or_str_list_metadata
+
 felt_list_metadata = dict(
     marshmallow_field=mfields.List(IntAsStr(validate=everest_fields.FeltField.validate))
 )
@@ -155,7 +157,6 @@ default_optional_transaction_index_metadata = sequential_id_metadata(
 
 # InvokeFunction.
 
-call_data_metadata = felt_list_metadata
 call_data_as_hex_metadata = felt_as_hex_list_metadata
 signature_as_hex_metadata = felt_as_hex_or_str_list_metadata
 signature_metadata = felt_list_metadata
@@ -165,6 +166,19 @@ retdata_as_hex_metadata = felt_as_hex_list_metadata
 # L1Handler.
 
 payload_metadata = felt_as_hex_list_metadata
+
+# Used in the CallL1Handler, to solve compatibility bug.
+FromAddressEthAddressField = BackwardCompatibleIntAsHex(
+    allow_decimal_loading=True,
+    allow_bytes_hex_loading=False,
+    allow_int_loading=True,
+    required=True,
+    validate=everest_fields.EthAddressIntField.validate,
+)
+
+from_address_field_metadata = dict(
+    marshmallow_field=FromAddressEthAddressField, field_name="from_address"
+)
 
 # Contract address.
 
@@ -312,7 +326,7 @@ EntryPointOffsetField = RangeValidatedField(
     upper_bound=constants.ENTRY_POINT_OFFSET_UPPER_BOUND,
     name="Entry point offset",
     error_code=StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_OFFSET,
-    formatter=hex,
+    formatter=None,
 )
 entry_point_offset_metadata = EntryPointOffsetField.metadata()
 

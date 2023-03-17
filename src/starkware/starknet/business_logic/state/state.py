@@ -497,12 +497,31 @@ class UpdatesTrackerState(SyncState):
         self.cache._class_hash_writes[contract_address] = class_hash
         self.state.set_class_hash_at(contract_address=contract_address, class_hash=class_hash)
 
+    def get_nonce_at(self, contract_address: int) -> int:
+        # Delegate the request to the actual state anyway (even if the value is already cached).
+        nonce = self.state.get_nonce_at(contract_address=contract_address)
+        if contract_address not in self.cache.address_to_class_hash:
+            self.cache._nonce_initial_values[contract_address] = nonce
+
+        return nonce
+
+    def increment_nonce(self, contract_address: int):
+        if contract_address not in self.cache.address_to_nonce:
+            # First access (read or write) to this cell; cache initial value.
+            self.cache._nonce_initial_values[contract_address] = self.state.get_nonce_at(
+                contract_address=contract_address
+            )
+
+        self.state.increment_nonce(contract_address=contract_address)
+        new_nonce = self.state.get_nonce_at(contract_address=contract_address)
+        self.cache._nonce_writes[contract_address] = new_nonce
+
     @property
     def block_info(self) -> BlockInfo:
         return self.state.block_info
 
     def update_block_info(self, block_info: BlockInfo):
-        return self.state.update_block_info(block_info=block_info)
+        self.state.update_block_info(block_info=block_info)
 
     def get_compiled_class(self, compiled_class_hash: int) -> CompiledClassBase:
         return self.state.get_compiled_class(compiled_class_hash=compiled_class_hash)
@@ -510,36 +529,53 @@ class UpdatesTrackerState(SyncState):
     def get_compiled_class_hash(self, class_hash: int) -> int:
         return self.state.get_compiled_class_hash(class_hash=class_hash)
 
-    def get_nonce_at(self, contract_address: int) -> int:
-        return self.state.get_nonce_at(contract_address=contract_address)
-
     def set_compiled_class_hash(self, class_hash: int, compiled_class_hash: int):
         self.state.set_compiled_class_hash(
             class_hash=class_hash, compiled_class_hash=compiled_class_hash
         )
 
-    def increment_nonce(self, contract_address: int):
-        self.state.increment_nonce(contract_address=contract_address)
+    def count_actual_updates(self) -> Tuple[int, int, int, int]:
+        """
+        Returns a tuple of:
+            1. The number of modified contracts.
+            2. The number of storage updates.
+            3. The number of class hash updates.
+            4. The number of nonce updates.
 
-    def count_actual_storage_changes(self) -> Tuple[int, int]:
+        An update is any a change done through this state; A contract is considered
+        modified if its nonce was updated, if its class hash was updated or
+        if one of its storage cells has changed.
         """
-        Returns the number of storage changes done through this state, and the number of modified
-        contracts, where a contract is considered as modified if one or more of its storage cells
-        has changed.
-        """
+        # Storage Update.
         storage_updates = subtract_mappings(
             self.cache._storage_writes, self.cache._storage_initial_values
         )
-        modified_contracts = {
+        contracts_with_modified_storage = {
             contract_address for (contract_address, _key) in storage_updates.keys()
         }
-        return (len(modified_contracts), len(storage_updates))
 
-    def count_actual_class_updates(self) -> int:
-        """
-        Returns the number of class hashes updated through this state.
-        """
+        # Class hash Update.
         class_hash_updates = subtract_mappings(
             self.cache._class_hash_writes, self.cache._class_hash_initial_values
         )
-        return len(class_hash_updates)
+        contracts_with_modified_class_hash = set(class_hash_updates.keys())
+
+        # Nonce Update.
+        nonce_updates = subtract_mappings(
+            self.cache._nonce_writes, self.cache._nonce_initial_values
+        )
+        contracts_with_modified_nonce = set(nonce_updates.keys())
+
+        # Modified contracts.
+        modified_contracts = (
+            contracts_with_modified_storage
+            | contracts_with_modified_class_hash
+            | contracts_with_modified_nonce
+        )
+
+        return (
+            len(modified_contracts),
+            len(storage_updates),
+            len(class_hash_updates),
+            len(nonce_updates),
+        )

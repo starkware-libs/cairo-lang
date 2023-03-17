@@ -1,11 +1,11 @@
 from typing import Dict, Optional
 
-from starkware.cairo.lang.vm.crypto import poseidon_hash_func
 from starkware.python.utils import from_bytes, to_bytes
 from starkware.starknet.business_logic.fact_state.contract_class_objects import (
     CompiledClassFact,
     ContractClassLeaf,
     DeprecatedCompiledClassFact,
+    get_ffc_for_contract_class_facts,
 )
 from starkware.starknet.business_logic.fact_state.contract_state_objects import ContractState
 from starkware.starknet.business_logic.state.state_api import (
@@ -37,9 +37,7 @@ class PatriciaStateReader(StateReader):
     ):
         # Members related to dynamic retrieval of facts during transaction execution.
         self.ffc = ffc
-        self.ffc_for_class_hash = FactFetchingContext(
-            storage=ffc.storage, hash_func=poseidon_hash_func, n_workers=ffc.n_workers
-        )
+        self.ffc_for_class_hash = get_ffc_for_contract_class_facts(ffc=ffc)
         self.contract_class_storage = contract_class_storage
 
         # Last committed state roots.

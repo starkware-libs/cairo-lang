@@ -6,6 +6,7 @@ from starkware.cairo.common.math import assert_not_zero
 from starkware.cairo.common.memcpy import memcpy
 from starkware.cairo.common.segments import relocate_segment
 from starkware.starknet.common.constants import ORIGIN_ADDRESS
+from starkware.starknet.common.new_syscalls import ExecutionInfo
 from starkware.starknet.common.syscalls import (
     CALL_CONTRACT_SELECTOR,
     DELEGATE_CALL_SELECTOR,
@@ -49,7 +50,6 @@ from starkware.starknet.common.syscalls import (
     SendMessageToL1SysCall,
     StorageRead,
     StorageWrite,
-    TxInfo,
 )
 from starkware.starknet.core.os.block_context import BlockContext
 from starkware.starknet.core.os.builtins import BuiltinPointers
@@ -118,7 +118,7 @@ func execute_contract_call_syscall{
     contract_address: felt,
     caller_address: felt,
     entry_point_type: felt,
-    original_tx_info: TxInfo*,
+    caller_execution_context: ExecutionContext*,
     syscall_ptr: CallContract*,
 ) {
     alloc_locals;
@@ -129,15 +129,20 @@ func execute_contract_call_syscall{
         key=call_req.contract_address
     );
 
+    tempvar caller_execution_info = caller_execution_context.execution_info;
     local execution_context: ExecutionContext* = new ExecutionContext(
         entry_point_type=entry_point_type,
-        caller_address=caller_address,
-        contract_address=contract_address,
         class_hash=state_entry.class_hash,
-        selector=call_req.function_selector,
         calldata_size=call_req.calldata_size,
         calldata=call_req.calldata,
-        original_tx_info=original_tx_info,
+        execution_info=new ExecutionInfo(
+            block_info=caller_execution_info.block_info,
+            tx_info=caller_execution_info.tx_info,
+            caller_address=caller_address,
+            contract_address=contract_address,
+            selector=call_req.function_selector,
+        ),
+        deprecated_tx_info=caller_execution_context.deprecated_tx_info,
     );
 
     return contract_call_helper(
@@ -164,15 +169,20 @@ func execute_library_call_syscall{
 
     let call_req = syscall_ptr.request;
 
+    tempvar caller_execution_info = caller_execution_context.execution_info;
     local execution_context: ExecutionContext* = new ExecutionContext(
         entry_point_type=entry_point_type,
-        caller_address=caller_execution_context.caller_address,
-        contract_address=caller_execution_context.contract_address,
         class_hash=call_req.class_hash,
-        selector=call_req.function_selector,
         calldata_size=call_req.calldata_size,
         calldata=call_req.calldata,
-        original_tx_info=caller_execution_context.original_tx_info,
+        execution_info=new ExecutionInfo(
+            block_info=caller_execution_info.block_info,
+            tx_info=caller_execution_info.tx_info,
+            caller_address=caller_execution_info.caller_address,
+            contract_address=caller_execution_info.contract_address,
+            selector=call_req.function_selector,
+        ),
+        deprecated_tx_info=caller_execution_context.deprecated_tx_info,
     );
 
     return contract_call_helper(
@@ -189,13 +199,15 @@ func execute_deploy_syscall{
     contract_class_changes: DictAccess*,
     outputs: OsCarriedOutputs*,
 }(block_context: BlockContext*, caller_execution_context: ExecutionContext*, syscall_ptr: Deploy*) {
+    alloc_locals;
+    local caller_execution_info: ExecutionInfo* = caller_execution_context.execution_info;
+    local caller_address = caller_execution_info.contract_address;
+
     let request = syscall_ptr.request;
     // Verify deploy_from_zero is either 0 (FALSE) or 1 (TRUE).
     assert request.deploy_from_zero * (request.deploy_from_zero - 1) = 0;
     // Set deployer_address to 0 if request.deploy_from_zero is TRUE.
-    let deployer_address = (
-        (1 - request.deploy_from_zero) * caller_execution_context.contract_address
-    );
+    let deployer_address = (1 - request.deploy_from_zero) * caller_address;
 
     let hash_ptr = builtin_ptrs.pedersen;
     with hash_ptr {
@@ -214,6 +226,7 @@ func execute_deploy_syscall{
         bitwise=builtin_ptrs.bitwise,
         ec_op=builtin_ptrs.ec_op,
         poseidon=builtin_ptrs.poseidon,
+        segment_arena=builtin_ptrs.segment_arena,
     );
 
     // Fill the syscall response, before contract_address is revoked.
@@ -225,13 +238,17 @@ func execute_deploy_syscall{
 
     tempvar constructor_execution_context = new ExecutionContext(
         entry_point_type=ENTRY_POINT_TYPE_CONSTRUCTOR,
-        caller_address=caller_execution_context.contract_address,
-        contract_address=contract_address,
         class_hash=request.class_hash,
-        selector=CONSTRUCTOR_ENTRY_POINT_SELECTOR,
         calldata_size=request.constructor_calldata_size,
         calldata=request.constructor_calldata,
-        original_tx_info=caller_execution_context.original_tx_info,
+        execution_info=new ExecutionInfo(
+            block_info=caller_execution_info.block_info,
+            tx_info=caller_execution_info.tx_info,
+            caller_address=caller_address,
+            contract_address=contract_address,
+            selector=CONSTRUCTOR_ENTRY_POINT_SELECTOR,
+        ),
+        deprecated_tx_info=caller_execution_context.deprecated_tx_info,
     );
 
     // Set enough gas for this call to succeed; see the comment in 'contract_call_helper'.
@@ -377,7 +394,7 @@ func execute_deprecated_syscalls{
 
     if (selector == STORAGE_READ_SELECTOR) {
         execute_storage_read(
-            contract_address=execution_context.contract_address,
+            contract_address=execution_context.execution_info.contract_address,
             syscall_ptr=cast(syscall_ptr, StorageRead*),
         );
         return execute_deprecated_syscalls(
@@ -390,7 +407,7 @@ func execute_deprecated_syscalls{
 
     if (selector == STORAGE_WRITE_SELECTOR) {
         execute_storage_write(
-            contract_address=execution_context.contract_address,
+            contract_address=execution_context.execution_info.contract_address,
             syscall_ptr=cast(syscall_ptr, StorageWrite*),
         );
         return execute_deprecated_syscalls(
@@ -416,9 +433,9 @@ func execute_deprecated_syscalls{
         execute_contract_call_syscall(
             block_context=block_context,
             contract_address=call_contract_syscall.request.contract_address,
-            caller_address=execution_context.contract_address,
+            caller_address=execution_context.execution_info.contract_address,
             entry_point_type=ENTRY_POINT_TYPE_EXTERNAL,
-            original_tx_info=execution_context.original_tx_info,
+            caller_execution_context=execution_context,
             syscall_ptr=call_contract_syscall,
         );
         return execute_deprecated_syscalls(
@@ -461,7 +478,7 @@ func execute_deprecated_syscalls{
 
     if (selector == GET_TX_INFO_SELECTOR) {
         assert cast(syscall_ptr, GetTxInfo*).response = GetTxInfoResponse(
-            tx_info=execution_context.original_tx_info
+            tx_info=execution_context.deprecated_tx_info
         );
         return execute_deprecated_syscalls(
             block_context=block_context,
@@ -473,7 +490,7 @@ func execute_deprecated_syscalls{
 
     if (selector == GET_CALLER_ADDRESS_SELECTOR) {
         assert [cast(syscall_ptr, GetCallerAddress*)].response = GetCallerAddressResponse(
-            caller_address=execution_context.caller_address
+            caller_address=execution_context.execution_info.caller_address
         );
         return execute_deprecated_syscalls(
             block_context=block_context,
@@ -485,7 +502,7 @@ func execute_deprecated_syscalls{
 
     if (selector == GET_SEQUENCER_ADDRESS_SELECTOR) {
         assert [cast(syscall_ptr, GetSequencerAddress*)].response = GetSequencerAddressResponse(
-            sequencer_address=block_context.sequencer_address
+            sequencer_address=block_context.block_info.sequencer_address
         );
         return execute_deprecated_syscalls(
             block_context=block_context,
@@ -497,7 +514,7 @@ func execute_deprecated_syscalls{
 
     if (selector == GET_CONTRACT_ADDRESS_SELECTOR) {
         assert [cast(syscall_ptr, GetContractAddress*)].response = GetContractAddressResponse(
-            contract_address=execution_context.contract_address
+            contract_address=execution_context.execution_info.contract_address
         );
         return execute_deprecated_syscalls(
             block_context=block_context,
@@ -532,9 +549,9 @@ func execute_deprecated_syscalls{
     }
 
     if (selector == GET_TX_SIGNATURE_SELECTOR) {
-        tempvar original_tx_info: TxInfo* = execution_context.original_tx_info;
+        tempvar deprecated_tx_info = execution_context.deprecated_tx_info;
         assert [cast(syscall_ptr, GetTxSignature*)].response = GetTxSignatureResponse(
-            signature_len=original_tx_info.signature_len, signature=original_tx_info.signature
+            signature_len=deprecated_tx_info.signature_len, signature=deprecated_tx_info.signature
         );
         return execute_deprecated_syscalls(
             block_context=block_context,
@@ -560,12 +577,13 @@ func execute_deprecated_syscalls{
 
     // DEPRECATED.
     if (selector == DELEGATE_CALL_SELECTOR) {
+        tempvar execution_info = execution_context.execution_info;
         execute_contract_call_syscall(
             block_context=block_context,
-            contract_address=execution_context.contract_address,
-            caller_address=execution_context.caller_address,
+            contract_address=execution_info.contract_address,
+            caller_address=execution_info.caller_address,
             entry_point_type=ENTRY_POINT_TYPE_EXTERNAL,
-            original_tx_info=execution_context.original_tx_info,
+            caller_execution_context=execution_context,
             syscall_ptr=cast(syscall_ptr, CallContract*),
         );
         return execute_deprecated_syscalls(
@@ -578,12 +596,13 @@ func execute_deprecated_syscalls{
 
     // DEPRECATED.
     if (selector == DELEGATE_L1_HANDLER_SELECTOR) {
+        tempvar execution_info = execution_context.execution_info;
         execute_contract_call_syscall(
             block_context=block_context,
-            contract_address=execution_context.contract_address,
-            caller_address=execution_context.caller_address,
+            contract_address=execution_info.contract_address,
+            caller_address=execution_info.caller_address,
             entry_point_type=ENTRY_POINT_TYPE_L1_HANDLER,
-            original_tx_info=execution_context.original_tx_info,
+            caller_execution_context=execution_context,
             syscall_ptr=cast(syscall_ptr, CallContract*),
         );
         return execute_deprecated_syscalls(
@@ -596,7 +615,7 @@ func execute_deprecated_syscalls{
 
     if (selector == REPLACE_CLASS_SELECTOR) {
         execute_replace_class(
-            contract_address=execution_context.contract_address,
+            contract_address=execution_context.execution_info.contract_address,
             syscall_ptr=cast(syscall_ptr, ReplaceClass*),
         );
         return execute_deprecated_syscalls(
@@ -613,7 +632,7 @@ func execute_deprecated_syscalls{
     let syscall = [cast(syscall_ptr, SendMessageToL1SysCall*)];
 
     assert [outputs.messages_to_l1] = MessageToL1Header(
-        from_address=execution_context.contract_address,
+        from_address=execution_context.execution_info.contract_address,
         to_address=syscall.to_address,
         payload_size=syscall.payload_size,
     );
@@ -650,7 +669,7 @@ func deploy_contract{
 }(block_context: BlockContext*, constructor_execution_context: ExecutionContext*) {
     alloc_locals;
 
-    local contract_address = constructor_execution_context.contract_address;
+    local contract_address = constructor_execution_context.execution_info.contract_address;
 
     // Assert that we don't deploy to ORIGIN_ADDRESS.
     assert_not_zero(contract_address - ORIGIN_ADDRESS);

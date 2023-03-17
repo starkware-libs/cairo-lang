@@ -1,3 +1,6 @@
+add_subdirectory(v1)
+
+
 python_lib(starknet_compile_lib
     PREFIX starkware/starknet/compiler
 

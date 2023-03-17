@@ -14,12 +14,11 @@ from starkware.starknet.business_logic.transaction.objects import (
     InternalTransaction,
 )
 from starkware.starknet.business_logic.transaction.state_objects import FeeInfo
-from starkware.starknet.business_logic.utils import verify_version
-from starkware.starknet.definitions import constants
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.services.api.feeder_gateway.response_objects import FeeEstimationInfo
 from starkware.starknet.services.api.gateway.transaction import (
     AccountTransaction,
+    Declare,
     DeployAccount,
     DeprecatedDeclare,
     InvokeFunction,
@@ -42,6 +41,8 @@ class InternalAccountTransactionForSimulate(InternalAccountTransaction):
     # Simulation flags; should be replaced with actual values after construction.
     skip_validate: Optional[bool] = None
 
+    # Override InternalAccountTransaction flag; enable query-version transactions to be created and
+    # executed.
     only_query: ClassVar[bool] = True
 
     @classmethod
@@ -70,7 +71,7 @@ class InternalAccountTransactionForSimulate(InternalAccountTransaction):
         internal_cls: Type[InternalAccountTransactionForSimulate]
         if isinstance(external_tx, InvokeFunction):
             internal_cls = InternalInvokeFunctionForSimulate
-        elif isinstance(external_tx, DeprecatedDeclare):
+        elif isinstance(external_tx, (Declare, DeprecatedDeclare)):
             internal_cls = InternalDeclareForSimulate
         elif isinstance(external_tx, DeployAccount):
             internal_cls = InternalDeployAccountForSimulate
@@ -138,16 +139,3 @@ class InternalDeployAccountForSimulate(
     """
     Represents an internal deploy account in the StarkNet network for the simulate transaction API.
     """
-
-    def verify_version(self):
-        expected_transaction_version_constant = 1
-        assert constants.TRANSACTION_VERSION == expected_transaction_version_constant, (
-            f"Unexpected constant value. Expected {expected_transaction_version_constant}; "
-            f"got {constants.TRANSACTION_VERSION}."
-        )
-        verify_version(
-            version=self.version,
-            expected_version=constants.TRANSACTION_VERSION,
-            only_query=self.only_query,
-            old_supported_versions=[],
-        )

@@ -1,44 +1,11 @@
-import contextlib
-from contextvars import ContextVar
-from enum import Enum, auto
-from typing import Any, Optional, Tuple
-
-import cachetools
-
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
-from starkware.starknet.core.os.contract_class.contract_class import (
+from starkware.starknet.core.os.contract_class.class_hash_utils import (
     get_contract_class_struct,
     load_contract_class_cairo_program,
 )
+from starkware.starknet.core.os.contract_class.utils import ClassHashType, class_hash_cache_ctx_var
 from starkware.starknet.public.abi import starknet_keccak
 from starkware.starknet.services.api.contract_class.contract_class import ContractClass
-
-
-class ClassHashType(Enum):
-    CONTRACT_CLASS = 0
-    COMPILED_CLASS = auto()
-    DEPRECATED_COMPILED_CLASS = auto()
-
-
-ClassHashCacheKeyType = Tuple[ClassHashType, Any]
-
-class_hash_cache_ctx_var: ContextVar[
-    Optional[cachetools.LRUCache[ClassHashCacheKeyType, int]]
-] = ContextVar("class_hash_cache", default=None)
-
-
-@contextlib.contextmanager
-def set_class_hash_cache(cache: cachetools.LRUCache[ClassHashCacheKeyType, int]):
-    """
-    Sets a cache to be used by compute_class_hash().
-    """
-    assert class_hash_cache_ctx_var.get() is None, "Cannot replace an existing class_hash_cache."
-
-    token = class_hash_cache_ctx_var.set(cache)
-    try:
-        yield
-    finally:
-        class_hash_cache_ctx_var.reset(token)
 
 
 def compute_class_hash(contract_class: ContractClass) -> int:
@@ -65,6 +32,7 @@ def _compute_class_hash_inner(contract_class: ContractClass) -> int:
     runner.run(
         "starkware.starknet.core.os.contract_class.contract_class.class_hash",
         poseidon_ptr=runner.poseidon_builtin.base,
+        range_check_ptr=runner.range_check_builtin.base,
         contract_class=contract_class_struct,
         use_full_name=True,
         verify_secure=False,

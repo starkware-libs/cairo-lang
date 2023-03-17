@@ -49,6 +49,7 @@ python_lib(starknet_execute_entry_point_lib
     cairo_relocatable_lib
     cairo_vm_lib
     everest_definitions_lib
+    segment_arena_builtin_lib
     starknet_abi_lib
     starknet_business_logic_fact_state_lib
     starknet_business_logic_state_lib

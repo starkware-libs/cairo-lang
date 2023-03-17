@@ -16,7 +16,7 @@ ContractStorageMapping = Dict[int, "StorageLeaf"]
 
 class StorageLeaf(FeltLeaf):
     """
-    Represents a commitment tree leaf in a StarkNet contract storage.
+    Represents a commitment tree leaf in a Starknet contract storage.
     """
 
     @classmethod

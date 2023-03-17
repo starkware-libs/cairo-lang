@@ -2,6 +2,7 @@ from dataclasses import field
 
 import marshmallow_dataclass
 
+from starkware.cairo.lang.vm.crypto import poseidon_hash_func
 from starkware.python.utils import to_bytes
 from starkware.starknet.core.os.contract_class.class_hash import compute_class_hash
 from starkware.starknet.core.os.contract_class.compiled_class_hash import (
@@ -11,6 +12,7 @@ from starkware.starknet.core.os.contract_class.deprecated_class_hash import (
     compute_deprecated_class_hash,
 )
 from starkware.starknet.definitions import fields
+from starkware.starknet.definitions.constants import CONTRACT_CLASS_LEAF_VERSION
 from starkware.starknet.services.api.contract_class.contract_class import (
     CompiledClass,
     ContractClass,
@@ -19,7 +21,17 @@ from starkware.starknet.services.api.contract_class.contract_class import (
 from starkware.starkware_utils.commitment_tree.leaf_fact import LeafFact
 from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import EmptyNodeFact
 from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
-from starkware.storage.storage import Fact, HashFunctionType
+from starkware.storage.storage import Fact, FactFetchingContext, HashFunctionType
+
+
+def get_ffc_for_contract_class_facts(ffc: FactFetchingContext) -> FactFetchingContext:
+    """
+    Replaces the given FactFetchingContext object with a corresponding one used for·
+    fetching contract class facts.
+    """
+    return FactFetchingContext(
+        storage=ffc.storage, hash_func=poseidon_hash_func, n_workers=ffc.n_workers
+    )
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -92,9 +104,7 @@ class ContractClassLeaf(ValidatedMarshmallowDataclass, LeafFact):
         if self.is_empty:
             return EmptyNodeFact.EMPTY_NODE_HASH
 
-        CONTRACT_CLASS_HASH_VERSION = b"CONTRACT_CLASS_LEAF_V0"
-
-        # Return H(CONTRACT_CLASS_HASH_VERSION, compiled_class_hash).
-        hash_value = hash_func(CONTRACT_CLASS_HASH_VERSION, to_bytes(self.compiled_class_hash))
+        # Return H(CONTRACT_CLASS_LEAF_VERSION, compiled_class_hash).
+        hash_value = hash_func(CONTRACT_CLASS_LEAF_VERSION, to_bytes(self.compiled_class_hash))
 
         return hash_value

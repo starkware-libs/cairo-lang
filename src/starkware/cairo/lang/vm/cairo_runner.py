@@ -1,4 +1,17 @@
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Type, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 
 from starkware.cairo.lang.builtins.bitwise.bitwise_builtin_runner import BitwiseBuiltinRunner
 from starkware.cairo.lang.builtins.ec.ec_op_builtin_runner import EcOpBuiltinRunner
@@ -74,7 +87,13 @@ class CairoRunner:
         memory: MemoryDict = None,
         proof_mode: Optional[bool] = None,
         allow_missing_builtins: Optional[bool] = None,
+        additional_builtin_factories: Optional[
+            Dict[str, Callable[[str, bool], BuiltinRunner]]
+        ] = None,
     ):
+        if additional_builtin_factories is None:
+            additional_builtin_factories = {}
+
         self.program = program
         self.layout: CairoLayout
         if isinstance(layout, CairoLayout):
@@ -128,6 +147,7 @@ class CairoRunner:
             poseidon=lambda name, included: PoseidonBuiltinRunner(
                 included=included, instance_def=self.layout.builtins["poseidon"]
             ),
+            **additional_builtin_factories,
         )
 
         for name in self.layout.builtins:
@@ -342,7 +362,12 @@ class CairoRunner:
         """
         self.run_until_steps(next_power_of_2(self.vm.current_step))
 
-    def end_run(self, disable_trace_padding: bool = True, disable_finalize_all: bool = False):
+    def end_run(
+        self,
+        disable_trace_padding: bool = True,
+        disable_finalize_all: bool = False,
+        allow_tmp_segments: bool = False,
+    ):
         assert not self._run_ended, "end_run called twice."
 
         self.accessed_addresses = {
@@ -358,7 +383,7 @@ class CairoRunner:
         # Freeze to enable caching; No changes in memory should be made from now on.
         self.vm_memory.freeze()
         # Deduce the size of each segment from its usage.
-        self.segments.compute_effective_sizes()
+        self.segments.compute_effective_sizes(allow_tmp_segments=allow_tmp_segments)
 
         if self.proof_mode and not disable_trace_padding:
             self.run_until_next_power_of_2()

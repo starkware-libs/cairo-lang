@@ -1,3 +1,4 @@
+add_subdirectory(builtins)
 add_subdirectory(business_logic)
 add_subdirectory(cli)
 add_subdirectory(common)

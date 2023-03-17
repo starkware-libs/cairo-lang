@@ -81,11 +81,7 @@ class StrippedProgram(ProgramBase):
 
 
 @marshmallow_dataclass.dataclass(repr=False)
-class HintedProgram(ProgramBase, SerializableMarshmallowDataclass):
-    """
-    A Serializable Cairo Program with hints.
-    """
-
+class Program(ProgramBase, SerializableMarshmallowDataclass):
     prime: int = field(metadata=additional_metadata(marshmallow_field=IntAsHex(required=True)))
     data: List[int] = field(
         metadata=additional_metadata(marshmallow_field=mfields.List(IntAsHex(), required=True))
@@ -95,17 +91,6 @@ class HintedProgram(ProgramBase, SerializableMarshmallowDataclass):
     compiler_version: Optional[str] = field(
         metadata=dict(marshmallow_field=mfields.String(required=False, load_default=None))
     )
-
-    def stripped(self) -> StrippedProgram:
-        raise NotImplementedError("HintedProgram does not have a main entrypoint.")
-
-    @property
-    def main(self) -> Optional[int]:  # type: ignore
-        raise NotImplementedError("HintedProgram does not have a main entrypoint.")
-
-
-@marshmallow_dataclass.dataclass(repr=False)
-class Program(HintedProgram):
     main_scope: ScopedName = field(
         metadata=additional_metadata(marshmallow_field=ScopedNameAsStr())
     )

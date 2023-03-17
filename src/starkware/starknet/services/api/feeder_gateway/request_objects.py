@@ -3,7 +3,6 @@ from typing import List
 
 import marshmallow_dataclass
 
-from services.everest.definitions import fields as everest_fields
 from starkware.starknet.business_logic.execution.execute_entry_point import ExecuteEntryPoint
 from starkware.starknet.business_logic.transaction.objects import InternalL1Handler
 from starkware.starknet.definitions import fields
@@ -19,7 +18,7 @@ class CallFunction(ValidatedMarshmallowDataclass):
     contract_address: int = field(metadata=fields.contract_address_metadata)
     # A field element that encodes the invoked method.
     entry_point_selector: int = field(metadata=fields.entry_point_selector_metadata)
-    calldata: List[int] = field(metadata=fields.call_data_metadata)
+    calldata: List[int] = field(metadata=fields.calldata_metadata)
 
     def to_entry_point(self) -> ExecuteEntryPoint:
         return ExecuteEntryPoint.create_for_testing(
@@ -35,9 +34,7 @@ class CallL1Handler(ValidatedMarshmallowDataclass):
     Represents an L1 handler call in the StarkNet network.
     """
 
-    from_address: int = field(
-        metadata=everest_fields.EthAddressIntField.metadata(field_name="from_address")
-    )
+    from_address: int = field(metadata=fields.from_address_field_metadata)
     to_address: int = field(metadata=fields.contract_address_metadata)
     entry_point_selector: int = field(metadata=fields.entry_point_selector_metadata)
     payload: List[int] = field(metadata=fields.payload_metadata)

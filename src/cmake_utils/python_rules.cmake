@@ -303,3 +303,30 @@ function(full_python_test TEST_NAME)
     ${CODE_COVERAGE_SUPPRESSION_FLAG}
   )
 endfunction()
+
+function(starknet_contract_v1 NAME)
+    # Parse arguments.
+    set(options)
+    set(oneValueArgs MAIN COMPILED_SIERRA_NAME COMPILED_CASM_NAME)
+    set(multiValueArgs)
+    cmake_parse_arguments(ARGS "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    add_custom_command(
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${ARGS_COMPILED_SIERRA_NAME}
+        COMMAND
+            ${CMAKE_BINARY_DIR}/src/starkware/starknet/compiler/v1/cairo/bin/starknet-compile
+            ${CMAKE_CURRENT_SOURCE_DIR}/${ARGS_MAIN}
+            ${CMAKE_CURRENT_BINARY_DIR}/${ARGS_COMPILED_SIERRA_NAME}
+        DEPENDS get_cairo_compiler ${CMAKE_CURRENT_SOURCE_DIR}/${ARGS_MAIN}
+    )
+    add_custom_command(
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${ARGS_COMPILED_CASM_NAME}
+        COMMAND
+            ${CMAKE_BINARY_DIR}/src/starkware/starknet/compiler/v1/cairo/bin/starknet-sierra-compile
+            --add-pythonic-hints
+            ${CMAKE_CURRENT_BINARY_DIR}/${ARGS_COMPILED_SIERRA_NAME}
+            ${CMAKE_CURRENT_BINARY_DIR}/${ARGS_COMPILED_CASM_NAME}
+        DEPENDS get_cairo_compiler ${CMAKE_CURRENT_BINARY_DIR}/${ARGS_COMPILED_SIERRA_NAME}
+    )
+add_custom_target(${NAME} ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${ARGS_COMPILED_SIERRA_NAME} ${CMAKE_CURRENT_BINARY_DIR}/${ARGS_COMPILED_CASM_NAME})
+endfunction()

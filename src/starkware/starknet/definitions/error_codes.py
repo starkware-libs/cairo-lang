@@ -8,6 +8,7 @@ from starkware.starkware_utils.error_handling import ErrorCode, StarkErrorCode
 class StarknetErrorCode(ErrorCode):
     BLOCK_NOT_FOUND = 0
     CLASS_ALREADY_DECLARED = auto()
+    COMPILATION_FAILED = auto()
     CONTRACT_ADDRESS_UNAVAILABLE = auto()
     CONTRACT_BYTECODE_SIZE_TOO_LARGE = auto()
     CONTRACT_CLASS_OBJECT_SIZE_TOO_LARGE = auto()
@@ -19,6 +20,7 @@ class StarknetErrorCode(ErrorCode):
     INVALID_BLOCK_TIMESTAMP = auto()
     INVALID_COMPILED_CLASS_HASH = auto()
     INVALID_CONTRACT_CLASS = auto()
+    INVALID_CONTRACT_CLASS_VERSION = auto()
     INVALID_PROGRAM = auto()
     INVALID_RETURN_DATA = auto()
     INVALID_STATUS_MODE = auto()
@@ -63,6 +65,7 @@ class StarknetErrorCode(ErrorCode):
     UNDECLARED_CLASS = auto()
     UNEXPECTED_FAILURE = auto()
     UNINITIALIZED_CONTRACT = auto()
+    UNSUPPORTED_TRANSACTION = auto()
 
 
 # Errors that are raised by the gateways and caused by wrong usage of the user.
@@ -87,8 +90,10 @@ common_error_codes: List[ErrorCode] = [
     StarknetErrorCode.MISSING_ENTRY_POINT_FOR_INVOKE,
     StarknetErrorCode.UNAUTHORIZED_ENTRY_POINT_FOR_INVOKE,
     # Contract class validation.
+    StarknetErrorCode.COMPILATION_FAILED,
     StarknetErrorCode.INVALID_COMPILED_CLASS_HASH,
     StarknetErrorCode.INVALID_CONTRACT_CLASS,
+    StarknetErrorCode.INVALID_CONTRACT_CLASS_VERSION,
     # Validate execution.
     StarknetErrorCode.UNAUTHORIZED_ACTION_ON_VALIDATE,
 ]
@@ -143,6 +148,7 @@ feeder_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
         StarknetErrorCode.OUT_OF_RANGE_CONTRACT_STORAGE_KEY,
         StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_HASH,
         StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_ID,
+        StarknetErrorCode.UNSUPPORTED_TRANSACTION,
     ]
 )
 

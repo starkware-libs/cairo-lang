@@ -204,8 +204,12 @@ def calculate_tx_resources(
     Used for transaction fee; calculation is made as if the transaction is the first in batch, for
     consistency.
     """
-    (n_modified_contracts, n_storage_changes) = state.count_actual_storage_changes()
-    n_class_updates = state.count_actual_class_updates()
+    (
+        n_modified_contracts,
+        n_storage_changes,
+        n_class_updates,
+        _n_nonce_updates,
+    ) = state.count_actual_updates()
 
     non_optional_call_infos = [call for call in call_infos if call is not None]
     l2_to_l1_messages = []

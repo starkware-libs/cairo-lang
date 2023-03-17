@@ -94,6 +94,7 @@ func public_input_validate{range_check_ptr}(
     assert_nn(n_output_uses);
 
     assert public_input.n_segments = segments.N_SEGMENTS;
+
     tempvar n_pedersen_copies = n_steps / PEDERSEN_BUILTIN_RATIO;
     tempvar n_pedersen_uses = (
         public_input.segments[segments.PEDERSEN].stop_ptr -
@@ -107,6 +108,7 @@ func public_input_validate{range_check_ptr}(
         public_input.segments[segments.RANGE_CHECK].stop_ptr -
         public_input.segments[segments.RANGE_CHECK].begin_addr
     );
+    // Note that the following call implies that n_steps is divisible by RC_BUILTIN_RATIO.
     assert_nn_le(n_range_check_uses, n_range_check_copies);
 
     tempvar n_ecdsa_copies = n_steps / ECDSA_BUILTIN_RATIO;
@@ -114,6 +116,7 @@ func public_input_validate{range_check_ptr}(
         public_input.segments[segments.ECDSA].stop_ptr -
         public_input.segments[segments.ECDSA].begin_addr
     ) / 2;
+    // Note that the following call implies that n_steps is divisible by ECDSA_BUILTIN_RATIO.
     assert_nn_le(n_ecdsa_uses, n_ecdsa_copies);
 
     tempvar n_bitwise_copies = n_steps / BITWISE__RATIO;
@@ -121,6 +124,7 @@ func public_input_validate{range_check_ptr}(
         public_input.segments[segments.BITWISE].stop_ptr -
         public_input.segments[segments.BITWISE].begin_addr
     ) / 5;
+    // Note that the following call implies that n_steps is divisible by BITWISE__RATIO.
     assert_nn_le(n_bitwise_uses, n_bitwise_copies);
 
     tempvar n_ec_op_copies = n_steps / EC_OP_BUILTIN_RATIO;
@@ -128,6 +132,7 @@ func public_input_validate{range_check_ptr}(
         public_input.segments[segments.EC_OP].stop_ptr -
         public_input.segments[segments.EC_OP].begin_addr
     ) / 7;
+    // Note that the following call implies that n_steps is divisible by EC_OP_BUILTIN_RATIO.
     assert_nn_le(n_ec_op_uses, n_ec_op_copies);
 
     tempvar n_poseidon_copies = n_steps / POSEIDON__RATIO;
@@ -135,6 +140,8 @@ func public_input_validate{range_check_ptr}(
         public_input.segments[segments.POSEIDON].stop_ptr -
         public_input.segments[segments.POSEIDON].begin_addr
     ) / 6;
+    // Note that the following call implies that n_steps is divisible by POSEIDON__RATIO.
     assert_nn_le(n_poseidon_uses, n_poseidon_copies);
+
     return ();
 }

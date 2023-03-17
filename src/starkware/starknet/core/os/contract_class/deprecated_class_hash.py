@@ -17,10 +17,7 @@ from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.vm.crypto import pedersen_hash
 from starkware.python.utils import from_bytes
-from starkware.starknet.core.os.contract_class.class_hash import (
-    ClassHashType,
-    class_hash_cache_ctx_var,
-)
+from starkware.starknet.core.os.contract_class.utils import ClassHashType, class_hash_cache_ctx_var
 from starkware.starknet.public.abi import starknet_keccak
 from starkware.starknet.services.api.contract_class.contract_class import (
     DeprecatedCompiledClass,

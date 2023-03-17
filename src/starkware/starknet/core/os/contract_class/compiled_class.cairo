@@ -39,13 +39,6 @@ struct CompiledClass {
     n_constructors: felt,
     constructors: CompiledClassEntryPoint*,
 
-    // The hinted_compiled_class_hash field should be set to the starknet_keccak of the
-    // contract program, including its hints. However the OS does not validate that.
-    // This field may be used by the operator to differentiate between contract classes that
-    // differ only in the hints.
-    // This field is included in the hash of the CompiledClass to simplify the implementation.
-    hinted_compiled_class_hash: felt,
-
     // The length and pointer of the bytecode.
     bytecode_length: felt,
     bytecode_ptr: felt*,
@@ -86,6 +79,8 @@ func validate_entry_points_inner{range_check_ptr}(
 func compiled_class_hash{poseidon_ptr: PoseidonBuiltin*}(compiled_class: CompiledClass*) -> (
     hash: felt
 ) {
+    assert compiled_class.compiled_class_version = COMPILED_CLASS_VERSION;
+
     let hash_state: HashState = hash_init();
     with hash_state {
         hash_update_single(item=compiled_class.compiled_class_version);
@@ -105,9 +100,6 @@ func compiled_class_hash{poseidon_ptr: PoseidonBuiltin*}(compiled_class: Compile
         hash_entry_points(
             entry_points=compiled_class.constructors, n_entry_points=compiled_class.n_constructors
         );
-
-        // Hash hinted_compiled_class_hash.
-        hash_update_single(item=compiled_class.hinted_compiled_class_hash);
 
         // Hash bytecode.
         hash_update_with_nested_hash(
@@ -220,8 +212,6 @@ func load_compiled_class_facts_inner{poseidon_ptr: PoseidonBuiltin*, range_check
             identifiers=ids._context.identifiers, compiled_class=compiled_class)
         ids.compiled_class = segments.gen_arg(cairo_contract)
     %}
-
-    assert compiled_class.compiled_class_version = COMPILED_CLASS_VERSION;
 
     validate_entry_points(
         n_entry_points=compiled_class.n_external_functions,

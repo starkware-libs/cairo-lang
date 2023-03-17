@@ -170,7 +170,7 @@ class SyncStateReader(ABC):
             compiled_class = self.get_compiled_class(compiled_class_hash=class_hash)
             assert isinstance(
                 compiled_class, DeprecatedCompiledClass
-            ), "Class of version > 0 must be committed."
+            ), "Expected class hash; got compiled class hash."
 
         return compiled_class
 

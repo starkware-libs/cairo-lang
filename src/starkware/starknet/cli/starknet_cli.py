@@ -6,7 +6,7 @@ import json
 import os
 import sys
 import traceback
-from typing import Awaitable, Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import Awaitable, Callable, Dict, List, Optional, Tuple
 
 from web3 import Web3
 
@@ -17,6 +17,7 @@ from starkware.python.utils import as_non_optional
 from starkware.starknet.cli.reconstruct_starknet_traceback import reconstruct_starknet_traceback
 from starkware.starknet.cli.starknet_cli_utils import (
     AbiFormatError,
+    DeclareArgs,
     DeprecatedDeclareArgs,
     InvokeFunctionArgs,
     NetworkData,
@@ -24,6 +25,7 @@ from starkware.starknet.cli.starknet_cli_utils import (
     compute_max_fee_for_tx,
     construct_declare_tx,
     construct_deploy_account_tx,
+    construct_deprecated_declare_tx,
     construct_feeder_gateway_client,
     construct_gateway_client,
     construct_invoke_tx,
@@ -37,12 +39,18 @@ from starkware.starknet.cli.starknet_cli_utils import (
     simulate_tx_at_block,
     simulate_tx_at_pending_block,
     tx_received,
-    validate_call_args,
+)
+from starkware.starknet.core.os.contract_class.compiled_class_hash import (
+    compute_compiled_class_hash,
 )
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.general_config import StarknetChainId, StarknetGeneralConfig
 from starkware.starknet.public.abi import AbiType
 from starkware.starknet.services.api.contract_class.contract_class import DeprecatedCompiledClass
+from starkware.starknet.services.api.contract_class.contract_class_utils import (
+    compile_contract_class,
+    load_sierra_from_dict,
+)
 from starkware.starknet.services.api.feeder_gateway.feeder_gateway_client import FeederGatewayClient
 from starkware.starknet.services.api.feeder_gateway.request_objects import (
     CallFunction,
@@ -56,6 +64,7 @@ from starkware.starknet.services.api.feeder_gateway.response_objects import (
 from starkware.starknet.services.api.gateway.gateway_client import GatewayClient
 from starkware.starknet.services.api.gateway.transaction import (
     AccountTransaction,
+    Declare,
     DeployAccount,
     DeprecatedDeclare,
     InvokeFunction,
@@ -70,18 +79,25 @@ from starkware.starknet.wallets.starknet_context import StarknetContext
 
 async def declare(args: argparse.Namespace, command_args: List[str]):
     """
-    Creates a Cairo-0 declare transaction and sends it to the gateway. In case a wallet is
-    provided, the transaction is wrapped and signed by the wallet provider. Otherwise, a sender
-    address and a valid signature must be provided as arguments.
+    If the `--deprecated` flag is used, creates a version 1 - Declare transaction (which is used to
+    declare Cairo 0 contracts) and sends it to the gateway. If the `--deprecated` flag is not used,
+    creates a version 2 - Declare transaction (which is used to declare Cairo 1.0 contracts) and
+    sends it to the gateway. In case a wallet is provided, the transaction is wrapped and signed by
+    the wallet provider. Otherwise, a sender address and a valid signature must be provided as
+    arguments.
     """
 
     parser = argparse.ArgumentParser(description="Sends a declare transaction to StarkNet.")
     add_declare_tx_arguments(parser=parser)
     parser.parse_args(command_args, namespace=args)
-    declare_tx_args = parse_declare_tx_args(args=args)
-    has_wallet = get_wallet_provider(args=args) is not None
+    if args.deprecated:
+        await deprecated_declare(args=args)
+        return
 
-    declare_tx_for_simulate: Optional[DeprecatedDeclare] = None
+    has_wallet = get_wallet_provider(args=args) is not None
+    declare_tx_args = parse_declare_tx_args(args=args)
+
+    declare_tx_for_simulate: Optional[Declare] = None
     if need_simulate_tx(args=args, has_wallet=has_wallet):
         declare_tx_for_simulate = await create_declare_tx(
             args=args,
@@ -94,10 +110,6 @@ async def declare(args: argparse.Namespace, command_args: List[str]):
             await simulate_or_estimate_fee(args=args, tx=declare_tx_for_simulate)
             return
 
-    assert args.block_hash is None and args.block_number is None, (
-        "--block_hash and --block_number should only be passed when either --simulate or "
-        "--estimate_fee flag are used."
-    )
     max_fee = await compute_max_fee(args=args, tx=declare_tx_for_simulate, has_wallet=has_wallet)
 
     tx = await create_declare_tx(
@@ -114,6 +126,50 @@ async def declare(args: argparse.Namespace, command_args: List[str]):
     print(
         f"""\
 Declare transaction was sent.
+Contract class hash: {gateway_response['class_hash']}
+Transaction hash: {gateway_response['transaction_hash']}"""
+    )
+
+
+async def deprecated_declare(args: argparse.Namespace):
+    """
+    Creates a DeprecatedDeclare transaction and sends it to the gateway. In case a wallet is
+    provided, the transaction is wrapped and signed by the wallet provider. Otherwise, a sender
+    address and a valid signature must be provided as arguments.
+    """
+
+    declare_tx_args = parse_deprecated_declare_tx_args(args=args)
+    has_wallet = get_wallet_provider(args=args) is not None
+
+    declare_tx_for_simulate: Optional[DeprecatedDeclare] = None
+    if need_simulate_tx(args=args, has_wallet=has_wallet):
+        declare_tx_for_simulate = await create_deprecated_declare_tx(
+            args=args,
+            declare_tx_args=declare_tx_args,
+            max_fee=args.max_fee if args.max_fee is not None else 0,
+            has_wallet=has_wallet,
+            query=True,
+        )
+        if args.simulate or args.estimate_fee:
+            await simulate_or_estimate_fee(args=args, tx=declare_tx_for_simulate)
+            return
+
+    max_fee = await compute_max_fee(args=args, tx=declare_tx_for_simulate, has_wallet=has_wallet)
+
+    tx = await create_deprecated_declare_tx(
+        args=args,
+        declare_tx_args=declare_tx_args,
+        max_fee=max_fee,
+        has_wallet=has_wallet,
+        query=False,
+    )
+    gateway_client = get_gateway_client(args)
+    gateway_response = await gateway_client.add_transaction(tx=tx, token=args.token)
+    assert_tx_received(gateway_response=gateway_response)
+    # Don't end sentences with '.', to allow easy double-click copy-pasting of the values.
+    print(
+        f"""\
+DeprecatedDeclare transaction was sent.
 Contract class hash: {gateway_response['class_hash']}
 Transaction hash: {gateway_response['transaction_hash']}"""
     )
@@ -233,10 +289,6 @@ async def deploy_account(args: argparse.Namespace, command_args: List[str]):
             await simulate_or_estimate_fee(args=args, tx=deploy_account_tx_for_simulate)
             return
 
-    assert args.block_hash is None and args.block_number is None, (
-        "--block_hash and --block_number should only be passed when either --simulate or "
-        "--estimate_fee flag are used."
-    )
     max_fee = await compute_max_fee(args=args, tx=deploy_account_tx_for_simulate, has_wallet=True)
 
     tx, contract_address = await create_deploy_account_tx(
@@ -305,19 +357,10 @@ async def invoke(args: argparse.Namespace, command_args: List[str]):
             await simulate_or_estimate_fee(args=args, tx=invoke_tx_for_simulate)
             return
 
-    assert args.block_hash is None and args.block_number is None, (
-        "--block_hash and --block_number should only be passed when --simulate or "
-        "--estimate_fee flag is used."
-    )
-
     if args.dry_run:
         assert has_wallet, "--dry_run can only be used for invocation through an account contract."
 
-    max_fee = await compute_max_fee(
-        args=args,
-        tx=invoke_tx_for_simulate,
-        has_wallet=has_wallet,
-    )
+    max_fee = await compute_max_fee(args=args, tx=invoke_tx_for_simulate, has_wallet=has_wallet)
 
     tx = await create_invoke_tx(
         args=args,
@@ -667,12 +710,12 @@ async def get_storage_at(args, command_args):
 # Utilities.
 
 
-def load_abi(args) -> AbiType:
+def load_abi(args) -> Optional[AbiType]:
     """
-    Raises an error if ABI doesn't exist / fails to load.
+    Raises an error if ABI fails to load. Returns None if ABI doesn't exist.
     """
     try:
-        return json.load(args.abi)
+        return None if args.abi is None else json.load(args.abi)
     except Exception as ex:
         raise AbiFormatError(ex) from ex
 
@@ -815,7 +858,9 @@ async def compute_max_fee(
 
     if has_wallet:
         max_fee = await compute_max_fee_for_tx(
-            feeder_client=get_feeder_gateway_client(args), tx=as_non_optional(tx)
+            feeder_client=get_feeder_gateway_client(args),
+            tx=as_non_optional(tx),
+            skip_validate=args.skip_validate,
         )
         max_fee_eth = float(Web3.fromWei(max_fee, "ether"))
 
@@ -827,7 +872,22 @@ async def compute_max_fee(
 
 
 def need_simulate_tx(args: argparse.Namespace, has_wallet: bool) -> bool:
-    return (args.max_fee is None and has_wallet) or args.simulate or args.estimate_fee
+    """
+    Returns whether a simulate is required.
+    If simulation was not requested, asserts that no other simulation related flags appear.
+    """
+    simulate_requested = args.simulate or args.estimate_fee
+    if not simulate_requested:
+        assert args.block_hash is None and args.block_number is None, (
+            "--block_hash and --block_number should only be passed when either --simulate or "
+            "--estimate_fee flag are used."
+        )
+        assert not args.skip_validate, (
+            "--skip_validate should only be passed when either --simulate or "
+            "--estimate_fee flag are used."
+        )
+
+    return (args.max_fee is None and has_wallet) or simulate_requested
 
 
 async def load_account_from_args(args) -> Account:
@@ -848,35 +908,20 @@ def handle_network_param(args):
     if network is not None:
         try:
             data = NetworkData.from_network_name(network=network)
-            if args.gateway_url is None:
-                args.gateway_url = data.gateway_url
-            if args.feeder_gateway_url is None:
-                args.feeder_gateway_url = data.feeder_gateway_url
-            if args.network_id is None:
-                args.network_id = data.network_id
-            if args.chain_id is None:
-                args.chain_id = data.chain_id
         except NetworkNameError as error:
             print(str(error), file=sys.stderr)
             return 1
 
+        if args.gateway_url is None:
+            args.gateway_url = data.gateway_url
+        if args.feeder_gateway_url is None:
+            args.feeder_gateway_url = data.feeder_gateway_url
+        if args.network_id is None:
+            args.network_id = data.network_id
+        if args.chain_id is None:
+            args.chain_id = data.chain_id
+
     return 0
-
-
-def validate_call_function_args(
-    args: argparse.Namespace,
-    abi_entry_type: Union[Literal["function"], Literal["l1_handler"]],
-    inputs: List[int],
-):
-    """
-    Validates that the function name is in the ABI and that the inputs match the required structure.
-    """
-    validate_call_args(
-        abi=load_abi(args=args),
-        abi_entry_name=args.function,
-        abi_entry_type=abi_entry_type,
-        inputs=inputs,
-    )
 
 
 def parse_call_function_args(args: argparse.Namespace) -> CallFunction:
@@ -911,7 +956,23 @@ def parse_invoke_tx_args(args: argparse.Namespace) -> InvokeFunctionArgs:
     )
 
 
-def parse_declare_tx_args(args: argparse.Namespace) -> DeprecatedDeclareArgs:
+def parse_declare_tx_args(args: argparse.Namespace) -> DeclareArgs:
+    sender = parse_hex_arg(arg=args.sender, arg_name="sender") if args.sender is not None else None
+
+    contract_class = load_sierra_from_dict(sierra=json.load(args.contract))
+
+    compiled_class = compile_contract_class(contract_class=contract_class)
+    compiled_class_hash = compute_compiled_class_hash(compiled_class=compiled_class)
+
+    return DeclareArgs(
+        sender=sender,
+        signature=cast_to_felts(values=args.signature),
+        compiled_class_hash=compiled_class_hash,
+        contract_class=contract_class,
+    )
+
+
+def parse_deprecated_declare_tx_args(args: argparse.Namespace) -> DeprecatedDeclareArgs:
     validate_max_fee(max_fee=args.max_fee)
     sender = parse_hex_arg(arg=args.sender, arg_name="sender") if args.sender is not None else None
     return DeprecatedDeclareArgs(
@@ -972,6 +1033,28 @@ async def create_invoke_tx(
 
 async def create_declare_tx(
     args: argparse.Namespace,
+    declare_tx_args: DeclareArgs,
+    max_fee: int,
+    has_wallet: bool,
+    query: bool,
+) -> Declare:
+    """
+    Creates and returns a DeprecatedDeclare transaction with the given parameters.
+    If a wallet provider was provided in args, that transaction will be wrapped and signed.
+    """
+    return await construct_declare_tx(
+        feeder_client=get_feeder_gateway_client(args=args),
+        declare_tx_args=declare_tx_args,
+        chain_id=get_chain_id(args=args),
+        max_fee=max_fee,
+        account=await load_account_from_args(args=args) if has_wallet else None,
+        explicit_nonce=args.nonce,
+        simulate=query,
+    )
+
+
+async def create_deprecated_declare_tx(
+    args: argparse.Namespace,
     declare_tx_args: DeprecatedDeclareArgs,
     max_fee: int,
     has_wallet: bool,
@@ -981,7 +1064,7 @@ async def create_declare_tx(
     Creates and returns a DeprecatedDeclare transaction with the given parameters.
     If a wallet provider was provided in args, that transaction will be wrapped and signed.
     """
-    return await construct_declare_tx(
+    return await construct_deprecated_declare_tx(
         feeder_client=get_feeder_gateway_client(args=args),
         declare_tx_args=declare_tx_args,
         chain_id=get_chain_id(args=args),
@@ -1021,14 +1104,18 @@ async def simulate_tx_inner(
     Returns a TransactionSimulationInfo object.
     """
     feeder_client = get_feeder_gateway_client(args=args)
+    skip_validate = args.skip_validate
     if has_block_info:
         return await simulate_tx_at_block(
             feeder_client=feeder_client,
             tx=tx,
             block_hash=args.block_hash,
             block_number=args.block_number,
+            skip_validate=skip_validate,
         )
-    return await simulate_tx_at_pending_block(feeder_client=feeder_client, tx=tx)
+    return await simulate_tx_at_pending_block(
+        feeder_client=feeder_client, tx=tx, skip_validate=skip_validate
+    )
 
 
 def print_invoke_tx(tx: InvokeFunction, chain_id: int):
@@ -1123,6 +1210,11 @@ def add_simulate_tx_arguments(parser: argparse.ArgumentParser):
         action="store_true",
         help="Estimates the fee of the transaction.",
     )
+    parser.add_argument(
+        "--skip_validate",
+        action="store_true",
+        help="Skips the validate function on simulate and estimate_fee.",
+    )
     add_block_identifier_arguments(
         parser=parser,
         block_role_description="be used as the context for the transaction simulation",
@@ -1145,6 +1237,11 @@ def add_declare_tx_arguments(parser: argparse.ArgumentParser):
         type=str,
         help="The address of the account contract sending the transaction.",
     )
+    parser.add_argument(
+        "--deprecated",
+        action="store_true",
+        help="Send a deprecated declare transaction (i.e., to declare a Cairo v0 contract).",
+    )
     add_account_tx_arguments(parser=parser)
     parser.add_argument(
         "--token", type=str, help="Used for declaring contracts in Alpha MainNet.", required=False
@@ -1159,9 +1256,7 @@ def add_call_function_arguments(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--address", type=str, required=True, help="The address of the invoked contract."
     )
-    parser.add_argument(
-        "--abi", type=argparse.FileType("r"), required=True, help="The Cairo contract ABI."
-    )
+    parser.add_argument("--abi", type=argparse.FileType("r"), help="The Cairo contract ABI.")
     parser.add_argument(
         "--function", type=str, required=True, help="The name of the invoked function."
     )

@@ -2,7 +2,6 @@ import dataclasses
 from dataclasses import field
 from typing import Any, Dict, Optional
 
-from starkware.cairo.common.poseidon_utils import PoseidonParams
 from starkware.cairo.lang.builtins.bitwise.instance_def import BitwiseInstanceDef
 from starkware.cairo.lang.builtins.ec.instance_def import EcOpInstanceDef
 from starkware.cairo.lang.builtins.hash.instance_def import PedersenInstanceDef
@@ -195,7 +194,6 @@ starknet_instance = CairoLayout(
         ),
         poseidon=PoseidonInstanceDef(
             ratio=32,
-            params=PoseidonParams.get_default_poseidon_params(),
             partial_rounds_partition=[64, 22],
         ),
     ),
@@ -247,7 +245,6 @@ starknet_with_keccak_instance = CairoLayout(
         ),
         poseidon=PoseidonInstanceDef(
             ratio=32,
-            params=PoseidonParams.get_default_poseidon_params(),
             partial_rounds_partition=[64, 22],
         ),
     ),
@@ -366,7 +363,6 @@ all_cairo_instance = CairoLayout(
         ),
         poseidon=PoseidonInstanceDef(
             ratio=256,
-            params=PoseidonParams.get_default_poseidon_params(),
             partial_rounds_partition=[64, 22],
         ),
     ),

@@ -71,6 +71,7 @@ DEFAULT_GAS_PRICE = 100 * 10**9
 DEFAULT_CAIRO_RESOURCE_FEE_WEIGHTS = {
     N_STEPS_RESOURCE: 1.0,
     **{builtin: 0.0 for builtin in ALL_BUILTINS.except_for(KECCAK_BUILTIN).with_suffix()},
+    "segment_arena_builtin": 0.0,
 }
 
 
@@ -223,5 +224,6 @@ def build_general_config(raw_general_config: Dict[str, Any]) -> StarknetGeneralC
             },
         }
     )
+    cairo_resource_fee_weights["segment_arena_builtin"] = n_steps_weight * 10
 
     return StarknetGeneralConfig.load(data=raw_general_config)

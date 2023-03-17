@@ -1,5 +1,6 @@
 from starkware.cairo.common.cairo_builtins import HashBuiltin, PoseidonBuiltin
 from starkware.cairo.common.registers import get_fp_and_pc
+from starkware.starknet.common.new_syscalls import BlockInfo
 from starkware.starknet.core.os.builtins import BuiltinParams, get_builtin_params
 from starkware.starknet.core.os.contract_class.compiled_class import (
     CompiledClassFact,
@@ -10,12 +11,6 @@ from starkware.starknet.core.os.contract_class.deprecated_compiled_class import 
     deprecated_load_compiled_class_facts,
 )
 from starkware.starknet.core.os.os_config.os_config import StarknetOsConfig
-
-struct BlockInfo {
-    // Currently, the block timestamp is not validated.
-    block_timestamp: felt,
-    block_number: felt,
-}
 
 // Represents information that is the same throughout the block.
 struct BlockContext {
@@ -32,10 +27,8 @@ struct BlockContext {
     n_deprecated_compiled_class_facts: felt,
     deprecated_compiled_class_facts: DeprecatedCompiledClassFact*,
 
-    // The address of the sequencer that is creating this block.
-    sequencer_address: felt,
     // Information about the block.
-    block_info: BlockInfo,
+    block_info: BlockInfo*,
     // StarknetOsConfig instance.
     starknet_os_config: StarknetOsConfig,
     // A function pointer to the 'execute_syscalls' function.
@@ -62,10 +55,10 @@ func get_block_context{poseidon_ptr: PoseidonBuiltin*, pedersen_ptr: HashBuiltin
         compiled_class_facts=compiled_class_facts,
         n_deprecated_compiled_class_facts=n_deprecated_compiled_class_facts,
         deprecated_compiled_class_facts=deprecated_compiled_class_facts,
-        sequencer_address=nondet %{ os_input.general_config.sequencer_address %},
-        block_info=BlockInfo(
-            block_timestamp=nondet %{ deprecated_syscall_handler.block_info.block_timestamp %},
+        block_info=new BlockInfo(
             block_number=nondet %{ deprecated_syscall_handler.block_info.block_number %},
+            block_timestamp=nondet %{ deprecated_syscall_handler.block_info.block_timestamp %},
+            sequencer_address=nondet %{ os_input.general_config.sequencer_address %},
         ),
         starknet_os_config=StarknetOsConfig(
             chain_id=nondet %{ os_input.general_config.chain_id.value %},
