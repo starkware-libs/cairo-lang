@@ -654,7 +654,8 @@ func execute_deprecated_syscalls{
     );
 }
 
-// Deploys a contract.
+// Deploys a contract and invokes its constructor.
+// Returns the constructor's return data.
 //
 // Arguments:
 // block_context - A global context that is fixed throughout the block.
@@ -666,7 +667,9 @@ func deploy_contract{
     contract_state_changes: DictAccess*,
     contract_class_changes: DictAccess*,
     outputs: OsCarriedOutputs*,
-}(block_context: BlockContext*, constructor_execution_context: ExecutionContext*) {
+}(block_context: BlockContext*, constructor_execution_context: ExecutionContext*) -> (
+    retdata_size: felt, retdata: felt*
+) {
     alloc_locals;
 
     local contract_address = constructor_execution_context.execution_info.contract_address;
@@ -696,9 +699,7 @@ func deploy_contract{
     );
 
     // Invoke the contract constructor.
-    select_execute_entry_point_func(
+    return select_execute_entry_point_func(
         block_context=block_context, execution_context=constructor_execution_context
     );
-
-    return ();
 }

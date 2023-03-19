@@ -97,6 +97,9 @@ CONSUMED_MSG_TO_L2_ENCODED_DATA_SIZE = (L1_TO_L2_MSG_HEADER_SIZE + 1) - CONSUMED
 # The (empirical) L1 gas cost of each Cairo step.
 N_STEPS_FEE_WEIGHT = 0.01
 
+# Expected return values of a 'validate' entry point.
+VALIDATE_RETDATA = [from_bytes(b"VALID")]
+
 
 class GasCost(Enum):
     """

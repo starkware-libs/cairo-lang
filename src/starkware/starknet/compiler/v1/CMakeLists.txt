@@ -83,7 +83,7 @@ set(CAIRO_COMPILER_ARTIFACTS
 
 add_custom_command(
     OUTPUT "${CAIRO_COMPILER_DUMMY_FILE}" "${CAIRO_COMPILER_FILES}"
-    COMMAND curl -Lo release-x86_64-unknown-linux-musl.tar.gz https://github.com/starkware-libs/cairo/releases/download/v1.0.0-alpha.5/release-x86_64-unknown-linux-musl.tar.gz
+    COMMAND curl -Lo release-x86_64-unknown-linux-musl.tar.gz https://github.com/starkware-libs/cairo/releases/download/v1.0.0-alpha.6/release-x86_64-unknown-linux-musl.tar.gz
     COMMAND tar -xf release-x86_64-unknown-linux-musl.tar.gz
     COMMAND touch "${CAIRO_COMPILER_DUMMY_FILE}"
     COMMENT "Downloading cairo compiler."
@@ -96,6 +96,9 @@ python_lib(starknet_compile_v1_lib
 
     FILES
     compile.py
+    mainnet_libfuncs.json
+    testnet_libfuncs.json
+    testnet2_libfuncs.json
 
     ARTIFACTS
     "${CAIRO_COMPILER_ARTIFACTS}"

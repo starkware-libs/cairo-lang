@@ -18,6 +18,7 @@ class StarknetErrorCode(ErrorCode):
     FEE_TRANSFER_FAILURE = auto()
     INVALID_BLOCK_NUMBER = auto()
     INVALID_BLOCK_TIMESTAMP = auto()
+    INVALID_COMPILED_CLASS = auto()
     INVALID_COMPILED_CLASS_HASH = auto()
     INVALID_CONTRACT_CLASS = auto()
     INVALID_CONTRACT_CLASS_VERSION = auto()
@@ -129,6 +130,7 @@ feeder_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
         StarknetErrorCode.CONTRACT_ADDRESS_UNAVAILABLE,
         StarknetErrorCode.ENTRY_POINT_NOT_FOUND_IN_CONTRACT,
         StarknetErrorCode.FEE_TRANSFER_FAILURE,
+        StarknetErrorCode.INVALID_COMPILED_CLASS,
         StarknetErrorCode.INVALID_RETURN_DATA,
         StarknetErrorCode.INVALID_TRANSACTION_VERSION,
         StarknetErrorCode.L1_TO_L2_MESSAGE_INSUFFICIENT_FEE,

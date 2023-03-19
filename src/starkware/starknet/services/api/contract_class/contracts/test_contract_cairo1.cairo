@@ -3,6 +3,7 @@ mod TestContract {
     use starknet::storage_read_syscall;
     use starknet::storage_write_syscall;
     use starknet::syscalls::emit_event_syscall;
+    use starknet::syscalls::send_message_to_l1_syscall;
     use starknet::StorageAddress;
     use starknet::ContractAddress;
     use starknet::storage_access::storage_base_address_from_felt252;
@@ -14,6 +15,7 @@ mod TestContract {
     use array::SpanTrait;
     use array::ArrayTrait;
     use box::BoxTrait;
+    use dict::Felt252DictTrait;
 
     const UNEXPECTED_ERROR: felt252 = 'UNEXPECTED ERROR';
 
@@ -92,6 +94,21 @@ mod TestContract {
     }
 
     #[external]
+    fn test_send_message_to_l1(to_address: felt252, payload: Array::<felt252>) {
+        send_message_to_l1_syscall(to_address, payload.span()).unwrap_syscall();
+    }
+
+    #[external]
+    fn test_emit_simple_event(
+        argument: felt252, my_array: Array::<felt252>, another_argument: felt252
+    ) {
+        simple_event(argument, my_array);
+    }
+
+    #[event]
+    fn simple_event(argument: felt252, my_array: Array::<felt252>) {}
+
+    #[external]
     fn test_call_contract(
         contract_address: ContractAddress, entry_point_selector: felt252, calldata: Array::<felt252>
     ) {
@@ -113,6 +130,23 @@ mod TestContract {
     fn assert_eq(x: felt252, y: felt252) -> felt252{
         assert(x == y, 'x != y');
         'success'
+    }
+
+    /// Tests the segment arena builtin, by creating dictionaries (`felt252_dict_new()` and
+    /// `squash()` use the segment arena builtin).
+    ///
+    /// Expected return value: 200.
+    #[external]
+    fn test_segment_arena() -> felt252 {
+        let mut x = felt252_dict_new::<felt252>();
+        let mut y = felt252_dict_new::<felt252>();
+        x.insert(0, 100);
+        y.insert(1, 200);
+        // x.get(1) returns 0 (the default value), y.get(1) returns 200.
+        let z = x.get(1) + y.get(1);
+        y.squash();
+        x.squash();
+        z
     }
 
 }

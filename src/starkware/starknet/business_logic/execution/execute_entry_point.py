@@ -329,7 +329,7 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
             storage=syscall_handler.storage,
             result=get_call_result(runner=runner, initial_gas=self.initial_gas),
             events=syscall_handler.events,
-            l2_to_l1_messages=[],
+            l2_to_l1_messages=syscall_handler.l2_to_l1_messages,
             internal_calls=syscall_handler.internal_calls,
         )
 

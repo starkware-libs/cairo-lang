@@ -11,6 +11,7 @@ from marshmallow_oneofschema import OneOfSchema
 from services.everest.api.gateway.transaction import EverestTransaction
 from services.everest.business_logic.internal_transaction import EverestInternalTransaction
 from services.everest.business_logic.state_api import StateProxy
+from services.everest.definitions.fields import format_felt_list
 from starkware.python.utils import as_non_optional, from_bytes, to_bytes
 from starkware.starknet.business_logic.execution.execute_entry_point import ExecuteEntryPoint
 from starkware.starknet.business_logic.execution.objects import (
@@ -348,6 +349,22 @@ class InternalAccountTransaction(InternalTransaction):
                 n_steps=general_config.validate_max_n_steps
             ),
         )
+
+        class_hash = state.get_class_hash_at(contract_address=self.sender_address)
+        compiled_class_hash = state.get_compiled_class_hash(class_hash=class_hash)
+        if compiled_class_hash != 0:
+            # The account contract class is a Cairo 1.0 contract; the 'validate' entry point
+            # should return 'VALID'.
+            stark_assert(
+                call_info.retdata == constants.VALIDATE_RETDATA,
+                code=StarknetErrorCode.INVALID_RETURN_DATA,
+                message=(
+                    "Invalid 'validate' return values. "
+                    f"Expected: {format_felt_list(constants.VALIDATE_RETDATA)}, "
+                    f"got: {format_felt_list(call_info.retdata)}."
+                ),
+            )
+
         remaining_gas -= call_info.gas_consumed
         verify_no_calls_to_other_contracts(call_info=call_info, function_name="'validate'")
 

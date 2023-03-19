@@ -209,9 +209,19 @@ class CompiledClass(CompiledClassBase):
         The returned CairoHint object takes empty "accessible_scopes" and "flow_tracking_data"
         values as these are only relevant to Cairo 0 programs.
         """
-        assert "program" not in data, (
-            "Unsupported compiled class format. "
-            "Cairo 1.0 compiled class must not contain the attribute `program`."
+        # Invalidate 0.11.0-pre-release compiled classes.
+        stark_assert(
+            "program" not in data,
+            code=StarknetErrorCode.INVALID_COMPILED_CLASS,
+            message="Unsupported compiled class format. "
+            "Cairo 1.0 compiled class must not contain the attribute `program`.",
+        )
+        # Invalidate compiled classes without pythonic hints.
+        stark_assert(
+            "pythonic_hints" in data,
+            code=StarknetErrorCode.INVALID_COMPILED_CLASS,
+            message="Unsupported compiled class format. "
+            "Cairo 1.0 compiled class must contain the attribute `pythonic_hints`.",
         )
 
         pythonic_hints = data["pythonic_hints"]

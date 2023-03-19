@@ -27,7 +27,7 @@
                 "range_check_builtin": 18
             },
             "n_memory_holes": 0,
-            "n_steps": 926
+            "n_steps": 920
         },
         "emit_event": {
             "builtin_instance_counter": {},
@@ -124,7 +124,7 @@
                 "range_check_builtin": 83
             },
             "n_memory_holes": 0,
-            "n_steps": 3577
+            "n_steps": 3571
         },
         "INVOKE_FUNCTION": {
             "builtin_instance_counter": {

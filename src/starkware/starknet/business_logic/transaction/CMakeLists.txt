@@ -7,6 +7,7 @@ python_lib(starknet_transaction_objects_lib
     LIBS
     everest_business_logic_lib
     everest_business_logic_state_api_lib
+    everest_definitions_lib
     everest_internal_transaction_lib
     everest_transaction_lib
     starknet_abi_lib

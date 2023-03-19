@@ -110,7 +110,12 @@ async def declare(args: argparse.Namespace, command_args: List[str]):
             await simulate_or_estimate_fee(args=args, tx=declare_tx_for_simulate)
             return
 
-    max_fee = await compute_max_fee(args=args, tx=declare_tx_for_simulate, has_wallet=has_wallet)
+    max_fee = await compute_max_fee(
+        args=args,
+        tx=declare_tx_for_simulate,
+        has_wallet=has_wallet,
+        skip_validate=args.skip_validate,
+    )
 
     tx = await create_declare_tx(
         args=args,
@@ -154,7 +159,12 @@ async def deprecated_declare(args: argparse.Namespace):
             await simulate_or_estimate_fee(args=args, tx=declare_tx_for_simulate)
             return
 
-    max_fee = await compute_max_fee(args=args, tx=declare_tx_for_simulate, has_wallet=has_wallet)
+    max_fee = await compute_max_fee(
+        args=args,
+        tx=declare_tx_for_simulate,
+        has_wallet=has_wallet,
+        skip_validate=args.skip_validate,
+    )
 
     tx = await create_deprecated_declare_tx(
         args=args,
@@ -234,7 +244,9 @@ async def deploy_with_invoke(args: argparse.Namespace):
         max_fee=0,
         call=True,
     )
-    max_fee = await compute_max_fee(args=args, tx=invoke_tx_for_fee_estimation, has_wallet=True)
+    max_fee = await compute_max_fee(
+        args=args, tx=invoke_tx_for_fee_estimation, has_wallet=True, skip_validate=False
+    )
     tx, contract_address = await create_invoke_tx_for_deploy(
         args=args,
         salt=salt,
@@ -289,7 +301,12 @@ async def deploy_account(args: argparse.Namespace, command_args: List[str]):
             await simulate_or_estimate_fee(args=args, tx=deploy_account_tx_for_simulate)
             return
 
-    max_fee = await compute_max_fee(args=args, tx=deploy_account_tx_for_simulate, has_wallet=True)
+    max_fee = await compute_max_fee(
+        args=args,
+        tx=deploy_account_tx_for_simulate,
+        has_wallet=True,
+        skip_validate=args.skip_validate,
+    )
 
     tx, contract_address = await create_deploy_account_tx(
         args=args,
@@ -360,7 +377,12 @@ async def invoke(args: argparse.Namespace, command_args: List[str]):
     if args.dry_run:
         assert has_wallet, "--dry_run can only be used for invocation through an account contract."
 
-    max_fee = await compute_max_fee(args=args, tx=invoke_tx_for_simulate, has_wallet=has_wallet)
+    max_fee = await compute_max_fee(
+        args=args,
+        tx=invoke_tx_for_simulate,
+        has_wallet=has_wallet,
+        skip_validate=args.skip_validate,
+    )
 
     tx = await create_invoke_tx(
         args=args,
@@ -847,7 +869,10 @@ def validate_max_fee(max_fee: Optional[int]):
 
 
 async def compute_max_fee(
-    args: argparse.Namespace, tx: Optional[AccountTransaction], has_wallet: bool
+    args: argparse.Namespace,
+    tx: Optional[AccountTransaction],
+    has_wallet: bool,
+    skip_validate: bool,
 ) -> int:
     """
     Returns max_fee argument if passed, and estimates and returns the max fee otherwise.
@@ -860,7 +885,7 @@ async def compute_max_fee(
         max_fee = await compute_max_fee_for_tx(
             feeder_client=get_feeder_gateway_client(args),
             tx=as_non_optional(tx),
-            skip_validate=args.skip_validate,
+            skip_validate=skip_validate,
         )
         max_fee_eth = float(Web3.fromWei(max_fee, "ether"))
 

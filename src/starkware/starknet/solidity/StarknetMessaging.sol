@@ -112,6 +112,7 @@ contract StarknetMessaging is IStarknetMessaging {
         uint256 selector,
         uint256[] calldata payload
     ) external payable override returns (bytes32, uint256) {
+        require(msg.value > 0, "L1_MSG_FEE_MUST_BE_GREATER_THAN_0");
         require(msg.value <= getMaxL1MsgFee(), "MAX_L1_MSG_FEE_EXCEEDED");
         uint256 nonce = l1ToL2MessageNonce();
         NamedStorage.setUintValue(L1L2_MESSAGE_NONCE_TAG, nonce + 1);
