@@ -18,4 +18,4 @@ pytest-asyncio
 PyYAML
 typeguard<3.0.0
 sympy
-Web3
+Web3<6.0.0
