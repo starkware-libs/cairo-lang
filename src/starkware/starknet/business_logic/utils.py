@@ -10,6 +10,7 @@ from starkware.starknet.business_logic.execution.gas_usage import calculate_tx_g
 from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
     CallResult,
+    ExecutionResourcesManager,
     ResourcesMapping,
     TransactionExecutionInfo,
 )
@@ -19,7 +20,6 @@ from starkware.starknet.business_logic.fact_state.contract_class_objects import 
     ContractClassFact,
     DeprecatedCompiledClassFact,
 )
-from starkware.starknet.business_logic.fact_state.state import ExecutionResourcesManager
 from starkware.starknet.business_logic.state.state import UpdatesTrackerState
 from starkware.starknet.business_logic.state.state_api import SyncState
 from starkware.starknet.definitions import constants, fields

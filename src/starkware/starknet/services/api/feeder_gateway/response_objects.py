@@ -261,7 +261,7 @@ class TransactionSpecificInfo(ValidatedResponseObject):
 @marshmallow_dataclass.dataclass(frozen=True)  # type: ignore[misc]
 class AccountTransactionSpecificInfo(TransactionSpecificInfo):
     max_fee: int = field(metadata=fields.fee_metadata)
-    signature: List[int] = field(metadata=fields.signature_as_hex_metadata)
+    signature: List[int] = field(metadata=fields.signature_metadata)
     nonce: Optional[int] = field(metadata=fields.optional_nonce_metadata)
 
     @property
@@ -307,7 +307,7 @@ class DeploySpecificInfo(TransactionSpecificInfo):
     contract_address: int = field(metadata=fields.contract_address_metadata)
     contract_address_salt: int = field(metadata=fields.contract_address_salt_metadata)
     class_hash: Optional[int] = field(metadata=fields.OptionalClassHashIntField.metadata())
-    constructor_calldata: List[int] = field(metadata=fields.call_data_as_hex_metadata)
+    constructor_calldata: List[int] = field(metadata=fields.calldata_as_hex_metadata)
 
     tx_type: ClassVar[TransactionType] = TransactionType.DEPLOY
 
@@ -328,7 +328,7 @@ class DeployAccountSpecificInfo(AccountTransactionSpecificInfo):
     contract_address: int = field(metadata=fields.contract_address_metadata)
     contract_address_salt: int = field(metadata=fields.contract_address_salt_metadata)
     class_hash: int = field(metadata=fields.ClassHashIntField.metadata())
-    constructor_calldata: List[int] = field(metadata=fields.call_data_as_hex_metadata)
+    constructor_calldata: List[int] = field(metadata=fields.calldata_as_hex_metadata)
     version: int = field(metadata=fields.tx_version_metadata)
     # Repeat `nonce` to narrow its type to non-optional int.
     nonce: int = field(metadata=fields.nonce_metadata)
@@ -364,7 +364,7 @@ class InvokeSpecificInfo(AccountTransactionSpecificInfo):
     entry_point_selector: Optional[int] = field(
         metadata=fields.optional_entry_point_selector_metadata
     )
-    calldata: List[int] = field(metadata=fields.call_data_as_hex_metadata)
+    calldata: List[int] = field(metadata=fields.calldata_as_hex_metadata)
 
     tx_type: ClassVar[TransactionType] = TransactionType.INVOKE_FUNCTION
 
@@ -421,7 +421,7 @@ class L1HandlerSpecificInfo(TransactionSpecificInfo):
     contract_address: int = field(metadata=fields.contract_address_metadata)
     entry_point_selector: int = field(metadata=fields.entry_point_selector_metadata)
     nonce: Optional[int] = field(metadata=fields.optional_nonce_metadata)
-    calldata: List[int] = field(metadata=fields.call_data_as_hex_metadata)
+    calldata: List[int] = field(metadata=fields.calldata_as_hex_metadata)
 
     tx_type: ClassVar[TransactionType] = TransactionType.L1_HANDLER
 
@@ -754,7 +754,7 @@ class FunctionInvocation(BaseResponseObject, SerializableMarshmallowDataclass):
         metadata=fields.L2AddressField.metadata(field_name="caller_address")
     )
     contract_address: int = field(metadata=fields.contract_address_metadata)
-    calldata: List[int] = field(metadata=fields.call_data_as_hex_metadata)
+    calldata: List[int] = field(metadata=fields.calldata_as_hex_metadata)
     call_type: Optional[CallType] = field(metadata=nonrequired_optional_metadata)
     class_hash: Optional[int] = field(metadata=fields.OptionalClassHashIntField.metadata())
     selector: Optional[int] = field(metadata=fields.optional_entry_point_selector_metadata)
@@ -811,7 +811,7 @@ class TransactionTrace(ValidatedResponseObject):
     validate_invocation: Optional[FunctionInvocation]
     function_invocation: Optional[FunctionInvocation]
     fee_transfer_invocation: Optional[FunctionInvocation]
-    signature: List[int] = field(metadata=fields.signature_as_hex_metadata)
+    signature: List[int] = field(metadata=fields.signature_metadata)
 
 
 @marshmallow_dataclass.dataclass(frozen=True)

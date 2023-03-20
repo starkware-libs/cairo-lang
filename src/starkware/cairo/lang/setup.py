@@ -30,6 +30,13 @@ setuptools.setup(
         "starkware.crypto.signature": ["pedersen_params.json"],
         "starkware.starknet": ["common/*.cairo", "definitions/*.yml"],
         "starkware.starknet.business_logic.execution": ["os_resources.json"],
+        "starkware.starknet.compiler.v1": [
+            "corelib/*.cairo",
+            "corelib/src/*.cairo",
+            "corelib/src/starknet/*.cairo",
+            "bin/starknet-sierra-compile",
+            "bin/starknet-compile",
+        ],
         "starkware.starknet.core.os": ["*/*.cairo", "*.cairo", "*.json"],
         "starkware.starknet.core.test_contract": ["*.cairo", "*.json"],
         "starkware.starknet.security": ["whitelists/*.json"],

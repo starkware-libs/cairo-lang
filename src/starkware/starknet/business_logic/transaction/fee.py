@@ -3,10 +3,10 @@ import math
 from starkware.starknet.business_logic.execution.execute_entry_point import ExecuteEntryPoint
 from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
+    ExecutionResourcesManager,
     ResourcesMapping,
     TransactionExecutionContext,
 )
-from starkware.starknet.business_logic.fact_state.state import ExecutionResourcesManager
 from starkware.starknet.business_logic.state.state_api import SyncState
 from starkware.starknet.business_logic.utils import extract_l1_gas_and_cairo_usage
 from starkware.starknet.definitions.constants import GasCost

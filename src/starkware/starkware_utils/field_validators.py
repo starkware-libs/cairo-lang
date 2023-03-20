@@ -131,11 +131,14 @@ def validate_equal(field_name: str, *, allowed_value: T) -> ValidatorType:
     return marshmallow.validate.Equal(comparable=allowed_value, error=error_message)
 
 
-def validate_length(field_name: str, *, length: int) -> ValidatorType:
-    error_message = "Invalid {field_name}: {{input}}; must be of length: {length}".format(
-        field_name=field_name, length=length
+def validate_length(field_name: str, *, max_length: int) -> ValidatorType:
+    error_message = (
+        "Invalid {field_name}: {{input}}; "
+        "must be of length less than or equal to: {max_length}.".format(
+            field_name=field_name, max_length=max_length
+        )
     )
-    return marshmallow.validate.Length(equal=length, error=error_message)
+    return marshmallow.validate.Length(max=max_length, error=error_message)
 
 
 def validate_in_range(

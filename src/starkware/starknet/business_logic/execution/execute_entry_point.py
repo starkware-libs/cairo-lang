@@ -22,11 +22,11 @@ from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
     CallResult,
     CallType,
+    ExecutionResourcesManager,
     OrderedEvent,
     OrderedL2ToL1Message,
     TransactionExecutionContext,
 )
-from starkware.starknet.business_logic.fact_state.state import ExecutionResourcesManager
 from starkware.starknet.business_logic.state.state import ContractStorageState, StateSyncifier
 from starkware.starknet.business_logic.state.state_api import State, SyncState
 from starkware.starknet.business_logic.utils import (

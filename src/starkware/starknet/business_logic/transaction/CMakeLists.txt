@@ -11,7 +11,6 @@ python_lib(starknet_transaction_objects_lib
     everest_internal_transaction_lib
     everest_transaction_lib
     starknet_abi_lib
-    starknet_business_logic_fact_state_lib
     starknet_business_logic_patricia_state_lib
     starknet_business_logic_state_lib
     starknet_business_logic_utils_lib
@@ -71,7 +70,6 @@ python_lib(starknet_transaction_fee_lib
 
     LIBS
     starknet_abi_lib
-    starknet_business_logic_fact_state_lib
     starknet_business_logic_state_lib
     starknet_business_logic_utils_lib
     starknet_contract_class_lib

@@ -1,5 +1,5 @@
 {
     "prover_url": "https://testnet.provingservice.io",
-    "verifier_address": "0x87b653D97B4e507A19a4A16bbF7434dcEf853AaA",
+    "verifier_address": "0x8f97970aC5a9aa8D130d35146F5b59c4aef57963",
     "steps_limit": 1000000
 }

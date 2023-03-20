@@ -5,9 +5,9 @@ from typing import List, Optional
 from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
     CallType,
+    ExecutionResourcesManager,
     TransactionExecutionContext,
 )
-from starkware.starknet.business_logic.fact_state.state import ExecutionResourcesManager
 from starkware.starknet.business_logic.state.state_api import SyncState
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.services.api.contract_class.contract_class import EntryPointType

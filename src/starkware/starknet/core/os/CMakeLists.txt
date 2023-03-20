@@ -32,7 +32,6 @@ python_lib(starknet_os_utils_lib
     cairo_run_lib
     cairo_vm_lib
     starknet_abi_lib
-    starknet_business_logic_fact_state_lib
     starknet_business_logic_patricia_state_lib
     starknet_business_logic_state_lib
     starknet_contract_address_lib

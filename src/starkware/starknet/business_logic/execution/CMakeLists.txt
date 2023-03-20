@@ -30,7 +30,6 @@ python_lib(starknet_execute_entry_point_base_lib
     execute_entry_point_base.py
 
     LIBS
-    starknet_business_logic_fact_state_lib
     starknet_business_logic_state_lib
     starknet_contract_class_lib
     starknet_general_config_lib
@@ -51,7 +50,6 @@ python_lib(starknet_execute_entry_point_lib
     everest_definitions_lib
     segment_arena_builtin_lib
     starknet_abi_lib
-    starknet_business_logic_fact_state_lib
     starknet_business_logic_state_lib
     starknet_business_logic_utils_lib
     starknet_contract_class_lib

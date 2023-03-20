@@ -69,7 +69,7 @@ class CommitmentInfo(ValidatedDataclass):
 class OsSingleStarknetStorage:
     """
     Represents a single contract storage.
-    It is used by the StarkNet OS run in the GpsAmbassador.
+    It is used by the Starknet OS run in the GpsAmbassador.
     """
 
     def __init__(self, commitment_info: CommitmentInfo, ongoing_storage_changes: Dict[int, int]):

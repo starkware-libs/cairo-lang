@@ -16,12 +16,12 @@ from starkware.python.utils import as_non_optional, from_bytes, to_bytes
 from starkware.starknet.business_logic.execution.execute_entry_point import ExecuteEntryPoint
 from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
+    ExecutionResourcesManager,
     ResourcesMapping,
     TransactionExecutionContext,
     TransactionExecutionInfo,
 )
 from starkware.starknet.business_logic.fact_state.contract_state_objects import StateSelector
-from starkware.starknet.business_logic.fact_state.state import ExecutionResourcesManager
 from starkware.starknet.business_logic.state.state import UpdatesTrackerState
 from starkware.starknet.business_logic.state.state_api import SyncState
 from starkware.starknet.business_logic.state.state_api_objects import BlockInfo

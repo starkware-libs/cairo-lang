@@ -10,7 +10,6 @@ from services.everest.business_logic.state import (
     SharedStateBase,
     StateSelectorBase,
 )
-from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
 from starkware.cairo.lang.vm.crypto import poseidon_hash_many
 from starkware.python.utils import (
     from_bytes,
@@ -46,32 +45,6 @@ logger = logging.getLogger(__name__)
 state_objects_logger = logging.getLogger(f"{__name__}:state_objects_logger")
 
 ContractCarriedStateMapping = MutableMapping[int, ContractCarriedState]
-
-
-class ExecutionResourcesManager:
-    """
-    Aggregates execution resources throughout transaction stream processing.
-    """
-
-    def __init__(
-        self,
-        cairo_usage: ExecutionResources,
-        syscall_counter: Dict[str, int],
-    ):
-        # The accumulated Cairo usage.
-        self.cairo_usage = cairo_usage
-
-        # A mapping from system call to the cumulative times it was invoked.
-        self.syscall_counter = syscall_counter
-
-    # Alternative constructors.
-
-    @classmethod
-    def empty(cls) -> "ExecutionResourcesManager":
-        return cls(
-            cairo_usage=ExecutionResources.empty(),
-            syscall_counter={},
-        )
 
 
 class CarriedState(CarriedStateBase):

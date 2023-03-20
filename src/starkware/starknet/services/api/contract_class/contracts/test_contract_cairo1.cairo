@@ -20,7 +20,13 @@ mod TestContract {
     const UNEXPECTED_ERROR: felt252 = 'UNEXPECTED ERROR';
 
     struct Storage {
-        my_storage_var: felt252
+        my_storage_var: felt252,
+        public_key: felt252
+    }
+
+    #[constructor]
+    fn constructor() {
+        public_key::write('public_key');
     }
 
     #[external]
@@ -149,5 +155,17 @@ mod TestContract {
         z
     }
 
+    #[external]
+    fn test_deploy(
+        class_hash: ClassHash,
+        contract_address_salt: felt252,
+        calldata: Array::<felt252>,
+        deploy_from_zero: bool,
+    ) {
+        starknet::syscalls::deploy_syscall(
+            class_hash, contract_address_salt, calldata.span(), deploy_from_zero
+        ).unwrap_syscall();
+
+    }
 }
 

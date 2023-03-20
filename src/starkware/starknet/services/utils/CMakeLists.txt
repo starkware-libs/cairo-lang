@@ -6,7 +6,6 @@ python_lib(starknet_sequencer_api_utils_lib
 
     LIBS
     everest_transaction_lib
-    starknet_business_logic_fact_state_lib
     starknet_business_logic_state_lib
     starknet_feeder_gateway_response_objects_lib
     starknet_general_config_lib
