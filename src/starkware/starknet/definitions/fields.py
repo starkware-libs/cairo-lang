@@ -11,11 +11,7 @@ from starkware.python.utils import from_bytes
 from starkware.starknet.definitions import constants
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.transaction_type import TransactionType
-from starkware.starkware_utils.field_validators import (
-    validate_length,
-    validate_non_negative,
-    validate_positive,
-)
+from starkware.starkware_utils.field_validators import validate_non_negative, validate_positive
 from starkware.starkware_utils.marshmallow_dataclass_fields import (
     BackwardCompatibleIntAsHex,
     BytesAsHex,
@@ -37,15 +33,6 @@ felt_as_hex_list_metadata = dict(
     marshmallow_field=mfields.List(everest_fields.FeltField.get_marshmallow_field())
 )
 
-bounded_felt_as_hex_list_metadata = dict(
-    marshmallow_field=mfields.List(
-        everest_fields.FeltField.get_marshmallow_field(),
-        validate=validate_length(
-            field_name="felt_list", max_length=constants.SIERRA_ARRAY_LEN_BOUND - 1
-        ),
-    )
-)
-
 felt_as_hex_or_str_list_metadata = dict(
     marshmallow_field=mfields.List(
         BackwardCompatibleIntAsHex(
@@ -54,19 +41,10 @@ felt_as_hex_or_str_list_metadata = dict(
     )
 )
 
+calldata_metadata = felt_as_hex_or_str_list_metadata
+
 felt_list_metadata = dict(
     marshmallow_field=mfields.List(IntAsStr(validate=everest_fields.FeltField.validate))
-)
-
-bounded_felt_as_hex_or_str_list_metadata = dict(
-    marshmallow_field=mfields.List(
-        BackwardCompatibleIntAsHex(
-            allow_decimal_loading=True, validate=everest_fields.FeltField.validate
-        ),
-        validate=validate_length(
-            field_name="felt_list", max_length=constants.SIERRA_ARRAY_LEN_BOUND - 1
-        ),
-    )
 )
 
 
@@ -92,11 +70,6 @@ def new_class_hash_dict_keys_metadata(
 timestamp_metadata = dict(
     marshmallow_field=StrictRequiredInteger(validate=validate_non_negative("timestamp"))
 )
-
-calldata_metadata = bounded_felt_as_hex_or_str_list_metadata
-signature_metadata = bounded_felt_as_hex_or_str_list_metadata
-calldata_as_hex_metadata = bounded_felt_as_hex_list_metadata
-retdata_as_hex_metadata = felt_as_hex_list_metadata
 
 
 # Address.
@@ -180,6 +153,15 @@ optional_block_hash_metadata = OptionalBlockHashField.metadata()
 default_optional_transaction_index_metadata = sequential_id_metadata(
     field_name="Transaction index", required=False, load_default=None
 )
+
+
+# InvokeFunction.
+
+call_data_as_hex_metadata = felt_as_hex_list_metadata
+signature_as_hex_metadata = felt_as_hex_or_str_list_metadata
+signature_metadata = felt_list_metadata
+retdata_as_hex_metadata = felt_as_hex_list_metadata
+
 
 # L1Handler.
 
