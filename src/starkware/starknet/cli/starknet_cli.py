@@ -8,7 +8,7 @@ import sys
 import traceback
 from typing import Awaitable, Callable, Dict, List, Optional, Tuple
 
-from web3 import Web3
+from eth_utils import from_wei
 
 from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.version import __version__
@@ -16,6 +16,7 @@ from starkware.cairo.lang.vm.crypto import get_crypto_lib_context_manager
 from starkware.python.utils import as_non_optional
 from starkware.starknet.cli.reconstruct_starknet_traceback import reconstruct_starknet_traceback
 from starkware.starknet.cli.starknet_cli_utils import (
+    LIBFUNC_LIST_FILES,
     AbiFormatError,
     DeclareArgs,
     DeprecatedDeclareArgs,
@@ -44,7 +45,8 @@ from starkware.starknet.core.os.contract_class.compiled_class_hash import (
     compute_compiled_class_hash,
 )
 from starkware.starknet.definitions import fields
-from starkware.starknet.definitions.general_config import StarknetChainId, StarknetGeneralConfig
+from starkware.starknet.definitions.chain_ids import StarknetChainId
+from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public.abi import AbiType
 from starkware.starknet.services.api.contract_class.contract_class import DeprecatedCompiledClass
 from starkware.starknet.services.api.contract_class.contract_class_utils import (
@@ -91,6 +93,9 @@ async def declare(args: argparse.Namespace, command_args: List[str]):
     add_declare_tx_arguments(parser=parser)
     parser.parse_args(command_args, namespace=args)
     if args.deprecated:
+        assert (
+            args.compiler_args is None and args.compiler_dir is None
+        ), "compiler_args and compiler_dir are not supported for deprecated declare."
         await deprecated_declare(args=args)
         return
 
@@ -125,7 +130,7 @@ async def declare(args: argparse.Namespace, command_args: List[str]):
         query=False,
     )
     gateway_client = get_gateway_client(args)
-    gateway_response = await gateway_client.add_transaction(tx=tx, token=args.token)
+    gateway_response = await gateway_client.add_transaction(tx=tx)
     assert_tx_received(gateway_response=gateway_response)
     # Don't end sentences with '.', to allow easy double-click copy-pasting of the values.
     print(
@@ -174,7 +179,7 @@ async def deprecated_declare(args: argparse.Namespace):
         query=False,
     )
     gateway_client = get_gateway_client(args)
-    gateway_response = await gateway_client.add_transaction(tx=tx, token=args.token)
+    gateway_response = await gateway_client.add_transaction(tx=tx)
     assert_tx_received(gateway_response=gateway_response)
     # Don't end sentences with '.', to allow easy double-click copy-pasting of the values.
     print(
@@ -199,9 +204,6 @@ async def deploy(args, command_args):
     )
     parser.add_argument(
         "--inputs", type=str, nargs="*", default=[], help="The inputs to the constructor."
-    )
-    parser.add_argument(
-        "--token", type=str, help="Used for deploying contracts in Alpha MainNet.", required=False
     )
     parser.add_argument(
         "--class_hash", type=str, help="The class hash of the deployed contract.", required=True
@@ -798,6 +800,38 @@ def get_wallet_provider(args) -> Optional[str]:
     return value
 
 
+def get_compiler_dir(args) -> Optional[str]:
+    """
+    Returns the path to the directory containing the Cairo 1.0 compiler as defined by the user;
+    If no directory was defined, None is returned and the default compiler should be used.
+    """
+    return get_optional_arg_value(
+        args=args, arg_name="compiler_dir", environment_var="CAIRO_COMPILER_DIR"
+    )
+
+
+def get_compiler_args(args) -> Optional[str]:
+    """
+    Returns the compilation arguments used on a declare request of a Cairo 1.0 contract,
+    if given by the user; otherwise returns None.
+    """
+    return get_optional_arg_value(
+        args=args, arg_name="compiler_args", environment_var="CAIRO_COMPILER_ARGS"
+    )
+
+
+def allowed_libfuncs_list_file_from_network(args) -> Optional[str]:
+    """
+    Returns the name of the allowed libfunc list file corresponding to the network, if exists;
+    otherwise return None.
+    """
+    network = get_network(args=args)
+    if network is None:
+        return None
+
+    return LIBFUNC_LIST_FILES.get(network, None)
+
+
 def get_account_dir(args) -> str:
     """
     Returns the directory containing the wallet files. By default, DEFAULT_ACCOUNT_DIR is used.
@@ -887,7 +921,7 @@ async def compute_max_fee(
             tx=as_non_optional(tx),
             skip_validate=skip_validate,
         )
-        max_fee_eth = float(Web3.fromWei(max_fee, "ether"))
+        max_fee_eth = float(from_wei(number=max_fee, unit="ether"))
 
         print(f"Sending the transaction with max_fee: {max_fee_eth:.6f} ETH ({max_fee} WEI).")
     else:
@@ -984,9 +1018,36 @@ def parse_invoke_tx_args(args: argparse.Namespace) -> InvokeFunctionArgs:
 def parse_declare_tx_args(args: argparse.Namespace) -> DeclareArgs:
     sender = parse_hex_arg(arg=args.sender, arg_name="sender") if args.sender is not None else None
 
-    contract_class = load_sierra_from_dict(sierra=json.load(args.contract))
+    try:
+        contract_class = load_sierra_from_dict(sierra=json.load(args.contract))
+    except Exception as exception:
+        raise ValueError(
+            "Invalid Cairo 1.0 contract. "
+            "To declare a Cairo 0 contract, pass '--deprecated'; "
+            "to see the full traceback, pass '--show_trace'."
+        ) from exception
 
-    compiled_class = compile_contract_class(contract_class=contract_class)
+    compiler_dir = get_compiler_dir(args=args)
+    compiler_args = get_compiler_args(args=args)
+    # The explicit compiler_args should override other specific compilation arguments.
+    allowed_libfuncs_list_file = (
+        allowed_libfuncs_list_file_from_network(args=args) if compiler_args is None else None
+    )
+    if compiler_args is None and allowed_libfuncs_list_file is None:
+        print(
+            "The network is unknown. "
+            "The default list of allowed libfuncs will be used. "
+            "To specify the network, pass '--network' "
+            "or set the STARKNET_NETWORK environment variable.",
+            file=sys.stderr,
+        )
+
+    compiled_class = compile_contract_class(
+        contract_class=contract_class,
+        compiler_dir=compiler_dir,
+        compiler_args=compiler_args,
+        allowed_libfuncs_list_file=allowed_libfuncs_list_file,
+    )
     compiled_class_hash = compute_compiled_class_hash(compiled_class=compiled_class)
 
     return DeclareArgs(
@@ -1160,7 +1221,7 @@ def print_fee_info(fee_info: FeeEstimationInfo):
     Prints the fee information based on the FeeEstimationInfo object.
     """
     fee_wei = fee_info.overall_fee
-    fee_eth = float(Web3.fromWei(fee_wei, "ether"))
+    fee_eth = float(from_wei(number=fee_wei, unit="ether"))
     print(
         f"""\
 The estimated fee is: {fee_wei} WEI ({fee_eth:.6f} ETH).
@@ -1248,8 +1309,7 @@ def add_simulate_tx_arguments(parser: argparse.ArgumentParser):
 
 def add_declare_tx_arguments(parser: argparse.ArgumentParser):
     """
-    Adds the arguments: contract, sender, max_fee, signature, nonce, token and the simulate
-    arguments and the block identifier arguments.
+    Adds arguments for declare.
     """
     parser.add_argument(
         "--contract",
@@ -1267,10 +1327,29 @@ def add_declare_tx_arguments(parser: argparse.ArgumentParser):
         action="store_true",
         help="Send a deprecated declare transaction (i.e., to declare a Cairo v0 contract).",
     )
-    add_account_tx_arguments(parser=parser)
     parser.add_argument(
-        "--token", type=str, help="Used for declaring contracts in Alpha MainNet.", required=False
+        "--compiler_dir",
+        type=str,
+        # This compiler will be used by the CLI during the creation of the declare tx.
+        # Later, during the execution of the transaction in the gateway the contract will be
+        # recompiled with the compiler configured there.
+        help=(
+            "The path to the directory containing the compiler used to compile the given contract. "
+            "Assumes a binary file named starknet-sierra-compile is in the directory. "
+            "If no directory is provided, uses the default compiler."
+        ),
     )
+    parser.add_argument(
+        "--compiler_args",
+        type=str,
+        help=(
+            "The compilation arguments for the Cairo 1.0 compiler. For example, "
+            "--compiler_args='--add-pythonic-hints --allowed-libfuncs-list-file testnet_libfuncs'. "
+            "If '--compiler_args' is not specified, "
+            "the libfunc list will be chosen according to the specified network."
+        ),
+    )
+    add_account_tx_arguments(parser=parser)
     add_simulate_tx_arguments(parser=parser)
 
 

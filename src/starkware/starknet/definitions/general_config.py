@@ -1,7 +1,6 @@
 import copy
 import os
 from dataclasses import field
-from enum import Enum
 from typing import Any, Dict
 
 import marshmallow.fields as mfields
@@ -17,6 +16,7 @@ from starkware.cairo.lang.builtins.all_builtins import (
 from starkware.cairo.lang.instances import starknet_instance
 from starkware.python.utils import from_bytes
 from starkware.starknet.definitions import constants, fields
+from starkware.starknet.definitions.chain_ids import StarknetChainId
 from starkware.starkware_utils.config_base import Config, load_config
 from starkware.starkware_utils.field_validators import validate_dict, validate_non_negative
 from starkware.starkware_utils.marshmallow_dataclass_fields import (
@@ -36,12 +36,6 @@ STARKNET_LAYOUT_INSTANCE = starknet_instance
 default_general_config = load_config(
     config_file_path=GENERAL_CONFIG_PATH, load_logging_config=False
 )
-
-
-class StarknetChainId(Enum):
-    MAINNET = from_bytes(b"SN_MAIN")
-    TESTNET = from_bytes(b"SN_GOERLI")
-    TESTNET2 = from_bytes(b"SN_GOERLI2")
 
 
 # Fee token account constants.

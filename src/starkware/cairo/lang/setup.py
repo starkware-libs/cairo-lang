@@ -31,6 +31,7 @@ setuptools.setup(
         "starkware.starknet": ["common/*.cairo", "definitions/*.yml"],
         "starkware.starknet.business_logic.execution": ["os_resources.json"],
         "starkware.starknet.compiler.v1": [
+            "*.json",
             "corelib/*.cairo",
             "corelib/src/*.cairo",
             "corelib/src/starknet/*.cairo",
@@ -52,7 +53,7 @@ setuptools.setup(
         "starkware/cairo/lang/scripts/cairo-run",
         "starkware/cairo/lang/scripts/cairo-sharp",
         "starkware/starknet/scripts/starknet-class-hash",
-        "starkware/starknet/scripts/starknet-compile",
+        "starkware/starknet/scripts/starknet-compile-deprecated",
         "starkware/starknet/scripts/starknet",
     ],
 )

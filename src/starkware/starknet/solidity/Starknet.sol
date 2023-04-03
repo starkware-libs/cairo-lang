@@ -128,7 +128,7 @@ contract Starknet is
       Returns a string that identifies the contract.
     */
     function identify() external pure override returns (string memory) {
-        return "StarkWare_Starknet_2022_4";
+        return "StarkWare_Starknet_2023_5";
     }
 
     /**

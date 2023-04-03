@@ -84,6 +84,7 @@ python_lib(starknet_testing_lib
     starkware_python_utils_lib
     starkware_storage_lib
     pip_typeguard
+    web3_wrapper_lib
 )
 
 full_python_test(starknet_testing_test

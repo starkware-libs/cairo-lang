@@ -10,7 +10,7 @@ from starkware.cairo.lang.compiler.type_system import mark_type_resolved
 from starkware.cairo.lang.compiler.type_utils import check_felts_only_type
 from starkware.python.utils import from_bytes
 from starkware.starknet.definitions import constants
-from starkware.starknet.definitions.general_config import StarknetChainId
+from starkware.starknet.definitions.chain_ids import StarknetChainId
 from starkware.starknet.public.abi import (
     EXECUTE_ENTRY_POINT_NAME,
     EXECUTE_ENTRY_POINT_SELECTOR,
@@ -57,6 +57,13 @@ CHAIN_IDS = {
     "alpha-goerli": StarknetChainId.TESTNET.value,
     "alpha-goerli2": StarknetChainId.TESTNET2.value,
     "alpha-mainnet": StarknetChainId.MAINNET.value,
+}
+
+# Mapping from the network's name to the corresponding allowed libfuncs list file.
+LIBFUNC_LIST_FILES = {
+    "alpha-goerli": "testnet_libfuncs",
+    "alpha-goerli2": "testnet2_libfuncs",
+    "alpha-mainnet": "mainnet_libfuncs",
 }
 
 FEE_MARGIN_OF_ESTIMATION = 1.1

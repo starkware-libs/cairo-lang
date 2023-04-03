@@ -4,33 +4,59 @@ import subprocess
 import tempfile
 from typing import Any, Dict, List, Optional
 
+import shlex
+
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starkware_utils.error_handling import StarkException
-
-JsonObject = Dict[str, Any]
-
-DEFAULT_ALLOWED_LIBFUNCS_ARG: List[str] = []
-
-
-def get_allowed_libfuncs_list_file(file_name: str) -> str:
-    main_dir_path = os.path.dirname(__file__)
-    file_path = os.path.join(main_dir_path, file_name + ".json")
-
-    return file_path
-
 
 if "RUNFILES_DIR" in os.environ:
     from bazel_tools.tools.python.runfiles import runfiles
 
     r = runfiles.Create()
 
-    STARKNET_SIERRA_COMPILE = r.Rlocation("cairo-lang-1.0.0/bin/starknet-sierra-compile")
-    STARKNET_COMPILE = r.Rlocation("cairo-lang-1.0.0/bin/starknet-compile")
+    COMPILER_DIR = r.Rlocation("cairo-lang-1.0.0/bin")
 else:
-    STARKNET_SIERRA_COMPILE = os.path.join(
-        os.path.dirname(__file__), "bin", "starknet-sierra-compile"
+    COMPILER_DIR = os.path.join(os.path.dirname(__file__), "bin")
+
+
+JsonObject = Dict[str, Any]
+
+
+def get_allowed_libfuncs_list_file(file_name: str) -> str:
+    main_dir_path = os.path.dirname(__file__)
+    return os.path.join(main_dir_path, file_name + ".json")
+
+
+def build_sierra_to_casm_compilation_args(
+    add_pythonic_hints: bool,
+    compiler_args: Optional[str] = None,
+    allowed_libfuncs_list_name: Optional[str] = None,
+    allowed_libfuncs_list_file: Optional[str] = None,
+) -> List[str]:
+    """
+    Returns the compilation arguments for a given starknet contract.
+    If the compiler arguments are given explicitly in the argument compiler_args, returns the
+    corresponding formatted arguments.
+    Otherwise, builds the compiler arguments based on the other inputs.
+    """
+    if compiler_args is not None:
+        assert allowed_libfuncs_list_name is None and allowed_libfuncs_list_file is None, (
+            "allowed_libfuncs_list_name or allowed_libfuncs_list_file cannot be used "
+            "together with compiler_args."
+        )
+        return shlex.split(compiler_args)
+
+    additional_args: List[str] = []
+
+    if add_pythonic_hints:
+        additional_args.append("--add-pythonic-hints")
+
+    additional_args += build_allowed_libfuncs_args(
+        allowed_libfuncs_list_name=allowed_libfuncs_list_name,
+        allowed_libfuncs_list_file=allowed_libfuncs_list_file,
     )
-    STARKNET_COMPILE = os.path.join(os.path.dirname(__file__), "bin", "starknet-compile")
+
+    return additional_args
 
 
 def build_allowed_libfuncs_args(
@@ -38,22 +64,18 @@ def build_allowed_libfuncs_args(
     allowed_libfuncs_list_file: Optional[str] = None,
 ) -> List[str]:
     if allowed_libfuncs_list_name is None and allowed_libfuncs_list_file is None:
-        return DEFAULT_ALLOWED_LIBFUNCS_ARG
-
-    assert allowed_libfuncs_list_name is None or allowed_libfuncs_list_file is None, (
-        "Received too many libfuncs list parameters."
-        f"allowed_libfuncs_list_name = {allowed_libfuncs_list_name},"
-        f"allowed_libfuncs_list_file = {allowed_libfuncs_list_file}."
-    )
-
-    if allowed_libfuncs_list_name is not None:
+        return []
+    elif allowed_libfuncs_list_name is not None and allowed_libfuncs_list_file is None:
         return ["--allowed-libfuncs-list-name", allowed_libfuncs_list_name]
-
-    assert allowed_libfuncs_list_file is not None
-    return [
-        "--allowed-libfuncs-list-file",
-        get_allowed_libfuncs_list_file(allowed_libfuncs_list_file),
-    ]
+    elif allowed_libfuncs_list_name is None and allowed_libfuncs_list_file is not None:
+        return [
+            "--allowed-libfuncs-list-file",
+            get_allowed_libfuncs_list_file(file_name=allowed_libfuncs_list_file),
+        ]
+    else:
+        raise Exception(
+            "allowed_libfuncs_list_name and allowed_libfuncs_list_file cannot be used together."
+        )
 
 
 def compile_cairo_to_sierra(
@@ -68,24 +90,36 @@ def compile_cairo_to_sierra(
         allowed_libfuncs_list_name=allowed_libfuncs_list_name,
         allowed_libfuncs_list_file=allowed_libfuncs_list_file,
     )
-    return run_compile_command(command=[STARKNET_COMPILE, cairo_path, *additional_args])
+
+    starknet_compile = os.path.join(COMPILER_DIR, "starknet-compile")
+    command = [starknet_compile, cairo_path, *additional_args]
+    return run_compile_command(command=command)
 
 
 def compile_sierra_to_casm(
     sierra_path: str,
+    add_pythonic_hints: bool,
+    compiler_args: Optional[str] = None,
     allowed_libfuncs_list_name: Optional[str] = None,
     allowed_libfuncs_list_file: Optional[str] = None,
+    compiler_dir: Optional[str] = None,
 ) -> JsonObject:
     """
-    Compiles a Starknet Sierra contract; returns the resulting Casm as json.
+    Compiles a Starknet Sierra contract.
+    If compiler_path is None, uses a default compiler.
+    Returns the resulting Casm as json.
     """
-    additional_args = build_allowed_libfuncs_args(
+    compiler_dir = COMPILER_DIR if compiler_dir is None else compiler_dir
+    compiler_path = os.path.join(compiler_dir, "starknet-sierra-compile")
+    additional_args = build_sierra_to_casm_compilation_args(
+        compiler_args=compiler_args,
+        add_pythonic_hints=add_pythonic_hints,
         allowed_libfuncs_list_name=allowed_libfuncs_list_name,
         allowed_libfuncs_list_file=allowed_libfuncs_list_file,
     )
-    return run_compile_command(
-        command=[STARKNET_SIERRA_COMPILE, sierra_path, "--add-pythonic-hints", *additional_args]
-    )
+
+    command = [compiler_path, sierra_path, *additional_args]
+    return run_compile_command(command=command)
 
 
 def compile_cairo_to_casm(
@@ -107,6 +141,7 @@ def compile_cairo_to_casm(
 
         return compile_sierra_to_casm(
             sierra_path=sierra_file.name,
+            add_pythonic_hints=True,
             allowed_libfuncs_list_name=allowed_libfuncs_list_name,
             allowed_libfuncs_list_file=allowed_libfuncs_list_file,
         )

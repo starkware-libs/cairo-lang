@@ -1594,8 +1594,7 @@ class DeprecatedOsSysCallHandler(DeprecatedSysCallHandlerBase):
         return next(self.execution_helper.result_iterator)
 
     def _deploy(self, syscall_ptr: RelocatableValue) -> int:
-        constructor_result = next(self.execution_helper.result_iterator)
-        assert len(constructor_result.retdata) == 0, "Unexpected constructor_retdata."
+        next(self.execution_helper.result_iterator)
         return next(self.execution_helper.deployed_contracts_iterator)
 
     def _get_caller_address(self, syscall_ptr: RelocatableValue) -> int:

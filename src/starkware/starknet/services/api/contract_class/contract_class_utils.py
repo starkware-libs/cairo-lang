@@ -11,8 +11,10 @@ from starkware.starknet.services.api.contract_class.contract_class import (
 
 def compile_contract_class(
     contract_class: ContractClass,
+    compiler_args: Optional[str] = None,
     allowed_libfuncs_list_name: Optional[str] = None,
     allowed_libfuncs_list_file: Optional[str] = None,
+    compiler_dir: Optional[str] = None,
 ) -> CompiledClass:
     """
     Compiles a contract class to a compiled class.
@@ -34,8 +36,11 @@ def compile_contract_class(
         # Compile the Sierra file.
         casm_from_compiled_sierra = compile_sierra_to_casm(
             sierra_path=temp_sierra_file_name,
+            compiler_args=compiler_args,
+            add_pythonic_hints=True,
             allowed_libfuncs_list_name=allowed_libfuncs_list_name,
             allowed_libfuncs_list_file=allowed_libfuncs_list_file,
+            compiler_dir=compiler_dir,
         )
 
     # Parse the resultant Casm file.

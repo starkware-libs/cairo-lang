@@ -86,7 +86,7 @@ func os_output_serialize{output_ptr: felt*}(
         onchain_data_start = ids.da_start
         onchain_data_size = ids.output_ptr - onchain_data_start
 
-        max_page_size = 1000
+        max_page_size = 3800
         n_pages = div_ceil(onchain_data_size, max_page_size)
         for i in range(n_pages):
             start_offset = i * max_page_size

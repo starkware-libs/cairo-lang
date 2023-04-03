@@ -53,7 +53,7 @@ python_lib(starknet_cli_lib
     starknet_transaction_lib
     starknet_wallets_lib
     starkware_python_utils_lib
-    pip_web3
+    pip_eth_utils
 )
 
 python_venv(starknet_cli_venv

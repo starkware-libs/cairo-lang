@@ -6,10 +6,10 @@ from typing import Any, ClassVar, Dict, List, Optional
 import marshmallow.fields as mfields
 import marshmallow.utils
 from eth_typing import ChecksumAddress
-from web3 import Web3
 
 from services.everest.definitions import constants
 from starkware.crypto.signature.signature import FIELD_PRIME
+from starkware.eth.web3_wrapper import Web3
 from starkware.python.utils import initialize_random
 from starkware.starkware_utils.error_handling import StarkErrorCode
 from starkware.starkware_utils.field_validators import validate_non_negative
@@ -36,11 +36,12 @@ class EthAddressTypeField(ValidatedField[str]):
     def get_random_value(self, random_object: Optional[random.Random] = None) -> str:
         r = initialize_random(random_object=random_object)
         raw_address = "".join(r.choices(population=string.hexdigits, k=40))
-        return Web3.toChecksumAddress(value=f"0x{raw_address}")
+
+        return Web3.to_checksum_address(value=f"0x{raw_address}")  # type: ignore
 
     # Validation.
     def is_valid(self, value: str) -> bool:
-        return Web3.isChecksumAddress(value)
+        return Web3.is_checksum_address(value)  # type: ignore
 
     def get_invalid_values(self) -> List[str]:
         return [
@@ -65,7 +66,7 @@ class EthAddressTypeField(ValidatedField[str]):
         self.validate(value=value)
         # This won't change value. It will only allow the function to return value as return
         # ChecksumAddress.
-        return Web3.toChecksumAddress(value=value)
+        return Web3.to_checksum_address(value=value)  # type: ignore
 
     def format(self, value: str) -> str:
         return value

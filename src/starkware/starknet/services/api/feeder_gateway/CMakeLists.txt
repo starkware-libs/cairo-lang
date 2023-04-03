@@ -40,6 +40,7 @@ python_lib(starknet_feeder_gateway_response_objects_lib
     pip_marshmallow_oneofschema
     pip_typing_extensions
     pip_web3
+    web3_wrapper_lib
 )
 
 python_lib(starknet_feeder_gateway_request_objects_lib

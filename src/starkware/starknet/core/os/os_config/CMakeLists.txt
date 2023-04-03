@@ -15,6 +15,7 @@ python_lib(starknet_os_config_hash_test_base_lib
     FILES
     os_config_hash_test.py
     os_config_hash.json
+    private_os_config_hash.json
 
     LIBS
     cairo_common_lib
@@ -37,6 +38,7 @@ full_python_test(starknet_os_config_hash_test
     FILES
     os_config_hash_test.py
     os_config_hash.json
+    private_os_config_hash.json
 
     LIBS
     cairo_common_lib

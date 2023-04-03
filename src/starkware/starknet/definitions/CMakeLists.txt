@@ -28,6 +28,7 @@ python_lib(starknet_general_config_lib
     FILES
     general_config.py
     general_config.yml
+    chain_ids.py
 
     LIBS
     cairo_all_builtins_lib

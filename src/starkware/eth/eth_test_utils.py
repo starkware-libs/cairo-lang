@@ -11,15 +11,17 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 import web3.exceptions
-from web3 import HTTPProvider, Web3
+from web3 import HTTPProvider
 from web3 import logs as web3_logs
 from web3 import types as web3_types
 from web3.contract import Contract
 
+from starkware.eth.web3_wrapper import Web3
+
 # Max timeout for web3 requests in seconds.
 TIMEOUT_FOR_WEB3_REQUESTS = 120  # Seconds.
 
-# Max number of attempts to check web3.isConnected().
+# Max number of attempts to check web3.is_connected().
 GANACHE_MAX_TRIES = 60
 logger = logging.getLogger(__name__)
 
@@ -131,7 +133,7 @@ class Ganache:
 
         for i in range(GANACHE_MAX_TRIES):
             time.sleep(1)
-            if self.w3.isConnected():
+            if self.w3.is_connected():  # type: ignore
                 break
         else:
             raise Exception("Could not connect to ganache.")
@@ -220,7 +222,9 @@ class EthContract:
         return EthContractFunction(contract=self, name=name)
 
     def replace_abi(self, abi: Abi) -> "EthContract":
-        w3_contract = self.w3.eth.contract(address=Web3.toChecksumAddress(self.address), abi=abi)
+        w3_contract = self.w3.eth.contract(
+            address=Web3.to_checksum_address(self.address), abi=abi  # type: ignore
+        )
 
         return EthContract(
             w3=self.w3,
@@ -331,7 +335,7 @@ def int_to_address(addr: int):
     """
     Converts the given integer to an Ethereum address.
     """
-    return web3.Web3.toChecksumAddress(f"{addr:040x}")
+    return Web3.to_checksum_address(f"{addr:040x}")  # type: ignore
 
 
 def prepare_transact_args(

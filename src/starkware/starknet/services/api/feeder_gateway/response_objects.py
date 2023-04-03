@@ -12,7 +12,6 @@ import marshmallow_dataclass
 from marshmallow.decorators import post_dump, pre_load
 from marshmallow_oneofschema import OneOfSchema
 from typing_extensions import Literal
-from web3 import Web3
 
 from services.everest.api.feeder_gateway.response_objects import (
     BaseResponseObject,
@@ -21,6 +20,7 @@ from services.everest.api.feeder_gateway.response_objects import (
 from services.everest.business_logic.transaction_execution_objects import TransactionFailureReason
 from services.everest.definitions import fields as everest_fields
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
+from starkware.eth.web3_wrapper import Web3
 from starkware.python.utils import as_non_optional, from_bytes, to_bytes
 from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
@@ -720,7 +720,9 @@ class OrderedL2ToL1MessageResponse(ValidatedDataclass):
         return [
             cls(
                 order=message.order,
-                to_address=Web3.toChecksumAddress(to_bytes(message.to_address, 20)),
+                to_address=Web3.to_checksum_address(  # type: ignore
+                    to_bytes(message.to_address, 20)
+                ),
                 payload=message.payload,
             )
             for message in messages

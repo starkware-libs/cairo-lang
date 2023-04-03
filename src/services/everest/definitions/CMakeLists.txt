@@ -11,6 +11,7 @@ python_lib(everest_definitions_lib
     starkware_error_handling_lib
     pip_marshmallow
     pip_web3
+    web3_wrapper_lib
 )
 
 python_lib(everest_general_config_lib

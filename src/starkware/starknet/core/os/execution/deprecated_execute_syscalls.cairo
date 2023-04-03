@@ -95,7 +95,9 @@ func contract_call_helper{
     }
     %{
         # Check that the actual return value matches the expected one.
-        expected = memory.get_range(addr=ids.call_response.retdata, size=ids.retdata_size)
+        expected = memory.get_range(
+            addr=ids.call_response.retdata, size=ids.call_response.retdata_size
+        )
         actual = memory.get_range(addr=ids.retdata, size=ids.retdata_size)
 
         assert expected == actual, f'Return value mismatch expected={expected}, actual={actual}.'

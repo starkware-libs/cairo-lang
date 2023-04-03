@@ -3,7 +3,7 @@ python_lib(starknet_script_lib
     FILES
     starknet
     starknet-class-hash
-    starknet-compile
+    starknet-compile-deprecated
 
     LIBS
     starknet_cli_lib
