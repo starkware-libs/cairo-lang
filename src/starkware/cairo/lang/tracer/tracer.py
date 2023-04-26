@@ -26,6 +26,7 @@ def trace_runner(runner):
     trace = runner.relocated_trace
 
     run_tracer(
+        "localhost", 8100,
         TracerData(
             program=runner.program,
             memory=memory,
@@ -41,7 +42,7 @@ class SimpleTCPServer(socketserver.TCPServer):
         self.socket.bind(self.server_address)
 
 
-def run_tracer(tracer_data: TracerData):
+def run_tracer(host: str, port: int, tracer_data: TracerData):
     # Change directory for the SimpleHTTPRequestHandler.
     os.chdir(os.path.abspath(os.path.dirname(__file__)))
 
@@ -92,18 +93,17 @@ def run_tracer(tracer_data: TracerData):
                 # Request was canceled.
                 pass
 
-    def start_server():
-        port = 8100
+    def start_server(host: str, port: int):
         while True:
             try:
-                return SimpleTCPServer(("localhost", port), Handler)
+                return SimpleTCPServer((host, port), Handler)
             except OSError:
                 pass
             # port was not available. Try the next one.
             port += 1
 
-    httpd = start_server()
-    print("Running tracer on http://localhost:%d/" % httpd.server_address[1])
+    httpd = start_server(host, port)
+    print(f"Running tracer on http://{httpd.server_address[0]}:{httpd.server_address[1]}/")
     print()
     httpd.serve_forever()
 
@@ -117,6 +117,8 @@ def main():
     )
     parser.add_argument("--memory", type=str, required=True, help="A path to the memory file.")
     parser.add_argument("--trace", type=str, required=True, help="A path to the trace file.")
+    parser.add_argument("--host", default="localhost", type=str, help="Host to serve on.")
+    parser.add_argument("--port", default="8100", type=int, help="Port to serve on.")
     parser.add_argument("--air_public_input", type=str, help="A path to the AIR public input file.")
     parser.add_argument("--debug_info", type=str, help="A path to the run time debug info file.")
 
@@ -130,7 +132,7 @@ def main():
         debug_info_path=args.debug_info,
     )
 
-    run_tracer(tracer_data)
+    run_tracer(args.host, args.port, tracer_data)
     return 0
 
 
