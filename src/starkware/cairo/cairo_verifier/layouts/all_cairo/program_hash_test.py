@@ -1,13 +1,19 @@
-import os
-
 from starkware.cairo.bootloaders.program_hash_test_utils import (
     program_hash_test_main,
     run_generate_hash_test,
 )
+from starkware.python.utils import get_build_dir_path, get_source_dir_path
 
-CURRENT_DIR_PATH = os.path.dirname(__file__)
-PROGRAM_PATH = os.path.join(CURRENT_DIR_PATH, "cairo_verifier_compiled_all_cairo.json")
-HASH_PATH = os.path.join(CURRENT_DIR_PATH, "program_hash.json")
+PROGRAM_PATH = get_build_dir_path(
+    "src/starkware/cairo/cairo_verifier/cairo_verifier_compiled_all_cairo.json"
+)
+HASH_PATH = get_source_dir_path(
+    rel_path="src/starkware/cairo/cairo_verifier/layouts/all_cairo/program_hash.json",
+    default_value=get_build_dir_path(
+        "src/starkware/cairo/cairo_verifier/layouts/all_cairo/program_hash.json"
+    ),
+)
+
 COMMAND = "generate_cairo_verifier_program_hash_all_cairo"
 
 

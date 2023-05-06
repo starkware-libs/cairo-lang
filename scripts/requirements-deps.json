@@ -22,7 +22,7 @@
                 "required_version": ">=4.0.0a3,<5.0"
             },
             {
-                "installed_version": "22.2.0",
+                "installed_version": "23.1.0",
                 "key": "attrs",
                 "package_name": "attrs",
                 "required_version": ">=17.3.0"
@@ -84,7 +84,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "22.2.0",
+            "installed_version": "23.1.0",
             "key": "attrs",
             "package_name": "attrs"
         }
@@ -372,7 +372,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "2.3.6",
+            "installed_version": "2.3.7",
             "key": "frozendict",
             "package_name": "frozendict"
         }
@@ -412,7 +412,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "22.2.0",
+                "installed_version": "23.1.0",
                 "key": "attrs",
                 "package_name": "attrs",
                 "required_version": ">=17.4.0"
@@ -449,7 +449,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "23.0",
+                "installed_version": "23.1",
                 "key": "packaging",
                 "package_name": "packaging",
                 "required_version": ">=17.0"
@@ -553,7 +553,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "23.0",
+            "installed_version": "23.1",
             "key": "packaging",
             "package_name": "packaging"
         }
@@ -608,7 +608,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "4.22.1",
+            "installed_version": "4.22.3",
             "key": "protobuf",
             "package_name": "protobuf"
         }
@@ -632,12 +632,6 @@
     {
         "dependencies": [
             {
-                "installed_version": "22.2.0",
-                "key": "attrs",
-                "package_name": "attrs",
-                "required_version": ">=19.2.0"
-            },
-            {
                 "installed_version": "1.1.1",
                 "key": "exceptiongroup",
                 "package_name": "exceptiongroup",
@@ -650,7 +644,7 @@
                 "required_version": null
             },
             {
-                "installed_version": "23.0",
+                "installed_version": "23.1",
                 "key": "packaging",
                 "package_name": "packaging",
                 "required_version": null
@@ -669,7 +663,7 @@
             }
         ],
         "package": {
-            "installed_version": "7.2.2",
+            "installed_version": "7.3.1",
             "key": "pytest",
             "package_name": "pytest"
         }
@@ -677,7 +671,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "7.2.2",
+                "installed_version": "7.3.1",
                 "key": "pytest",
                 "package_name": "pytest",
                 "required_version": ">=7.0.0"
@@ -748,7 +742,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "67.4.0",
+            "installed_version": "67.6.1",
             "key": "setuptools",
             "package_name": "setuptools"
         }
@@ -849,7 +843,7 @@
                 "installed_version": "4.0.0",
                 "key": "eth-abi",
                 "package_name": "eth-abi",
-                "required_version": ">=4.0.0-b.2"
+                "required_version": ">=4.0.0"
             },
             {
                 "installed_version": "0.8.0",
@@ -894,13 +888,7 @@
                 "required_version": ">=1.1.6"
             },
             {
-                "installed_version": "0.9.0",
-                "key": "parsimonious",
-                "package_name": "parsimonious",
-                "required_version": "==0.9.0"
-            },
-            {
-                "installed_version": "4.22.1",
+                "installed_version": "4.22.3",
                 "key": "protobuf",
                 "package_name": "protobuf",
                 "required_version": ">=4.21.6"
@@ -912,14 +900,14 @@
                 "required_version": ">=2.16.0"
             },
             {
-                "installed_version": "10.4",
+                "installed_version": "11.0.2",
                 "key": "websockets",
                 "package_name": "websockets",
                 "required_version": ">=10.0.0"
             }
         ],
         "package": {
-            "installed_version": "6.0.0",
+            "installed_version": "6.2.0",
             "key": "web3",
             "package_name": "web3"
         }
@@ -927,7 +915,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "10.4",
+            "installed_version": "11.0.2",
             "key": "websockets",
             "package_name": "websockets"
         }
@@ -935,7 +923,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "0.38.4",
+            "installed_version": "0.40.0",
             "key": "wheel",
             "package_name": "wheel"
         }

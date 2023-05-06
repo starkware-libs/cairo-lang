@@ -12,13 +12,17 @@ from starkware.cairo.lang.compiler.ast.cairo_types import (
 from starkware.cairo.lang.compiler.identifier_definition import StructDefinition
 from starkware.cairo.lang.compiler.parser import parse_type
 from starkware.cairo.lang.compiler.type_system import mark_type_resolved
-from starkware.python.utils import as_non_optional, assert_exhausted
-from starkware.starknet.business_logic.execution.objects import Event, TransactionExecutionInfo
+from starkware.python.utils import assert_exhausted
+from starkware.starknet.business_logic.execution.objects import CallInfo, Event
 from starkware.starknet.compiler.compile import compile_starknet_files
 from starkware.starknet.public.abi import AbiType, get_selector_from_name
 from starkware.starknet.public.abi_structs import struct_definition_from_abi_entry
 from starkware.starknet.services.api.contract_class.contract_class import DeprecatedCompiledClass
 from starkware.starknet.testing.objects import Dataclass, StarknetCallInfo
+
+CastableToFelt = Union[str, int]
+CastableToAddress = CastableToFelt
+CastableToAddressSalt = CastableToFelt
 
 EventIdentifier = Union[str, int]
 RAW_OUTPUT_ARG_LIST = ["retdata_size", "retdata"]
@@ -211,12 +215,9 @@ def build_arguments(
     return res
 
 
-def execution_info_to_call_info(
-    execution_info: TransactionExecutionInfo, abi: AbiType
-) -> StarknetCallInfo:
+def external_call_info_from_internal(call_info: CallInfo, abi: AbiType) -> StarknetCallInfo:
     event_manager = EventManager(abi=abi)
     struct_manager = StructManager(abi=abi)
-    call_info = as_non_optional(execution_info.call_info)
     events = call_info.get_sorted_events()
     main_events = event_manager.build_events(raw_events=events, struct_manager=struct_manager)
     return StarknetCallInfo.from_internal(
@@ -311,3 +312,11 @@ def gather_deprecated_compiled_class(
     assert cairo_path is None, "The cairo_path argument can only be used with the source argument."
     assert contract_class is not None
     return contract_class
+
+
+def cast_to_int(value: CastableToFelt) -> int:
+    if isinstance(value, str):
+        return int(value, 16)
+
+    assert isinstance(value, int)
+    return value

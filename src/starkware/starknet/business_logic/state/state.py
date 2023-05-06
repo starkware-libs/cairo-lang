@@ -39,7 +39,7 @@ class StateSyncifier(SyncState):
     """
 
     def __init__(self, async_state: State, loop: asyncio.AbstractEventLoop):
-        # State to sychronize.
+        # State to synchronize.
         self.async_state = async_state
 
         # Current running event loop; used for running async tasks in a synchronous context.
@@ -204,32 +204,32 @@ class CachedState(State):
         self,
         block_info: BlockInfo,
         state_reader: StateReader,
-        contract_class_cache: Optional[CompiledClassCache] = None,
+        compiled_class_cache: Optional[CompiledClassCache] = None,
     ):
         self.block_info = block_info
         self.state_reader = state_reader
         self.cache = StateCache()
-        self._contract_classes: Optional[CompiledClassCache] = contract_class_cache
+        self._compiled_classes: Optional[CompiledClassCache] = compiled_class_cache
 
     @property
-    def contract_classes(self) -> CompiledClassCache:
-        assert self._contract_classes is not None, "contract_classes mapping is not initialized."
-        return self._contract_classes
+    def compiled_classes(self) -> CompiledClassCache:
+        assert self._compiled_classes is not None, "compiled_classes mapping is not initialized."
+        return self._compiled_classes
 
-    def set_contract_class_cache(self, contract_classes: CompiledClassCache):
-        assert self._contract_classes is None, "contract_classes mapping is already initialized."
-        self._contract_classes = contract_classes
+    def set_compiled_class_cache(self, compiled_classes: CompiledClassCache):
+        assert self._compiled_classes is None, "compiled_classes mapping is already initialized."
+        self._compiled_classes = compiled_classes
 
     def update_block_info(self, block_info: BlockInfo):
         self.block_info = block_info
 
     async def get_compiled_class(self, compiled_class_hash: int) -> CompiledClassBase:
-        if compiled_class_hash not in self.contract_classes:
-            self.contract_classes[compiled_class_hash] = await self.state_reader.get_compiled_class(
+        if compiled_class_hash not in self.compiled_classes:
+            self.compiled_classes[compiled_class_hash] = await self.state_reader.get_compiled_class(
                 compiled_class_hash=compiled_class_hash
             )
 
-        return self.contract_classes[compiled_class_hash]
+        return self.compiled_classes[compiled_class_hash]
 
     async def get_compiled_class_hash(self, class_hash: int) -> int:
         if class_hash not in self.cache.class_hash_to_compiled_class_hash:
@@ -290,7 +290,7 @@ class CachedState(State):
         return CachedState(
             block_info=self.block_info,
             state_reader=self,
-            contract_class_cache=self.contract_classes,
+            compiled_class_cache=self.compiled_classes,
         )
 
     def _apply(self, parent: "CachedState"):
@@ -319,36 +319,36 @@ class CachedSyncState(SyncState):
         self,
         block_info: BlockInfo,
         state_reader: SyncStateReader,
-        contract_class_cache: Optional[CompiledClassCache] = None,
+        compiled_class_cache: Optional[CompiledClassCache] = None,
     ):
         self._block_info = block_info
         self.state_reader = state_reader
         self.cache = StateCache()
-        self._contract_classes: Optional[CompiledClassCache] = contract_class_cache
+        self._compiled_classes: Optional[CompiledClassCache] = compiled_class_cache
 
     @property
     def block_info(self) -> BlockInfo:
         return self._block_info
 
     @property
-    def contract_classes(self) -> CompiledClassCache:
-        assert self._contract_classes is not None, "contract_classes mapping is not initialized."
-        return self._contract_classes
+    def compiled_classes(self) -> CompiledClassCache:
+        assert self._compiled_classes is not None, "compiled_classes mapping is not initialized."
+        return self._compiled_classes
 
     def update_block_info(self, block_info: BlockInfo):
         self._block_info = block_info
 
-    def set_contract_class_cache(self, contract_classes: CompiledClassCache):
-        assert self._contract_classes is None, "contract_classes mapping is already initialized."
-        self._contract_classes = contract_classes
+    def set_compiled_class_cache(self, compiled_classes: CompiledClassCache):
+        assert self._compiled_classes is None, "compiled_classes mapping is already initialized."
+        self._compiled_classes = compiled_classes
 
     def get_compiled_class(self, compiled_class_hash: int) -> CompiledClassBase:
-        if compiled_class_hash not in self.contract_classes:
-            self.contract_classes[compiled_class_hash] = self.state_reader.get_compiled_class(
+        if compiled_class_hash not in self.compiled_classes:
+            self.compiled_classes[compiled_class_hash] = self.state_reader.get_compiled_class(
                 compiled_class_hash=compiled_class_hash
             )
 
-        return self.contract_classes[compiled_class_hash]
+        return self.compiled_classes[compiled_class_hash]
 
     def get_compiled_class_hash(self, class_hash: int) -> int:
         if class_hash not in self.cache.class_hash_to_compiled_class_hash:
@@ -400,6 +400,30 @@ class CachedSyncState(SyncState):
 
     def set_storage_at(self, contract_address: int, key: int, value: int):
         self.cache._storage_writes[(contract_address, key)] = value
+
+    def _copy(self) -> "CachedSyncState":
+        # Note that the reader's cache may be updated by this copy's read requests.
+        return CachedSyncState(
+            block_info=self.block_info,
+            state_reader=self,
+            compiled_class_cache=self.compiled_classes,
+        )
+
+    def _apply(self, parent: "CachedSyncState"):
+        """
+        Apply updates to parent state.
+        """
+        assert self.state_reader is parent, "Current reader expected to be the parent state."
+
+        parent._block_info = self.block_info
+        parent.cache.update_writes_from_other(other=self.cache)
+
+    @contextlib.contextmanager
+    def copy_and_apply(self: "CachedSyncState") -> Iterator["CachedSyncState"]:
+        copied_state = self._copy()
+        # The exit logic will not be called in case an exception is raised inside the context.
+        yield copied_state
+        copied_state._apply(parent=self)  # Apply to self.
 
 
 class ContractStorageState:

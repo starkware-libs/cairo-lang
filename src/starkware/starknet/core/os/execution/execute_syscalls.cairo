@@ -614,7 +614,7 @@ func reduce_syscall_gas_and_write_response_header{range_check_ptr, syscall_ptr: 
     );
     if (success != 0) {
         // Reduction has succeded; write the response header.
-        tempvar response_header = cast(syscall_ptr, ResponseHeader*);
+        let response_header = cast(syscall_ptr, ResponseHeader*);
         // Advance syscall pointer to the response body.
         let syscall_ptr = syscall_ptr + ResponseHeader.SIZE;
         assert [response_header] = ResponseHeader(gas=remaining_gas, failure_flag=0);

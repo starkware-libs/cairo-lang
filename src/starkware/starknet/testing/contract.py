@@ -2,7 +2,7 @@ import dataclasses
 import sys
 import types
 from collections import namedtuple
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from typeguard import check_type
 
@@ -19,6 +19,7 @@ from starkware.python.utils import safe_zip
 from starkware.starknet.public.abi import AbiType
 from starkware.starknet.testing.contract_utils import (
     RAW_OUTPUT_ARG_LIST,
+    CastableToAddress,
     EventManager,
     StructManager,
     build_arguments,
@@ -26,7 +27,7 @@ from starkware.starknet.testing.contract_utils import (
     parse_arguments,
 )
 from starkware.starknet.testing.objects import StarknetCallInfo
-from starkware.starknet.testing.state import CastableToAddress, StarknetState
+from starkware.starknet.testing.state import StarknetState
 from starkware.starknet.utils.api_utils import cast_to_felts
 
 # Represents Python types, in particular those that are parallel to the cairo ones:
@@ -52,12 +53,10 @@ class StarknetContract:
         state: StarknetState,
         abi: AbiType,
         contract_address: CastableToAddress,
-        deploy_call_info: StarknetCallInfo,
+        constructor_call_info: Optional[StarknetCallInfo] = None,
     ):
         self.state = state
         self.abi = abi
-        self.deploy_call_info = deploy_call_info
-
         self.struct_manager = StructManager(abi=abi)
         self.event_manager = EventManager(abi=abi)
 
@@ -72,6 +71,7 @@ class StarknetContract:
             contract_address = int(contract_address, 16)
         assert isinstance(contract_address, int)
         self.contract_address = contract_address
+        self.constructor_call_info = constructor_call_info
 
     def __dir__(self):
         return list(object.__dir__(self)) + list(self._abi_function_mapping.keys())
@@ -243,10 +243,7 @@ class StarknetContract:
         implementation contract.
         """
         return StarknetContract(
-            state=self.state,
-            abi=impl_contract_abi,
-            contract_address=self.contract_address,
-            deploy_call_info=self.deploy_call_info,
+            state=self.state, abi=impl_contract_abi, contract_address=self.contract_address
         )
 
 

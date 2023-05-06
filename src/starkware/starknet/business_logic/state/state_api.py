@@ -15,7 +15,7 @@ from starkware.starkware_utils.error_handling import StarkException, stark_asser
 
 class StateReader(ABC):
     """
-    A read-only API for accessing StarkNet global state.
+    A read-only API for accessing Starknet global state.
     """
 
     @abstractmethod
@@ -73,7 +73,7 @@ class StateReader(ABC):
 
 class State(StateProxy, StateReader):
     """
-    A class defining the API for accessing StarkNet global state.
+    A class defining the API for accessing Starknet global state.
 
     Reader functionality is injected through dependency, rather than inherited (only the abstract
     API is inherited).

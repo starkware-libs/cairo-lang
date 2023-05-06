@@ -26,11 +26,25 @@ contract Starknet is
 {
     using StarknetState for StarknetState.State;
 
+    // Indicates a change of the Starknet config hash.
+    event ConfigHashChanged(
+        address indexed changedBy,
+        uint256 oldConfigHash,
+        uint256 newConfigHash
+    );
+
     // Logs the new state following a state update.
-    event LogStateUpdate(uint256 globalRoot, int256 blockNumber);
+    event LogStateUpdate(uint256 globalRoot, int256 blockNumber, uint256 blockHash);
 
     // Logs a stateTransitionFact that was used to update the state.
     event LogStateTransitionFact(bytes32 stateTransitionFact);
+
+    // Indicates a change of the Starknet OS program hash.
+    event ProgramHashChanged(
+        address indexed changedBy,
+        uint256 oldProgramHash,
+        uint256 newProgramHash
+    );
 
     // Random storage slot tags.
     string internal constant PROGRAM_HASH_TAG = "STARKNET_1.0_INIT_PROGRAM_HASH_UINT";
@@ -41,10 +55,12 @@ contract Starknet is
     string internal constant CONFIG_HASH_TAG = "STARKNET_1.0_STARKNET_CONFIG_HASH";
 
     function setProgramHash(uint256 newProgramHash) external notFinalized onlyGovernance {
+        emit ProgramHashChanged(msg.sender, programHash(), newProgramHash);
         programHash(newProgramHash);
     }
 
     function setConfigHash(uint256 newConfigHash) external notFinalized onlyGovernance {
+        emit ConfigHashChanged(msg.sender, configHash(), newConfigHash);
         configHash(newConfigHash);
     }
 
@@ -102,7 +118,7 @@ contract Starknet is
     }
 
     function validateInitData(bytes calldata data) internal view override {
-        require(data.length == 5 * 32, "ILLEGAL_INIT_DATA_SIZE");
+        require(data.length == 6 * 32, "ILLEGAL_INIT_DATA_SIZE");
         uint256 programHash_ = abi.decode(data[:32], (uint256));
         require(programHash_ != 0, "BAD_INITIALIZATION");
     }
@@ -128,7 +144,7 @@ contract Starknet is
       Returns a string that identifies the contract.
     */
     function identify() external pure override returns (string memory) {
-        return "StarkWare_Starknet_2023_5";
+        return "StarkWare_Starknet_2023_6";
     }
 
     /**
@@ -143,6 +159,13 @@ contract Starknet is
     */
     function stateBlockNumber() external view returns (int256) {
         return state().blockNumber;
+    }
+
+    /**
+      Returns the current block hash.
+    */
+    function stateBlockHash() external view returns (uint256) {
+        return state().blockHash;
     }
 
     /**
@@ -208,7 +231,7 @@ contract Starknet is
         // followed by storage changes.
 
         StarknetState.State storage state_ = state();
-        emit LogStateUpdate(state_.globalRoot, state_.blockNumber);
+        emit LogStateUpdate(state_.globalRoot, state_.blockNumber, state_.blockHash);
         // Re-entrancy protection (see above).
         require(state_.blockNumber == initialBlockNumber + 1, "INVALID_FINAL_BLOCK_NUMBER");
     }

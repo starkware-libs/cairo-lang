@@ -25,33 +25,27 @@ async def starknet() -> Starknet:
 
 @pytest_asyncio.fixture
 async def test_contract(starknet: Starknet) -> StarknetContract:
-    return await starknet.deploy(
-        source=CONTRACT_FILE,
-        constructor_calldata=[],
-    )
+    declare_info = await starknet.deprecated_declare(source=CONTRACT_FILE)
+    return await starknet.deploy(class_hash=declare_info.class_hash, constructor_calldata=[])
 
 
 @pytest_asyncio.fixture
 async def test_class(starknet: Starknet) -> DeclaredClass:
-    return await starknet.declare(source=CONTRACT_FILE)
+    return await starknet.deprecated_declare(source=CONTRACT_FILE)
 
 
 @pytest_asyncio.fixture
 async def proxy_contract(starknet: Starknet) -> StarknetContract:
     contract_class = get_deprecated_compiled_class("delegate_proxy")
-    return await starknet.deploy(
-        constructor_calldata=[],
-        contract_class=contract_class,
-    )
+    declare_info = await starknet.deprecated_declare(contract_class=contract_class)
+    return await starknet.deploy(constructor_calldata=[], class_hash=declare_info.class_hash)
 
 
 @pytest_asyncio.fixture
 async def account_contract(starknet: Starknet) -> StarknetContract:
     contract_class = get_deprecated_compiled_class("dummy_account")
-    return await starknet.deploy(
-        constructor_calldata=[],
-        contract_class=contract_class,
-    )
+    declare_info = await starknet.deprecated_declare(contract_class=contract_class)
+    return await starknet.deploy(constructor_calldata=[], class_hash=declare_info.class_hash)
 
 
 # Tests.

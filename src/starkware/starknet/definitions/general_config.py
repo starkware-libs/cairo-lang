@@ -65,7 +65,6 @@ DEFAULT_GAS_PRICE = 100 * 10**9
 DEFAULT_CAIRO_RESOURCE_FEE_WEIGHTS = {
     N_STEPS_RESOURCE: 1.0,
     **{builtin: 0.0 for builtin in ALL_BUILTINS.except_for(KECCAK_BUILTIN).with_suffix()},
-    "segment_arena_builtin": 0.0,
 }
 
 
@@ -128,19 +127,6 @@ class StarknetGeneralConfig(EverestGeneralConfig):
             description="Height of Patricia tree of the transaction commitment in a block.",
         ),
         default=constants.TRANSACTION_COMMITMENT_TREE_HEIGHT,
-    )
-
-    tx_version: int = field(
-        metadata=additional_metadata(
-            marshmallow_field=StrictRequiredInteger(
-                validate=validate_non_negative("Transaction version."),
-            ),
-            description=(
-                "Current transaction version - "
-                "in order to identify transactions from unsupported versions."
-            ),
-        ),
-        default=constants.TRANSACTION_VERSION,
     )
 
     event_commitment_tree_height: int = field(
@@ -218,6 +204,5 @@ def build_general_config(raw_general_config: Dict[str, Any]) -> StarknetGeneralC
             },
         }
     )
-    cairo_resource_fee_weights["segment_arena_builtin"] = n_steps_weight * 10
 
     return StarknetGeneralConfig.load(data=raw_general_config)

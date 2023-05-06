@@ -81,19 +81,11 @@ func keccak_felts_bigend{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_p
     return keccak_bigend(inputs=inputs_start, n_bytes=n_elements * 32);
 }
 
-// Computes the keccak of 'input'.
-// To use this function, split the input into words of 64 bits (little endian).
-// For example, to compute keccak('Hello world!'), use:
-//   inputs = [8031924123371070792, 560229490]
-// where:
-//   8031924123371070792 == int.from_bytes(b'Hello wo', 'little')
-//   560229490 == int.from_bytes(b'rld!', 'little')
-//
-// Returns the hash as a Uint256.
-func keccak{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: KeccakBuiltin*}(
-    inputs: felt*, n_bytes: felt
+// Converts a final state of the Keccak builtin to the hash output as `Uint256`.
+@known_ap_change
+func _keccak_output_to_uint256{range_check_ptr, bitwise_ptr: BitwiseBuiltin*}(
+    output: KeccakBuiltinState*
 ) -> (res: Uint256) {
-    let (output) = keccak_final_state(inputs=inputs, n_bytes=n_bytes);
     tempvar output0 = output.s0;
     tempvar output1 = output.s1;
 
@@ -122,6 +114,24 @@ func keccak{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: KeccakBui
     let range_check_ptr = range_check_ptr + 8;
     let res_high = output0_high + output1_low * 256 ** 9;
     return (res=Uint256(low=output0_low, high=res_high));
+}
+
+// Computes the keccak of 'input'.
+// To use this function, split the input into words of 64 bits (little endian).
+// For example, to compute keccak('Hello world!'), use:
+//   inputs = [8031924123371070792, 560229490]
+// where:
+//   8031924123371070792 == int.from_bytes(b'Hello wo', 'little')
+//   560229490 == int.from_bytes(b'rld!', 'little')
+//
+// Returns the hash as a Uint256.
+func keccak{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: KeccakBuiltin*}(
+    inputs: felt*, n_bytes: felt
+) -> (res: Uint256) {
+    let (output) = keccak_final_state(inputs=inputs, n_bytes=n_bytes);
+
+    let res = _keccak_output_to_uint256(output);
+    return res;
 }
 
 // Same as keccak, but outputs the hash in big endian representation.
@@ -361,4 +371,31 @@ func _keccak{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: KeccakBu
     let state = &(keccak_ptr.output);
     let keccak_ptr = keccak_ptr + KeccakBuiltin.SIZE;
     return (output=state);
+}
+
+// Same as keccak but assumes that the input was already padded to 1088-bit blocks.
+// Namely, the size of the `inputs` should be `n_blocks * KECCAK_FULL_RATE_IN_WORDS`.
+func keccak_padded_input{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: KeccakBuiltin*}(
+    inputs: felt*, n_blocks: felt
+) -> (res: Uint256) {
+    tempvar state = new KeccakBuiltinState(s0=0, s1=0, s2=0, s3=0, s4=0, s5=0, s6=0, s7=0);
+    let output = _keccak_padded_input(inputs, n_blocks, state);
+    let res = _keccak_output_to_uint256(output);
+    return res;
+}
+
+func _keccak_padded_input{
+    range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: KeccakBuiltin*
+}(inputs: felt*, n_blocks: felt, state: KeccakBuiltinState*) -> KeccakBuiltinState* {
+    if (n_blocks == 0) {
+        return state;
+    }
+
+    _prepare_full_block(inputs=inputs, state=state);
+    let state = &(keccak_ptr.output);
+    let keccak_ptr = keccak_ptr + KeccakBuiltin.SIZE;
+
+    return _keccak_padded_input(
+        inputs=&inputs[KECCAK_FULL_RATE_IN_WORDS], n_blocks=n_blocks - 1, state=state
+    );
 }

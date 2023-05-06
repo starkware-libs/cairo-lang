@@ -128,9 +128,9 @@ class OrderedEvent(ValidatedDataclass):
 
     order: int = field(metadata=sequential_id_metadata("Event order"))
     # The keys by which the event will be indexed.
-    keys: List[int] = field(metadata=fields.felt_list_metadata)
+    keys: List[int] = field(metadata=fields.felt_as_hex_or_str_list_metadata)
     # The data of the event.
-    data: List[int] = field(metadata=fields.felt_list_metadata)
+    data: List[int] = field(metadata=fields.felt_as_hex_or_str_list_metadata)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -165,7 +165,7 @@ class OrderedL2ToL1Message(ValidatedDataclass):
 
     order: int = field(metadata=sequential_id_metadata("L2-to-L1 message order"))
     to_address: int = field(metadata=everest_fields.EthAddressIntField.metadata("to_address"))
-    payload: List[int] = field(metadata=fields.felt_list_metadata)
+    payload: List[int] = field(metadata=fields.felt_as_hex_or_str_list_metadata)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -176,7 +176,7 @@ class L2ToL1MessageInfo(ValidatedDataclass):
 
     from_address: int = field(metadata=fields.L2AddressField.metadata(field_name="from_address"))
     to_address: int = field(metadata=everest_fields.EthAddressIntField.metadata("to_address"))
-    payload: List[int] = field(metadata=fields.felt_list_metadata)
+    payload: List[int] = field(metadata=fields.felt_as_hex_or_str_list_metadata)
 
     @classmethod
     def create(cls, message_content: OrderedL2ToL1Message, sending_contract_address: int):

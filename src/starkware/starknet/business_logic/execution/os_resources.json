@@ -54,6 +54,11 @@
             "n_memory_holes": 0,
             "n_steps": 36
         },
+        "get_execution_info": {
+            "builtin_instance_counter": {},
+            "n_memory_holes": 0,
+            "n_steps": 29
+        },
         "get_sequencer_address": {
             "builtin_instance_counter": {},
             "n_memory_holes": 0,

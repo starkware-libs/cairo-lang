@@ -30,7 +30,7 @@ class PatriciaStateReader(StateReader):
 
     def __init__(
         self,
-        global_state_root: PatriciaTree,
+        contract_state_root: PatriciaTree,
         contract_class_root: Optional[PatriciaTree],
         ffc: FactFetchingContext,
         contract_class_storage: Storage,
@@ -41,7 +41,7 @@ class PatriciaStateReader(StateReader):
         self.contract_class_storage = contract_class_storage
 
         # Last committed state roots.
-        self.global_state_root = global_state_root
+        self.contract_state_root = contract_state_root
         self.contract_class_root = contract_class_root
 
         # A mapping from contract address to its state.
@@ -108,7 +108,7 @@ class PatriciaStateReader(StateReader):
         return self.contract_states[contract_address]
 
     async def _fetch_contract_state(self, contract_address: int) -> ContractState:
-        return await self.global_state_root.get_leaf(
+        return await self.contract_state_root.get_leaf(
             ffc=self.ffc, index=contract_address, fact_cls=ContractState
         )
 

@@ -1206,7 +1206,7 @@ async def simulate_tx_inner(
 
 def print_invoke_tx(tx: InvokeFunction, chain_id: int):
     sn_config_dict = StarknetGeneralConfig().dump()
-    sn_config_dict["starknet_os_config"]["chain_id"] = StarknetChainId(chain_id).name
+    sn_config_dict["starknet_os_config"]["chain_id"] = StarknetChainId(chain_id).value
     sn_config = StarknetGeneralConfig.load(sn_config_dict)
     tx_hash = tx.calculate_hash(sn_config)
     out_dict = {

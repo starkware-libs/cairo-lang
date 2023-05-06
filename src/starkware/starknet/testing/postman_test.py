@@ -20,7 +20,8 @@ async def postman(eth_test_utils: EthTestUtils) -> Postman:
 
 @pytest_asyncio.fixture
 async def test_contract(postman: Postman) -> StarknetContract:
-    return await postman.starknet.deploy(source=CONTRACT_FILE)
+    declare_info = await postman.starknet.deprecated_declare(source=CONTRACT_FILE)
+    return await postman.starknet.deploy(class_hash=declare_info.class_hash)
 
 
 @pytest.mark.asyncio

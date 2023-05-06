@@ -150,6 +150,7 @@ def get_source_dir_path(rel_path: str = "", default_value: Optional[str] = None)
     Returns a path to a file inside the source directory. Does not work in docker.
     rel_path is the relative path of the file with respect to the source directory.
     """
+
     if "BUILD_ROOT" in os.environ:
         source_root = os.path.join(os.environ["BUILD_ROOT"], "../../")
         assert os.path.exists(os.path.join(source_root, "src"))

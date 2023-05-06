@@ -1,9 +1,11 @@
 import asyncio
 import contextlib
+import dataclasses
 import logging
 from typing import Dict, Iterable, List, Optional, Tuple, cast
 
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
+from starkware.cairo.lang.builtins.all_builtins import with_suffix
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
 from starkware.python.utils import from_bytes, sub_counters, to_bytes
 from starkware.starknet.business_logic.execution.gas_usage import calculate_tx_gas_usage
@@ -14,7 +16,7 @@ from starkware.starknet.business_logic.execution.objects import (
     ResourcesMapping,
     TransactionExecutionInfo,
 )
-from starkware.starknet.business_logic.execution.os_usage import get_additional_os_resources
+from starkware.starknet.business_logic.execution.os_usage import get_tx_additional_os_resources
 from starkware.starknet.business_logic.fact_state.contract_class_objects import (
     CompiledClassFact,
     ContractClassFact,
@@ -224,10 +226,23 @@ def calculate_tx_resources(
         n_class_updates=n_class_updates,
     )
 
-    cairo_usage = resources_manager.cairo_usage
+    cairo_usage_with_segment_arena_builtin = resources_manager.cairo_usage
+    # "segment_arena" built-in is not a SHARP built-in - i.e., it is not part of any proof layout.
+    # Each instance requires approximately 10 steps in the OS.
+    builtin_instance_counter = dict(cairo_usage_with_segment_arena_builtin.builtin_instance_counter)
+    n_steps = cairo_usage_with_segment_arena_builtin.n_steps + 10 * builtin_instance_counter.pop(
+        with_suffix("segment_arena"), 0
+    )
+    cairo_usage = dataclasses.replace(
+        cairo_usage_with_segment_arena_builtin,
+        n_steps=n_steps,
+        builtin_instance_counter=builtin_instance_counter,
+    )
     tx_syscall_counter = resources_manager.syscall_counter
     # Add additional Cairo resources needed for the OS to run the transaction.
-    cairo_usage += get_additional_os_resources(syscall_counter=tx_syscall_counter, tx_type=tx_type)
+    cairo_usage += get_tx_additional_os_resources(
+        syscall_counter=tx_syscall_counter, tx_type=tx_type
+    )
 
     return dict(l1_gas_usage=l1_gas_usage, **cairo_usage.filter_unused_builtins().to_dict())
 

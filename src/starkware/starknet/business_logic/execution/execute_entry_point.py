@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import dataclasses
 import functools
 import logging
@@ -36,10 +37,8 @@ from starkware.starknet.business_logic.utils import (
     validate_contract_deployed,
 )
 from starkware.starknet.core.os import os_utils, syscall_utils
-from starkware.starknet.core.os.syscall_handler import (
-    BusinessLogicSyscallHandler,
-    DeprecatedBlSyscallHandler,
-)
+from starkware.starknet.core.os.deprecated_syscall_handler import DeprecatedBlSyscallHandler
+from starkware.starknet.core.os.syscall_handler import BusinessLogicSyscallHandler
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.constants import GasCost
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
@@ -299,39 +298,40 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
         ]
 
         # Run.
-        self._run(
-            runner=runner,
-            entry_point_offset=entry_point.offset,
-            entry_point_args=entry_point_args,
-            hint_locals={"syscall_handler": syscall_handler},
-            run_resources=tx_execution_context.run_resources,
-            program_segment_size=len(runner.program.data) + len(program_extra_data),
-            allow_tmp_segments=True,
-        )
+        with clean_leaks(runner=runner, syscall_handler=syscall_handler):
+            self._run(
+                runner=runner,
+                entry_point_offset=entry_point.offset,
+                entry_point_args=entry_point_args,
+                hint_locals={"syscall_handler": syscall_handler},
+                run_resources=tx_execution_context.run_resources,
+                program_segment_size=len(runner.program.data) + len(program_extra_data),
+                allow_tmp_segments=True,
+            )
 
-        # We should not count (possibly) unsued code as holes.
-        runner.mark_as_accessed(address=core_program_end_ptr, size=len(program_extra_data))
+            # We should not count (possibly) unsued code as holes.
+            runner.mark_as_accessed(address=core_program_end_ptr, size=len(program_extra_data))
 
-        # Complete validations.
-        os_utils.validate_and_process_os_implicit_args(
-            runner=runner,
-            syscall_handler=syscall_handler,
-            initial_implicit_args=implicit_args,
-        )
+            # Complete validations.
+            os_utils.validate_and_process_os_implicit_args(
+                runner=runner,
+                syscall_handler=syscall_handler,
+                initial_implicit_args=implicit_args,
+            )
 
-        # Update resources usage (for the bouncer and fee calculation).
-        resources_manager.cairo_usage += runner.get_execution_resources()
+            # Update resources usage (for the bouncer and fee calculation).
+            resources_manager.cairo_usage += runner.get_execution_resources()
 
-        # Build and return the call info.
-        return self._build_call_info(
-            class_hash=class_hash,
-            execution_resources=resources_manager.cairo_usage - previous_cairo_usage,
-            storage=syscall_handler.storage,
-            result=get_call_result(runner=runner, initial_gas=self.initial_gas),
-            events=syscall_handler.events,
-            l2_to_l1_messages=syscall_handler.l2_to_l1_messages,
-            internal_calls=syscall_handler.internal_calls,
-        )
+            # Build and return the call info.
+            return self._build_call_info(
+                class_hash=class_hash,
+                execution_resources=resources_manager.cairo_usage - previous_cairo_usage,
+                storage=syscall_handler.storage,
+                result=get_call_result(runner=runner, initial_gas=self.initial_gas),
+                events=syscall_handler.events,
+                l2_to_l1_messages=syscall_handler.l2_to_l1_messages,
+                internal_calls=syscall_handler.internal_calls,
+            )
 
     def _run(
         self,
@@ -562,33 +562,78 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
         )
         entry_point_offset = entry_point.offset
 
-        # Run.
-        self._run(
-            runner=runner,
-            entry_point_offset=entry_point_offset,
-            entry_point_args=entry_point_args,
-            hint_locals={"syscall_handler": syscall_handler},
-            run_resources=tx_execution_context.run_resources,
-            allow_tmp_segments=False,
-        )
+        with clean_leaks(runner=runner, syscall_handler=syscall_handler):
+            # Run.
+            self._run(
+                runner=runner,
+                entry_point_offset=entry_point_offset,
+                entry_point_args=entry_point_args,
+                hint_locals={"syscall_handler": syscall_handler},
+                run_resources=tx_execution_context.run_resources,
+                allow_tmp_segments=False,
+            )
 
-        # Complete validations.
-        os_utils.validate_and_process_os_context_for_version0_class(
-            runner=runner,
-            syscall_handler=syscall_handler,
-            initial_os_context=implicit_args,
-        )
+            # Complete validations.
+            os_utils.validate_and_process_os_context_for_version0_class(
+                runner=runner,
+                syscall_handler=syscall_handler,
+                initial_os_context=implicit_args,
+            )
 
-        # Update resources usage (for the bouncer and fee calculation).
-        resources_manager.cairo_usage += runner.get_execution_resources()
+            # Update resources usage (for the bouncer and fee calculation).
+            resources_manager.cairo_usage += runner.get_execution_resources()
 
-        # Build and return the call info.
-        return self._build_call_info(
-            storage=syscall_handler.starknet_storage,
-            events=syscall_handler.events,
-            l2_to_l1_messages=syscall_handler.l2_to_l1_messages,
-            internal_calls=syscall_handler.internal_calls,
-            execution_resources=resources_manager.cairo_usage - previous_cairo_usage,
-            result=get_call_result_for_version0_class(runner=runner),
-            class_hash=class_hash,
-        )
+            # Build and return the call info.
+            return self._build_call_info(
+                storage=syscall_handler.starknet_storage,
+                events=syscall_handler.events,
+                l2_to_l1_messages=syscall_handler.l2_to_l1_messages,
+                internal_calls=syscall_handler.internal_calls,
+                execution_resources=resources_manager.cairo_usage - previous_cairo_usage,
+                result=get_call_result_for_version0_class(runner=runner),
+                class_hash=class_hash,
+            )
+
+
+@contextlib.contextmanager
+def clean_leaks(
+    runner: CairoFunctionRunner,
+    syscall_handler: Union[DeprecatedBlSyscallHandler, BusinessLogicSyscallHandler],
+):
+    # There are memory leaks around these objects; delete some of them as a temporary fix.
+    try:
+        yield
+    finally:
+        del runner.program
+        del runner.memory
+        del runner.segments
+        del runner.vm.hints
+        del runner.vm.exec_scopes
+        del runner.vm.program
+        del runner.vm.error_message_attributes
+        del runner.vm.validated_memory
+        del runner.vm.accessed_addresses
+        del runner.vm.hint_pc_and_index
+        del runner.vm.trace
+        del runner.vm.builtin_runners
+        del runner.vm.run_context.memory
+        del runner.vm.run_context
+        del runner
+
+        del syscall_handler.internal_calls
+        del syscall_handler.events
+        del syscall_handler.segments.memory
+        del syscall_handler._segments
+        del syscall_handler.read_only_segments
+        del syscall_handler.resources_manager
+        del syscall_handler.tx_execution_context
+        if isinstance(syscall_handler, DeprecatedBlSyscallHandler):
+            del syscall_handler.block_info
+            del syscall_handler.sync_state
+            del syscall_handler.starknet_storage
+        else:
+            assert isinstance(syscall_handler, BusinessLogicSyscallHandler)
+            del syscall_handler.state
+            del syscall_handler.storage
+
+        del syscall_handler

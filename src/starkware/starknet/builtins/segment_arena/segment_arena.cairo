@@ -1,5 +1,4 @@
 from starkware.cairo.common.alloc import alloc
-from starkware.cairo.common.segments import relocate_segment
 
 // The segment arena builtin allows Sierra libfuncs to allocate memory segments and only track their
 // ends (rather than both the start and the end). When the segment is finalized, the arena can
@@ -84,7 +83,12 @@ func _verify_continuity(infos: SegmentInfo*, n_segments_minus_one: felt) {
     // is strictly bigger than the end of the previous segment.
     // This is required for proving the soundness of this construction, in the case where a segment
     // has length zero.
-    relocate_segment(infos[1].start, infos[0].end + 1);
+
+    // Note: the following code was copied from relocate_segment() for efficiency reasons.
+    let src_ptr = infos[1].start;
+    let dest_ptr = infos[0].end + 1;
+    %{ memory.add_relocation_rule(src_ptr=ids.src_ptr, dest_ptr=ids.dest_ptr) %}
+    assert src_ptr = dest_ptr;
 
     return _verify_continuity(infos=&infos[1], n_segments_minus_one=n_segments_minus_one - 1);
 }

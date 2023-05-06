@@ -4,10 +4,8 @@ from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 from starkware.starknet.core.os import segment_utils
-from starkware.starknet.core.os.syscall_handler import (
-    BusinessLogicSyscallHandler,
-    DeprecatedBlSyscallHandler,
-)
+from starkware.starknet.core.os.deprecated_syscall_handler import DeprecatedBlSyscallHandler
+from starkware.starknet.core.os.syscall_handler import BusinessLogicSyscallHandler
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.public.abi import SYSCALL_PTR_OFFSET_IN_VERSION0
 from starkware.starkware_utils.error_handling import wrap_with_stark_exception

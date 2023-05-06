@@ -6,11 +6,8 @@ import marshmallow_dataclass
 
 from starkware.starknet.business_logic.fact_state.contract_state_objects import ContractState
 from starkware.starknet.business_logic.transaction.objects import InternalTransaction
-from starkware.starknet.core.os.syscall_handler import (
-    DeprecatedOsSysCallHandler,
-    OsExecutionHelper,
-    OsSyscallHandler,
-)
+from starkware.starknet.core.os.deprecated_syscall_handler import DeprecatedOsSysCallHandler
+from starkware.starknet.core.os.syscall_handler import OsExecutionHelper, OsSyscallHandler
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.services.api.contract_class.contract_class import (
@@ -40,6 +37,7 @@ class StarknetOsInput(ValidatedMarshmallowDataclass):
     class_hash_to_compiled_class_hash: Dict[int, int]
     general_config: StarknetGeneralConfig
     transactions: List[InternalTransaction]
+    block_hash: int
 
 
 @dataclasses.dataclass(frozen=True)

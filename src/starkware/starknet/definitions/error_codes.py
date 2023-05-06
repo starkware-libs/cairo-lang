@@ -7,6 +7,7 @@ from starkware.starkware_utils.error_handling import ErrorCode, StarkErrorCode
 
 class StarknetErrorCode(ErrorCode):
     BLOCK_NOT_FOUND = 0
+    SENDER_ADDRESS_IS_BLOCKED = auto()
     CLASS_ALREADY_DECLARED = auto()
     COMPILATION_FAILED = auto()
     CONTRACT_ADDRESS_UNAVAILABLE = auto()
@@ -103,6 +104,7 @@ main_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
     [
         *common_error_codes,
         StarknetErrorCode.DEPRECATED_TRANSACTION,
+        StarknetErrorCode.SENDER_ADDRESS_IS_BLOCKED,
         # Signature validation errors.
         StarkErrorCode.INVALID_SIGNATURE,
         # External deploy loading errors.
@@ -170,6 +172,7 @@ class CairoErrorCode(Enum):
     """
 
     OUT_OF_GAS = "Out of gas"
+    INVALID_INPUT_LEN = "Invalid input length"
 
     def to_felt(self) -> int:
         return from_bytes(self.value.encode("ascii"))

@@ -90,6 +90,13 @@
         {
             "allowed_expressions": [],
             "hint_lines": [
+                "from starkware.cairo.common.cairo_secp.secp_utils import pack",
+                "value = pack(ids.x, PRIME) % SECP_P"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
                 "from starkware.python.math_utils import div_mod",
                 "",
                 "value = x_inv = div_mod(1, x, SECP_P)"

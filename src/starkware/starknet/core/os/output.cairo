@@ -54,6 +54,8 @@ func os_output_serialize{output_ptr: felt*}(
     serialize_word(state_update_output.final_root);
 
     serialize_word(block_context.block_info.block_number);
+    // Currently, the block hash is not enforced by the OS.
+    serialize_word(nondet %{ os_input.block_hash %});
     serialize_word(starknet_os_config_hash);
 
     let messages_to_l1_segment_size = (

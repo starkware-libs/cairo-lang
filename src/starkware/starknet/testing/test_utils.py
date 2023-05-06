@@ -4,11 +4,7 @@ from starkware.starknet.business_logic.transaction.objects import InternalInvoke
 from starkware.starknet.core.os.contract_address.contract_address import (
     calculate_contract_address_from_hash,
 )
-from starkware.starknet.core.os.contract_class.deprecated_class_hash import (
-    compute_deprecated_class_hash,
-)
 from starkware.starknet.public.abi import get_selector_from_name
-from starkware.starknet.services.api.contract_class.contract_class import DeprecatedCompiledClass
 
 
 class NonceManager:
@@ -56,24 +52,24 @@ class NonceManager:
 
 
 def create_internal_deploy_tx_for_testing(
-    account_address: int,
-    contract_class: DeprecatedCompiledClass,
+    sender_address: int,
+    class_hash: int,
     constructor_calldata: List[int],
     salt: int,
     max_fee: int,
     nonce: int,
     signature: Optional[List[int]] = None,
+    chain_id: Optional[int] = None,
 ) -> Tuple[int, InternalInvokeFunction]:
     """
     Returns an InternalInvokeFunction object that deploys a contract
-    by calling the account's `deploy_contract` function.
+    by calling the dummy_account's `deploy_contract` function.
     """
-    class_hash = compute_deprecated_class_hash(contract_class=contract_class)
     contract_address = calculate_contract_address_from_hash(
         salt=salt,
         class_hash=class_hash,
         constructor_calldata=constructor_calldata,
-        deployer_address=account_address,
+        deployer_address=sender_address,
     )
     deploy_contract_calldata = [
         class_hash,
@@ -82,13 +78,14 @@ def create_internal_deploy_tx_for_testing(
         *constructor_calldata,
     ]
     deploy_tx = InternalInvokeFunction.create_wrapped_with_account(
-        account_address=account_address,
-        contract_address=account_address,
+        account_address=sender_address,
+        contract_address=sender_address,
         calldata=deploy_contract_calldata,
         entry_point_selector=get_selector_from_name("deploy_contract"),
         max_fee=max_fee,
         nonce=nonce,
         signature=signature,
+        chain_id=chain_id,
     )
 
     return contract_address, deploy_tx

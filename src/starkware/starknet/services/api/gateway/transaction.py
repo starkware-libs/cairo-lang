@@ -330,7 +330,9 @@ class BaseTransactionSchema(OneOfSchema):
 
     def get_data_type(self, data: Dict[str, Any]) -> str:
         data_type = data.get(self.type_field)
-        version = fields.TransactionVersionField.load_value(data["version"])
+        # Version field may be missing in old transactions.
+        raw_version = data.get("version", "0x0")
+        version = fields.TransactionVersionField.load_value(raw_version)
         if (
             data_type == TransactionType.DECLARE.name
             and version in constants.DEPRECATED_DECLARE_VERSIONS

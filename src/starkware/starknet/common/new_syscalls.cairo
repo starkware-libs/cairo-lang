@@ -4,6 +4,7 @@ const CALL_CONTRACT_SELECTOR = 'CallContract';
 const DEPLOY_SELECTOR = 'Deploy';
 const EMIT_EVENT_SELECTOR = 'EmitEvent';
 const GET_EXECUTION_INFO_SELECTOR = 'GetExecutionInfo';
+const KECCAK_SELECTOR = 'Keccak';
 const LIBRARY_CALL_SELECTOR = 'LibraryCall';
 const REPLACE_CLASS_SELECTOR = 'ReplaceClass';
 const SEND_MESSAGE_TO_L1_SELECTOR = 'SendMessageToL1';
@@ -113,6 +114,13 @@ struct DeployRequest {
     deploy_from_zero: felt,
 }
 
+struct KeccakRequest {
+    // The Span<u64> to be hashed.
+    // See `keccak_padded_input` for more details.
+    input_start: felt*,
+    input_end: felt*,
+}
+
 struct StorageReadRequest {
     reserved: felt,
     key: felt,
@@ -152,6 +160,11 @@ struct DeployResponse {
     contract_address: felt,
     constructor_retdata_start: felt*,
     constructor_retdata_end: felt*,
+}
+
+struct KeccakResponse {
+    result_low: felt,
+    result_high: felt,
 }
 
 struct StorageReadResponse {

@@ -26,6 +26,12 @@ def compute_compiled_class_hash(compiled_class: CompiledClass) -> int:
 
 
 def _compute_compiled_class_hash_inner(compiled_class: CompiledClass) -> int:
+    runner = run_compiled_class_hash(compiled_class=compiled_class)
+    _, class_hash = runner.get_return_values(2)
+    return class_hash
+
+
+def run_compiled_class_hash(compiled_class: CompiledClass) -> CairoFunctionRunner:
     program = load_compiled_class_cairo_program()
     compiled_class_struct = get_compiled_class_struct(
         identifiers=program.identifiers, compiled_class=compiled_class
@@ -39,5 +45,4 @@ def _compute_compiled_class_hash_inner(compiled_class: CompiledClass) -> int:
         use_full_name=True,
         verify_secure=False,
     )
-    _, class_hash = runner.get_return_values(2)
-    return class_hash
+    return runner

@@ -96,6 +96,16 @@ ret;
     )
 
 
+def test_pow_with_const_exponent():
+    code = """
+const A = 5;
+const B = 2 ** A;
+[ap] = B;
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert program.format() == "[ap] = 32;\n"
+
+
 def test_pow_failure():
     verify_exception(
         """\

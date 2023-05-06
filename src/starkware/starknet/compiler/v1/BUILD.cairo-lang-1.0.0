@@ -1,7 +1,0 @@
-package(default_visibility = ["//visibility:public"])
-
-filegroup(
-    name = "cairo-lang-1.0.0",
-    srcs = glob(["**/*"]),
-    visibility = ["//visibility:public"],
-)

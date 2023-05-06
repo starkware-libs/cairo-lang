@@ -104,12 +104,12 @@ class CarriedState(CarriedStateBase):
         state = CachedState(
             block_info=shared_state.block_info,
             state_reader=PatriciaStateReader(
-                global_state_root=shared_state.contract_states,
+                contract_state_root=shared_state.contract_states,
                 contract_class_root=shared_state.contract_classes,
                 ffc=ffc,
                 contract_class_storage=ffc.storage,
             ),
-            contract_class_cache={},
+            compiled_class_cache={},
         )
         return cls(
             parent_state=None,
@@ -284,7 +284,7 @@ class SharedState(SharedStateBase):
         state = CachedState(
             block_info=self.block_info,
             state_reader=PatriciaStateReader(
-                global_state_root=self.contract_states,
+                contract_state_root=self.contract_states,
                 contract_class_root=self.contract_classes,
                 ffc=ffc,
                 contract_class_storage=ffc.storage,
