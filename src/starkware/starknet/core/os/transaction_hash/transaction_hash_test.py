@@ -4,18 +4,21 @@ import pytest
 
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.crypto.signature.fast_pedersen_hash import pedersen_hash
-from starkware.starknet.core.os.class_hash import compute_class_hash
+from starkware.starknet.core.os.contract_class.deprecated_class_hash import (
+    compute_deprecated_class_hash,
+)
 from starkware.starknet.core.os.os_program import get_os_program
 from starkware.starknet.core.os.transaction_hash.transaction_hash import (
     TransactionHashPrefix,
-    calculate_declare_transaction_hash,
     calculate_deploy_account_transaction_hash,
     calculate_deploy_transaction_hash,
+    calculate_deprecated_declare_transaction_hash,
     calculate_transaction_hash_common,
     compute_hash_on_elements,
 )
-from starkware.starknet.core.test_contract.test_utils import get_contract_class
+from starkware.starknet.core.test_contract.test_utils import get_deprecated_compiled_class
 from starkware.starknet.definitions import constants
+from starkware.starknet.definitions.general_config import STARKNET_LAYOUT_INSTANCE
 from starkware.starknet.public.abi import CONSTRUCTOR_ENTRY_POINT_SELECTOR
 
 
@@ -30,7 +33,7 @@ def run_cairo_transaction_hash(
     additional_data: List[int],
 ) -> int:
     program = get_os_program()
-    runner = CairoFunctionRunner(program, layout="all")
+    runner = CairoFunctionRunner(program, layout=STARKNET_LAYOUT_INSTANCE)
 
     runner.run(
         "starkware.starknet.core.os.transaction_hash.transaction_hash.get_transaction_hash",
@@ -144,8 +147,10 @@ def test_deploy_account_transaction_hash(constructor_calldata: List[int]):
     max_fee = 1
     chain_id = 2
     nonce = 0
-    contract_class = get_contract_class(contract_name="dummy_account")
-    class_hash = compute_class_hash(contract_class=contract_class, hash_func=pedersen_hash)
+    contract_class = get_deprecated_compiled_class(contract_name="dummy_account")
+    class_hash = compute_deprecated_class_hash(
+        contract_class=contract_class, hash_func=pedersen_hash
+    )
     calldata = [class_hash, salt, *constructor_calldata]
 
     expected_hash = compute_hash_on_elements(
@@ -186,8 +191,10 @@ def test_declare_transaction_hash():
     max_fee = 1
     chain_id = 2
     nonce = 0
-    contract_class = get_contract_class(contract_name="dummy_account")
-    class_hash = compute_class_hash(contract_class=contract_class, hash_func=pedersen_hash)
+    contract_class = get_deprecated_compiled_class(contract_name="dummy_account")
+    class_hash = compute_deprecated_class_hash(
+        contract_class=contract_class, hash_func=pedersen_hash
+    )
 
     expected_hash = compute_hash_on_elements(
         data=[
@@ -203,7 +210,7 @@ def test_declare_transaction_hash():
         hash_func=pedersen_hash,
     )
     assert (
-        calculate_declare_transaction_hash(
+        calculate_deprecated_declare_transaction_hash(
             contract_class=contract_class,
             chain_id=chain_id,
             sender_address=sender_address,

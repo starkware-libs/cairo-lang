@@ -3,10 +3,10 @@ from starkware.cairo.common.math import assert_250_bit
 const MAX_STORAGE_ITEM_SIZE = 256;
 // Valid storage addresses should satisfy address + offset < 2**251 where
 // offset < MAX_STORAGE_ITEM_SIZE and address < ADDR_BOUND.
-const ADDR_BOUND = 2 ** 251 - 256;
+const ADDR_BOUND = 2 ** 251 - MAX_STORAGE_ITEM_SIZE;
 
 // Computes addr % ADDR_BOUND so that the result will form a valid storage item address in the
-// storage tree. In particular, we need the result + MAX_STORAGE_ITEM_SIZE to be less that
+// storage tree. In particular, we need the result + MAX_STORAGE_ITEM_SIZE to be less than
 // 2**251.
 @known_ap_change
 func normalize_address{range_check_ptr}(addr: felt) -> (res: felt) {

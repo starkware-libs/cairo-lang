@@ -2,7 +2,7 @@
 // function.
 //
 // In order to use the functions that get the ``keccak_ptr`` implicit argument
-// (e.g., ``keccak_uint256s()``, ``keccak()``, ...) you should:
+// (e.g., ``cairo_keccak_uint256s()``, ``cairo_keccak()``, ...) you should:
 //
 //   1. Create a new memory segment using ``alloc()`` and store it in a variable named
 //      ``keccak_ptr``.
@@ -17,8 +17,8 @@
 //   local keccak_ptr_start: felt* = keccak_ptr;
 //
 //   with keccak_ptr {
-//     keccak_uint256s(...);
-//     keccak_uint256s(...);
+//     cairo_keccak_uint256s(...);
+//     cairo_keccak_uint256s(...);
 //   }
 //
 //   finalize_keccak(keccak_ptr_start=keccak_ptr_start, keccak_ptr_end=keccak_ptr);
@@ -30,24 +30,19 @@
 // Failing to call ``finalize_keccak()``, will make the keccak function unsound - the prover will be
 // able to choose any value as the keccak's result.
 //
-// The module also provides a set of helper functions to prepare the input data for keccak,
+// The module also uses a set of helper functions to prepare the input data for keccak,
 // such as ``keccak_add_uint256()`` and ``keccak_add_felt()``. To use them, you should allocate
 // a new memory segment to variable named ``inputs`` (this value is an implicit argument to those
-// functions). Once the input is ready, you should call ``keccak()`` or ``keccak_bigend()``.
+// functions). Once the input is ready, you should call ``cairo_keccak()`` or
+// ``cairo_keccak_bigend()``.
 // Don't forget to call ``finalize_keccak()`` at the end of the program/transaction.
 
 from starkware.cairo.common.alloc import alloc
-from starkware.cairo.common.bitwise import bitwise_and, bitwise_or, bitwise_xor
+from starkware.cairo.common.bitwise import bitwise_xor
 from starkware.cairo.common.cairo_builtins import BitwiseBuiltin
+from starkware.cairo.common.keccak_utils.keccak_utils import keccak_add_felts, keccak_add_uint256s
 from starkware.cairo.common.cairo_keccak.packed_keccak import BLOCK_SIZE, packed_keccak_func
-from starkware.cairo.common.math import (
-    assert_lt,
-    assert_nn,
-    assert_nn_le,
-    assert_not_zero,
-    split_felt,
-    unsigned_div_rem,
-)
+from starkware.cairo.common.math import assert_nn_le, unsigned_div_rem
 from starkware.cairo.common.memcpy import memcpy
 from starkware.cairo.common.memset import memset
 from starkware.cairo.common.pow import pow
@@ -60,7 +55,7 @@ const KECCAK_CAPACITY_IN_WORDS = 8;
 const BYTES_IN_WORD = 8;
 
 // Computes the keccak hash of multiple uint256 numbers.
-func keccak_uint256s{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: felt*}(
+func cairo_keccak_uint256s{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: felt*}(
     n_elements: felt, elements: Uint256*
 ) -> (res: Uint256) {
     alloc_locals;
@@ -70,12 +65,12 @@ func keccak_uint256s{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: 
 
     keccak_add_uint256s{inputs=inputs}(n_elements=n_elements, elements=elements, bigend=0);
 
-    return keccak(inputs=inputs_start, n_bytes=n_elements * 32);
+    return cairo_keccak(inputs=inputs_start, n_bytes=n_elements * 32);
 }
 
 // Computes the keccak hash of multiple uint256 numbers (big-endian).
 // Note that both the output and the input are in big endian representation.
-func keccak_uint256s_bigend{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: felt*}(
+func cairo_keccak_uint256s_bigend{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: felt*}(
     n_elements: felt, elements: Uint256*
 ) -> (res: Uint256) {
     alloc_locals;
@@ -85,11 +80,11 @@ func keccak_uint256s_bigend{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, kecca
 
     keccak_add_uint256s{inputs=inputs}(n_elements=n_elements, elements=elements, bigend=1);
 
-    return keccak_bigend(inputs=inputs_start, n_bytes=n_elements * 32);
+    return cairo_keccak_bigend(inputs=inputs_start, n_bytes=n_elements * 32);
 }
 
 // Computes the keccak hash of multiple field elements.
-func keccak_felts{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: felt*}(
+func cairo_keccak_felts{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: felt*}(
     n_elements: felt, elements: felt*
 ) -> (res: Uint256) {
     alloc_locals;
@@ -99,12 +94,12 @@ func keccak_felts{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: fel
 
     keccak_add_felts{inputs=inputs}(n_elements=n_elements, elements=elements, bigend=0);
 
-    return keccak(inputs=inputs_start, n_bytes=n_elements * 32);
+    return cairo_keccak(inputs=inputs_start, n_bytes=n_elements * 32);
 }
 
 // Computes the keccak hash of multiple field elements (big-endian).
 // Note that both the output and the input are in big endian representation.
-func keccak_felts_bigend{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: felt*}(
+func cairo_keccak_felts_bigend{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: felt*}(
     n_elements: felt, elements: felt*
 ) -> (res: Uint256) {
     alloc_locals;
@@ -114,82 +109,7 @@ func keccak_felts_bigend{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_p
 
     keccak_add_felts{inputs=inputs}(n_elements=n_elements, elements=elements, bigend=1);
 
-    return keccak_bigend(inputs=inputs_start, n_bytes=n_elements * 32);
-}
-
-// Helper functions.
-// These functions serialize input to an array of 64-bit little endian words
-// to be used with keccak() or keccak_as_words().
-// Note: You must call finalize_keccak() at the end of the program, where the range of the input
-// is checked. Otherwise, these functions are not sound.
-
-// Serializes a uint256 number in a keccak compatible way.
-// The argument 'bigend' is either 0 or 1, representing the endianness of the given number.
-func keccak_add_uint256{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, inputs: felt*}(
-    num: Uint256, bigend: felt
-) {
-    if (bigend != 0) {
-        let (num_reversed) = uint256_reverse_endian(num=num);
-        tempvar bitwise_ptr = bitwise_ptr;
-        tempvar high = num_reversed.high;
-        tempvar low = num_reversed.low;
-    } else {
-        tempvar bitwise_ptr = bitwise_ptr;
-        tempvar high = num.high;
-        tempvar low = num.low;
-    }
-
-    %{
-        segments.write_arg(ids.inputs, [ids.low % 2 ** 64, ids.low // 2 ** 64])
-        segments.write_arg(ids.inputs + 2, [ids.high % 2 ** 64, ids.high // 2 ** 64])
-    %}
-
-    assert inputs[1] * 2 ** 64 + inputs[0] = low;
-    assert inputs[3] * 2 ** 64 + inputs[2] = high;
-
-    let inputs = inputs + 4;
-    return ();
-}
-
-// Serializes multiple uint256 numbers in a keccak compatible way.
-// The argument 'bigend' is either 0 or 1, representing the endianness of the given numbers.
-// Note: This function does not serialize the number of elements. If desired, this is the caller's
-// responsibility.
-func keccak_add_uint256s{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, inputs: felt*}(
-    n_elements: felt, elements: Uint256*, bigend: felt
-) {
-    if (n_elements == 0) {
-        return ();
-    }
-
-    keccak_add_uint256(num=elements[0], bigend=bigend);
-    return keccak_add_uint256s(n_elements=n_elements - 1, elements=&elements[1], bigend=bigend);
-}
-
-// Serializes a field element in a keccak compatible way.
-// The argument 'bigend' is either 0 or 1, representing the endianness of the given element.
-func keccak_add_felt{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, inputs: felt*}(
-    num: felt, bigend: felt
-) {
-    let (high, low) = split_felt(value=num);
-    keccak_add_uint256(num=Uint256(low=low, high=high), bigend=bigend);
-
-    return ();
-}
-
-// Serializes multiple field elements in a keccak compatible way.
-// The argument 'bigend' is either 0 or 1, representing the endianness of the given elements.
-// Note: This function does not serialize the number of elements. If desired, this is the caller's
-// responsibility.
-func keccak_add_felts{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, inputs: felt*}(
-    n_elements: felt, elements: felt*, bigend: felt
-) {
-    if (n_elements == 0) {
-        return ();
-    }
-
-    keccak_add_felt(num=elements[0], bigend=bigend);
-    return keccak_add_felts(n_elements=n_elements - 1, elements=&elements[1], bigend=bigend);
+    return cairo_keccak_bigend(inputs=inputs_start, n_bytes=n_elements * 32);
 }
 
 // Computes the keccak of 'input'.
@@ -204,10 +124,10 @@ func keccak_add_felts{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, inputs: fel
 //
 // Note: You must call finalize_keccak() at the end of the program. Otherwise, this function
 // is not sound and a malicious prover may return a wrong result.
-func keccak{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: felt*}(
+func cairo_keccak{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: felt*}(
     inputs: felt*, n_bytes: felt
 ) -> (res: Uint256) {
-    let (output) = keccak_as_words(inputs=inputs, n_bytes=n_bytes);
+    let (output) = cairo_keccak_as_words(inputs=inputs, n_bytes=n_bytes);
 
     let res_low = output[1] * 2 ** 64 + output[0];
     let res_high = output[3] * 2 ** 64 + output[2];
@@ -217,16 +137,16 @@ func keccak{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: felt*}(
 
 // Same as keccak, but outputs the hash in big endian representation.
 // Note that the input is still treated as little endian.
-func keccak_bigend{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: felt*}(
+func cairo_keccak_bigend{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: felt*}(
     inputs: felt*, n_bytes: felt
 ) -> (res: Uint256) {
-    let (hash) = keccak(inputs=inputs, n_bytes=n_bytes);
+    let (hash) = cairo_keccak(inputs=inputs, n_bytes=n_bytes);
     let (res) = uint256_reverse_endian(num=hash);
     return (res=res);
 }
 
 // Same as keccak, but outputs a pointer to 4 64-bit little endian words instead.
-func keccak_as_words{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: felt*}(
+func cairo_keccak_as_words{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: felt*}(
     inputs: felt*, n_bytes: felt
 ) -> (output: felt*) {
     alloc_locals;
@@ -309,7 +229,7 @@ func _copy_inputs{
 // from the corresponding offset, and writes it to keccak_ptr.
 //
 // Arguments:
-//   input_word - the last word of the input to keccak (given in little endian)
+//   input_word - the last word of the input to cairo_keccak (given in little endian)
 //       if it has less than 8 bytes, otherwise 0.
 //   n_bytes - the number of bytes in input_word. Must be in the range [0, 8).
 //   state - the output of the last block permutation, from the word that corresponds
@@ -371,7 +291,7 @@ func _long_padding{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: fe
 
 func _block_permutation{keccak_ptr: felt*}() {
     %{
-        from starkware.cairo.common.cairo_keccak.keccak_utils import keccak_func
+        from starkware.cairo.common.keccak_utils.keccak_utils import keccak_func
         _keccak_state_size_felts = int(ids.KECCAK_STATE_SIZE_FELTS)
         assert 0 <= _keccak_state_size_felts < 100
 
@@ -406,8 +326,8 @@ func _keccak{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, keccak_ptr: felt*}(
     return (output=keccak_ptr - KECCAK_STATE_SIZE_FELTS);
 }
 
-// Verifies that the results of keccak() are valid. For optimization, this can be called only once
-// after all the keccak calculations are completed.
+// Verifies that the results of cairo_keccak() are valid. For optimization, this can be called only
+// once after all the keccak calculations are completed.
 func finalize_keccak{range_check_ptr, bitwise_ptr: BitwiseBuiltin*}(
     keccak_ptr_start: felt*, keccak_ptr_end: felt*
 ) {

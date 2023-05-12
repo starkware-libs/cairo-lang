@@ -38,11 +38,6 @@ def structs(program):
     ).structs
 
 
-def to_uint256(s):
-    x = int(s, 16)
-    return (x % (2**128), x >> 128)
-
-
 def test_vector_commitment(program, structs):
     with open(
         TEST_DATA_FILE,
@@ -52,13 +47,14 @@ def test_vector_commitment(program, structs):
     commitment = structs.VectorCommitment(
         config=structs.VectorCommitmentConfig(
             height=data["merkle_height"],
+            n_verifier_friendly_commitment_layers=9,
         ),
-        commitment_hash=int(data["expected_root"], 16) >> 96,
+        commitment_hash=int(data["expected_root"], 16),
     )
 
     runner = CairoFunctionRunner(program, layout="small")
     query_indices = data["merkle_queue_indices"]
-    query_values = data["merkle_queue_values"]
+    query_values = [int(query, 16) for query in data["merkle_queue_values"]]
     n_queries = len(query_indices)
     queries = list(
         itertools.chain(
@@ -66,7 +62,7 @@ def test_vector_commitment(program, structs):
                 runner.segments.gen_typed_args(
                     structs.VectorQuery(
                         index=index - 2 ** data["merkle_height"],
-                        value=structs.Uint256(*to_uint256(value)),
+                        value=value,
                     )
                 )
                 for index, value in zip(query_indices, query_values)
@@ -74,20 +70,29 @@ def test_vector_commitment(program, structs):
         )
     )
     blake2s_ptr = runner.segments.add()
+    proof_values = [int(proof_val, 16) for proof_val in data["proof"]]
     runner.run(
         "vector_commitment_decommit",
         range_check_ptr=runner.range_check_builtin.base,
         blake2s_ptr=blake2s_ptr,
+        pedersen_ptr=runner.pedersen_builtin.base,
         bitwise_ptr=runner.bitwise_builtin.base,
         commitment=commitment,
         n_queries=n_queries,
         queries=queries,
         witness=structs.VectorCommitmentWitness(
             n_authentications=len(data["proof"]),
-            authentications=list(itertools.chain(*map(to_uint256, data["proof"]))),
+            authentications=proof_values,
         ),
+        n_columns=1,
     )
-    (res_range_check_ptr, res_blake2s_ptr, res_bitwise_ptr) = runner.get_return_values(3)
+    (
+        res_range_check_ptr,
+        res_blake2s_ptr,
+        res_pedersen_ptr,
+        res_bitwise_ptr,
+    ) = runner.get_return_values(4)
     validate_builtin_usage(runner.range_check_builtin, res_range_check_ptr)
     assert res_blake2s_ptr.segment_index == blake2s_ptr.segment_index
+    validate_builtin_usage(runner.pedersen_builtin, res_pedersen_ptr)
     validate_builtin_usage(runner.bitwise_builtin, res_bitwise_ptr)

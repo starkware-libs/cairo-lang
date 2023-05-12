@@ -32,7 +32,7 @@ struct E {
         prime=DEFAULT_PRIME,
     )
 
-    for (typ, expected_res) in [
+    for typ, expected_res in [
         # Positive cases.
         ("test_scope.A", 1),
         ("test_scope.B", 0),

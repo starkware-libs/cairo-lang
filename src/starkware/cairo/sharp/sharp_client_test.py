@@ -8,11 +8,11 @@ import starkware.cairo.sharp.sharp_client as sharp_client
 from starkware.cairo.bootloaders.fact_topology import FactInfo
 from starkware.cairo.bootloaders.generate_fact import get_program_output
 from starkware.cairo.sharp.sharp_client import SharpClient
+from starkware.python.utils import get_build_dir_path
 
 DIR = os.path.dirname(__file__)
-CAIRO_SCRIPTS_DIR = os.path.join(DIR, "../lang/scripts")
-CAIRO_COMPILE_EXE = os.path.join(CAIRO_SCRIPTS_DIR, "cairo-compile")
-CAIRO_RUN_EXE = os.path.join(CAIRO_SCRIPTS_DIR, "cairo-run")
+CAIRO_COMPILE_EXE = get_build_dir_path("src/starkware/cairo/lang/compiler/cairo_compile_exe")
+CAIRO_RUN_EXE = get_build_dir_path("src/starkware/cairo/lang/vm/cairo_run_exe")
 
 
 def test_compile_and_run():

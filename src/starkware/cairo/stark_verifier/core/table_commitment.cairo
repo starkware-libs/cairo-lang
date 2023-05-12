@@ -1,6 +1,7 @@
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.cairo_blake2s.blake2s import blake2s_add_felts, blake2s_bigend
 from starkware.cairo.common.cairo_builtins import BitwiseBuiltin
+from starkware.cairo.common.hash import HashBuiltin
 from starkware.cairo.common.math import assert_nn, split_felt, unsigned_div_rem
 from starkware.cairo.common.uint256 import Uint256
 from starkware.cairo.stark_verifier.core.channel import MONTGOMERY_R, Channel, ChannelUnsentFelt
@@ -63,7 +64,9 @@ func table_commit{
 // queries - the claimed indices.
 // decommitment - the claimed values at those indices.
 // witness - the decommitment witness.
-func table_decommit{range_check_ptr, blake2s_ptr: felt*, bitwise_ptr: BitwiseBuiltin*}(
+func table_decommit{
+    range_check_ptr, blake2s_ptr: felt*, pedersen_ptr: HashBuiltin*, bitwise_ptr: BitwiseBuiltin*
+}(
     commitment: TableCommitment*,
     n_queries: felt,
     queries: felt*,
@@ -98,6 +101,7 @@ func table_decommit{range_check_ptr, blake2s_ptr: felt*, bitwise_ptr: BitwiseBui
         n_queries=n_queries,
         queries=vector_queries,
         witness=witness.vector,
+        n_columns=n_columns,
     );
 
     return ();
@@ -129,8 +133,7 @@ func generate_vector_queries{range_check_ptr, blake2s_ptr: felt*, bitwise_ptr: B
     alloc_locals;
     assert vector_queries.index = queries[0];
     if (n_columns == 1) {
-        let (high, low) = split_felt(values[0]);
-        assert vector_queries.value = Uint256(low=low, high=high);
+        assert vector_queries.value = values[0];
 
         return generate_vector_queries(
             n_queries=n_queries - 1,
@@ -146,9 +149,9 @@ func generate_vector_queries{range_check_ptr, blake2s_ptr: felt*, bitwise_ptr: B
     blake2s_add_felts{data=data}(n_elements=n_columns, elements=values, bigend=1);
     let (hash) = blake2s_bigend(data=data_start, n_bytes=32 * n_columns);
 
-    // Truncate hash.
-    let (low_h, low_l) = unsigned_div_rem(hash.low, 2 ** 96);
-    assert vector_queries.value = Uint256(low=low_h * 2 ** 96, high=hash.high);
+    // Truncate hash - convert value to felt, by taking the 160 least significant bits.
+    let (high_h, high_l) = unsigned_div_rem(hash.high, 2 ** 32);
+    assert vector_queries.value = high_l * 2 ** 128 + hash.low;
 
     return generate_vector_queries(
         n_queries=n_queries - 1,

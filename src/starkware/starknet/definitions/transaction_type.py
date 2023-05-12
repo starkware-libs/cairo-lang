@@ -2,6 +2,8 @@ from enum import auto
 
 from services.everest.api.gateway.transaction_type import TransactionTypeBase
 
+DEPRECATED_DECLARE_SCHEMA_NAME = "DEPRECATED_DECLARE"
+
 
 class TransactionType(TransactionTypeBase):
     DECLARE = 0

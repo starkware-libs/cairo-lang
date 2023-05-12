@@ -6,10 +6,8 @@ import marshmallow_dataclass
 
 from services.everest.business_logic.state import StateSelectorBase
 from starkware.python.utils import to_bytes
-from starkware.starknet.core.os.class_hash import compute_class_hash
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
-from starkware.starknet.services.api.contract_class import ContractClass
 from starkware.starknet.storage.starknet_storage import StorageLeaf
 from starkware.starkware_utils.commitment_tree.leaf_fact import LeafFact
 from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import EmptyNodeFact
@@ -19,27 +17,7 @@ from starkware.starkware_utils.validated_dataclass import (
     ValidatedDataclass,
     ValidatedMarshmallowDataclass,
 )
-from starkware.storage.storage import HASH_BYTES, Fact, FactFetchingContext, HashFunctionType
-
-
-@marshmallow_dataclass.dataclass(frozen=True)
-class ContractClassFact(ValidatedMarshmallowDataclass, Fact):
-    """
-    Represents a single contract class which is stored in the full StarkNet state commitment
-    tree.
-    """
-
-    contract_definition: ContractClass
-
-    def _hash(self, hash_func: HashFunctionType) -> bytes:
-        return to_bytes(compute_class_hash(contract_class=self.contract_definition))
-
-    @classmethod
-    def prefix(cls) -> bytes:
-        """
-        Overrides the prefix for backward compatibility.
-        """
-        return b"contract_definition_fact"
+from starkware.storage.storage import HASH_BYTES, FactFetchingContext, HashFunctionType
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -55,7 +33,7 @@ class ContractState(ValidatedMarshmallowDataclass, LeafFact):
     storage_commitment_tree: PatriciaTree
     nonce: int = field(metadata=fields.non_required_nonce_metadata)
 
-    UNINITIALIZED_CLASS_HASH: ClassVar[bytes] = b"\x00" * HASH_BYTES
+    UNINITIALIZED_CLASS_HASH: ClassVar[bytes] = bytes(HASH_BYTES)
 
     @classmethod
     async def create(
@@ -131,24 +109,23 @@ class ContractState(ValidatedMarshmallowDataclass, LeafFact):
         ffc: FactFetchingContext,
         updates: Mapping[int, int],
         nonce: Optional[int],
-        class_hash: Optional[bytes] = None,
+        class_hash: Optional[int] = None,
     ) -> "ContractState":
         """
         Returns a new ContractState object with the same contract object and a newly calculated
-        root, according to the given updates of its leaves.
-        In a case of an empty contract - it is possible to update the class hash as well.
+        storage root, according to the given updates of its leaves.
         """
         if class_hash is None:
-            class_hash = self.contract_hash
-        elif class_hash != self.contract_hash:
-            assert self.is_empty, "Cannot override an assigned contract state."
+            class_hash_bytes = self.contract_hash
+        else:
+            class_hash_bytes = to_bytes(class_hash)
 
         if nonce is None:
             nonce = self.nonce
 
         if len(updates) > 0 or nonce != self.nonce:
             assert (
-                class_hash != ContractState.UNINITIALIZED_CLASS_HASH
+                class_hash_bytes != ContractState.UNINITIALIZED_CLASS_HASH
             ), "Cannot update the state of an uninitialized contract."
 
         modifications = [(key, StorageLeaf(value=value)) for key, value in updates.items()]
@@ -158,7 +135,7 @@ class ContractState(ValidatedMarshmallowDataclass, LeafFact):
         )
 
         return ContractState(
-            contract_hash=class_hash,
+            contract_hash=class_hash_bytes,
             storage_commitment_tree=updated_storage_commitment_tree,
             nonce=nonce,
         )
@@ -215,7 +192,7 @@ class StateSelector(StateSelectorBase):
     """
 
     contract_addresses: FrozenSet[int]
-    class_hashes: FrozenSet[bytes]
+    class_hashes: FrozenSet[int]
 
     @classmethod
     def empty(cls) -> "StateSelector":
@@ -223,7 +200,7 @@ class StateSelector(StateSelectorBase):
 
     @classmethod
     def create(
-        cls, contract_addresses: Iterable[int], class_hashes: Iterable[bytes]
+        cls, contract_addresses: Iterable[int], class_hashes: Iterable[int]
     ) -> "StateSelector":
         return cls(
             contract_addresses=frozenset(contract_addresses), class_hashes=frozenset(class_hashes)
@@ -251,3 +228,6 @@ class StateSelector(StateSelectorBase):
         return (self.contract_addresses <= other.contract_addresses) and (
             self.class_hashes <= other.class_hashes
         )
+
+    def update(self, other: "StateSelector"):
+        raise NotImplementedError(f"Unsupported method since the sets are frozen.")

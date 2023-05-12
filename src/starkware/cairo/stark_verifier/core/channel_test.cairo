@@ -8,9 +8,9 @@ from starkware.cairo.stark_verifier.core.channel import (
     channel_new,
     random_felts_to_prover,
     random_uint256_to_prover,
+    read_felt_from_prover,
     read_felt_vector_from_prover,
     read_felts_from_prover,
-    read_truncated_hash_from_prover,
 )
 
 func test_to{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: felt*}() {
@@ -46,10 +46,10 @@ func test_from{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: felt*
         assert channel.digest = original_channel.digest;
         assert channel.counter = original_channel.counter;
 
-        let (value) = read_truncated_hash_from_prover(ChannelUnsentFelt(2 ** 160 - 1));
+        let (value) = read_felt_from_prover(ChannelUnsentFelt(2 ** 160 - 1));
         assert value = ChannelSentFelt(2 ** 160 - 1);
         assert channel.digest = Uint256(
-            264245158129643438725130805500698377532, 273487178329072845015974259185110443467
+            56167004286255481276482511662906702549, 234392798194350380932282913623756516436
         );
         assert channel.counter = 0;
 
@@ -58,7 +58,7 @@ func test_from{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: felt*
         %{ segments.write_arg(ids.unsent_values.address_, [2, 3, -1]) %}
         let (values: ChannelSentFelt*) = read_felts_from_prover(n_values=3, values=unsent_values);
         assert channel.digest = Uint256(
-            242546666571867849760234496042176867468, 276032264349006147573126117370612632439
+            112024683927095477838641218961157907563, 5661176600678131043744698980571579995
         );
         assert channel.counter = 0;
         %{
@@ -72,7 +72,7 @@ func test_from{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: felt*
             n_values=3, values=unsent_values
         );
         assert channel.digest = Uint256(
-            47489586150803289593519442158772964707, 295510913258162813848457591889478884574
+            189864326141136730846745412438399658276, 15139562861684933156438197658243262907
         );
         assert channel.counter = 0;
         %{

@@ -11,6 +11,7 @@ from marshmallow import ValidationError
 from marshmallow.base import FieldABC
 from mypy_extensions import KwArg, VarArg
 
+from starkware.python.utils import from_bytes
 from starkware.starkware_utils.custom_raising_dict import CustomRaisingDict, CustomRaisingFrozenDict
 
 FieldMetadata = Dict[str, Any]
@@ -91,13 +92,15 @@ class IntAsHex(mfields.Field):
     field elements.
     """
 
-    default_error_messages = {"invalid": 'Expected hex string, got: "{input}".'}
+    default_error_messages = {"invalid": 'Expected all-lowercase hex string, got: "{input}".'}
 
-    def __init__(self, support_decimal_loading: bool = False, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.support_decimal_loading = support_decimal_loading
 
     def _serialize(self, value, attr, obj, **kwargs):
+        """
+        Used during dump.
+        """
         if value is None:
             return None
         assert isinstance(value, int)
@@ -105,13 +108,51 @@ class IntAsHex(mfields.Field):
         return hex(value)
 
     def _deserialize(self, value, attr, data, **kwargs):
+        """
+        Used during load.
+        """
         if re.match("^0x[0-9a-f]+$", value) is not None:
             return int(value, 16)
 
-        if self.support_decimal_loading and re.match("^[0-9]+$", value) is not None:
+        raise self.make_error("invalid", input=value)
+
+
+class BackwardCompatibleIntAsHex(IntAsHex):
+    """
+    Extends IntAsHex functionality by allowing the deserialization of bytes-hex (i.e., without
+    the '0x' prefix) or int strings.
+    """
+
+    def __init__(
+        self,
+        allow_decimal_loading: bool = False,
+        allow_bytes_hex_loading: bool = False,
+        allow_int_loading: bool = False,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        assert not (allow_decimal_loading and allow_bytes_hex_loading), (
+            "At most one of {allow_decimal_loading, allow_bytes_hex_loading} "
+            "can be supported at a time."
+        )
+        self._allow_decimal_loading = allow_decimal_loading
+        self._allow_bytes_hex_loading = allow_bytes_hex_loading
+        self._allow_int_loading = allow_int_loading
+
+    def _deserialize(self, value, attr, data, **kwargs):
+        if self._allow_int_loading and isinstance(value, int):
+            return value
+
+        if self._allow_decimal_loading and re.match("^[0-9]+$", value) is not None:
+            # Load non-negative int string.
             return int(value)
 
-        raise self.make_error("invalid", input=value)
+        if self._allow_bytes_hex_loading and re.match("^[0-9a-f]*$", value) is not None:
+            # Load hex-bytes string.
+            return from_bytes(bytes.fromhex(value))
+
+        # Try loading the value as hex.
+        return super()._deserialize(value=value, attr=attr, data=data, **kwargs)
 
 
 class BytesAsHex(mfields.Field):
@@ -119,7 +160,7 @@ class BytesAsHex(mfields.Field):
     A field that behaves like bytes, but serializes to a hex string.
     """
 
-    default_error_messages = {"invalid": 'Expected hex string, got: "{input}".'}
+    default_error_messages = {"invalid": 'Expected all-lowercase hex string, got: "{input}".'}
 
     def _serialize(self, value, attr, obj, **kwargs):
         if value is None:

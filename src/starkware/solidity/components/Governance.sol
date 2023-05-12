@@ -91,7 +91,7 @@ abstract contract Governance is MGovernance {
         require(msg.sender == gub.candidateGovernor, "ONLY_CANDIDATE_GOVERNOR");
 
         // Update state.
-        acceptNewGovernor(gub.candidateGovernor);
+        acceptNewGovernor(msg.sender);
         gub.candidateGovernor = address(0x0);
     }
 

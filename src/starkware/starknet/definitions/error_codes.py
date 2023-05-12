@@ -1,11 +1,15 @@
-from enum import auto
+from enum import Enum, auto
 from typing import FrozenSet, List
 
+from starkware.python.utils import from_bytes
 from starkware.starkware_utils.error_handling import ErrorCode, StarkErrorCode
 
 
 class StarknetErrorCode(ErrorCode):
     BLOCK_NOT_FOUND = 0
+    SENDER_ADDRESS_IS_BLOCKED = auto()
+    CLASS_ALREADY_DECLARED = auto()
+    COMPILATION_FAILED = auto()
     CONTRACT_ADDRESS_UNAVAILABLE = auto()
     CONTRACT_BYTECODE_SIZE_TOO_LARGE = auto()
     CONTRACT_CLASS_OBJECT_SIZE_TOO_LARGE = auto()
@@ -15,7 +19,10 @@ class StarknetErrorCode(ErrorCode):
     FEE_TRANSFER_FAILURE = auto()
     INVALID_BLOCK_NUMBER = auto()
     INVALID_BLOCK_TIMESTAMP = auto()
+    INVALID_COMPILED_CLASS = auto()
+    INVALID_COMPILED_CLASS_HASH = auto()
     INVALID_CONTRACT_CLASS = auto()
+    INVALID_CONTRACT_CLASS_VERSION = auto()
     INVALID_PROGRAM = auto()
     INVALID_RETURN_DATA = auto()
     INVALID_STATUS_MODE = auto()
@@ -25,6 +32,7 @@ class StarknetErrorCode(ErrorCode):
     INVALID_TRANSACTION_QUERYING_VERSION = auto()
     INVALID_TRANSACTION_VERSION = auto()
     L1_TO_L2_MESSAGE_CANCELLED = auto()
+    L1_TO_L2_MESSAGE_INSUFFICIENT_FEE = auto()
     L1_TO_L2_MESSAGE_ZEROED_COUNTER = auto()
     MISSING_ENTRY_POINT_FOR_INVOKE = auto()
     MULTIPLE_ENTRY_POINTS_MATCH_SELECTOR = auto()
@@ -36,8 +44,10 @@ class StarknetErrorCode(ErrorCode):
     OUT_OF_RANGE_BLOCK_ID = auto()
     OUT_OF_RANGE_CALLER_ADDRESS = auto()
     OUT_OF_RANGE_CLASS_HASH = auto()
+    OUT_OF_RANGE_COMPILED_CLASS_HASH = auto()
     OUT_OF_RANGE_CONTRACT_ADDRESS = auto()
     OUT_OF_RANGE_CONTRACT_STORAGE_KEY = auto()
+    OUT_OF_RANGE_ENTRY_POINT_FUNCTION_IDX = auto()
     OUT_OF_RANGE_ENTRY_POINT_OFFSET = auto()
     OUT_OF_RANGE_ENTRY_POINT_SELECTOR = auto()
     OUT_OF_RANGE_FEE = auto()
@@ -57,6 +67,7 @@ class StarknetErrorCode(ErrorCode):
     UNDECLARED_CLASS = auto()
     UNEXPECTED_FAILURE = auto()
     UNINITIALIZED_CONTRACT = auto()
+    UNSUPPORTED_TRANSACTION = auto()
 
 
 # Errors that are raised by the gateways and caused by wrong usage of the user.
@@ -69,6 +80,7 @@ common_error_codes: List[ErrorCode] = [
     StarknetErrorCode.INVALID_TRANSACTION_NONCE,
     StarknetErrorCode.NON_EMPTY_SIGNATURE,
     StarknetErrorCode.OUT_OF_RANGE_CONTRACT_ADDRESS,
+    StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_FUNCTION_IDX,
     StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_OFFSET,
     StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_SELECTOR,
     StarknetErrorCode.OUT_OF_RANGE_FEE,
@@ -80,7 +92,10 @@ common_error_codes: List[ErrorCode] = [
     StarknetErrorCode.MISSING_ENTRY_POINT_FOR_INVOKE,
     StarknetErrorCode.UNAUTHORIZED_ENTRY_POINT_FOR_INVOKE,
     # Contract class validation.
+    StarknetErrorCode.COMPILATION_FAILED,
+    StarknetErrorCode.INVALID_COMPILED_CLASS_HASH,
     StarknetErrorCode.INVALID_CONTRACT_CLASS,
+    StarknetErrorCode.INVALID_CONTRACT_CLASS_VERSION,
     # Validate execution.
     StarknetErrorCode.UNAUTHORIZED_ACTION_ON_VALIDATE,
 ]
@@ -88,6 +103,8 @@ common_error_codes: List[ErrorCode] = [
 main_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
     [
         *common_error_codes,
+        StarknetErrorCode.DEPRECATED_TRANSACTION,
+        StarknetErrorCode.SENDER_ADDRESS_IS_BLOCKED,
         # Signature validation errors.
         StarkErrorCode.INVALID_SIGNATURE,
         # External deploy loading errors.
@@ -111,11 +128,14 @@ feeder_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
         StarknetErrorCode.TRANSACTION_NOT_FOUND,
         StarknetErrorCode.UNINITIALIZED_CONTRACT,
         # Function call errors.
+        StarknetErrorCode.CLASS_ALREADY_DECLARED,
         StarknetErrorCode.CONTRACT_ADDRESS_UNAVAILABLE,
         StarknetErrorCode.ENTRY_POINT_NOT_FOUND_IN_CONTRACT,
         StarknetErrorCode.FEE_TRANSFER_FAILURE,
+        StarknetErrorCode.INVALID_COMPILED_CLASS,
         StarknetErrorCode.INVALID_RETURN_DATA,
         StarknetErrorCode.INVALID_TRANSACTION_VERSION,
+        StarknetErrorCode.L1_TO_L2_MESSAGE_INSUFFICIENT_FEE,
         StarknetErrorCode.OUT_OF_RESOURCES,
         StarknetErrorCode.SECURITY_ERROR,
         StarknetErrorCode.TRANSACTION_FAILED,
@@ -127,10 +147,12 @@ feeder_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
         StarknetErrorCode.OUT_OF_RANGE_BLOCK_HASH,
         StarknetErrorCode.OUT_OF_RANGE_BLOCK_ID,
         StarknetErrorCode.OUT_OF_RANGE_CLASS_HASH,
+        StarknetErrorCode.OUT_OF_RANGE_COMPILED_CLASS_HASH,
         StarknetErrorCode.OUT_OF_RANGE_CONTRACT_ADDRESS,
         StarknetErrorCode.OUT_OF_RANGE_CONTRACT_STORAGE_KEY,
         StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_HASH,
         StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_ID,
+        StarknetErrorCode.UNSUPPORTED_TRANSACTION,
     ]
 )
 
@@ -142,3 +164,15 @@ internal_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
         StarkErrorCode.OUT_OF_RANGE_BATCH_ID,
     ]
 )
+
+
+class CairoErrorCode(Enum):
+    """
+    Error codes returned by Cairo 1.0 code.
+    """
+
+    OUT_OF_GAS = "Out of gas"
+    INVALID_INPUT_LEN = "Invalid input length"
+
+    def to_felt(self) -> int:
+        return from_bytes(self.value.encode("ascii"))

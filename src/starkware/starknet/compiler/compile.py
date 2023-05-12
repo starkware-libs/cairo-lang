@@ -33,14 +33,14 @@ from starkware.starknet.compiler.starknet_pass_manager import starknet_pass_mana
 from starkware.starknet.compiler.starknet_preprocessor import StarknetPreprocessedProgram
 from starkware.starknet.compiler.validation_utils import verify_account_contract
 from starkware.starknet.public.abi import AbiType, get_selector_from_name
-from starkware.starknet.services.api.contract_class import (
-    ContractClass,
-    ContractEntryPoint,
+from starkware.starknet.services.api.contract_class.contract_class import (
+    CompiledClassEntryPoint,
+    DeprecatedCompiledClass,
     EntryPointType,
 )
 
 
-def get_entry_points(program: Program) -> Dict[str, ContractEntryPoint]:
+def get_entry_points(program: Program) -> Dict[str, CompiledClassEntryPoint]:
     """
     Returns a mapping from entry point name to (selector, offset).
     """
@@ -51,15 +51,17 @@ def get_entry_points(program: Program) -> Dict[str, ContractEntryPoint]:
         return {}
 
     return {
-        func_name: ContractEntryPoint(
-            selector=get_selector_from_name(func_name=func_name), offset=func_def.pc
+        func_name: CompiledClassEntryPoint(
+            selector=get_selector_from_name(func_name=func_name), offset=func_def.pc, builtins=None
         )
         for func_name, func_def in wrapper_scope.identifiers.items()
         if isinstance(func_def, FunctionDefinition)
     }
 
 
-def get_entry_points_by_type(program: Program) -> Dict[EntryPointType, List[ContractEntryPoint]]:
+def get_entry_points_by_type(
+    program: Program,
+) -> Dict[EntryPointType, List[CompiledClassEntryPoint]]:
     """
     Returns a mapping from entry point type to a list of entry points of that type.
     """
@@ -84,11 +86,13 @@ def get_entry_points_by_type(program: Program) -> Dict[EntryPointType, List[Cont
 
 def get_entry_points_by_decorators(
     wrapper_scope: IdentifierScope, decorators: Tuple[str, ...]
-) -> List[ContractEntryPoint]:
+) -> List[CompiledClassEntryPoint]:
     return sorted(
         [
-            ContractEntryPoint(
-                selector=get_selector_from_name(func_name=func_name), offset=func_def.pc
+            CompiledClassEntryPoint(
+                selector=get_selector_from_name(func_name=func_name),
+                offset=func_def.pc,
+                builtins=None,
             )
             for func_name, func_def in wrapper_scope.identifiers.items()
             if isinstance(func_def, FunctionDefinition)
@@ -110,7 +114,7 @@ def compile_starknet_files(
     cairo_path: Optional[List[str]] = None,
     opt_unused_functions: bool = True,
     filter_identifiers: bool = True,
-) -> ContractClass:
+) -> DeprecatedCompiledClass:
     return compile_starknet_codes(
         codes=get_codes(files),
         opt_unused_functions=opt_unused_functions,
@@ -128,7 +132,7 @@ def compile_starknet_codes(
     cairo_path: Optional[List[str]] = None,
     opt_unused_functions: bool = True,
     filter_identifiers: bool = True,
-) -> ContractClass:
+) -> DeprecatedCompiledClass:
     if cairo_path is None:
         cairo_path = []
     module_reader = get_module_reader(cairo_path=cairo_path)
@@ -159,7 +163,7 @@ def assemble_starknet_contract(
     file_contents_for_debug_info: Dict[str, str],
     filter_identifiers: bool,
     is_account_contract: bool,
-) -> ContractClass:
+) -> DeprecatedCompiledClass:
     abi = get_abi(preprocessed=preprocessed_program)
     verify_account_contract(contract_abi=abi, is_account_contract=is_account_contract)
     program = assemble(
@@ -178,12 +182,12 @@ def create_starknet_contract_class(
     program: Program,
     abi: AbiType,
     filter_identifiers: bool = True,
-) -> ContractClass:
+) -> DeprecatedCompiledClass:
     entry_points_by_type = get_entry_points_by_type(program=program)
     if filter_identifiers:
         program = filter_unused_identifiers(program)
 
-    return ContractClass(
+    return DeprecatedCompiledClass(
         program=program,
         entry_points_by_type=entry_points_by_type,
         abi=abi,

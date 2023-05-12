@@ -1,5 +1,6 @@
 import functools
 import os.path
+from functools import lru_cache
 from typing import Mapping
 
 import marshmallow_dataclass
@@ -20,15 +21,16 @@ class OsResources(ValidatedMarshmallowDataclass):
     execute_txs_inner: Mapping[TransactionType, ExecutionResources]
 
 
-# Empirical costs; accounted during transaction execution.
-os_resources: OsResources = OsResources.loads(
-    data=open(os.path.join(DIR, "os_resources.json")).read()
-)
+@lru_cache()
+def get_os_resources() -> OsResources:
+    # Empirical costs; accounted during transaction execution.
+    return OsResources.loads(data=open(os.path.join(DIR, "os_resources.json")).read())
 
 
-def get_additional_os_resources(
+def get_tx_additional_os_resources(
     syscall_counter: Mapping[str, int], tx_type: TransactionType
 ) -> ExecutionResources:
+    os_resources = get_os_resources()
     # Calculate the additional resources needed for the OS to run the given syscalls;
     # i.e., the resources of the function execute_syscalls().
     os_additional_resources = functools.reduce(

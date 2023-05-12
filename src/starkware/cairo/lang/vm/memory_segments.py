@@ -72,10 +72,9 @@ class MemorySegmentManager:
 
         self.public_memory_offsets[segment_index] = list(public_memory)
 
-    def compute_effective_sizes(self, include_tmp_segments: bool = False):
+    def compute_effective_sizes(self, allow_tmp_segments: bool = False):
         """
         Computes the current used size of the segments, and caches it.
-        include_tmp_segments should be used for tests only.
         """
         if self._segment_used_sizes is not None:
             # segment_sizes is already cached.
@@ -83,7 +82,7 @@ class MemorySegmentManager:
 
         assert self.memory.is_frozen(), "Memory has to be frozen before calculating effective size."
 
-        first_segment_index = -self.n_temp_segments if include_tmp_segments else 0
+        first_segment_index = -self.n_temp_segments if allow_tmp_segments else 0
         self._segment_used_sizes = {
             index: 0 for index in range(first_segment_index, self.n_segments)
         }

@@ -7,11 +7,13 @@ library StarknetState {
     struct State {
         uint256 globalRoot;
         int256 blockNumber;
+        uint256 blockHash;
     }
 
     function copy(State storage state, State memory stateFrom) internal {
         state.globalRoot = stateFrom.globalRoot;
         state.blockNumber = stateFrom.blockNumber;
+        state.blockHash = stateFrom.blockHash;
     }
 
     /**
@@ -25,6 +27,8 @@ library StarknetState {
             uint256(state.blockNumber) == starknetOutput[StarknetOutput.BLOCK_NUMBER_OFFSET],
             "INVALID_BLOCK_NUMBER"
         );
+
+        state.blockHash = starknetOutput[StarknetOutput.BLOCK_HASH_OFFSET];
 
         uint256[] calldata commitment_tree_update = StarknetOutput.getMerkleUpdate(starknetOutput);
         require(

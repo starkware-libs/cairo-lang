@@ -6,7 +6,7 @@ import pytest
 
 from starkware.cairo.common.patricia_utils import compute_patricia_from_leaves_for_test
 from starkware.crypto.signature.fast_pedersen_hash import pedersen_hash, pedersen_hash_func
-from starkware.python.random_test import random_test
+from starkware.python.random_test_utils import random_test
 from starkware.python.utils import safe_zip, to_bytes
 from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import (
     BinaryNodeFact,

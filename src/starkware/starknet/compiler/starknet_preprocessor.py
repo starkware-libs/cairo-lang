@@ -33,7 +33,7 @@ from starkware.starknet.public.abi_structs import (
     struct_definition_to_abi_entry,
 )
 from starkware.starknet.security.secure_hints import HintsWhitelist, InsecureHintError
-from starkware.starknet.services.api.contract_class import SUPPORTED_BUILTINS
+from starkware.starknet.services.api.contract_class.contract_class import SUPPORTED_BUILTINS
 from starkware.starkware_utils.subsequence import is_subsequence
 
 

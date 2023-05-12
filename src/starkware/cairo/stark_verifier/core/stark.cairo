@@ -198,7 +198,11 @@ func verify_stark_proof{range_check_ptr, pedersen_ptr: HashBuiltin*, bitwise_ptr
 
 // STARK commitment phase.
 func stark_commit{
-    range_check_ptr, blake2s_ptr: felt*, bitwise_ptr: BitwiseBuiltin*, channel: Channel
+    range_check_ptr,
+    blake2s_ptr: felt*,
+    pedersen_ptr: HashBuiltin*,
+    bitwise_ptr: BitwiseBuiltin*,
+    channel: Channel,
 }(
     air: AirInstance*,
     public_input: PublicInput*,
@@ -312,7 +316,9 @@ func verify_oods{range_check_ptr}(
 }
 
 // STARK decommitment phase.
-func stark_decommit{range_check_ptr, blake2s_ptr: felt*, bitwise_ptr: BitwiseBuiltin*}(
+func stark_decommit{
+    range_check_ptr, blake2s_ptr: felt*, pedersen_ptr: HashBuiltin*, bitwise_ptr: BitwiseBuiltin*
+}(
     air: AirInstance*,
     n_queries: felt,
     queries: felt*,

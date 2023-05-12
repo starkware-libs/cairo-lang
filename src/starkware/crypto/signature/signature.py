@@ -15,6 +15,7 @@
 ###############################################################################
 
 import hashlib
+import itertools
 import json
 import math
 import os
@@ -32,6 +33,7 @@ from starkware.crypto.signature.math_utils import (
     is_quad_residue,
     sqrt_mod,
 )
+from starkware.python.math_utils import div_ceil
 
 PEDERSEN_HASH_POINT_FILENAME = os.path.join(os.path.dirname(__file__), "pedersen_params.json")
 PEDERSEN_PARAMS = json.load(open(PEDERSEN_HASH_POINT_FILENAME))
@@ -188,6 +190,23 @@ def mimic_ec_mult_air(m: int, point: ECPoint, shift_point: ECPoint) -> ECPoint:
     return partial_sum
 
 
+def is_point_on_curve(x: int, y: int) -> bool:
+    return pow(y, 2, FIELD_PRIME) == (pow(x, 3, FIELD_PRIME) + ALPHA * x + BETA) % FIELD_PRIME
+
+
+def is_valid_stark_key(stark_key: int) -> bool:
+    """
+    Returns whether the given input is a valid STARK key.
+    """
+    # Only the x coordinate of the point is given, get the y coordinate and make sure that the
+    # point is on the curve.
+    try:
+        get_y_coordinate(stark_key_x_coordinate=stark_key)
+    except InvalidPublicKeyError:
+        return False
+    return True
+
+
 def verify(msg_hash: int, r: int, s: int, public_key: Union[int, ECPoint]) -> bool:
     # Compute w = s^-1 (mod EC_ORDER).
     assert 1 <= s < EC_ORDER, "s = %s" % s
@@ -207,19 +226,12 @@ def verify(msg_hash: int, r: int, s: int, public_key: Union[int, ECPoint]) -> bo
             y = get_y_coordinate(public_key)
         except InvalidPublicKeyError:
             return False
-        assert (
-            pow(y, 2, FIELD_PRIME)
-            == (pow(public_key, 3, FIELD_PRIME) + ALPHA * public_key + BETA) % FIELD_PRIME
-        )
         return verify(msg_hash, r, s, (public_key, y)) or verify(
             msg_hash, r, s, (public_key, (-y) % FIELD_PRIME)
         )
-    else:
-        # The public key is provided as a point.
-        # Verify it is on the curve.
-        assert (
-            public_key[1] ** 2 - (public_key[0] ** 3 + ALPHA * public_key[0] + BETA)
-        ) % FIELD_PRIME == 0
+
+    # The public key is provided as a point.
+    assert is_point_on_curve(x=public_key[0], y=public_key[1])
 
     # Signature validation.
     # DIFF: original formula is:
@@ -239,6 +251,34 @@ def verify(msg_hash: int, r: int, s: int, public_key: Union[int, ECPoint]) -> bo
 
     # DIFF: Here we drop the mod n from classic ECDSA.
     return r == x
+
+
+def grind_key(key_seed: int, key_value_limit: int) -> int:  # type: ignore[return]
+    """
+    Given a cryptographically-secure seed and a limit, deterministically generates a pseudorandom
+    key in the range [0, limit).
+    This is a reference implementation, and cryptographic security is not guaranteed (for example,
+    it may be vulnerable to side-channel attacks); this function is not recommended for use with key
+    generation on mainnet.
+    """
+    # Simply taking a uniform value in [0, 2**256) and returning the result modulo key_value_limit
+    # is not necessarily uniform on [0, key_value_limit). We define max_allowed_value to be a
+    # multiple of the limit, so that a uniform sample of [0, max_allowed_value) mod key_value_limit
+    # is uniform on [0, key_value_limit).
+    max_allowed_value = 2**256 - (2**256 % key_value_limit)
+
+    def to_bytes_no_pad(x: int) -> bytes:
+        # To conform with the JS implementation, convert integer to bytes using minimal amount of
+        # bytes possible. We would like 0.to_bytes() to be b'\x00', so a minimal length of 1 is
+        # enforced.
+        return x.to_bytes(length=max(1, div_ceil(x.bit_length(), 8)), byteorder="big", signed=False)
+
+    # Increment the index (salt) until the hash value falls in the range [0, max_allowed_value).
+    for index in itertools.count():
+        hash_input = to_bytes_no_pad(key_seed) + to_bytes_no_pad(index)
+        key = int(hashlib.sha256(hash_input).hexdigest(), 16)
+        if key < max_allowed_value:
+            return key % key_value_limit
 
 
 #################

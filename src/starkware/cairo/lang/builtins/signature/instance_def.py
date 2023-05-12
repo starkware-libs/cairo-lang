@@ -1,4 +1,5 @@
 import dataclasses
+from typing import Optional
 
 # Each signature consists of 2 cells (a public key and a message).
 CELLS_PER_SIGNATURE = INPUT_CELLS_PER_SIGNATURE = 2
@@ -8,7 +9,8 @@ CELLS_PER_SIGNATURE = INPUT_CELLS_PER_SIGNATURE = 2
 class EcdsaInstanceDef:
     # Defines the ratio between the number of steps to the number of ECDSA instances.
     # For every ratio steps, we have one instance.
-    ratio: int
+    # None means dynamic ratio.
+    ratio: Optional[int]
 
     # Split to this many different components - for optimization.
     repetitions: int

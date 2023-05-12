@@ -1,15 +1,23 @@
-from typing import Dict
+from typing import Dict, Optional
 
-from starkware.starknet.business_logic.fact_state.contract_state_objects import (
-    ContractClassFact,
-    ContractState,
+from starkware.python.utils import from_bytes, to_bytes
+from starkware.starknet.business_logic.fact_state.contract_class_objects import (
+    CompiledClassFact,
+    ContractClassLeaf,
+    DeprecatedCompiledClassFact,
+    get_ffc_for_contract_class_facts,
 )
+from starkware.starknet.business_logic.fact_state.contract_state_objects import ContractState
 from starkware.starknet.business_logic.state.state_api import (
     StateReader,
     get_stark_exception_on_undeclared_contract,
 )
 from starkware.starknet.definitions import fields
-from starkware.starknet.services.api.contract_class import ContractClass
+from starkware.starknet.services.api.contract_class.contract_class import (
+    CompiledClass,
+    CompiledClassBase,
+    DeprecatedCompiledClass,
+)
 from starkware.starknet.storage.starknet_storage import StorageLeaf
 from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
 from starkware.storage.storage import FactFetchingContext, Storage
@@ -22,35 +30,55 @@ class PatriciaStateReader(StateReader):
 
     def __init__(
         self,
-        global_state_root: PatriciaTree,
+        contract_state_root: PatriciaTree,
+        contract_class_root: Optional[PatriciaTree],
         ffc: FactFetchingContext,
         contract_class_storage: Storage,
     ):
         # Members related to dynamic retrieval of facts during transaction execution.
         self.ffc = ffc
+        self.ffc_for_class_hash = get_ffc_for_contract_class_facts(ffc=ffc)
         self.contract_class_storage = contract_class_storage
-        # The last committed state; the one this state was created from.
-        self.global_state_root = global_state_root
-        # A mapping from contract address to its cached state.
+
+        # Last committed state roots.
+        self.contract_state_root = contract_state_root
+        self.contract_class_root = contract_class_root
+
+        # A mapping from contract address to its state.
         self.contract_states: Dict[int, ContractState] = {}
 
     # StateReader API.
 
-    async def get_contract_class(self, class_hash: bytes) -> ContractClass:
-        contract_class_fact = await ContractClassFact.get(
-            storage=self.contract_class_storage, suffix=class_hash
+    async def get_compiled_class(self, compiled_class_hash: int) -> CompiledClassBase:
+        # Try the deprecated compiled classes.
+        deprecated_compiled_class = await self._get_deprecated_compiled_class(
+            compiled_class_hash=compiled_class_hash
         )
+        if deprecated_compiled_class is not None:
+            return deprecated_compiled_class
 
-        if contract_class_fact is None:
-            raise get_stark_exception_on_undeclared_contract(class_hash=class_hash)
+        # The given hash does not match any deprecated class; try the new compiled classes.
+        compiled_class = await self._get_compiled_class(compiled_class_hash=compiled_class_hash)
+        if compiled_class is not None:
+            return compiled_class
 
-        contract_class = contract_class_fact.contract_definition
-        contract_class.validate()
-        return contract_class
+        # The given hash does not match any class; it is not declared.
+        raise get_stark_exception_on_undeclared_contract(class_hash=compiled_class_hash)
 
-    async def get_class_hash_at(self, contract_address: int) -> bytes:
+    async def get_compiled_class_hash(self, class_hash: int) -> int:
+        if self.contract_class_root is None:
+            # The tree is not initialized; may happen if the reader is based on an old state
+            # without class commitment.
+            return 0
+
+        leaf = await self.contract_class_root.get_leaf(
+            ffc=self.ffc_for_class_hash, index=class_hash, fact_cls=ContractClassLeaf
+        )
+        return leaf.compiled_class_hash
+
+    async def get_class_hash_at(self, contract_address: int) -> int:
         contract_state = await self._get_contract_state(contract_address=contract_address)
-        return contract_state.contract_hash
+        return from_bytes(contract_state.contract_hash)
 
     async def get_nonce_at(self, contract_address: int) -> int:
         contract_state = await self._get_contract_state(contract_address=contract_address)
@@ -80,7 +108,7 @@ class PatriciaStateReader(StateReader):
         return self.contract_states[contract_address]
 
     async def _fetch_contract_state(self, contract_address: int) -> ContractState:
-        return await self.global_state_root.get_leaf(
+        return await self.contract_state_root.get_leaf(
             ffc=self.ffc, index=contract_address, fact_cls=ContractState
         )
 
@@ -88,3 +116,27 @@ class PatriciaStateReader(StateReader):
         return await contract_state.storage_commitment_tree.get_leaf(
             ffc=self.ffc, index=key, fact_cls=StorageLeaf
         )
+
+    async def _get_deprecated_compiled_class(
+        self, compiled_class_hash: int
+    ) -> Optional[DeprecatedCompiledClass]:
+        compiled_class_fact = await DeprecatedCompiledClassFact.get(
+            storage=self.contract_class_storage, suffix=to_bytes(compiled_class_hash)
+        )
+        if compiled_class_fact is None:
+            return None
+
+        compiled_class = compiled_class_fact.contract_definition
+        compiled_class.validate()
+        return compiled_class
+
+    async def _get_compiled_class(self, compiled_class_hash: int) -> Optional[CompiledClass]:
+        compiled_class_fact = await CompiledClassFact.get(
+            storage=self.contract_class_storage, suffix=to_bytes(compiled_class_hash)
+        )
+        if compiled_class_fact is None:
+            return None
+
+        compiled_class = compiled_class_fact.compiled_class
+        compiled_class.validate()
+        return compiled_class

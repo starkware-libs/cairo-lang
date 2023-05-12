@@ -26,7 +26,11 @@ contract StarknetMessaging is IStarknetMessaging {
         "STARKNET_1.0_MSGING_L1TOL2_CANCELLATION_DELAY"
     );
 
-    uint256 public constant MAX_L1_MSG_FEE = 1 ether;
+    uint256 constant MAX_L1_MSG_FEE = 1 ether;
+
+    function getMaxL1MsgFee() public pure override returns (uint256) {
+        return MAX_L1_MSG_FEE;
+    }
 
     /**
       Returns the msg_fee + 1 for the message with the given 'msgHash',
@@ -108,7 +112,8 @@ contract StarknetMessaging is IStarknetMessaging {
         uint256 selector,
         uint256[] calldata payload
     ) external payable override returns (bytes32, uint256) {
-        require(msg.value <= MAX_L1_MSG_FEE, "MAX_L1_MSG_FEE_EXCEEDED");
+        require(msg.value > 0, "L1_MSG_FEE_MUST_BE_GREATER_THAN_0");
+        require(msg.value <= getMaxL1MsgFee(), "MAX_L1_MSG_FEE_EXCEEDED");
         uint256 nonce = l1ToL2MessageNonce();
         NamedStorage.setUintValue(L1L2_MESSAGE_NONCE_TAG, nonce + 1);
         emit LogMessageToL2(msg.sender, toAddress, selector, payload, nonce, msg.value);
@@ -160,6 +165,9 @@ contract StarknetMessaging is IStarknetMessaging {
         uint256 nonce
     ) external override returns (bytes32) {
         emit MessageToL2Canceled(msg.sender, toAddress, selector, payload, nonce);
+        // Note that the message hash depends on msg.sender, which prevents one contract from
+        // cancelling another contract's message.
+        // Trying to do so will result in NO_MESSAGE_TO_CANCEL.
         bytes32 msgHash = getL1ToL2MsgHash(toAddress, selector, payload, nonce);
         uint256 msgFeePlusOne = l1ToL2Messages()[msgHash];
         require(msgFeePlusOne != 0, "NO_MESSAGE_TO_CANCEL");

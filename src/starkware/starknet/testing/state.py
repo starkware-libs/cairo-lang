@@ -15,32 +15,46 @@ from starkware.starknet.business_logic.state.state_api import State
 from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
 from starkware.starknet.business_logic.transaction.objects import (
     InternalDeclare,
-    InternalDeploy,
     InternalInvokeFunction,
     InternalTransaction,
+)
+from starkware.starknet.core.os.contract_class.compiled_class_hash import (
+    compute_compiled_class_hash,
 )
 from starkware.starknet.definitions import constants, fields
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public.abi import get_selector_from_name
-from starkware.starknet.services.api.contract_class import ContractClass, EntryPointType
+from starkware.starknet.services.api.contract_class.contract_class import (
+    ContractClass,
+    DeprecatedCompiledClass,
+    EntryPointType,
+)
+from starkware.starknet.services.api.contract_class.contract_class_utils import (
+    compile_contract_class,
+)
 from starkware.starknet.services.api.gateway.transaction import DEFAULT_DECLARE_SENDER_ADDRESS
 from starkware.starknet.services.api.messages import StarknetMessageToL1
+from starkware.starknet.testing.contract_utils import (
+    CastableToAddress,
+    CastableToAddressSalt,
+    CastableToFelt,
+    cast_to_int,
+)
+from starkware.starknet.testing.test_utils import create_internal_deploy_tx_for_testing
 from starkware.storage.dict_storage import DictStorage
 from starkware.storage.storage import FactFetchingContext
-
-CastableToAddress = Union[str, int]
-CastableToAddressSalt = Union[str, int]
 
 
 class StarknetState:
     """
-    StarkNet testing object. Represents a state of a StarkNet network.
+    Starknet testing object. Represents a state of a Starknet network.
 
     Example usage:
-      starknet = await StarknetState.empty()
+      state = await StarknetState.empty()
       contract_class = compile_starknet_files([CONTRACT_FILE], debug_info=True)
-      contract_address, _ = await starknet.deploy(contract_class=contract_class)
-      res = await starknet.invoke_raw(
+      class_hash, _ = await state.deprecated_declare(contract_class=contract_class)
+      contract_address, _ = await state.deploy(class_hash=class_hash)
+      res = await state.invoke_raw(
           contract_address=contract_address, selector="func", calldata=[1, 2])
     """
 
@@ -75,21 +89,22 @@ class StarknetState:
         ffc = FactFetchingContext(storage=DictStorage(), hash_func=pedersen_hash_func)
         empty_shared_state = await SharedState.empty(ffc=ffc, general_config=general_config)
         state_reader = PatriciaStateReader(
-            global_state_root=empty_shared_state.contract_states,
+            contract_state_root=empty_shared_state.contract_states,
+            contract_class_root=empty_shared_state.contract_classes,
             ffc=ffc,
             contract_class_storage=ffc.storage,
         )
         state = CachedState(
             block_info=BlockInfo.empty(sequencer_address=general_config.sequencer_address),
             state_reader=state_reader,
-            contract_class_cache={},
+            compiled_class_cache={},
         )
 
         return cls(state=state, general_config=general_config)
 
-    async def declare(
-        self, contract_class: ContractClass
-    ) -> Tuple[bytes, TransactionExecutionInfo]:
+    async def deprecated_declare(
+        self, contract_class: DeprecatedCompiledClass
+    ) -> Tuple[int, TransactionExecutionInfo]:
         """
         Declares a contract class.
         Returns the class hash and the execution info.
@@ -97,7 +112,7 @@ class StarknetState:
         Args:
         contract_class - a compiled StarkNet contract returned by compile_starknet_files().
         """
-        tx = InternalDeclare.create(
+        tx = InternalDeclare.create_deprecated(
             contract_class=contract_class,
             chain_id=self.general_config.chain_id.value,
             sender_address=DEFAULT_DECLARE_SENDER_ADDRESS,
@@ -106,7 +121,41 @@ class StarknetState:
             signature=[],
             nonce=0,
         )
-        await self.state.set_contract_class(class_hash=tx.class_hash, contract_class=contract_class)
+        self.state.compiled_classes[tx.class_hash] = contract_class
+
+        with self.state.copy_and_apply() as state_copy:
+            tx_execution_info = await tx.apply_state_updates(
+                state=state_copy, general_config=self.general_config
+            )
+
+        return tx.class_hash, tx_execution_info
+
+    async def declare(
+        self,
+        contract_class: ContractClass,
+        sender_address: CastableToAddress,
+    ) -> Tuple[int, TransactionExecutionInfo]:
+        """
+        Declares a Cairo 1.0 contract class.
+        Returns the class hash and the execution info.
+
+        Args:
+        contract_class - a compiled StarkNet contract.
+        """
+        compiled_class = compile_contract_class(contract_class=contract_class)
+        compiled_class_hash = compute_compiled_class_hash(compiled_class=compiled_class)
+        sender_address = cast_to_int(sender_address)
+        tx = InternalDeclare.create(
+            contract_class=contract_class,
+            compiled_class_hash=compiled_class_hash,
+            chain_id=self.general_config.chain_id.value,
+            sender_address=sender_address,
+            max_fee=0,
+            version=constants.DECLARE_VERSION,
+            signature=[],
+            nonce=await self.state.get_nonce_at(contract_address=sender_address),
+        )
+        self.state.compiled_classes[compiled_class_hash] = compiled_class
 
         with self.state.copy_and_apply() as state_copy:
             tx_execution_info = await tx.apply_state_updates(
@@ -117,38 +166,39 @@ class StarknetState:
 
     async def deploy(
         self,
-        contract_class: ContractClass,
+        class_hash: CastableToFelt,
         constructor_calldata: List[int],
+        sender_address: CastableToAddress,
+        max_fee: int = 0,
         contract_address_salt: Optional[CastableToAddressSalt] = None,
     ) -> Tuple[int, TransactionExecutionInfo]:
         """
-        Deploys a contract. Returns the contract address and the execution info.
+        Deploys a contract by invoking the account contract's `deploy_contract` function.
+        Returns the contract address and the execution info.
 
         Args:
-        contract_class - a compiled StarkNet contract returned by compile_starknet_files().
+        class_hash - a declared class hash.
         contract_address_salt - If supplied, a hexadecimal string or an integer representing
         the salt to use for deploying. Otherwise, the salt is randomized.
         """
         if contract_address_salt is None:
             contract_address_salt = fields.ContractAddressSalt.get_random_value()
-        if isinstance(contract_address_salt, str):
-            contract_address_salt = int(contract_address_salt, 16)
-        assert isinstance(contract_address_salt, int)
 
-        tx = InternalDeploy.create(
-            contract_address_salt=contract_address_salt,
+        sender_address = cast_to_int(sender_address)
+        nonce = await self.state.get_nonce_at(contract_address=sender_address)
+        contract_address, tx = create_internal_deploy_tx_for_testing(
+            sender_address=sender_address,
+            class_hash=cast_to_int(class_hash),
             constructor_calldata=constructor_calldata,
-            contract_class=contract_class,
+            salt=cast_to_int(contract_address_salt),
+            nonce=nonce,
+            max_fee=max_fee,
             chain_id=self.general_config.chain_id.value,
-            version=constants.TRANSACTION_VERSION,
-        )
-        await self.state.set_contract_class(
-            class_hash=tx.contract_hash, contract_class=contract_class
         )
 
         tx_execution_info = await self.execute_tx(tx=tx)
 
-        return tx.contract_address, tx_execution_info
+        return contract_address, tx_execution_info
 
     async def invoke_raw(
         self,
@@ -203,6 +253,7 @@ class StarknetState:
         call = ExecuteEntryPoint.create(
             contract_address=contract_address,
             entry_point_selector=selector,
+            initial_gas=constants.GasCost.INITIAL.value,
             entry_point_type=EntryPointType.EXTERNAL,
             calldata=calldata,
             caller_address=caller_address,
@@ -266,10 +317,7 @@ async def create_invoke_function(
     chain_id: int,
     only_query: bool = False,
 ) -> InternalInvokeFunction:
-    if isinstance(contract_address, str):
-        contract_address = int(contract_address, 16)
-    assert isinstance(contract_address, int)
-
+    contract_address = cast_to_int(contract_address)
     if isinstance(selector, str):
         selector = get_selector_from_name(selector)
     assert isinstance(selector, int)
@@ -282,7 +330,7 @@ async def create_invoke_function(
         nonce = await state.get_nonce_at(contract_address=contract_address)
 
     return InternalInvokeFunction.create(
-        contract_address=contract_address,
+        sender_address=contract_address,
         entry_point_selector=selector,
         calldata=calldata,
         max_fee=max_fee,

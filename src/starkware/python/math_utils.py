@@ -3,6 +3,7 @@ import random
 from hashlib import sha256
 from typing import Optional, Tuple, Union
 
+import numpy as np
 import sympy
 from sympy.core.numbers import igcdex
 
@@ -31,6 +32,17 @@ def div_mod(n, m, p):
     return (n * a) % p
 
 
+def pow_mod(vector, exponent, p):
+    """
+    Returns a numpy array which, in index i, will be equal to (vector[i] ** exponent % p), where
+    '**' is the power operator.
+    vector: numpy array
+    exponent: int
+    p: int
+    """
+    return np.vectorize(lambda x: pow(x, exponent, p))(vector)
+
+
 def next_power_of_2(x: int):
     """
     Returns the smallest power of two which is >= x.
@@ -41,7 +53,7 @@ def next_power_of_2(x: int):
     return res
 
 
-def is_power_of_2(x):
+def is_power_of_2(x: int) -> bool:
     return isinstance(x, int) and x > 0 and x & (x - 1) == 0
 
 

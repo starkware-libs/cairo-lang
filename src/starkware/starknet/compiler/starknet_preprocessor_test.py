@@ -1,5 +1,5 @@
 from starkware.starknet.compiler.test_utils import preprocess_str, verify_exception
-from starkware.starknet.services.api.contract_class import SUPPORTED_BUILTINS
+from starkware.starknet.services.api.contract_class.contract_class import SUPPORTED_BUILTINS
 
 
 def test_builtin_directive_after_external():

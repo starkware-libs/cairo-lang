@@ -5,7 +5,10 @@ import marshmallow.fields as mfields
 import marshmallow_dataclass
 
 from starkware.starkware_utils.error_handling import StarkErrorCode, stark_assert
-from starkware.starkware_utils.field_validators import validate_alternative_endpoint
+from starkware.starkware_utils.field_validators import (
+    validate_alternative_endpoint,
+    validate_failure_description_endpoint,
+)
 from starkware.starkware_utils.marshmallow_dataclass_fields import additional_metadata
 from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
 
@@ -13,14 +16,18 @@ from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDa
 @marshmallow_dataclass.dataclass
 class AlternativeEndpointSettingRequest(ValidatedMarshmallowDataclass):
     """
-    This request is sent when the endpoint that receives the alternative transaction request
-    is changed.
-    The client should provide one of the following options:
-        - Bearer token
-        - Certificates: server certificate and client certificate
+    This type of request is allowed only in setups that support dynamically configuring the
+    endpoint for alternative transactions.
 
-    :param url: The URL address of the endpoint.
+    AlternativeEndpointSettingRequest is sent from the client to the gateway
+    when the configuration of the alternative transaction request endpoint is changed.
+    The client should provide either of the following:
+    A bearer token, or client and server certificates.
+
+    :param url: The URL of the endpoint.
     :type url: str
+    :param failure_description_url: The URL address that receives the failure description.
+    :type failure_description_url: str
     :param bearer_token: The Bearer token.
     :type bearer_token: Optional[str]
     :param server_certificate: The server certificate.
@@ -35,6 +42,14 @@ class AlternativeEndpointSettingRequest(ValidatedMarshmallowDataclass):
         metadata=additional_metadata(
             marshmallow_field=mfields.String(validate=validate_alternative_endpoint),
         )
+    )
+    failure_description_url: Optional[str] = field(
+        metadata=additional_metadata(
+            marshmallow_field=mfields.String(
+                validate=validate_failure_description_endpoint, allow_none=True
+            ),
+        ),
+        default=None,
     )
     bearer_token: Optional[str] = field(
         metadata=additional_metadata(

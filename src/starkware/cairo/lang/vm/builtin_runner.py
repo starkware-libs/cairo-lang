@@ -3,7 +3,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 from starkware.cairo.lang.vm.utils import MemorySegmentRelocatableAddresses
-from starkware.python.math_utils import div_ceil, safe_div
+from starkware.python.math_utils import div_ceil, next_power_of_2, safe_div
 
 
 class InsufficientAllocatedCells(Exception):
@@ -171,7 +171,7 @@ class SimpleBuiltinRunner(BuiltinRunner):
         self,
         name: str,
         included: bool,
-        ratio: int,
+        ratio: Optional[int],
         cells_per_instance: int,
         n_input_cells: int,
         instances_per_component: int = 1,
@@ -225,16 +225,22 @@ class SimpleBuiltinRunner(BuiltinRunner):
         return div_ceil(self.get_used_cells(runner), self.cells_per_instance)
 
     def get_allocated_memory_units(self, runner):
-        return self.cells_per_instance * safe_div(runner.vm.current_step, self.ratio)
-
-    def get_used_cells_and_allocated_size(self, runner):
+        if self.ratio is None:
+            # Dynamic layout has the exact number of instances it needs (up to a power of 2).
+            instances = div_ceil(self.get_used_cells(runner), self.cells_per_instance)
+            components = next_power_of_2(div_ceil(instances, self.instances_per_component))
+            return self.cells_per_instance * self.instances_per_component * components
+        assert isinstance(self.ratio, int), "ratio is not an int"
         min_steps = self.ratio * self.instances_per_component
         if runner.vm.current_step < min_steps:
             raise InsufficientAllocatedCells(
                 f"Number of steps must be at least {min_steps} for the {self.name} builtin."
             )
+        return self.cells_per_instance * safe_div(runner.vm.current_step, self.ratio)
+
+    def get_used_cells_and_allocated_size(self, runner):
         used = self.get_used_cells(runner)
-        size = self.cells_per_instance * safe_div(runner.vm.current_step, self.ratio)
+        size = self.get_allocated_memory_units(runner)
         if used > size:
             raise InsufficientAllocatedCells(
                 f"The {self.name} builtin used {used} cells but the capacity is {size}."

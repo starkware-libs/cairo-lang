@@ -10,30 +10,14 @@ from starkware.cairo.common.math import (
     assert_nn_le,
     assert_not_zero,
 )
+from starkware.cairo.common.patricia_utils import (
+    MAX_LENGTH,
+    NodeEdge,
+    ParticiaGlobals,
+    PatriciaUpdateConstants,
+)
 
-// Maximum length of an edge.
-const MAX_LENGTH = 251;
-
-// A struct of globals that are passed throughout the algorithm.
-struct ParticiaGlobals {
-    // An array of size MAX_LENGTH, where pow2[i] = 2**i.
-    pow2: felt*,
-    // Offset of the relevant value field in DictAccess.
-    // 1 if the previous tree is traversed and 2 if the new tree is traversed.
-    access_offset: felt,
-}
-
-// Represents an edge node: a subtree with a path, s.t. all leaves not under that path are 0.
-struct NodeEdge {
-    length: felt,
-    path: felt,
-    bottom: felt,
-}
-
-// Holds the constants needed for Patricia updates.
-struct PatriciaUpdateConstants {
-    globals_pow2: felt*,
-}
+// ADDITIONAL_IMPORTS_MACRO()
 
 // Given an edge node hash, opens the hash using the preimage hint, and returns a NodeEdge object.
 func open_edge{hash_ptr: HashBuiltin*, range_check_ptr}(globals: ParticiaGlobals*, node: felt) -> (
@@ -59,6 +43,7 @@ func open_edge{hash_ptr: HashBuiltin*, range_check_ptr}(globals: ParticiaGlobals
     // verified later in the algorithm if necessary.
     assert hash_ptr.x = edge.bottom;
     assert hash_ptr.y = edge.path;
+    // PREPARE_ADDITIONAL_HASH_INPUTS_MACRO(hash_ptr)
     assert node = hash_ptr.result + edge.length;
     let hash_ptr = hash_ptr + HashBuiltin.SIZE;
     return (edge=edge);
@@ -262,6 +247,7 @@ func traverse_edge{
         if (height != 1) {
             // This check should only be done on the new tree.
             if (globals.access_offset == 2) {
+                // PREPARE_ADDITIONAL_HASH_INPUTS_MACRO(hash_ptr)
                 hash_ptr.result = edge.bottom;
                 %{
                     ids.hash_ptr.x, ids.hash_ptr.y = preimage[ids.edge.bottom]
@@ -336,6 +322,7 @@ func traverse_binary_or_leaf{
     // Binary.
     let current_hash = hash_ptr;
     let hash_ptr = hash_ptr + HashBuiltin.SIZE;
+    // PREPARE_ADDITIONAL_HASH_INPUTS_MACRO(current_hash)
     assert current_hash.result = node;
 
     %{

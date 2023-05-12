@@ -10,7 +10,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "1.2.0",
+                "installed_version": "1.3.1",
                 "key": "aiosignal",
                 "package_name": "aiosignal",
                 "required_version": ">=1.1.2"
@@ -22,38 +22,38 @@
                 "required_version": ">=4.0.0a3,<5.0"
             },
             {
-                "installed_version": "22.1.0",
+                "installed_version": "23.1.0",
                 "key": "attrs",
                 "package_name": "attrs",
                 "required_version": ">=17.3.0"
             },
             {
-                "installed_version": "2.1.1",
+                "installed_version": "3.1.0",
                 "key": "charset-normalizer",
                 "package_name": "charset-normalizer",
-                "required_version": ">=2.0,<3.0"
+                "required_version": ">=2.0,<4.0"
             },
             {
-                "installed_version": "1.3.1",
+                "installed_version": "1.3.3",
                 "key": "frozenlist",
                 "package_name": "frozenlist",
                 "required_version": ">=1.1.1"
             },
             {
-                "installed_version": "6.0.2",
+                "installed_version": "6.0.4",
                 "key": "multidict",
                 "package_name": "multidict",
                 "required_version": ">=4.5,<7.0"
             },
             {
-                "installed_version": "1.8.1",
+                "installed_version": "1.8.2",
                 "key": "yarl",
                 "package_name": "yarl",
                 "required_version": ">=1.0,<2.0"
             }
         ],
         "package": {
-            "installed_version": "3.8.1",
+            "installed_version": "3.8.4",
             "key": "aiohttp",
             "package_name": "aiohttp"
         }
@@ -61,14 +61,14 @@
     {
         "dependencies": [
             {
-                "installed_version": "1.3.1",
+                "installed_version": "1.3.3",
                 "key": "frozenlist",
                 "package_name": "frozenlist",
                 "required_version": ">=1.1.0"
             }
         ],
         "package": {
-            "installed_version": "1.2.0",
+            "installed_version": "1.3.1",
             "key": "aiosignal",
             "package_name": "aiosignal"
         }
@@ -84,7 +84,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "22.1.0",
+            "installed_version": "23.1.0",
             "key": "attrs",
             "package_name": "attrs"
         }
@@ -92,15 +92,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "2.1.1",
-            "key": "base58",
-            "package_name": "base58"
-        }
-    },
-    {
-        "dependencies": [],
-        "package": {
-            "installed_version": "2.6.0",
+            "installed_version": "2.7.3",
             "key": "bitarray",
             "package_name": "bitarray"
         }
@@ -108,7 +100,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "5.2.0",
+            "installed_version": "5.3.0",
             "key": "cachetools",
             "package_name": "cachetools"
         }
@@ -116,7 +108,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "2022.6.15",
+            "installed_version": "2022.12.7",
             "key": "certifi",
             "package_name": "certifi"
         }
@@ -124,7 +116,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "2.1.1",
+            "installed_version": "3.1.0",
             "key": "charset-normalizer",
             "package_name": "charset-normalizer"
         }
@@ -139,7 +131,7 @@
             }
         ],
         "package": {
-            "installed_version": "0.12.0",
+            "installed_version": "0.12.1",
             "key": "cytoolz",
             "package_name": "cytoolz"
         }
@@ -162,26 +154,26 @@
     {
         "dependencies": [
             {
-                "installed_version": "2.3.0",
+                "installed_version": "3.3.0",
                 "key": "eth-typing",
                 "package_name": "eth-typing",
-                "required_version": ">=2.0.0,<3.0.0"
+                "required_version": ">=3.0.0"
             },
             {
-                "installed_version": "1.9.5",
+                "installed_version": "2.1.0",
                 "key": "eth-utils",
                 "package_name": "eth-utils",
-                "required_version": ">=1.2.0,<2.0.0"
+                "required_version": ">=2.0.0"
             },
             {
-                "installed_version": "0.8.1",
+                "installed_version": "0.9.0",
                 "key": "parsimonious",
                 "package_name": "parsimonious",
-                "required_version": ">=0.8.0,<0.9.0"
+                "required_version": ">=0.9.0,<0.10.0"
             }
         ],
         "package": {
-            "installed_version": "2.2.0",
+            "installed_version": "4.0.0",
             "key": "eth-abi",
             "package_name": "eth-abi"
         }
@@ -189,40 +181,40 @@
     {
         "dependencies": [
             {
-                "installed_version": "2.6.0",
+                "installed_version": "2.7.3",
                 "key": "bitarray",
                 "package_name": "bitarray",
-                "required_version": ">=1.2.1,<3"
+                "required_version": ">=2.4.0,<3"
             },
             {
-                "installed_version": "2.2.0",
+                "installed_version": "4.0.0",
                 "key": "eth-abi",
                 "package_name": "eth-abi",
-                "required_version": ">=2.0.0b7,<3"
+                "required_version": ">=3.0.1"
             },
             {
-                "installed_version": "0.5.1",
+                "installed_version": "0.6.1",
                 "key": "eth-keyfile",
                 "package_name": "eth-keyfile",
-                "required_version": ">=0.5.0,<0.6.0"
+                "required_version": ">=0.6.0,<0.7.0"
             },
             {
-                "installed_version": "0.3.4",
+                "installed_version": "0.4.0",
                 "key": "eth-keys",
                 "package_name": "eth-keys",
-                "required_version": ">=0.3.4,<0.4.0"
+                "required_version": ">=0.4.0,<0.5"
             },
             {
-                "installed_version": "0.2.1",
+                "installed_version": "0.3.0",
                 "key": "eth-rlp",
                 "package_name": "eth-rlp",
-                "required_version": ">=0.1.2,<2"
+                "required_version": ">=0.3.0,<1"
             },
             {
-                "installed_version": "1.9.5",
+                "installed_version": "2.1.0",
                 "key": "eth-utils",
                 "package_name": "eth-utils",
-                "required_version": ">=1.3.0,<2"
+                "required_version": ">=2.0.0,<3"
             },
             {
                 "installed_version": "0.3.0",
@@ -231,14 +223,14 @@
                 "required_version": ">=0.1.0,<1"
             },
             {
-                "installed_version": "2.0.1",
+                "installed_version": "3.0.0",
                 "key": "rlp",
                 "package_name": "rlp",
-                "required_version": ">=1.0.0,<3"
+                "required_version": ">=1.0.0,<4"
             }
         ],
         "package": {
-            "installed_version": "0.5.9",
+            "installed_version": "0.8.0",
             "key": "eth-account",
             "package_name": "eth-account"
         }
@@ -246,7 +238,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "0.5.0",
+            "installed_version": "0.5.1",
             "key": "eth-hash",
             "package_name": "eth-hash"
         }
@@ -254,32 +246,26 @@
     {
         "dependencies": [
             {
-                "installed_version": "0.12.0",
-                "key": "cytoolz",
-                "package_name": "cytoolz",
-                "required_version": ">=0.9.0,<1.0.0"
-            },
-            {
-                "installed_version": "0.3.4",
+                "installed_version": "0.4.0",
                 "key": "eth-keys",
                 "package_name": "eth-keys",
-                "required_version": ">=0.1.0-beta.4,<1.0.0"
+                "required_version": ">=0.4.0,<0.5.0"
             },
             {
-                "installed_version": "1.9.5",
+                "installed_version": "2.1.0",
                 "key": "eth-utils",
                 "package_name": "eth-utils",
-                "required_version": ">=1.0.0-beta.1,<2.0.0"
+                "required_version": ">=2,<3"
             },
             {
-                "installed_version": "3.15.0",
+                "installed_version": "3.17",
                 "key": "pycryptodome",
                 "package_name": "pycryptodome",
-                "required_version": ">=3.4.7,<4.0.0"
+                "required_version": ">=3.6.6,<4"
             }
         ],
         "package": {
-            "installed_version": "0.5.1",
+            "installed_version": "0.6.1",
             "key": "eth-keyfile",
             "package_name": "eth-keyfile"
         }
@@ -287,20 +273,20 @@
     {
         "dependencies": [
             {
-                "installed_version": "2.3.0",
+                "installed_version": "3.3.0",
                 "key": "eth-typing",
                 "package_name": "eth-typing",
-                "required_version": ">=2.2.1,<3.0.0"
+                "required_version": ">=3.0.0,<4"
             },
             {
-                "installed_version": "1.9.5",
+                "installed_version": "2.1.0",
                 "key": "eth-utils",
                 "package_name": "eth-utils",
-                "required_version": ">=1.8.2,<2.0.0"
+                "required_version": ">=2.0.0,<3.0.0"
             }
         ],
         "package": {
-            "installed_version": "0.3.4",
+            "installed_version": "0.4.0",
             "key": "eth-keys",
             "package_name": "eth-keys"
         }
@@ -308,10 +294,10 @@
     {
         "dependencies": [
             {
-                "installed_version": "1.9.5",
+                "installed_version": "2.1.0",
                 "key": "eth-utils",
                 "package_name": "eth-utils",
-                "required_version": ">=1.0.1,<2"
+                "required_version": ">=2.0.0,<3"
             },
             {
                 "installed_version": "0.3.0",
@@ -320,14 +306,14 @@
                 "required_version": ">=0.1.0,<1"
             },
             {
-                "installed_version": "2.0.1",
+                "installed_version": "3.0.0",
                 "key": "rlp",
                 "package_name": "rlp",
-                "required_version": ">=0.6.0,<3"
+                "required_version": ">=0.6.0,<4"
             }
         ],
         "package": {
-            "installed_version": "0.2.1",
+            "installed_version": "0.3.0",
             "key": "eth-rlp",
             "package_name": "eth-rlp"
         }
@@ -335,7 +321,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "2.3.0",
+            "installed_version": "3.3.0",
             "key": "eth-typing",
             "package_name": "eth-typing"
         }
@@ -343,26 +329,26 @@
     {
         "dependencies": [
             {
-                "installed_version": "0.12.0",
+                "installed_version": "0.12.1",
                 "key": "cytoolz",
                 "package_name": "cytoolz",
-                "required_version": ">=0.10.1,<1.0.0"
+                "required_version": ">=0.10.1"
             },
             {
-                "installed_version": "0.5.0",
+                "installed_version": "0.5.1",
                 "key": "eth-hash",
                 "package_name": "eth-hash",
-                "required_version": ">=0.1.0,<1.0.0"
+                "required_version": ">=0.3.1"
             },
             {
-                "installed_version": "2.3.0",
+                "installed_version": "3.3.0",
                 "key": "eth-typing",
                 "package_name": "eth-typing",
-                "required_version": ">=2.2.1,<3.0.0"
+                "required_version": ">=3.0.0"
             }
         ],
         "package": {
-            "installed_version": "1.9.5",
+            "installed_version": "2.1.0",
             "key": "eth-utils",
             "package_name": "eth-utils"
         }
@@ -370,7 +356,15 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "2.2.3",
+            "installed_version": "1.1.1",
+            "key": "exceptiongroup",
+            "package_name": "exceptiongroup"
+        }
+    },
+    {
+        "dependencies": [],
+        "package": {
+            "installed_version": "2.3.0",
             "key": "fastecdsa",
             "package_name": "fastecdsa"
         }
@@ -378,7 +372,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "1.2",
+            "installed_version": "2.3.7",
             "key": "frozendict",
             "package_name": "frozendict"
         }
@@ -386,7 +380,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "1.3.1",
+            "installed_version": "1.3.3",
             "key": "frozenlist",
             "package_name": "frozenlist"
         }
@@ -402,7 +396,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "3.3",
+            "installed_version": "3.4",
             "key": "idna",
             "package_name": "idna"
         }
@@ -410,7 +404,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "1.1.1",
+            "installed_version": "2.0.0",
             "key": "iniconfig",
             "package_name": "iniconfig"
         }
@@ -418,53 +412,20 @@
     {
         "dependencies": [
             {
-                "installed_version": "0.0.9",
-                "key": "multiaddr",
-                "package_name": "multiaddr",
-                "required_version": ">=0.0.7"
-            },
-            {
-                "installed_version": "2.28.1",
-                "key": "requests",
-                "package_name": "requests",
-                "required_version": ">=2.11"
-            }
-        ],
-        "package": {
-            "installed_version": "0.8.0a2",
-            "key": "ipfshttpclient",
-            "package_name": "ipfshttpclient"
-        }
-    },
-    {
-        "dependencies": [
-            {
-                "installed_version": "22.1.0",
+                "installed_version": "23.1.0",
                 "key": "attrs",
                 "package_name": "attrs",
                 "required_version": ">=17.4.0"
             },
             {
-                "installed_version": "0.18.1",
+                "installed_version": "0.19.3",
                 "key": "pyrsistent",
                 "package_name": "pyrsistent",
-                "required_version": ">=0.14.0"
-            },
-            {
-                "installed_version": "63.2.0",
-                "key": "setuptools",
-                "package_name": "setuptools",
-                "required_version": null
-            },
-            {
-                "installed_version": "1.16.0",
-                "key": "six",
-                "package_name": "six",
-                "required_version": ">=1.11.0"
+                "required_version": ">=0.14.0,!=0.17.2,!=0.17.1,!=0.17.0"
             }
         ],
         "package": {
-            "installed_version": "3.2.0",
+            "installed_version": "4.17.3",
             "key": "jsonschema",
             "package_name": "jsonschema"
         }
@@ -472,7 +433,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "1.1.2",
+            "installed_version": "1.1.5",
             "key": "lark",
             "package_name": "lark"
         }
@@ -488,14 +449,14 @@
     {
         "dependencies": [
             {
-                "installed_version": "21.3",
+                "installed_version": "23.1",
                 "key": "packaging",
                 "package_name": "packaging",
                 "required_version": ">=17.0"
             }
         ],
         "package": {
-            "installed_version": "3.17.1",
+            "installed_version": "3.19.0",
             "key": "marshmallow",
             "package_name": "marshmallow"
         }
@@ -503,20 +464,26 @@
     {
         "dependencies": [
             {
-                "installed_version": "3.17.1",
+                "installed_version": "3.19.0",
                 "key": "marshmallow",
                 "package_name": "marshmallow",
                 "required_version": ">=3.13.0,<4.0"
             },
             {
+                "installed_version": "4.5.0",
+                "key": "typing-extensions",
+                "package_name": "typing-extensions",
+                "required_version": ">=4.1.0"
+            },
+            {
                 "installed_version": "0.8.0",
                 "key": "typing-inspect",
                 "package_name": "typing-inspect",
-                "required_version": ">=0.7.1"
+                "required_version": ">=0.8.0"
             }
         ],
         "package": {
-            "installed_version": "8.5.8",
+            "installed_version": "8.5.12",
             "key": "marshmallow-dataclass",
             "package_name": "marshmallow-dataclass"
         }
@@ -524,7 +491,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "3.17.1",
+                "installed_version": "3.19.0",
                 "key": "marshmallow",
                 "package_name": "marshmallow",
                 "required_version": ">=2.0.0"
@@ -539,7 +506,7 @@
     {
         "dependencies": [
             {
-                "installed_version": "3.17.1",
+                "installed_version": "3.19.0",
                 "key": "marshmallow",
                 "package_name": "marshmallow",
                 "required_version": ">=3.0.0,<4.0.0"
@@ -554,48 +521,15 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "1.2.1",
+            "installed_version": "1.3.0",
             "key": "mpmath",
             "package_name": "mpmath"
         }
     },
     {
-        "dependencies": [
-            {
-                "installed_version": "2.1.1",
-                "key": "base58",
-                "package_name": "base58",
-                "required_version": null
-            },
-            {
-                "installed_version": "0.8.0",
-                "key": "netaddr",
-                "package_name": "netaddr",
-                "required_version": null
-            },
-            {
-                "installed_version": "1.16.0",
-                "key": "six",
-                "package_name": "six",
-                "required_version": null
-            },
-            {
-                "installed_version": "1.0.2",
-                "key": "varint",
-                "package_name": "varint",
-                "required_version": null
-            }
-        ],
-        "package": {
-            "installed_version": "0.0.9",
-            "key": "multiaddr",
-            "package_name": "multiaddr"
-        }
-    },
-    {
         "dependencies": [],
         "package": {
-            "installed_version": "6.0.2",
+            "installed_version": "6.0.4",
             "key": "multidict",
             "package_name": "multidict"
         }
@@ -603,7 +537,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "0.4.3",
+            "installed_version": "1.0.0",
             "key": "mypy-extensions",
             "package_name": "mypy-extensions"
         }
@@ -611,30 +545,15 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "0.8.0",
-            "key": "netaddr",
-            "package_name": "netaddr"
-        }
-    },
-    {
-        "dependencies": [],
-        "package": {
-            "installed_version": "1.23.2",
+            "installed_version": "1.24.2",
             "key": "numpy",
             "package_name": "numpy"
         }
     },
     {
-        "dependencies": [
-            {
-                "installed_version": "3.0.9",
-                "key": "pyparsing",
-                "package_name": "pyparsing",
-                "required_version": ">=2.0.2,!=3.0.5"
-            }
-        ],
+        "dependencies": [],
         "package": {
-            "installed_version": "21.3",
+            "installed_version": "23.1",
             "key": "packaging",
             "package_name": "packaging"
         }
@@ -642,14 +561,14 @@
     {
         "dependencies": [
             {
-                "installed_version": "1.16.0",
-                "key": "six",
-                "package_name": "six",
-                "required_version": ">=1.9.0"
+                "installed_version": "2023.3.23",
+                "key": "regex",
+                "package_name": "regex",
+                "required_version": ">=2022.3.15"
             }
         ],
         "package": {
-            "installed_version": "0.8.1",
+            "installed_version": "0.9.0",
             "key": "parsimonious",
             "package_name": "parsimonious"
         }
@@ -657,22 +576,15 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "22.2.2",
+            "installed_version": "23.0.1",
             "key": "pip",
             "package_name": "pip"
         }
     },
     {
-        "dependencies": [
-            {
-                "installed_version": "22.2.2",
-                "key": "pip",
-                "package_name": "pip",
-                "required_version": ">=6.0.0"
-            }
-        ],
+        "dependencies": [],
         "package": {
-            "installed_version": "2.2.1",
+            "installed_version": "2.7.0",
             "key": "pipdeptree",
             "package_name": "pipdeptree"
         }
@@ -688,7 +600,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "0.14.1",
+            "installed_version": "0.16.0",
             "key": "prometheus-client",
             "package_name": "prometheus-client"
         }
@@ -696,7 +608,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "3.20.1",
+            "installed_version": "4.22.3",
             "key": "protobuf",
             "package_name": "protobuf"
         }
@@ -704,15 +616,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "1.11.0",
-            "key": "py",
-            "package_name": "py"
-        }
-    },
-    {
-        "dependencies": [],
-        "package": {
-            "installed_version": "3.15.0",
+            "installed_version": "3.17",
             "key": "pycryptodome",
             "package_name": "pycryptodome"
         }
@@ -720,15 +624,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "3.0.9",
-            "key": "pyparsing",
-            "package_name": "pyparsing"
-        }
-    },
-    {
-        "dependencies": [],
-        "package": {
-            "installed_version": "0.18.1",
+            "installed_version": "0.19.3",
             "key": "pyrsistent",
             "package_name": "pyrsistent"
         }
@@ -736,19 +632,19 @@
     {
         "dependencies": [
             {
-                "installed_version": "22.1.0",
-                "key": "attrs",
-                "package_name": "attrs",
-                "required_version": ">=19.2.0"
+                "installed_version": "1.1.1",
+                "key": "exceptiongroup",
+                "package_name": "exceptiongroup",
+                "required_version": ">=1.0.0rc8"
             },
             {
-                "installed_version": "1.1.1",
+                "installed_version": "2.0.0",
                 "key": "iniconfig",
                 "package_name": "iniconfig",
                 "required_version": null
             },
             {
-                "installed_version": "21.3",
+                "installed_version": "23.1",
                 "key": "packaging",
                 "package_name": "packaging",
                 "required_version": null
@@ -760,12 +656,6 @@
                 "required_version": ">=0.12,<2.0"
             },
             {
-                "installed_version": "1.11.0",
-                "key": "py",
-                "package_name": "py",
-                "required_version": ">=1.8.2"
-            },
-            {
                 "installed_version": "2.0.1",
                 "key": "tomli",
                 "package_name": "tomli",
@@ -773,7 +663,7 @@
             }
         ],
         "package": {
-            "installed_version": "7.1.2",
+            "installed_version": "7.3.1",
             "key": "pytest",
             "package_name": "pytest"
         }
@@ -781,47 +671,55 @@
     {
         "dependencies": [
             {
-                "installed_version": "7.1.2",
+                "installed_version": "7.3.1",
                 "key": "pytest",
                 "package_name": "pytest",
-                "required_version": ">=6.1.0"
+                "required_version": ">=7.0.0"
             }
         ],
         "package": {
-            "installed_version": "0.19.0",
+            "installed_version": "0.21.0",
             "key": "pytest-asyncio",
             "package_name": "pytest-asyncio"
         }
     },
     {
+        "dependencies": [],
+        "package": {
+            "installed_version": "2023.3.23",
+            "key": "regex",
+            "package_name": "regex"
+        }
+    },
+    {
         "dependencies": [
             {
-                "installed_version": "2022.6.15",
+                "installed_version": "2022.12.7",
                 "key": "certifi",
                 "package_name": "certifi",
                 "required_version": ">=2017.4.17"
             },
             {
-                "installed_version": "2.1.1",
+                "installed_version": "3.1.0",
                 "key": "charset-normalizer",
                 "package_name": "charset-normalizer",
-                "required_version": ">=2,<3"
+                "required_version": ">=2,<4"
             },
             {
-                "installed_version": "3.3",
+                "installed_version": "3.4",
                 "key": "idna",
                 "package_name": "idna",
                 "required_version": ">=2.5,<4"
             },
             {
-                "installed_version": "1.26.12",
+                "installed_version": "1.26.15",
                 "key": "urllib3",
                 "package_name": "urllib3",
                 "required_version": ">=1.21.1,<1.27"
             }
         ],
         "package": {
-            "installed_version": "2.28.1",
+            "installed_version": "2.28.2",
             "key": "requests",
             "package_name": "requests"
         }
@@ -829,14 +727,14 @@
     {
         "dependencies": [
             {
-                "installed_version": "1.9.5",
+                "installed_version": "2.1.0",
                 "key": "eth-utils",
                 "package_name": "eth-utils",
-                "required_version": ">=1.0.2,<2"
+                "required_version": ">=2.0.0,<3"
             }
         ],
         "package": {
-            "installed_version": "2.0.1",
+            "installed_version": "3.0.0",
             "key": "rlp",
             "package_name": "rlp"
         }
@@ -844,7 +742,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "63.2.0",
+            "installed_version": "67.6.1",
             "key": "setuptools",
             "package_name": "setuptools"
         }
@@ -860,14 +758,14 @@
     {
         "dependencies": [
             {
-                "installed_version": "1.2.1",
+                "installed_version": "1.3.0",
                 "key": "mpmath",
                 "package_name": "mpmath",
                 "required_version": ">=0.19"
             }
         ],
         "package": {
-            "installed_version": "1.10.1",
+            "installed_version": "1.11.1",
             "key": "sympy",
             "package_name": "sympy"
         }
@@ -899,7 +797,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "4.3.0",
+            "installed_version": "4.5.0",
             "key": "typing-extensions",
             "package_name": "typing-extensions"
         }
@@ -907,13 +805,13 @@
     {
         "dependencies": [
             {
-                "installed_version": "0.4.3",
+                "installed_version": "1.0.0",
                 "key": "mypy-extensions",
                 "package_name": "mypy-extensions",
                 "required_version": ">=0.3.0"
             },
             {
-                "installed_version": "4.3.0",
+                "installed_version": "4.5.0",
                 "key": "typing-extensions",
                 "package_name": "typing-extensions",
                 "required_version": ">=3.7.4"
@@ -928,102 +826,88 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "1.26.12",
+            "installed_version": "1.26.15",
             "key": "urllib3",
             "package_name": "urllib3"
         }
     },
     {
-        "dependencies": [],
-        "package": {
-            "installed_version": "1.0.2",
-            "key": "varint",
-            "package_name": "varint"
-        }
-    },
-    {
         "dependencies": [
             {
-                "installed_version": "3.8.1",
+                "installed_version": "3.8.4",
                 "key": "aiohttp",
                 "package_name": "aiohttp",
-                "required_version": ">=3.7.4.post0,<4"
+                "required_version": ">=3.7.4.post0"
             },
             {
-                "installed_version": "2.2.0",
+                "installed_version": "4.0.0",
                 "key": "eth-abi",
                 "package_name": "eth-abi",
-                "required_version": ">=2.0.0b6,<3.0.0"
+                "required_version": ">=4.0.0"
             },
             {
-                "installed_version": "0.5.9",
+                "installed_version": "0.8.0",
                 "key": "eth-account",
                 "package_name": "eth-account",
-                "required_version": ">=0.5.7,<0.6.0"
+                "required_version": ">=0.8.0"
             },
             {
-                "installed_version": "0.5.0",
+                "installed_version": "0.5.1",
                 "key": "eth-hash",
                 "package_name": "eth-hash",
-                "required_version": ">=0.2.0,<1.0.0"
+                "required_version": ">=0.5.1"
             },
             {
-                "installed_version": "2.3.0",
+                "installed_version": "3.3.0",
                 "key": "eth-typing",
                 "package_name": "eth-typing",
-                "required_version": ">=2.0.0,<3.0.0"
+                "required_version": ">=3.0.0"
             },
             {
-                "installed_version": "1.9.5",
+                "installed_version": "2.1.0",
                 "key": "eth-utils",
                 "package_name": "eth-utils",
-                "required_version": ">=1.9.5,<2.0.0"
+                "required_version": ">=2.1.0"
             },
             {
                 "installed_version": "0.3.0",
                 "key": "hexbytes",
                 "package_name": "hexbytes",
-                "required_version": ">=0.1.0,<1.0.0"
+                "required_version": ">=0.1.0"
             },
             {
-                "installed_version": "0.8.0a2",
-                "key": "ipfshttpclient",
-                "package_name": "ipfshttpclient",
-                "required_version": "==0.8.0a2"
-            },
-            {
-                "installed_version": "3.2.0",
+                "installed_version": "4.17.3",
                 "key": "jsonschema",
                 "package_name": "jsonschema",
-                "required_version": ">=3.2.0,<4.0.0"
+                "required_version": ">=4.0.0"
             },
             {
                 "installed_version": "1.1.8",
                 "key": "lru-dict",
                 "package_name": "lru-dict",
-                "required_version": ">=1.1.6,<2.0.0"
+                "required_version": ">=1.1.6"
             },
             {
-                "installed_version": "3.20.1",
+                "installed_version": "4.22.3",
                 "key": "protobuf",
                 "package_name": "protobuf",
-                "required_version": ">=3.10.0,<4"
+                "required_version": ">=4.21.6"
             },
             {
-                "installed_version": "2.28.1",
+                "installed_version": "2.28.2",
                 "key": "requests",
                 "package_name": "requests",
-                "required_version": ">=2.16.0,<3.0.0"
+                "required_version": ">=2.16.0"
             },
             {
-                "installed_version": "9.1",
+                "installed_version": "11.0.2",
                 "key": "websockets",
                 "package_name": "websockets",
-                "required_version": ">=9.1,<10"
+                "required_version": ">=10.0.0"
             }
         ],
         "package": {
-            "installed_version": "5.28.0",
+            "installed_version": "6.2.0",
             "key": "web3",
             "package_name": "web3"
         }
@@ -1031,7 +915,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "9.1",
+            "installed_version": "11.0.2",
             "key": "websockets",
             "package_name": "websockets"
         }
@@ -1039,7 +923,7 @@
     {
         "dependencies": [],
         "package": {
-            "installed_version": "0.37.1",
+            "installed_version": "0.40.0",
             "key": "wheel",
             "package_name": "wheel"
         }
@@ -1047,20 +931,20 @@
     {
         "dependencies": [
             {
-                "installed_version": "3.3",
+                "installed_version": "3.4",
                 "key": "idna",
                 "package_name": "idna",
                 "required_version": ">=2.0"
             },
             {
-                "installed_version": "6.0.2",
+                "installed_version": "6.0.4",
                 "key": "multidict",
                 "package_name": "multidict",
                 "required_version": ">=4.0"
             }
         ],
         "package": {
-            "installed_version": "1.8.1",
+            "installed_version": "1.8.2",
             "key": "yarl",
             "package_name": "yarl"
         }

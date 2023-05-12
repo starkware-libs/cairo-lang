@@ -33,7 +33,7 @@ class StarknetMessageToL1(StarknetMessage):
     to_address: int = field(
         metadata=everest_fields.EthAddressIntField.metadata(field_name="to_address")
     )
-    payload: List[int] = field(metadata=fields.felt_list_metadata)
+    payload: List[int] = field(metadata=fields.felt_as_hex_or_str_list_metadata)
 
     def encode(self) -> List[int]:
         return [self.from_address, self.to_address, len(self.payload)] + self.payload
@@ -53,7 +53,7 @@ class StarknetMessageToL2(StarknetMessage):
     )
     to_address: int = field(metadata=fields.L2AddressField.metadata(field_name="to_address"))
     l1_handler_selector: int
-    payload: List[int] = field(metadata=fields.felt_list_metadata)
+    payload: List[int] = field(metadata=fields.felt_as_hex_or_str_list_metadata)
     nonce: int = field(metadata=fields.nonce_metadata)
 
     def encode(self) -> List[int]:

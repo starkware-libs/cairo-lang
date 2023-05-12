@@ -52,6 +52,10 @@ class StateSelectorBase(ABC, ValidatedDataclass):
     def __le__(self: TStateSelector, other: TStateSelector) -> bool:
         pass
 
+    @abstractmethod
+    def update(self: TStateSelector, other: TStateSelector):
+        pass
+
 
 class CarriedStateBase(StateProxy):
     """

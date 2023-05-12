@@ -391,7 +391,8 @@ func test{syscall_ptr: felt*, range_check_ptr, pedersen_ptr: HashBuiltin*}() -> 
 }
 """,
         """
-file:?:?: Cannot convert the implicit arguments of f.read to the implicit arguments of test.
+file:?:?: Tail calls require the implicit arguments of the callee to match the caller. \
+Consider separating the function call and the return statement.
     return f.read();
     ^**************^
 The implicit arguments of 'f.read' were defined here:

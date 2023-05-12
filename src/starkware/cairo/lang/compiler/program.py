@@ -86,8 +86,11 @@ class Program(ProgramBase, SerializableMarshmallowDataclass):
     data: List[int] = field(
         metadata=additional_metadata(marshmallow_field=mfields.List(IntAsHex(), required=True))
     )
-    hints: Dict[int, List[CairoHint]]
     builtins: List[str]
+    hints: Dict[int, List[CairoHint]]
+    compiler_version: Optional[str] = field(
+        metadata=dict(marshmallow_field=mfields.String(required=False, load_default=None))
+    )
     main_scope: ScopedName = field(
         metadata=additional_metadata(marshmallow_field=ScopedNameAsStr())
     )
@@ -96,9 +99,6 @@ class Program(ProgramBase, SerializableMarshmallowDataclass):
     )
     # Holds all the allocated references in the program.
     reference_manager: ReferenceManager
-    compiler_version: Optional[str] = field(
-        metadata=dict(marshmallow_field=mfields.String(required=False, load_default=None))
-    )
     attributes: List[AttributeScope] = field(default_factory=list)
     debug_info: Optional[DebugInfo] = None
 

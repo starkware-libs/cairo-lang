@@ -14,7 +14,10 @@ from starkware.cairo.stark_verifier.core.proof_of_work import (
 )
 from starkware.cairo.stark_verifier.core.table_commitment import TableCommitmentConfig
 from starkware.cairo.stark_verifier.core.utils import FIELD_GENERATOR
-from starkware.cairo.stark_verifier.core.vector_commitment import VectorCommitmentConfig
+from starkware.cairo.stark_verifier.core.vector_commitment import (
+    VectorCommitmentConfig,
+    validate_vector_commitment,
+)
 
 const MAX_LOG_TRACE = 64;
 const MAX_LOG_BLOWUP_FACTOR = 16;
@@ -64,7 +67,11 @@ func stark_config_validate{range_check_ptr}(
 
     // Validate composition config.
     assert config.composition.n_columns = air.constraint_degree;
-    assert [config.composition.vector] = VectorCommitmentConfig(height=log_eval_domain_size);
+
+    // Validate vector commitment.
+    validate_vector_commitment(
+        config=config.composition.vector, expected_height=log_eval_domain_size
+    );
 
     // Validate Fri config.
     let (log_expected_degree) = fri_config_validate(

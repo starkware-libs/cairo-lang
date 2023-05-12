@@ -12,6 +12,8 @@ import subprocess
 from argparse import ArgumentParser
 from typing import Dict, List
 
+BAD_BRANCH_IDENTIFIER = "BADB51"
+
 
 def find_dependency_libraries(libs: List[str], info_dir: str) -> Dict[str, dict]:
     """
@@ -91,10 +93,19 @@ def main():
         cwd=args.env_dir,
     )
 
+    git_commit = BAD_BRANCH_IDENTIFIER
+    try:
+        git_commit = (
+            subprocess.check_output("git rev-parse HEAD".split()).decode("ascii").strip()[:6]
+        )
+    except Exception:
+        pass
+
     # Extract artifacts.
     extract_artifacts(
         artifacts_dir=artifacts_dir,
         combined_json_filename=os.path.join(artifacts_dir, "combined.json"),
+        build_tag=git_commit,
     )
 
     # Generate info file.
@@ -109,7 +120,7 @@ def main():
         fp.write("\n")
 
 
-def extract_artifacts(artifacts_dir, combined_json_filename):
+def extract_artifacts(artifacts_dir, combined_json_filename, build_tag):
     with open(combined_json_filename) as fp:
         combined_json = json.load(fp)
 
@@ -136,6 +147,7 @@ def extract_artifacts(artifacts_dir, combined_json_filename):
             "contractName": name,
             "abi": abi,
             "bytecode": bytecode,
+            "build_tag": build_tag,
         }
 
         destination_filename = os.path.join(artifacts_dir, f"{name}.json")

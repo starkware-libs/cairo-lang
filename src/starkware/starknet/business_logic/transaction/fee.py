@@ -3,16 +3,17 @@ import math
 from starkware.starknet.business_logic.execution.execute_entry_point import ExecuteEntryPoint
 from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
+    ExecutionResourcesManager,
     ResourcesMapping,
     TransactionExecutionContext,
 )
-from starkware.starknet.business_logic.fact_state.state import ExecutionResourcesManager
 from starkware.starknet.business_logic.state.state_api import SyncState
 from starkware.starknet.business_logic.utils import extract_l1_gas_and_cairo_usage
+from starkware.starknet.definitions.constants import GasCost
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public import abi as starknet_abi
-from starkware.starknet.services.api.contract_class import EntryPointType
+from starkware.starknet.services.api.contract_class.contract_class import EntryPointType
 from starkware.starkware_utils.error_handling import StarkException, stark_assert_le
 
 
@@ -38,6 +39,7 @@ def execute_fee_transfer(
         caller_address=tx_execution_context.account_contract_address,
         contract_address=fee_token_address,
         entry_point_selector=starknet_abi.TRANSFER_ENTRY_POINT_SELECTOR,
+        initial_gas=GasCost.INITIAL.value,
         entry_point_type=EntryPointType.EXTERNAL,
         calldata=[general_config.sequencer_address, actual_fee, 0],  # Recipient, amount (128-bit).
     )

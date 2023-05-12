@@ -14,7 +14,6 @@ struct GlobalValues {
     initial_pedersen_addr: felt,
     initial_rc_addr: felt,
     initial_bitwise_addr: felt,
-    initial_keccak_addr: felt,
     rc_min: felt,
     rc_max: felt,
 
@@ -26,13 +25,6 @@ struct GlobalValues {
     // Periodic columns.
     pedersen__points__x: felt,
     pedersen__points__y: felt,
-    keccak__keccak__keccak_round_key0: felt,
-    keccak__keccak__keccak_round_key1: felt,
-    keccak__keccak__keccak_round_key3: felt,
-    keccak__keccak__keccak_round_key7: felt,
-    keccak__keccak__keccak_round_key15: felt,
-    keccak__keccak__keccak_round_key31: felt,
-    keccak__keccak__keccak_round_key63: felt,
 
     // Interaction elements.
     memory__multi_column_perm__perm__interaction_elm: felt,

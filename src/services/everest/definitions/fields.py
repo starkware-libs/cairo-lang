@@ -6,15 +6,15 @@ from typing import Any, ClassVar, Dict, List, Optional
 import marshmallow.fields as mfields
 import marshmallow.utils
 from eth_typing import ChecksumAddress
-from web3 import Web3
 
 from services.everest.definitions import constants
 from starkware.crypto.signature.signature import FIELD_PRIME
+from starkware.eth.web3_wrapper import Web3
 from starkware.python.utils import initialize_random
 from starkware.starkware_utils.error_handling import StarkErrorCode
 from starkware.starkware_utils.field_validators import validate_non_negative
 from starkware.starkware_utils.marshmallow_dataclass_fields import StrictRequiredInteger
-from starkware.starkware_utils.validated_fields import Field, RangeValidatedField
+from starkware.starkware_utils.validated_fields import RangeValidatedField, ValidatedField
 
 # Fields data: validation data, dataclass metadata.
 tx_id_marshmallow_field = StrictRequiredInteger(validate=validate_non_negative("tx_id"))
@@ -22,7 +22,7 @@ tx_id_field_metadata = dict(marshmallow_field=tx_id_marshmallow_field)
 
 
 # Fact Registry Address.
-class EthAddressTypeField(Field[str]):
+class EthAddressTypeField(ValidatedField[str]):
     """
     A field representation of an Ethereum address.
     """
@@ -36,11 +36,12 @@ class EthAddressTypeField(Field[str]):
     def get_random_value(self, random_object: Optional[random.Random] = None) -> str:
         r = initialize_random(random_object=random_object)
         raw_address = "".join(r.choices(population=string.hexdigits, k=40))
-        return Web3.toChecksumAddress(value=f"0x{raw_address}")
+
+        return Web3.to_checksum_address(value=f"0x{raw_address}")  # type: ignore
 
     # Validation.
     def is_valid(self, value: str) -> bool:
-        return Web3.isChecksumAddress(value)
+        return Web3.is_checksum_address(value)  # type: ignore
 
     def get_invalid_values(self) -> List[str]:
         return [
@@ -65,7 +66,7 @@ class EthAddressTypeField(Field[str]):
         self.validate(value=value)
         # This won't change value. It will only allow the function to return value as return
         # ChecksumAddress.
-        return Web3.toChecksumAddress(value=value)
+        return Web3.to_checksum_address(value=value)  # type: ignore
 
     def format(self, value: str) -> str:
         return value
@@ -102,3 +103,7 @@ def felt(name_in_error_message: str) -> RangeValidatedField:
 
 def felt_metadata(name_in_error_message: str) -> Dict[str, Any]:
     return felt(name_in_error_message=name_in_error_message).metadata()
+
+
+def format_felt_list(felts: List[int]) -> str:
+    return f"[{', '.join([FeltField.format(felt) for felt in felts])}]"

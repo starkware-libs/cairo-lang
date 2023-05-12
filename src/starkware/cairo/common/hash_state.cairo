@@ -30,8 +30,8 @@ func hash_update{hash_ptr: HashBuiltin*}(
     hash_state_ptr: HashState*, data_ptr: felt*, data_length
 ) -> (new_hash_state_ptr: HashState*) {
     alloc_locals;
-    let (hash) = hash_update_inner(
-        data_ptr=data_ptr, data_length=data_length, hash=hash_state_ptr.current_hash
+    let (hash) = hash_felts_no_padding(
+        data_ptr=data_ptr, data_length=data_length, initial_hash=hash_state_ptr.current_hash
     );
     let (__fp__, _) = get_fp_and_pc();
     local new_hash_state: HashState;
@@ -74,12 +74,16 @@ func hash_finalize{hash_ptr: HashBuiltin*}(hash_state_ptr: HashState*) -> (hash:
 
 // A helper function for 'hash_update', see its documentation.
 // Computes the hash of an array of items, not including its length.
-// The hash is: hash(...hash(hash(data[0], data[1]), data[2])..., data[n-1]).
-func hash_update_inner{hash_ptr: HashBuiltin*}(data_ptr: felt*, data_length: felt, hash: felt) -> (
-    hash: felt
-) {
+// The hash is: hash(...hash(hash(initial_hash, data[0]), data[1])..., data[n-1]).
+//
+// NOTE: when this function is used directly (instead of using 'hash_update' and 'hash_finalize'),
+// one must make sure that the result is collision-resistant. For example, by including the length
+// in the outermost hash.
+func hash_felts_no_padding{hash_ptr: HashBuiltin*}(
+    data_ptr: felt*, data_length: felt, initial_hash: felt
+) -> (hash: felt) {
     if (data_length == 0) {
-        return (hash=hash);
+        return (hash=initial_hash);
     }
 
     // Compute 'data_last_ptr' before entering the loop.
@@ -95,7 +99,7 @@ func hash_update_inner{hash_ptr: HashBuiltin*}(data_ptr: felt*, data_length: fel
     let first_locals: LoopLocals* = cast(ap, LoopLocals*);
     first_locals.data_ptr = data_ptr, ap++;
     first_locals.hash_ptr = hash_ptr, ap++;
-    first_locals.cur_hash = hash, ap++;
+    first_locals.cur_hash = initial_hash, ap++;
 
     // Do{.
     hash_loop:
@@ -121,6 +125,14 @@ func hash_update_inner{hash_ptr: HashBuiltin*}(data_ptr: felt*, data_length: fel
     return (hash=final_locals.cur_hash);
 }
 
+// Hashing an arbitrary-length input has the risk of creating a hashing algorithm that is not
+// collision-resistant. Consider the following hashing algorithm of an array:
+//   h(a_1, ..., a_n) = h(h(a_1, a_2), ..., a_n)
+// and consider the following inputs: [2, 1, 0] and [h(2, 1), 0].
+// Both inputs produce the same hash.
+//
+// To resolve this we append the length of the input as the outermost hash, allowing `hash_felts`
+// to retain the collision resistance of `hash2`.
 func hash_felts{hash_ptr: HashBuiltin*}(data: felt*, length: felt) -> (hash: felt) {
     let (hash_state_ptr: HashState*) = hash_init();
     let (hash_state_ptr) = hash_update(

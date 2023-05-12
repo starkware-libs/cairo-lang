@@ -204,6 +204,8 @@ class VirtualMachineBase(ABC):
         self.validated_memory.validate_existing_memory()
 
     def load_hints(self, program: Program, program_base: MaybeRelocatable):
+        # Avoid using 'self' in the lambda function (to avoid cyclic pointers).
+        prime = self.prime
         for pc, hints in program.hints.items():
             compiled_hints = []
             for hint_index, hint in enumerate(hints):
@@ -221,7 +223,7 @@ class VirtualMachineBase(ABC):
                             context=VmConstsContext(
                                 identifiers=program.identifiers,
                                 evaluator=ExpressionEvaluator(
-                                    self.prime, ap, fp, memory, program.identifiers
+                                    prime, ap, fp, memory, program.identifiers
                                 ).eval,
                                 reference_manager=program.reference_manager,
                                 flow_tracking_data=hint.flow_tracking_data,

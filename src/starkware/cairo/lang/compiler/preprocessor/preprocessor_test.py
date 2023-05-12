@@ -96,6 +96,16 @@ ret;
     )
 
 
+def test_pow_with_const_exponent():
+    code = """
+const A = 5;
+const B = 2 ** A;
+[ap] = B;
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert program.format() == "[ap] = 32;\n"
+
+
 def test_pow_failure():
     verify_exception(
         """\
@@ -624,7 +634,8 @@ func f{y, x}() -> (a: felt) {
 }
 """,
         """
-file:?:?: Cannot convert the implicit arguments of g to the implicit arguments of f.
+file:?:?: Tail calls require the implicit arguments of the callee to match the caller. \
+Consider separating the function call and the return statement.
     return g();
     ^*********^
 The implicit arguments of 'g' were defined here:
@@ -4919,4 +4930,23 @@ jmp rel 3 if [ap + (-1)] != 0;
 [ap] = [ap + (-4)] + [ap + (-3)], ap++;
 ret;
 """
+    )
+
+
+def test_missing_assert_failure():
+    verify_exception(
+        """
+func foo() -> felt {
+    [ap] = foo();
+    ret;
+}
+""",
+        """
+file:?:?: Invalid RHS expression.
+    [ap] = foo();
+           ^***^
+Preprocessed instruction:
+[ap] = foo()
+""",
+        exc_type=InstructionBuilderError,
     )

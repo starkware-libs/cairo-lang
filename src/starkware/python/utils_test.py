@@ -223,16 +223,22 @@ async def test_execute_coroutine_threadsafe():
     async def foo(x: int) -> int:
         return x
 
-    def sync_foo(x: int) -> int:
-        return execute_coroutine_threadsafe(coroutine=foo(x), loop=loop)
-
     # Positive flow - run in a separate thread.
     x = 5
-    assert x == await loop.run_in_executor(executor=None, func=functools.partial(sync_foo, x=x))
+    foo_coroutine = foo(x=x)
+    result = await loop.run_in_executor(
+        executor=None,
+        func=functools.partial(execute_coroutine_threadsafe, coroutine=foo_coroutine, loop=loop),
+    )
+    assert result == x
 
     # Negative flow - try to run in the main thread.
+    foo_coroutine = foo(x=x)
     with pytest.raises(AssertionError, match="Cannot run foo synchronously in main thread."):
-        sync_foo(x=x)
+        execute_coroutine_threadsafe(coroutine=foo_coroutine, loop=loop)
+
+    # Cleanup.
+    await foo_coroutine
 
 
 @pytest.mark.asyncio

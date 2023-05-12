@@ -1,17 +1,42 @@
 import functools
 import os
 
-from starkware.starknet.services.api.contract_class import ContractClass
+from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
+from starkware.starknet.services.api.contract_class.contract_class import (
+    CompiledClass,
+    CompiledClassEntryPoint,
+    DeprecatedCompiledClass,
+    EntryPointType,
+)
 
 
 @functools.lru_cache(maxsize=None)
-def get_contract_class(contract_name: str) -> ContractClass:
+def get_deprecated_compiled_class(contract_name: str) -> DeprecatedCompiledClass:
     main_dir_path = os.path.dirname(__file__)
     file_path = os.path.join(main_dir_path, contract_name + ".json")
 
     with open(file_path, "r") as fp:
-        return ContractClass.loads(data=fp.read())
+        return DeprecatedCompiledClass.loads(data=fp.read())
 
 
-def get_test_contract_class() -> ContractClass:
-    return get_contract_class("test_contract")
+def get_test_deprecated_compiled_class() -> DeprecatedCompiledClass:
+    return get_deprecated_compiled_class("test_contract")
+
+
+def get_test_compiled_class() -> CompiledClass:
+    return CompiledClass(
+        prime=DEFAULT_PRIME,
+        bytecode=[1, 2, 3],
+        hints=[],
+        pythonic_hints={},
+        compiler_version="",
+        entry_points_by_type={
+            EntryPointType.EXTERNAL: [
+                CompiledClassEntryPoint(selector=1, offset=1, builtins=["237"])
+            ],
+            EntryPointType.L1_HANDLER: [],
+            EntryPointType.CONSTRUCTOR: [
+                CompiledClassEntryPoint(selector=5, offset=0, builtins=[])
+            ],
+        },
+    )

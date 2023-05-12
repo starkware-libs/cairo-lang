@@ -41,14 +41,16 @@ def test_table_commitment(program, structs):
     vector_commitment_config = (
         structs.VectorCommitmentConfig(
             height=5,
+            n_verifier_friendly_commitment_layers=2,
         ),
     )
     commitment = structs.TableCommitment(
         vector_commitment=structs.VectorCommitment(
             config=structs.VectorCommitmentConfig(
                 height=5,
+                n_verifier_friendly_commitment_layers=2,
             ),
-            commitment_hash=575056728485645732317951179216147002053792710986,
+            commitment_hash=0x77814A8D523E263E544747B743D672CAA538A648BF7B85C7FD0C0F87C63D66D,
         ),
         config=structs.TableCommitmentConfig(
             n_columns=4,
@@ -65,6 +67,7 @@ def test_table_commitment(program, structs):
         "table_decommit",
         range_check_ptr=runner.range_check_builtin.base,
         blake2s_ptr=blake2s_ptr,
+        pedersen_ptr=runner.pedersen_builtin.base,
         bitwise_ptr=runner.bitwise_builtin.base,
         commitment=commitment,
         n_queries=len(queries),
@@ -76,11 +79,17 @@ def test_table_commitment(program, structs):
         witness=structs.TableCommitmentWitness(
             vector=structs.VectorCommitmentWitness(
                 n_authentications=6,
-                authentications=[8] * 12,
+                authentications=[8 * 2**128 + 8] * 6,
             ),
         ),
     )
-    (res_range_check_ptr, res_blake2s_ptr, res_bitwise_ptr) = runner.get_return_values(3)
+    (
+        res_range_check_ptr,
+        res_blake2s_ptr,
+        res_pedersen_ptr,
+        res_bitwise_ptr,
+    ) = runner.get_return_values(4)
     validate_builtin_usage(runner.range_check_builtin, res_range_check_ptr)
     assert res_blake2s_ptr.segment_index == blake2s_ptr.segment_index
+    validate_builtin_usage(runner.pedersen_builtin, res_pedersen_ptr)
     validate_builtin_usage(runner.bitwise_builtin, res_bitwise_ptr)

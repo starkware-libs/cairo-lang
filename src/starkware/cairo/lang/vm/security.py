@@ -1,9 +1,13 @@
+from typing import Optional
+
 from starkware.cairo.lang.vm.cairo_runner import CairoRunner
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
 from starkware.cairo.lang.vm.vm_exceptions import SecurityError
 
 
-def verify_secure_runner(runner: CairoRunner, verify_builtins=True):
+def verify_secure_runner(
+    runner: CairoRunner, verify_builtins: bool = True, program_segment_size: Optional[int] = None
+):
     """
     Verifies the complete run in runner is safe to relocate and run by another Cairo program.
     Checks that:
@@ -11,9 +15,13 @@ def verify_secure_runner(runner: CairoRunner, verify_builtins=True):
     * All segment offsets are non negative.
     * No access to builtin segments beyond the allowed region. This region is defined
       by the start ptr (0), and the ptr returned in final stack.
-    * No access to program segment beyond program data.
+    * No access to program segment beyond program data. The argument program_segment_size
+      can be used when additional data is added to the program
+      segment (that is not part of the core program).
     Note: The continuity of builtin segments is checked in builtin specific checks.
     """
+    if program_segment_size is None:
+        program_segment_size = len(runner.program.data)
 
     builtin_segments = runner.get_builtin_segments_info() if verify_builtins else {}
     builtin_segment_names = {seg.index: name for name, seg in builtin_segments.items()}
@@ -35,7 +43,7 @@ def verify_secure_runner(runner: CairoRunner, verify_builtins=True):
 
         # Check out of bounds for program segment.
         if addr.segment_index == runner.program_base.segment_index:
-            if not addr.offset < len(runner.program.data):
+            if not addr.offset < program_segment_size:
                 raise SecurityError(f"Out of bounds access to program segment at {addr}.")
 
         # Check memory value, to be consistent with the CairoPie validation done by SHARP.

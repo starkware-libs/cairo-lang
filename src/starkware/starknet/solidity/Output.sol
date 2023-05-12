@@ -28,8 +28,9 @@ library CommitmentTreeUpdateOutput {
 library StarknetOutput {
     uint256 internal constant MERKLE_UPDATE_OFFSET = 0;
     uint256 internal constant BLOCK_NUMBER_OFFSET = 2;
-    uint256 internal constant CONFIG_HASH_OFFSET = 3;
-    uint256 internal constant HEADER_SIZE = 4;
+    uint256 internal constant BLOCK_HASH_OFFSET = 3;
+    uint256 internal constant CONFIG_HASH_OFFSET = 4;
+    uint256 internal constant HEADER_SIZE = 5;
 
     uint256 constant MESSAGE_TO_L1_FROM_ADDRESS_OFFSET = 0;
     uint256 constant MESSAGE_TO_L1_TO_ADDRESS_OFFSET = 1;

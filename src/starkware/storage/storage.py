@@ -14,6 +14,7 @@ from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 logger = logging.getLogger(__name__)
 
 HASH_BYTES = 32
+MAX_OBJECT_SIZE_FOR_LOADING_IN_MAIN_THREAD = 2**20  # 1MB.
 HashFunctionType = Callable[[bytes, bytes], bytes]
 
 TDBObject = TypeVar("TDBObject", bound="DBObject")
@@ -159,7 +160,10 @@ class DBObject(Serializable):
         if result is None:
             return None
 
-        return cls.deserialize(result)
+        if len(result) > MAX_OBJECT_SIZE_FOR_LOADING_IN_MAIN_THREAD:
+            return await asyncio.get_event_loop().run_in_executor(None, cls.deserialize, result)
+        else:
+            return cls.deserialize(data=result)
 
     @classmethod
     async def get_or_fail(cls: Type[TDBObject], storage: Storage, suffix: bytes) -> TDBObject:
@@ -170,7 +174,10 @@ class DBObject(Serializable):
         db_key = cls.db_key(suffix=suffix)
         result = await storage.get_value_or_fail(key=db_key)
 
-        return cls.deserialize(data=result)
+        if len(result) > MAX_OBJECT_SIZE_FOR_LOADING_IN_MAIN_THREAD:
+            return await asyncio.get_event_loop().run_in_executor(None, cls.deserialize, result)
+        else:
+            return cls.deserialize(data=result)
 
     async def set(self, storage: Storage, suffix: bytes):
         serialized = await asyncio.get_event_loop().run_in_executor(None, self.serialize)
@@ -250,6 +257,9 @@ class IndexedDBObject(DBObject):
         return db_object_or_aborted
 
     async def set_obj(self, storage: Storage, index: int):
+        """
+        Stores object in storage with given index.
+        """
         await self.set(storage=storage, suffix=str(index).encode("ascii"))
 
     async def setnx_obj(self, storage: Storage, index: int) -> bool:

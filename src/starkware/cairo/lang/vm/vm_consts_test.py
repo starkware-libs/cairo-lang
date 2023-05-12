@@ -157,6 +157,7 @@ def test_references():
 
     my_struct = TypeStruct(scope=scope("MyStruct"))
     my_struct_star = TypePointer(pointee=my_struct)
+    MY_STRUCT_SIZE = 20
     identifier_values = {
         scope("x.ref"): ReferenceDefinition(
             full_name=scope("x.ref"), cairo_type=TypeFelt(), references=[]
@@ -179,7 +180,7 @@ def test_references():
                 "member": MemberDefinition(offset=10, cairo_type=TypeFelt()),
                 "struct": MemberDefinition(offset=11, cairo_type=my_struct),
             },
-            size=11,
+            size=MY_STRUCT_SIZE,
         ),
     }
     identifiers = IdentifierManager.from_dict(identifier_values)
@@ -209,6 +210,9 @@ def test_references():
 
     assert consts.x.ref == memory[(ap - 2) + 1]
     assert consts.x.typeref.address_ == (ap - 1) + 1
+    assert consts.x.typeref[0].address_ == (ap - 1) + 1
+    assert consts.x.typeref[2].address_ == (ap - 1) + 1 + MY_STRUCT_SIZE * 2
+    assert consts.x.typeref[2].struct.address_ == (ap - 1) + 1 + MY_STRUCT_SIZE * 2 + 11
     assert consts.x.typeref.member == memory[(ap - 1) + 1 + 10]
     with pytest.raises(IdentifierError, match="'abc' is not a member of 'MyStruct'."):
         consts.x.typeref.abc
@@ -223,7 +227,7 @@ def test_references():
     with pytest.raises(AssertionError, match="Cannot change the value of a constant."):
         consts.MyStruct.member = 13
 
-    assert consts.MyStruct.SIZE == 11
+    assert consts.MyStruct.SIZE == MY_STRUCT_SIZE
     with pytest.raises(AssertionError, match="Cannot change the value of a constant."):
         consts.MyStruct.SIZE = 13
 

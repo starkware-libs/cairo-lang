@@ -20,7 +20,8 @@ async def postman(eth_test_utils: EthTestUtils) -> Postman:
 
 @pytest_asyncio.fixture
 async def test_contract(postman: Postman) -> StarknetContract:
-    return await postman.starknet.deploy(source=CONTRACT_FILE)
+    declare_info = await postman.starknet.deprecated_declare(source=CONTRACT_FILE)
+    return await postman.starknet.deploy(class_hash=declare_info.class_hash)
 
 
 @pytest.mark.asyncio
@@ -36,11 +37,14 @@ async def test_postman_l1_to_l2_positive_flow(
 
     nonce = postman.mock_starknet_messaging_contract.l1ToL2MessageNonce.call()
 
+    # Set fee as it is mandatory to be greater than 0.
+    transact_args = {"value": 4}
+
     postman.mock_starknet_messaging_contract.sendMessageToL2.transact(
-        test_contract.contract_address, selector, payload1
+        test_contract.contract_address, selector, payload1, transact_args=transact_args
     )
     postman.mock_starknet_messaging_contract.sendMessageToL2.transact(
-        test_contract.contract_address, selector, payload1
+        test_contract.contract_address, selector, payload1, transact_args=transact_args
     )
 
     msg_hashes = [
@@ -55,7 +59,10 @@ async def test_postman_l1_to_l2_positive_flow(
     ]
 
     for msg_hash in msg_hashes:
-        assert postman.mock_starknet_messaging_contract.l1ToL2Messages.call(msg_hash) == 1
+        assert (
+            postman.mock_starknet_messaging_contract.l1ToL2Messages.call(msg_hash)
+            == transact_args["value"] + 1
+        )
     await postman.flush()
     for msg_hash in msg_hashes:
         assert postman.mock_starknet_messaging_contract.l1ToL2Messages.call(msg_hash) == 0
@@ -70,7 +77,7 @@ async def test_postman_l1_to_l2_positive_flow(
     nonce += 2
     assert nonce == postman.mock_starknet_messaging_contract.l1ToL2MessageNonce.call()
     postman.mock_starknet_messaging_contract.sendMessageToL2.transact(
-        test_contract.contract_address, selector, payload2
+        test_contract.contract_address, selector, payload2, transact_args=transact_args
     )
 
     msg_hash2 = StarknetMessageToL2(
@@ -81,7 +88,10 @@ async def test_postman_l1_to_l2_positive_flow(
         nonce=nonce,
     ).get_hash()
 
-    assert postman.mock_starknet_messaging_contract.l1ToL2Messages.call(msg_hash2) == 1
+    assert (
+        postman.mock_starknet_messaging_contract.l1ToL2Messages.call(msg_hash2)
+        == transact_args["value"] + 1
+    )
     await postman.flush()
     assert postman.mock_starknet_messaging_contract.l1ToL2Messages.call(msg_hash2) == 0
 
@@ -93,13 +103,18 @@ async def test_postman_l1_to_l2_positive_flow(
 async def test_postman_l1_to_l2_another_mock_starknet_messaging_contract(
     postman: Postman, eth_test_utils: EthTestUtils
 ):
+    # Set fee as it is mandatory to be greater than 0.
+    transact_args = {"value": 4}
+
     other_messaging_contract = eth_test_utils.accounts[0].deploy(MockStarknetMessaging, 0)
     INVALID_L2_ADDRESS = 0
     INVALID_SELECTOR = 2
     # This message is sent into another StarknetMessaging contract and therefore shouldn't be
     # proccessed by postman. If it will be proccessed the test will fail because the address and
     # selector are invalid.
-    other_messaging_contract.sendMessageToL2.transact(INVALID_L2_ADDRESS, INVALID_SELECTOR, [3, 4])
+    other_messaging_contract.sendMessageToL2.transact(
+        INVALID_L2_ADDRESS, INVALID_SELECTOR, [3, 4], transact_args=transact_args
+    )
     await postman.flush()
 
 

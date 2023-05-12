@@ -5,6 +5,7 @@ from starkware.storage.names import generate_unique_key
 from starkware.storage.storage import Storage
 
 MAGIC_HEADER = hashlib.sha256(b"Gated storage magic header").digest()
+RECORD_LENGTH_BUFFER = 10240
 
 
 class GatedStorage(Storage):
@@ -37,7 +38,10 @@ class GatedStorage(Storage):
         if value[: len(MAGIC_HEADER)] != MAGIC_HEADER:
             # If the value starts with MAGIC_HEADER, treat the value as a large value; Hence, it
             # will be stored in the second storage.
-            if len(key) + len(value) <= self.limit:
+
+            # RECORD_LENGTH_BUFFER is added to the calculation in order to avoid edge cases where
+            # record metadata causes it to exceed the maximum allowed length.
+            if len(key) + len(value) + RECORD_LENGTH_BUFFER <= self.limit:
                 return key, value
 
         ukey = generate_unique_key(

@@ -2,8 +2,14 @@ import dataclasses
 import math
 
 import pytest
+from pytest import MonkeyPatch
 
-from starkware.python.test_utils import WithoutValidations, maybe_raises, without_validations
+from starkware.python.test_utils import (
+    WithoutValidations,
+    apply_and_stop,
+    maybe_raises,
+    without_validations,
+)
 
 
 def maybe_trigger_exception(error_message):
@@ -70,3 +76,26 @@ def test_recursive_without_validations():
     good_line.perform_validations()
     with pytest.raises(AssertionError):
         bad_line.perform_validations()
+
+
+class EndsWithError:
+    def ends_with_error(self, num: int):
+        self.foo(num=num)
+        1 / 0
+
+    def foo(self, num: int):
+        self.num = num
+
+
+@pytest.mark.asyncio
+def test_apply_and_stop(monkeypatch: MonkeyPatch):
+    obj = EndsWithError()
+    with pytest.raises(ZeroDivisionError):
+        obj.ends_with_error(num=1)
+
+    with apply_and_stop(obj=obj, last_func=obj.foo, monkeypatch=monkeypatch):
+        obj.ends_with_error(num=2)
+    assert obj.num == 2
+
+    with pytest.raises(ZeroDivisionError):
+        obj.ends_with_error(num=3)

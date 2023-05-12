@@ -1,6 +1,7 @@
 from starkware.cairo.common.math import assert_in_range
 from starkware.cairo.stark_verifier.air.layout import AirWithLayout
 from starkware.cairo.stark_verifier.core.table_commitment import TableCommitmentConfig
+from starkware.cairo.stark_verifier.core.vector_commitment import validate_vector_commitment
 
 const MAX_N_COLUMNS = 128;
 
@@ -19,7 +20,9 @@ func traces_config_validate{range_check_ptr}(
     assert_in_range(config.interaction.n_columns, 1, MAX_N_COLUMNS + 1);
     assert config.original.n_columns = air.layout.n_original_columns;
     assert config.interaction.n_columns = air.layout.n_interaction_columns;
-    assert config.original.vector.height = log_eval_domain_size;
-    assert config.interaction.vector.height = log_eval_domain_size;
+    validate_vector_commitment(config=config.original.vector, expected_height=log_eval_domain_size);
+    validate_vector_commitment(
+        config=config.interaction.vector, expected_height=log_eval_domain_size
+    );
     return ();
 }

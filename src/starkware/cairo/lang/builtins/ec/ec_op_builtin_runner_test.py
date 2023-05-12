@@ -42,33 +42,39 @@ func main{{ec_op_ptr: EcOpBuiltin*}}() {{
             q=EC_GEN,
             r=ec_add(SHIFT_POINT, ec_mult(3, EC_GEN, ALPHA, FIELD_PRIME), FIELD_PRIME),
         ),
-        layout="all",
+        layout="all_solidity",
     )
 
     # Test that the runner fails when the computaiton is successful but an incorrect r is given.
     with pytest.raises(VmException, match="Wrong result"):
-        compile_and_run(CODE_FORMAT.format(p=SHIFT_POINT, m=3, q=EC_GEN, r=(0, 0)), layout="all")
+        compile_and_run(
+            CODE_FORMAT.format(p=SHIFT_POINT, m=3, q=EC_GEN, r=(0, 0)), layout="all_solidity"
+        )
 
     # Test that the runner fails when either point is not on the curve.
     with pytest.raises(VmException, match="is not on the curve"):
         compile_and_run(
-            CODE_FORMAT.format(p=SHIFT_POINT, m=3, q=(123, 456), r=(0, 0)), layout="all"
+            CODE_FORMAT.format(p=SHIFT_POINT, m=3, q=(123, 456), r=(0, 0)),
+            layout="all_solidity",
         )
 
     with pytest.raises(VmException, match="is not on the curve"):
         compile_and_run(
-            CODE_FORMAT.format(p=(123, 456), m=3, q=SHIFT_POINT, r=(0, 0)), layout="all"
+            CODE_FORMAT.format(p=(123, 456), m=3, q=SHIFT_POINT, r=(0, 0)),
+            layout="all_solidity",
         )
 
     # Test that the runner fails when the builtin would try to add two points with the same x.
     with pytest.raises(VmException, match="Cannot apply EC operation"):
         compile_and_run(
-            CODE_FORMAT.format(p=SHIFT_POINT, m=3, q=MINUS_SHIFT_POINT, r=(0, 0)), layout="all"
+            CODE_FORMAT.format(p=SHIFT_POINT, m=3, q=MINUS_SHIFT_POINT, r=(0, 0)),
+            layout="all_solidity",
         )
 
     with pytest.raises(VmException, match="Cannot apply EC operation"):
         compile_and_run(
-            CODE_FORMAT.format(p=SHIFT_POINT, m=3, q=SHIFT_POINT, r=(0, 0)), layout="all"
+            CODE_FORMAT.format(p=SHIFT_POINT, m=3, q=SHIFT_POINT, r=(0, 0)),
+            layout="all_solidity",
         )
 
     with pytest.raises(VmException, match="Cannot apply EC operation"):
@@ -76,7 +82,7 @@ func main{{ec_op_ptr: EcOpBuiltin*}}() {{
             CODE_FORMAT.format(
                 p=ec_double(SHIFT_POINT, ALPHA, FIELD_PRIME), m=8, q=SHIFT_POINT, r=(0, 0)
             ),
-            layout="all",
+            layout="all_solidity",
         )
 
     # This should work because the partial sum changes after the first addition.
@@ -85,5 +91,5 @@ func main{{ec_op_ptr: EcOpBuiltin*}}() {{
             CODE_FORMAT.format(
                 p=ec_double(SHIFT_POINT, ALPHA, FIELD_PRIME), m=9, q=SHIFT_POINT, r=(0, 0)
             ),
-            layout="all",
+            layout="all_solidity",
         )

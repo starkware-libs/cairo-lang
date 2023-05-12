@@ -24,13 +24,45 @@ from starkware.starkware_utils.validated_fields import RangeValidatedField
 CastableToHash = Union[int, str]
 
 
+# Simulation-related.
+SKIP_VALIDATE = "skipValidate"
+
+
 class FeederGatewayClient(EverestFeederGatewayClient):
     """
     A client class for the StarkNet FeederGateway.
     """
 
+    async def get_number_of_transactions_in_backlog(self) -> JsonObject:
+        raw_response = await self._send_request(
+            send_method="GET", uri="/get_number_of_transactions_in_backlog"
+        )
+        return json.loads(raw_response)
+
+    async def get_oldest_transaction_age(self) -> JsonObject:
+        raw_response = await self._send_request(
+            send_method="GET", uri="/get_oldest_transaction_age"
+        )
+        return json.loads(raw_response)
+
+    async def get_compiled_class_by_class_hash(
+        self,
+        class_hash: str,
+        block_hash: Optional[CastableToHash] = None,
+        block_number: Optional[BlockIdentifier] = None,
+    ) -> JsonObject:
+        formatted_block_named_argument = get_formatted_block_named_argument(
+            block_hash=block_hash, block_number=block_number
+        )
+        uri = (
+            "/get_compiled_class_by_class_hash?"
+            f"classHash={class_hash}&{formatted_block_named_argument}"
+        )
+        raw_response = await self._send_request(send_method="GET", uri=uri)
+        return json.loads(raw_response)
+
     async def get_contract_addresses(self) -> Dict[str, str]:
-        raw_response = await self._send_request(send_method="GET", uri=f"/get_contract_addresses")
+        raw_response = await self._send_request(send_method="GET", uri="/get_contract_addresses")
         return json.loads(raw_response)
 
     async def call_contract(
@@ -54,13 +86,14 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         tx: AccountTransaction,
         block_hash: Optional[CastableToHash] = None,
         block_number: Optional[BlockIdentifier] = None,
+        skip_validate: bool = False,
     ) -> FeeEstimationInfo:
-        formatted_block_named_argument = get_formatted_block_named_argument(
-            block_hash=block_hash, block_number=block_number
+        formatted_simulate_tx_arguments = get_formatted_simulate_tx_arguments(
+            block_hash=block_hash, block_number=block_number, skip_validate=skip_validate
         )
         raw_response = await self._send_request(
             send_method="POST",
-            uri=f"/estimate_fee?{formatted_block_named_argument}",
+            uri=f"/estimate_fee?{formatted_simulate_tx_arguments}",
             data=AccountTransaction.Schema().dumps(obj=tx),
         )
         return FeeEstimationInfo.loads(data=raw_response)
@@ -70,16 +103,17 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         txs: List[AccountTransaction],
         block_hash: Optional[CastableToHash] = None,
         block_number: Optional[BlockIdentifier] = None,
+        skip_validate: bool = False,
     ) -> List[FeeEstimationInfo]:
-        formatted_block_named_argument = get_formatted_block_named_argument(
-            block_hash=block_hash, block_number=block_number
+        formatted_simulate_tx_arguments = get_formatted_simulate_tx_arguments(
+            block_hash=block_hash, block_number=block_number, skip_validate=skip_validate
         )
         raw_response = await self._send_request(
             send_method="POST",
-            uri=f"/estimate_fee_bulk?{formatted_block_named_argument}",
+            uri=f"/estimate_fee_bulk?{formatted_simulate_tx_arguments}",
             data=AccountTransaction.Schema().dumps(obj=txs, many=True),
         )
-        return FeeEstimationInfo.Schema().load(data=raw_response, many=True)
+        return FeeEstimationInfo.Schema().loads(json_data=raw_response, many=True)
 
     async def estimate_message_fee(
         self,
@@ -102,13 +136,14 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         tx: AccountTransaction,
         block_hash: Optional[CastableToHash] = None,
         block_number: Optional[BlockIdentifier] = None,
+        skip_validate: bool = False,
     ) -> TransactionSimulationInfo:
-        formatted_block_named_argument = get_formatted_block_named_argument(
-            block_hash=block_hash, block_number=block_number
+        formatted_simulate_tx_arguments = get_formatted_simulate_tx_arguments(
+            block_hash=block_hash, block_number=block_number, skip_validate=skip_validate
         )
         raw_response = await self._send_request(
             send_method="POST",
-            uri=f"/simulate_transaction?{formatted_block_named_argument}",
+            uri=f"/simulate_transaction?{formatted_simulate_tx_arguments}",
             data=AccountTransaction.Schema().dumps(obj=tx),
         )
         return TransactionSimulationInfo.loads(data=raw_response)
@@ -212,12 +247,20 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         raw_response = await self._send_request(send_method="GET", uri=uri)
         return json.loads(raw_response)
 
-    async def get_class_by_hash(self, class_hash: str) -> JsonObject:
+    async def get_class_by_hash(
+        self,
+        class_hash: str,
+        block_hash: Optional[CastableToHash] = None,
+        block_number: Optional[BlockIdentifier] = None,
+    ) -> JsonObject:
         """
         Returns the contract class deployed under the given class hash.
         A plain JSON is returned, rather than the Python object, to save loading time.
         """
-        uri = f"/get_class_by_hash?classHash={class_hash}"
+        formatted_block_named_argument = get_formatted_block_named_argument(
+            block_hash=block_hash, block_number=block_number
+        )
+        uri = f"/get_class_by_hash?classHash={class_hash}&{formatted_block_named_argument}"
         raw_response = await self._send_request(send_method="GET", uri=uri)
         return json.loads(raw_response)
 
@@ -338,3 +381,19 @@ def get_formatted_block_named_argument(
         return f"blockNumber={block_number_str}"
     else:
         return f"blockHash={format_hash(hash_value=block_hash, hash_field=fields.BlockHashField)}"
+
+
+def get_formatted_simulate_tx_arguments(
+    block_hash: Optional[CastableToHash],
+    block_number: Optional[BlockIdentifier],
+    skip_validate: bool,
+) -> str:
+    """
+    Returns formatted simulate transaction arguments, corresponding to the request's arguments.
+    """
+    formatted_block_named_argument = get_formatted_block_named_argument(
+        block_hash=block_hash, block_number=block_number
+    )
+    formatted_simulation_flags = f"{SKIP_VALIDATE}={json.dumps(skip_validate)}"
+
+    return "&".join([formatted_block_named_argument, formatted_simulation_flags])

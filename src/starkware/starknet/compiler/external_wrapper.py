@@ -45,7 +45,7 @@ from starkware.starknet.compiler.data_encoder import (
 )
 from starkware.starknet.definitions import constants
 from starkware.starknet.public.abi import DEFAULT_ENTRY_POINT_NAME, DEFAULT_L1_ENTRY_POINT_NAME
-from starkware.starknet.services.api.contract_class import SUPPORTED_BUILTINS
+from starkware.starknet.services.api.contract_class.contract_class import SUPPORTED_BUILTINS
 
 RAW_INPUT_DECORATOR = "raw_input"
 RAW_OUTPUT_DECORATOR = "raw_output"

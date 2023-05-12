@@ -449,3 +449,22 @@ func get_tx_info{syscall_ptr: felt*}() -> (tx_info: TxInfo*) {
     let syscall_ptr = syscall_ptr + GetTxInfo.SIZE;
     return (tx_info=response.tx_info);
 }
+
+const REPLACE_CLASS_SELECTOR = 'ReplaceClass';
+
+// Describes the ReplaceClass system call format.
+struct ReplaceClass {
+    // The system call selector (= GET_REPLACE_CLASS_SELECTOR).
+    selector: felt,
+    // The new class hash for the contract.
+    class_hash: felt,
+}
+
+func replace_class{syscall_ptr: felt*}(class_hash: felt) {
+    assert [cast(syscall_ptr, ReplaceClass*)] = ReplaceClass(
+        selector=REPLACE_CLASS_SELECTOR, class_hash=class_hash
+    );
+    %{ syscall_handler.replace_class(segments=segments, syscall_ptr=ids.syscall_ptr) %}
+    let syscall_ptr = syscall_ptr + ReplaceClass.SIZE;
+    return ();
+}

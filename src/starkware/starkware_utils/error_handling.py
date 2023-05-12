@@ -22,7 +22,7 @@ class ErrorCode(Enum):
 class StarkErrorCode(ErrorCode):
     #: Api function temporarily disabled.
     API_FUNCTION_TEMPORARILY_DISABLED = 0
-    #: Bach was aborted.
+    #: Batch was aborted.
     BATCH_ABORTED = auto()
     #: Batch creation failure; batch currently cannot be created.
     BATCH_CREATION_FAILURE = auto()
@@ -50,6 +50,8 @@ class StarkErrorCode(ErrorCode):
     INVALID_COMMITTEE_MEMBER = auto()
     #: StarkEx contracts information missing or corrupt.
     INVALID_CONTRACT_ADDRESS = auto()
+    #: StarkEx contracts returns invalid response.
+    INVALID_CONTRACT_RESPONSE = auto()
     #: StarkEx deployment information missing or corrupt.
     INVALID_DEPLOYMENT_INFO = auto()
     #: Invalid eth address.
@@ -58,6 +60,8 @@ class StarkErrorCode(ErrorCode):
     INVALID_FACT = auto()
     #: Fee taken is too high.
     INVALID_FEE_TAKEN = auto()
+    #: Invalid multi asset trade.
+    INVALID_MULTI_ASSET_TRADE = auto()
     #: Invalid multi transaction.
     INVALID_MULTI_TRANSACTION = auto()
     #: Invalid order ID.
@@ -90,6 +94,8 @@ class StarkErrorCode(ErrorCode):
     MIGRATED_PIPELINE_OBJECT_MISSING = auto()
     #: The chain ID does not exist in storage.
     MISSING_BLOCKCHAIN_ID = auto()
+    #: The required endpoint configuration is not available in the DB.
+    MISSING_ENDPOINT_CONFIGURATION = auto()
     #: One of the fee objects is missing while the other exists.
     MISSING_FEE_OBJECT = auto()
     #: Nested multi-transaction (multi-transaction inside multi-transaction)
@@ -122,6 +128,8 @@ class StarkErrorCode(ErrorCode):
     OUT_OF_RANGE_PUBLIC_KEY = auto()
     #: Signature subfield is out of range.
     OUT_OF_RANGE_SIGNATURE_SUBFIELD = auto()
+    #: System ID value is out of range.
+    OUT_OF_RANGE_SYSTEM_ID = auto()
     #: Token ID value is out of range.
     OUT_OF_RANGE_TOKEN_ID = auto()
     #: Vault ID value is out of range.

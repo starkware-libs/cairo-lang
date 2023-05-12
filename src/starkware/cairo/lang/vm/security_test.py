@@ -5,7 +5,7 @@ from starkware.cairo.lang.vm.cairo_runner import get_runner_from_code
 from starkware.cairo.lang.vm.crypto import get_crypto_lib_context_manager
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
 from starkware.cairo.lang.vm.security import verify_secure_runner
-from starkware.cairo.lang.vm.vm_exceptions import SecurityError
+from starkware.cairo.lang.vm.vm_exceptions import InconsistentAutoDeductionError, SecurityError
 
 
 def run_code_in_runner(code, layout="plain"):
@@ -127,4 +127,28 @@ func main{pedersen_ptr}() {
 """,
                 layout="small",
             )
+        )
+
+    # Invalid builtin output.
+    with pytest.raises(
+        InconsistentAutoDeductionError,
+        match=r"Inconsistent auto deduction rule at address \d+:4. 17 != 137693795251028017\d+\.",
+    ):
+        run_code_in_runner(
+            """
+%builtins poseidon
+
+from starkware.cairo.common.cairo_builtins import PoseidonBuiltin
+func main{poseidon_ptr: PoseidonBuiltin*}() {
+    assert poseidon_ptr.output.s1 = 17;
+
+    assert poseidon_ptr.input.s0 = 0;
+    assert poseidon_ptr.input.s1 = 1;
+    assert poseidon_ptr.input.s2 = 2;
+
+    let poseidon_ptr = poseidon_ptr + PoseidonBuiltin.SIZE;
+    return ();
+}
+""",
+            layout="starknet",
         )

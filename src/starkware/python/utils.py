@@ -32,12 +32,16 @@ from typing import (
 )
 
 import yaml
-from typing_extensions import Literal, Protocol
+from typing_extensions import Literal, ParamSpec, Protocol
 
 # All functions with stubs are imported from this module.
 from starkware.python.utils_stub_module import *  # noqa
 
+DIR = os.path.dirname(__file__)
+
+
 T = TypeVar("T")
+P = ParamSpec("P")
 K = TypeVar("K")
 V = TypeVar("V")
 TAsyncGenerator = TypeVar("TAsyncGenerator", bound=AsyncGenerator)
@@ -107,17 +111,38 @@ def get_package_path():
     return os.path.abspath(os.path.join(os.path.dirname(starkware.python.__file__), "../../"))
 
 
+def climb(path: str, levels_to_climb: int = 1) -> str:
+    """
+    Returns a path of k-parent.
+
+    for example:
+        climb(path="src/starkware/python/utils.py" ,levels_to_climb=2)
+        returns "src/starkware"
+    """
+    result = path
+    for _ in range(levels_to_climb):
+        result = os.path.dirname(result)
+
+    return result
+
+
 def get_build_dir_path(rel_path=""):
     """
     Returns a path to a file inside the build directory (or the docker).
-    rel_path is the relative path of the file with respect to the build directory.
+
+    rel_path is the relative path of the file with respect to the build
+    directory.
     """
-    if "BUILD_ROOT" in os.environ:
-        return os.path.join(os.environ["BUILD_ROOT"], rel_path)
 
-    from bazel_tools.tools.python.runfiles import runfiles
+    if "RUNFILES_DIR" in os.environ:
+        build_root = os.path.join(os.environ["RUNFILES_DIR"], "__main__")
+    elif "BUILD_ROOT" in os.environ:
+        build_root = os.environ["BUILD_ROOT"]
+    else:
+        assert DIR.endswith("starkware/python"), f"Wrong path : DIR = {DIR}"
+        build_root = climb(path=DIR, levels_to_climb=3)
 
-    return runfiles.Create().Rlocation(os.path.join("__main__", rel_path))
+    return os.path.join(build_root, rel_path)
 
 
 def get_source_dir_path(rel_path: str = "", default_value: Optional[str] = None):
@@ -125,6 +150,7 @@ def get_source_dir_path(rel_path: str = "", default_value: Optional[str] = None)
     Returns a path to a file inside the source directory. Does not work in docker.
     rel_path is the relative path of the file with respect to the source directory.
     """
+
     if "BUILD_ROOT" in os.environ:
         source_root = os.path.join(os.environ["BUILD_ROOT"], "../../")
         assert os.path.exists(os.path.join(source_root, "src"))
@@ -404,14 +430,6 @@ def from_bytes(
     return int.from_bytes(value, byteorder=byte_order, signed=signed)
 
 
-def from_hex_str_to_bytes_str(hex_str: str) -> str:
-    return to_bytes(int(hex_str, 16)).hex()
-
-
-def from_hex_str_to_decimal_str(hex_str: str) -> str:
-    return str(int(hex_str, 16))
-
-
 def blockify(data, chunk_size: int) -> Iterable:
     """
     Returns the given data partitioned to chunks of chunks_size (last chunk might be smaller).
@@ -575,8 +593,8 @@ class aclosing(contextlib.AbstractAsyncContextManager, Generic[TAsyncGenerator])
 
 
 def aclosing_context_manager(
-    function: Callable[..., TAsyncGenerator]
-) -> Callable[..., AsyncContextManager[TAsyncGenerator]]:
+    function: Callable[P, TAsyncGenerator]
+) -> Callable[P, AsyncContextManager[TAsyncGenerator]]:
     """
     Wraps a function that returns an async generator with aclosing context manager.
     """
@@ -594,6 +612,14 @@ async def aenumerate(aiterable: AsyncIterable[T], start: int = 0) -> AsyncIterat
     counter = itertools.count(start)
     async for element in aiterable:
         yield next(counter), element
+
+
+def from_hex_str_to_bytes_str(hex_str: str) -> str:
+    return to_bytes(int(hex_str, 16)).hex()
+
+
+def from_hex_str_to_decimal_str(hex_str: str) -> str:
+    return str(int(hex_str, 16))
 
 
 def subtract_mappings(a: Mapping[K, V], b: Mapping[K, V]) -> Mapping[K, V]:

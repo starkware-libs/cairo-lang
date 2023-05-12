@@ -46,8 +46,12 @@ def test_mock_consume_message_to_l2(eth_test_utils, mock_starknet_contract):
     msg_hash = msg.get_hash()
     assert mock_starknet_contract.l1ToL2Messages.call(msg_hash) == 0
 
-    mock_starknet_contract.sendMessageToL2.transact(l2_address, selector, payload)
-    assert mock_starknet_contract.l1ToL2Messages.call(msg_hash) == 1
+    # Set fee as it is mandatory to be greater than 0.
+    transact_args = {"value": 4}
+    mock_starknet_contract.sendMessageToL2.transact(
+        l2_address, selector, payload, transact_args=transact_args
+    )
+    assert mock_starknet_contract.l1ToL2Messages.call(msg_hash) == transact_args["value"] + 1
 
     mock_starknet_contract.mockConsumeMessageToL2.transact(
         int(l1_address, 16),

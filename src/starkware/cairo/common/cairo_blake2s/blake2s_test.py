@@ -38,7 +38,7 @@ def structs(program: Program) -> CairoStructProxy:
 
 
 def test_blake_round(program):
-    runner = CairoFunctionRunner(program, layout="all")
+    runner = CairoFunctionRunner(program, layout="all_solidity")
 
     state = [random.randrange(0, 2**32) for i in range(16)]
     message = [random.randrange(0, 2**32) for i in range(16)]
@@ -65,7 +65,7 @@ def test_compress(program):
     N_INSTANCES = 7
     SHIFT = 35
 
-    runner = CairoFunctionRunner(program, layout="all")
+    runner = CairoFunctionRunner(program, layout="all_solidity")
 
     h = [[random.randrange(0, 2**32) for _ in range(8)] for _ in range(N_INSTANCES)]
     message = [[random.randrange(0, 2**32) for _ in range(16)] for _ in range(N_INSTANCES)]
@@ -125,7 +125,7 @@ def test_blake2s_func(program, n_bytes):
             h = next_state
 
     def run_func(func_name: str, n_rets: int, has_bitwise: bool):
-        runner = CairoFunctionRunner(program, layout="all")
+        runner = CairoFunctionRunner(program, layout="all_solidity")
         blake2s_ptr = runner.segments.add()
         runner.run(
             func_name,
@@ -164,7 +164,7 @@ def test_blake2s_func(program, n_bytes):
 @pytest.mark.parametrize("n", [0, 1, 6, 7, 8, 13, 14, 15])
 def test_finalize_blake2s(program, n):
     random.seed(0)
-    runner = CairoFunctionRunner(program, layout="all")
+    runner = CairoFunctionRunner(program, layout="all_solidity")
 
     values = []
     for _ in range(n):
@@ -196,7 +196,7 @@ def test_finalize_blake2s(program, n):
 @pytest.mark.parametrize("n", [0, 1, 7])
 def test_run_and_finalize_blake2s(program, n):
     random.seed(0)
-    runner = CairoFunctionRunner(program, layout="all")
+    runner = CairoFunctionRunner(program, layout="all_solidity")
 
     values = [
         bytes([random.randrange(256) for _ in range(random.randrange(257))]) for _ in range(n)
@@ -230,7 +230,7 @@ def cairo_blake_representation(data: bytes):
 
 @pytest.mark.parametrize("big_endian", [False, True])
 def test_blake2s_add_uint256(program, structs, big_endian: bool):
-    runner = CairoFunctionRunner(program, layout="all")
+    runner = CairoFunctionRunner(program, layout="all_solidity")
     num = random.randrange(2**256)
     data = runner.segments.add()
 
@@ -254,7 +254,7 @@ def test_blake2s_add_uint256(program, structs, big_endian: bool):
 
 @pytest.mark.parametrize("big_endian", [False, True])
 def test_blake2s_add_felts(program, structs, big_endian: bool):
-    runner = CairoFunctionRunner(program, layout="all")
+    runner = CairoFunctionRunner(program, layout="all_solidity")
     nums = [random.randrange(DEFAULT_PRIME) for _ in range(5)]
     data = runner.segments.add()
 
@@ -277,7 +277,7 @@ def test_blake2s_add_felts(program, structs, big_endian: bool):
 
 @pytest.mark.parametrize("big_endian", [False, True])
 def test_blake2s_felts(program, big_endian: bool):
-    runner = CairoFunctionRunner(program, layout="all")
+    runner = CairoFunctionRunner(program, layout="all_solidity")
     nums = [random.randrange(DEFAULT_PRIME) for _ in range(5)]
 
     blake2s_ptr = runner.segments.add()

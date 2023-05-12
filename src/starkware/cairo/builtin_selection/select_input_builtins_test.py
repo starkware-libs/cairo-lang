@@ -2,10 +2,9 @@ import os
 
 import pytest
 
-from starkware.cairo.common.test_utils import create_memory_struct
+from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.lang.builtins.all_builtins import ALL_BUILTINS
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
-from starkware.cairo.lang.vm.cairo_runner import CairoRunner
 from starkware.python.utils import from_bytes
 
 
@@ -25,9 +24,8 @@ def test_select_input_builtins(builtin_selection_indicators):
     """
     # Setup runner.
     cairo_file = os.path.join(os.path.dirname(__file__), "select_input_builtins.cairo")
-    runner = CairoRunner.from_file(cairo_file, DEFAULT_PRIME)
+    runner = CairoFunctionRunner.from_file(cairo_file, DEFAULT_PRIME)
     runner.initialize_segments()
-
     builtin_bases = [runner.segments.add() for builtin in ALL_BUILTINS]
 
     # Setup function.
@@ -41,30 +39,23 @@ def test_select_input_builtins(builtin_selection_indicators):
         if is_builtin_selected
     ]
 
-    selected_builtins = [
+    all_encodings = list(builtins_encoding.values())
+    n_selected_builtins = len(selected_builtin_encodings)
+
+    runner.run(
+        "select_input_builtins",
+        all_encodings=all_encodings,
+        all_ptrs=builtin_bases,
+        n_all_builtins=len(all_encodings),
+        selected_encodings=selected_builtin_encodings,
+        n_selected_builtins=n_selected_builtins,
+    )
+
+    # Check result.
+    # 'select_input_builtins' should return the pointers to the selected builtins.
+    expected_selected_builtins = [
         builtin
         for builtin, is_builtin_selected in zip(builtin_bases, builtin_selection_indicators)
         if is_builtin_selected
     ]
-
-    all_encodings = create_memory_struct(runner, builtins_encoding.values())
-    selected_encodings = create_memory_struct(runner, selected_builtin_encodings)
-    all_ptrs = create_memory_struct(runner, builtin_bases)
-    n_builtins = len(selected_builtin_encodings)
-
-    args = [all_encodings, all_ptrs, selected_encodings, n_builtins]
-    end = runner.initialize_function_entrypoint("select_input_builtins", args)
-
-    # Setup context.
-    runner.initialize_vm(hint_locals={})
-    runner.run_until_pc(end)
-    runner.end_run()
-
-    # Check result.
-    context = runner.vm.run_context
-
-    # 'select_input_builtins' should return the pointers to the selected builtins.
-    return_values_addr = context.ap - n_builtins
-    assert [
-        context.memory[return_values_addr + i] for i in range(len(selected_builtins))
-    ] == selected_builtins
+    assert expected_selected_builtins == runner.get_return_values(n_ret=n_selected_builtins)

@@ -58,12 +58,20 @@ class SubstituteIdentifiers(ExpressionTransformer):
         )
 
     def visit_ExprPow(self, expr: ExprPow):
-        # Same as super().visit_ExprPow, except that we don't visit expr.b.
-        # The reason is that the exponent shouldn't be taken modulo PRIME, so we don't allow
-        # using identifiers in the exponent.
+        # Same as super().visit_ExprPow, except that we visit expr.b only if it is an
+        # identifier that is resolved to a const.
+        # The reason for the limitation is that expressions in Cairo are simplified modulo PRIME
+        # but the exponent shouldn't be taken modulo PRIME.
+        fixed_b = expr.b
+        if isinstance(expr.b, ExprIdentifier):
+            # If expr.b is an Identifier try to substitute it only it it is a const.
+            res = self.visit(expr.b)
+            if isinstance(res, ExprConst):
+                fixed_b = res
+
         return ExprPow(
             a=self.visit(expr.a),
-            b=expr.b,
+            b=fixed_b,
             notes=expr.notes,
             location=self.location_modifier(expr.location),
         )

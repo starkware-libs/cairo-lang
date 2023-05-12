@@ -265,20 +265,32 @@ class VmConsts(VmConstsBase):
 
 
 class VmConstsReference(VmConstsBase):
-    def __init__(self, *, reference_value, struct_name: ScopedName, **kw):
+    def __init__(
+        self,
+        *,
+        reference_value,
+        struct_name: Optional[ScopedName] = None,
+        struct_definition: Optional[StructDefinition] = None,
+        **kw,
+    ):
         """
         Constructs a VmConstsReference which allows accessing a typed reference fields.
         """
         super().__init__(**kw)
 
-        object.__setattr__(
-            self,
-            "_struct_definition",
-            get_struct_definition(
+        if struct_definition is None:
+            assert (
+                struct_name is not None
+            ), "Exactly one of 'struct_name' and 'struct_definition' must be specified."
+            struct_definition = get_struct_definition(
                 struct_name=struct_name, identifier_manager=self._context.identifiers
-            ),
-        )
+            )
+        else:
+            assert (
+                struct_name is None
+            ), "Exactly one of 'struct_name' and 'struct_definition' must be specified."
 
+        object.__setattr__(self, "_struct_definition", struct_definition)
         object.__setattr__(self, "_reference_value", reference_value)
         object.__setattr__(self, "address_", reference_value)
 
@@ -323,6 +335,13 @@ class VmConstsReference(VmConstsBase):
                     struct_name=expr_type.pointee.scope,
                     reference_value=self._context.memory[addr],
                 )
+
+    def __getitem__(self, idx: int):
+        return VmConstsReference(
+            context=self._context,
+            struct_definition=self._struct_definition,
+            reference_value=self.address_ + idx * self._struct_definition.size,
+        )
 
 
 def is_simple_type(expr_type: CairoType) -> bool:

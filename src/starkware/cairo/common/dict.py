@@ -41,11 +41,11 @@ class DictManager:
         )
         return base
 
-    def new_default_dict(self, segments, default_value):
+    def new_default_dict(self, segments, default_value, temp_segment: bool = False):
         """
         Creates a new Cairo default dictionary.
         """
-        base = segments.add()
+        base = segments.add_temp_segment() if temp_segment else segments.add()
         assert base.segment_index not in self.trackers
         self.trackers[base.segment_index] = DictTracker(
             data=defaultdict(lambda: default_value),

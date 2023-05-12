@@ -3,16 +3,18 @@ from typing import Callable, Sequence
 from starkware.cairo.common.hash_state import compute_hash_on_elements
 from starkware.cairo.lang.vm.crypto import pedersen_hash
 from starkware.python.utils import from_bytes
-from starkware.starknet.core.os.class_hash import compute_class_hash
+from starkware.starknet.core.os.contract_class.deprecated_class_hash import (
+    compute_deprecated_class_hash,
+)
 from starkware.starknet.definitions.constants import L2_ADDRESS_UPPER_BOUND
-from starkware.starknet.services.api.contract_class import ContractClass
+from starkware.starknet.services.api.contract_class.contract_class import DeprecatedCompiledClass
 
 CONTRACT_ADDRESS_PREFIX = from_bytes(b"STARKNET_CONTRACT_ADDRESS")
 
 
 def calculate_contract_address(
     salt: int,
-    contract_class: ContractClass,
+    contract_class: DeprecatedCompiledClass,
     constructor_calldata: Sequence[int],
     deployer_address: int,
     hash_function: Callable[[int, int], int] = pedersen_hash,
@@ -27,7 +29,9 @@ def calculate_contract_address(
     To avoid exceeding the maximum address we take modulus L2_ADDRESS_UPPER_BOUND of the above
     result.
     """
-    class_hash = compute_class_hash(contract_class=contract_class, hash_func=hash_function)
+    class_hash = compute_deprecated_class_hash(
+        contract_class=contract_class, hash_func=hash_function
+    )
     return calculate_contract_address_from_hash(
         salt=salt,
         class_hash=class_hash,

@@ -68,7 +68,7 @@ class SignatureBuiltinRunner(SimpleBuiltinRunner):
 
     def air_private_input(self, runner) -> Dict[str, Any]:
         res: Dict[int, Any] = {}
-        for (addr, signature) in self.signatures.items():
+        for addr, signature in self.signatures.items():
             addr_offset = addr - self.base
             idx = safe_div(addr_offset, CELLS_PER_SIGNATURE)
             pubkey = runner.vm_memory[addr]

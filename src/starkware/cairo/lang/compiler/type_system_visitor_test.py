@@ -285,7 +285,7 @@ def test_type_dot_op():
 
     identifiers = IdentifierManager.from_dict(identifier_dict)
 
-    for (orig_expr, simplified_expr, simplified_type) in [
+    for orig_expr, simplified_expr, simplified_type in [
         ("[cast(fp, T*)].t", "[fp]", "felt"),
         ("[cast(fp, T*)].s", "[fp + 1]", "S"),
         ("[cast(fp, T*)].sp", "[fp + 3]", "S*"),
@@ -379,7 +379,7 @@ def test_type_dot_op_named_tuples():
     identifiers = IdentifierManager()
     tuple_ref = "[cast(fp, (x: felt, y: (a: felt, b: felt), z: felt)*)]"
     tuple_ptr = "cast(fp, (x: felt, y: (a: felt, b: felt)*, z: felt)*)"
-    for (orig_expr, simplified_expr, simplified_type) in [
+    for orig_expr, simplified_expr, simplified_type in [
         (f"{tuple_ref}.x", "[fp]", "felt"),
         (f"{tuple_ref}.y", "[fp + 1]", "(a: felt, b: felt)"),
         (f"{tuple_ref}.y.a", "[fp + 1]", "felt"),

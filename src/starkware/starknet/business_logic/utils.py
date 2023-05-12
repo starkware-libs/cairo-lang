@@ -1,32 +1,44 @@
+import asyncio
 import contextlib
+import dataclasses
 import logging
 from typing import Dict, Iterable, List, Optional, Tuple, cast
 
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
+from starkware.cairo.lang.builtins.all_builtins import with_suffix
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
-from starkware.python.utils import sub_counters
+from starkware.python.utils import from_bytes, sub_counters, to_bytes
 from starkware.starknet.business_logic.execution.gas_usage import calculate_tx_gas_usage
 from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
+    CallResult,
+    ExecutionResourcesManager,
     ResourcesMapping,
     TransactionExecutionInfo,
 )
-from starkware.starknet.business_logic.execution.os_usage import get_additional_os_resources
-from starkware.starknet.business_logic.fact_state.contract_state_objects import ContractClassFact
-from starkware.starknet.business_logic.fact_state.state import ExecutionResourcesManager
+from starkware.starknet.business_logic.execution.os_usage import get_tx_additional_os_resources
+from starkware.starknet.business_logic.fact_state.contract_class_objects import (
+    CompiledClassFact,
+    ContractClassFact,
+    DeprecatedCompiledClassFact,
+)
 from starkware.starknet.business_logic.state.state import UpdatesTrackerState
 from starkware.starknet.business_logic.state.state_api import SyncState
 from starkware.starknet.definitions import constants, fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.transaction_type import TransactionType
 from starkware.starknet.public import abi as starknet_abi
-from starkware.starknet.services.api.contract_class import ContractClass, EntryPointType
+from starkware.starknet.services.api.contract_class.contract_class import (
+    CompiledClass,
+    ContractClass,
+    DeprecatedCompiledClass,
+)
 from starkware.starkware_utils.error_handling import (
     StarkException,
     stark_assert,
     wrap_with_stark_exception,
 )
-from starkware.storage.storage import FactFetchingContext
+from starkware.storage.storage import Fact, FactFetchingContext
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +49,7 @@ FEE_TRANSFER_N_STORAGE_CHANGES_TO_CHARGE = FEE_TRANSFER_N_STORAGE_CHANGES - 1
 VALIDATE_BLACKLISTED_SYSCALLS: Tuple[str, ...] = ("call_contract",)
 
 
-def get_return_values(runner: CairoFunctionRunner) -> List[int]:
+def get_call_result(runner: CairoFunctionRunner, initial_gas: int) -> CallResult:
     """
     Extracts the return values of a StarkNet contract function from the Cairo runner.
     """
@@ -47,8 +59,35 @@ def get_return_values(runner: CairoFunctionRunner) -> List[int]:
         logger=logger,
         exception_types=[Exception],
     ):
-        ret_data_size, ret_data_ptr = runner.get_return_values(2)
-        values = runner.memory.get_range(ret_data_ptr, ret_data_size)
+        return_values = runner.get_return_values(n_ret=5)
+        panic_result = return_values[2:]
+        # Corresponds to the Cairo 1.0 enum:
+        # enum PanicResult<Array::<felt>> { Ok: Array::<felt>, Err: Array::<felt>, }.
+        failure_flag, retdata_start, retdata_end = panic_result
+        retdata = runner.memory.get_range(addr=retdata_start, size=retdata_end - retdata_start)
+
+    gas = return_values[0]
+
+    return CallResult.create(
+        initial_gas=initial_gas,
+        updated_gas=gas,
+        failure_flag=failure_flag,
+        retdata=retdata,
+    )
+
+
+def get_call_result_for_version0_class(runner: CairoFunctionRunner) -> CallResult:
+    """
+    Extracts the return values of a StarkNet contract function from the Cairo runner.
+    """
+    with wrap_with_stark_exception(
+        code=StarknetErrorCode.INVALID_RETURN_DATA,
+        message="Error extracting return data.",
+        logger=logger,
+        exception_types=[Exception],
+    ):
+        retdata_size, retdata_ptr = runner.get_return_values(2)
+        values = runner.memory.get_range(retdata_ptr, retdata_size)
 
     stark_assert(
         all(isinstance(value, int) for value in values),
@@ -56,10 +95,12 @@ def get_return_values(runner: CairoFunctionRunner) -> List[int]:
         message="Return data expected to be non-relocatable.",
     )
 
-    return cast(List[int], values)
+    return CallResult.create(initial_gas=0, updated_gas=0, failure_flag=0, retdata=values)
 
 
-def verify_version(version: int, only_query: bool, old_supported_versions: List[int]):
+def verify_version(
+    version: int, expected_version: int, only_query: bool, old_supported_versions: List[int]
+):
     """
     Validates the given transaction version.
 
@@ -67,8 +108,7 @@ def verify_version(version: int, only_query: bool, old_supported_versions: List[
     If True, the transaction is assumed to be used for query rather than
     being invoked in the StarkNet OS.
     """
-    assert constants.TRANSACTION_VERSION == 1
-    allowed_versions = [*old_supported_versions, constants.TRANSACTION_VERSION]
+    allowed_versions = [*old_supported_versions, expected_version]
     if only_query:
         error_code = StarknetErrorCode.INVALID_TRANSACTION_QUERYING_VERSION
         allowed_versions += [constants.QUERY_VERSION_BASE + v for v in allowed_versions]
@@ -166,13 +206,14 @@ def calculate_tx_resources(
     Used for transaction fee; calculation is made as if the transaction is the first in batch, for
     consistency.
     """
-    (n_modified_contracts, n_storage_changes) = state.count_actual_storage_changes()
+    (
+        n_modified_contracts,
+        n_storage_changes,
+        n_class_updates,
+        _n_nonce_updates,
+    ) = state.count_actual_updates()
 
     non_optional_call_infos = [call for call in call_infos if call is not None]
-    n_deployments = 0
-    for call_info in non_optional_call_infos:
-        n_deployments += get_call_n_deployments(call_info=call_info)
-
     l2_to_l1_messages = []
     for call_info in non_optional_call_infos:
         l2_to_l1_messages += call_info.get_sorted_l2_to_l1_messages()
@@ -182,13 +223,26 @@ def calculate_tx_resources(
         n_modified_contracts=n_modified_contracts,
         n_storage_changes=n_storage_changes + FEE_TRANSFER_N_STORAGE_CHANGES_TO_CHARGE,
         l1_handler_payload_size=l1_handler_payload_size,
-        n_deployments=n_deployments,
+        n_class_updates=n_class_updates,
     )
 
-    cairo_usage = resources_manager.cairo_usage
+    cairo_usage_with_segment_arena_builtin = resources_manager.cairo_usage
+    # "segment_arena" built-in is not a SHARP built-in - i.e., it is not part of any proof layout.
+    # Each instance requires approximately 10 steps in the OS.
+    builtin_instance_counter = dict(cairo_usage_with_segment_arena_builtin.builtin_instance_counter)
+    n_steps = cairo_usage_with_segment_arena_builtin.n_steps + 10 * builtin_instance_counter.pop(
+        with_suffix("segment_arena"), 0
+    )
+    cairo_usage = dataclasses.replace(
+        cairo_usage_with_segment_arena_builtin,
+        n_steps=n_steps,
+        builtin_instance_counter=builtin_instance_counter,
+    )
     tx_syscall_counter = resources_manager.syscall_counter
     # Add additional Cairo resources needed for the OS to run the transaction.
-    cairo_usage += get_additional_os_resources(syscall_counter=tx_syscall_counter, tx_type=tx_type)
+    cairo_usage += get_tx_additional_os_resources(
+        syscall_counter=tx_syscall_counter, tx_type=tx_type
+    )
 
     return dict(l1_gas_usage=l1_gas_usage, **cairo_usage.filter_unused_builtins().to_dict())
 
@@ -198,10 +252,10 @@ def extract_l1_gas_and_cairo_usage(resources: ResourcesMapping) -> Tuple[int, Re
     return cairo_resource_usage.pop("l1_gas_usage"), cairo_resource_usage
 
 
-def get_deployed_class_hash_at_address(state: SyncState, contract_address: int) -> bytes:
+def get_deployed_class_hash_at_address(state: SyncState, contract_address: int) -> int:
     class_hash = state.get_class_hash_at(contract_address=contract_address)
     stark_assert(
-        class_hash != constants.UNINITIALIZED_CLASS_HASH,
+        to_bytes(class_hash) != constants.UNINITIALIZED_CLASS_HASH,
         code=StarknetErrorCode.UNINITIALIZED_CONTRACT,
         message=(
             "Requested contract address "
@@ -216,22 +270,27 @@ def validate_contract_deployed(state: SyncState, contract_address: int):
     get_deployed_class_hash_at_address(state=state, contract_address=contract_address)
 
 
-async def write_contract_class_fact(
-    contract_class: ContractClass, ffc: FactFetchingContext
+async def write_class_facts(
+    ffc: FactFetchingContext, contract_class: ContractClass, compiled_class: CompiledClass
+) -> Tuple[int, int]:
+    facts: List[Fact] = [
+        ContractClassFact(contract_class=contract_class),
+        CompiledClassFact(compiled_class=compiled_class),
+    ]
+    contract_class_hash, compiled_class_hash = await asyncio.gather(
+        *(fact.set_fact(ffc=ffc) for fact in facts)
+    )
+
+    return from_bytes(contract_class_hash), from_bytes(compiled_class_hash)
+
+
+async def write_deprecated_compiled_class_fact(
+    deprecated_compiled_class: DeprecatedCompiledClass, ffc: FactFetchingContext
 ) -> bytes:
-    contract_class_fact = ContractClassFact(contract_definition=contract_class)
-    return await contract_class_fact.set_fact(ffc=ffc)
-
-
-def get_call_n_deployments(call_info: CallInfo) -> int:
-    # The number of the contracts deployed in the transaction.
-    n_deployments = 0
-
-    for call_info in call_info.gen_call_topology():
-        if call_info.entry_point_type is EntryPointType.CONSTRUCTOR:
-            n_deployments += 1
-
-    return n_deployments
+    deprecated_compiled_class_fact = DeprecatedCompiledClassFact(
+        contract_definition=deprecated_compiled_class
+    )
+    return await deprecated_compiled_class_fact.set_fact(ffc=ffc)
 
 
 def get_validate_entrypoint_blacklisted_syscall_counter(

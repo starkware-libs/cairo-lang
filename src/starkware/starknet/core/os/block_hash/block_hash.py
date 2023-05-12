@@ -42,6 +42,7 @@ async def calculate_block_hash(
     The length is appended in order to avoid collisions of the following kind:
     H([x,y,z]) = h(h(x,y),z) = H([w, z]) where w = h(x,y).
     """
+
     def bytes_hash_function(x: bytes, y: bytes) -> bytes:
         return to_bytes(hash_function(from_bytes(x), from_bytes(y)))
 
