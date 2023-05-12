@@ -49,6 +49,56 @@ func uint256_add{range_check_ptr}(a: Uint256, b: Uint256) -> (res: Uint256, carr
 
     return (res, carry_high);
 }
+// Adds two integers. Returns the result as a 256-bit integer and the (1-bit) carry.
+func uint256_fast_add{range_check_ptr}(a: Uint256, b: Uint256) -> (res: Uint256, carry: felt) {
+    alloc_locals;
+    local res: Uint256;
+    local has_carry_low: felt;
+    local has_carry_high: felt;
+    let res_low = a.low + b.low;
+    let res_high = a.high + b.high;
+    %{
+        has_carry_low = 1 if ids.res_low >= ids.SHIFT else 0
+        ids.has_carry_low=has_carry_low
+        ids.has_carry_high = 1 if (ids.res_high+has_carry_low) >= ids.SHIFT else 0
+    %}
+
+    if (has_carry_low != 0) {
+        if (has_carry_high != 0) {
+            assert res.low = res_low - SHIFT;
+            assert res.high = res_high + 1 - SHIFT;
+            assert [range_check_ptr] = res.low;
+            assert [range_check_ptr + 1] = res.high;
+            let range_check_ptr = range_check_ptr + 2;
+            return (res, 1);
+        } else {
+            assert res.low = res_low - SHIFT;
+            assert res.high = res_high + 1;
+            assert [range_check_ptr] = res.low;
+            assert [range_check_ptr + 1] = res.high;
+            let range_check_ptr = range_check_ptr + 2;
+            return (res, 0);
+        }
+    } else {
+        if (has_carry_high != 0) {
+            assert res.low = res_low;
+            assert res.high = res_high - SHIFT;
+            assert [range_check_ptr] = res.low;
+            assert [range_check_ptr + 1] = res.high;
+            let range_check_ptr = range_check_ptr + 2;
+            return (res, 1);
+        } else {
+            assert res.low = res_low;
+            assert res.high = res_high;
+            assert [range_check_ptr] = res.low;
+            assert [range_check_ptr + 1] = res.high;
+            let range_check_ptr = range_check_ptr + 2;
+            return (res, 0);
+        }
+    }
+
+    return (res, carry_high);
+}
 
 // Splits a field element in the range [0, 2^192) to its low 64-bit and high 128-bit parts.
 // Soundness guarantee: a is in the range [0, 2^192).
