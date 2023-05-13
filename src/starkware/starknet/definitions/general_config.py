@@ -61,7 +61,7 @@ DEFAULT_SEQUENCER_ADDRESS = load_int_value(
 DEFAULT_ENFORCE_L1_FEE = True
 
 # Given in units of wei.
-DEFAULT_GAS_PRICE = 100 * 10**9
+DEFAULT_GAS_PRICE = 10**8
 DEFAULT_CAIRO_RESOURCE_FEE_WEIGHTS = {
     N_STEPS_RESOURCE: 1.0,
     **{builtin: 0.0 for builtin in ALL_BUILTINS.except_for(KECCAK_BUILTIN).with_suffix()},
