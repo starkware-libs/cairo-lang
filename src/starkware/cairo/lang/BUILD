@@ -1,4 +1,4 @@
-load("//src/starkware/cairo:vars.bzl", "CAIRO_INSTANCES_LIB_ADDITIONAL_FILES")
+load("//src/starkware/cairo:vars.bzl", "CAIRO_COMPILER_ARCHIVE", "CAIRO_INSTANCES_LIB_ADDITIONAL_FILES")
 load("//bazel_utils:python.bzl", "py_exe")
 
 # Python library with all the dependencies that should be part of the cairo-lang package.
@@ -6,6 +6,9 @@ py_library(
     name = "cairo_lang_package_lib",
     srcs = [
         "create_cairo_lang_zip.py",
+    ],
+    data = [
+        "@" + CAIRO_COMPILER_ARCHIVE,
     ],
     visibility = ["//visibility:public"],
     deps = [

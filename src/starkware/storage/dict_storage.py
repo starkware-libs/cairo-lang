@@ -2,7 +2,7 @@ from typing import Any, Dict, Optional
 
 import cachetools
 
-from starkware.storage import metrics
+import starkware.storage.metrics as storage_metrics
 from starkware.storage.storage import Storage
 
 
@@ -51,10 +51,10 @@ class CachedStorage(Storage):
 
     async def get_value(self, key: bytes) -> Optional[bytes]:
         if self.metric_active:
-            metrics.CACHED_STORAGE_GET_TOTAL.inc()
+            storage_metrics.CACHED_STORAGE_GET_TOTAL.inc()
         if key in self.cache:
             if self.metric_active:
-                metrics.CACHED_STORAGE_GET_CACHE.inc()
+                storage_metrics.CACHED_STORAGE_GET_CACHE.inc()
             return self.cache[key]
         value = await self.storage.get_value(key)
         if value is None:
