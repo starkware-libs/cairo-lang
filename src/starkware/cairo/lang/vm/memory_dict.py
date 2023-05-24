@@ -32,6 +32,8 @@ MemoryDictInitializer = Optional[
     ]
 ]
 
+RelocateValueFunc = Callable[[MaybeRelocatable], MaybeRelocatable]
+
 
 class MemoryDict:
     """
@@ -213,14 +215,17 @@ class MemoryDict:
         """
         self.data[addr] = value
 
-    def serialize(self, field_bytes):
+    def serialize(self, field_bytes, relocate_value: Optional[RelocateValueFunc] = None):
         assert (
             len(self.relocation_rules) == 0
         ), "Cannot serialize a MemoryDict with active segment relocation rules."
 
+        if relocate_value is None:
+            relocate_value = lambda val: val
+
         return b"".join(
-            RelocatableValue.to_bytes(addr, ADDR_SIZE_IN_BYTES, "little")
-            + RelocatableValue.to_bytes(value, field_bytes, "little")
+            RelocatableValue.to_bytes(relocate_value(addr), ADDR_SIZE_IN_BYTES, "little")
+            + RelocatableValue.to_bytes(relocate_value(value), field_bytes, "little")
             for addr, value in self.items()
         )
 

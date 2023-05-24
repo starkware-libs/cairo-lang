@@ -40,10 +40,12 @@ http_archive(
 )
 
 http_archive(
-    name = "cairo-compiler-archive-1.0.0",
-    build_file = get_from_cairo_lang("//src/starkware/starknet/compiler/v1:BUILD.cairo-compiler-archive-1.0.0"),
+    name = "cairo-compiler-archive-1.1.0-rc",
+    build_file = get_from_cairo_lang(
+        "//src/starkware/starknet/compiler/v1:BUILD.cairo-compiler-archive-1.1.0-rc",
+    ),
     strip_prefix = "cairo",
-    url = "https://github.com/starkware-libs/cairo/releases/download/v1.0.0/release-x86_64-unknown-linux-musl.tar.gz",
+    url = "https://github.com/starkware-libs/cairo/releases/download/v1.1.0-rc0/release-x86_64-unknown-linux-musl.tar.gz",
 )
 
 http_archive(

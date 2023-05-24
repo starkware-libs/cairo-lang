@@ -4,21 +4,22 @@ A CairoPie represents a position independent execution of a Cairo program.
 
 import copy
 import dataclasses
+import functools
 import io
 import json
 import math
 import zipfile
 from dataclasses import field
-from typing import Any, ClassVar, Dict, List, Type
+from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple, Type
 
 import marshmallow
 import marshmallow.fields as mfields
 import marshmallow_dataclass
 
 from starkware.cairo.lang.compiler.program import StrippedProgram, is_valid_builtin_name
-from starkware.cairo.lang.vm.memory_dict import MemoryDict
+from starkware.cairo.lang.vm.memory_dict import MemoryDict, RelocateValueFunc
 from starkware.cairo.lang.vm.memory_segments import is_valid_memory_addr, is_valid_memory_value
-from starkware.cairo.lang.vm.relocatable import RelocatableValue
+from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue, relocate_value
 from starkware.python.utils import add_counters, multiply_counter_by_scalar, sub_counters
 from starkware.starkware_utils.marshmallow_dataclass_fields import additional_metadata
 
@@ -279,12 +280,68 @@ class CairoPie:
 
         return cls(metadata, memory, additional_data, execution_resources, version)
 
-    def to_file(self, file):
+    def merge_extra_segments(self) -> Tuple[List[SegmentInfo], Dict[int, RelocatableValue]]:
+        """
+        Merges extra_segments to one segment.
+        Returns a tuple of the new extra_segments (which contains a single merged segment) and a
+        dictionary from old segment index to its offset in the new segment.
+        """
+        assert len(self.metadata.extra_segments) > 0
+
+        # Take the index of the segment from the first merged segment.
+        new_segment_index = self.metadata.extra_segments[0].index
+        segment_offsets = {}
+        segments_accumulated_size = 0
+        for segment in self.metadata.extra_segments:
+            segment_offsets[segment.index] = RelocatableValue(
+                new_segment_index, segments_accumulated_size
+            )
+            segments_accumulated_size += segment.size
+        return (
+            [SegmentInfo(index=new_segment_index, size=segments_accumulated_size)],
+            segment_offsets,
+        )
+
+    def get_relocate_value_func(
+        self, segment_offsets: Optional[Mapping[int, MaybeRelocatable]]
+    ) -> Optional[RelocateValueFunc]:
+        """
+        Returns a relocate_value function that relocates values according to the given segment
+        offsets.
+        """
+        if segment_offsets is None:
+            return None
+
+        return functools.partial(
+            relocate_value,
+            segment_offsets=segment_offsets,
+            prime=self.program.prime,
+            # The known segments (such as builtins) are missing since we do not want to relocate
+            # them.
+            allow_missing_segments=True,
+        )
+
+    def to_file(self, file, merge_extra_segments: bool = False):
+        extra_segments, segment_offsets = (
+            self.merge_extra_segments()
+            if merge_extra_segments and len(self.metadata.extra_segments) > 0
+            else (None, None)
+        )
+        metadata = self.metadata
+        if extra_segments is not None:
+            metadata = dataclasses.replace(metadata, extra_segments=extra_segments)
         with zipfile.ZipFile(file, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
             with zf.open(self.METADATA_FILENAME, "w") as fp:
-                fp.write(json.dumps(CairoPieMetadata.Schema().dump(self.metadata)).encode("ascii"))
+                fp.write(json.dumps(CairoPieMetadata.Schema().dump(metadata)).encode("ascii"))
             with zf.open(self.MEMORY_FILENAME, "w") as fp:
-                fp.write(self.memory.serialize(self.metadata.field_bytes))
+                fp.write(
+                    self.memory.serialize(
+                        field_bytes=self.metadata.field_bytes,
+                        relocate_value=self.get_relocate_value_func(
+                            segment_offsets=segment_offsets
+                        ),
+                    )
+                )
             with zf.open(self.ADDITIONAL_DATA_FILENAME, "w") as fp:
                 fp.write(json.dumps(self.additional_data).encode("ascii"))
             with zf.open(self.EXECUTION_RESOURCES_FILENAME, "w") as fp:

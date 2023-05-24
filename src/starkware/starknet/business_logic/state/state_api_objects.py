@@ -28,7 +28,7 @@ class BlockInfo(ValidatedMarshmallowDataclass):
     # The sequencer address of this block.
     sequencer_address: Optional[int] = field(metadata=fields.optional_sequencer_address_metadata)
 
-    # The version of StarkNet system (e.g. "0.11.1").
+    # The version of Starknet system (e.g. "0.11.2").
     starknet_version: Optional[str] = field(metadata=fields.starknet_version_metadata)
 
     @classmethod

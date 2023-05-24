@@ -1,6 +1,6 @@
 import io
 import random
-from typing import Dict
+from typing import Dict, Mapping
 
 import pytest
 
@@ -15,7 +15,11 @@ from starkware.cairo.lang.vm.cairo_pie import (
 from starkware.cairo.lang.vm.cairo_runner import get_runner_from_code
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
 from starkware.cairo.lang.vm.memory_segments import SEGMENT_SIZE_UPPER_BOUND
-from starkware.cairo.lang.vm.relocatable import MaybeRelocatableDict, RelocatableValue
+from starkware.cairo.lang.vm.relocatable import (
+    MaybeRelocatable,
+    MaybeRelocatableDict,
+    RelocatableValue,
+)
 from starkware.python.utils import add_counters
 
 
@@ -206,3 +210,31 @@ def test_filter_unused_builtins():
     diff = (execution_resources2 - execution_resources1).filter_unused_builtins()
 
     assert diff.builtin_instance_counter == {"builtin3": 2}
+
+
+def test_cairo_pie_merge_extra_segments(cairo_pie: CairoPie):
+    """
+    Tests to_file when merge_extra_segments parameter is True.
+    """
+    cairo_pie.metadata.extra_segments = [SegmentInfo(8, 10), SegmentInfo(9, 20)]
+    initializer: Mapping[MaybeRelocatable, MaybeRelocatable] = {
+        1: 2,
+        RelocatableValue(3, 4): RelocatableValue(6, 7),
+        RelocatableValue(8, 0): RelocatableValue(8, 4),
+        RelocatableValue(9, 3): RelocatableValue(9, 7),
+    }
+    cairo_pie.memory = MemoryDict(initializer)
+
+    fileobj = io.BytesIO()
+    cairo_pie.to_file(fileobj, merge_extra_segments=True)
+    actual_cairo_pie = CairoPie.from_file(fileobj)
+
+    assert actual_cairo_pie.metadata.extra_segments == [SegmentInfo(8, 30)]
+
+    expected_memory_initializer: Mapping[MaybeRelocatable, MaybeRelocatable] = {
+        1: 2,
+        RelocatableValue(3, 4): RelocatableValue(6, 7),
+        RelocatableValue(8, 0): RelocatableValue(8, 4),
+        RelocatableValue(8, 13): RelocatableValue(8, 17),
+    }
+    assert actual_cairo_pie.memory == MemoryDict(expected_memory_initializer)

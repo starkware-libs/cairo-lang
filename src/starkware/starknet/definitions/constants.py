@@ -71,7 +71,7 @@ DEPRECATED_DECLARE_VERSIONS = (
 )
 
 # Sierra -> Casm compilation version.
-SIERRA_VERSION = [1, 0, 0]
+SIERRA_VERSION = [1, 1, 0]
 
 # The version of contract class leaf.
 CONTRACT_CLASS_LEAF_VERSION: bytes = b"CONTRACT_CLASS_LEAF_V0"
