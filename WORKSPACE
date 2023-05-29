@@ -40,20 +40,20 @@ http_archive(
 )
 
 http_archive(
-    name = "cairo-compiler-archive-1.1.0-rc",
+    name = "cairo-compiler-archive-1.1.0",
     build_file = get_from_cairo_lang(
-        "//src/starkware/starknet/compiler/v1:BUILD.cairo-compiler-archive-1.1.0-rc",
+        "//src/starkware/starknet/compiler/v1:BUILD.cairo-compiler-archive-1.1.0",
     ),
     strip_prefix = "cairo",
-    url = "https://github.com/starkware-libs/cairo/releases/download/v1.1.0-rc0/release-x86_64-unknown-linux-musl.tar.gz",
+    url = "https://github.com/starkware-libs/cairo/releases/download/v1.1.0/release-x86_64-unknown-linux-musl.tar.gz",
 )
 
 http_archive(
     name = "pypy3.9",
     build_file = "//:pypy3.9_archive_build_file.bzl",
-    sha256 = "46818cb3d74b96b34787548343d266e2562b531ddbaf330383ba930ff1930ed5",
-    strip_prefix = "pypy3.9-v7.3.9-linux64",
-    url = "https://downloads.python.org/pypy/pypy3.9-v7.3.9-linux64.tar.bz2",
+    sha256 = "d506172ca11071274175d74e9c581c3166432d0179b036470e3b9e8d20eae581",
+    strip_prefix = "pypy3.9-v7.3.11-linux64",
+    url = "https://downloads.python.org/pypy/pypy3.9-v7.3.11-linux64.tar.bz2",
 )
 
 register_toolchains("//bazel_utils/python:py_stub_toolchain")

@@ -10,7 +10,7 @@ import sys
 
 from starkware.python.utils import get_build_dir_path
 
-COMPILER_DIR = get_build_dir_path("../cairo-compiler-archive-1.1.0-rc")
+COMPILER_DIR = get_build_dir_path("../cairo-compiler-archive-1.1.0")
 
 INIT_FILE_CONTENT = "__path__ = __import__('pkgutil').extend_path(__path__, __name__)\n"
 

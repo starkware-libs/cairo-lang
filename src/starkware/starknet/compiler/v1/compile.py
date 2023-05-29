@@ -14,7 +14,7 @@ if "RUNFILES_DIR" in os.environ:
 
     r = runfiles.Create()
 
-    COMPILER_DIR = r.Rlocation("cairo-compiler-archive-1.1.0-rc/bin")
+    COMPILER_DIR = r.Rlocation("cairo-compiler-archive-1.1.0/bin")
 else:
     COMPILER_DIR = os.path.join(os.path.dirname(__file__), "bin")
 

@@ -168,6 +168,26 @@ def get_source_dir_path(rel_path: str = "", default_value: Optional[str] = None)
     raise Exception(f"Failed to get source path for {rel_path}.")
 
 
+def deduce_absolute_path(path: str) -> str:
+    """
+    Returns the given path if it is absolute, and otherwise joins it with the current working
+    directory.
+    This function is useful when using Bazel, which changes the current working directory.
+
+    Important note: This function assumes that the code is being run using Bazel.
+    """
+
+    if os.path.isabs(path):
+        return path
+
+    # The path is considered to be relative to the current working directory.
+    build_working_directory = os.getenv("BUILD_WORKING_DIRECTORY")
+    assert (
+        build_working_directory is not None
+    ), "Could not deduce your working directory path; please run your code using Bazel."
+    return os.path.join(build_working_directory, path)
+
+
 def assert_same_and_get(*args):
     """
     Verifies that all the arguments are the same, and returns this value.
