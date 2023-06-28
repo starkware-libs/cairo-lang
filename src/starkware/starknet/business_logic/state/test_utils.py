@@ -3,6 +3,7 @@ from starkware.starknet.business_logic.state.state_api import (
     SyncStateReader,
     get_stark_exception_on_undeclared_contract,
 )
+from starkware.starknet.business_logic.state.storage_domain import StorageDomain
 from starkware.starknet.services.api.contract_class.contract_class import CompiledClassBase
 
 
@@ -20,10 +21,12 @@ class EmptyStateReader(StateReader):
     async def get_class_hash_at(self, contract_address: int) -> int:
         return 0
 
-    async def get_nonce_at(self, contract_address: int) -> int:
+    async def get_nonce_at(self, storage_domain: StorageDomain, contract_address: int) -> int:
         return 0
 
-    async def get_storage_at(self, contract_address: int, key: int) -> int:
+    async def get_storage_at(
+        self, storage_domain: StorageDomain, contract_address: int, key: int
+    ) -> int:
         return 0
 
 
@@ -41,8 +44,8 @@ class EmptySyncStateReader(SyncStateReader):
     def get_class_hash_at(self, contract_address: int) -> int:
         return 0
 
-    def get_nonce_at(self, contract_address: int) -> int:
+    def get_nonce_at(self, storage_domain: StorageDomain, contract_address: int) -> int:
         return 0
 
-    def get_storage_at(self, contract_address: int, key: int) -> int:
+    def get_storage_at(self, storage_domain: StorageDomain, contract_address: int, key: int) -> int:
         return 0

@@ -79,19 +79,7 @@ class BitwiseBuiltinRunner(SimpleBuiltinRunner):
         return {"bitwise": sorted(res.values(), key=lambda item: item["index"])}
 
     def get_used_diluted_check_units(self, diluted_spacing: int, diluted_n_bits: int) -> int:
-        total_n_bits = self.bitwise_builtin.total_n_bits
-
-        partition = [
-            i + j
-            for i in range(0, total_n_bits, diluted_spacing * diluted_n_bits)
-            for j in range(diluted_spacing)
-            if i + j < total_n_bits
-        ]
-        num_trimmed = len(
-            [
-                1
-                for shift in partition
-                if shift + diluted_spacing * (diluted_n_bits - 1) + 1 > total_n_bits
-            ]
+        return self.bitwise_builtin.get_diluted_units_per_builtin(
+            diluted_spacing=diluted_spacing,
+            diluted_n_bits=diluted_n_bits,
         )
-        return 4 * len(partition) + num_trimmed

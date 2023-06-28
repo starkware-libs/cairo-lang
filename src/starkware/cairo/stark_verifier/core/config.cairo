@@ -36,6 +36,8 @@ struct StarkConfig {
     // Log2 of the number of cosets composing the evaluation domain, where the coset size is the
     // trace length.
     log_n_cosets: felt,
+    // Number of layers that use a verifier friendly hash in each commitment.
+    n_verifier_friendly_commitment_layers: felt,
 }
 
 // Validates the StarkConfig object.
@@ -53,6 +55,7 @@ func stark_config_validate{range_check_ptr}(
     assert_in_range(config.log_n_cosets, 1, MAX_LOG_BLOWUP_FACTOR + 1);
     assert_le(config.proof_of_work.n_bits, security_bits);
     assert_in_range(config.n_queries, 1, MAX_N_QUERIES + 1);
+    assert_nn(config.n_verifier_friendly_commitment_layers);
 
     // Check security bits.
     assert_nn_le(
@@ -62,20 +65,25 @@ func stark_config_validate{range_check_ptr}(
     // Validate traces config.
     let log_eval_domain_size = config.log_trace_domain_size + config.log_n_cosets;
     traces_config_validate(
-        air=air, config=config.traces, log_eval_domain_size=log_eval_domain_size
+        air=air,
+        config=config.traces,
+        log_eval_domain_size=log_eval_domain_size,
+        n_verifier_friendly_commitment_layers=config.n_verifier_friendly_commitment_layers,
     );
 
     // Validate composition config.
     assert config.composition.n_columns = air.constraint_degree;
-
-    // Validate vector commitment.
     validate_vector_commitment(
-        config=config.composition.vector, expected_height=log_eval_domain_size
+        config=config.composition.vector,
+        expected_height=log_eval_domain_size,
+        n_verifier_friendly_commitment_layers=config.n_verifier_friendly_commitment_layers,
     );
 
     // Validate Fri config.
     let (log_expected_degree) = fri_config_validate(
-        config=config.fri, log_n_cosets=config.log_n_cosets
+        config=config.fri,
+        log_n_cosets=config.log_n_cosets,
+        n_verifier_friendly_commitment_layers=config.n_verifier_friendly_commitment_layers,
     );
     assert log_expected_degree = config.log_trace_domain_size;
 

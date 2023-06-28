@@ -7,9 +7,15 @@ from typing import Any, Dict, Tuple, Type, Union
 import cachetools
 
 from starkware.cairo.common.structs import CairoStructFactory, CairoStructProxy
-from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, TypeFelt, TypePointer
+from starkware.cairo.lang.compiler.ast.cairo_types import (
+    CairoType,
+    TypeFelt,
+    TypePointer,
+    TypeStruct,
+)
 from starkware.cairo.lang.compiler.identifier_definition import StructDefinition
 from starkware.cairo.lang.compiler.program import Program
+from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
 from starkware.python.utils import safe_zip
 from starkware.starknet.business_logic.execution.execute_entry_point_base import (
@@ -213,7 +219,9 @@ def validate_runtime_request_type(
         )
 
 
-def get_runtime_type(cairo_type: CairoType) -> Union[Type[int], Type[RelocatableValue]]:
+def get_runtime_type(
+    cairo_type: CairoType,
+) -> Union[Type[int], Type[RelocatableValue], Type[tuple]]:
     """
     Given a CairoType returns the expected runtime type.
     """
@@ -221,6 +229,10 @@ def get_runtime_type(cairo_type: CairoType) -> Union[Type[int], Type[Relocatable
         return int
     if isinstance(cairo_type, TypePointer) and isinstance(cairo_type.pointee, TypeFelt):
         return RelocatableValue
+    if isinstance(cairo_type, TypeStruct) and cairo_type.scope == ScopedName.from_string(
+        "starkware.cairo.common.uint256.Uint256"
+    ):
+        return tuple
 
     raise NotImplementedError(f"Unexpected type: {cairo_type.format()}.")
 

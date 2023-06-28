@@ -30,11 +30,8 @@ class Field(ABC, Generic[T]):
     1.  Data needed for @dataclasses.dataclass fields: 'description', 'default',
         'default_factory', etc. ,
     2.  Data needed for marshmallow: in 'marshmallow_field',
-    3.  An object implementing this Field class: in 'field',
-    4.  A name for messages: in 'name'.
+    3.  An object implementing this Field class: in 'validated_field',
     """
-
-    name: str
 
     # Randomization.
 
@@ -67,20 +64,19 @@ class Field(ABC, Generic[T]):
 
     def metadata(
         self,
-        field_name: Optional[str] = None,
         required: bool = True,
         load_default: Any = marshmallow.utils.missing,
+        nested_metadata: Optional[FieldMetadata] = None,
     ) -> FieldMetadata:
         """
-        Creates the metadata associated with this field. If provided, then use the given field_name
-        for messages, and otherwise (if it is None) use the default name.
+        Creates the metadata associated with this field.
         """
+        nested_metadata = {} if nested_metadata is None else nested_metadata
         return dict(
             marshmallow_field=self.get_marshmallow_field(
                 required=required, load_default=load_default
             ),
-            validated_field=self,
-            name_in_messages=self.name if field_name is None else field_name,
+            metadata=dict(validated_field=self) | nested_metadata,
         )
 
 
@@ -107,11 +103,13 @@ class BooleanField(Field[bool]):
 @dataclasses.dataclass(frozen=True)  # type: ignore
 class ValidatedField(Field[T]):
     """
-    A class representing data types for validated fields in ValidatedMarshmallowDataclass.
-    This class adds on top of Field[T] an error-code in 'error_code', to be used when the
-    field validation fails.
+    A class representing data types for validated fields in ValidatedDataclass.
+    This class adds on top of Field[T]
+    - an error-code in 'error_code', to be used when the field validation fails.
+    - a name for messages: in 'name'.
     """
 
+    name: str
     error_code: ErrorCode
 
     @property
@@ -155,6 +153,29 @@ class ValidatedField(Field[T]):
         """
         Constructs the error message for invalid values.
         """
+
+    # Metadata.
+
+    def metadata(
+        self,
+        required: bool = True,
+        load_default: Any = marshmallow.utils.missing,
+        nested_metadata: Optional[FieldMetadata] = None,
+        field_name: Optional[str] = None,
+    ) -> FieldMetadata:
+        """
+        Creates the metadata associated with this field. If provided, uses the given field_name for
+        messages, and otherwise (if it is None), uses the default name.
+        """
+        nested_metadata = {} if nested_metadata is None else nested_metadata
+        nested_metadata.update(
+            dict(name_in_messages=self.name if field_name is None else field_name)
+        )
+        return super().metadata(
+            required=required,
+            load_default=load_default,
+            nested_metadata=nested_metadata,
+        )
 
 
 class OptionalField(ValidatedField[Optional[T]]):
@@ -207,16 +228,22 @@ class OptionalField(ValidatedField[Optional[T]]):
 
     def metadata(
         self,
-        field_name: Optional[str] = None,
         required: bool = False,
         load_default: Any = None,
+        nested_metadata: Optional[FieldMetadata] = None,
+        field_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Creates the metadata associated with this optional field.
         """
         assert not required, "Optional field must not be required."
         assert load_default is None, "Optional field must have default value None."
-        return super().metadata(field_name=field_name, required=required, load_default=load_default)
+        return super().metadata(
+            field_name=field_name,
+            required=required,
+            load_default=load_default,
+            nested_metadata=nested_metadata,
+        )
 
     def get_marshmallow_field(
         self, required: bool = False, load_default: Any = None

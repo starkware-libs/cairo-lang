@@ -3,6 +3,7 @@ package(default_visibility = ["//visibility:public"])
 py_library(
     name = "cairo_run_builtins_lib",
     srcs = [
+        "instance_def.py",
         "//src/starkware/cairo/lang/builtins/bitwise:bitwise_builtin_runner.py",
         "//src/starkware/cairo/lang/builtins/bitwise:instance_def.py",
         "//src/starkware/cairo/lang/builtins/ec:ec_op_builtin_runner.py",

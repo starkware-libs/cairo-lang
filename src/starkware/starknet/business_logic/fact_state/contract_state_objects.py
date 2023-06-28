@@ -61,7 +61,11 @@ class ContractState(ValidatedMarshmallowDataclass, LeafFact):
 
     @property
     def is_empty(self) -> bool:
-        return not self.initialized
+        return (
+            self.storage_commitment_tree.root == EmptyNodeFact.EMPTY_NODE_HASH
+            and self.contract_hash == self.UNINITIALIZED_CLASS_HASH
+            and self.nonce == 0
+        )
 
     def _hash(self, hash_func: HashFunctionType) -> bytes:
         """
@@ -122,11 +126,6 @@ class ContractState(ValidatedMarshmallowDataclass, LeafFact):
 
         if nonce is None:
             nonce = self.nonce
-
-        if len(updates) > 0 or nonce != self.nonce:
-            assert (
-                class_hash_bytes != ContractState.UNINITIALIZED_CLASS_HASH
-            ), "Cannot update the state of an uninitialized contract."
 
         modifications = [(key, StorageLeaf(value=value)) for key, value in updates.items()]
 

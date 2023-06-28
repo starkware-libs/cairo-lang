@@ -1,5 +1,10 @@
 from starkware.cairo.common.alloc import alloc
-from starkware.cairo.common.cairo_builtins import HashBuiltin, PoseidonBuiltin
+from starkware.cairo.common.cairo_builtins import (
+    BitwiseBuiltin,
+    HashBuiltin,
+    KeccakBuiltin,
+    PoseidonBuiltin,
+)
 from starkware.cairo.common.dict import dict_new, dict_read, dict_update
 from starkware.cairo.common.dict_access import DictAccess
 from starkware.cairo.common.math import assert_nn, assert_nn_le, assert_not_zero
@@ -20,7 +25,11 @@ from starkware.starknet.common.new_syscalls import ExecutionInfo, TxInfo
 from starkware.starknet.common.syscalls import Deploy
 from starkware.starknet.common.syscalls import TxInfo as DeprecatedTxInfo
 from starkware.starknet.core.os.block_context import BlockContext
-from starkware.starknet.core.os.builtins import BuiltinPointers
+from starkware.starknet.core.os.builtins import (
+    BuiltinPointers,
+    NonSelectableBuiltins,
+    SelectableBuiltins,
+)
 from starkware.starknet.core.os.constants import (
     CONSTRUCTOR_ENTRY_POINT_SELECTOR,
     DECLARE_VERSION,
@@ -56,14 +65,13 @@ from starkware.starknet.core.os.output import (
     OsCarriedOutputs,
     os_carried_outputs_new,
 )
-from starkware.starknet.core.os.state import StateChanges, StateEntry
+from starkware.starknet.core.os.state import StateEntry
 from starkware.starknet.core.os.transaction_hash.transaction_hash import get_transaction_hash
 
 // Executes the transactions in the hint variable os_input.transactions.
 //
 // Returns:
 // reserved_range_checks_end - end pointer for the reserved range checks.
-// state_changes - StateChanges struct documenting the changes that were done by the transactions.
 //
 // Assumptions:
 //   The caller verifies that the memory range [range_check_ptr, reserved_range_checks_end)
@@ -74,45 +82,37 @@ func execute_transactions{
     pedersen_ptr: HashBuiltin*,
     range_check_ptr,
     ecdsa_ptr,
-    bitwise_ptr,
+    bitwise_ptr: BitwiseBuiltin*,
     ec_op_ptr,
+    keccak_ptr: KeccakBuiltin*,
     poseidon_ptr: PoseidonBuiltin*,
+    contract_state_changes: DictAccess*,
+    contract_class_changes: DictAccess*,
     outputs: OsCarriedOutputs*,
-}(block_context: BlockContext*) -> (reserved_range_checks_end: felt, state_changes: StateChanges*) {
+}(block_context: BlockContext*) -> (reserved_range_checks_end: felt) {
     alloc_locals;
-    local n_txs;
-    %{
-        from starkware.python.utils import from_bytes
 
-        ids.n_txs = len(os_input.transactions)
-
-        initial_dict = {
-            address: segments.gen_arg(
-                (from_bytes(contract.contract_hash), segments.add(), contract.nonce))
-            for address, contract in os_input.contracts.items()
-        }
-    %}
-    // A dictionary from contract address to a dict of storage changes of type StateEntry.
-    let (local contract_state_changes: DictAccess*) = dict_new();
-
-    %{ initial_dict = os_input.class_hash_to_compiled_class_hash %}
-    // A dictionary from class hash to compiled class hash (casm).
-    let (local contract_class_changes: DictAccess*) = dict_new();
-
+    // Prepare builtin pointers.
     let segment_arena_ptr = new_arena();
 
     let (__fp__, _) = get_fp_and_pc();
     local local_builtin_ptrs: BuiltinPointers = BuiltinPointers(
-        pedersen=pedersen_ptr,
-        range_check=nondet %{ segments.add_temp_segment() %},
-        ecdsa=ecdsa_ptr,
-        bitwise=bitwise_ptr,
-        ec_op=ec_op_ptr,
-        poseidon=poseidon_ptr,
-        segment_arena=segment_arena_ptr,
+        selectable=SelectableBuiltins(
+            pedersen=pedersen_ptr,
+            range_check=nondet %{ segments.add_temp_segment() %},
+            ecdsa=ecdsa_ptr,
+            bitwise=bitwise_ptr,
+            ec_op=ec_op_ptr,
+            poseidon=poseidon_ptr,
+            segment_arena=segment_arena_ptr,
+        ),
+        non_selectable=NonSelectableBuiltins(keccak=keccak_ptr),
     );
 
     let builtin_ptrs = &local_builtin_ptrs;
+
+    // Execute transactions.
+    local n_txs = nondet %{ len(os_input.transactions) %};
     %{
         vm_enter_scope({
             '__deprecated_class_hashes': __deprecated_class_hashes,
@@ -123,9 +123,6 @@ func execute_transactions{
              '__dict_manager': __dict_manager,
         })
     %}
-    // Keep a reference to the start of contract_state_changes and contract_class_changes.
-    let contract_state_changes_start = contract_state_changes;
-    let contract_class_changes_start = contract_class_changes;
     execute_transactions_inner{
         builtin_ptrs=builtin_ptrs,
         contract_state_changes=contract_state_changes,
@@ -136,26 +133,19 @@ func execute_transactions{
     let reserved_range_checks_end = range_check_ptr;
     // Relocate the range checks used by the transactions to reserved_range_checks_end.
     relocate_segment(
-        src_ptr=cast(local_builtin_ptrs.range_check, felt*),
+        src_ptr=cast(local_builtin_ptrs.selectable.range_check, felt*),
         dest_ptr=cast(reserved_range_checks_end, felt*),
     );
 
-    let pedersen_ptr = builtin_ptrs.pedersen;
-    let range_check_ptr = builtin_ptrs.range_check;
-    let ecdsa_ptr = builtin_ptrs.ecdsa;
-    let bitwise_ptr = builtin_ptrs.bitwise;
-    let ec_op_ptr = builtin_ptrs.ec_op;
-    let poseidon_ptr = builtin_ptrs.poseidon;
+    let selectable_builtins = &builtin_ptrs.selectable;
+    let pedersen_ptr = selectable_builtins.pedersen;
+    let range_check_ptr = selectable_builtins.range_check;
+    let ecdsa_ptr = selectable_builtins.ecdsa;
+    let bitwise_ptr = selectable_builtins.bitwise;
+    let ec_op_ptr = selectable_builtins.ec_op;
+    let poseidon_ptr = selectable_builtins.poseidon;
 
-    return (
-        reserved_range_checks_end=reserved_range_checks_end,
-        state_changes=new StateChanges(
-            contract_state_changes_start=contract_state_changes_start,
-            contract_state_changes_end=contract_state_changes,
-            class_changes_start=contract_class_changes_start,
-            class_changes_end=contract_class_changes,
-        ),
-    );
+    return (reserved_range_checks_end=reserved_range_checks_end);
 }
 
 // Inner function for execute_transactions.
@@ -650,7 +640,8 @@ func prepare_constructor_execution_context{range_check_ptr, builtin_ptrs: Builti
     %}
     assert_nn_le(constructor_calldata_size, SIERRA_ARRAY_LEN_BOUND - 1);
 
-    let hash_ptr = builtin_ptrs.pedersen;
+    let selectable_builtins = &builtin_ptrs.selectable;
+    let hash_ptr = selectable_builtins.pedersen;
     with hash_ptr {
         let (contract_address) = get_contract_address(
             salt=contract_address_salt,
@@ -661,13 +652,16 @@ func prepare_constructor_execution_context{range_check_ptr, builtin_ptrs: Builti
         );
     }
     tempvar builtin_ptrs = new BuiltinPointers(
-        pedersen=hash_ptr,
-        range_check=builtin_ptrs.range_check,
-        ecdsa=builtin_ptrs.ecdsa,
-        bitwise=builtin_ptrs.bitwise,
-        ec_op=builtin_ptrs.ec_op,
-        poseidon=builtin_ptrs.poseidon,
-        segment_arena=builtin_ptrs.segment_arena,
+        selectable=SelectableBuiltins(
+            pedersen=hash_ptr,
+            range_check=selectable_builtins.range_check,
+            ecdsa=selectable_builtins.ecdsa,
+            bitwise=selectable_builtins.bitwise,
+            ec_op=selectable_builtins.ec_op,
+            poseidon=selectable_builtins.poseidon,
+            segment_arena=selectable_builtins.segment_arena,
+        ),
+        non_selectable=builtin_ptrs.non_selectable,
     );
 
     tempvar constructor_execution_context = new ExecutionContext(
@@ -998,7 +992,8 @@ func compute_transaction_hash{builtin_ptrs: BuiltinPointers*}(
     additional_data_size: felt,
     additional_data: felt*,
 ) -> (transaction_hash: felt) {
-    let hash_ptr = builtin_ptrs.pedersen;
+    let selectable_builtins = &builtin_ptrs.selectable;
+    let hash_ptr = selectable_builtins.pedersen;
     with hash_ptr {
         let (transaction_hash) = get_transaction_hash(
             tx_hash_prefix=tx_hash_prefix,
@@ -1021,13 +1016,16 @@ func compute_transaction_hash{builtin_ptrs: BuiltinPointers*}(
     %}
 
     tempvar builtin_ptrs = new BuiltinPointers(
-        pedersen=hash_ptr,
-        range_check=builtin_ptrs.range_check,
-        ecdsa=builtin_ptrs.ecdsa,
-        bitwise=builtin_ptrs.bitwise,
-        ec_op=builtin_ptrs.ec_op,
-        poseidon=builtin_ptrs.poseidon,
-        segment_arena=builtin_ptrs.segment_arena,
+        selectable=SelectableBuiltins(
+            pedersen=hash_ptr,
+            range_check=selectable_builtins.range_check,
+            ecdsa=selectable_builtins.ecdsa,
+            bitwise=selectable_builtins.bitwise,
+            ec_op=selectable_builtins.ec_op,
+            poseidon=selectable_builtins.poseidon,
+            segment_arena=selectable_builtins.segment_arena,
+        ),
+        non_selectable=builtin_ptrs.non_selectable,
     );
 
     return (transaction_hash=transaction_hash);

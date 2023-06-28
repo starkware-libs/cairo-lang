@@ -50,15 +50,6 @@ const N_UPDATES_BOUND = 2 ** 64;
 // A bound on the nonce of a contract.
 const NONCE_BOUND = 2 ** 64;
 
-struct StateChanges {
-    // A dictionary from address to StateEntry.
-    contract_state_changes_start: DictAccess*,
-    contract_state_changes_end: DictAccess*,
-    // A dictionary from class hash to compiled class hash.
-    class_changes_start: DictAccess*,
-    class_changes_end: DictAccess*,
-}
-
 struct StateUpdateOutput {
     initial_root: felt,
     final_root: felt,
@@ -154,7 +145,12 @@ func state_update{
     hash_ptr: HashBuiltin*,
     range_check_ptr,
     state_updates_ptr: felt*,
-}(state_changes: StateChanges*) -> (state_update_output: StateUpdateOutput*) {
+}(
+    contract_state_changes_start: DictAccess*,
+    contract_state_changes_end: DictAccess*,
+    contract_class_changes_start: DictAccess*,
+    contract_class_changes_end: DictAccess*,
+) -> (state_update_output: StateUpdateOutput*) {
     alloc_locals;
 
     // Create PatriciaUpdateConstants struct for patricia update.
@@ -163,15 +159,15 @@ func state_update{
 
     // Update the contract state tree.
     let (contract_state_tree_update_output) = contract_state_update(
-        contract_state_changes_start=state_changes.contract_state_changes_start,
-        contract_state_changes_end=state_changes.contract_state_changes_end,
+        contract_state_changes_start=contract_state_changes_start,
+        contract_state_changes_end=contract_state_changes_end,
         patricia_update_constants=patricia_update_constants,
     );
 
     // Update the contract class tree.
     let (contract_class_tree_update_output) = contract_class_update(
-        class_changes_start=state_changes.class_changes_start,
-        class_changes_end=state_changes.class_changes_end,
+        class_changes_start=contract_class_changes_start,
+        class_changes_end=contract_class_changes_end,
         patricia_update_constants=patricia_update_constants,
     );
 
@@ -421,14 +417,14 @@ func hash_state_changes{
     local final_contract_state_root;
 
     %{
-        storage = storage_by_address[ids.state_changes.key]
-        ids.initial_contract_state_root = storage.commitment_info.previous_root
-        ids.final_contract_state_root = storage.commitment_info.updated_root
+        commitment_info = commitment_info_by_address[ids.state_changes.key]
+        ids.initial_contract_state_root = commitment_info.previous_root
+        ids.final_contract_state_root = commitment_info.updated_root
         preimage = {
             int(root): children
-            for root, children in storage.commitment_info.commitment_facts.items()
+            for root, children in commitment_info.commitment_facts.items()
         }
-        assert storage.commitment_info.tree_height == ids.MERKLE_HEIGHT
+        assert commitment_info.tree_height == ids.MERKLE_HEIGHT
     %}
     let (local squashed_contract_state_dict_end) = squash_dict(
         dict_accesses=prev_state.storage_ptr,

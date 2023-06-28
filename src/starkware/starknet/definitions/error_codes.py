@@ -1,7 +1,7 @@
 from enum import Enum, auto
 from typing import FrozenSet, List
 
-from starkware.python.utils import from_bytes
+from starkware.python.utils import camel_to_snake_case, from_bytes
 from starkware.starkware_utils.error_handling import ErrorCode, StarkErrorCode
 
 
@@ -14,6 +14,7 @@ class StarknetErrorCode(ErrorCode):
     CONTRACT_BYTECODE_SIZE_TOO_LARGE = auto()
     CONTRACT_CLASS_OBJECT_SIZE_TOO_LARGE = auto()
     DEPRECATED_TRANSACTION = auto()
+    DUPLICATED_TRANSACTION = auto()
     ENTRY_POINT_NOT_FOUND_IN_CONTRACT = auto()
     EXTERNAL_TO_INTERNAL_CONVERSION_ERROR = auto()
     FEE_TRANSFER_FAILURE = auto()
@@ -68,6 +69,28 @@ class StarknetErrorCode(ErrorCode):
     UNEXPECTED_FAILURE = auto()
     UNINITIALIZED_CONTRACT = auto()
     UNSUPPORTED_TRANSACTION = auto()
+    # Native blockifier errors.
+    PY_NATIVE_BLOCKIFIER_INPUT_ERROR = auto()
+    PY_PROGRAM_ERROR = auto()
+    PY_PYO3_ERROR = auto()
+    PY_SERDE_ERROR = auto()
+    PY_STARKNET_API_ERROR = auto()
+    PY_STATE_ERROR = auto()
+    PY_STORAGE_ERROR = auto()
+    PY_TRANSACTION_EXECUTION_ERROR = auto()
+
+    @classmethod
+    def from_raw_code(cls, code: str) -> "StarknetErrorCode":
+        """
+        If the error code is from the Blockifier, converts to the correct error code name.
+        Otherwise, assumes the error code is part of the enum already.
+        """
+        prefix = "native_blockifier."
+        if code.startswith(prefix):
+            starknet_error_name = camel_to_snake_case(code[len(prefix) :]).upper()
+            return cls[starknet_error_name]
+
+        return cls[code]
 
 
 # Errors that are raised by the gateways and caused by wrong usage of the user.
@@ -104,6 +127,7 @@ main_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
     [
         *common_error_codes,
         StarknetErrorCode.DEPRECATED_TRANSACTION,
+        StarknetErrorCode.DUPLICATED_TRANSACTION,
         StarknetErrorCode.SENDER_ADDRESS_IS_BLOCKED,
         # Signature validation errors.
         StarkErrorCode.INVALID_SIGNATURE,
@@ -173,6 +197,8 @@ class CairoErrorCode(Enum):
 
     OUT_OF_GAS = "Out of gas"
     INVALID_INPUT_LEN = "Invalid input length"
+    INVALID_ARGUMENT = "Invalid argument"
+    BLOCK_NUMBER_OUT_OF_RANGE = "Block number out of range"
 
     def to_felt(self) -> int:
         return from_bytes(self.value.encode("ascii"))

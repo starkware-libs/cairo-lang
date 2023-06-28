@@ -44,6 +44,13 @@ const TRANSFER_ENTRY_POINT_SELECTOR = (
 
 const DEFAULT_ENTRY_POINT_SELECTOR = 0;
 
+// OS reserved contract addresses.
+
+// This contract stores the block number -> block hash mapping.
+const BLOCK_HASH_CONTRACT_ADDRESS = 1;
+// The block number -> block hash mapping is written for the current block number minus this number.
+const STORED_BLOCK_HASH_BUFFER = 10;
+
 // Gas constants.
 const STEP_GAS_COST = 100;
 const INITIAL_GAS_COST = (10 ** 8) * STEP_GAS_COST;
@@ -73,6 +80,7 @@ const TRANSACTION_GAS_COST = (2 * ENTRY_POINT_GAS_COST) + FEE_TRANSFER_GAS_COST 
 // Syscall gas costs.
 const CALL_CONTRACT_GAS_COST = SYSCALL_BASE_GAS_COST + 10 * STEP_GAS_COST + ENTRY_POINT_GAS_COST;
 const DEPLOY_GAS_COST = SYSCALL_BASE_GAS_COST + 200 * STEP_GAS_COST + ENTRY_POINT_GAS_COST;
+const GET_BLOCK_HASH_GAS_COST = SYSCALL_BASE_GAS_COST + 50 * STEP_GAS_COST;
 const GET_EXECUTION_INFO_GAS_COST = SYSCALL_BASE_GAS_COST + 10 * STEP_GAS_COST;
 const LIBRARY_CALL_GAS_COST = CALL_CONTRACT_GAS_COST;
 const REPLACE_CLASS_GAS_COST = SYSCALL_BASE_GAS_COST + 50 * STEP_GAS_COST;
@@ -85,5 +93,7 @@ const KECCAK_GAS_COST = SYSCALL_BASE_GAS_COST;
 const KECCAK_ROUND_COST_GAS_COST = 180000;
 
 // Cairo 1.0 error codes.
+const ERROR_BLOCK_NUMBER_OUT_OF_RANGE = 'Block number out of range';
 const ERROR_OUT_OF_GAS = 'Out of gas';
 const ERROR_INVALID_INPUT_LEN = 'Invalid input length';
+const ERROR_INVALID_ARGUMENT = 'Invalid argument';

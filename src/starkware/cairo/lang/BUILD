@@ -68,6 +68,7 @@ py_library(
     ] + CAIRO_INSTANCES_LIB_ADDITIONAL_FILES,
     visibility = ["//visibility:public"],
     deps = [
+        "//src/starkware/cairo/lang/builtins:cairo_all_builtins_lib",
         "//src/starkware/cairo/lang/builtins:cairo_run_builtins_lib",
     ],
 )

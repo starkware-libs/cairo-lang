@@ -1,4 +1,5 @@
 from starkware.cairo.common.alloc import alloc
+from starkware.cairo.common.cairo_builtins import KeccakBuiltin
 from starkware.cairo.common.dict import dict_read, dict_update
 from starkware.cairo.common.dict_access import DictAccess
 from starkware.cairo.common.find_element import find_element
@@ -52,8 +53,13 @@ from starkware.starknet.common.syscalls import (
     StorageWrite,
 )
 from starkware.starknet.core.os.block_context import BlockContext
-from starkware.starknet.core.os.builtins import BuiltinPointers
+from starkware.starknet.core.os.builtins import (
+    BuiltinPointers,
+    NonSelectableBuiltins,
+    SelectableBuiltins,
+)
 from starkware.starknet.core.os.constants import (
+    BLOCK_HASH_CONTRACT_ADDRESS,
     CONSTRUCTOR_ENTRY_POINT_SELECTOR,
     ENTRY_POINT_TYPE_CONSTRUCTOR,
     ENTRY_POINT_TYPE_EXTERNAL,
@@ -211,7 +217,8 @@ func execute_deploy_syscall{
     // Set deployer_address to 0 if request.deploy_from_zero is TRUE.
     let deployer_address = (1 - request.deploy_from_zero) * caller_address;
 
-    let hash_ptr = builtin_ptrs.pedersen;
+    let selectable_builtins = &builtin_ptrs.selectable;
+    let hash_ptr = selectable_builtins.pedersen;
     with hash_ptr {
         let (contract_address) = get_contract_address(
             salt=request.contract_address_salt,
@@ -222,13 +229,16 @@ func execute_deploy_syscall{
         );
     }
     tempvar builtin_ptrs = new BuiltinPointers(
-        pedersen=hash_ptr,
-        range_check=builtin_ptrs.range_check,
-        ecdsa=builtin_ptrs.ecdsa,
-        bitwise=builtin_ptrs.bitwise,
-        ec_op=builtin_ptrs.ec_op,
-        poseidon=builtin_ptrs.poseidon,
-        segment_arena=builtin_ptrs.segment_arena,
+        selectable=SelectableBuiltins(
+            pedersen=hash_ptr,
+            range_check=selectable_builtins.range_check,
+            ecdsa=selectable_builtins.ecdsa,
+            bitwise=selectable_builtins.bitwise,
+            ec_op=selectable_builtins.ec_op,
+            poseidon=selectable_builtins.poseidon,
+            segment_arena=selectable_builtins.segment_arena,
+        ),
+        non_selectable=builtin_ptrs.non_selectable,
     );
 
     // Fill the syscall response, before contract_address is revoked.
@@ -307,6 +317,14 @@ func execute_storage_read{contract_state_changes: DictAccess*}(
     %}
 
     tempvar value = syscall_ptr.response.value;
+    %{
+        # Make sure the value is cached (by reading it), to be used later on for the
+        # commitment computation.
+        value = execution_helper.storage_by_address[ids.contract_address].read(
+            key=ids.syscall_ptr.request.address
+        )
+        assert ids.value == value, "Inconsistent storage value."
+    %}
 
     // Update the contract's storage.
     tempvar storage_ptr = state_entry.storage_ptr;
@@ -676,8 +694,10 @@ func deploy_contract{
 
     local contract_address = constructor_execution_context.execution_info.contract_address;
 
-    // Assert that we don't deploy to ORIGIN_ADDRESS.
-    assert_not_zero(contract_address - ORIGIN_ADDRESS);
+    // Assert that we don't deploy to one of the reserved addresses.
+    assert_not_zero(
+        (contract_address - ORIGIN_ADDRESS) * (contract_address - BLOCK_HASH_CONTRACT_ADDRESS)
+    );
 
     local state_entry: StateEntry*;
     %{

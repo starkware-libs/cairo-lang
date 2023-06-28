@@ -25,10 +25,10 @@ def pytest_test(
         Calls pytest.
     """
 
-    if "timeout" not in kwargs:
-        kwargs["timeout"] = "eternal"
+    # Set the test timeout to 'eternal' if it isn't already set.
+    timeout = kwargs.pop("timeout", "eternal")
 
-    (pypy_test if is_pypy else cpython_test)(
+    test_and_debug_targets(
         name = name,
         srcs = [
             "//bazel_utils:pytest_wrapper.py",
@@ -36,12 +36,34 @@ def pytest_test(
         main = "//bazel_utils:pytest_wrapper.py",
         # Args passed to the tests using parser.addoption() need to be sent after the tested
         #   files so pytest recognizes them.
-        args = ["$(location :%s)" % x for x in srcs] + ["--color=yes"] + args,
+        args = [
+            "$(location :%s)" % x
+            for x in srcs
+        ] + ["--color=yes", "--junitxml=$$XML_OUTPUT_FILE"] + args,
         python_version = "PY3",
         srcs_version = "PY3",
         deps = deps + [requirement("pytest"), "//:starkware"],
         data = data,
+        timeout = timeout,
         legacy_create_init = legacy_create_init,
+        is_pypy = is_pypy,
+        **kwargs
+    )
+
+def test_and_debug_targets(name, srcs, timeout, is_pypy, **kwargs):
+    """
+    Creates both a test target and a binary target with the same content, for debugging purposes.
+    """
+    (pypy_test if is_pypy else cpython_test)(
+        name = name,
+        srcs = srcs,
+        timeout = timeout,
+        **kwargs
+    )
+
+    (pypy_binary if is_pypy else cpython_binary)(
+        name = name + "-debug",
+        srcs = srcs,
         **kwargs
     )
 

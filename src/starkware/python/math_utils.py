@@ -221,13 +221,21 @@ class NotOnCurveException(Exception):
     pass
 
 
+def y_squared_from_x(x: int, alpha: int, beta: int, field_prime: int) -> int:
+    """
+    Computes y^2 using the curve equation:
+    y^2 = x^3 + alpha * x + beta (mod field_prime)
+    """
+    return (pow(x, 3, field_prime) + alpha * x + beta) % field_prime
+
+
 def recover_y(x: int, alpha: int, beta: int, field_prime: int) -> int:
     """
     Recovers the corresponding y coordinate on the elliptic curve
     y^2 = x^3 + alpha * x + beta (mod field_prime)
     of a given x coordinate.
     """
-    y_squared = pow(x, 3, field_prime) + alpha * x + beta
+    y_squared = y_squared_from_x(x, alpha, beta, field_prime)
     if is_quad_residue(y_squared, field_prime):
         return sqrt(y_squared, field_prime)
     raise NotOnCurveException(f"{x} does not represent the x coordinate of a point on the curve.")

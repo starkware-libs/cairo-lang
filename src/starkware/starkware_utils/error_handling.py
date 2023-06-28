@@ -126,6 +126,8 @@ class StarkErrorCode(ErrorCode):
     OUT_OF_RANGE_POSITIVE_AMOUNT = auto()
     #: Public key (Stark key) value is out of range.
     OUT_OF_RANGE_PUBLIC_KEY = auto()
+    #: Risk factor segment upper bound is out of range.
+    OUT_OF_RANGE_RISK_FACTOR_UPPER_BOUND = auto()
     #: Signature subfield is out of range.
     OUT_OF_RANGE_SIGNATURE_SUBFIELD = auto()
     #: System ID value is out of range.
@@ -167,7 +169,7 @@ class StarkException(WebFriendlyException):
     def __init__(self, code: ErrorCode, message: Optional[str] = None):
         self.code = code
         self.message = message
-        super().__init__(status_code=500, body={"code": code, "message": message})
+        super().__init__(status_code=400, body={"code": code, "message": message})
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(code={self.code}, message={self.message})"

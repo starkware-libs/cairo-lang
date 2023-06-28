@@ -3,7 +3,7 @@ import inspect
 import re
 from abc import abstractmethod
 from contextlib import contextmanager, nullcontext
-from typing import ContextManager, Optional, Type, TypeVar
+from typing import Callable, ContextManager, Optional, Type, TypeVar
 
 import pytest
 from pytest import MonkeyPatch
@@ -107,3 +107,15 @@ def apply_and_stop(obj, last_func, monkeypatch: MonkeyPatch):
         pass
     finally:
         monkeypatch.setattr(obj, last_func.__name__, last_func)
+
+
+def as_coroutine(func: Callable):
+    """
+    Converts the given function to a coroutine.
+    Useful for turning a lambda function to an async function.
+    """
+
+    async def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return wrapper

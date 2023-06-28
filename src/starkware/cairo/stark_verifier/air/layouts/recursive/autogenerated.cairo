@@ -2,10 +2,9 @@ from starkware.cairo.stark_verifier.air.layouts.recursive.global_values import G
 from starkware.cairo.stark_verifier.air.oods import OodsGlobalValues
 from starkware.cairo.common.pow import pow
 
+const N_DYNAMIC_PARAMS = 0;
 const N_CONSTRAINTS = 93;
 const MASK_SIZE = 133;
-const N_ORIGINAL_COLUMNS = 7;
-const N_INTERACTION_COLUMNS = 3;
 const PUBLIC_MEMORY_STEP = 16;
 const HAS_DILUTED_POOL = 1;
 const DILUTED_SPACING = 4;
@@ -29,6 +28,8 @@ const CONSTRAINT_DEGREE = 2;
 const CPU_COMPONENT_HEIGHT = 16;
 const LOG_CPU_COMPONENT_HEIGHT = 4;
 const MEMORY_STEP = 2;
+const NUM_COLUMNS_FIRST = 7;
+const NUM_COLUMNS_SECOND = 3;
 const IS_DYNAMIC_AIR = 0;
 
 func eval_composition_polynomial{range_check_ptr}(
@@ -1395,10 +1396,13 @@ func eval_oods_polynomial{range_check_ptr}(
     // Sum the OODS boundary constraints on the composition polynomials.
     let (oods_point_to_deg) = pow(oods_point, CONSTRAINT_DEGREE);
 
-    tempvar value = (column_values[10] - oods_values[133]) / (point - oods_point_to_deg);
+    tempvar value = (column_values[NUM_COLUMNS_FIRST + NUM_COLUMNS_SECOND] - oods_values[133]) / (
+        point - oods_point_to_deg
+    );
     tempvar total_sum = total_sum + constraint_coefficients[133] * value;
 
-    tempvar value = (column_values[11] - oods_values[134]) / (point - oods_point_to_deg);
+    tempvar value = (column_values[NUM_COLUMNS_FIRST + NUM_COLUMNS_SECOND + 1] - oods_values[134]) /
+        (point - oods_point_to_deg);
     tempvar total_sum = total_sum + constraint_coefficients[134] * value;
 
     static_assert 135 == MASK_SIZE + CONSTRAINT_DEGREE;

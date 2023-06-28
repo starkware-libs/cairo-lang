@@ -103,6 +103,7 @@ class Starknet:
         sierra_dict: Optional[JsonObject] = None,
         contract_class: Optional[ContractClass] = None,
         sender_address: Optional[CastableToAddress] = None,
+        compiler_dir: Optional[str] = None,
     ) -> int:
         """
         Declares a Cairo 1.0 contract class in the StarkNet network.
@@ -123,7 +124,7 @@ class Starknet:
             sender_address = self.default_account_address
 
         class_hash, _ = await self.state.declare(
-            contract_class=contract_class, sender_address=sender_address
+            contract_class=contract_class, sender_address=sender_address, compiler_dir=compiler_dir
         )
         self.class_hash_to_abi[class_hash] = abi
 

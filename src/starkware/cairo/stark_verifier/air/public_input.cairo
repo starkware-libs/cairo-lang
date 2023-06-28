@@ -29,6 +29,8 @@ struct PublicInput {
     rc_max: felt,
     // Layout ID.
     layout: felt,
+    // Dynamic layout params.
+    dynamic_params: felt*,
     // Memory segment infos array.
     n_segments: felt,
     segments: SegmentInfo*,
@@ -77,6 +79,11 @@ func public_input_hash{
         blake2s_add_felt(num=public_input.rc_min, bigend=1);
         blake2s_add_felt(num=public_input.rc_max, bigend=1);
         blake2s_add_felt(num=public_input.layout, bigend=1);
+
+        blake2s_add_felts(
+            n_elements=air.air.n_dynamic_params, elements=public_input.dynamic_params, bigend=1
+        );
+
         // n_segments is not written, it is assumed to be fixed.
         blake2s_add_felts(
             n_elements=public_input.n_segments * SegmentInfo.SIZE,

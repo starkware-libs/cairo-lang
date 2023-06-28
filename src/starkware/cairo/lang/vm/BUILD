@@ -53,7 +53,6 @@ py_library(
     deps = [
         "cairo_relocatable_lib",
         "cairo_vm_crypto_lib",
-        "//src/starkware/cairo/lang:dynamic_layout_params_lib",
         "//src/starkware/cairo/lang/builtins:cairo_all_builtins_lib",
         "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
         "//src/starkware/python:starkware_python_utils_lib",
@@ -72,7 +71,6 @@ py_library(
         "cairo_vm_lib",
         "//src/starkware/cairo/lang:cairo_instances_lib",
         "//src/starkware/cairo/lang:cairo_version_lib",
-        "//src/starkware/cairo/lang:dynamic_layout_params_lib",
         "//src/starkware/cairo/lang/builtins:cairo_run_builtins_lib",
         "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
         "//src/starkware/cairo/lang/tracer:cairo_tracer_lib",

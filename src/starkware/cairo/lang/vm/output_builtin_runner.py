@@ -56,6 +56,9 @@ class OutputBuiltinRunner(BuiltinRunner):
         # Output builtin has one cell per instance.
         return self.get_used_cells(runner)
 
+    def get_allocated_instances(self, runner):
+        return self.get_used_instances(runner)
+
     def get_allocated_memory_units(self, runner):
         # The output builtin uses only public memory units.
         return 0

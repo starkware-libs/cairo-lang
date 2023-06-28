@@ -71,7 +71,9 @@ DEPRECATED_DECLARE_VERSIONS = (
 )
 
 # Sierra -> Casm compilation version.
-SIERRA_VERSION = [1, 1, 0]
+SIERRA_VERSION = [1, 2, 0]
+# Contract classes with sierra version older than MIN_SIERRA_VERSION are not supported.
+MIN_SIERRA_VERSION = [1, 1, 0]
 
 # The version of contract class leaf.
 CONTRACT_CLASS_LEAF_VERSION: bytes = b"CONTRACT_CLASS_LEAF_V0"
@@ -86,6 +88,11 @@ COMPILED_CLASS_VERSION = from_bytes(b"COMPILED_CLASS_V1")
 L1_TO_L2_MSG_HEADER_SIZE = 5
 L2_TO_L1_MSG_HEADER_SIZE = 3
 CLASS_UPDATE_SIZE = 1
+
+# OS reserved contract addresses.
+ORIGIN_ADDRESS = 0
+BLOCK_HASH_CONTRACT_ADDRESS = 1
+OS_RESERVED_CONTRACT_ADDRESSES = [ORIGIN_ADDRESS, BLOCK_HASH_CONTRACT_ADDRESS]
 
 # StarkNet solidity contract-related constants.
 N_DEFAULT_TOPICS = 1  # Events have one default topic.
@@ -102,6 +109,9 @@ N_STEPS_FEE_WEIGHT = 0.01
 
 # Expected return values of a 'validate' entry point.
 VALIDATE_RETDATA = [from_bytes(b"VALID")]
+
+# The block number -> block hash mapping is written for the current block number minus this number.
+STORED_BLOCK_HASH_BUFFER = 10
 
 
 class OsOutputConstant(Enum):
@@ -131,7 +141,9 @@ class GasCost(Enum):
     # Syscall cas costs.
     CALL_CONTRACT = SYSCALL_BASE + 10 * STEP + ENTRY_POINT
     DEPLOY = SYSCALL_BASE + 200 * STEP + ENTRY_POINT
+    GET_BLOCK_HASH = SYSCALL_BASE + 50 * STEP
     GET_EXECUTION_INFO = SYSCALL_BASE + 10 * STEP
+    SECP256K1_NEW = SYSCALL_BASE
     KECCAK = SYSCALL_BASE
     KECCAK_ROUND_COST = 180000
     LIBRARY_CALL = CALL_CONTRACT

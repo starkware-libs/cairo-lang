@@ -194,6 +194,13 @@ def is_point_on_curve(x: int, y: int) -> bool:
     return pow(y, 2, FIELD_PRIME) == (pow(x, 3, FIELD_PRIME) + ALPHA * x + BETA) % FIELD_PRIME
 
 
+def is_valid_stark_private_key(private_key: int) -> bool:
+    """
+    Returns whether the given input is a valid STARK private key.
+    """
+    return 0 < private_key < EC_ORDER
+
+
 def is_valid_stark_key(stark_key: int) -> bool:
     """
     Returns whether the given input is a valid STARK key.

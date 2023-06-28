@@ -39,7 +39,7 @@ from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
 from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
 from starkware.starkware_utils.config_base import Config
-from starkware.storage.storage import DBObject, FactFetchingContext
+from starkware.storage.storage import DBObject, FactFetchingContext, Storage
 
 logger = logging.getLogger(__name__)
 state_objects_logger = logging.getLogger(f"{__name__}:state_objects_logger")
@@ -402,6 +402,14 @@ class StateDiff(EverestStateDiff, DBObject):
         metadata=fields.storage_updates_metadata
     )
     block_info: BlockInfo
+
+    async def write(self, storage: Storage) -> bytes:
+        """
+        Writes an entry containing the state diff to the storage under its hash, as a fact object.
+        """
+        hash_value = self.calculate_hash()
+        await self.set(storage=storage, suffix=hash_value)
+        return hash_value
 
     @classmethod
     def empty(cls, block_info: BlockInfo):

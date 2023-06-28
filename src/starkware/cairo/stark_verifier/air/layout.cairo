@@ -16,6 +16,7 @@ struct AirWithLayout {
 }
 
 struct OodsGlobalValues {
+    dynamic_params: felt*,
 }
 
 func eval_oods_polynomial{range_check_ptr}(

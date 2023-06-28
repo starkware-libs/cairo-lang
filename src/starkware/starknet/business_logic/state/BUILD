@@ -8,6 +8,7 @@ py_library(
         "state.py",
         "state_api.py",
         "state_api_objects.py",
+        "storage_domain.py",
     ],
     visibility = ["//visibility:public"],
     deps = [

@@ -13,7 +13,7 @@ from starkware.cairo.lang.builtins.all_builtins import (
     OUTPUT_BUILTIN,
     with_suffix,
 )
-from starkware.cairo.lang.instances import starknet_instance
+from starkware.cairo.lang.instances import starknet_with_keccak_instance
 from starkware.python.utils import from_bytes
 from starkware.starknet.definitions import constants, fields
 from starkware.starknet.definitions.chain_ids import StarknetChainId
@@ -30,7 +30,7 @@ GENERAL_CONFIG_FILE_NAME = "general_config.yml"
 DOCKER_GENERAL_CONFIG_PATH = os.path.join("/", GENERAL_CONFIG_FILE_NAME)
 GENERAL_CONFIG_PATH = os.path.join(os.path.dirname(__file__), GENERAL_CONFIG_FILE_NAME)
 N_STEPS_RESOURCE = "n_steps"
-STARKNET_LAYOUT_INSTANCE = starknet_instance
+STARKNET_LAYOUT_INSTANCE = starknet_with_keccak_instance
 
 # Reference to the default general config.
 default_general_config = load_config(
@@ -64,7 +64,7 @@ DEFAULT_ENFORCE_L1_FEE = True
 DEFAULT_GAS_PRICE = 10**8
 DEFAULT_CAIRO_RESOURCE_FEE_WEIGHTS = {
     N_STEPS_RESOURCE: 1.0,
-    **{builtin: 0.0 for builtin in ALL_BUILTINS.except_for(KECCAK_BUILTIN).with_suffix()},
+    **{builtin: 0.0 for builtin in ALL_BUILTINS.with_suffix()},
 }
 
 

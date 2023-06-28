@@ -44,6 +44,12 @@ class BuiltinRunner(ABC):
         """
 
     @abstractmethod
+    def get_allocated_instances(self, runner) -> int:
+        """
+        Returns the number of instances in the trace (including unused instances).
+        """
+
+    @abstractmethod
     def get_allocated_memory_units(self, runner) -> int:
         """
         Returns the number of memory units used by the builtin.
@@ -224,19 +230,22 @@ class SimpleBuiltinRunner(BuiltinRunner):
     def get_used_instances(self, runner):
         return div_ceil(self.get_used_cells(runner), self.cells_per_instance)
 
-    def get_allocated_memory_units(self, runner):
+    def get_allocated_instances(self, runner):
         if self.ratio is None:
             # Dynamic layout has the exact number of instances it needs (up to a power of 2).
-            instances = div_ceil(self.get_used_cells(runner), self.cells_per_instance)
-            components = next_power_of_2(div_ceil(instances, self.instances_per_component))
-            return self.cells_per_instance * self.instances_per_component * components
+            instances = self.get_used_instances(runner)
+            components = next_power_of_2(max(1, div_ceil(instances, self.instances_per_component)))
+            return self.instances_per_component * components
         assert isinstance(self.ratio, int), "ratio is not an int"
         min_steps = self.ratio * self.instances_per_component
         if runner.vm.current_step < min_steps:
             raise InsufficientAllocatedCells(
                 f"Number of steps must be at least {min_steps} for the {self.name} builtin."
             )
-        return self.cells_per_instance * safe_div(runner.vm.current_step, self.ratio)
+        return safe_div(runner.vm.current_step, self.ratio)
+
+    def get_allocated_memory_units(self, runner):
+        return self.cells_per_instance * self.get_allocated_instances(runner)
 
     def get_used_cells_and_allocated_size(self, runner):
         used = self.get_used_cells(runner)

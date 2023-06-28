@@ -25,6 +25,7 @@ from starkware.starknet.business_logic.fact_state.contract_state_objects import 
 from starkware.starknet.business_logic.state.state import UpdatesTrackerState
 from starkware.starknet.business_logic.state.state_api import SyncState
 from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
+from starkware.starknet.business_logic.state.storage_domain import StorageDomain
 from starkware.starknet.business_logic.transaction.fee import calculate_tx_fee, execute_fee_transfer
 from starkware.starknet.business_logic.transaction.state_objects import (
     FeeInfo,
@@ -226,6 +227,10 @@ class InitializeBlockInfo(SyntheticTransaction):
     """
 
     block_info: BlockInfo
+    # A (block number, block hash) pair that should be written to the block number -> block hash
+    # mapping. This pair corresponds to the n-th block from the current block, where n is specified
+    # in constants.STORED_BLOCK_HASH_BUFFER.
+    old_block_number_and_hash: Optional[Tuple[int, int]]
     tx_type: ClassVar[TransactionType] = TransactionType.INITIALIZE_BLOCK_INFO
 
     def sync_apply_state_updates(self, state: StateProxy, general_config: Config) -> None:
@@ -237,6 +242,16 @@ class InitializeBlockInfo(SyntheticTransaction):
 
         # Update entire block-related information.
         state.update_block_info(block_info=self.block_info)
+
+        # Write block number -> block hash mapping.
+        if self.old_block_number_and_hash is not None:
+            block_number, block_hash = self.old_block_number_and_hash
+            state.set_storage_at(
+                storage_domain=StorageDomain.ON_CHAIN,
+                contract_address=constants.BLOCK_HASH_CONTRACT_ADDRESS,
+                key=block_number,
+                value=block_hash,
+            )
         return None
 
     def _apply_specific_sequential_changes(
@@ -414,7 +429,9 @@ class InternalAccountTransaction(InternalTransaction):
         if self.version in [0, constants.QUERY_VERSION_BASE]:
             return
 
-        current_nonce = state.get_nonce_at(contract_address=self.sender_address)
+        current_nonce = state.get_nonce_at(
+            storage_domain=StorageDomain.ON_CHAIN, contract_address=self.sender_address
+        )
         stark_assert(
             current_nonce == self.nonce,
             code=StarknetErrorCode.INVALID_TRANSACTION_NONCE,
@@ -424,7 +441,9 @@ class InternalAccountTransaction(InternalTransaction):
         # Increment nonce.
         # Note that changing contract_state.nonce directly will bypass the proxy used to revert
         # transactions.
-        state.increment_nonce(contract_address=self.sender_address)
+        state.increment_nonce(
+            storage_domain=StorageDomain.ON_CHAIN, contract_address=self.sender_address
+        )
 
     def _apply_specific_sequential_changes(
         self,
@@ -590,7 +609,9 @@ class InternalDeclare(InternalAccountTransaction):
         sender_address: int,
         chain_id: Optional[int] = None,
         max_fee: int = 0,
+        version: int = constants.TRANSACTION_VERSION,
         signature: Optional[List[int]] = None,
+        nonce: int = 0,
     ) -> "InternalDeclare":
         """
         Creates an InternalDeclare transaction and writes its contract class to the DB.
@@ -604,9 +625,9 @@ class InternalDeclare(InternalAccountTransaction):
             chain_id=0 if chain_id is None else chain_id,
             sender_address=sender_address,
             max_fee=max_fee,
-            version=constants.TRANSACTION_VERSION,
+            version=version,
             signature=[] if signature is None else signature,
-            nonce=0,
+            nonce=nonce,
         )
 
     @classmethod

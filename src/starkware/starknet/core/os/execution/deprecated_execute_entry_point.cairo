@@ -1,11 +1,15 @@
 from starkware.cairo.builtin_selection.select_builtins import select_builtins
-from starkware.cairo.builtin_selection.validate_builtins import validate_builtins
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.dict_access import DictAccess
 from starkware.cairo.common.find_element import find_element, search_sorted
 from starkware.cairo.common.registers import get_ap
 from starkware.starknet.core.os.block_context import BlockContext
-from starkware.starknet.core.os.builtins import BuiltinEncodings, BuiltinParams, BuiltinPointers
+from starkware.starknet.core.os.builtins import (
+    BuiltinEncodings,
+    BuiltinParams,
+    BuiltinPointers,
+    update_builtin_ptrs,
+)
 from starkware.starknet.core.os.constants import (
     DEFAULT_ENTRY_POINT_SELECTOR,
     ENTRY_POINT_TYPE_CONSTRUCTOR,
@@ -173,42 +177,16 @@ func deprecated_execute_entry_point{
     local retdata_size: felt = [ap_val - 2];
     local retdata: felt* = cast([ap_val - 1], felt*);
 
-    local return_builtin_ptrs: BuiltinPointers*;
-    %{
-        from starkware.starknet.core.os.os_utils import update_builtin_pointers
-
-        # Fill the values of all builtin pointers after the current transaction.
-        ids.return_builtin_ptrs = segments.gen_arg(
-            update_builtin_pointers(
-                memory=memory,
-                n_builtins=ids.n_builtins,
-                builtins_encoding_addr=ids.builtin_params.builtin_encodings.address_,
-                n_selected_builtins=ids.compiled_class.n_builtins,
-                selected_builtins_encoding_addr=ids.compiled_class.builtin_list,
-                orig_builtins_ptrs_addr=ids.builtin_ptrs.address_,
-                selected_builtins_ptrs_addr=ids.returned_builtin_ptrs_subset,
-                ),
-            )
-    %}
-    select_builtins(
-        n_builtins=n_builtins,
-        all_encodings=builtin_params.builtin_encodings,
-        all_ptrs=return_builtin_ptrs,
+    let return_builtin_ptrs = update_builtin_ptrs(
+        builtin_params=builtin_params,
+        builtin_ptrs=builtin_ptrs,
         n_selected_builtins=compiled_class.n_builtins,
         selected_encodings=compiled_class.builtin_list,
         selected_ptrs=returned_builtin_ptrs_subset,
     );
 
-    // Call validate_builtins to validate that the builtin pointers have advanced correctly.
-    validate_builtins(
-        prev_builtin_ptrs=builtin_ptrs,
-        new_builtin_ptrs=return_builtin_ptrs,
-        builtin_instance_sizes=builtin_params.builtin_instance_sizes,
-        n_builtins=n_builtins,
-    );
-
     // Validate that segment_arena builtin was not used.
-    assert builtin_ptrs.segment_arena = return_builtin_ptrs.segment_arena;
+    assert builtin_ptrs.selectable.segment_arena = return_builtin_ptrs.selectable.segment_arena;
 
     let syscall_end = cast([returned_builtin_ptrs_subset - 1], felt*);
 

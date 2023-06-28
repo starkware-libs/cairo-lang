@@ -12,6 +12,7 @@ from starkware.starknet.business_logic.state.state_api import (
     StateReader,
     get_stark_exception_on_undeclared_contract,
 )
+from starkware.starknet.business_logic.state.storage_domain import StorageDomain
 from starkware.starknet.definitions import fields
 from starkware.starknet.services.api.contract_class.contract_class import (
     CompiledClass,
@@ -80,11 +81,15 @@ class PatriciaStateReader(StateReader):
         contract_state = await self._get_contract_state(contract_address=contract_address)
         return from_bytes(contract_state.contract_hash)
 
-    async def get_nonce_at(self, contract_address: int) -> int:
+    async def get_nonce_at(self, storage_domain: StorageDomain, contract_address: int) -> int:
+        storage_domain.assert_onchain()
         contract_state = await self._get_contract_state(contract_address=contract_address)
         return contract_state.nonce
 
-    async def get_storage_at(self, contract_address: int, key: int) -> int:
+    async def get_storage_at(
+        self, storage_domain: StorageDomain, contract_address: int, key: int
+    ) -> int:
+        storage_domain.assert_onchain()
         contract_state = await self._get_contract_state(contract_address=contract_address)
 
         contract_storage_tree_height = contract_state.storage_commitment_tree.height

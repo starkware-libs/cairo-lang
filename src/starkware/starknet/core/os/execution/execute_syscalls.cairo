@@ -1,13 +1,27 @@
+from starkware.cairo.common.bool import FALSE
+from starkware.cairo.common.builtin_keccak.keccak import (
+    KECCAK_FULL_RATE_IN_WORDS,
+    keccak_padded_input,
+)
+from starkware.cairo.common.cairo_builtins import BitwiseBuiltin, KeccakBuiltin
 from starkware.cairo.common.dict import dict_read, dict_update
 from starkware.cairo.common.dict_access import DictAccess
-from starkware.cairo.common.math import assert_lt, assert_nn, assert_not_zero
+from starkware.cairo.common.math import (
+    assert_le,
+    assert_lt,
+    assert_nn,
+    assert_not_zero,
+    unsigned_div_rem,
+)
 from starkware.cairo.common.memcpy import memcpy
 from starkware.cairo.common.segments import relocate_segment
 from starkware.starknet.common.new_syscalls import (
     CALL_CONTRACT_SELECTOR,
     DEPLOY_SELECTOR,
     EMIT_EVENT_SELECTOR,
+    GET_BLOCK_HASH_SELECTOR,
     GET_EXECUTION_INFO_SELECTOR,
+    KECCAK_SELECTOR,
     LIBRARY_CALL_SELECTOR,
     REPLACE_CLASS_SELECTOR,
     SEND_MESSAGE_TO_L1_SELECTOR,
@@ -20,7 +34,11 @@ from starkware.starknet.common.new_syscalls import (
     EmitEventRequest,
     ExecutionInfo,
     FailureReason,
+    GetBlockHashRequest,
+    GetBlockHashResponse,
     GetExecutionInfoResponse,
+    KeccakRequest,
+    KeccakResponse,
     LibraryCallRequest,
     ReplaceClassRequest,
     RequestHeader,
@@ -31,21 +49,32 @@ from starkware.starknet.common.new_syscalls import (
     StorageWriteRequest,
 )
 from starkware.starknet.core.os.block_context import BlockContext
-from starkware.starknet.core.os.builtins import BuiltinPointers
+from starkware.starknet.core.os.builtins import (
+    BuiltinPointers,
+    NonSelectableBuiltins,
+    SelectableBuiltins,
+)
 from starkware.starknet.core.os.constants import (
+    BLOCK_HASH_CONTRACT_ADDRESS,
     CALL_CONTRACT_GAS_COST,
     CONSTRUCTOR_ENTRY_POINT_SELECTOR,
     DEPLOY_GAS_COST,
     EMIT_EVENT_GAS_COST,
     ENTRY_POINT_TYPE_CONSTRUCTOR,
     ENTRY_POINT_TYPE_EXTERNAL,
+    ERROR_BLOCK_NUMBER_OUT_OF_RANGE,
+    ERROR_INVALID_INPUT_LEN,
     ERROR_OUT_OF_GAS,
+    GET_BLOCK_HASH_GAS_COST,
     GET_EXECUTION_INFO_GAS_COST,
+    KECCAK_GAS_COST,
+    KECCAK_ROUND_COST_GAS_COST,
     LIBRARY_CALL_GAS_COST,
     REPLACE_CLASS_GAS_COST,
     SEND_MESSAGE_TO_L1_GAS_COST,
     STORAGE_READ_GAS_COST,
     STORAGE_WRITE_GAS_COST,
+    STORED_BLOCK_HASH_BUFFER,
     SYSCALL_BASE_GAS_COST,
 )
 from starkware.starknet.core.os.contract_address.contract_address import get_contract_address
@@ -151,8 +180,26 @@ func execute_syscalls{
         );
     }
 
+    if (selector == GET_BLOCK_HASH_SELECTOR) {
+        execute_get_block_hash(block_context=block_context);
+        return execute_syscalls(
+            block_context=block_context,
+            execution_context=execution_context,
+            syscall_ptr_end=syscall_ptr_end,
+        );
+    }
+
     if (selector == REPLACE_CLASS_SELECTOR) {
         execute_replace_class(contract_address=execution_context.execution_info.contract_address);
+        return execute_syscalls(
+            block_context=block_context,
+            execution_context=execution_context,
+            syscall_ptr_end=syscall_ptr_end,
+        );
+    }
+
+    if (selector == KECCAK_SELECTOR) {
+        execute_keccak();
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -183,7 +230,7 @@ func execute_call_contract{
     let (success, remaining_gas) = reduce_syscall_base_gas(
         specific_base_gas_cost=CALL_CONTRACT_GAS_COST, request_struct_size=CallContractRequest.SIZE
     );
-    if (success == 0) {
+    if (success == FALSE) {
         // Not enough gas to execute the syscall.
         return ();
     }
@@ -231,7 +278,7 @@ func execute_library_call{
     let (success, remaining_gas) = reduce_syscall_base_gas(
         specific_base_gas_cost=LIBRARY_CALL_GAS_COST, request_struct_size=LibraryCallRequest.SIZE
     );
-    if (success == 0) {
+    if (success == FALSE) {
         // Not enough gas to execute the syscall.
         return ();
     }
@@ -322,7 +369,7 @@ func execute_deploy{
     let (success, remaining_gas) = reduce_syscall_base_gas(
         specific_base_gas_cost=DEPLOY_GAS_COST, request_struct_size=DeployRequest.SIZE
     );
-    if (success == 0) {
+    if (success == FALSE) {
         // Not enough gas to execute the syscall.
         return ();
     }
@@ -339,7 +386,8 @@ func execute_deploy{
     tempvar constructor_calldata_start = request.constructor_calldata_start;
     tempvar constructor_calldata_size = request.constructor_calldata_end -
         constructor_calldata_start;
-    let hash_ptr = builtin_ptrs.pedersen;
+    let selectable_builtins = &builtin_ptrs.selectable;
+    let hash_ptr = selectable_builtins.pedersen;
     with hash_ptr {
         let (contract_address) = get_contract_address(
             salt=request.contract_address_salt,
@@ -350,13 +398,16 @@ func execute_deploy{
         );
     }
     tempvar builtin_ptrs = new BuiltinPointers(
-        pedersen=hash_ptr,
-        range_check=builtin_ptrs.range_check,
-        ecdsa=builtin_ptrs.ecdsa,
-        bitwise=builtin_ptrs.bitwise,
-        ec_op=builtin_ptrs.ec_op,
-        poseidon=builtin_ptrs.poseidon,
-        segment_arena=builtin_ptrs.segment_arena,
+        selectable=SelectableBuiltins(
+            pedersen=hash_ptr,
+            range_check=selectable_builtins.range_check,
+            ecdsa=selectable_builtins.ecdsa,
+            bitwise=selectable_builtins.bitwise,
+            ec_op=selectable_builtins.ec_op,
+            poseidon=selectable_builtins.poseidon,
+            segment_arena=selectable_builtins.segment_arena,
+        ),
+        non_selectable=builtin_ptrs.non_selectable,
     );
 
     tempvar constructor_execution_context = new ExecutionContext(
@@ -423,7 +474,7 @@ func execute_storage_read{range_check_ptr, syscall_ptr: felt*, contract_state_ch
     let success = reduce_syscall_gas_and_write_response_header(
         total_gas_cost=STORAGE_READ_GAS_COST, request_struct_size=StorageReadRequest.SIZE
     );
-    if (success == 0) {
+    if (success == FALSE) {
         // Not enough gas to execute the syscall.
         return ();
     }
@@ -444,6 +495,12 @@ func execute_storage_read{range_check_ptr, syscall_ptr: felt*, contract_state_ch
     static_assert StorageReadRequest.SIZE == 2;
     assert request.reserved = 0;
     tempvar value = response.value;
+    %{
+        # Make sure the value is cached (by reading it), to be used later on for the
+        # commitment computation.
+        value = execution_helper.storage_by_address[ids.contract_address].read(key=ids.request.key)
+        assert ids.value == value, "Inconsistent storage value."
+    %}
     tempvar storage_ptr = state_entry.storage_ptr;
     assert [storage_ptr] = DictAccess(key=request.key, prev_value=value, new_value=value);
     let storage_ptr = storage_ptr + DictAccess.SIZE;
@@ -472,7 +529,7 @@ func execute_storage_write{
     let success = reduce_syscall_gas_and_write_response_header(
         total_gas_cost=STORAGE_WRITE_GAS_COST, request_struct_size=StorageWriteRequest.SIZE
     );
-    if (success == 0) {
+    if (success == FALSE) {
         // Not enough gas to execute the syscall.
         return ();
     }
@@ -512,6 +569,83 @@ func execute_storage_write{
     return ();
 }
 
+// Gets the block hash of the block at given block number.
+func execute_get_block_hash{
+    range_check_ptr, syscall_ptr: felt*, contract_state_changes: DictAccess*
+}(block_context: BlockContext*) {
+    alloc_locals;
+    let request = cast(syscall_ptr + RequestHeader.SIZE, GetBlockHashRequest*);
+
+    // Reduce gas.
+    let (success, remaining_gas) = reduce_syscall_base_gas(
+        specific_base_gas_cost=GET_BLOCK_HASH_GAS_COST, request_struct_size=GetBlockHashRequest.SIZE
+    );
+    if (success == FALSE) {
+        // Not enough gas to execute the syscall; in that case, 'reduce_syscall_base_gas' already
+        // wrote the response objects and advanced the syscall pointer.
+        return ();
+    }
+
+    // Handle out of range block number.
+    let request_block_number = request.block_number;
+    let current_block_number = block_context.block_info.block_number;
+
+    // A block number is a u64. STORED_BLOCK_HASH_BUFFER is 10.
+    // The following computations will not overflow.
+    if (nondet %{
+            ids.request_block_number > \
+                       ids.current_block_number - ids.STORED_BLOCK_HASH_BUFFER
+        %} != FALSE) {
+        assert_lt(current_block_number, request_block_number + STORED_BLOCK_HASH_BUFFER);
+        write_failure_response(
+            remaining_gas=remaining_gas, failure_felt=ERROR_BLOCK_NUMBER_OUT_OF_RANGE
+        );
+        return ();
+    }
+
+    assert_le(request_block_number + STORED_BLOCK_HASH_BUFFER, current_block_number);
+
+    // Gas reduction has succeeded and the request is valid; write the response header.
+    let response_header = cast(syscall_ptr, ResponseHeader*);
+    // Advance syscall pointer to the response body.
+    let syscall_ptr = syscall_ptr + ResponseHeader.SIZE;
+    assert [response_header] = ResponseHeader(gas=remaining_gas, failure_flag=0);
+
+    let response = cast(syscall_ptr, GetBlockHashResponse*);
+    // Advance syscall pointer to the next syscall.
+    let syscall_ptr = syscall_ptr + GetBlockHashResponse.SIZE;
+
+    // Fetch the block hash contract state.
+    local state_entry: StateEntry*;
+    local new_state_entry: StateEntry*;
+    %{
+        # Fetch a state_entry in this hint. Validate it in the update that comes next.
+        ids.state_entry = __dict_manager.get_dict(ids.contract_state_changes)[
+            ids.BLOCK_HASH_CONTRACT_ADDRESS]
+        ids.new_state_entry = segments.add()
+    %}
+
+    // Read from storage.
+    tempvar block_hash = response.block_hash;
+    tempvar storage_ptr = state_entry.storage_ptr;
+    assert [storage_ptr] = DictAccess(
+        key=request_block_number, prev_value=block_hash, new_value=block_hash
+    );
+    let storage_ptr = storage_ptr + DictAccess.SIZE;
+
+    // Update the state.
+    assert [new_state_entry] = StateEntry(
+        class_hash=state_entry.class_hash, storage_ptr=storage_ptr, nonce=state_entry.nonce
+    );
+    dict_update{dict_ptr=contract_state_changes}(
+        key=BLOCK_HASH_CONTRACT_ADDRESS,
+        prev_value=cast(state_entry, felt),
+        new_value=cast(new_state_entry, felt),
+    );
+
+    return ();
+}
+
 // Gets the execution info.
 func execute_get_execution_info{range_check_ptr, syscall_ptr: felt*}(
     execution_info: ExecutionInfo*
@@ -520,7 +654,7 @@ func execute_get_execution_info{range_check_ptr, syscall_ptr: felt*}(
     let success = reduce_syscall_gas_and_write_response_header(
         total_gas_cost=GET_EXECUTION_INFO_GAS_COST, request_struct_size=0
     );
-    if (success == 0) {
+    if (success == FALSE) {
         // Not enough gas to execute the syscall.
         return ();
     }
@@ -545,7 +679,7 @@ func execute_replace_class{
     let success = reduce_syscall_gas_and_write_response_header(
         total_gas_cost=REPLACE_CLASS_GAS_COST, request_struct_size=ReplaceClassRequest.SIZE
     );
-    if (success == 0) {
+    if (success == FALSE) {
         // Not enough gas to execute the syscall.
         return ();
     }
@@ -572,6 +706,66 @@ func execute_replace_class{
     return ();
 }
 
+// Executes the keccak system call.
+func execute_keccak{
+    range_check_ptr, builtin_ptrs: BuiltinPointers*, syscall_ptr: felt*, outputs: OsCarriedOutputs*
+}() {
+    alloc_locals;
+    let request_header = cast(syscall_ptr, RequestHeader*);
+    let request = cast(syscall_ptr + RequestHeader.SIZE, KeccakRequest*);
+    tempvar input_start = request.input_start;
+    tempvar input_end = request.input_end;
+    let len = input_end - input_start;
+    let (local q, r) = unsigned_div_rem(len, KECCAK_FULL_RATE_IN_WORDS);
+
+    // Note that if KECCAK_GAS_COST > SYSCALL_BASE_GAS_COST, we need to call
+    // `reduce_syscall_base_gas` before the 'if' bellow to be consistent with the Sequencer.
+    static_assert KECCAK_GAS_COST == SYSCALL_BASE_GAS_COST;
+    if (r != 0) {
+        let syscall_ptr = syscall_ptr + RequestHeader.SIZE + KeccakRequest.SIZE;
+        write_failure_response(
+            remaining_gas=request_header.gas, failure_felt=ERROR_INVALID_INPUT_LEN
+        );
+        return ();
+    }
+
+    let required_gas = KECCAK_GAS_COST + q * KECCAK_ROUND_COST_GAS_COST;
+    let success = reduce_syscall_gas_and_write_response_header(
+        total_gas_cost=required_gas, request_struct_size=KeccakRequest.SIZE
+    );
+
+    if (success == FALSE) {
+        // Not enough gas to execute the syscall.
+        return ();
+    }
+
+    let selectable_builtins = &builtin_ptrs.selectable;
+    let bitwise_ptr = selectable_builtins.bitwise;
+    let keccak_ptr = builtin_ptrs.non_selectable.keccak;
+    with bitwise_ptr, keccak_ptr {
+        let (res) = keccak_padded_input(inputs=input_start, n_blocks=q);
+    }
+
+    assert [cast(syscall_ptr, KeccakResponse*)] = KeccakResponse(
+        result_low=res.low, result_high=res.high
+    );
+    let syscall_ptr = syscall_ptr + KeccakResponse.SIZE;
+
+    tempvar builtin_ptrs = new BuiltinPointers(
+        selectable=SelectableBuiltins(
+            pedersen=selectable_builtins.pedersen,
+            range_check=selectable_builtins.range_check,
+            ecdsa=selectable_builtins.ecdsa,
+            bitwise=bitwise_ptr,
+            ec_op=selectable_builtins.ec_op,
+            poseidon=selectable_builtins.poseidon,
+            segment_arena=selectable_builtins.segment_arena,
+        ),
+        non_selectable=NonSelectableBuiltins(keccak=keccak_ptr),
+    );
+    return ();
+}
+
 // Sends a message to L1.
 func execute_send_message_to_l1{range_check_ptr, syscall_ptr: felt*, outputs: OsCarriedOutputs*}(
     contract_address: felt
@@ -581,7 +775,7 @@ func execute_send_message_to_l1{range_check_ptr, syscall_ptr: felt*, outputs: Os
     let success = reduce_syscall_gas_and_write_response_header(
         total_gas_cost=SEND_MESSAGE_TO_L1_GAS_COST, request_struct_size=SendMessageToL1Request.SIZE
     );
-    if (success == 0) {
+    if (success == FALSE) {
         // Not enough gas to execute the syscall.
         return ();
     }
@@ -612,8 +806,8 @@ func reduce_syscall_gas_and_write_response_header{range_check_ptr, syscall_ptr: 
     let (success, remaining_gas) = reduce_syscall_base_gas(
         specific_base_gas_cost=total_gas_cost, request_struct_size=request_struct_size
     );
-    if (success != 0) {
-        // Reduction has succeded; write the response header.
+    if (success != FALSE) {
+        // Reduction has succeeded; write the response header.
         let response_header = cast(syscall_ptr, ResponseHeader*);
         // Advance syscall pointer to the response body.
         let syscall_ptr = syscall_ptr + ResponseHeader.SIZE;
@@ -627,6 +821,27 @@ func reduce_syscall_gas_and_write_response_header{range_check_ptr, syscall_ptr: 
     return 0;
 }
 
+// Returns a failure response with a single felt.
+@known_ap_change
+func write_failure_response{syscall_ptr: felt*}(remaining_gas: felt, failure_felt: felt) {
+    let response_header = cast(syscall_ptr, ResponseHeader*);
+    // Advance syscall pointer to the response body.
+    let syscall_ptr = syscall_ptr + ResponseHeader.SIZE;
+
+    // Write the response header.
+    assert [response_header] = ResponseHeader(gas=remaining_gas, failure_flag=1);
+
+    let failure_reason: FailureReason* = cast(syscall_ptr, FailureReason*);
+    // Advance syscall pointer to the next syscall.
+    let syscall_ptr = syscall_ptr + FailureReason.SIZE;
+
+    // Write the failure reason.
+    tempvar start = failure_reason.start;
+    assert start[0] = failure_felt;
+    assert failure_reason.end = start + 1;
+    return ();
+}
+
 // Reduces the base amount of gas for the current syscall.
 // In case of out-of-gas failure, writes the corresponding ResponseHeader and FailureReason
 // objects to syscall_ptr.
@@ -636,12 +851,12 @@ func reduce_syscall_base_gas{range_check_ptr, syscall_ptr: felt*}(
 ) -> (success: felt, remaining_gas: felt) {
     let request_header = cast(syscall_ptr, RequestHeader*);
     // Advance syscall pointer to the response header.
-    tempvar syscall_ptr = syscall_ptr + RequestHeader.SIZE + request_struct_size;
+    let syscall_ptr = syscall_ptr + RequestHeader.SIZE + request_struct_size;
 
     // Refund the pre-charged base gas.
     let required_gas = specific_base_gas_cost - SYSCALL_BASE_GAS_COST;
     tempvar initial_gas = request_header.gas;
-    if (nondet %{ ids.initial_gas >= ids.required_gas %} != 0) {
+    if (nondet %{ ids.initial_gas >= ids.required_gas %} != FALSE) {
         tempvar remaining_gas = initial_gas - required_gas;
         assert_nn(remaining_gas);
         return (success=1, remaining_gas=remaining_gas);
@@ -649,21 +864,7 @@ func reduce_syscall_base_gas{range_check_ptr, syscall_ptr: felt*}(
 
     // Handle out-of-gas.
     assert_lt(initial_gas, required_gas);
-    tempvar response_header = cast(syscall_ptr, ResponseHeader*);
-    // Advance syscall pointer to the response body.
-    let syscall_ptr = syscall_ptr + ResponseHeader.SIZE;
-
-    // Write the response header.
-    assert [response_header] = ResponseHeader(gas=initial_gas, failure_flag=1);
-
-    let failure_reason: FailureReason* = cast(syscall_ptr, FailureReason*);
-    // Advance syscall pointer to the next syscall.
-    let syscall_ptr = syscall_ptr + FailureReason.SIZE;
-
-    // Write the failure reason.
-    tempvar start = failure_reason.start;
-    assert start[0] = ERROR_OUT_OF_GAS;
-    assert failure_reason.end = start + 1;
+    write_failure_response(remaining_gas=initial_gas, failure_felt=ERROR_OUT_OF_GAS);
 
     return (success=0, remaining_gas=initial_gas);
 }

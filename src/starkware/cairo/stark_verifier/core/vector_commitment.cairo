@@ -56,12 +56,14 @@ struct VectorQueryWithDepth {
 }
 
 func validate_vector_commitment{range_check_ptr}(
-    config: VectorCommitmentConfig*, expected_height: felt
+    config: VectorCommitmentConfig*,
+    expected_height: felt,
+    n_verifier_friendly_commitment_layers: felt,
 ) {
     assert config.height = expected_height;
     // Note that n_verifier_friendly_commitment_layers can be greater than height (in such a case,
     // all Merkle layers use the verifier-friendly hash).
-    assert_nn(config.n_verifier_friendly_commitment_layers);
+    assert config.n_verifier_friendly_commitment_layers = n_verifier_friendly_commitment_layers;
     return ();
 }
 

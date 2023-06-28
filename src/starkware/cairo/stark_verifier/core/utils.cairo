@@ -30,3 +30,13 @@ func bit_reverse_u64{bitwise_ptr: BitwiseBuiltin*}(num: felt) -> (res: felt) {
     // Combine in reverse.
     return (res=num / 2 ** 63);
 }
+
+// Writes the following `n` values into data_ptr:
+//   cur, cur * alpha, cur * alpha^2, ..., cur * alpha^(n - 1).
+func compute_powers_array(data_ptr: felt*, alpha: felt, cur: felt, n: felt) -> () {
+    if (n == 0) {
+        return ();
+    }
+    assert data_ptr[0] = cur;
+    return compute_powers_array(data_ptr=&data_ptr[1], alpha=alpha, cur=cur * alpha, n=n - 1);
+}

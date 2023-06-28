@@ -17,12 +17,12 @@ def update_builtin_pointers(
     builtins_encoding_addr: RelocatableValue,
     n_selected_builtins: int,
     selected_builtins_encoding_addr: RelocatableValue,
-    orig_builtins_ptrs_addr: RelocatableValue,
-    selected_builtins_ptrs_addr: RelocatableValue,
+    orig_builtin_ptrs_addr: RelocatableValue,
+    selected_builtin_ptrs_addr: RelocatableValue,
 ):
     """
-    Update subsets of the pointer at 'orig_builtins_ptrs_addr' with the pointers at
-    'selected_builtins_ptrs_addr' according the location specified by
+    Update subsets of the pointer at 'orig_builtin_ptrs_addr' with the pointers at
+    'selected_builtin_ptrs_addr' according the location specified by
     'selected_builtins_encoding_addr'.
 
     Assumption: selected_builtins_encoding is an ordered subset of builtins_encoding_addr
@@ -37,11 +37,11 @@ def update_builtin_pointers(
     selected_builtin_offset = 0
     for index, builtin in enumerate(all_builtins):
         if builtin in selected_builtins:
-            return_builtins.append(memory[selected_builtins_ptrs_addr + selected_builtin_offset])
+            return_builtins.append(memory[selected_builtin_ptrs_addr + selected_builtin_offset])
             selected_builtin_offset += 1
         else:
             # The builtin is unselected, hence its value is the same as before calling the program.
-            return_builtins.append(memory[orig_builtins_ptrs_addr + index])
+            return_builtins.append(memory[orig_builtin_ptrs_addr + index])
 
     return return_builtins
 

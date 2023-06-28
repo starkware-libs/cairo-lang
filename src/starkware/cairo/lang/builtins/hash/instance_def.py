@@ -1,18 +1,15 @@
 import dataclasses
 from typing import Optional
 
+from starkware.cairo.lang.builtins.instance_def import BuiltinInstanceDef
+
 # Each hash consists of 3 cells (two inputs and one output).
 CELLS_PER_HASH = 3
 INPUT_CELLS_PER_HASH = 2
 
 
 @dataclasses.dataclass
-class PedersenInstanceDef:
-    # Defines the ratio between the number of steps to the number of pedersen instances.
-    # For every ratio steps, we have one instance.
-    # None means dynamic ratio.
-    ratio: Optional[int]
-
+class PedersenInstanceDef(BuiltinInstanceDef):
     # Split to this many different components - for optimization.
     repetitions: int
 
@@ -25,9 +22,16 @@ class PedersenInstanceDef:
     hash_limit: Optional[int] = None
 
     @property
-    def cells_per_builtin(self):
+    def cells_per_builtin(self) -> int:
         return CELLS_PER_HASH
 
     @property
-    def range_check_units_per_builtin(self):
+    def range_check_units_per_builtin(self) -> int:
+        return 0
+
+    @property
+    def invocation_height(self) -> int:
+        return self.element_height * self.n_inputs
+
+    def get_diluted_units_per_builtin(self, diluted_spacing: int, diluted_n_bits: int) -> int:
         return 0

@@ -1,4 +1,5 @@
 FROM ciimage/python:3.9
+RUN sed -i -e 's|http://archive\.ubuntu\.com/ubuntu/|mirror://mirrors.ubuntu.com/mirrors.txt|' /etc/apt/sources.list
 
 COPY ./docker_common_deps.sh /app/
 WORKDIR /app/

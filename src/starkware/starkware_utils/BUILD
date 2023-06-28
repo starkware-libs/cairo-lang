@@ -1,38 +1,4 @@
 load("//bazel_utils/python:defs.bzl", "requirement")
-load(
-    "//src/starkware/starkware_utils:vars.bzl",
-    "STARKWARE_UTILS_LIBS_ADDITIONAL_FILES",
-    "STARKWARE_UTILS_LIBS_ADDITIONAL_LIBS",
-)
-
-py_library(
-    name = "starkware_utils_lib",
-    srcs = [
-        "//src/starkware/starkware_utils/commitment_tree:binary_fact_tree.py",
-        "//src/starkware/starkware_utils/commitment_tree:binary_fact_tree_da_utils.py",
-        "//src/starkware/starkware_utils/commitment_tree:binary_fact_tree_node.py",
-        "//src/starkware/starkware_utils/commitment_tree:calculation.py",
-        "//src/starkware/starkware_utils/commitment_tree/merkle_tree:traverse_tree.py",
-        "//src/starkware/starkware_utils/commitment_tree/patricia_tree:virtual_calculation_node.py",
-        "//src/starkware/starkware_utils/commitment_tree/patricia_tree:nodes.py",
-        "//src/starkware/starkware_utils/commitment_tree/patricia_tree:patricia_tree.py",
-        "//src/starkware/starkware_utils/commitment_tree/patricia_tree:virtual_patricia_node.py",
-        "//src/starkware/starkware_utils/commitment_tree:update_tree.py",
-        "executor.py",
-        "subsequence.py",
-    ] + STARKWARE_UTILS_LIBS_ADDITIONAL_FILES,
-    visibility = ["//visibility:public"],
-    deps = [
-        "//src/starkware/crypto:starkware_crypto_lib",
-        "starkware_config_utils_lib",
-        "starkware_custom_dict_utils_lib",
-        "starkware_dataclasses_field_utils_lib",
-        "starkware_error_handling_lib",
-        "starkware_serializability_utils_lib",
-        "//src/starkware/python:starkware_python_utils_lib",
-        requirement("marshmallow_dataclass"),
-    ] + STARKWARE_UTILS_LIBS_ADDITIONAL_LIBS,
-)
 
 package(default_visibility = ["//visibility:public"])
 
@@ -142,6 +108,36 @@ py_library(
     visibility = ["//visibility:public"],
     deps = [
         "//src/starkware/storage:starkware_abstract_storage_lib",
+    ],
+)
+
+py_library(
+    name = "starkware_utils_lib",
+    srcs = [
+        "executor.py",
+        "subsequence.py",
+        "//src/starkware/starkware_utils/commitment_tree:binary_fact_tree.py",
+        "//src/starkware/starkware_utils/commitment_tree:binary_fact_tree_da_utils.py",
+        "//src/starkware/starkware_utils/commitment_tree:binary_fact_tree_node.py",
+        "//src/starkware/starkware_utils/commitment_tree:calculation.py",
+        "//src/starkware/starkware_utils/commitment_tree:update_tree.py",
+        "//src/starkware/starkware_utils/commitment_tree/merkle_tree:traverse_tree.py",
+        "//src/starkware/starkware_utils/commitment_tree/patricia_tree:nodes.py",
+        "//src/starkware/starkware_utils/commitment_tree/patricia_tree:patricia_tree.py",
+        "//src/starkware/starkware_utils/commitment_tree/patricia_tree:virtual_calculation_node.py",
+        "//src/starkware/starkware_utils/commitment_tree/patricia_tree:virtual_patricia_node.py",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "starkware_commitment_tree_facts_lib",
+        "starkware_config_utils_lib",
+        "starkware_custom_dict_utils_lib",
+        "starkware_dataclasses_field_utils_lib",
+        "starkware_error_handling_lib",
+        "starkware_serializability_utils_lib",
+        "//src/starkware/python:starkware_python_utils_lib",
+        "//src/starkware/storage:starkware_abstract_storage_lib",
+        requirement("marshmallow_dataclass"),
     ],
 )
 

@@ -1,8 +1,12 @@
+from starkware.cairo.common.cairo_secp.ec import EcPoint
+from starkware.cairo.common.uint256 import Uint256
+
 // Syscall selectors.
 
 const CALL_CONTRACT_SELECTOR = 'CallContract';
 const DEPLOY_SELECTOR = 'Deploy';
 const EMIT_EVENT_SELECTOR = 'EmitEvent';
+const GET_BLOCK_HASH_SELECTOR = 'GetBlockHash';
 const GET_EXECUTION_INFO_SELECTOR = 'GetExecutionInfo';
 const KECCAK_SELECTOR = 'Keccak';
 const LIBRARY_CALL_SELECTOR = 'LibraryCall';
@@ -114,6 +118,11 @@ struct DeployRequest {
     deploy_from_zero: felt,
 }
 
+struct GetBlockHashRequest {
+    // The number of the block to get the hash for.
+    block_number: felt,
+}
+
 struct KeccakRequest {
     // The Span<u64> to be hashed.
     // See `keccak_padded_input` for more details.
@@ -173,4 +182,8 @@ struct StorageReadResponse {
 
 struct GetExecutionInfoResponse {
     execution_info: ExecutionInfo*,
+}
+
+struct GetBlockHashResponse {
+    block_hash: felt,
 }

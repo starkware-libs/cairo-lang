@@ -136,6 +136,8 @@ py_library(
         "//src/starkware/python:starkware_python_utils_lib",
         "//src/starkware/starknet/business_logic/execution:starknet_execute_entry_point_base_lib",
         "//src/starkware/starknet/business_logic/execution:starknet_transaction_execution_objects_lib",
+        "//src/starkware/starknet/business_logic/fact_state:starknet_business_logic_fact_state_lib",
+        "//src/starkware/starknet/business_logic/fact_state:starknet_business_logic_patricia_state_lib",
         "//src/starkware/starknet/business_logic/state:starknet_business_logic_state_lib",
         "//src/starkware/starknet/core/os/contract_address:starknet_contract_address_lib",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
@@ -144,6 +146,7 @@ py_library(
         "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",
         "//src/starkware/starknet/storage:starknet_storage_lib",
         "//src/starkware/starkware_utils:starkware_error_handling_lib",
+        "//src/starkware/storage:starkware_storage_lib",
         requirement("cachetools"),
     ],
 )

@@ -3,8 +3,8 @@ from collections import defaultdict
 from dataclasses import field
 from typing import Dict
 
+MIN_BUILTIN_RATIO = 1
 MAX_BUILTIN_RATIO = 2**20
-DYNAMIC_LAYOUT_NAME = "dynamic"
 
 
 @dataclasses.dataclass

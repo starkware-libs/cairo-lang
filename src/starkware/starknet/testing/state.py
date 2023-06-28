@@ -13,6 +13,7 @@ from starkware.starknet.business_logic.fact_state.state import SharedState
 from starkware.starknet.business_logic.state.state import CachedState
 from starkware.starknet.business_logic.state.state_api import State
 from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
+from starkware.starknet.business_logic.state.storage_domain import StorageDomain
 from starkware.starknet.business_logic.transaction.objects import (
     InternalDeclare,
     InternalInvokeFunction,
@@ -134,6 +135,7 @@ class StarknetState:
         self,
         contract_class: ContractClass,
         sender_address: CastableToAddress,
+        compiler_dir: Optional[str] = None,
     ) -> Tuple[int, TransactionExecutionInfo]:
         """
         Declares a Cairo 1.0 contract class.
@@ -142,7 +144,9 @@ class StarknetState:
         Args:
         contract_class - a compiled StarkNet contract.
         """
-        compiled_class = compile_contract_class(contract_class=contract_class)
+        compiled_class = compile_contract_class(
+            contract_class=contract_class, compiler_dir=compiler_dir
+        )
         compiled_class_hash = compute_compiled_class_hash(compiled_class=compiled_class)
         sender_address = cast_to_int(sender_address)
         tx = InternalDeclare.create(
@@ -153,7 +157,9 @@ class StarknetState:
             max_fee=0,
             version=constants.DECLARE_VERSION,
             signature=[],
-            nonce=await self.state.get_nonce_at(contract_address=sender_address),
+            nonce=await self.state.get_nonce_at(
+                storage_domain=StorageDomain.ON_CHAIN, contract_address=sender_address
+            ),
         )
         self.state.compiled_classes[compiled_class_hash] = compiled_class
 
@@ -185,7 +191,9 @@ class StarknetState:
             contract_address_salt = fields.ContractAddressSalt.get_random_value()
 
         sender_address = cast_to_int(sender_address)
-        nonce = await self.state.get_nonce_at(contract_address=sender_address)
+        nonce = await self.state.get_nonce_at(
+            storage_domain=StorageDomain.ON_CHAIN, contract_address=sender_address
+        )
         contract_address, tx = create_internal_deploy_tx_for_testing(
             sender_address=sender_address,
             class_hash=cast_to_int(class_hash),
@@ -327,7 +335,9 @@ async def create_invoke_function(
 
     # We allow not specifying nonce. In this case, the current nonce of the contract will be used.
     if nonce is None:
-        nonce = await state.get_nonce_at(contract_address=contract_address)
+        nonce = await state.get_nonce_at(
+            storage_domain=StorageDomain.ON_CHAIN, contract_address=contract_address
+        )
 
     return InternalInvokeFunction.create(
         sender_address=contract_address,

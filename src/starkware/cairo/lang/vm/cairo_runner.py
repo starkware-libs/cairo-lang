@@ -32,7 +32,7 @@ from starkware.cairo.lang.compiler.expression_simplifier import to_field_element
 from starkware.cairo.lang.compiler.preprocessor.default_pass_manager import default_pass_manager
 from starkware.cairo.lang.compiler.preprocessor.preprocessor import Preprocessor
 from starkware.cairo.lang.compiler.program import Program, ProgramBase
-from starkware.cairo.lang.instances import LAYOUTS, CairoLayout
+from starkware.cairo.lang.instances import DYNAMIC_LAYOUT_NAME, LAYOUTS, CairoLayout
 from starkware.cairo.lang.vm.builtin_runner import BuiltinRunner, InsufficientAllocatedCells
 from starkware.cairo.lang.vm.cairo_pie import (
     CairoPie,
@@ -95,11 +95,7 @@ class CairoRunner:
             additional_builtin_factories = {}
 
         self.program = program
-        self.layout: CairoLayout
-        if isinstance(layout, CairoLayout):
-            self.layout = layout
-        else:
-            self.layout = LAYOUTS[layout]
+        self.layout: CairoLayout = layout if isinstance(layout, CairoLayout) else LAYOUTS[layout]
         self.builtin_runners: Dict[str, BuiltinRunner] = {}
         self.original_steps = None
         self.proof_mode = False if proof_mode is None else proof_mode
@@ -440,10 +436,11 @@ class CairoRunner:
         If not, the number of steps should be increased or a different layout should be used.
         """
         try:
-            for builtin_runner in self.builtin_runners.values():
-                builtin_runner.get_used_cells_and_allocated_size(self)
-            self.check_range_check_usage()
-            self.check_memory_usage()
+            if self.layout.layout_name != DYNAMIC_LAYOUT_NAME:
+                for builtin_runner in self.builtin_runners.values():
+                    builtin_runner.get_used_cells_and_allocated_size(self)
+                self.check_range_check_usage()
+                self.check_memory_usage()
             self.check_diluted_check_usage()
         except InsufficientAllocatedCells as e:
             print(f"Warning: {e} Increasing number of steps.")
@@ -568,14 +565,16 @@ class CairoRunner:
                 diluted_spacing=self.layout.diluted_pool_instance_def.spacing,
                 diluted_n_bits=self.layout.diluted_pool_instance_def.n_bits,
             )
-            * safe_div(
-                self.vm.current_step,
-                getattr(builtin_runner, "ratio", 1),
-            )
+            * builtin_runner.get_allocated_instances(self)
             for builtin_runner in self.builtin_runners.values()
         )
 
-        diluted_units = self.layout.diluted_pool_instance_def.units_per_step * self.vm.current_step
+        log_units_per_step = self.layout.diluted_pool_instance_def.log_units_per_step
+        diluted_units = (
+            pow(2, log_units_per_step) * self.vm.current_step
+            if log_units_per_step >= 0
+            else safe_div(self.vm.current_step, pow(2, -log_units_per_step))
+        )
         unused_diluted_units = diluted_units - diluted_units_used_by_builtins
         diluted_usage_upper_bound = 2**self.layout.diluted_pool_instance_def.n_bits
         if unused_diluted_units < diluted_usage_upper_bound:

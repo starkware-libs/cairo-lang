@@ -206,10 +206,10 @@ L2AddressField = RangeValidatedField(
 
 contract_address_metadata = L2AddressField.metadata(field_name="contract address")
 
-OptionalCodeAddressField = OptionalField(
-    field=dataclasses.replace(L2AddressField, name="Code address"), none_probability=0
+OptionalL2AddressField = OptionalField(
+    field=dataclasses.replace(L2AddressField, name="L2 address"), none_probability=0
 )
-optional_code_address_metadata = OptionalCodeAddressField.metadata()
+optional_l2_address_metadata = OptionalL2AddressField.metadata()
 
 ContractAddressSalt = everest_fields.felt(name_in_error_message="Contract salt")
 contract_address_salt_metadata = ContractAddressSalt.metadata()
@@ -276,7 +276,7 @@ new_class_hash_metadata = dict(marshmallow_field=NewClassHashField)
 
 
 address_to_class_hash_metadata = dict(
-    marshmallow_field=FrozenDictField(
+    marshmallow_field=mfields.Dict(
         keys=L2AddressField.get_marshmallow_field(), values=NewClassHashField
     )
 )
@@ -306,7 +306,7 @@ optional_new_class_hash_metadata = dict(marshmallow_field=OptionalNewClassHashFi
 
 
 class_hash_to_compiled_class_hash_metadata = dict(
-    marshmallow_field=FrozenDictField(
+    marshmallow_field=mfields.Dict(
         keys=ClassHashIntField.get_marshmallow_field(),
         values=ClassHashIntField.get_marshmallow_field(),
         load_default=dict,

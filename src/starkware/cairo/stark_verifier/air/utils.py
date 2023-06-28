@@ -71,12 +71,18 @@ def public_input_to_cairo(structs, public_input: PublicInput, z: int, alpha: int
     )
     main_page = get_main_page(public_memory=public_input.public_memory)
 
+    dynamic_params = []
+    if public_input.dynamic_params is not None:
+        # The dynamic params are sorted by name in alphabetical order.
+        dynamic_params = [param[1] for param in sorted(public_input.dynamic_params.items())]
+
     memory_segments = sort_segments(public_input.memory_segments)
     cairo_public_input = structs.PublicInput(
         log_n_steps=safe_log2(public_input.n_steps),
         rc_min=public_input.rc_min,
         rc_max=public_input.rc_max,
         layout=int.from_bytes(public_input.layout.encode("ascii"), "big"),
+        dynamic_params=dynamic_params,
         n_segments=len(public_input.memory_segments),
         segments=list(
             itertools.chain(

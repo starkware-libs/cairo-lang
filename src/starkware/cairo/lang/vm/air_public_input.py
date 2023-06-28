@@ -6,7 +6,6 @@ import marshmallow
 import marshmallow_dataclass
 
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
-from starkware.cairo.lang.dynamic_layout_params import DynamicLayoutParams
 from starkware.cairo.lang.vm.utils import IntAsHex, MemorySegmentAddresses
 from starkware.starkware_utils.marshmallow_dataclass_fields import additional_metadata
 
@@ -24,8 +23,6 @@ class PublicInput:
     # The name of the layout (e.g., 'small'), see the LAYOUTS dict in
     # starkware/cairo/lang/instances.py.
     layout: str
-    # If layout is "dynamic", layout_params will contain all the computed layout parameters.
-    layout_params: Optional[DynamicLayoutParams]
     rc_min: int
     rc_max: int
     n_steps: int
@@ -33,6 +30,8 @@ class PublicInput:
     memory_segments: Dict[str, MemorySegmentAddresses]
     public_memory: List[PublicMemoryEntry]
     Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
+    # If layout is "dynamic", dynamic_params will contain all the computed dynamic parameters.
+    dynamic_params: Optional[Dict[str, int]] = None
 
 
 def extract_public_memory(public_input: PublicInput) -> Dict[int, int]:

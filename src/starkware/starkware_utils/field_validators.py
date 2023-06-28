@@ -6,7 +6,7 @@ import marshmallow.exceptions
 import marshmallow.validate
 from eth_utils import is_checksum_address
 
-from starkware.crypto.signature.signature import is_valid_stark_key
+from starkware.crypto.signature.signature import is_valid_stark_key, is_valid_stark_private_key
 
 DNS_REGEX = r"^((\*)|(\*\.))?([a-z0-9-]){1,62}(\.[a-z0-9-]{1,62})*\.?$"
 
@@ -237,16 +237,29 @@ def validate_stark_key(field_name: str) -> ValidatorType:
         )
     )
 
-    def validator(stark_key: int) -> bool:
-        if not is_valid_stark_key(stark_key=stark_key):
+    def validator(stark_key: str) -> bool:
+        if not is_valid_stark_key(stark_key=int(stark_key, 16)):
             raise ValueError(error_message.format(input=stark_key))
-
         return True
 
     return validator
 
 
-def validate_eth_address(field_name: str) -> ValidatorType:
+def validate_stark_private_key(field_name: str) -> ValidatorType:
+    error_message = (
+        "Invalid {field_name}: {{input}}; must be a valid Starknet private key. The given value is "
+        "not within the valid range.".format(field_name=field_name)
+    )
+
+    def validator(private_key: str) -> bool:
+        if not (private_key.isdigit() and is_valid_stark_private_key(private_key=int(private_key))):
+            raise ValueError(error_message.format(input=private_key))
+        return True
+
+    return validator
+
+
+def validate_eth_address(field_name: str, allow_none: bool = False) -> ValidatorType:
     error_message = "Invalid {field_name}: {{input}}; must be a legal Ethereum address".format(
         field_name=field_name
     )
@@ -254,7 +267,11 @@ def validate_eth_address(field_name: str) -> ValidatorType:
     address_regex = r"^0x[a-fA-F0-9]{40}$"
     validate_address_regex = marshmallow.validate.Regexp(regex=address_regex, error=error_message)
 
-    def validator(addresses: Union[str, List[str]]):
+    def validator(addresses: Optional[Union[str, List[str]]]):
+        if allow_none and addresses is None:
+            return True
+        assert addresses is not None
+
         if isinstance(addresses, str):
             addresses = [addresses]
 
@@ -269,7 +286,7 @@ def validate_eth_address(field_name: str) -> ValidatorType:
     return validator
 
 
-def validate_private_key(field_name: str) -> ValidatorType:
+def validate_eth_private_key(field_name: str) -> ValidatorType:
     error_message = "Invalid {field_name}: {{input}}; must be a legal Ethereum private key".format(
         field_name=field_name
     )

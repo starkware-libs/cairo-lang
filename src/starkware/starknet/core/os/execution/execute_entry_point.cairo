@@ -1,7 +1,7 @@
-from starkware.cairo.builtin_selection.select_builtins import select_builtins
 from starkware.cairo.builtin_selection.select_input_builtins import select_input_builtins
 from starkware.cairo.builtin_selection.validate_builtins import validate_builtins
 from starkware.cairo.common.alloc import alloc
+from starkware.cairo.common.cairo_builtins import KeccakBuiltin
 from starkware.cairo.common.dict import dict_read
 from starkware.cairo.common.dict_access import DictAccess
 from starkware.cairo.common.find_element import find_element, search_sorted
@@ -14,7 +14,14 @@ from starkware.starknet.builtins.segment_arena.segment_arena import (
 from starkware.starknet.common.new_syscalls import ExecutionInfo
 from starkware.starknet.common.syscalls import TxInfo as DeprecatedTxInfo
 from starkware.starknet.core.os.block_context import BlockContext
-from starkware.starknet.core.os.builtins import BuiltinEncodings, BuiltinParams, BuiltinPointers
+from starkware.starknet.core.os.builtins import (
+    BuiltinEncodings,
+    BuiltinParams,
+    BuiltinPointers,
+    NonSelectableBuiltins,
+    SelectableBuiltins,
+    update_builtin_ptrs,
+)
 from starkware.starknet.core.os.constants import (
     DEFAULT_ENTRY_POINT_SELECTOR,
     ENTRY_POINT_GAS_COST,
@@ -236,45 +243,19 @@ func execute_entry_point{
     let retdata_start = entry_point_return_values.retdata_start;
     let retdata_end = entry_point_return_values.retdata_end;
 
-    local return_builtin_ptrs: BuiltinPointers*;
-    %{
-        from starkware.starknet.core.os.os_utils import update_builtin_pointers
-
-        # Fill the values of all builtin pointers after the current transaction.
-        ids.return_builtin_ptrs = segments.gen_arg(
-            update_builtin_pointers(
-                memory=memory,
-                n_builtins=ids.n_builtins,
-                builtins_encoding_addr=ids.builtin_params.builtin_encodings.address_,
-                n_selected_builtins=ids.entry_point_n_builtins,
-                selected_builtins_encoding_addr=ids.entry_point_builtin_list,
-                orig_builtins_ptrs_addr=ids.builtin_ptrs.address_,
-                selected_builtins_ptrs_addr=ids.returned_builtin_ptrs_subset,
-                ),
-            )
-    %}
-    select_builtins(
-        n_builtins=n_builtins,
-        all_encodings=builtin_params.builtin_encodings,
-        all_ptrs=return_builtin_ptrs,
+    let return_builtin_ptrs = update_builtin_ptrs(
+        builtin_params=builtin_params,
+        builtin_ptrs=builtin_ptrs,
         n_selected_builtins=entry_point_n_builtins,
         selected_encodings=entry_point_builtin_list,
         selected_ptrs=returned_builtin_ptrs_subset,
     );
 
-    // Call validate_builtins to validate that the builtin pointers have advanced correctly.
-    validate_builtins(
-        prev_builtin_ptrs=builtin_ptrs,
-        new_builtin_ptrs=return_builtin_ptrs,
-        builtin_instance_sizes=builtin_params.builtin_instance_sizes,
-        n_builtins=n_builtins,
-    );
-
     // Validate the segment_arena builtin.
     // Note that as the segment_arena pointer points to the first unused element, we need to
     // take segment_arena[-1] to get the actual values.
-    tempvar prev_segment_arena = &builtin_ptrs.segment_arena[-1];
-    tempvar current_segment_arena = &return_builtin_ptrs.segment_arena[-1];
+    tempvar prev_segment_arena = &builtin_ptrs.selectable.segment_arena[-1];
+    tempvar current_segment_arena = &return_builtin_ptrs.selectable.segment_arena[-1];
     assert prev_segment_arena.infos = current_segment_arena.infos;
     validate_segment_arena(segment_arena=current_segment_arena);
 
@@ -293,7 +274,8 @@ func execute_entry_point{
 // Prepares the builtin pointer for the execution of an entry point.
 // In particular, restarts the SegmentArenaBuiltin struct if it was previously used.
 func prepare_builtin_ptrs_for_execute(builtin_ptrs: BuiltinPointers*) -> BuiltinPointers* {
-    tempvar segment_arena_ptr = builtin_ptrs.segment_arena;
+    let selectable_builtins = &builtin_ptrs.selectable;
+    tempvar segment_arena_ptr = selectable_builtins.segment_arena;
     tempvar prev_segment_arena = &segment_arena_ptr[-1];
 
     // If no segment was allocated, we don't need to restart the struct.
@@ -307,12 +289,15 @@ func prepare_builtin_ptrs_for_execute(builtin_ptrs: BuiltinPointers*) -> Builtin
     );
     let segment_arena_ptr = &segment_arena_ptr[1];
     return new BuiltinPointers(
-        pedersen=builtin_ptrs.pedersen,
-        range_check=builtin_ptrs.range_check,
-        ecdsa=builtin_ptrs.ecdsa,
-        bitwise=builtin_ptrs.bitwise,
-        ec_op=builtin_ptrs.ec_op,
-        poseidon=builtin_ptrs.poseidon,
-        segment_arena=segment_arena_ptr,
+        selectable=SelectableBuiltins(
+            pedersen=selectable_builtins.pedersen,
+            range_check=selectable_builtins.range_check,
+            ecdsa=selectable_builtins.ecdsa,
+            bitwise=selectable_builtins.bitwise,
+            ec_op=selectable_builtins.ec_op,
+            poseidon=selectable_builtins.poseidon,
+            segment_arena=segment_arena_ptr,
+        ),
+        non_selectable=builtin_ptrs.non_selectable,
     );
 }

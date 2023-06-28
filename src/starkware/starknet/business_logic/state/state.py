@@ -22,6 +22,7 @@ from starkware.starknet.business_logic.state.state_api import (
     SyncStateReader,
 )
 from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
+from starkware.starknet.business_logic.state.storage_domain import StorageDomain
 from starkware.starknet.definitions import constants
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.services.api.contract_class.contract_class import CompiledClassBase
@@ -70,15 +71,19 @@ class StateSyncifier(SyncState):
             loop=self.loop,
         )
 
-    def get_nonce_at(self, contract_address: int) -> int:
+    def get_nonce_at(self, storage_domain: StorageDomain, contract_address: int) -> int:
         return execute_coroutine_threadsafe(
-            coroutine=self.async_state.get_nonce_at(contract_address=contract_address),
+            coroutine=self.async_state.get_nonce_at(
+                storage_domain=storage_domain, contract_address=contract_address
+            ),
             loop=self.loop,
         )
 
-    def get_storage_at(self, contract_address: int, key: int) -> int:
+    def get_storage_at(self, storage_domain: StorageDomain, contract_address: int, key: int) -> int:
         return execute_coroutine_threadsafe(
-            coroutine=self.async_state.get_storage_at(contract_address=contract_address, key=key),
+            coroutine=self.async_state.get_storage_at(
+                storage_domain=storage_domain, contract_address=contract_address, key=key
+            ),
             loop=self.loop,
         )
 
@@ -98,16 +103,23 @@ class StateSyncifier(SyncState):
             loop=self.loop,
         )
 
-    def increment_nonce(self, contract_address: int):
+    def increment_nonce(self, storage_domain: StorageDomain, contract_address: int):
         return execute_coroutine_threadsafe(
-            coroutine=self.async_state.increment_nonce(contract_address=contract_address),
+            coroutine=self.async_state.increment_nonce(
+                storage_domain=storage_domain, contract_address=contract_address
+            ),
             loop=self.loop,
         )
 
-    def set_storage_at(self, contract_address: int, key: int, value: int):
+    def set_storage_at(
+        self, storage_domain: StorageDomain, contract_address: int, key: int, value: int
+    ):
         return execute_coroutine_threadsafe(
             coroutine=self.async_state.set_storage_at(
-                contract_address=contract_address, key=key, value=value
+                storage_domain=storage_domain,
+                contract_address=contract_address,
+                key=key,
+                value=value,
             ),
             loop=self.loop,
         )
@@ -249,20 +261,28 @@ class CachedState(State):
 
         return self.cache.address_to_class_hash[contract_address]
 
-    async def get_nonce_at(self, contract_address: int) -> int:
+    async def get_nonce_at(self, storage_domain: StorageDomain, contract_address: int) -> int:
+        storage_domain.assert_onchain()
         if contract_address not in self.cache.address_to_nonce:
             self.cache._nonce_initial_values[
                 contract_address
-            ] = await self.state_reader.get_nonce_at(contract_address=contract_address)
+            ] = await self.state_reader.get_nonce_at(
+                storage_domain=storage_domain, contract_address=contract_address
+            )
 
         return self.cache.address_to_nonce[contract_address]
 
-    async def get_storage_at(self, contract_address: int, key: int) -> int:
+    async def get_storage_at(
+        self, storage_domain: StorageDomain, contract_address: int, key: int
+    ) -> int:
+        storage_domain.assert_onchain()
         address_key_pair = (contract_address, key)
         if address_key_pair not in self.cache.storage_view:
             self.cache._storage_initial_values[
                 address_key_pair
-            ] = await self.state_reader.get_storage_at(contract_address=contract_address, key=key)
+            ] = await self.state_reader.get_storage_at(
+                storage_domain=storage_domain, contract_address=contract_address, key=key
+            )
 
         return self.cache.storage_view[address_key_pair]
 
@@ -278,11 +298,17 @@ class CachedState(State):
 
         self.cache._class_hash_writes[contract_address] = class_hash
 
-    async def increment_nonce(self, contract_address: int):
-        current_nonce = await self.get_nonce_at(contract_address=contract_address)
+    async def increment_nonce(self, storage_domain: StorageDomain, contract_address: int):
+        storage_domain.assert_onchain()
+        current_nonce = await self.get_nonce_at(
+            storage_domain=storage_domain, contract_address=contract_address
+        )
         self.cache._nonce_writes[contract_address] = current_nonce + 1
 
-    async def set_storage_at(self, contract_address: int, key: int, value: int):
+    async def set_storage_at(
+        self, storage_domain: StorageDomain, contract_address: int, key: int, value: int
+    ):
+        storage_domain.assert_onchain()
         self.cache._storage_writes[(contract_address, key)] = value
 
     def _copy(self) -> "CachedState":
@@ -365,19 +391,21 @@ class CachedSyncState(SyncState):
 
         return self.cache.address_to_class_hash[contract_address]
 
-    def get_nonce_at(self, contract_address: int) -> int:
+    def get_nonce_at(self, storage_domain: StorageDomain, contract_address: int) -> int:
+        storage_domain.assert_onchain()
         if contract_address not in self.cache.address_to_nonce:
             self.cache._nonce_initial_values[contract_address] = self.state_reader.get_nonce_at(
-                contract_address=contract_address
+                storage_domain=storage_domain, contract_address=contract_address
             )
 
         return self.cache.address_to_nonce[contract_address]
 
-    def get_storage_at(self, contract_address: int, key: int) -> int:
+    def get_storage_at(self, storage_domain: StorageDomain, contract_address: int, key: int) -> int:
+        storage_domain.assert_onchain()
         address_key_pair = (contract_address, key)
         if address_key_pair not in self.cache.storage_view:
             self.cache._storage_initial_values[address_key_pair] = self.state_reader.get_storage_at(
-                contract_address=contract_address, key=key
+                storage_domain=storage_domain, contract_address=contract_address, key=key
             )
 
         return self.cache.storage_view[address_key_pair]
@@ -394,11 +422,17 @@ class CachedSyncState(SyncState):
 
         self.cache._class_hash_writes[contract_address] = class_hash
 
-    def increment_nonce(self, contract_address: int):
-        current_nonce = self.get_nonce_at(contract_address=contract_address)
+    def increment_nonce(self, storage_domain: StorageDomain, contract_address: int):
+        storage_domain.assert_onchain()
+        current_nonce = self.get_nonce_at(
+            storage_domain=storage_domain, contract_address=contract_address
+        )
         self.cache._nonce_writes[contract_address] = current_nonce + 1
 
-    def set_storage_at(self, contract_address: int, key: int, value: int):
+    def set_storage_at(
+        self, storage_domain: StorageDomain, contract_address: int, key: int, value: int
+    ):
+        storage_domain.assert_onchain()
         self.cache._storage_writes[(contract_address, key)] = value
 
     def _copy(self) -> "CachedSyncState":
@@ -441,14 +475,23 @@ class ContractStorageState:
 
     def read(self, address: int) -> int:
         self.accessed_keys.add(address)
-        value = self.state.get_storage_at(contract_address=self.contract_address, key=address)
+        value = self.state.get_storage_at(
+            storage_domain=StorageDomain.ON_CHAIN,
+            contract_address=self.contract_address,
+            key=address,
+        )
         self.read_values.append(value)
 
         return value
 
     def write(self, address: int, value: int):
         self.accessed_keys.add(address)
-        self.state.set_storage_at(contract_address=self.contract_address, key=address, value=value)
+        self.state.set_storage_at(
+            storage_domain=StorageDomain.ON_CHAIN,
+            contract_address=self.contract_address,
+            key=address,
+            value=value,
+        )
 
 
 class UpdatesTrackerState(SyncState):
@@ -458,7 +501,7 @@ class UpdatesTrackerState(SyncState):
     and writes.
 
     The goal of this implementation is to allow more precise and fair computation of the number of
-    storage-writes a single transaction preforms for the purposes of transaction fee calculation.
+    storage-writes a single transaction performs for the purposes of transaction fee calculation.
     That is, if a given transaction writes to the same storage address multiple times, this should
     be counted as a single storage-write. Additionally, if a transaction writes a value to storage
     which is equal to the initial value previously contained in that address, then no change needs
@@ -469,9 +512,12 @@ class UpdatesTrackerState(SyncState):
         self.state = state
         self.cache = StateCache()
 
-    def get_storage_at(self, contract_address: int, key: int) -> int:
+    def get_storage_at(self, storage_domain: StorageDomain, contract_address: int, key: int) -> int:
+        storage_domain.assert_onchain()
         # Delegate the request to the actual state anyway (even if the value is already cached).
-        return_value = self.state.get_storage_at(contract_address=contract_address, key=key)
+        return_value = self.state.get_storage_at(
+            storage_domain=storage_domain, contract_address=contract_address, key=key
+        )
         address_key_pair = (contract_address, key)
         if address_key_pair not in self.cache.storage_view:
             # First access (read or write) to this cell; cache initial value.
@@ -479,7 +525,9 @@ class UpdatesTrackerState(SyncState):
 
         return return_value
 
-    def set_storage_at(self, contract_address: int, key: int, value: int):
+    def set_storage_at(
+        self, storage_domain: StorageDomain, contract_address: int, key: int, value: int
+    ):
         """
         This method writes to a storage cell and updates the cache accordingly. If this is the first
         access to the cell (read or write), the method first reads the value at that cell and caches
@@ -489,15 +537,18 @@ class UpdatesTrackerState(SyncState):
         value to storage that is identical to the value previously held at that address, then no
         change is made to that cell and it does not count as a storage-change in fee calculation.
         """
+        storage_domain.assert_onchain()
         address_key_pair = (contract_address, key)
         if address_key_pair not in self.cache.storage_view:
             # First access (read or write) to this cell; cache initial value.
             self.cache._storage_initial_values[address_key_pair] = self.state.get_storage_at(
-                contract_address=contract_address, key=key
+                storage_domain=storage_domain, contract_address=contract_address, key=key
             )
 
         self.cache._storage_writes[address_key_pair] = value
-        self.state.set_storage_at(contract_address=contract_address, key=key, value=value)
+        self.state.set_storage_at(
+            storage_domain=storage_domain, contract_address=contract_address, key=key, value=value
+        )
 
     def get_class_hash_at(self, contract_address: int) -> int:
         # Delegate the request to the actual state anyway (even if the value is already cached).
@@ -521,23 +572,29 @@ class UpdatesTrackerState(SyncState):
         self.cache._class_hash_writes[contract_address] = class_hash
         self.state.set_class_hash_at(contract_address=contract_address, class_hash=class_hash)
 
-    def get_nonce_at(self, contract_address: int) -> int:
+    def get_nonce_at(self, storage_domain: StorageDomain, contract_address: int) -> int:
+        storage_domain.assert_onchain()
         # Delegate the request to the actual state anyway (even if the value is already cached).
-        nonce = self.state.get_nonce_at(contract_address=contract_address)
+        nonce = self.state.get_nonce_at(
+            storage_domain=storage_domain, contract_address=contract_address
+        )
         if contract_address not in self.cache.address_to_class_hash:
             self.cache._nonce_initial_values[contract_address] = nonce
 
         return nonce
 
-    def increment_nonce(self, contract_address: int):
+    def increment_nonce(self, storage_domain: StorageDomain, contract_address: int):
+        storage_domain.assert_onchain()
         if contract_address not in self.cache.address_to_nonce:
             # First access (read or write) to this cell; cache initial value.
             self.cache._nonce_initial_values[contract_address] = self.state.get_nonce_at(
-                contract_address=contract_address
+                storage_domain=storage_domain, contract_address=contract_address
             )
 
-        self.state.increment_nonce(contract_address=contract_address)
-        new_nonce = self.state.get_nonce_at(contract_address=contract_address)
+        self.state.increment_nonce(storage_domain=storage_domain, contract_address=contract_address)
+        new_nonce = self.state.get_nonce_at(
+            storage_domain=storage_domain, contract_address=contract_address
+        )
         self.cache._nonce_writes[contract_address] = new_nonce
 
     @property

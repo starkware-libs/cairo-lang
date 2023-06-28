@@ -213,6 +213,26 @@ def calculate_tx_resources(
         _n_nonce_updates,
     ) = state.count_actual_updates()
 
+    return calculate_tx_resources_given_usage(
+        resources_manager=resources_manager,
+        call_infos=call_infos,
+        tx_type=tx_type,
+        n_modified_contracts=n_modified_contracts,
+        n_storage_changes=n_storage_changes,
+        n_class_updates=n_class_updates,
+        l1_handler_payload_size=l1_handler_payload_size,
+    )
+
+
+def calculate_tx_resources_given_usage(
+    resources_manager: ExecutionResourcesManager,
+    call_infos: Iterable[Optional[CallInfo]],
+    tx_type: TransactionType,
+    n_modified_contracts: int,
+    n_storage_changes: int,
+    n_class_updates: int,
+    l1_handler_payload_size: Optional[int] = None,
+) -> ResourcesMapping:
     non_optional_call_infos = [call for call in call_infos if call is not None]
     l2_to_l1_messages = []
     for call_info in non_optional_call_infos:

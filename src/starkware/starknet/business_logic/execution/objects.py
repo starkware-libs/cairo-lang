@@ -4,13 +4,14 @@ import logging
 import operator
 from dataclasses import field
 from enum import Enum, auto
-from typing import Dict, FrozenSet, Iterable, Iterator, List, Mapping, Optional, Set, cast
+from typing import Dict, FrozenSet, Iterable, Iterator, List, Mapping, Optional, Set, Union, cast
 
 import marshmallow.fields as mfields
 import marshmallow_dataclass
 
 from services.everest.business_logic.transaction_execution_objects import (
     EverestTransactionExecutionInfo,
+    TransactionFailureReason,
 )
 from services.everest.definitions import fields as everest_fields
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
@@ -41,6 +42,7 @@ from starkware.starkware_utils.validated_dataclass import (
 
 logger = logging.getLogger(__name__)
 ResourcesMapping = Mapping[str, int]
+TransactionExecutionResult = Union[TransactionFailureReason, "TransactionExecutionInfo"]
 
 
 class CallType(Enum):
@@ -164,7 +166,9 @@ class OrderedL2ToL1Message(ValidatedDataclass):
     """
 
     order: int = field(metadata=sequential_id_metadata("L2-to-L1 message order"))
-    to_address: int = field(metadata=everest_fields.EthAddressIntField.metadata("to_address"))
+    to_address: int = field(
+        metadata=everest_fields.EthAddressIntField.metadata(field_name="to_address")
+    )
     payload: List[int] = field(metadata=fields.felt_as_hex_or_str_list_metadata)
 
 
@@ -175,7 +179,9 @@ class L2ToL1MessageInfo(ValidatedDataclass):
     """
 
     from_address: int = field(metadata=fields.L2AddressField.metadata(field_name="from_address"))
-    to_address: int = field(metadata=everest_fields.EthAddressIntField.metadata("to_address"))
+    to_address: int = field(
+        metadata=everest_fields.EthAddressIntField.metadata(field_name="to_address")
+    )
     payload: List[int] = field(metadata=fields.felt_as_hex_or_str_list_metadata)
 
     @classmethod
@@ -619,7 +625,7 @@ class ContractCall(ValidatedMarshmallowDataclass):
     to_address: int  # The called contract address.
     # The address that holds the executed code; relevant just for delegate calls, where it may
     # differ from the code of the to_address contract.
-    code_address: Optional[int] = field(metadata=fields.optional_code_address_metadata)
+    code_address: Optional[int] = field(metadata=fields.optional_l2_address_metadata)
     entry_point_selector: Optional[int] = field(metadata=nonrequired_optional_metadata)
     entry_point_type: Optional[EntryPointType] = field(metadata=nonrequired_optional_metadata)
     calldata: List[int]
@@ -754,11 +760,7 @@ class ExecutionResourcesManager:
     Aggregates execution resources throughout transaction stream processing.
     """
 
-    def __init__(
-        self,
-        cairo_usage: ExecutionResources,
-        syscall_counter: Dict[str, int],
-    ):
+    def __init__(self, cairo_usage: ExecutionResources, syscall_counter: Dict[str, int]):
         # The accumulated Cairo usage.
         self.cairo_usage = cairo_usage
 

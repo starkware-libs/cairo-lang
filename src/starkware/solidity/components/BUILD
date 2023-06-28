@@ -25,6 +25,7 @@ sol_library(
     deps = [
         "//src/starkware/solidity/interfaces:governance_interface_sol",
         "//src/starkware/solidity/interfaces:solidity_contracts_interfaces_sol",
+        "//src/starkware/solidity/libraries:common_library_sol",
         "//src/starkware/solidity/libraries:named_storage_sol",
     ],
 )

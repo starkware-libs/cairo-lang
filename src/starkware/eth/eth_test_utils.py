@@ -6,6 +6,7 @@ import pathlib
 import random
 import signal
 import subprocess
+import tempfile
 import time
 from typing import Any, Dict, List, Optional
 
@@ -113,6 +114,7 @@ class Ganache:
         Runs ganache.
         Use stop() to ensure the process is killed at the end.
         """
+        self.err_stream = tempfile.NamedTemporaryFile()
         self.port = random.randrange(1024, 8192)
         self.ganache_proc = subprocess.Popen(
             f"{get_ganache_bin_path()} \
@@ -123,6 +125,7 @@ class Ganache:
                 --chain.allow-unlimited-contract-size",
             shell=True,
             stdout=subprocess.DEVNULL,
+            stderr=self.err_stream,
             # Open the process in a new process group.
             start_new_session=True,
         )
@@ -131,7 +134,7 @@ class Ganache:
             HTTPProvider(f"http://localhost:{self.port}/", request_kwargs=request_kwargs)
         )
 
-        for i in range(GANACHE_MAX_TRIES):
+        for _ in range(GANACHE_MAX_TRIES):
             time.sleep(1)
             if self.w3.is_connected():  # type: ignore
                 break
@@ -150,6 +153,13 @@ class Ganache:
         # Kill the entire process group.
         os.killpg(self.ganache_proc.pid, signal.SIGINT)
         self.is_alive = False
+        # Capture errors.
+        self.err_stream.flush()
+        self.err_stream.seek(0)
+        stderr_data = self.err_stream.read().decode()
+        if len(stderr_data) > 0:
+            logger.error(f"Ganache stderr data:\n{str(stderr_data)}\n")
+        self.err_stream.close()
 
 
 class EthAccount:

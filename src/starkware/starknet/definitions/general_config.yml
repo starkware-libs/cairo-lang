@@ -7,9 +7,9 @@ event_commitment_tree_height: 64
 global_state_commitment_tree_height: 251
 invoke_tx_max_n_steps: 1000000
 min_gas_price: 100000000000
-sequencer_address: "0xedad892bb8c0cd384ff67c0cfabed06ccef6216a1a4ae553a260fb30b03826"
+sequencer_address: '0x2d389df4ad1c4d382cb7751982ab7bf24ac40cbab4769667f108a7b93f9e987'
 starknet_os_config:
   chain_id: 1536727068981429685321 # StarknetChainId.TESTNET.value
-  fee_token_address: "0x168d0cad4a83436210cd43fcf842270762fbca1d55abf291c929b5fab828ed9"
+  fee_token_address: '0x5b57f0a6c0fcb7cc85b38fff4cff89e4fee49a8c9501b3553459c563b4b3024'
 tx_commitment_tree_height: 64
 validate_max_n_steps: 1000000

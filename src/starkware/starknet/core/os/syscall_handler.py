@@ -1,3 +1,4 @@
+import asyncio
 import dataclasses
 import functools
 from abc import ABC, abstractmethod
@@ -22,11 +23,14 @@ from starkware.cairo.common.keccak_utils.keccak_utils import keccak_f
 from starkware.cairo.common.structs import CairoStructProxy
 from starkware.cairo.lang.vm.memory_segments import MemorySegmentManager
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
+from starkware.python.math_utils import safe_div
 from starkware.python.utils import (
     as_non_optional,
     assert_exhausted,
     blockify,
+    execute_coroutine_threadsafe,
     from_bytes,
+    gather_in_chunks,
     safe_zip,
     to_bytes,
 )
@@ -43,8 +47,11 @@ from starkware.starknet.business_logic.execution.objects import (
     TransactionExecutionContext,
     TransactionExecutionInfo,
 )
+from starkware.starknet.business_logic.fact_state.contract_state_objects import ContractState
 from starkware.starknet.business_logic.state.state import ContractStorageState
 from starkware.starknet.business_logic.state.state_api import SyncState
+from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
+from starkware.starknet.business_logic.state.storage_domain import StorageDomain
 from starkware.starknet.core.os.contract_address.contract_address import (
     calculate_contract_address_from_hash,
 )
@@ -57,13 +64,19 @@ from starkware.starknet.core.os.syscall_utils import (
     validate_runtime_request_type,
     wrap_with_handler_exception,
 )
+from starkware.starknet.definitions import constants
 from starkware.starknet.definitions.constants import GasCost
 from starkware.starknet.definitions.error_codes import CairoErrorCode, StarknetErrorCode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public.abi import CONSTRUCTOR_ENTRY_POINT_SELECTOR
 from starkware.starknet.services.api.contract_class.contract_class import EntryPointType
-from starkware.starknet.storage.starknet_storage import OsSingleStarknetStorage
+from starkware.starknet.storage.starknet_storage import (
+    CommitmentInfo,
+    OsSingleStarknetStorage,
+    StorageLeaf,
+)
 from starkware.starkware_utils.error_handling import stark_assert
+from starkware.storage.storage import FactFetchingContext
 
 SyscallFullResponse = Tuple[tuple, tuple]  # Response header + specific syscall response.
 ExecuteSyscallCallback = Callable[
@@ -71,6 +84,14 @@ ExecuteSyscallCallback = Callable[
 ]
 
 KECCAK_FULL_RATE_IN_U64S = 17
+
+
+def from_uint256(val: CairoStructProxy) -> int:
+    return val.high * 2**128 + val.low  # type: ignore
+
+
+def to_uint256(structs: CairoStructProxy, val: int) -> CairoStructProxy:
+    return structs.Uint256(low=val & (2**128 - 1), high=val >> 128)  # type: ignore
 
 
 @dataclasses.dataclass(frozen=True)
@@ -118,6 +139,11 @@ class SyscallHandlerBase(ABC):
                 name="keccak",
                 execute_callback=cls.keccak,
                 request_struct=structs.KeccakRequest,
+            ),
+            get_selector("get_block_hash"): SyscallInfo(
+                name="get_block_hash",
+                execute_callback=cls.get_block_hash,
+                request_struct=structs.GetBlockHashRequest,
             ),
             get_selector("get_execution_info"): SyscallInfo(
                 name="get_execution_info",
@@ -178,7 +204,9 @@ class SyscallHandlerBase(ABC):
         # Validate syscall selector and request.
         selector = cast_to_int(request_header.selector)
         syscall_info = self.selector_to_syscall_info.get(selector)
-        assert syscall_info is not None, f"Unsupported syscall selector {selector}."
+        assert (
+            syscall_info is not None
+        ), f"Unsupported syscall selector {bytes.fromhex(hex(selector)[2:])!r}"
         self._count_syscall(syscall_name=syscall_info.name)
         request = self._read_and_validate_request(request_struct=syscall_info.request_struct)
 
@@ -251,6 +279,28 @@ class SyscallHandlerBase(ABC):
 
         return response_header, response
 
+    def get_block_hash(self, remaining_gas: int, request: CairoStructProxy) -> SyscallFullResponse:
+        """
+        Executes the get_block_hash system call.
+
+        Returns the block hash of the block at given block_number.
+        Returns the expected block hash if the given block was created at least 10 blocks before the
+        current block. Otherwise, returns an error.
+        """
+        block_number = cast_to_int(request.block_number)
+
+        # Handle out of range block number.
+        if self.current_block_number - block_number < constants.STORED_BLOCK_HASH_BUFFER:
+            return self._handle_failure(
+                final_gas=remaining_gas, error_code=CairoErrorCode.BLOCK_NUMBER_OUT_OF_RANGE
+            )
+
+        block_hash = self._get_block_hash(block_number=block_number)
+        response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
+        response = self.structs.GetBlockHashResponse(block_hash=block_hash)
+
+        return response_header, response
+
     def get_execution_info(
         self, remaining_gas: int, request: CairoStructProxy
     ) -> SyscallFullResponse:
@@ -264,25 +314,42 @@ class SyscallHandlerBase(ABC):
         assert isinstance(request.input_end, RelocatableValue)
         assert isinstance(request.input_start, RelocatableValue)
         input_len = cast(int, request.input_end - request.input_start)
-        if input_len == 0 or input_len % KECCAK_FULL_RATE_IN_U64S != 0:
+
+        if input_len % KECCAK_FULL_RATE_IN_U64S != 0:
             return self._handle_failure(
                 final_gas=remaining_gas,
                 error_code=CairoErrorCode.INVALID_INPUT_LEN,
             )
 
-        gas_cost = (input_len * GasCost.KECCAK_ROUND_COST.value) // KECCAK_FULL_RATE_IN_U64S
+        n_rounds = safe_div(input_len, KECCAK_FULL_RATE_IN_U64S)
+        gas_cost = n_rounds * GasCost.KECCAK_ROUND_COST.value
         if gas_cost > remaining_gas:
             return self._handle_failure(
                 final_gas=remaining_gas,
                 error_code=CairoErrorCode.OUT_OF_GAS,
             )
+        remaining_gas -= gas_cost
 
+        self._keccak(n_rounds=n_rounds)
         input_array = self._get_felt_range(
             start_addr=request.input_start, end_addr=request.input_end
         )
-        result = self._keccak(input_array)
+        state = bytearray(200)
+        for chunk in blockify(input_array, chunk_size=KECCAK_FULL_RATE_IN_U64S):
+            for i, val in safe_zip(range(0, KECCAK_FULL_RATE_IN_U64S * 8, 8), chunk):
+                state[i : i + 8] = to_bytes(
+                    value=from_bytes(value=state[i : i + 8], byte_order="little") ^ val,
+                    length=8,
+                    byte_order="little",
+                )
+            state = bytearray(keccak_f(state))
 
-        response_header = self.structs.ResponseHeader(gas=remaining_gas - gas_cost, failure_flag=0)
+        result = [
+            from_bytes(state[0:16], byte_order="little"),
+            from_bytes(state[16:32], byte_order="little"),
+        ]
+
+        response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
         response = self.structs.KeccakResponse(result_low=result[0], result_high=result[1])
         return response_header, response
 
@@ -348,30 +415,22 @@ class SyscallHandlerBase(ABC):
         """
 
     @abstractmethod
+    def _get_block_hash(self, block_number: int) -> int:
+        """
+        Returns the block hash of the block at given block number.
+        """
+
+    @abstractmethod
     def _get_execution_info_ptr(self) -> RelocatableValue:
         """
         Returns a pointer to the ExecutionInfo struct.
         """
 
-    def _keccak(self, input_array: List[int]) -> List[int]:
+    @abstractmethod
+    def _keccak(self, n_rounds: int):
         """
-        Returns the keccak of the input.
+        Post-process for the keccak syscall.
         """
-
-        state = bytearray(200)
-        for chunk in blockify(input_array, chunk_size=KECCAK_FULL_RATE_IN_U64S):
-            for i, val in safe_zip(range(0, KECCAK_FULL_RATE_IN_U64S * 8, 8), chunk):
-                state[i : i + 8] = to_bytes(
-                    value=from_bytes(value=state[i : i + 8], byte_order="little") ^ val,
-                    length=8,
-                    byte_order="little",
-                )
-            state = bytearray(keccak_f(state))
-
-        return [
-            from_bytes(state[0:16], byte_order="little"),
-            from_bytes(state[16:32], byte_order="little"),
-        ]
 
     @abstractmethod
     def _storage_read(self, key: int) -> int:
@@ -477,6 +536,13 @@ class SyscallHandlerBase(ABC):
     def _count_syscall(self, syscall_name: str):
         return
 
+    @property
+    @abstractmethod
+    def current_block_number(self) -> int:
+        """
+        Returns the block number of the current block.
+        """
+
 
 class BusinessLogicSyscallHandler(SyscallHandlerBase):
     """
@@ -528,6 +594,10 @@ class BusinessLogicSyscallHandler(SyscallHandlerBase):
 
         # A pointer to the Cairo ExecutionInfo struct.
         self._execution_info_ptr: Optional[RelocatableValue] = None
+
+    @property
+    def current_block_number(self) -> int:
+        return self.state.block_info.block_number
 
     # Syscalls.
 
@@ -590,6 +660,13 @@ class BusinessLogicSyscallHandler(SyscallHandlerBase):
             remaining_gas=remaining_gas,
         )
         return contract_address, result
+
+    def _get_block_hash(self, block_number: int) -> int:
+        return self.state.get_storage_at(
+            storage_domain=StorageDomain.ON_CHAIN,
+            contract_address=constants.BLOCK_HASH_CONTRACT_ADDRESS,
+            key=block_number,
+        )
 
     def _get_execution_info_ptr(self) -> RelocatableValue:
         if self._execution_info_ptr is None:
@@ -760,9 +837,16 @@ class BusinessLogicSyscallHandler(SyscallHandlerBase):
 
             runner.mark_as_accessed(address=segment_ptr, size=segment_size)
 
-    def _count_syscall(self, syscall_name: str):
+    def _keccak(self, n_rounds: int):
+        # For the keccak system call we want to count the number of rounds,
+        # rather than the number of syscall invocations.
+        # Since the infrastructure already added 1 to the counter, we add n_rounds -1 here.
+        if n_rounds > 1:
+            self._count_syscall(syscall_name="keccak", count=n_rounds - 1)
+
+    def _count_syscall(self, syscall_name: str, count: int = 1):
         previous_syscall_count = self.resources_manager.syscall_counter.get(syscall_name, 0)
-        self.resources_manager.syscall_counter[syscall_name] = previous_syscall_count + 1
+        self.resources_manager.syscall_counter[syscall_name] = previous_syscall_count + count
 
 
 class OsExecutionHelper:
@@ -774,7 +858,12 @@ class OsExecutionHelper:
         self,
         tx_execution_infos: List[TransactionExecutionInfo],
         storage_by_address: Mapping[int, OsSingleStarknetStorage],
+        old_block_number_and_hash: Optional[Tuple[int, int]],
+        loop: asyncio.AbstractEventLoop,
     ):
+        """
+        Private constructor.
+        """
         self.tx_execution_info_iterator: Iterator[TransactionExecutionInfo] = iter(
             tx_execution_infos
         )
@@ -810,6 +899,61 @@ class OsExecutionHelper:
         # system call validation by the StarkNet OS.
         # Set during enter_call.
         self.call_execution_info_ptr: Optional[RelocatableValue] = None
+
+        # Current running event loop; used for running async tasks in a synchronous context.
+        self.loop = loop
+
+        # The block number and block hash of the (current_block_number - buffer) block, where
+        # buffer=STORED_BLOCK_HASH_BUFFER.
+        # It is the hash that is going to be written by this OS run.
+        self.old_block_number_and_hash = old_block_number_and_hash
+
+    @classmethod
+    async def create(
+        cls,
+        tx_execution_infos: List[TransactionExecutionInfo],
+        storage_by_address: Mapping[int, OsSingleStarknetStorage],
+        block_info: BlockInfo,
+        updated_block_hash_contract_state: ContractState,
+        ffc: FactFetchingContext,
+    ) -> "OsExecutionHelper":
+        # Fetch the hash of the (current_block_number - buffer) block from the updated state
+        # (was written by the Batcher).
+        old_block_number = block_info.block_number - constants.STORED_BLOCK_HASH_BUFFER
+        if old_block_number < 0:
+            old_block_number_and_hash = None
+        else:
+            leaf = await updated_block_hash_contract_state.storage_commitment_tree.get_leaf(
+                index=old_block_number, ffc=ffc, fact_cls=StorageLeaf
+            )
+            old_block_number_and_hash = (old_block_number, leaf.value)
+
+        return cls(
+            tx_execution_infos=tx_execution_infos,
+            storage_by_address=storage_by_address,
+            old_block_number_and_hash=old_block_number_and_hash,
+            loop=asyncio.get_running_loop(),
+        )
+
+    def compute_storage_commitments(self) -> Mapping[int, CommitmentInfo]:
+        coroutine = gather_in_chunks(
+            awaitables=(
+                storage.compute_commitment() for storage in self.storage_by_address.values()
+            )
+        )
+        commitments = execute_coroutine_threadsafe(coroutine=coroutine, loop=self.loop)
+        return dict(safe_zip(self.storage_by_address.keys(), commitments))
+
+    def get_old_block_number_and_hash(self) -> Tuple[int, int]:
+        """
+        Returns the block number and block hash of the
+        (current_block_number - stored_block_hash_buffer) block.
+        """
+        assert (
+            self.old_block_number_and_hash is not None
+        ), f"Block number is probably < {constants.STORED_BLOCK_HASH_BUFFER}."
+
+        return self.old_block_number_and_hash
 
     @property
     def call_info(self) -> CallInfo:
@@ -892,11 +1036,17 @@ class OsSyscallHandler(SyscallHandlerBase):
     def __init__(
         self,
         execution_helper: OsExecutionHelper,
+        block_info: BlockInfo,
         # Note that a non-optional segments must be set before using the SyscallHandler.
         segments: Optional[MemorySegmentManager] = None,
     ):
         super().__init__(segments=segments, initial_syscall_ptr=None)
         self.execution_helper = execution_helper
+        self.block_info = block_info
+
+    @property
+    def current_block_number(self) -> int:
+        return self.block_info.block_number
 
     def set_segments(self, segments: MemorySegmentManager):
         assert self._segments is None, "segments is already set."
@@ -932,6 +1082,15 @@ class OsSyscallHandler(SyscallHandlerBase):
         contract_address = next(self.execution_helper.deployed_contracts_iterator)
         return contract_address, constructor_result
 
+    def _get_block_hash(self, block_number: int) -> int:
+        # The syscall handler should not directly read from the storage during the execution of
+        # transactions because the order in which reads and writes occur is not strictly linear.
+        # However, for the "block hash contract," this rule does not apply. This contract is updated
+        # only at the start of each block before other transactions are executed.
+        return self.execution_helper.storage_by_address[constants.BLOCK_HASH_CONTRACT_ADDRESS].read(
+            block_number
+        )
+
     def _get_execution_info_ptr(self) -> RelocatableValue:
         assert (
             self.execution_helper.call_execution_info_ptr is not None
@@ -951,4 +1110,7 @@ class OsSyscallHandler(SyscallHandlerBase):
         return
 
     def _send_message_to_l1(self, to_address: int, payload: List[int]):
+        return
+
+    def _keccak(self, n_rounds: int):
         return

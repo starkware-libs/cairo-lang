@@ -2,7 +2,7 @@ import dataclasses
 import hashlib
 import inspect
 import random
-from typing import Any, Dict, Optional, Sequence, Tuple, Type, TypeVar
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, Type, TypeVar
 
 import marshmallow
 import marshmallow.fields as mfields
@@ -14,6 +14,19 @@ from starkware.starkware_utils.validated_fields import ValidatedField
 
 TValidatedDataclass = TypeVar("TValidatedDataclass", bound="ValidatedDataclass")
 T = TypeVar("T")
+
+
+def get_from_nested_metadata(metadata: Mapping[str, Any], key: str) -> Any:
+    """
+    Returns the value for the given key in the metadata dict, or in an additional metadata dict
+    nested inside.
+    """
+    for meta in (metadata, metadata.get("metadata", None)):
+        if meta is None:
+            return None
+        if (value := meta.get(key, None)) is not None:
+            return value
+    return None
 
 
 class ValidatedDataclass:
@@ -106,13 +119,15 @@ class ValidatedDataclass:
             value = getattr(self, field.name)
             # First use the field_validated argument, and only if it does not exist,
             # use the validation inside the marshmallow field argument.
-            validated_field = metadata.get("validated_field", None)
+            validated_field = get_from_nested_metadata(metadata=metadata, key="validated_field")
             if validated_field is None:
                 marshmallow_field = field.metadata.get("marshmallow_field", None)
                 if marshmallow_field is not None:
                     validate_field(field=marshmallow_field, value=value)
             else:
-                name_in_messages = metadata.get("name_in_messages", None)
+                name_in_messages = get_from_nested_metadata(
+                    metadata=metadata, key="name_in_messages"
+                )
                 validated_field.validate(value=value, name=name_in_messages)
 
     def validate_types(self):
@@ -150,9 +165,7 @@ def get_validated_field(field: dataclasses.Field) -> Optional[ValidatedField]:
     Checks if the dataclass field has a validated_field attribute in its metadata.
     If so returns it, otherwise returns None.
     """
-    if field.metadata is not None and "validated_field" in field.metadata:
-        return field.metadata["validated_field"]
-    return None
+    return get_from_nested_metadata(metadata=field.metadata, key="validated_field")
 
 
 def late_marshmallow_dataclass(cls: Optional[type] = None, **kwargs):

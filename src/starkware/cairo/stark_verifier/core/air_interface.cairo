@@ -41,6 +41,7 @@ struct AirInstance {
     traces_eval_composition_polynomial: felt*,
     eval_oods_boundary_poly_at_points: felt*,
     // Constants.
+    n_dynamic_params: felt,
     n_constraints: felt,
     constraint_degree: felt,
     mask_size: felt,
@@ -59,7 +60,10 @@ func public_input_validate{range_check_ptr}(
 }
 
 func traces_config_validate{range_check_ptr}(
-    air: AirInstance*, config: TracesConfig*, log_eval_domain_size: felt
+    air: AirInstance*,
+    config: TracesConfig*,
+    log_eval_domain_size: felt,
+    n_verifier_friendly_commitment_layers: felt,
 ) {
     jmp abs air.traces_config_validate;
 }
@@ -102,6 +106,7 @@ func traces_eval_composition_polynomial{range_check_ptr}(
 
 func eval_oods_boundary_poly_at_points{range_check_ptr}(
     air: AirInstance*,
+    public_input: PublicInput*,
     eval_info: OodsEvaluationInfo*,
     n_points: felt,
     points: felt*,

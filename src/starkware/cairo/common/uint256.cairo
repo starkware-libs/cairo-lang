@@ -1,6 +1,12 @@
 from starkware.cairo.common.bitwise import bitwise_and, bitwise_or, bitwise_xor
 from starkware.cairo.common.cairo_builtins import BitwiseBuiltin
-from starkware.cairo.common.math import assert_in_range, assert_le, assert_nn_le, assert_not_zero
+from starkware.cairo.common.math import (
+    assert_in_range,
+    assert_le,
+    assert_nn_le,
+    assert_not_zero,
+    split_felt,
+)
 from starkware.cairo.common.math_cmp import is_le
 from starkware.cairo.common.pow import pow
 from starkware.cairo.common.registers import get_ap, get_fp_and_pc
@@ -23,6 +29,39 @@ func uint256_check{range_check_ptr}(a: Uint256) {
     [range_check_ptr + 1] = a.high;
     let range_check_ptr = range_check_ptr + 2;
     return ();
+}
+
+// Converters.
+
+// Converts a Uint256 value in the range [0, PRIME) to a felt. Fails if value is out of range.
+func uint256_to_felt{range_check_ptr}(value: Uint256) -> felt {
+    // The maximal accepted value is PRIME - 1 = -1 = 2**251 + 17 * 2**192 =
+    // SHIFT * (2**123 + 17*2**64).
+    // Denote HIGH_PART = -1 / SHIFT.
+    // If value.low = 0 then value is valid only if value.high <= HIGH_PART.
+    // Otherwise, value is valid if value.high <= HIGH_PART - 1.
+
+    const HIGH_PART = (-1) / SHIFT;
+    // Derive the upper bound based on value.low.
+    if (value.low == 0) {
+        tempvar high_part_max_value = HIGH_PART;
+    } else {
+        tempvar high_part_max_value = HIGH_PART - 1;
+    }
+
+    with_attr error_message("OUT_OF_RANGE_UINT256_VALUE") {
+        // Assert value.high <= high_part_max_value.
+        assert [range_check_ptr] = high_part_max_value - value.high;
+        let range_check_ptr = range_check_ptr + 1;
+    }
+    // Express the value as felt.
+    return value.high * SHIFT + value.low;
+}
+
+// Converts a felt to a uint256.
+func felt_to_uint256{range_check_ptr}(value: felt) -> Uint256 {
+    let (high, low) = split_felt(value=value);
+    return (Uint256(low=low, high=high));
 }
 
 // Arithmetics.

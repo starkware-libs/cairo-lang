@@ -1,17 +1,24 @@
 import dataclasses
 from dataclasses import field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
+from starkware.cairo.lang.builtins.all_builtins import (
+    OUTPUT_BUILTIN,
+    SUPPORTED_DYNAMIC_BUILTINS,
+    BuiltinList,
+)
 from starkware.cairo.lang.builtins.bitwise.instance_def import BitwiseInstanceDef
 from starkware.cairo.lang.builtins.ec.instance_def import EcOpInstanceDef
 from starkware.cairo.lang.builtins.hash.instance_def import PedersenInstanceDef
+from starkware.cairo.lang.builtins.instance_def import BuiltinInstanceDef
 from starkware.cairo.lang.builtins.keccak.instance_def import KeccakInstanceDef
 from starkware.cairo.lang.builtins.poseidon.instance_def import PoseidonInstanceDef
 from starkware.cairo.lang.builtins.range_check.instance_def import RangeCheckInstanceDef
 from starkware.cairo.lang.builtins.signature.instance_def import EcdsaInstanceDef
-from starkware.cairo.lang.dynamic_layout_params import DYNAMIC_LAYOUT_NAME
 
 PRIME = 2**251 + 17 * 2**192 + 1
+
+DYNAMIC_LAYOUT_NAME = "dynamic"
 
 
 @dataclasses.dataclass
@@ -22,8 +29,11 @@ class CpuInstanceDef:
 
 @dataclasses.dataclass
 class DilutedPoolInstanceDef:
-    # The ratio between the number of diluted cells in the pool and the number of cpu steps.
-    units_per_step: int
+    # The log of the ratio between the number of diluted cells in the pool
+    # and the number of cpu steps.
+    # The case of log_units_per_step < 0 is possible when there are only few
+    # builtins that require diluted units (as bitwise and keccak).
+    log_units_per_step: int
 
     # In diluted form the binary sequence **** of length n_bits is represented as 00*00*00*00*,
     # with (spacing - 1) zero bits between consecutive information carying bits.
@@ -31,6 +41,24 @@ class DilutedPoolInstanceDef:
 
     # The number of (information) bits (before diluting).
     n_bits: int
+
+
+@dataclasses.dataclass
+class BuiltinsInfo:
+    output: bool = field(default=True)
+    # Dictionary of builtin definitions. Note that builtin definitions only exist for builtins that
+    # are implemented with a periodic constraint in the trace, i.e., all builtins except for the
+    # output builtin. Therefore, the output builtin is not included in this dictionary.
+    builtin_defs: Dict[str, BuiltinInstanceDef] = field(default_factory=lambda: {})
+
+    @property
+    def builtins_list(self) -> BuiltinList:
+        list_of_builtins = []
+        if self.output:
+            list_of_builtins.append(OUTPUT_BUILTIN)
+        list_of_builtins.extend(self.builtin_defs.keys())
+
+        return BuiltinList(list_of_builtins)
 
 
 @dataclasses.dataclass
@@ -48,52 +76,71 @@ class CairoLayout:
     cpu_instance_def: CpuInstanceDef = field(default=CpuInstanceDef())
 
 
-def build_dynamic_layout(**ratios) -> CairoLayout:
+def build_builtins_dict_with_default_params(
+    **ratios: Optional[int],
+) -> Dict[str, Union[BuiltinInstanceDef, bool]]:
+    """
+    Creates a builtins dictionary according to the given ratios.
+    The ratios are allowed to be None - this is used when constructing the AIR before knowing the
+    ratios.
+    """
+    assert all(builtin in SUPPORTED_DYNAMIC_BUILTINS for builtin in ratios.keys())
+
+    return dict(
+        output=True,
+        pedersen=PedersenInstanceDef(
+            ratio=ratios.get("pedersen"),
+            repetitions=4,
+            element_height=256,
+            element_bits=252,
+            n_inputs=2,
+            hash_limit=PRIME,
+        ),
+        range_check=RangeCheckInstanceDef(
+            ratio=ratios.get("range_check"),
+            n_parts=8,
+        ),
+        ecdsa=EcdsaInstanceDef(
+            ratio=ratios.get("ecdsa"),
+            repetitions=1,
+            height=256,
+            n_hash_bits=251,
+        ),
+        bitwise=BitwiseInstanceDef(
+            ratio=ratios.get("bitwise"),
+            total_n_bits=251,
+        ),
+        ec_op=EcOpInstanceDef(
+            ratio=ratios.get("ec_op"),
+            scalar_height=256,
+            scalar_bits=252,
+            scalar_limit=PRIME,
+        ),
+        poseidon=PoseidonInstanceDef(
+            ratio=ratios.get("poseidon"),
+            partial_rounds_partition=[64, 22],
+        ),
+    )
+
+
+def build_dynamic_layout(**ratios: Optional[int]) -> CairoLayout:
     return CairoLayout(
         layout_name=DYNAMIC_LAYOUT_NAME,
         cpu_component_step=1,
         rc_units=16,
-        builtins=dict(
-            output=True,
-            pedersen=PedersenInstanceDef(
-                ratio=ratios.get("pedersen"),
-                repetitions=4,
-                element_height=256,
-                element_bits=252,
-                n_inputs=2,
-                hash_limit=PRIME,
-            ),
-            range_check=RangeCheckInstanceDef(
-                ratio=ratios.get("range_check"),
-                n_parts=8,
-            ),
-            ecdsa=EcdsaInstanceDef(
-                ratio=ratios.get("ecdsa"),
-                repetitions=1,
-                height=256,
-                n_hash_bits=251,
-            ),
-            bitwise=BitwiseInstanceDef(
-                ratio=ratios.get("bitwise"),
-                total_n_bits=251,
-            ),
-            ec_op=EcOpInstanceDef(
-                ratio=ratios.get("ec_op"),
-                scalar_height=256,
-                scalar_bits=252,
-                scalar_limit=PRIME,
-            ),
-        ),
+        builtins=build_builtins_dict_with_default_params(**ratios),
         public_memory_fraction=8,
         memory_units_per_step=8,
         diluted_pool_instance_def=DilutedPoolInstanceDef(
-            units_per_step=16,
+            log_units_per_step=4,
             spacing=4,
             n_bits=16,
         ),
         n_trace_columns=73,
     )
 
+
+dynamic_template_instance = build_dynamic_layout()
 
 plain_instance = CairoLayout(
     layout_name="plain",
@@ -158,7 +205,7 @@ starknet_instance = CairoLayout(
     layout_name="starknet",
     rc_units=4,
     diluted_pool_instance_def=DilutedPoolInstanceDef(
-        units_per_step=2,
+        log_units_per_step=1,
         spacing=4,
         n_bits=16,
     ),
@@ -204,7 +251,7 @@ starknet_with_keccak_instance = CairoLayout(
     layout_name="starknet_with_keccak",
     rc_units=4,
     diluted_pool_instance_def=DilutedPoolInstanceDef(
-        units_per_step=16,
+        log_units_per_step=4,
         spacing=4,
         n_bits=16,
     ),
@@ -257,7 +304,7 @@ recursive_instance = CairoLayout(
     rc_units=4,
     public_memory_fraction=8,
     diluted_pool_instance_def=DilutedPoolInstanceDef(
-        units_per_step=16,
+        log_units_per_step=4,
         spacing=4,
         n_bits=16,
     ),
@@ -290,7 +337,7 @@ recursive_large_output_instance = CairoLayout(
     rc_units=4,
     public_memory_fraction=8,
     diluted_pool_instance_def=DilutedPoolInstanceDef(
-        units_per_step=16,
+        log_units_per_step=4,
         spacing=4,
         n_bits=16,
     ),
@@ -322,7 +369,7 @@ all_cairo_instance = CairoLayout(
     rc_units=4,
     public_memory_fraction=8,
     diluted_pool_instance_def=DilutedPoolInstanceDef(
-        units_per_step=16,
+        log_units_per_step=4,
         spacing=4,
         n_bits=16,
     ),
@@ -374,7 +421,7 @@ all_solidity_instance = CairoLayout(
     rc_units=8,
     public_memory_fraction=8,
     diluted_pool_instance_def=DilutedPoolInstanceDef(
-        units_per_step=16,
+        log_units_per_step=4,
         spacing=4,
         n_bits=16,
     ),

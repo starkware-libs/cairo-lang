@@ -4,7 +4,8 @@ from starkware.cairo.common.cairo_blake2s.blake2s import (
     blake2s_add_uint256_bigend,
     blake2s_bigend,
 )
-from starkware.cairo.common.cairo_builtins import BitwiseBuiltin
+from starkware.cairo.common.cairo_builtins import BitwiseBuiltin, HashBuiltin
+from starkware.cairo.common.hash_state import hash_felts
 from starkware.cairo.common.math import (
     assert_nn,
     assert_nn_le,
@@ -139,23 +140,19 @@ func read_uint64_from_prover{
     return (value=ChannelSentFelt(value.value));
 }
 
-// Reads multiple field elements from the prover. See Channel.
+// Reads multiple field elements from the prover.
+// Calls read_felt_from_prover on the hash chain of values. See Channel.
 func read_felts_from_prover{
-    range_check_ptr, blake2s_ptr: felt*, bitwise_ptr: BitwiseBuiltin*, channel: Channel
+    range_check_ptr,
+    pedersen_ptr: HashBuiltin*,
+    blake2s_ptr: felt*,
+    bitwise_ptr: BitwiseBuiltin*,
+    channel: Channel,
 }(n_values: felt, values: ChannelUnsentFelt*) -> (values: ChannelSentFelt*) {
-    read_felts_from_prover_inner(n_values=n_values, values=values);
+    alloc_locals;
+    let (unsent_felt_hash: felt) = hash_felts{hash_ptr=pedersen_ptr}(data=values, length=n_values);
+    read_felt_from_prover(ChannelUnsentFelt(unsent_felt_hash));
     return (values=cast(values, ChannelSentFelt*));
-}
-
-func read_felts_from_prover_inner{
-    range_check_ptr, blake2s_ptr: felt*, bitwise_ptr: BitwiseBuiltin*, channel: Channel
-}(n_values: felt, values: ChannelUnsentFelt*) -> () {
-    if (n_values == 0) {
-        return ();
-    }
-
-    let (value) = read_montgomery_form_felt_from_prover(values[0]);
-    return read_felts_from_prover_inner(n_values=n_values - 1, values=&values[1]);
 }
 
 // Reads a field element vector from the prover. Unlike read_felts_from_prover, this hashes all the

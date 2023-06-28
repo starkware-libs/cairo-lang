@@ -19,9 +19,19 @@ def test_channel(program):
     runner = CairoFunctionRunner(program, layout="small")
     blake2s_ptr = runner.segments.add()
     runner.run(
-        "main_test", runner.range_check_builtin.base, runner.bitwise_builtin.base, blake2s_ptr
+        "main_test",
+        runner.range_check_builtin.base,
+        runner.pedersen_builtin.base,
+        runner.bitwise_builtin.base,
+        blake2s_ptr,
     )
-    res_range_check_ptr, res_bitwise_ptr, res_blake2s_ptr = runner.get_return_values(3)
+    (
+        res_range_check_ptr,
+        res_pedersen_ptr,
+        res_bitwise_ptr,
+        res_blake2s_ptr,
+    ) = runner.get_return_values(4)
     validate_builtin_usage(runner.range_check_builtin, res_range_check_ptr)
+    validate_builtin_usage(runner.pedersen_builtin, res_pedersen_ptr)
     validate_builtin_usage(runner.bitwise_builtin, res_bitwise_ptr)
     assert res_blake2s_ptr.segment_index == blake2s_ptr.segment_index

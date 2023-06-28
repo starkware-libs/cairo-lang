@@ -55,6 +55,7 @@ from starkware.cairo.stark_verifier.core.table_commitment import (
     table_commit,
     table_decommit,
 )
+from starkware.cairo.stark_verifier.core.utils import compute_powers_array
 
 // Protocol components:
 // ======================
@@ -182,6 +183,7 @@ func verify_stark_proof{range_check_ptr, pedersen_ptr: HashBuiltin*, bitwise_ptr
 
         stark_decommit(
             air=air,
+            public_input=proof.public_input,
             n_queries=n_queries,
             queries=queries,
             commitment=stark_commitment,
@@ -221,8 +223,13 @@ func stark_commit{
     );
 
     // Generate interaction values after traces commitment.
+    let (composition_alpha: felt*) = alloc();
+    random_felts_to_prover(n_elements=1, elements=composition_alpha);
     let (traces_coefficients: felt*) = alloc();
-    random_felts_to_prover(n_elements=air.n_constraints, elements=traces_coefficients);
+    compute_powers_array(
+        data_ptr=traces_coefficients, alpha=[composition_alpha], cur=1, n=air.n_constraints
+    );
+
     let (interaction_after_traces: InteractionValuesAfterTraces*) = alloc();
     assert [interaction_after_traces] = InteractionValuesAfterTraces(
         coefficients=traces_coefficients
@@ -258,8 +265,10 @@ func stark_commit{
     );
 
     // Generate interaction values after OODS.
+    let (oods_alpha: felt*) = alloc();
+    random_felts_to_prover(n_elements=1, elements=oods_alpha);
     let (oods_coefficients: felt*) = alloc();
-    random_felts_to_prover(n_elements=n_oods_values, elements=oods_coefficients);
+    compute_powers_array(data_ptr=oods_coefficients, alpha=[oods_alpha], cur=1, n=n_oods_values);
     tempvar interaction_after_oods = new InteractionValuesAfterOods(coefficients=oods_coefficients);
 
     // Read fri commitment.
@@ -320,6 +329,7 @@ func stark_decommit{
     range_check_ptr, blake2s_ptr: felt*, pedersen_ptr: HashBuiltin*, bitwise_ptr: BitwiseBuiltin*
 }(
     air: AirInstance*,
+    public_input: PublicInput*,
     n_queries: felt,
     queries: felt*,
     commitment: StarkCommitment*,
@@ -360,6 +370,7 @@ func stark_decommit{
     );
     let (oods_poly_evals) = eval_oods_boundary_poly_at_points(
         air=air,
+        public_input=public_input,
         eval_info=eval_info,
         n_points=n_queries,
         points=points,

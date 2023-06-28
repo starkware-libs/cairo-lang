@@ -1,4 +1,4 @@
-from typing import List, MutableMapping, NamedTuple, Optional
+from typing import List, MutableMapping, NamedTuple, Optional, Union
 
 from starkware.cairo.lang.compiler.ast.cairo_types import (
     CairoType,
@@ -17,6 +17,7 @@ from starkware.cairo.lang.compiler.identifier_utils import (
 )
 from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
+from starkware.cairo.lang.vm.relocatable import MaybeRelocatable
 from starkware.python.utils import WriteOnceDict
 
 
@@ -151,6 +152,17 @@ class CairoStructFactory:
         """
         return CairoStructProxy(self, ScopedName())
 
+    def from_type_and_ptr(
+        self, cairo_type: CairoType, memory, addr
+    ) -> Union[NamedTuple, MaybeRelocatable]:
+        if isinstance(cairo_type, TypeStruct):
+            return CairoStructProxy(factory=self, path=cairo_type.scope).from_ptr(memory, addr)
+
+        assert isinstance(
+            cairo_type, (TypeFelt, TypeCodeoffset, TypePointer)
+        ), f"Unsupported Cairo type {cairo_type}."
+        return memory[addr]
+
 
 class CairoStructProxy:
     """
@@ -184,7 +196,13 @@ class CairoStructProxy:
         namedtuple instance.
         """
         named_tuple = self.build()
-
         return named_tuple(
-            **{name: memory[addr + index] for index, name in enumerate(named_tuple._fields)}
+            **{
+                name: self.factory.from_type_and_ptr(
+                    member_def.cairo_type,
+                    memory=memory,
+                    addr=addr + member_def.offset,
+                )
+                for name, member_def in self.struct_definition_.members.items()
+            }
         )

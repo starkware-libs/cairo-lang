@@ -10,7 +10,7 @@ from starkware.cairo.lang.compiler.identifier_definition import ConstDefinition
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
-from starkware.python.utils import from_bytes, to_bytes
+from starkware.python.utils import to_bytes
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.public.abi import starknet_keccak
 from starkware.starknet.services.api.contract_class.contract_class import (
@@ -70,13 +70,12 @@ def get_contract_class_struct(
         ScopedName.from_string(f"{CONTRACT_CLASS_MODULE}.CONTRACT_CLASS_VERSION")
     )
     assert isinstance(CONTRACT_CLASS_VERSION_IDENT, ConstDefinition)
-
-    if CONTRACT_CLASS_VERSION_IDENT.value != from_bytes(
-        ("CONTRACT_CLASS_V" + contract_class.contract_class_version).encode("ascii")
+    contract_class_version_ident_str = (
+        to_bytes(CONTRACT_CLASS_VERSION_IDENT.value).decode("ascii").lstrip("\x00")
+    )
+    if contract_class_version_ident_str != (
+        "CONTRACT_CLASS_V" + contract_class.contract_class_version
     ):
-        contract_class_version_ident_str = to_bytes(CONTRACT_CLASS_VERSION_IDENT.value).decode(
-            "ascii"
-        )
         raise StarkException(
             code=StarknetErrorCode.INVALID_CONTRACT_CLASS_VERSION,
             message=(

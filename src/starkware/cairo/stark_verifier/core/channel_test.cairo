@@ -1,5 +1,5 @@
 from starkware.cairo.common.alloc import alloc
-from starkware.cairo.common.cairo_builtins import BitwiseBuiltin
+from starkware.cairo.common.cairo_builtins import BitwiseBuiltin, HashBuiltin
 from starkware.cairo.common.uint256 import Uint256
 from starkware.cairo.stark_verifier.core.channel import (
     Channel,
@@ -35,17 +35,14 @@ func test_to{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: felt*}(
     return ();
 }
 
-func test_from{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: felt*}() {
+func test_from{
+    range_check_ptr, pedersen_ptr: HashBuiltin*, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: felt*
+}() {
     alloc_locals;
     let (channel) = channel_new(digest=Uint256(0, 0));
     local original_channel: Channel = channel;
     with channel {
         let (unsent_values: ChannelUnsentFelt*) = alloc();
-
-        read_felts_from_prover(n_values=0, values=unsent_values);
-        assert channel.digest = original_channel.digest;
-        assert channel.counter = original_channel.counter;
-
         let (value) = read_felt_from_prover(ChannelUnsentFelt(2 ** 160 - 1));
         assert value = ChannelSentFelt(2 ** 160 - 1);
         assert channel.digest = Uint256(
@@ -58,7 +55,7 @@ func test_from{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: felt*
         %{ segments.write_arg(ids.unsent_values.address_, [2, 3, -1]) %}
         let (values: ChannelSentFelt*) = read_felts_from_prover(n_values=3, values=unsent_values);
         assert channel.digest = Uint256(
-            112024683927095477838641218961157907563, 5661176600678131043744698980571579995
+            295335566410811725414215363086094601243, 235943495558589014390324160323936214827
         );
         assert channel.counter = 0;
         %{
@@ -72,7 +69,7 @@ func test_from{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: felt*
             n_values=3, values=unsent_values
         );
         assert channel.digest = Uint256(
-            189864326141136730846745412438399658276, 15139562861684933156438197658243262907
+            107293173750539804415118856895235527826, 287334618810652651334396317613525936033
         );
         assert channel.counter = 0;
         %{
@@ -85,7 +82,9 @@ func test_from{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: felt*
     return ();
 }
 
-func main_test{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: felt*}() -> () {
+func main_test{
+    range_check_ptr, pedersen_ptr: HashBuiltin*, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: felt*
+}() -> () {
     test_to();
     test_from();
     return ();

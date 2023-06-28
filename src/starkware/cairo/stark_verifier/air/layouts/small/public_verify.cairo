@@ -91,7 +91,8 @@ func public_input_validate{range_check_ptr}(
         public_input.segments[segments.PEDERSEN].stop_ptr -
         public_input.segments[segments.PEDERSEN].begin_addr
     ) / 3;
-    // Note that the following call implies that n_steps is divisible by PEDERSEN_BUILTIN_RATIO.
+    // Note that the following call implies that n_steps is divisible by
+    // PEDERSEN_BUILTIN_RATIO.
     assert_nn_le(n_pedersen_uses, n_pedersen_copies);
 
     tempvar n_range_check_copies = n_steps / RC_BUILTIN_RATIO;
@@ -99,7 +100,8 @@ func public_input_validate{range_check_ptr}(
         public_input.segments[segments.RANGE_CHECK].stop_ptr -
         public_input.segments[segments.RANGE_CHECK].begin_addr
     );
-    // Note that the following call implies that n_steps is divisible by RC_BUILTIN_RATIO.
+    // Note that the following call implies that n_steps is divisible by
+    // RC_BUILTIN_RATIO.
     assert_nn_le(n_range_check_uses, n_range_check_copies);
 
     tempvar n_ecdsa_copies = n_steps / ECDSA_BUILTIN_RATIO;
@@ -107,7 +109,8 @@ func public_input_validate{range_check_ptr}(
         public_input.segments[segments.ECDSA].stop_ptr -
         public_input.segments[segments.ECDSA].begin_addr
     ) / 2;
-    // Note that the following call implies that n_steps is divisible by ECDSA_BUILTIN_RATIO.
+    // Note that the following call implies that n_steps is divisible by
+    // ECDSA_BUILTIN_RATIO.
     assert_nn_le(n_ecdsa_uses, n_ecdsa_copies);
 
     return ();

@@ -82,12 +82,10 @@ class TransactionStatus(Enum):
     NOT_RECEIVED = 0
     # The transaction was received by the sequencer.
     RECEIVED = auto()
-    # The transaction passed the validation and entered the pending block.
-    PENDING = auto()
     # The transaction failed validation and thus was skipped (applies both to a pending and an
     # actual created block).
     REJECTED = auto()
-    # The transaction passed the validation and entered an actual created block.
+    # The transaction passed the validation and entered a pending or an actual created block.
     ACCEPTED_ON_L2 = auto()
     # The transaction was accepted on-chain.
     ACCEPTED_ON_L1 = auto()
@@ -98,7 +96,6 @@ class TransactionStatus(Enum):
         Returns whether a transaction with that status has been executed successfully.
         """
         return self in (
-            TransactionStatus.PENDING,
             TransactionStatus.ACCEPTED_ON_L2,
             TransactionStatus.ACCEPTED_ON_L1,
         )
@@ -108,11 +105,13 @@ class TransactionStatus(Enum):
         """
         Returns a transaction status according to the status of a block containing it.
         """
-        if block_status in (
-            BlockStatus.PENDING,
-            BlockStatus.ACCEPTED_ON_L2,
-            BlockStatus.ACCEPTED_ON_L1,
-        ):
+
+        if block_status is BlockStatus.PENDING:
+            # We do not distinguish between a pending and a finalized block in transaction status.
+            # A pending block will eventually be closed, so the transaction is considered
+            # accepted on L2.
+            return TransactionStatus.ACCEPTED_ON_L2
+        elif block_status in (BlockStatus.ACCEPTED_ON_L2, BlockStatus.ACCEPTED_ON_L1):
             # The statuses above are identical for a block and a transaction.
             return TransactionStatus[block_status.name]
         elif block_status in (BlockStatus.REVERTED, BlockStatus.ABORTED):
@@ -147,9 +146,8 @@ class TransactionStatus(Enum):
 tx_status_order_relation: Dict[TransactionStatus, int] = {
     TransactionStatus.NOT_RECEIVED: 0,
     TransactionStatus.RECEIVED: 1,
-    TransactionStatus.PENDING: 2,
-    TransactionStatus.ACCEPTED_ON_L2: 3,
-    TransactionStatus.ACCEPTED_ON_L1: 4,
+    TransactionStatus.ACCEPTED_ON_L2: 2,
+    TransactionStatus.ACCEPTED_ON_L1: 3,
 }
 
 
@@ -205,28 +203,33 @@ class TransactionInBlockInfo(ValidatedResponseObject):
             tx_rejected == has_failure_info
         ), "A rejected transaction must contain failure information, and vice versa."
 
-        # Validate PENDING status matches missing created block fields.
-        if self.status is TransactionStatus.PENDING:
-            assert (
-                self.block_hash is None and self.block_number is None
-            ), "Block hash and block number must not appear in a pending transaction."
-
-            return
-
         # Validate ACCEPTED_ON_L1/2 status matches existing missing created block fields.
         minimal_remaining_status = TransactionStatus.ACCEPTED_ON_L2
         assert tx_rejected or self.status >= minimal_remaining_status, (
             f"Unexpected transaction status: {self.status}; expected status to be at least "
             f"{minimal_remaining_status.name}."
         )
+
+        # We do not distinguish between a pending and a finalized block when considering transaction
+        # status. In each case the block hash contains different values therefore we
+        # can't assure its validity.
         if not tx_rejected:
-            assert all(
-                field is not None
-                for field in (self.block_hash, self.block_number, self.transaction_index)
-            ), (
-                "Block hash, block number and transaction index in block must appear in an "
-                "accepted transaction."
-            )
+            if self.status is TransactionStatus.ACCEPTED_ON_L1:
+                assert all(
+                    field is not None
+                    for field in (self.block_hash, self.block_number, self.transaction_index)
+                ), (
+                    "Block hash, block number and transaction index in block must appear in an "
+                    "accepted transaction."
+                )
+            else:
+                assert self.status is TransactionStatus.ACCEPTED_ON_L2
+                assert all(
+                    field is not None for field in (self.block_number, self.transaction_index)
+                ), (
+                    "Block number and transaction index in block must appear in an "
+                    "accepted transaction."
+                )
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -718,7 +721,9 @@ class OrderedL2ToL1MessageResponse(ValidatedDataclass):
     """
 
     order: int = field(metadata=sequential_id_metadata("L2-to-L1 message order"))
-    to_address: str = field(metadata=everest_fields.EthAddressField.metadata("to_address"))
+    to_address: str = field(
+        metadata=everest_fields.EthAddressField.metadata(field_name="to_address")
+    )
     payload: List[int] = field(metadata=fields.felt_as_hex_list_metadata)
 
     @classmethod
