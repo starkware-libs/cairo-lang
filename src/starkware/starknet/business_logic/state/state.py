@@ -615,7 +615,10 @@ class UpdatesTrackerState(SyncState):
             class_hash=class_hash, compiled_class_hash=compiled_class_hash
         )
 
-    def count_actual_updates(self) -> Tuple[int, int, int, int]:
+    def count_actual_updates(
+        self,
+        sender_address: Optional[int],
+    ) -> Tuple[int, int, int, int]:
         """
         Returns a tuple of:
             1. The number of modified contracts.
@@ -646,7 +649,10 @@ class UpdatesTrackerState(SyncState):
             self.cache._nonce_writes, self.cache._nonce_initial_values
         )
         contracts_with_modified_nonce = set(nonce_updates.keys())
-
+        # Adds manually the account contract address since we increment the nonce after computing
+        # the state updates.
+        if sender_address is not None:
+            contracts_with_modified_nonce.add(sender_address)
         # Modified contracts.
         modified_contracts = (
             contracts_with_modified_storage

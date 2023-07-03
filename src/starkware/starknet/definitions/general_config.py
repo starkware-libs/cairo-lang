@@ -112,6 +112,17 @@ class StarknetGeneralConfig(EverestGeneralConfig):
 
     min_gas_price: int = field(metadata=fields.gas_price, default=DEFAULT_GAS_PRICE)
 
+    constant_gas_price: bool = field(
+        metadata=additional_metadata(
+            marshmallow_field=RequiredBoolean(),
+            description=(
+                "If True, sets the gas price to the `min_gas_price` value, regardless of the L1 "
+                "gas prices."
+            ),
+        ),
+        default=False,
+    )
+
     sequencer_address: int = field(
         metadata=additional_metadata(
             **fields.sequencer_address_metadata, description="StarkNet sequencer address."

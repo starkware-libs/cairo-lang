@@ -706,6 +706,9 @@ class InternalDeclare(InternalAccountTransaction):
             resources_manager=resources_manager,
             call_infos=[validate_info],
             tx_type=self.tx_type,
+            sender_address=None
+            if self.version in [0, constants.QUERY_VERSION_BASE]
+            else self.sender_address,
         )
 
         return TransactionExecutionInfo.create_concurrent_stage_execution_info(
@@ -895,6 +898,7 @@ class InternalDeployAccount(InternalAccountTransaction):
             resources_manager=resources_manager,
             call_infos=[constructor_call_info, validate_info],
             tx_type=self.tx_type,
+            sender_address=self.sender_address,
         )
 
         return TransactionExecutionInfo.create_concurrent_stage_execution_info(
@@ -1145,6 +1149,7 @@ class InternalDeploy(InternalTransaction):
             resources_manager=resources_manager,
             call_infos=[call_info],
             tx_type=self.tx_type,
+            sender_address=None,
         )
 
         return TransactionExecutionInfo.create_concurrent_stage_execution_info(
@@ -1187,6 +1192,7 @@ class InternalDeploy(InternalTransaction):
             resources_manager=resources_manager,
             call_infos=[call_info],
             tx_type=self.tx_type,
+            sender_address=None,
         )
 
         return TransactionExecutionInfo.create_concurrent_stage_execution_info(
@@ -1444,6 +1450,9 @@ class InternalInvokeFunction(InternalAccountTransaction):
             resources_manager=resources_manager,
             call_infos=[call_info, validate_info],
             tx_type=self.tx_type,
+            sender_address=None
+            if self.version in [0, constants.QUERY_VERSION_BASE]
+            else self.sender_address,
         )
 
         return TransactionExecutionInfo.create_concurrent_stage_execution_info(
@@ -1623,6 +1632,7 @@ class InternalL1Handler(InternalTransaction):
             call_infos=[call_info],
             tx_type=self.tx_type,
             l1_handler_payload_size=self.get_payload_size(),
+            sender_address=None,
         )
 
         # Enforce L1 fees.

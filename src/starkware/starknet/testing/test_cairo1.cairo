@@ -9,7 +9,7 @@ mod TestContract {
     struct Storage {
     }
 
-    #[external]
+    #[external(v0)]
     fn read(ref self: ContractState, key: felt252) -> felt252 {
         let domain_address = 0_u32; // Only address_domain 0 is currently supported.
         let storage_address = storage_address_from_base_and_offset(
@@ -18,7 +18,7 @@ mod TestContract {
         storage_read_syscall(domain_address, storage_address).unwrap_syscall()
     }
 
-    #[external]
+    #[external(v0)]
     fn write(ref self: ContractState, key: felt252, value: felt252) {
         let domain_address = 0_u32; // Only address_domain 0 is currently supported.
         let storage_address = storage_address_from_base_and_offset(

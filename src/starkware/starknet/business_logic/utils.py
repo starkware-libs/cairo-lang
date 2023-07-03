@@ -198,6 +198,7 @@ def calculate_tx_resources(
     call_infos: Iterable[Optional[CallInfo]],
     tx_type: TransactionType,
     state: UpdatesTrackerState,
+    sender_address: Optional[int],
     l1_handler_payload_size: Optional[int] = None,
 ) -> ResourcesMapping:
     """
@@ -211,7 +212,7 @@ def calculate_tx_resources(
         n_storage_changes,
         n_class_updates,
         _n_nonce_updates,
-    ) = state.count_actual_updates()
+    ) = state.count_actual_updates(sender_address=sender_address)
 
     return calculate_tx_resources_given_usage(
         resources_manager=resources_manager,
