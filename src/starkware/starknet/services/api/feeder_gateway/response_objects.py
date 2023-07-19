@@ -77,15 +77,81 @@ class BlockStatus(Enum):
     ACCEPTED_ON_L1 = auto()
 
 
-class TransactionStatus(Enum):
+class FinalityStatus(Enum):
     # The transaction has not been received yet (i.e., not written to storage).
     NOT_RECEIVED = 0
     # The transaction was received by the sequencer.
     RECEIVED = auto()
-    # The transaction failed validation and thus was skipped (applies both to a pending and an
-    # actual created block).
+    # The transaction passed validation and entered a pending or a finalized block.
+    ACCEPTED_ON_L2 = auto()
+    # The transaction was accepted on-chain.
+    ACCEPTED_ON_L1 = auto()
+
+    def __ge__(self, other: object) -> bool:
+        if not isinstance(other, FinalityStatus):
+            return NotImplemented
+
+        return self.value >= other.value
+
+    def __lt__(self, other: object) -> bool:
+        return not self >= other
+
+    @property
+    def was_executed(self) -> bool:
+        """
+        Returns True if a transaction with this finality status is in a pending / finalized block.
+        """
+        return self >= FinalityStatus.ACCEPTED_ON_L2
+
+    @classmethod
+    def from_block_status(cls, block_status: BlockStatus) -> "FinalityStatus":
+        """
+        Returns the finality status of a transaction in a block with the given block status.
+        """
+
+        if block_status is BlockStatus.PENDING:
+            # Finality status does not distinguish between pending and finalized blocks -
+            # A pending block will eventually be finalized, so the transaction is considered
+            # accepted on L2.
+            return FinalityStatus.ACCEPTED_ON_L2
+        elif block_status in (BlockStatus.ACCEPTED_ON_L2, BlockStatus.ACCEPTED_ON_L1):
+            return FinalityStatus[block_status.name]
+        elif block_status in (BlockStatus.REVERTED, BlockStatus.ABORTED):
+            # The transaction passed Batcher validations, but the block containing it failed on
+            # L1 or L2. Hence, it is yet again waiting to be inserted to a new block.
+            return FinalityStatus.RECEIVED
+
+        raise NotImplementedError(f"Handling block status {block_status.name} is not implemented.")
+
+
+class ExecutionStatus(Enum):
+    # The transaction failed validation and thus was skipped.
+    REJECTED = 0
+    # The transaction passed validation but failed execution, and will be (or was) included in
+    # a block (nonce will be incremented and an execution fee will be charged).
+    REVERTED = auto()
+    # The transaction passed validation and its execution is valid.
+    SUCCEEDED = auto()
+
+
+class TransactionStatus(Enum):
+    """
+    This class is DEPRECATED and will be removed.
+    It is replaced by ExecutionStatus & FinalityStatus.
+    """
+
+    # The transaction has not been received yet (i.e., not written to storage).
+    NOT_RECEIVED = 0
+    # The transaction was received by the sequencer.
+    RECEIVED = auto()
+    # The transaction failed validation and thus was skipped (applies both to a pending and a
+    # finalized block).
     REJECTED = auto()
-    # The transaction passed the validation and entered a pending or an actual created block.
+    # The transaction passed validation but failed execution, and will be (or was) included in
+    # a block (nonce will be incremented and an execution fee will be charged).
+    # This status does not distinguish between accepted on L2 / accepted on L1 blocks.
+    REVERTED = auto()
+    # The transaction passed validation and entered a pending or a finalized block.
     ACCEPTED_ON_L2 = auto()
     # The transaction was accepted on-chain.
     ACCEPTED_ON_L1 = auto()
@@ -138,6 +204,23 @@ class TransactionStatus(Enum):
     def __lt__(self, other: object) -> bool:
         return not self >= other
 
+    @classmethod
+    def from_new_status(
+        cls, finality_status: FinalityStatus, execution_status: Optional[ExecutionStatus]
+    ) -> "TransactionStatus":
+        """
+        Returns the DEPRECATED status which matches the given finality and execution
+        statuses.
+        """
+        if execution_status in (None, ExecutionStatus.SUCCEEDED):
+            return cls[finality_status.name]
+
+        assert execution_status in (
+            ExecutionStatus.REVERTED,
+            ExecutionStatus.REJECTED,
+        ), f"Unrecognized execution status {as_non_optional(execution_status).name}."
+        return cls[execution_status.name]
+
 
 # Dictionary that represents the TransactionStatus valid flows.
 # [NOT_RECEIVED] -> [RECEIVED] -> [PENDING] -> [ACCEPTED_ON_L2] -> [ACCEPTED_ON_L1].
@@ -157,8 +240,16 @@ class TransactionInBlockInfo(ValidatedResponseObject):
     Represents the information regarding a StarkNet transaction that appears in a block.
     """
 
-    # The status of a transaction, see TransactionStatus.
+    # The reason for the transaction revert, if applicable.
+    revert_error: Optional[str] = field(metadata=nonrequired_optional_metadata)
+    # Execution status of the transaction.
+    execution_status: Optional[ExecutionStatus] = field(metadata=nonrequired_optional_metadata)
+    # Finality of the transaction.
+    finality_status: FinalityStatus
+    # The status of the transaction.
+    # This field is DEPRECATED and will be removed.
     status: TransactionStatus
+
     # The reason for the transaction failure, if applicable.
     transaction_failure_reason: Optional[TransactionFailureReason]
     # The unique identifier of the block on the active chain containing the transaction.
@@ -174,62 +265,123 @@ class TransactionInBlockInfo(ValidatedResponseObject):
     def __post_init__(self):
         super().__post_init__()
 
-        # Validate NOT_RECEIVED/nonexistent status matches missing execution fields.
-        execution_fields = (
-            self.block_hash,
-            self.block_number,
-            self.transaction_index,
-            self.transaction_failure_reason,
+        # Assert the DEPRECATED status matches execution status and finality status.
+        execution_status_mismatch_msg = (
+            f"DEPRECATED status {self.status} doesn't match "
+            f"execution status {self.execution_status}."
         )
-        if self.status in (
-            TransactionStatus.NOT_RECEIVED,
-            TransactionStatus.RECEIVED,
-        ):
-            assert all(field is None for field in execution_fields), (
-                "Transaction execution fields (block hash, block number, index in block, etc.) "
-                "must not appear in a transaction that is not yet in a block, "
-                "or when status is None. "
-                f"Status: {self.status}. Execution fields: block_hash: {self.block_hash}, "
-                f"block_number: {self.block_number}, transaction_index: {self.transaction_index}, "
-                f"transaction_failure_reason: {self.transaction_failure_reason}."
+        if self.status in (TransactionStatus.REVERTED, TransactionStatus.REJECTED):
+            assert (
+                self.status.name == as_non_optional(self.execution_status).name
+            ), execution_status_mismatch_msg
+        else:
+            assert self.execution_status not in (
+                ExecutionStatus.REVERTED,
+                ExecutionStatus.REJECTED,
+            ), execution_status_mismatch_msg
+            assert self.status.name == as_non_optional(self.finality_status).name, (
+                f"DEPRECATED status {self.status} doesn't match finality status "
+                f"{self.finality_status}."
             )
+
+        # Verify fields match for NOT_RECEIVED/RECEIVED finality status.
+        if self.finality_status in (
+            FinalityStatus.NOT_RECEIVED,
+            FinalityStatus.RECEIVED,
+        ):
+            assert all(
+                field is None
+                for field in (
+                    self.block_hash,
+                    self.block_number,
+                    self.transaction_index,
+                    self.revert_error,
+                )
+            ), (
+                f"For a transaction with finality status: {self.finality_status}, the following "
+                f"fields must be None, but are instead: "
+                f"{self.block_hash=}, {self.block_number=}, {self.transaction_index=}, "
+                f"{self.revert_error=}."
+            )
+            if self.execution_status is ExecutionStatus.REJECTED:
+                assert (
+                    self.transaction_failure_reason is not None
+                ), "Rejected transactions must have a failure reason."
+                assert self.finality_status is FinalityStatus.RECEIVED, (
+                    f"The finality status of a rejected transaction should always be RECEIVED. "
+                    f"Instead it's {self.finality_status}."
+                )
+            else:
+                assert (self.execution_status is None) and (
+                    self.transaction_failure_reason is None
+                ), f"For a non-reverted transaction with finality status: {self.finality_status}, "
+                f"the following fields must be None, but are instead: "
+                f"{self.execution_status=}, {self.transaction_failure_reason=}."
 
             return
 
-        # Validate REJECTED status matches existing failure reason field.
-        tx_rejected = self.status is TransactionStatus.REJECTED
-        has_failure_info = self.transaction_failure_reason is not None
-        assert (
-            tx_rejected == has_failure_info
-        ), "A rejected transaction must contain failure information, and vice versa."
+        # At this point finality status should be ACCEPTED_ON_L2/L1.
+        # The following section verifies all fields match for the above cases.
+        assert self.finality_status.was_executed
 
-        # Validate ACCEPTED_ON_L1/2 status matches existing missing created block fields.
-        minimal_remaining_status = TransactionStatus.ACCEPTED_ON_L2
-        assert tx_rejected or self.status >= minimal_remaining_status, (
-            f"Unexpected transaction status: {self.status}; expected status to be at least "
-            f"{minimal_remaining_status.name}."
+        assert self.execution_status in (
+            ExecutionStatus.REVERTED,
+            ExecutionStatus.SUCCEEDED,
+        ), (
+            f"Accepted (on either L1 or L2) transactions' execution status must be SUCCEEDED or "
+            f"REVERTED. instead it's {self.execution_status}."
         )
 
-        # We do not distinguish between a pending and a finalized block when considering transaction
-        # status. In each case the block hash contains different values therefore we
-        # can't assure its validity.
-        if not tx_rejected:
-            if self.status is TransactionStatus.ACCEPTED_ON_L1:
-                assert all(
-                    field is not None
-                    for field in (self.block_hash, self.block_number, self.transaction_index)
-                ), (
-                    "Block hash, block number and transaction index in block must appear in an "
-                    "accepted transaction."
-                )
+        assert (
+            self.transaction_failure_reason is None
+        ), "Only rejected transactions should have a failure reason."
+
+        # Assert execution status is REVERTED if, and only if, revert error is not None.
+        assert (self.execution_status is ExecutionStatus.REVERTED) == (
+            self.revert_error is not None
+        ), "A transaction must contain revert information if and only if it is reverted."
+
+        assert (self.block_number is not None) and (self.transaction_index is not None), (
+            f"Block number and transaction index in block must appear in Accepted (on either L1 or "
+            f"L2) transactions. Actual values: {self.block_number=}, {self.transaction_index=}."
+        )
+
+        # ACCEPTED_ON_L2 transactions may be in a non finalized block. In this case the block hash
+        # is not known yet and will be None.
+        if self.finality_status is FinalityStatus.ACCEPTED_ON_L1:
+            assert (
+                self.block_hash is not None
+            ), "Transactions accepted on L1 must have a block hash."
+
+    @marshmallow.pre_load
+    def _fill_missing_tx_statuses(self, data, **kwargs):
+        finality_status_key_name = "finality_status"
+        execution_status_key_name = "execution_status"
+
+        # If True, This object was serialized before finality_status was added.
+        if finality_status_key_name not in data:
+            deprecated_status = TransactionStatus[data["status"]]
+
+            # REVERTED status and execution status did not exist before finality_status was added.
+            assert deprecated_status is not TransactionStatus.REVERTED
+            assert "revert_reason" not in data
+            assert execution_status_key_name not in data
+
+            if deprecated_status.was_executed:
+                data[finality_status_key_name] = deprecated_status.name
+                data[execution_status_key_name] = ExecutionStatus.SUCCEEDED.name
+            elif deprecated_status is TransactionStatus.REJECTED:
+                data[finality_status_key_name] = FinalityStatus.RECEIVED.name
+                data[execution_status_key_name] = ExecutionStatus.REJECTED.name
             else:
-                assert self.status is TransactionStatus.ACCEPTED_ON_L2
-                assert all(
-                    field is not None for field in (self.block_number, self.transaction_index)
-                ), (
-                    "Block number and transaction index in block must appear in an "
-                    "accepted transaction."
+                assert deprecated_status in (
+                    TransactionStatus.RECEIVED,
+                    TransactionStatus.NOT_RECEIVED,
                 )
+                data[finality_status_key_name] = deprecated_status.name
+                data[execution_status_key_name] = None
+
+        return data
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -309,7 +461,7 @@ class DeclareSpecificInfo(AccountTransactionSpecificInfo):
 class DeploySpecificInfo(TransactionSpecificInfo):
     contract_address: int = field(metadata=fields.contract_address_metadata)
     contract_address_salt: int = field(metadata=fields.contract_address_salt_metadata)
-    class_hash: Optional[int] = field(metadata=fields.OptionalClassHashIntField.metadata())
+    class_hash: Optional[int] = field(metadata=fields.optional_new_class_hash_metadata)
     constructor_calldata: List[int] = field(metadata=fields.calldata_as_hex_metadata)
 
     tx_type: ClassVar[TransactionType] = TransactionType.DEPLOY
@@ -483,7 +635,9 @@ class TransactionInfo(TransactionInBlockInfo):
     @classmethod
     def create(
         cls,
-        status: TransactionStatus,
+        finality_status: FinalityStatus,
+        execution_status: Optional[ExecutionStatus] = None,
+        revert_error: Optional[str] = None,
         transaction: Optional[InternalTransaction] = None,
         transaction_failure_reason: Optional[TransactionFailureReason] = None,
         block_hash: Optional[int] = None,
@@ -491,10 +645,15 @@ class TransactionInfo(TransactionInBlockInfo):
         transaction_index: Optional[int] = None,
     ) -> "TransactionInfo":
         return cls(
+            revert_error=revert_error,
+            execution_status=execution_status,
+            finality_status=finality_status,
             transaction=None
             if transaction is None
             else TransactionSpecificInfo.from_internal(internal_tx=transaction),
-            status=status,
+            status=TransactionStatus.from_new_status(
+                finality_status=finality_status, execution_status=execution_status
+            ),
             transaction_failure_reason=transaction_failure_reason,
             block_hash=block_hash,
             block_number=block_number,
@@ -506,7 +665,7 @@ class TransactionInfo(TransactionInBlockInfo):
 
         if self.transaction is None:
             assert (
-                self.status is TransactionStatus.NOT_RECEIVED
+                self.finality_status is FinalityStatus.NOT_RECEIVED
             ), "A received transaction must be included in TransactionInfo object."
 
 
@@ -544,6 +703,11 @@ class TransactionExecution(ValidatedResponseObject):
     Represents a receipt of an executed transaction.
     """
 
+    # The reason for the transaction revert, if applicable.
+    revert_error: Optional[str] = field(metadata=nonrequired_optional_metadata)
+    # Execution status of the transaction.
+    execution_status: Optional[ExecutionStatus] = field(metadata=nonrequired_optional_metadata)
+
     # The index of the transaction within the block.
     transaction_index: Optional[int] = field(
         metadata=fields.default_optional_transaction_index_metadata
@@ -561,20 +725,6 @@ class TransactionExecution(ValidatedResponseObject):
     # The actual fee that was charged in Wei.
     actual_fee: Optional[int] = field(metadata=fields.optional_fee_metadata)
 
-
-@marshmallow_dataclass.dataclass(frozen=True)
-class TransactionReceipt(TransactionExecution, TransactionInBlockInfo):
-    """
-    Represents a receipt of a StarkNet transaction;
-    i.e., the information regarding its execution and the block it appears in.
-    """
-
-    def __post_init__(self):
-        super().__post_init__()
-
-        if self.status is TransactionStatus.REJECTED and self.has_execution_info:
-            raise AssertionError("A rejected transaction cannot have execution info.")
-
     @property
     def has_execution_info(self) -> bool:
         """
@@ -585,7 +735,28 @@ class TransactionReceipt(TransactionExecution, TransactionInBlockInfo):
             or self.execution_resources is not None
             or len(self.l2_to_l1_messages) > 0
             or len(self.events) > 0
+            or self.actual_fee is not None
         )
+
+    def __post_init__(self):
+        super().__post_init__()
+        assert (self.execution_status is ExecutionStatus.REVERTED) == (
+            self.revert_error is not None
+        ), (
+            f"A transaction must have a revert error if and only if it is reverted. Actual values: "
+            f"{self.execution_status=}, {self.revert_error=}."
+        )
+
+        if self.execution_status is ExecutionStatus.REJECTED and self.has_execution_info:
+            raise AssertionError("A rejected transaction cannot have execution info.")
+
+
+@marshmallow_dataclass.dataclass(frozen=True)
+class TransactionReceipt(TransactionExecution, TransactionInBlockInfo):
+    """
+    Represents a receipt of a StarkNet transaction;
+    i.e., the information regarding its execution and the block it appears in.
+    """
 
     @classmethod
     def from_tx_info(
@@ -599,6 +770,9 @@ class TransactionReceipt(TransactionExecution, TransactionInBlockInfo):
         execution_resources: Optional[ExecutionResources] = None,
     ) -> "TransactionReceipt":
         return cls(
+            revert_error=tx_info.revert_error,
+            execution_status=tx_info.execution_status,
+            finality_status=tx_info.finality_status,
             l1_to_l2_consumed_message=l1_to_l2_consumed_message,
             l2_to_l1_messages=[] if l2_to_l1_messages is None else l2_to_l1_messages,
             events=[] if events is None else events,
@@ -771,7 +945,7 @@ class FunctionInvocation(BaseResponseObject, SerializableMarshmallowDataclass):
     contract_address: int = field(metadata=fields.contract_address_metadata)
     calldata: List[int] = field(metadata=fields.calldata_as_hex_metadata)
     call_type: Optional[CallType] = field(metadata=nonrequired_optional_metadata)
-    class_hash: Optional[int] = field(metadata=fields.OptionalClassHashIntField.metadata())
+    class_hash: Optional[int] = field(metadata=fields.optional_new_class_hash_metadata)
     selector: Optional[int] = field(metadata=fields.optional_entry_point_selector_metadata)
     entry_point_type: Optional[EntryPointType]
 
@@ -822,11 +996,20 @@ class TransactionTrace(ValidatedResponseObject):
     including internal calls.
     """
 
+    # The reason for the transaction revert, if applicable.
+    revert_error: Optional[str] = field(metadata=nonrequired_optional_metadata)
     # Objects describe invocation of validation, fee transfer, and a specific function.
     validate_invocation: Optional[FunctionInvocation]
     function_invocation: Optional[FunctionInvocation]
     fee_transfer_invocation: Optional[FunctionInvocation]
     signature: List[int] = field(metadata=fields.signature_metadata)
+
+    def __post_init__(self):
+        super().__post_init__()
+        if self.revert_error is not None:
+            assert (
+                self.function_invocation is None
+            ), "Reverted transactions only execute validation and fee transfer."
 
 
 @marshmallow_dataclass.dataclass(frozen=True)

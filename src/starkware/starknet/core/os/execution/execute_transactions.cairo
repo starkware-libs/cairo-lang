@@ -144,6 +144,7 @@ func execute_transactions{
     let bitwise_ptr = selectable_builtins.bitwise;
     let ec_op_ptr = selectable_builtins.ec_op;
     let poseidon_ptr = selectable_builtins.poseidon;
+    let keccak_ptr = builtin_ptrs.non_selectable.keccak;
 
     return (reserved_range_checks_end=reserved_range_checks_end);
 }
@@ -378,9 +379,24 @@ func execute_invoke_function_transaction{
     %}
 
     run_validate(block_context=block_context, tx_execution_context=tx_execution_context);
-    select_execute_entry_point_func(
-        block_context=block_context, execution_context=tx_execution_context
-    );
+
+    // Execute only non-reverted transactions.
+    if (nondet %{ execution_helper.tx_execution_info.is_reverted %} == 0) {
+        select_execute_entry_point_func(
+            block_context=block_context, execution_context=tx_execution_context
+        );
+    } else {
+        // Align the stack with the if branch to avoid revoked references.
+        tempvar range_check_ptr = range_check_ptr;
+        tempvar remaining_gas = remaining_gas;
+        tempvar builtin_ptrs = builtin_ptrs;
+        tempvar contract_state_changes = contract_state_changes;
+        tempvar contract_class_changes = contract_class_changes;
+        tempvar outputs = outputs;
+        ap += 2;
+    }
+    local remaining_gas = remaining_gas;
+
     charge_fee(block_context=block_context, tx_execution_context=tx_execution_context);
 
     %{ execution_helper.end_tx() %}

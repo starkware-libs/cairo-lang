@@ -279,18 +279,6 @@
         {
             "allowed_expressions": [],
             "hint_lines": [
-                "from starkware.cairo.common.keccak_utils.keccak_utils import keccak_func",
-                "_keccak_state_size_felts = int(ids.KECCAK_STATE_SIZE_FELTS)",
-                "assert 0 <= _keccak_state_size_felts < 100",
-                "",
-                "output_values = keccak_func(memory.get_range(",
-                "    ids.keccak_ptr - _keccak_state_size_felts, _keccak_state_size_felts))",
-                "segments.write_arg(ids.keccak_ptr, output_values)"
-            ]
-        },
-        {
-            "allowed_expressions": [],
-            "hint_lines": [
                 "from starkware.cairo.common.cairo_secp.secp_utils import N, pack",
                 "from starkware.python.math_utils import div_mod, safe_div",
                 "",
@@ -417,6 +405,18 @@
                 "from starkware.cairo.common.cairo_secp.secp_utils import split",
                 "",
                 "segments.write_arg(ids.res.address_, split(value))"
+            ]
+        },
+        {
+            "allowed_expressions": [],
+            "hint_lines": [
+                "from starkware.cairo.common.keccak_utils.keccak_utils import keccak_func",
+                "_keccak_state_size_felts = int(ids.KECCAK_STATE_SIZE_FELTS)",
+                "assert 0 <= _keccak_state_size_felts < 100",
+                "",
+                "output_values = keccak_func(memory.get_range(",
+                "    ids.keccak_ptr - _keccak_state_size_felts, _keccak_state_size_felts))",
+                "segments.write_arg(ids.keccak_ptr, output_values)"
             ]
         },
         {
@@ -887,13 +887,13 @@
         {
             "allowed_expressions": [],
             "hint_lines": [
-                "syscall_handler.send_message_to_l1(segments=segments, syscall_ptr=ids.syscall_ptr)"
+                "syscall_handler.replace_class(segments=segments, syscall_ptr=ids.syscall_ptr)"
             ]
         },
         {
             "allowed_expressions": [],
             "hint_lines": [
-                "syscall_handler.replace_class(segments=segments, syscall_ptr=ids.syscall_ptr)"
+                "syscall_handler.send_message_to_l1(segments=segments, syscall_ptr=ids.syscall_ptr)"
             ]
         },
         {

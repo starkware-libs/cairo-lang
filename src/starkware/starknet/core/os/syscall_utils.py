@@ -227,7 +227,7 @@ def get_runtime_type(
     """
     if isinstance(cairo_type, TypeFelt):
         return int
-    if isinstance(cairo_type, TypePointer) and isinstance(cairo_type.pointee, TypeFelt):
+    if isinstance(cairo_type, TypePointer):
         return RelocatableValue
     if isinstance(cairo_type, TypeStruct) and cairo_type.scope == ScopedName.from_string(
         "starkware.cairo.common.uint256.Uint256"

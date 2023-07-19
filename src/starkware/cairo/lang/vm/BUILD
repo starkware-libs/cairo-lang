@@ -68,12 +68,17 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "cairo_vm_lib",
+        ":cairo_relocatable_lib",
+        ":cairo_vm_crypto_lib",
+        ":cairo_vm_lib",
         "//src/starkware/cairo/lang:cairo_instances_lib",
         "//src/starkware/cairo/lang:cairo_version_lib",
         "//src/starkware/cairo/lang/builtins:cairo_run_builtins_lib",
         "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
+        # A tracer module is loaded dynamically in runtime and available with the following
+        # target.
         "//src/starkware/cairo/lang/tracer:cairo_tracer_lib",
+        "//src/starkware/crypto:starkware_crypto_lib",
         "//src/starkware/python:starkware_python_utils_lib",
         "//src/starkware/starkware_utils:starkware_utils_lib",
     ],
@@ -95,11 +100,11 @@ py_exe(
     name = "cairo_run_exe",
     module = "starkware.cairo.lang.vm.cairo_run",
     deps = [
+        "cairo_run_lib",
         "//src/starkware/cairo/bootloaders:cairo_bootloader_generate_fact_lib",
+        "//src/starkware/cairo/bootloaders:cairo_hash_program_lib",
         "//src/starkware/cairo/common:cairo_common_lib",
         "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
-        "//src/starkware/cairo/bootloaders:cairo_hash_program_lib",
-        "cairo_run_lib",
         "//src/starkware/cairo/lang/scripts:cairo_script_lib",
     ] + CAIRO_LANG_VENV_ADDITIONAL_LIBS,
 )

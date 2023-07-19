@@ -55,13 +55,13 @@ pytest_test(
     ],
     data = [
         "starknet_common.cairo",
+        "//src/starkware/starknet/common:starknet_common_cairo_lib",
     ],
     visibility = ["//visibility:public"],
     deps = [
         "starknet_security_lib",
         "//src/starkware/cairo/lang:cairo_constants_lib",
         "//src/starkware/python:starkware_python_utils_lib",
-        "//src/starkware/starknet/common:starknet_common_lib",
         "//src/starkware/starknet/security:starknet_hints_whitelist_lib",
     ],
 )

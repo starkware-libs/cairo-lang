@@ -17,10 +17,10 @@ py_library(
         "//src/starkware/python:starkware_python_utils_lib",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
         "//src/starkware/starknet/definitions:starknet_general_config_lib",
+        "//src/starkware/starknet/public:starknet_abi_lib",
         "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",
         "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
         "//src/starkware/starkware_utils:starkware_error_handling_lib",
-        "//src/starkware/starkware_utils:starkware_utils_lib",
         requirement("marshmallow_dataclass"),
     ],
 )

@@ -18,6 +18,8 @@ class StarknetErrorCode(ErrorCode):
     ENTRY_POINT_NOT_FOUND_IN_CONTRACT = auto()
     EXTERNAL_TO_INTERNAL_CONVERSION_ERROR = auto()
     FEE_TRANSFER_FAILURE = auto()
+    INSUFFICIENT_ACCOUNT_BALANCE = auto()
+    INSUFFICIENT_MAX_FEE = auto()
     INVALID_BLOCK_NUMBER = auto()
     INVALID_BLOCK_TIMESTAMP = auto()
     INVALID_COMPILED_CLASS = auto()
@@ -78,6 +80,7 @@ class StarknetErrorCode(ErrorCode):
     PY_STATE_ERROR = auto()
     PY_STORAGE_ERROR = auto()
     PY_TRANSACTION_EXECUTION_ERROR = auto()
+    VALIDATE_FAILURE = auto()
 
     @classmethod
     def from_raw_code(cls, code: str) -> "StarknetErrorCode":
@@ -121,6 +124,19 @@ common_error_codes: List[ErrorCode] = [
     StarknetErrorCode.INVALID_CONTRACT_CLASS_VERSION,
     # Validate execution.
     StarknetErrorCode.UNAUTHORIZED_ACTION_ON_VALIDATE,
+    # Function call errors.
+    StarknetErrorCode.CLASS_ALREADY_DECLARED,
+    StarknetErrorCode.CONTRACT_ADDRESS_UNAVAILABLE,
+    StarknetErrorCode.ENTRY_POINT_NOT_FOUND_IN_CONTRACT,
+    StarknetErrorCode.FEE_TRANSFER_FAILURE,
+    StarknetErrorCode.INVALID_COMPILED_CLASS,
+    StarknetErrorCode.INVALID_RETURN_DATA,
+    StarknetErrorCode.L1_TO_L2_MESSAGE_INSUFFICIENT_FEE,
+    StarknetErrorCode.OUT_OF_RESOURCES,
+    StarknetErrorCode.SECURITY_ERROR,
+    StarknetErrorCode.TRANSACTION_FAILED,
+    StarknetErrorCode.UNDECLARED_CLASS,
+    StarknetErrorCode.UNEXPECTED_FAILURE,
 ]
 
 main_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
@@ -139,6 +155,10 @@ main_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
         StarknetErrorCode.NON_PERMITTED_CONTRACT,
         # Reaching traffic limits.
         StarknetErrorCode.TRANSACTION_LIMIT_EXCEEDED,
+        # State-related validation errors.
+        StarknetErrorCode.INSUFFICIENT_ACCOUNT_BALANCE,
+        StarknetErrorCode.INSUFFICIENT_MAX_FEE,
+        StarknetErrorCode.VALIDATE_FAILURE,
     ]
 )
 
@@ -151,20 +171,6 @@ feeder_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
         StarknetErrorCode.NO_TRACE,
         StarknetErrorCode.TRANSACTION_NOT_FOUND,
         StarknetErrorCode.UNINITIALIZED_CONTRACT,
-        # Function call errors.
-        StarknetErrorCode.CLASS_ALREADY_DECLARED,
-        StarknetErrorCode.CONTRACT_ADDRESS_UNAVAILABLE,
-        StarknetErrorCode.ENTRY_POINT_NOT_FOUND_IN_CONTRACT,
-        StarknetErrorCode.FEE_TRANSFER_FAILURE,
-        StarknetErrorCode.INVALID_COMPILED_CLASS,
-        StarknetErrorCode.INVALID_RETURN_DATA,
-        StarknetErrorCode.INVALID_TRANSACTION_VERSION,
-        StarknetErrorCode.L1_TO_L2_MESSAGE_INSUFFICIENT_FEE,
-        StarknetErrorCode.OUT_OF_RESOURCES,
-        StarknetErrorCode.SECURITY_ERROR,
-        StarknetErrorCode.TRANSACTION_FAILED,
-        StarknetErrorCode.UNDECLARED_CLASS,
-        StarknetErrorCode.UNEXPECTED_FAILURE,
         # Request parsing errors.
         StarkErrorCode.MALFORMED_REQUEST,
         StarknetErrorCode.INVALID_STATUS_MODE,

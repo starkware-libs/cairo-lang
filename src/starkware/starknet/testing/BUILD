@@ -1,6 +1,7 @@
 load("//bazel_utils:solidity.bzl", "sol_contract", "sol_library")
 load("//bazel_utils/python:defs.bzl", "requirement")
 load("//bazel_utils:python.bzl", "pytest_test")
+load("//src/starkware/cairo/lang:cairo_rules.bzl", "cairo_library")
 
 sol_library(
     name = "starknet_mock_messaging_sol",
@@ -32,8 +33,19 @@ py_library(
         ":mock_starknet_messaging_sol_env",
     ],
     visibility = ["//visibility:public"],
+    deps = ["//src/starkware/solidity:starkware_contracts_utils_lib"],
+)
+
+cairo_library(
+    name = "starknet_testing_cairo_lib",
+    srcs = [
+        "test.cairo",
+        "test_cairo1.cairo",
+        "test_unwhitelisted_hint.cairo",
+    ],
     deps = [
-        "//src/starkware/solidity:starkware_contracts_utils_lib",
+        "//src/starkware/cairo/common:cairo_common_cairo_lib",
+        "//src/starkware/starknet/common:starknet_common_cairo_lib",
     ],
 )
 
@@ -46,19 +58,21 @@ pytest_test(
         "postman_test.py",
         "starknet_test.py",
     ],
-    data = [
-        "test.cairo",
-        "test_cairo1.cairo",
-        "test_unwhitelisted_hint.cairo",
-    ],
+    data = [":starknet_testing_cairo_lib"],
     visibility = ["//visibility:public"],
     deps = [
-        "starknet_mock_messaging_contracts_lib",
-        "starknet_testing_lib",
-        "//src/starkware/cairo/common:cairo_common_lib",
+        ":starknet_mock_messaging_contracts_lib",
+        ":starknet_testing_lib",
+        "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
         "//src/starkware/eth:starkware_eth_test_utils_lib",
+        "//src/starkware/starknet/business_logic/execution:starknet_transaction_execution_objects_lib",
+        "//src/starkware/starknet/compiler:starknet_compile_lib",
         "//src/starkware/starknet/compiler/v1:starknet_compile_v1_lib",
         "//src/starkware/starknet/core/test_contract:starknet_test_external_contract_test_utils_lib",
+        "//src/starkware/starknet/public:starknet_abi_lib",
+        "//src/starkware/starknet/services/api:starknet_messages_lib",
+        "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",
+        "//src/starkware/starknet/utils:starknet_api_utils_lib",
         requirement("pytest_asyncio"),
     ],
 )
@@ -72,9 +86,7 @@ py_library(
     deps = [
         "//src/starkware/starknet/business_logic/transaction:starknet_transaction_objects_lib",
         "//src/starkware/starknet/core/os/contract_address:starknet_contract_address_lib",
-        "//src/starkware/starknet/core/os/contract_class:starknet_os_abi_lib",
         "//src/starkware/starknet/public:starknet_abi_lib",
-        "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",
     ],
 )
 

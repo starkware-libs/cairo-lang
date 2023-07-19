@@ -42,10 +42,8 @@ py_library(
         "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
         requirement("marshmallow"),
         requirement("marshmallow_dataclass"),
-        requirement("marshmallow_enum"),
         requirement("marshmallow_oneofschema"),
         requirement("typing_extensions"),
-        requirement("web3"),
     ],
 )
 

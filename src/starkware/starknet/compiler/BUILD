@@ -26,12 +26,12 @@ py_library(
         "storage_var.py",
         "validation_utils.py",
     ],
+    data = ["//src/starkware/starknet/common:starknet_common_cairo_lib"],
     visibility = ["//visibility:public"],
     deps = [
         "//src/starkware/cairo/lang:cairo_constants_lib",
         "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
         "//src/starkware/python:starkware_python_utils_lib",
-        "//src/starkware/starknet/common:starknet_common_lib",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
         "//src/starkware/starknet/public:starknet_abi_lib",
         "//src/starkware/starknet/security:starknet_hints_whitelist_lib",

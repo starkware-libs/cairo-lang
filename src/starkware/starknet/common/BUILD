@@ -17,17 +17,6 @@ cairo_library(
     ],
 )
 
-py_library(
-    name = "starknet_common_lib",
-    data = [
-        ":starknet_common_cairo_lib",
-    ],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//src/starkware/cairo/common:cairo_common_lib",
-    ],
-)
-
 package(default_visibility = ["//visibility:public"])
 
 exports_files([
@@ -43,9 +32,9 @@ pytest_test(
         "eth_utils_test.py",
         "storage_test.py",
     ],
+    data = [":starknet_common_cairo_lib"],
     visibility = ["//visibility:public"],
     deps = [
-        "starknet_common_lib",
         "//src/starkware/cairo/common:cairo_function_runner_lib",
         "//src/starkware/python:starkware_python_test_utils_lib",
         "//src/starkware/starknet/public:starknet_abi_lib",

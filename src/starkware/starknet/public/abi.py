@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from eth_hash.auto import keccak
 
@@ -62,6 +62,16 @@ VALIDATE_DEPLOY_ENTRY_POINT_SELECTOR = get_selector_from_name(
 )
 
 
+SELECTOR_TO_NAME = {
+    CONSTRUCTOR_ENTRY_POINT_SELECTOR: CONSTRUCTOR_ENTRY_POINT_NAME,
+    EXECUTE_ENTRY_POINT_SELECTOR: EXECUTE_ENTRY_POINT_NAME,
+    TRANSFER_ENTRY_POINT_SELECTOR: TRANSFER_ENTRY_POINT_NAME,
+    VALIDATE_ENTRY_POINT_SELECTOR: VALIDATE_ENTRY_POINT_NAME,
+    VALIDATE_DECLARE_ENTRY_POINT_SELECTOR: VALIDATE_DECLARE_ENTRY_POINT_NAME,
+    VALIDATE_DEPLOY_ENTRY_POINT_SELECTOR: VALIDATE_DEPLOY_ENTRY_POINT_NAME,
+}
+
+
 def get_storage_var_address(var_name: str, *args) -> int:
     """
     Returns the storage address of a StarkNet storage variable given its name and arguments.
@@ -73,3 +83,8 @@ def get_storage_var_address(var_name: str, *args) -> int:
         res = pedersen_hash(res, arg)
 
     return res % ADDR_BOUND
+
+
+def get_uint256_storage_var_keys(var_name: str, *args) -> Tuple[int, int]:
+    low_key = get_storage_var_address(var_name, *args)
+    return (low_key, low_key + 1)

@@ -468,6 +468,20 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
     # Transaction type is used to determine the order of the calls.
     tx_type: Optional[TransactionType]
 
+    # The reason for the transaction revert, if applicable.
+    revert_error: Optional[str] = field(metadata=fields.revert_error_metadata)
+
+    def __post_init__(self):
+        super().__post_init__()
+        if self.is_reverted:
+            assert (
+                self.call_info is None
+            ), "Reverted transactions only execute validation and fee transfer."
+
+    @property
+    def is_reverted(self) -> bool:
+        return self.revert_error is not None
+
     @property
     def non_optional_calls(self) -> Iterable[CallInfo]:
         if self.tx_type is TransactionType.DEPLOY_ACCOUNT:
@@ -493,6 +507,7 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
         tx_type: Optional[TransactionType],
         validate_info: Optional[CallInfo] = None,
         fee_transfer_info: Optional[CallInfo] = None,
+        revert_error: Optional[str] = None,
     ) -> "TransactionExecutionInfo":
         return cls(
             validate_info=validate_info,
@@ -501,6 +516,7 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
             actual_fee=0,
             actual_resources={},
             tx_type=tx_type,
+            revert_error=revert_error,
         )
 
     @classmethod
@@ -512,6 +528,7 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
             actual_fee=0,
             actual_resources={},
             tx_type=None,
+            revert_error=None,
         )
 
     @classmethod
@@ -521,6 +538,7 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
         call_info: Optional[CallInfo],
         actual_resources: ResourcesMapping,
         tx_type: TransactionType,
+        revert_error: Optional[str],
     ) -> "TransactionExecutionInfo":
         """
         Returns TransactionExecutionInfo for the concurrent stage (without
@@ -533,6 +551,7 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
             actual_fee=0,
             actual_resources=actual_resources,
             tx_type=tx_type,
+            revert_error=revert_error,
         )
 
     @classmethod
@@ -553,6 +572,7 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
             actual_fee=actual_fee,
             actual_resources=concurrent_execution_info.actual_resources,
             tx_type=concurrent_execution_info.tx_type,
+            revert_error=concurrent_execution_info.revert_error,
         )
 
     def gen_call_iterator(self) -> Iterator[CallInfo]:

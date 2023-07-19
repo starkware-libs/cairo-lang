@@ -6,8 +6,7 @@ mod TestContract {
     use starknet::storage_access::storage_address_from_base_and_offset;
 
     #[storage]
-    struct Storage {
-    }
+    struct Storage {}
 
     #[external(v0)]
     fn read(ref self: ContractState, key: felt252) -> felt252 {

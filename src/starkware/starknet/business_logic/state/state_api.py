@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Tuple
 
 from services.everest.business_logic.state_api import StateProxy
 from starkware.python.utils import to_bytes
@@ -6,6 +7,7 @@ from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
 from starkware.starknet.business_logic.state.storage_domain import StorageDomain
 from starkware.starknet.definitions import constants, fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
+from starkware.starknet.public.abi import get_uint256_storage_var_keys
 from starkware.starknet.services.api.contract_class.contract_class import (
     CompiledClass,
     CompiledClassBase,
@@ -160,6 +162,33 @@ class SyncStateReader(ABC):
     @abstractmethod
     def get_storage_at(self, storage_domain: StorageDomain, contract_address: int, key: int) -> int:
         pass
+
+    def get_fee_token_balance(
+        self,
+        storage_domain: StorageDomain,
+        contract_address: int,
+        fee_token_address: int,
+    ) -> int:
+        """
+        Returns the fee-token balance at the given address.
+        The balance is of type Uint256.
+        """
+        storage_domain.assert_onchain()
+        low_key, high_key = get_uint256_storage_var_keys(
+            "ERC20_balances",
+            contract_address,
+        )
+        low = self.get_storage_at(
+            storage_domain=storage_domain,
+            contract_address=fee_token_address,
+            key=low_key,
+        )
+        high = self.get_storage_at(
+            storage_domain=storage_domain,
+            contract_address=fee_token_address,
+            key=high_key,
+        )
+        return low + high * 2**128
 
     def get_compiled_class_by_class_hash(self, class_hash: int) -> CompiledClassBase:
         compiled_class_hash = self.get_compiled_class_hash(class_hash=class_hash)

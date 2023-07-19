@@ -706,9 +706,9 @@ class InternalDeclare(InternalAccountTransaction):
             resources_manager=resources_manager,
             call_infos=[validate_info],
             tx_type=self.tx_type,
-            sender_address=None
-            if self.version in [0, constants.QUERY_VERSION_BASE]
-            else self.sender_address,
+            fee_token_address=general_config.fee_token_address,
+            is_nonce_increment=self.version not in [0, constants.QUERY_VERSION_BASE],
+            sender_address=self.sender_address,
         )
 
         return TransactionExecutionInfo.create_concurrent_stage_execution_info(
@@ -716,6 +716,7 @@ class InternalDeclare(InternalAccountTransaction):
             call_info=None,
             actual_resources=actual_resources,
             tx_type=self.tx_type,
+            revert_error=None,
         )
 
 
@@ -898,6 +899,8 @@ class InternalDeployAccount(InternalAccountTransaction):
             resources_manager=resources_manager,
             call_infos=[constructor_call_info, validate_info],
             tx_type=self.tx_type,
+            fee_token_address=general_config.fee_token_address,
+            is_nonce_increment=True,
             sender_address=self.sender_address,
         )
 
@@ -906,6 +909,7 @@ class InternalDeployAccount(InternalAccountTransaction):
             call_info=constructor_call_info,
             actual_resources=actual_resources,
             tx_type=self.tx_type,
+            revert_error=None,
         )
 
     def handle_constructor(
@@ -1116,7 +1120,7 @@ class InternalDeploy(InternalTransaction):
 
         n_ctors = len(contract_class.entry_points_by_type[EntryPointType.CONSTRUCTOR])
         if n_ctors == 0:
-            return self.handle_empty_constructor(state=state)
+            return self.handle_empty_constructor(state=state, general_config=general_config)
         else:
             return self.invoke_constructor(
                 state=state, general_config=general_config, remaining_gas=remaining_gas
@@ -1131,7 +1135,11 @@ class InternalDeploy(InternalTransaction):
         fee_transfer_info, actual_fee = None, 0
         return fee_transfer_info, actual_fee
 
-    def handle_empty_constructor(self, state: UpdatesTrackerState) -> TransactionExecutionInfo:
+    def handle_empty_constructor(
+        self,
+        state: UpdatesTrackerState,
+        general_config: StarknetGeneralConfig,
+    ) -> TransactionExecutionInfo:
         stark_assert(
             len(self.constructor_calldata) == 0,
             code=StarknetErrorCode.TRANSACTION_FAILED,
@@ -1149,6 +1157,8 @@ class InternalDeploy(InternalTransaction):
             resources_manager=resources_manager,
             call_infos=[call_info],
             tx_type=self.tx_type,
+            fee_token_address=general_config.fee_token_address,
+            is_nonce_increment=False,
             sender_address=None,
         )
 
@@ -1157,6 +1167,7 @@ class InternalDeploy(InternalTransaction):
             call_info=call_info,
             actual_resources=actual_resources,
             tx_type=self.tx_type,
+            revert_error=None,
         )
 
     def invoke_constructor(
@@ -1192,6 +1203,8 @@ class InternalDeploy(InternalTransaction):
             resources_manager=resources_manager,
             call_infos=[call_info],
             tx_type=self.tx_type,
+            fee_token_address=general_config.fee_token_address,
+            is_nonce_increment=False,
             sender_address=None,
         )
 
@@ -1200,6 +1213,7 @@ class InternalDeploy(InternalTransaction):
             call_info=call_info,
             actual_resources=actual_resources,
             tx_type=self.tx_type,
+            revert_error=None,
         )
 
 
@@ -1450,9 +1464,9 @@ class InternalInvokeFunction(InternalAccountTransaction):
             resources_manager=resources_manager,
             call_infos=[call_info, validate_info],
             tx_type=self.tx_type,
-            sender_address=None
-            if self.version in [0, constants.QUERY_VERSION_BASE]
-            else self.sender_address,
+            fee_token_address=general_config.fee_token_address,
+            is_nonce_increment=self.version not in [0, constants.QUERY_VERSION_BASE],
+            sender_address=self.sender_address,
         )
 
         return TransactionExecutionInfo.create_concurrent_stage_execution_info(
@@ -1460,6 +1474,7 @@ class InternalInvokeFunction(InternalAccountTransaction):
             call_info=call_info,
             actual_resources=actual_resources,
             tx_type=self.tx_type,
+            revert_error=None,
         )
 
     def run_execute_entrypoint(
@@ -1631,7 +1646,9 @@ class InternalL1Handler(InternalTransaction):
             resources_manager=resources_manager,
             call_infos=[call_info],
             tx_type=self.tx_type,
+            fee_token_address=general_config.fee_token_address,
             l1_handler_payload_size=self.get_payload_size(),
+            is_nonce_increment=False,
             sender_address=None,
         )
 
@@ -1663,6 +1680,7 @@ class InternalL1Handler(InternalTransaction):
             call_info=call_info,
             actual_resources=actual_resources,
             tx_type=self.tx_type,
+            revert_error=None,
         )
 
     def _apply_specific_sequential_changes(

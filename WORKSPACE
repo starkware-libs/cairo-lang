@@ -1,5 +1,6 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file")
 load("//bazel_utils:get_from_cairo_lang.bzl", "get_from_cairo_lang")
+load("//src/starkware/cairo:vars_cairo_compiler.bzl", "CAIRO_COMPILER_ARCHIVE")
 
 http_archive(
     name = "build_bazel_rules_nodejs",
@@ -40,12 +41,12 @@ http_archive(
 )
 
 http_archive(
-    name = "cairo-compiler-archive-2.0.0",
+    name = CAIRO_COMPILER_ARCHIVE,
     build_file = get_from_cairo_lang(
-        "//src/starkware/starknet/compiler/v1:BUILD.cairo-compiler-archive",
+        "//src/starkware/starknet/compiler/v1:BUILD." + CAIRO_COMPILER_ARCHIVE,
     ),
     strip_prefix = "cairo",
-    url = "https://github.com/starkware-libs/cairo/releases/download/v2.0.0/release-x86_64-unknown-linux-musl.tar.gz",
+    url = "https://github.com/starkware-libs/cairo/releases/download/v2.1.0-rc0/release-x86_64-unknown-linux-musl.tar.gz",
 )
 
 http_archive(

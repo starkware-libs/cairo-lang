@@ -35,7 +35,7 @@ import subprocess
 import sys
 
 cmd = [
-    sys.executable, "-u", "-m", {args.module!r}
+    sys.executable, "-u", "-s", "-m", {args.module!r}
 ] + sys.argv[1:]
 proc = subprocess.run(cmd)
 sys.exit(proc.returncode)

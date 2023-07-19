@@ -115,6 +115,8 @@ class EcInfinity:
 
 EC_INFINITY = EcInfinity()
 
+EcPoint = Union[Tuple[int, int], EcInfinity]
+
 
 def line_slope(point1: Tuple[int, int], point2: Tuple[int, int], p: int) -> int:
     """
@@ -190,9 +192,7 @@ def ec_mult(m, point, alpha, p):
     return ec_add(ec_mult(m - 1, point, alpha, p), point, p)
 
 
-def ec_safe_mult(
-    m: int, point: Tuple[int, int], alpha: int, p: int
-) -> Union[Tuple[int, int], EcInfinity]:
+def ec_safe_mult(m: int, point: EcPoint, alpha: int, p: int) -> EcPoint:
     """
     Multiplies by m a point on the elliptic curve with equation y^2 = x^3 + alpha*x + beta mod p.
     Assumes the point is given in affine form (x, y).

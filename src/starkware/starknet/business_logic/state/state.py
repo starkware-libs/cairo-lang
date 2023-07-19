@@ -14,7 +14,12 @@ from typing import (
     Tuple,
 )
 
-from starkware.python.utils import execute_coroutine_threadsafe, subtract_mappings, to_bytes
+from starkware.python.utils import (
+    as_non_optional,
+    execute_coroutine_threadsafe,
+    subtract_mappings,
+    to_bytes,
+)
 from starkware.starknet.business_logic.state.state_api import (
     State,
     StateReader,
@@ -25,6 +30,7 @@ from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
 from starkware.starknet.business_logic.state.storage_domain import StorageDomain
 from starkware.starknet.definitions import constants
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
+from starkware.starknet.public.abi import get_storage_var_address
 from starkware.starknet.services.api.contract_class.contract_class import CompiledClassBase
 from starkware.starkware_utils.error_handling import stark_assert
 
@@ -615,10 +621,12 @@ class UpdatesTrackerState(SyncState):
             class_hash=class_hash, compiled_class_hash=compiled_class_hash
         )
 
-    def count_actual_updates(
+    def count_actual_updates_for_fee_charge(
         self,
+        fee_token_address: int,
+        is_nonce_increment: bool,
         sender_address: Optional[int],
-    ) -> Tuple[int, int, int, int]:
+    ) -> Tuple[int, int, int, int, int]:
         """
         Returns a tuple of:
             1. The number of modified contracts.
@@ -629,16 +637,21 @@ class UpdatesTrackerState(SyncState):
         An update is any a change done through this state; A contract is considered
         modified if its nonce was updated, if its class hash was updated or
         if one of its storage cells has changed.
+        Arguments:
+        general_config.
+        sender_address is the account contract address.
+        is_nonce_increment is a flag indicating whether the tx will increment the nonce. In that
+        case, this change is added manually to the modified contracts.
         """
         # Storage Update.
-        storage_updates = subtract_mappings(
-            self.cache._storage_writes, self.cache._storage_initial_values
+        storage_updates = dict(
+            subtract_mappings(self.cache._storage_writes, self.cache._storage_initial_values)
         )
         contracts_with_modified_storage = {
             contract_address for (contract_address, _key) in storage_updates.keys()
         }
 
-        # Class hash Update.
+        # Class hash Update (deploy contracts + replace class syscall).
         class_hash_updates = subtract_mappings(
             self.cache._class_hash_writes, self.cache._class_hash_initial_values
         )
@@ -651,8 +664,14 @@ class UpdatesTrackerState(SyncState):
         contracts_with_modified_nonce = set(nonce_updates.keys())
         # Adds manually the account contract address since we increment the nonce after computing
         # the state updates.
-        if sender_address is not None:
-            contracts_with_modified_nonce.add(sender_address)
+        if is_nonce_increment:
+            contracts_with_modified_nonce.add(as_non_optional(sender_address))
+
+        # Compiled class hash updates (declare Cairo 1 contract).
+        compiled_class_hash_updates = subtract_mappings(
+            self.cache._compiled_class_hash_writes, self.cache._compiled_class_hash_initial_values
+        )
+
         # Modified contracts.
         modified_contracts = (
             contracts_with_modified_storage
@@ -660,9 +679,18 @@ class UpdatesTrackerState(SyncState):
             | contracts_with_modified_nonce
         )
 
+        # Calculated before executing fee transfer and therefore we add manually the fee transfer
+        # changes. Exclude the fee token contract modification, since it is changed one time
+        # in a batch.
+        if sender_address is not None:
+            account_balance_key = get_storage_var_address("ERC20_balances", sender_address)
+            storage_updates[(fee_token_address, account_balance_key)] = 0
+        modified_contracts.discard(fee_token_address)
+
         return (
             len(modified_contracts),
             len(storage_updates),
             len(class_hash_updates),
+            len(compiled_class_hash_updates),
             len(nonce_updates),
         )

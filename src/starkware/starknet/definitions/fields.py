@@ -218,11 +218,6 @@ contract_address_salt_metadata = ContractAddressSalt.metadata()
 # Class hash (as bytes).
 
 
-def validate_optional_class_hash(class_hash: Optional[bytes]):
-    if class_hash is not None:
-        validate_class_hash(class_hash=class_hash)
-
-
 def validate_class_hash(class_hash: bytes):
     value = from_bytes(value=class_hash, byte_order="big")
     ClassHashIntField.validate(value=value, name="Class hash must represent a field element.")
@@ -236,12 +231,6 @@ non_required_class_hash_metadata = dict(
     marshmallow_field=BytesAsHex(required=False, validate=validate_class_hash),
 )
 
-optional_class_hash_metadata = dict(
-    marshmallow_field=BytesAsHex(
-        required=False, load_default=None, validate=validate_optional_class_hash
-    )
-)
-
 
 # Class hash (as integer).
 
@@ -253,12 +242,6 @@ ClassHashIntField = RangeValidatedField(
     error_code=StarknetErrorCode.OUT_OF_RANGE_CLASS_HASH,
     formatter=hex,
 )
-
-OptionalClassHashIntField = OptionalField(field=ClassHashIntField, none_probability=0)
-
-
-def class_hash_from_bytes(class_hash: bytes) -> str:
-    return ClassHashIntField.format(from_bytes(class_hash))
 
 
 # Class hash.
@@ -511,6 +494,13 @@ optional_tx_type_metadata = dict(
     )
 )
 
+revert_error_metadata = dict(
+    marshmallow_field=mfields.String(required=False, load_default=None, allow_none=True)
+)
+
+
+# CallInfo.
+
 failure_flag_metadata = everest_fields.FeltField.metadata(
     field_name="failure_flag", required=False, load_default=0
 )
@@ -518,8 +508,8 @@ gas_consumed_metadata = everest_fields.FeltField.metadata(
     field_name="gas_consumed", required=False, load_default=0
 )
 
-# Commitment info.
 
+# Commitment info.
 
 commitment_facts_metadata = dict(
     marshmallow_field=FrozenDictField(

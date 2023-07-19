@@ -1,10 +1,11 @@
 from starkware.cairo.common.alloc import alloc
+from starkware.cairo.common.builtin_poseidon.poseidon import poseidon_hash
 from starkware.cairo.common.cairo_blake2s.blake2s import (
     blake2s_add_felt,
     blake2s_add_uint256_bigend,
     blake2s_bigend,
 )
-from starkware.cairo.common.cairo_builtins import BitwiseBuiltin
+from starkware.cairo.common.cairo_builtins import BitwiseBuiltin, PoseidonBuiltin
 from starkware.cairo.common.hash import HashBuiltin, hash2
 from starkware.cairo.common.math import assert_nn, assert_nn_le, split_felt, unsigned_div_rem
 from starkware.cairo.common.math_cmp import is_le_felt
@@ -236,6 +237,21 @@ func hash_blake_or_pedersen{
 }(x: felt, y: felt, is_verifier_friendly: felt) -> (res: felt) {
     if (is_verifier_friendly == 1) {
         let (res) = hash2{hash_ptr=pedersen_ptr}(x=x, y=y);
+        return (res=res);
+    } else {
+        let (res) = truncated_blake2s(x, y);
+        return (res=res);
+    }
+}
+
+func hash_blake_or_poseidon{
+    range_check_ptr,
+    blake2s_ptr: felt*,
+    bitwise_ptr: BitwiseBuiltin*,
+    poseidon_ptr: PoseidonBuiltin*,
+}(x: felt, y: felt, is_verifier_friendly: felt) -> (res: felt) {
+    if (is_verifier_friendly == 1) {
+        let (res) = poseidon_hash(x=x, y=y);
         return (res=res);
     } else {
         let (res) = truncated_blake2s(x, y);

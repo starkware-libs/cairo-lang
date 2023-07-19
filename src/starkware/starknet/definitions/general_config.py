@@ -7,13 +7,8 @@ import marshmallow.fields as mfields
 import marshmallow_dataclass
 
 from services.everest.definitions.general_config import EverestGeneralConfig
-from starkware.cairo.lang.builtins.all_builtins import (
-    ALL_BUILTINS,
-    KECCAK_BUILTIN,
-    OUTPUT_BUILTIN,
-    with_suffix,
-)
-from starkware.cairo.lang.instances import starknet_with_keccak_instance
+from starkware.cairo.lang.builtins.all_builtins import ALL_BUILTINS, OUTPUT_BUILTIN, with_suffix
+from starkware.cairo.lang.instances import starknet_instance, starknet_with_keccak_instance
 from starkware.python.utils import from_bytes
 from starkware.starknet.definitions import constants, fields
 from starkware.starknet.definitions.chain_ids import StarknetChainId
@@ -30,6 +25,7 @@ GENERAL_CONFIG_FILE_NAME = "general_config.yml"
 DOCKER_GENERAL_CONFIG_PATH = os.path.join("/", GENERAL_CONFIG_FILE_NAME)
 GENERAL_CONFIG_PATH = os.path.join(os.path.dirname(__file__), GENERAL_CONFIG_FILE_NAME)
 N_STEPS_RESOURCE = "n_steps"
+STARKNET_LAYOUT_INSTANCE_WITHOUT_KECCAK = starknet_instance
 STARKNET_LAYOUT_INSTANCE = starknet_with_keccak_instance
 
 # Reference to the default general config.
@@ -197,21 +193,18 @@ def build_general_config(raw_general_config: Dict[str, Any]) -> StarknetGeneralC
 
     # Zero all entries.
     cairo_resource_fee_weights.update(
-        {
-            resource: 0.0
-            for resource in [N_STEPS_RESOURCE]
-            + ALL_BUILTINS.except_for(KECCAK_BUILTIN).with_suffix()
-        }
+        {resource: 0.0 for resource in [N_STEPS_RESOURCE] + ALL_BUILTINS.with_suffix()}
     )
+
     # Update relevant entries.
     cairo_resource_fee_weights.update(
         {
             N_STEPS_RESOURCE: n_steps_weight,
             # All other weights are deduced from n_steps.
             **{
-                with_suffix(builtin): n_steps_weight
-                * STARKNET_LAYOUT_INSTANCE.builtins[builtin].ratio
-                for builtin in ALL_BUILTINS.except_for(OUTPUT_BUILTIN, KECCAK_BUILTIN)
+                with_suffix(name): n_steps_weight * instance_def.ratio
+                for name, instance_def in STARKNET_LAYOUT_INSTANCE.builtins.items()
+                if name != OUTPUT_BUILTIN
             },
         }
     )

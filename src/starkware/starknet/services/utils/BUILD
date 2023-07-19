@@ -17,6 +17,5 @@ py_library(
         "//src/starkware/starknet/services/api/feeder_gateway:starknet_feeder_gateway_response_objects_lib",
         "//src/starkware/starknet/services/api/gateway:starknet_transaction_lib",
         "//src/starkware/starkware_utils:starkware_config_utils_lib",
-        "//src/starkware/starkware_utils:starkware_utils_lib",
     ],
 )

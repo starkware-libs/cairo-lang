@@ -26,3 +26,7 @@ const N2 = 0xfffffffffffffffffffff;
 
 // BETA is the free term in the curve equation.
 const BETA = 7;
+
+// The high and low uint128 parts of SECP_PRIME.
+const SECP_PRIME_HIGH = 0xffffffffffffffffffffffffffffffff;
+const SECP_PRIME_LOW = 0xfffffffffffffffffffffffefffffc2f;

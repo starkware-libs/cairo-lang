@@ -39,7 +39,7 @@ def pytest_test(
         args = [
             "$(location :%s)" % x
             for x in srcs
-        ] + ["--color=yes", "--junitxml=$$XML_OUTPUT_FILE"] + args,
+        ] + ["--color=yes", "--junitxml=$$XML_OUTPUT_FILE", "--strict-markers"] + args,
         python_version = "PY3",
         srcs_version = "PY3",
         deps = deps + [requirement("pytest"), "//:starkware"],

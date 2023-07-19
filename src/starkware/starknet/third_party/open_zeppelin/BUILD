@@ -20,11 +20,13 @@ py_library(
     srcs = [
         "starknet_contracts.py",
     ],
-    data = ["account.json"],
+    data = [
+        "account.json",
+        "//src/starkware/starknet/common:starknet_common_cairo_lib",
+    ],
     visibility = ["//visibility:public"],
     deps = [
         "//src/starkware/cairo/common:cairo_common_lib",
-        "//src/starkware/starknet/common:starknet_common_lib",
         "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",
     ],
 )

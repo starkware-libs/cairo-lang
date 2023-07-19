@@ -123,10 +123,14 @@ func is_zero{range_check_ptr}(x: BigInt3) -> (res: felt) {
 }
 
 // Receives an unreduced number, and returns a number that is equal to the original number mod
-// SECP_P and in reduced form (meaning every limb is in the range [0, BASE)).
+// SECP_P and in reduced form.
 //
 // Completeness assumption: x's limbs are in the range (-2**210.99, 2**210.99).
 // Soundness assumption: x's limbs are in the range (-2**249.99, 2**249.99).
+//
+// Completeness guarantee (honest prover): the value is in reduced form and in particular,
+// each limb is in the range [0, BASE).
+// Soundness guarantee: each limb is in the range [0, 3 * BASE).
 func reduce{range_check_ptr}(x: UnreducedBigInt3) -> (reduced_x: BigInt3) {
     %{
         from starkware.cairo.common.cairo_secp.secp_utils import SECP_P, pack

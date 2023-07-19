@@ -5,6 +5,7 @@ from starkware.cairo.common.cairo_secp.field import (
     unreduced_sqr,
     verify_zero,
 )
+from starkware.cairo.common.uint256 import Uint256
 
 // Represents a point on the secp256k1 elliptic curve.
 // The zero point is represented as a point with x = 0 (there is no point on the curve with a zero
@@ -318,4 +319,12 @@ func ec_mul{range_check_ptr}(point: EcPoint, scalar: BigInt3) -> (res: EcPoint) 
     let (res: EcPoint) = ec_add(res0, res1);
     let (res: EcPoint) = ec_add(res, res2);
     return (res=res);
+}
+
+// Given a point and a 256-bit scalar, returns scalar * point.
+func ec_mul_by_uint256{range_check_ptr}(point: EcPoint, scalar: Uint256) -> (res: EcPoint) {
+    alloc_locals;
+    let (pow2_0: EcPoint, local res0: EcPoint) = ec_mul_inner(point, scalar.low, 128);
+    let (pow2_1: EcPoint, res1: EcPoint) = ec_mul_inner(pow2_0, scalar.high, 128);
+    return ec_add(res0, res1);
 }

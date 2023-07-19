@@ -19,11 +19,20 @@ from typing import (
 import cachetools
 
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
+from starkware.cairo.common.cairo_secp import secp_utils
 from starkware.cairo.common.keccak_utils.keccak_utils import keccak_f
 from starkware.cairo.common.structs import CairoStructProxy
 from starkware.cairo.lang.vm.memory_segments import MemorySegmentManager
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
-from starkware.python.math_utils import safe_div
+from starkware.python.math_utils import (
+    EC_INFINITY,
+    EcInfinity,
+    EcPoint,
+    ec_safe_add,
+    ec_safe_mult,
+    safe_div,
+    y_squared_from_x,
+)
 from starkware.python.utils import (
     as_non_optional,
     assert_exhausted,
@@ -116,6 +125,12 @@ class SyscallHandlerBase(ABC):
         # Current syscall pointer; updated internally during the call execution.
         self._syscall_ptr = initial_syscall_ptr
 
+        # Mapping from ec_point* to pythonic EcPoint.
+        self.ec_points: Dict[RelocatableValue, EcPoint] = {}
+        # A segment that holds all the ec points.
+        self.ec_points_segment: Optional[RelocatableValue] = None
+        self.ec_point_size = cast(int, self.structs.EcPoint.size)
+
     @classmethod
     @cachetools.cached(cache={})
     def get_selector_to_syscall_info(cls) -> Dict[int, SyscallInfo]:
@@ -134,6 +149,31 @@ class SyscallHandlerBase(ABC):
                 name="deploy",
                 execute_callback=cls.deploy,
                 request_struct=structs.DeployRequest,
+            ),
+            get_selector("secp256k1_new"): SyscallInfo(
+                name="secp256k1_new",
+                execute_callback=cls.secp256k1_new,
+                request_struct=structs.Secp256k1NewRequest,
+            ),
+            get_selector("secp256k1_add"): SyscallInfo(
+                name="secp256k1_add",
+                execute_callback=cls.secp256k1_add,
+                request_struct=structs.Secp256k1AddRequest,
+            ),
+            get_selector("secp256k1_mul"): SyscallInfo(
+                name="secp256k1_mul",
+                execute_callback=cls.secp256k1_mul,
+                request_struct=structs.Secp256k1MulRequest,
+            ),
+            get_selector("secp256k1_get_point_from_x"): SyscallInfo(
+                name="secp256k1_get_point_from_x",
+                execute_callback=cls.secp256k1_get_point_from_x,
+                request_struct=structs.Secp256k1GetPointFromXRequest,
+            ),
+            get_selector("secp256k1_get_xy"): SyscallInfo(
+                name="secp256k1_get_xy",
+                execute_callback=cls.secp256k1_get_xy,
+                request_struct=structs.Secp256k1GetXyRequest,
             ),
             get_selector("keccak"): SyscallInfo(
                 name="keccak",
@@ -207,7 +247,8 @@ class SyscallHandlerBase(ABC):
         assert (
             syscall_info is not None
         ), f"Unsupported syscall selector {bytes.fromhex(hex(selector)[2:])!r}"
-        self._count_syscall(syscall_name=syscall_info.name)
+        if syscall_info.name != "keccak":
+            self._count_syscall(syscall_name=syscall_info.name)
         request = self._read_and_validate_request(request_struct=syscall_info.request_struct)
 
         # Check and reduce gas (after validating the syscall selector for consistency with the OS).
@@ -308,6 +349,115 @@ class SyscallHandlerBase(ABC):
 
         response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
         response = self.structs.GetExecutionInfoResponse(execution_info=execution_info_ptr)
+        return response_header, response
+
+    def secp256k1_new(self, remaining_gas: int, request: CairoStructProxy) -> SyscallFullResponse:
+        x = from_uint256(request.x)
+        y = from_uint256(request.y)
+
+        if x >= secp_utils.SECP_P or y >= secp_utils.SECP_P:
+            return self._handle_failure(
+                final_gas=remaining_gas,
+                error_code=CairoErrorCode.INVALID_ARGUMENT,
+            )
+
+        response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
+
+        ec_point: Optional[RelocatableValue] = None
+        if x == 0 and y == 0:
+            ec_point = self._new_ec_point(ec_point=EC_INFINITY)
+        else:
+            y_squared = y_squared_from_x(
+                x=x, alpha=secp_utils.ALPHA, beta=secp_utils.BETA, field_prime=secp_utils.SECP_P
+            )
+
+            if (y**2 - y_squared) % secp_utils.SECP_P == 0:
+                ec_point = self._new_ec_point(ec_point=(x, y))
+
+        if ec_point is None:
+            response = self.structs.Secp256k1NewResponse(not_on_curve=1, ec_point=0)
+        else:
+            response = self.structs.Secp256k1NewResponse(not_on_curve=0, ec_point=ec_point)
+
+        return response_header, response
+
+    def secp256k1_add(self, remaining_gas: int, request: CairoStructProxy) -> SyscallFullResponse:
+        response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
+        response = self.structs.Secp256k1OpResponse(
+            ec_point=self._new_ec_point(
+                ec_point=ec_safe_add(
+                    point1=self._get_ec_point(request.p0),
+                    point2=self._get_ec_point(request.p1),
+                    alpha=secp_utils.ALPHA,
+                    p=secp_utils.SECP_P,
+                )
+            ),
+        )
+
+        return response_header, response
+
+    def secp256k1_mul(self, remaining_gas: int, request: CairoStructProxy) -> SyscallFullResponse:
+        response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
+        response = self.structs.Secp256k1OpResponse(
+            ec_point=self._new_ec_point(
+                ec_point=ec_safe_mult(
+                    m=from_uint256(request.scalar),
+                    point=self.ec_points[cast(RelocatableValue, request.p)],
+                    alpha=secp_utils.ALPHA,
+                    p=secp_utils.SECP_P,
+                )
+            ),
+        )
+        return response_header, response
+
+    def secp256k1_get_point_from_x(
+        self, remaining_gas: int, request: CairoStructProxy
+    ) -> SyscallFullResponse:
+        x = from_uint256(request.x)
+
+        if x >= secp_utils.SECP_P:
+            return self._handle_failure(
+                final_gas=remaining_gas,
+                error_code=CairoErrorCode.INVALID_ARGUMENT,
+            )
+
+        y_squared = y_squared_from_x(
+            x=x, alpha=secp_utils.ALPHA, beta=secp_utils.BETA, field_prime=secp_utils.SECP_P
+        )
+
+        y = pow(y_squared, (secp_utils.SECP_P + 1) // 4, secp_utils.SECP_P)
+        if (y & 1) != request.y_parity:
+            y = (-y) % secp_utils.SECP_P
+
+        response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
+        response = (
+            self.structs.Secp256k1NewResponse(
+                not_on_curve=0,
+                ec_point=self._new_ec_point(ec_point=(x, y)),
+            )
+            if (y * y) % secp_utils.SECP_P == y_squared
+            else self.structs.Secp256k1NewResponse(
+                not_on_curve=1,
+                ec_point=0,
+            )
+        )
+
+        return response_header, response
+
+    def secp256k1_get_xy(
+        self, remaining_gas: int, request: CairoStructProxy
+    ) -> SyscallFullResponse:
+        ec_point = self.ec_points[cast(RelocatableValue, request.ec_point)]
+        response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
+        if isinstance(ec_point, EcInfinity):
+            x, y = 0, 0
+        else:
+            x, y = ec_point
+
+        # Note that we can't use self.structs.Secp256k1GetXyResponse here
+        # as it is not flat.
+        response = to_uint256(self.structs, x) + to_uint256(self.structs, y)  # type: ignore
+
         return response_header, response
 
     def keccak(self, remaining_gas: int, request: CairoStructProxy) -> SyscallFullResponse:
@@ -535,6 +685,26 @@ class SyscallHandlerBase(ABC):
 
     def _count_syscall(self, syscall_name: str):
         return
+
+    def _new_ec_point(self, ec_point: EcPoint) -> RelocatableValue:
+        """
+        Allocates ec_points handle and stores it in the ec_points mapping.
+        """
+
+        if self.ec_points_segment is None:
+            self.ec_points_segment = self.segments.add()
+
+        handle = self.ec_points_segment + len(self.ec_points) * self.ec_point_size
+        self.ec_points[handle] = ec_point
+        return handle
+
+    def _get_ec_point(self, handle: CairoStructProxy) -> EcPoint:
+        """
+        Returns the ec_points corresponding to `handle`.
+        """
+
+        assert isinstance(handle, RelocatableValue)
+        return self.ec_points[handle]
 
     @property
     @abstractmethod
@@ -840,9 +1010,7 @@ class BusinessLogicSyscallHandler(SyscallHandlerBase):
     def _keccak(self, n_rounds: int):
         # For the keccak system call we want to count the number of rounds,
         # rather than the number of syscall invocations.
-        # Since the infrastructure already added 1 to the counter, we add n_rounds -1 here.
-        if n_rounds > 1:
-            self._count_syscall(syscall_name="keccak", count=n_rounds - 1)
+        self._count_syscall(syscall_name="keccak", count=n_rounds)
 
     def _count_syscall(self, syscall_name: str, count: int = 1):
         previous_syscall_count = self.resources_manager.syscall_counter.get(syscall_name, 0)

@@ -29,7 +29,10 @@ def cairo_verifier_program(layout_name):
         ],
         compiled_program_name = compiled_program_name,
         main = main_cairo_file,
-        deps = [":cairo_verifier_program_lib"],
+        deps = [
+            "//src/starkware/cairo/cairo_verifier",
+            "//src/starkware/cairo/stark_verifier/air:cairo",
+        ],
         tags = ["external_cairo", "external_cairo-docs"],
     )
 

@@ -9,6 +9,7 @@ import subprocess
 from time import sleep
 from typing import Dict
 
+import eth_account
 from eth_account.signers.base import BaseAccount
 from web3 import HTTPProvider, Web3, eth
 
@@ -135,7 +136,7 @@ def main():
         print("Generating a random key...")
         operator_private_key = random.randint(0, 2**256)
     operator_private_key = "0x{:064x}".format(operator_private_key)
-    operator = eth.Account.from_key(operator_private_key)
+    operator = Account.from_key(operator_private_key)
 
     # Ask for funds to be transferred to the operator account id its balance is too low.
     if w3.eth.getBalance(operator.address) < MIN_OPERATOR_BALANCE:
@@ -182,7 +183,7 @@ def main():
     print("AMM Demo finished successfully :)")
 
 
-def tx_kwargs(w3: Web3, sender_account: eth.Account):
+def tx_kwargs(w3: Web3, sender_account: eth_account.Account):
     """
     Helper function used to send Ethereum transactions.
 

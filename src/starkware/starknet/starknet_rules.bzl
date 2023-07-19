@@ -12,7 +12,7 @@ Args:
 """
 
 load("//src/starkware/cairo/lang:cairo_rules.bzl", "CairoInfo")
-load("//src/starkware/cairo:vars.bzl", "CAIRO_COMPILER_ARCHIVE")
+load("//src/starkware/cairo:vars_cairo_compiler.bzl", "CAIRO_COMPILER_ARCHIVE")
 
 def get_transitive_cairo_srcs(srcs, deps):
     """
@@ -40,6 +40,7 @@ def _starknet_contract_impl(ctx):
     else:
         outs = [compiled_sierra_name]
 
+    single_file_flag = ["--single-file"] if ctx.file.main.extension == "cairo" else []
     _compile_internal(
         ctx = ctx,
         srcs_list = srcs_list,
@@ -47,7 +48,7 @@ def _starknet_contract_impl(ctx):
         compiled_file_name = compiled_sierra_name,
         compile_exe = compile_cairo_to_sierra_exe,
         outs = [compiled_sierra_name],
-        cairoopts = ctx.attr.cairoopts,
+        cairoopts = ctx.attr.cairoopts + single_file_flag,
         progress_message = "Compiling cairo to sierra %s..." % ctx.file.main.path,
     )
 

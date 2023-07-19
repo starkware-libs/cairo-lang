@@ -35,7 +35,7 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "starknet_transaction_execution_objects_lib",
+        ":starknet_transaction_execution_objects_lib",
         "//src/starkware/starknet/business_logic/state:starknet_business_logic_state_lib",
         "//src/starkware/starknet/definitions:starknet_general_config_lib",
         "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",
@@ -50,8 +50,9 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "starknet_execute_entry_point_base_lib",
-        "starknet_transaction_execution_objects_lib",
+        ":starknet_execute_entry_point_base_lib",
+        ":starknet_transaction_execution_objects_lib",
+        "//src/services/everest/definitions:everest_definitions_lib",
         "//src/starkware/cairo/common:cairo_function_runner_lib",
         "//src/starkware/cairo/lang/vm:cairo_relocatable_lib",
         "//src/starkware/cairo/lang/vm:cairo_vm_lib",
@@ -66,7 +67,6 @@ py_library(
         "//src/starkware/starknet/definitions:starknet_general_config_lib",
         "//src/starkware/starknet/public:starknet_abi_lib",
         "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",
-        "//src/starkware/starknet/storage:starknet_storage_lib",
         "//src/starkware/starkware_utils:starkware_error_handling_lib",
     ],
 )
@@ -82,7 +82,7 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "starknet_transaction_execution_objects_lib",
+        ":starknet_transaction_execution_objects_lib",
         "//src/services/external_api:services_eth_gas_constants_lib",
         "//src/starkware/cairo/lang/vm:cairo_vm_lib",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",

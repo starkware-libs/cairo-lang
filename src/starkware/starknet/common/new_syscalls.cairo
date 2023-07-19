@@ -8,6 +8,11 @@ const DEPLOY_SELECTOR = 'Deploy';
 const EMIT_EVENT_SELECTOR = 'EmitEvent';
 const GET_BLOCK_HASH_SELECTOR = 'GetBlockHash';
 const GET_EXECUTION_INFO_SELECTOR = 'GetExecutionInfo';
+const SECP256K1_ADD_SELECTOR = 'Secp256k1Add';
+const SECP256K1_MUL_SELECTOR = 'Secp256k1Mul';
+const SECP256K1_NEW_SELECTOR = 'Secp256k1New';
+const SECP256K1_GET_POINT_FROM_X_SELECTOR = 'Secp256k1GetPointFromX';
+const SECP256K1_GET_XY_SELECTOR = 'Secp256k1GetXy';
 const KECCAK_SELECTOR = 'Keccak';
 const LIBRARY_CALL_SELECTOR = 'LibraryCall';
 const REPLACE_CLASS_SELECTOR = 'ReplaceClass';
@@ -130,6 +135,33 @@ struct KeccakRequest {
     input_end: felt*,
 }
 
+struct Secp256k1AddRequest {
+    p0: EcPoint*,
+    p1: EcPoint*,
+}
+
+struct Secp256k1MulRequest {
+    p: EcPoint*,
+    scalar: Uint256,
+}
+
+struct Secp256k1NewRequest {
+    // The x and y coordinates of the requested point on the Secp256k1 curve.
+    // The point at infinity, can be created by passing (0, 0).
+    x: Uint256,
+    y: Uint256,
+}
+
+struct Secp256k1GetPointFromXRequest {
+    x: Uint256,
+    y_parity: felt,
+}
+
+struct Secp256k1GetXyRequest {
+    // A pointer to the point.
+    ec_point: EcPoint*,
+}
+
 struct StorageReadRequest {
     reserved: felt,
     key: felt,
@@ -174,6 +206,26 @@ struct DeployResponse {
 struct KeccakResponse {
     result_low: felt,
     result_high: felt,
+}
+
+struct Secp256k1GetXyResponse {
+    // The x and y coordinates of the given point. Returns (0, 0) for the point at infinity.
+    x: Uint256,
+    y: Uint256,
+}
+
+struct Secp256k1NewResponse {
+    // The syscall returns `Option<Secp256k1Point>` which is represented as two felts in Cairo0.
+
+    // 1 if the point is not on the curve, 0 otherwise.
+    not_on_curve: felt,
+    // A pointer to the point in the case not_on_curve == 0, otherwise 0.
+    ec_point: EcPoint*,
+}
+
+struct Secp256k1OpResponse {
+    // The result of Secp256k1 add or mul operations.
+    ec_point: EcPoint*,
 }
 
 struct StorageReadResponse {

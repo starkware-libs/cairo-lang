@@ -1,19 +1,11 @@
 load("//bazel_utils:python.bzl", "pytest_test")
+load("//src/starkware/cairo/lang:cairo_rules.bzl", "cairo_library")
 
 package(default_visibility = ["//visibility:public"])
 
-exports_files([
-    "config.cairo",
-    "fri.cairo",
-    "fri_formula.cairo",
-    "fri_layer.cairo",
-])
-
-py_library(
-    name = "starkware_cairo_stark_verifier_core_fri_lib",
+cairo_library(
+    name = "fri",
     srcs = [
-    ],
-    data = [
         "config.cairo",
         "fri.cairo",
         "fri_formula.cairo",
@@ -21,8 +13,8 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "//src/starkware/cairo/common:cairo_common_lib",
-        "//src/starkware/cairo/stark_verifier/core:starkware_cairo_stark_verifier_core_lib",
+        "//src/starkware/cairo/common:cairo_common_cairo_lib",
+        "//src/starkware/cairo/stark_verifier/core:cairo",
     ],
 )
 
@@ -34,9 +26,9 @@ pytest_test(
         "fri_test.py",
         "test_utils.py",
     ],
+    data = [":fri"],
     visibility = ["//visibility:public"],
     deps = [
-        "starkware_cairo_stark_verifier_core_fri_lib",
         "//src/starkware/cairo/common:cairo_function_runner_lib",
         "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
         "//src/starkware/python:starkware_python_test_utils_lib",

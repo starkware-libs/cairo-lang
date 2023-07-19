@@ -11,13 +11,11 @@ def generate_layouts_libs(layouts):
                 "//src/starkware/cairo/stark_verifier/air/layouts/{}:periodic_columns.cairo".format(layout),
                 "//src/starkware/cairo/stark_verifier/air/layouts/{}:public_verify.cairo".format(layout),
                 "//src/starkware/cairo/stark_verifier/air/layouts/{}:verify.cairo".format(layout),
+                "//src/starkware/cairo/stark_verifier/core:stark",
             ],
             tags = [
                 "external_cairo",
                 "external_cairo-docs",
             ],
             visibility = ["//visibility:public"],
-            deps = [
-                "//src/starkware/cairo/stark_verifier/core:starkware_cairo_stark_verifier_core_stark_lib",
-            ],
         )

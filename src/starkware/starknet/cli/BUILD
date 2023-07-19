@@ -71,6 +71,14 @@ py_exe(
     ],
 )
 
+py_exe(
+    name = "compute_class_hash",
+    module = "starkware.starknet.cli.class_hash",
+    deps = [
+        "starknet_cli_lib",
+    ],
+)
+
 pytest_test(
     name = "starknet_cli_lib_test",
     srcs = [

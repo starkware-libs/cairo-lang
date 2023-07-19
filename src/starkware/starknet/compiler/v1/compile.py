@@ -9,15 +9,29 @@ import shlex
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starkware_utils.error_handling import StarkException
 
-if "RUNFILES_DIR" in os.environ:
+COMPILER_DIR_NAME = "sierra-compiler-major-1/bin"
+# This path might be invalid and shouldn't be used outside the following `if`.
+_COMPILER_DIR = os.path.join(os.path.dirname(__file__), COMPILER_DIR_NAME)
+
+if os.path.exists(_COMPILER_DIR):
+    STARKNET_COMPILE_EXE = os.path.join(_COMPILER_DIR, "starknet-compile")
+    STARKNET_SIERRA_COMPILE = os.path.join(_COMPILER_DIR, "starknet-sierra-compile")
+else:
+    # Bazel flow.
     from bazel_tools.tools.python.runfiles import runfiles
 
     r = runfiles.Create()
+    STARKNET_COMPILE_EXE = r.Rlocation(os.path.join(COMPILER_DIR_NAME, "starknet-compile"))
+    STARKNET_SIERRA_COMPILE = r.Rlocation(
+        os.path.join(COMPILER_DIR_NAME, "starknet-sierra-compile")
+    )
 
-    COMPILER_DIR = r.Rlocation("cairo-compiler-archive-2.0.0/bin")
-else:
-    COMPILER_DIR = os.path.join(os.path.dirname(__file__), "bin")
-
+assert os.path.exists(
+    STARKNET_COMPILE_EXE
+), f"starknet-compile exe doesn't exist at: {STARKNET_COMPILE_EXE}."
+assert os.path.exists(
+    STARKNET_SIERRA_COMPILE
+), f"starknet-sierra-compile exe doesn't exist at: {STARKNET_SIERRA_COMPILE}."
 
 JsonObject = Dict[str, Any]
 
@@ -90,9 +104,9 @@ def compile_cairo_to_sierra(
         allowed_libfuncs_list_name=allowed_libfuncs_list_name,
         allowed_libfuncs_list_file=allowed_libfuncs_list_file,
     )
+    additional_args += ["--single-file"]
 
-    starknet_compile = os.path.join(COMPILER_DIR, "starknet-compile")
-    command = [starknet_compile, cairo_path, *additional_args]
+    command = [STARKNET_COMPILE_EXE, cairo_path, *additional_args]
     return run_compile_command(command=command)
 
 
@@ -109,8 +123,10 @@ def compile_sierra_to_casm(
     If compiler_path is None, uses a default compiler.
     Returns the resulting Casm as json.
     """
-    compiler_dir = COMPILER_DIR if compiler_dir is None else compiler_dir
-    compiler_path = os.path.join(compiler_dir, "starknet-sierra-compile")
+    if compiler_dir is None:
+        compiler_path = STARKNET_SIERRA_COMPILE
+    else:
+        compiler_path = os.path.join(compiler_dir, "starknet-sierra-compile")
     additional_args = build_sierra_to_casm_compilation_args(
         compiler_args=compiler_args,
         add_pythonic_hints=add_pythonic_hints,

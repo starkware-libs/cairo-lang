@@ -1,4 +1,4 @@
-load("//src/starkware/cairo:vars.bzl", "CAIRO_COMPILER_ARCHIVE")
+load("//src/starkware/cairo:vars_cairo_compiler.bzl", "CAIRO_COMPILER_ARCHIVE")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -17,5 +17,6 @@ py_library(
     deps = [
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
         "//src/starkware/starkware_utils:starkware_error_handling_lib",
+        "@bazel_tools//tools/python/runfiles",
     ],
 )

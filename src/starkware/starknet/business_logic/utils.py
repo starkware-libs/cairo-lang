@@ -42,10 +42,6 @@ from starkware.storage.storage import Fact, FactFetchingContext
 
 logger = logging.getLogger(__name__)
 
-FEE_TRANSFER_N_STORAGE_CHANGES = 2  # Sender and sequencer balance update.
-# Exclude the sequencer balance update, since it's charged once throughout the batch.
-FEE_TRANSFER_N_STORAGE_CHANGES_TO_CHARGE = FEE_TRANSFER_N_STORAGE_CHANGES - 1
-
 VALIDATE_BLACKLISTED_SYSCALLS: Tuple[str, ...] = ("call_contract",)
 
 
@@ -198,6 +194,8 @@ def calculate_tx_resources(
     call_infos: Iterable[Optional[CallInfo]],
     tx_type: TransactionType,
     state: UpdatesTrackerState,
+    fee_token_address: int,
+    is_nonce_increment: bool,
     sender_address: Optional[int],
     l1_handler_payload_size: Optional[int] = None,
 ) -> ResourcesMapping:
@@ -210,9 +208,14 @@ def calculate_tx_resources(
     (
         n_modified_contracts,
         n_storage_changes,
-        n_class_updates,
+        n_class_hash_updates,
+        n_compiled_class_hash_updates,
         _n_nonce_updates,
-    ) = state.count_actual_updates(sender_address=sender_address)
+    ) = state.count_actual_updates_for_fee_charge(
+        fee_token_address=fee_token_address,
+        is_nonce_increment=is_nonce_increment,
+        sender_address=sender_address,
+    )
 
     return calculate_tx_resources_given_usage(
         resources_manager=resources_manager,
@@ -220,7 +223,8 @@ def calculate_tx_resources(
         tx_type=tx_type,
         n_modified_contracts=n_modified_contracts,
         n_storage_changes=n_storage_changes,
-        n_class_updates=n_class_updates,
+        n_class_hash_updates=n_class_hash_updates,
+        n_compiled_class_hash_updates=n_compiled_class_hash_updates,
         l1_handler_payload_size=l1_handler_payload_size,
     )
 
@@ -231,7 +235,8 @@ def calculate_tx_resources_given_usage(
     tx_type: TransactionType,
     n_modified_contracts: int,
     n_storage_changes: int,
-    n_class_updates: int,
+    n_class_hash_updates: int,
+    n_compiled_class_hash_updates: int,
     l1_handler_payload_size: Optional[int] = None,
 ) -> ResourcesMapping:
     non_optional_call_infos = [call for call in call_infos if call is not None]
@@ -242,9 +247,10 @@ def calculate_tx_resources_given_usage(
     l1_gas_usage = calculate_tx_gas_usage(
         l2_to_l1_messages=l2_to_l1_messages,
         n_modified_contracts=n_modified_contracts,
-        n_storage_changes=n_storage_changes + FEE_TRANSFER_N_STORAGE_CHANGES_TO_CHARGE,
+        n_storage_changes=n_storage_changes,
         l1_handler_payload_size=l1_handler_payload_size,
-        n_class_updates=n_class_updates,
+        n_class_hash_updates=n_class_hash_updates,
+        n_compiled_class_hash_updates=n_compiled_class_hash_updates,
     )
 
     cairo_usage_with_segment_arena_builtin = resources_manager.cairo_usage
