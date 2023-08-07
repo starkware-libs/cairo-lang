@@ -42,7 +42,7 @@ def pytest_test(
         ] + ["--color=yes", "--junitxml=$$XML_OUTPUT_FILE", "--strict-markers"] + args,
         python_version = "PY3",
         srcs_version = "PY3",
-        deps = deps + [requirement("pytest"), "//:starkware"],
+        deps = deps + [requirement("pytest"), requirement("pytest_profiling"), requirement("pytest_xdist"), "//:starkware"],
         data = data,
         timeout = timeout,
         legacy_create_init = legacy_create_init,

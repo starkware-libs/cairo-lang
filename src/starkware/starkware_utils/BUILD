@@ -19,9 +19,7 @@ py_library(
         "error_handling.py",
     ],
     visibility = ["//visibility:public"],
-    deps = [
-        requirement("marshmallow"),
-    ],
+    deps = [requirement("marshmallow")],
 )
 
 py_library(

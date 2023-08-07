@@ -96,6 +96,7 @@ def compile_cairo_to_sierra(
     cairo_path: str,
     allowed_libfuncs_list_name: Optional[str] = None,
     allowed_libfuncs_list_file: Optional[str] = None,
+    single_file: bool = True,
 ) -> JsonObject:
     """
     Compiles a Starknet Cairo 1.0 contract; returns the resulting Sierra as json.
@@ -104,7 +105,8 @@ def compile_cairo_to_sierra(
         allowed_libfuncs_list_name=allowed_libfuncs_list_name,
         allowed_libfuncs_list_file=allowed_libfuncs_list_file,
     )
-    additional_args += ["--single-file"]
+    if single_file:
+        additional_args += ["--single-file"]
 
     command = [STARKNET_COMPILE_EXE, cairo_path, *additional_args]
     return run_compile_command(command=command)

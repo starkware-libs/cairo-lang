@@ -40,7 +40,6 @@ def _starknet_contract_impl(ctx):
     else:
         outs = [compiled_sierra_name]
 
-    single_file_flag = ["--single-file"] if ctx.file.main.extension == "cairo" else []
     _compile_internal(
         ctx = ctx,
         srcs_list = srcs_list,
@@ -48,7 +47,7 @@ def _starknet_contract_impl(ctx):
         compiled_file_name = compiled_sierra_name,
         compile_exe = compile_cairo_to_sierra_exe,
         outs = [compiled_sierra_name],
-        cairoopts = ctx.attr.cairoopts + single_file_flag,
+        cairoopts = ctx.attr.cairoopts,
         progress_message = "Compiling cairo to sierra %s..." % ctx.file.main.path,
     )
 
@@ -76,6 +75,7 @@ def _compile_internal(
         outs,
         cairoopts,
         progress_message):
+    single_file_flag = ["--single-file"] if main.extension == "cairo" else []
     ctx.actions.run(
         executable = compile_exe,
         # https://github.com/starkware-libs/cairo/blob/main/crates/cairo-lang-runner/README.md
@@ -85,7 +85,7 @@ def _compile_internal(
         arguments = [
             main.path,
             compiled_file_name.path,
-        ] + cairoopts,
+        ] + cairoopts + single_file_flag,
         inputs = srcs_list + [compile_exe] + ctx.files.compiler_data,
         outputs = outs,
         progress_message = progress_message,

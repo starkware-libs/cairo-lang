@@ -353,36 +353,6 @@ class TransactionInBlockInfo(ValidatedResponseObject):
                 self.block_hash is not None
             ), "Transactions accepted on L1 must have a block hash."
 
-    @marshmallow.pre_load
-    def _fill_missing_tx_statuses(self, data, **kwargs):
-        finality_status_key_name = "finality_status"
-        execution_status_key_name = "execution_status"
-
-        # If True, This object was serialized before finality_status was added.
-        if finality_status_key_name not in data:
-            deprecated_status = TransactionStatus[data["status"]]
-
-            # REVERTED status and execution status did not exist before finality_status was added.
-            assert deprecated_status is not TransactionStatus.REVERTED
-            assert "revert_reason" not in data
-            assert execution_status_key_name not in data
-
-            if deprecated_status.was_executed:
-                data[finality_status_key_name] = deprecated_status.name
-                data[execution_status_key_name] = ExecutionStatus.SUCCEEDED.name
-            elif deprecated_status is TransactionStatus.REJECTED:
-                data[finality_status_key_name] = FinalityStatus.RECEIVED.name
-                data[execution_status_key_name] = ExecutionStatus.REJECTED.name
-            else:
-                assert deprecated_status in (
-                    TransactionStatus.RECEIVED,
-                    TransactionStatus.NOT_RECEIVED,
-                )
-                data[finality_status_key_name] = deprecated_status.name
-                data[execution_status_key_name] = None
-
-        return data
-
 
 @marshmallow_dataclass.dataclass(frozen=True)
 class TransactionSpecificInfo(ValidatedResponseObject):
@@ -1117,6 +1087,22 @@ class StarknetBlock(ValidatedResponseObject):
             assert all(
                 field is not None for field in created_block_fields
             ), "Block hash, block number, state_root must appear in a created block."
+
+    @marshmallow.pre_load
+    def fill_missing_execution_statuses(self, data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        have_execution_status = [
+            "execution_status" in tx_receipt for tx_receipt in data["transaction_receipts"]
+        ]
+        if all(have_execution_status):
+            return data
+
+        assert not any(
+            have_execution_status
+        ), "Either all transaction receipts should have execution statuses, or none should."
+        for tx_receipt in data["transaction_receipts"]:
+            tx_receipt["execution_status"] = ExecutionStatus.SUCCEEDED.name
+
+        return data
 
 
 @marshmallow_dataclass.dataclass(frozen=True)

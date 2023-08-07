@@ -2,8 +2,10 @@ aiohttp
 cachetools
 ecdsa
 eth-hash[pycryptodome]
+execnet
 fastecdsa
 frozendict
+gprof2dot
 lark
 marshmallow-dataclass>=7.1.0
 marshmallow-enum
@@ -15,7 +17,9 @@ pipdeptree
 prometheus-client
 pytest
 pytest-asyncio
+pytest-profiling
+pytest-xdist
 PyYAML
-typeguard<3.0.0
 sympy
+typeguard<3.0.0
 web3

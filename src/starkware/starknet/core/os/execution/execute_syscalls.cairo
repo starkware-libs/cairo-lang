@@ -413,7 +413,9 @@ func contract_call_helper{
     let syscall_ptr = syscall_ptr + ResponseHeader.SIZE;
 
     // Write the response header.
-    assert [response_header] = ResponseHeader(gas=remaining_gas, failure_flag=0);
+    with_attr error_message("Predicted gas costs are inconsistent with the actual execution.") {
+        assert [response_header] = ResponseHeader(gas=remaining_gas, failure_flag=0);
+    }
 
     let response = cast(syscall_ptr, CallContractResponse*);
     // Advance syscall pointer to the next syscall.

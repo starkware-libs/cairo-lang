@@ -32,6 +32,8 @@ class StarkErrorCode(ErrorCode):
     BATCH_NOT_READY = auto()
     #: Connection error with the node (for example, Infura too many requests).
     CONNECTION_ERROR = auto()
+    #: Connection error with a client.
+    CONNECTION_RESET_ERROR = auto()
     #: Duplicate order.
     DUPLICATE_ORDER = auto()
     #: Multi-Transaction with zero transactions.

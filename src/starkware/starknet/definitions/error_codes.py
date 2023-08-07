@@ -99,6 +99,8 @@ class StarknetErrorCode(ErrorCode):
 # Errors that are raised by the gateways and caused by wrong usage of the user.
 
 common_error_codes: List[ErrorCode] = [
+    # Client connection errors.
+    StarkErrorCode.CONNECTION_RESET_ERROR,
     # Raw builtin exceptions from pre/post_load/dump are wrapped with StarkException and this code.
     StarkErrorCode.MALFORMED_REQUEST,
     StarkErrorCode.OUT_OF_RANGE_FIELD_ELEMENT,

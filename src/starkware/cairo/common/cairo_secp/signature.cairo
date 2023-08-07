@@ -131,6 +131,9 @@ func public_key_point_to_eth_address{
 }
 
 // Returns 1 if (x, y) is a point on the secp256k1 curve and 0 otherwise.
+//
+// Prover assumption: the limbs of x and y are in the range (-2**87.49, 2**87.49).
+// Soundness assumption: the limbs of x and y are in the range (-2**106.99, 2**106.99).
 func is_on_curve{range_check_ptr}(x: BigInt3, y: BigInt3) -> (res: felt) {
     let (x_square: UnreducedBigInt3) = unreduced_sqr(x);
     let (x_square_reduced: BigInt3) = reduce(x_square);
