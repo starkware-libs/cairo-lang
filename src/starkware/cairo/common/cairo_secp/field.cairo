@@ -6,10 +6,10 @@ from starkware.cairo.common.math import assert_nn_le
 // secp256k1 prime.
 //
 // Arguments:
-//   x, y - the two BigInt3 to operate on.
+//   a, b - the two BigInt3 to operate on.
 //
 // Returns:
-//   x * y in an UnreducedBigInt3 representation (the returned limbs may be above 3 * BASE).
+//   a * b in an UnreducedBigInt3 representation (the returned limbs may be above 3 * BASE).
 //
 // If each of the input limbs is in the range (-x, x), the result's limbs are guaranteed to be
 // in the range (-x**2 * (2 ** 35.01), x**2 * (2 ** 35.01)) since log(8 * SECP_REM + 1) < 35.01.

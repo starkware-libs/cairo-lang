@@ -41,6 +41,7 @@ class StarknetErrorCode(ErrorCode):
     MULTIPLE_ENTRY_POINTS_MATCH_SELECTOR = auto()
     NON_EMPTY_SIGNATURE = auto()
     NON_PERMITTED_CONTRACT = auto()
+    NO_SIGNATURE_FOR_PENDING_BLOCK = auto()
     NO_TRACE = auto()
     OUT_OF_RANGE_ADDRESS = auto()
     OUT_OF_RANGE_BLOCK_HASH = auto()
@@ -176,6 +177,7 @@ feeder_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
         # Request parsing errors.
         StarkErrorCode.MALFORMED_REQUEST,
         StarknetErrorCode.INVALID_STATUS_MODE,
+        StarknetErrorCode.NO_SIGNATURE_FOR_PENDING_BLOCK,
         StarknetErrorCode.OUT_OF_RANGE_BLOCK_HASH,
         StarknetErrorCode.OUT_OF_RANGE_BLOCK_ID,
         StarknetErrorCode.OUT_OF_RANGE_CLASS_HASH,

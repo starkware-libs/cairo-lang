@@ -47,6 +47,7 @@ from starkware.starknet.core.os.constants import (
     VALIDATE_DECLARE_ENTRY_POINT_SELECTOR,
     VALIDATE_DEPLOY_ENTRY_POINT_SELECTOR,
     VALIDATE_ENTRY_POINT_SELECTOR,
+    VALIDATED,
 )
 from starkware.starknet.core.os.contract_address.contract_address import get_contract_address
 from starkware.starknet.core.os.contract_class.deprecated_compiled_class import (
@@ -393,7 +394,7 @@ func execute_invoke_function_transaction{
         tempvar contract_state_changes = contract_state_changes;
         tempvar contract_class_changes = contract_class_changes;
         tempvar outputs = outputs;
-        ap += 2;
+        tempvar _dummy_return_value: select_execute_entry_point_func.Return;
     }
     local remaining_gas = remaining_gas;
 
@@ -600,9 +601,14 @@ func run_validate{
         deprecated_tx_info=tx_execution_context.deprecated_tx_info,
     );
 
-    select_execute_entry_point_func(
+    let (retdata_size, retdata, is_deprecated) = select_execute_entry_point_func(
         block_context=block_context, execution_context=validate_execution_context
     );
+    if (is_deprecated == 0) {
+        assert retdata_size = 1;
+        assert retdata[0] = VALIDATED;
+    }
+
     return ();
 }
 
@@ -794,9 +800,13 @@ func execute_deploy_account_transaction{
 
     // Runs the account contract's "__validate_deploy__" entry point,
     // which is responsible for signature verification.
-    select_execute_entry_point_func(
+    let (retdata_size, retdata, is_deprecated) = select_execute_entry_point_func(
         block_context=block_context, execution_context=validate_deploy_execution_context
     );
+    if (is_deprecated == 0) {
+        assert retdata_size = 1;
+        assert retdata[0] = VALIDATED;
+    }
     charge_fee(block_context=block_context, tx_execution_context=validate_deploy_execution_context);
 
     %{ execution_helper.end_tx() %}
@@ -982,9 +992,13 @@ func execute_declare_transaction{
     %}
 
     // Run the account contract's "__validate_declare__" entry point.
-    select_execute_entry_point_func(
+    let (retdata_size, retdata, is_deprecated) = select_execute_entry_point_func(
         block_context=block_context, execution_context=validate_declare_execution_context
     );
+    if (is_deprecated == 0) {
+        assert retdata_size = 1;
+        assert retdata[0] = VALIDATED;
+    }
     charge_fee(
         block_context=block_context, tx_execution_context=validate_declare_execution_context
     );

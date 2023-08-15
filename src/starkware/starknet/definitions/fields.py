@@ -387,9 +387,13 @@ tx_version_metadata = TransactionVersionField.metadata()
 
 # State root.
 
-state_root_metadata = dict(marshmallow_field=BytesAsHex(required=True))
-optional_state_root_metadata = dict(
-    marshmallow_field=BytesAsHex(required=False, allow_none=True, load_default=None)
+backward_compatible_state_root_metadata = dict(
+    marshmallow_field=BackwardCompatibleIntAsHex(required=True, allow_bytes_hex_loading=True)
+)
+backward_compatible_optional_state_root_metadata = dict(
+    marshmallow_field=BackwardCompatibleIntAsHex(
+        required=False, allow_bytes_hex_loading=True, allow_none=True, load_default=None
+    )
 )
 
 
@@ -518,3 +522,21 @@ commitment_facts_metadata = dict(
         load_default=dict,
     )
 )
+
+# State diff commitment.
+
+state_diff_commitment_metadata = everest_fields.FeltField.metadata(
+    field_name="state diff commitment", required=True
+)
+
+ec_signature_metadata = dict(
+    marshmallow_field=mfields.Tuple(
+        tuple_fields=(
+            everest_fields.FeltField.get_marshmallow_field(),
+            everest_fields.FeltField.get_marshmallow_field(),
+        ),
+        required=True,
+    )
+)
+
+public_key_metadata = everest_fields.FeltField.metadata(field_name="public key", required=True)

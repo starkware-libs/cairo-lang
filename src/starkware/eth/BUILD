@@ -10,8 +10,9 @@ py_library(
     data = ["@npm_ganache//ganache/bin:ganache"],
     visibility = ["//visibility:public"],
     deps = [
+        ":web3_wrapper_lib",
+        requirement("pytest"),
         requirement("web3"),
-        "//src/starkware/eth:web3_wrapper_lib",
     ],
 )
 
@@ -21,7 +22,5 @@ py_library(
         "web3_wrapper.py",
     ],
     visibility = ["//visibility:public"],
-    deps = [
-        requirement("web3"),
-    ],
+    deps = [requirement("web3")],
 )

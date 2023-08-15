@@ -10,6 +10,7 @@ from starkware.starknet.services.api.feeder_gateway.request_objects import (
 )
 from starkware.starknet.services.api.feeder_gateway.response_objects import (
     BlockIdentifier,
+    BlockSignature,
     BlockTransactionTraces,
     FeeEstimationInfo,
     StarknetBlock,
@@ -356,6 +357,24 @@ class FeederGatewayClient(EverestFeederGatewayClient):
             ),
         )
         return json.loads(raw_response)
+
+    async def get_public_key(self) -> str:
+        raw_response = await self._send_request(send_method="GET", uri="/get_public_key")
+        return json.loads(raw_response)
+
+    async def get_signature(
+        self,
+        block_hash: Optional[CastableToHash] = None,
+        block_number: Optional[BlockIdentifier] = None,
+    ) -> BlockSignature:
+        formatted_block_named_argument = get_formatted_block_named_argument(
+            block_hash=block_hash, block_number=block_number
+        )
+        raw_response = await self._send_request(
+            send_method="GET",
+            uri=f"/get_signature?{formatted_block_named_argument}",
+        )
+        return BlockSignature.loads(data=raw_response)
 
 
 def format_hash(hash_value: CastableToHash, hash_field: RangeValidatedField) -> str:

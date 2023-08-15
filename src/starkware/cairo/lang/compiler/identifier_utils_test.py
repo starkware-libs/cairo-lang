@@ -8,6 +8,7 @@ from starkware.cairo.lang.compiler.identifier_definition import (
     DefinitionError,
     MemberDefinition,
     StructDefinition,
+    TypeDefinition,
 )
 from starkware.cairo.lang.compiler.identifier_manager import (
     IdentifierManager,
@@ -30,6 +31,7 @@ def test_get_struct_definition():
             size=2,
         ),
         scope("MyConst"): ConstDefinition(value=5),
+        scope("FeltTypedef"): TypeDefinition(cairo_type=TypeFelt()),
     }
 
     manager = IdentifierManager.from_dict(identifier_dict)
@@ -49,3 +51,9 @@ def test_get_struct_definition():
 
     with pytest.raises(MissingIdentifierError, match=re.escape("Unknown identifier 'abc'.")):
         get_struct_definition(scope("abc"), manager)
+
+    with pytest.raises(
+        DefinitionError,
+        match=re.escape("Expected 'FeltTypedef' to be struct. Found: 'type_definition'."),
+    ):
+        get_struct_definition(scope("FeltTypedef"), manager)

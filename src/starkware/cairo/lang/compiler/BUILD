@@ -8,12 +8,12 @@ py_exe(
     is_pypy = IS_COMPILER_PYPY,
     module = "starkware.cairo.lang.compiler.cairo_compile",
     deps = [
-        "//src/starkware/cairo/bootloaders:cairo_bootloader_generate_fact_lib",
-        "//src/starkware/cairo/common:cairo_common_lib",
         "cairo_compile_lib",
+        "//src/starkware/cairo/bootloaders:cairo_bootloader_generate_fact_lib",
         "//src/starkware/cairo/bootloaders:cairo_hash_program_lib",
-        "//src/starkware/cairo/lang/vm:cairo_run_lib",
+        "//src/starkware/cairo/common:cairo_common_lib",
         "//src/starkware/cairo/lang/scripts:cairo_script_lib",
+        "//src/starkware/cairo/lang/vm:cairo_run_lib",
     ] + CAIRO_LANG_VENV_ADDITIONAL_LIBS,
 )
 
@@ -100,7 +100,6 @@ py_library(
         "//src/starkware/cairo/lang/compiler/preprocessor/bool_expr:__init__.py",
         "//src/starkware/cairo/lang/compiler/preprocessor/bool_expr:errors.py",
         "//src/starkware/cairo/lang/compiler/preprocessor/bool_expr:lowering.py",
-        "//src/starkware/cairo/lang/compiler/preprocessor/bool_expr:lowering_test_utils.py",
     ],
     data = [
         "cairo.ebnf",
@@ -113,11 +112,11 @@ py_library(
         "//src/starkware/python:starkware_expression_string_lib",
         "//src/starkware/python:starkware_python_utils_lib",
         "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
-        requirement("marshmallow_dataclass"),
-        requirement("marshmallow_enum"),
-        requirement("marshmallow_oneofschema"),
-        requirement("marshmallow"),
         requirement("lark"),
+        requirement("marshmallow"),
+        requirement("marshmallow_enum"),
+        requirement("marshmallow_dataclass"),
+        requirement("marshmallow_oneofschema"),
     ],
 )
 
@@ -180,10 +179,13 @@ pytest_test(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "cairo_compile_lib",
-        "cairo_compile_test_utils_lib",
+        ":cairo_compile_lib",
+        ":cairo_compile_test_utils_lib",
+        "//src/starkware/cairo/lang:cairo_constants_lib",
         "//src/starkware/cairo/lang/vm:cairo_vm_test_utils_lib",
         "//src/starkware/python:starkware_python_test_utils_lib",
         "//src/starkware/python:starkware_python_utils_lib",
+        "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
+        requirement("marshmallow_dataclass"),
     ],
 )

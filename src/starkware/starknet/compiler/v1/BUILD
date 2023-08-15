@@ -15,8 +15,17 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
+        ":exe_paths",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
         "//src/starkware/starkware_utils:starkware_error_handling_lib",
-        "@bazel_tools//tools/python/runfiles",
     ],
+)
+
+py_library(
+    name = "exe_paths",
+    srcs = [
+        "compiler_exe_paths.py",
+    ],
+    visibility = ["//visibility:public"],
+    deps = ["@bazel_tools//tools/python/runfiles"],
 )

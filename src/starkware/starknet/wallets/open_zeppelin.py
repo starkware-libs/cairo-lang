@@ -25,6 +25,7 @@ from starkware.starknet.services.api.contract_class.contract_class import (
     ContractClass,
     DeprecatedCompiledClass,
 )
+from starkware.starknet.services.api.feeder_gateway.request_objects import CallFunction
 from starkware.starknet.services.api.gateway.transaction import (
     Declare,
     DeployAccount,
@@ -380,18 +381,58 @@ def sign_invoke_tx(
     (signer address, private key) prepares and signs an OpenZeppelin account invocation to this
     function.
     """
+    call_function = CallFunction(
+        contract_address=contract_address, entry_point_selector=selector, calldata=calldata
+    )
+
+    return sign_multicall_tx(
+        signer_address=signer_address,
+        private_key=private_key,
+        call_functions=[call_function],
+        chain_id=chain_id,
+        max_fee=max_fee,
+        version=version,
+        nonce=nonce,
+    )
+
+
+def sign_multicall_tx(
+    signer_address: int,
+    private_key: Optional[int],
+    call_functions: List[CallFunction],
+    chain_id: int,
+    max_fee: int,
+    version: int,
+    nonce: int,
+) -> InvokeFunction:
+    """
+    Given a list of call functions to invoke and account identifiers (signer address, private key),
+    prepares and signs an OpenZeppelin account multicall to this list of call functions.
+    """
+    call_array_len = len(call_functions)
+    multicall_calldata = [call_array_len]
     data_offset = 0
-    data_len = len(calldata)
-    call_entry = [contract_address, selector, data_offset, data_len]
-    call_array_len = 1
-    wrapped_method_calldata = [call_array_len, *call_entry, len(calldata), *calldata]
+    flat_calldata_list = []
+    for call_function in call_functions:
+        flat_calldata_list.extend(call_function.calldata)
+        data_len = len(call_function.calldata)
+        call_entry = [
+            call_function.contract_address,
+            call_function.entry_point_selector,
+            data_offset,
+            data_len,
+        ]
+        multicall_calldata.extend(call_entry)
+        data_offset += data_len
+
+    multicall_calldata.extend([len(flat_calldata_list), *flat_calldata_list])
 
     hash_value = calculate_transaction_hash_common(
         tx_hash_prefix=TransactionHashPrefix.INVOKE,
         version=version,
         contract_address=signer_address,
         entry_point_selector=0,
-        calldata=wrapped_method_calldata,
+        calldata=multicall_calldata,
         max_fee=max_fee,
         chain_id=chain_id,
         additional_data=[nonce],
@@ -399,7 +440,7 @@ def sign_invoke_tx(
 
     return InvokeFunction(
         sender_address=signer_address,
-        calldata=wrapped_method_calldata,
+        calldata=multicall_calldata,
         max_fee=max_fee,
         nonce=nonce,
         signature=(

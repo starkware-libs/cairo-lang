@@ -20,6 +20,7 @@ from services.everest.api.feeder_gateway.response_objects import (
 from services.everest.business_logic.transaction_execution_objects import TransactionFailureReason
 from services.everest.definitions import fields as everest_fields
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
+from starkware.crypto.signature.signature import ECSignature
 from starkware.eth.web3_wrapper import Web3
 from starkware.python.utils import as_non_optional, from_bytes, to_bytes
 from starkware.starknet.business_logic.execution.objects import (
@@ -324,10 +325,7 @@ class TransactionInBlockInfo(ValidatedResponseObject):
         # The following section verifies all fields match for the above cases.
         assert self.finality_status.was_executed
 
-        assert self.execution_status in (
-            ExecutionStatus.REVERTED,
-            ExecutionStatus.SUCCEEDED,
-        ), (
+        assert self.execution_status in (ExecutionStatus.REVERTED, ExecutionStatus.SUCCEEDED), (
             f"Accepted (on either L1 or L2) transactions' execution status must be SUCCEEDED or "
             f"REVERTED. instead it's {self.execution_status}."
         )
@@ -847,8 +845,10 @@ class BlockStateUpdate(ValidatedResponseObject):
     """
 
     block_hash: Optional[int] = field(metadata=fields.optional_block_hash_metadata)
-    new_root: Optional[bytes] = field(metadata=fields.optional_state_root_metadata)
-    old_root: bytes = field(metadata=fields.state_root_metadata)
+    new_root: Optional[int] = field(
+        metadata=fields.backward_compatible_optional_state_root_metadata
+    )
+    old_root: int = field(metadata=fields.backward_compatible_state_root_metadata)
     state_diff: StateDiff
 
     def __post_init__(self):
@@ -1015,7 +1015,9 @@ class StarknetBlock(ValidatedResponseObject):
     block_hash: Optional[int] = field(metadata=fields.optional_block_hash_metadata)
     parent_block_hash: int = field(metadata=fields.block_hash_metadata)
     block_number: Optional[int] = field(metadata=fields.default_optional_block_number_metadata)
-    state_root: Optional[bytes] = field(metadata=fields.optional_state_root_metadata)
+    state_root: Optional[int] = field(
+        metadata=fields.backward_compatible_optional_state_root_metadata
+    )
     status: Optional[BlockStatus]
     gas_price: int = field(metadata=fields.gas_price_metadata)
     transactions: Tuple[TransactionSpecificInfo, ...] = field(
@@ -1042,7 +1044,7 @@ class StarknetBlock(ValidatedResponseObject):
         block_hash: Optional[int],
         parent_block_hash: int,
         block_number: Optional[int],
-        state_root: Optional[bytes],
+        state_root: Optional[int],
         transactions: Iterable[InternalTransaction],
         timestamp: int,
         sequencer_address: Optional[int],
@@ -1090,6 +1092,9 @@ class StarknetBlock(ValidatedResponseObject):
 
     @marshmallow.pre_load
     def fill_missing_execution_statuses(self, data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        if data.get("transaction_receipts", None) is None:
+            return data
+
         have_execution_status = [
             "execution_status" in tx_receipt for tx_receipt in data["transaction_receipts"]
         ]
@@ -1103,6 +1108,23 @@ class StarknetBlock(ValidatedResponseObject):
             tx_receipt["execution_status"] = ExecutionStatus.SUCCEEDED.name
 
         return data
+
+
+@dataclasses.dataclass(frozen=True)
+class BlockSignatureInput(ValidatedResponseObject):
+    block_hash: int = field(metadata=fields.block_hash_metadata)
+    state_diff_commitment: int = field(metadata=fields.state_diff_commitment_metadata)
+
+
+@marshmallow_dataclass.dataclass(frozen=True)
+class BlockSignature(ValidatedResponseObject):
+    """
+    Contains the signature of a block.
+    """
+
+    block_number: int = field(metadata=fields.block_number_metadata)
+    signature: ECSignature = field(metadata=fields.ec_signature_metadata)
+    signature_input: BlockSignatureInput
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -1125,3 +1147,13 @@ class TransactionSimulationInfo(ValidatedResponseObject):
 
     trace: TransactionTrace
     fee_estimation: FeeEstimationInfo
+
+
+@marshmallow_dataclass.dataclass(frozen=True)
+class StarknetBlockAndStateUpdate(ValidatedResponseObject):
+    """
+    Contains both StarknetBlock and BlockStateUpdate objects, corresponding to a certain block.
+    """
+
+    block: StarknetBlock
+    state_update: BlockStateUpdate

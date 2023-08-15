@@ -84,6 +84,9 @@ GLOBAL_STATE_VERSION = from_bytes(b"STARKNET_STATE_V0")
 # The version of a compiled class.
 COMPILED_CLASS_VERSION = from_bytes(b"COMPILED_CLASS_V1")
 
+# State diff commitment.
+BLOCK_SIGNATURE_VERSION = 0
+
 # OS-related constants.
 L1_TO_L2_MSG_HEADER_SIZE = 5
 L2_TO_L1_MSG_HEADER_SIZE = 3

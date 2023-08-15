@@ -210,15 +210,20 @@ func select_execute_entry_point_func{
     contract_class_changes: DictAccess*,
     outputs: OsCarriedOutputs*,
 }(block_context: BlockContext*, execution_context: ExecutionContext*) -> (
-    retdata_size: felt, retdata: felt*
+    retdata_size: felt, retdata: felt*, is_deprecated: felt
 ) {
     %{ is_deprecated = 1 if ids.execution_context.class_hash in __deprecated_class_hashes else 0 %}
+    // Note that the class_hash is validated in both the `if` and `else` cases, so a malicious
+    // prover won't be able to produce a proof if guesses the wrong case.
     if (nondet %{ is_deprecated %} != 0) {
         let (retdata_size, retdata: felt*) = deprecated_execute_entry_point(
             block_context=block_context, execution_context=execution_context
         );
-        return (retdata_size=retdata_size, retdata=retdata);
+        return (retdata_size=retdata_size, retdata=retdata, is_deprecated=1);
     }
 
-    return execute_entry_point(block_context=block_context, execution_context=execution_context);
+    let (retdata_size, retdata) = execute_entry_point(
+        block_context=block_context, execution_context=execution_context
+    );
+    return (retdata_size=retdata_size, retdata=retdata, is_deprecated=0);
 }

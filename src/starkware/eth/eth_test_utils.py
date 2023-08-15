@@ -70,10 +70,10 @@ class EthTestUtils:
         self.w3.provider.make_request(method=web3_types.RPCEndpoint("evm_mine"), params=[])
 
     def get_block_by_hash(self, block_hash: str) -> "EthBlock":
-        return EthBlock(w3_block=self.w3.eth.getBlock(block_hash))
+        return EthBlock(w3_block=self.w3.eth.get_block(web3_types.HexStr(block_hash)))
 
     def get_balance(self, address: str) -> int:
-        return self.w3.eth.getBalance(address)
+        return self.w3.eth.get_balance(address)
 
     def get_contract(
         self,

@@ -9,14 +9,28 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "starknet_feeder_gateway_request_objects_lib",
-        "starknet_feeder_gateway_response_objects_lib",
+        ":starknet_feeder_gateway_request_objects_lib",
+        ":starknet_feeder_gateway_response_objects_lib",
         "//src/services/everest/api/feeder_gateway:everest_feeder_gateway_client_lib",
         "//src/services/external_api:services_external_api_lib",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
         "//src/starkware/starknet/services/api/gateway:starknet_transaction_lib",
         "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
-        requirement("typing_extensions"),
+    ],
+)
+
+py_library(
+    name = "state_diff_commitment",
+    srcs = [
+        "state_diff_commitment.py",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":starknet_feeder_gateway_response_objects_lib",
+        "//src/starkware/cairo/lang/vm:cairo_vm_crypto_lib",
+        "//src/starkware/crypto:starkware_crypto_lib",
+        "//src/starkware/starknet/business_logic/state:starknet_business_logic_state_lib",
+        "//src/starkware/starknet/definitions:starknet_definitions_lib",
     ],
 )
 
@@ -31,6 +45,7 @@ py_library(
         "//src/services/everest/business_logic:everest_transaction_execution_objects_lib",
         "//src/services/everest/definitions:everest_definitions_lib",
         "//src/starkware/cairo/lang/vm:cairo_vm_lib",
+        "//src/starkware/crypto:starkware_crypto_lib",
         "//src/starkware/eth:web3_wrapper_lib",
         "//src/starkware/python:starkware_python_utils_lib",
         "//src/starkware/starknet/business_logic/execution:starknet_transaction_execution_objects_lib",

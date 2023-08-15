@@ -42,9 +42,8 @@ TOKEN_DECIMALS = 18
 
 # Default configuration values.
 
-# In order to be able to use Keccak builtin, which uses bitwise, which is sparse.
-DEFAULT_MAX_STEPS = 10**6
-DEFAULT_VALIDATE_MAX_STEPS = DEFAULT_MAX_STEPS
+DEFAULT_VALIDATE_MAX_STEPS = 10**6
+DEFAULT_TX_MAX_STEPS = 3 * 10**6
 DEFAULT_CHAIN_ID = StarknetChainId.TESTNET.value
 DEFAULT_FEE_TOKEN_ADDRESS = load_int_value(
     field_metadata=fields.fee_token_address_metadata,
@@ -99,7 +98,7 @@ class StarknetGeneralConfig(EverestGeneralConfig):
     )
 
     invoke_tx_max_n_steps: int = field(
-        metadata=fields.invoke_tx_n_steps_metadata, default=DEFAULT_MAX_STEPS
+        metadata=fields.invoke_tx_n_steps_metadata, default=DEFAULT_TX_MAX_STEPS
     )
 
     validate_max_n_steps: int = field(

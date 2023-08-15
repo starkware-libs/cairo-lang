@@ -22,6 +22,7 @@ pytest_test(
     ],
     visibility = ["//visibility:public"],
     deps = [
+        "//src/starkware/cairo/lang:cairo_constants_lib",
         "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
         "//src/starkware/cairo/lang/compiler:cairo_compile_test_utils_lib",
     ],

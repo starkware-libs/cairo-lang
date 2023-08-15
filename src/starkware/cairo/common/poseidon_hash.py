@@ -1,10 +1,10 @@
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from starkware.cairo.common.poseidon_utils import PoseidonParams, hades_permutation
 from starkware.python.utils import blockify, from_bytes, to_bytes
 
 
-def poseidon_perm(*elements):
+def poseidon_perm(*elements: int) -> List[int]:
     """
     Returns the poseidon permutation of the inputs.
     """
@@ -49,6 +49,26 @@ def poseidon_hash_many(array: List[int], poseidon_params: Optional[PoseidonParam
     Equivalent to the function with the same name at
     src/starkware/cairo/common/builtin_poseidon/poseidon.cairo
     """
+    return poseidon_hash_many_given_poseidon_perm(
+        array=array,
+        poseidon_perm=poseidon_perm,
+        poseidon_params=poseidon_params,
+    )
+
+
+def poseidon_hash_many_given_poseidon_perm(
+    array: List[int],
+    poseidon_perm: Callable[..., List[int]],
+    poseidon_params: Optional[PoseidonParams] = None,
+) -> int:
+    """
+    Hashes array of elements and retrieves a single field element output.
+    Equivalent to the function with the same name at
+    src/starkware/cairo/common/builtin_poseidon/poseidon.cairo
+
+    Requires a poseidon_perm function with the following signature:
+        def poseidon_perm(*elements: int) -> List[int]:
+    """
     if poseidon_params is None:
         poseidon_params = PoseidonParams.get_default_poseidon_params()
 
@@ -64,9 +84,11 @@ def poseidon_hash_many(array: List[int], poseidon_params: Optional[PoseidonParam
     state = [0] * m
     for block in blockify(data=values, chunk_size=r):
         state = list(
-            hades_permutation(
-                [state_val + block_val for state_val, block_val in zip(state, block)] + state[-1:],
-                poseidon_params,
+            poseidon_perm(
+                *(
+                    [state_val + block_val for state_val, block_val in zip(state, block)]
+                    + state[-1:]
+                )
             )
         )
 

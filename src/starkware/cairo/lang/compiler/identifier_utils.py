@@ -1,5 +1,6 @@
 from typing import Dict, Tuple, Type
 
+from starkware.cairo.lang.compiler.ast.cairo_types import TypeStruct
 from starkware.cairo.lang.compiler.identifier_definition import (
     DefinitionError,
     IdentifierDefinition,
@@ -17,14 +18,25 @@ def get_identifier_definition(
     name: ScopedName,
     identifier_manager: IdentifierManager,
     supported_types: Tuple[Type[IdentifierDefinition], ...],
+    resolve_type_definitions: bool = False,
 ) -> IdentifierDefinition:
     """
     Returns the identifier definition given its full name (no alias resolution).
+
+    If `resolve_type_definitions` is set and the identifier is a type definition that
+    points to a struct, the corresponding struct definition is returned.
     """
 
     identifier_definition = identifier_manager.get_by_full_name(name)
     if identifier_definition is None:
         raise MissingIdentifierError(name)
+
+    if resolve_type_definitions and isinstance(identifier_definition, TypeDefinition):
+        cairo_type = identifier_definition.cairo_type
+        if isinstance(cairo_type, TypeStruct):
+            identifier_definition = get_struct_definition(
+                struct_name=cairo_type.scope, identifier_manager=identifier_manager
+            )
 
     if not isinstance(identifier_definition, supported_types):
         possible_types = " or ".join(
@@ -43,10 +55,16 @@ def get_struct_definition(
 ) -> StructDefinition:
     """
     Returns the struct definition of a struct given its full name (no alias resolution).
+    If `struct_name` corresponds to a type definition that point to a struct, the corresponding
+    struct definition is returned.
     """
     res = get_identifier_definition(
-        name=struct_name, identifier_manager=identifier_manager, supported_types=(StructDefinition,)
+        name=struct_name,
+        identifier_manager=identifier_manager,
+        supported_types=(StructDefinition,),
+        resolve_type_definitions=True,
     )
+
     assert isinstance(res, StructDefinition)
     return res
 

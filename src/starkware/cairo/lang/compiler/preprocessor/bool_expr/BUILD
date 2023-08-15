@@ -13,6 +13,7 @@ pytest_test(
     name = "cairo_compile_preprocessor_bool_expr_test",
     srcs = [
         "lowering_test.py",
+        "lowering_test_utils.py",
     ],
     visibility = ["//visibility:public"],
     deps = [

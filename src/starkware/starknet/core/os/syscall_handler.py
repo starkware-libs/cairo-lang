@@ -19,7 +19,7 @@ from typing import (
 import cachetools
 
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
-from starkware.cairo.common.cairo_secp import secp_utils
+from starkware.cairo.common.cairo_secp.secp_utils import SECP256K1, Curve
 from starkware.cairo.common.keccak_utils.keccak_utils import keccak_f
 from starkware.cairo.common.structs import CairoStructProxy
 from starkware.cairo.lang.vm.memory_segments import MemorySegmentManager
@@ -351,11 +351,17 @@ class SyscallHandlerBase(ABC):
         response = self.structs.GetExecutionInfoResponse(execution_info=execution_info_ptr)
         return response_header, response
 
-    def secp256k1_new(self, remaining_gas: int, request: CairoStructProxy) -> SyscallFullResponse:
+    def _secp_new(
+        self,
+        remaining_gas: int,
+        request: CairoStructProxy,
+        curve: Curve,
+        response_struct: CairoStructProxy,
+    ) -> SyscallFullResponse:
         x = from_uint256(request.x)
         y = from_uint256(request.y)
 
-        if x >= secp_utils.SECP_P or y >= secp_utils.SECP_P:
+        if x >= curve.prime or y >= curve.prime:
             return self._handle_failure(
                 final_gas=remaining_gas,
                 error_code=CairoErrorCode.INVALID_ARGUMENT,
@@ -368,18 +374,26 @@ class SyscallHandlerBase(ABC):
             ec_point = self._new_ec_point(ec_point=EC_INFINITY)
         else:
             y_squared = y_squared_from_x(
-                x=x, alpha=secp_utils.ALPHA, beta=secp_utils.BETA, field_prime=secp_utils.SECP_P
+                x=x, alpha=curve.alpha, beta=curve.beta, field_prime=curve.prime
             )
 
-            if (y**2 - y_squared) % secp_utils.SECP_P == 0:
+            if (y**2 - y_squared) % curve.prime == 0:
                 ec_point = self._new_ec_point(ec_point=(x, y))
 
         if ec_point is None:
-            response = self.structs.Secp256k1NewResponse(not_on_curve=1, ec_point=0)
+            response = response_struct(not_on_curve=1, ec_point=0)
         else:
-            response = self.structs.Secp256k1NewResponse(not_on_curve=0, ec_point=ec_point)
+            response = response_struct(not_on_curve=0, ec_point=ec_point)
 
         return response_header, response
+
+    def secp256k1_new(self, remaining_gas: int, request: CairoStructProxy) -> SyscallFullResponse:
+        return self._secp_new(
+            remaining_gas=remaining_gas,
+            request=request,
+            curve=SECP256K1,
+            response_struct=self.structs.Secp256k1NewResponse,
+        )
 
     def secp256k1_add(self, remaining_gas: int, request: CairoStructProxy) -> SyscallFullResponse:
         response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
@@ -388,8 +402,8 @@ class SyscallHandlerBase(ABC):
                 ec_point=ec_safe_add(
                     point1=self._get_ec_point(request.p0),
                     point2=self._get_ec_point(request.p1),
-                    alpha=secp_utils.ALPHA,
-                    p=secp_utils.SECP_P,
+                    alpha=SECP256K1.alpha,
+                    p=SECP256K1.prime,
                 )
             ),
         )
@@ -403,8 +417,8 @@ class SyscallHandlerBase(ABC):
                 ec_point=ec_safe_mult(
                     m=from_uint256(request.scalar),
                     point=self.ec_points[cast(RelocatableValue, request.p)],
-                    alpha=secp_utils.ALPHA,
-                    p=secp_utils.SECP_P,
+                    alpha=SECP256K1.alpha,
+                    p=SECP256K1.prime,
                 )
             ),
         )
@@ -415,19 +429,23 @@ class SyscallHandlerBase(ABC):
     ) -> SyscallFullResponse:
         x = from_uint256(request.x)
 
-        if x >= secp_utils.SECP_P:
+        if x >= SECP256K1.prime:
             return self._handle_failure(
                 final_gas=remaining_gas,
                 error_code=CairoErrorCode.INVALID_ARGUMENT,
             )
 
+        prime = SECP256K1.prime
         y_squared = y_squared_from_x(
-            x=x, alpha=secp_utils.ALPHA, beta=secp_utils.BETA, field_prime=secp_utils.SECP_P
+            x=x,
+            alpha=SECP256K1.alpha,
+            beta=SECP256K1.beta,
+            field_prime=prime,
         )
 
-        y = pow(y_squared, (secp_utils.SECP_P + 1) // 4, secp_utils.SECP_P)
+        y = pow(y_squared, (prime + 1) // 4, prime)
         if (y & 1) != request.y_parity:
-            y = (-y) % secp_utils.SECP_P
+            y = (-y) % prime
 
         response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
         response = (
@@ -435,7 +453,7 @@ class SyscallHandlerBase(ABC):
                 not_on_curve=0,
                 ec_point=self._new_ec_point(ec_point=(x, y)),
             )
-            if (y * y) % secp_utils.SECP_P == y_squared
+            if (y * y) % prime == y_squared
             else self.structs.Secp256k1NewResponse(
                 not_on_curve=1,
                 ec_point=0,

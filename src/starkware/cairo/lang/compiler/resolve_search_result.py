@@ -1,3 +1,4 @@
+from starkware.cairo.lang.compiler.ast.cairo_types import TypeStruct
 from starkware.cairo.lang.compiler.constants import SIZE_CONSTANT
 from starkware.cairo.lang.compiler.identifier_definition import (
     ConstDefinition,
@@ -5,12 +6,14 @@ from starkware.cairo.lang.compiler.identifier_definition import (
     IdentifierDefinition,
     ReferenceDefinition,
     StructDefinition,
+    TypeDefinition,
 )
 from starkware.cairo.lang.compiler.identifier_manager import (
     IdentifierError,
     IdentifierManager,
     IdentifierSearchResult,
 )
+from starkware.cairo.lang.compiler.identifier_utils import get_struct_definition
 from starkware.cairo.lang.compiler.offset_reference import OffsetReferenceDefinition
 
 
@@ -26,6 +29,14 @@ def resolve_search_result(
 
     if len(search_result.non_parsed) == 0:
         return identifier_definition
+
+    if isinstance(identifier_definition, TypeDefinition):
+        # Note that `get_struct_definition` resolves type definitions recursively.
+        cairo_type = identifier_definition.cairo_type
+        if isinstance(cairo_type, TypeStruct):
+            identifier_definition = get_struct_definition(
+                struct_name=cairo_type.scope, identifier_manager=identifiers
+            )
 
     if isinstance(identifier_definition, StructDefinition):
         if search_result.non_parsed == SIZE_CONSTANT:

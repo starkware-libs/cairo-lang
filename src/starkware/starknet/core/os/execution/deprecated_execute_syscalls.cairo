@@ -95,7 +95,7 @@ func contract_call_helper{
     // the callee may be of version 1.0.
     let remaining_gas = INITIAL_GAS_COST;
     with remaining_gas {
-        let (retdata_size, retdata) = select_execute_entry_point_func(
+        let (retdata_size, retdata, _is_deprecated) = select_execute_entry_point_func(
             block_context=block_context, execution_context=execution_context
         );
     }
@@ -721,7 +721,8 @@ func deploy_contract{
     );
 
     // Invoke the contract constructor.
-    return select_execute_entry_point_func(
+    let (retdata_size, retdata, _is_deprecated) = select_execute_entry_point_func(
         block_context=block_context, execution_context=constructor_execution_context
     );
+    return (retdata_size=retdata_size, retdata=retdata);
 }

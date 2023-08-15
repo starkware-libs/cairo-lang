@@ -1,5 +1,7 @@
+import dataclasses
 from typing import List
 
+from starkware.cairo.common.cairo_secp import secp256r1_utils
 from starkware.cairo.common.math_utils import as_int
 
 BASE = 2**86
@@ -32,3 +34,20 @@ def pack(z, prime):
     """
     limbs = z.d0, z.d1, z.d2
     return sum(as_int(limb, prime) * (BASE**i) for i, limb in enumerate(limbs))
+
+
+@dataclasses.dataclass
+class Curve:
+    prime: int
+    alpha: int
+    beta: int
+    order: int
+
+
+SECP256K1 = Curve(prime=SECP_P, alpha=ALPHA, beta=BETA, order=N)
+SECP256R1 = Curve(
+    prime=secp256r1_utils.SECP256R1_P,
+    alpha=secp256r1_utils.SECP256R1_ALPHA,
+    beta=secp256r1_utils.SECP256R1_BETA,
+    order=secp256r1_utils.SECP256R1_N,
+)

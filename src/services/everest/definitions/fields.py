@@ -5,7 +5,7 @@ from typing import Any, ClassVar, Dict, List, Optional
 
 import marshmallow.fields as mfields
 import marshmallow.utils
-from eth_typing import ChecksumAddress
+from web3.types import ChecksumAddress
 
 from services.everest.definitions import constants
 from starkware.crypto.signature.signature import FIELD_PRIME
@@ -95,6 +95,18 @@ FeltField = RangeValidatedField(
     error_code=StarkErrorCode.OUT_OF_RANGE_FIELD_ELEMENT,
     formatter=hex,
 )
+
+
+def get_bounded_int_range_validator(
+    lower_bound: int = 0, upper_bound: int = FIELD_PRIME
+) -> RangeValidatedField:
+    return RangeValidatedField(
+        lower_bound=lower_bound,
+        upper_bound=upper_bound,
+        name=f"Integer in range [{lower_bound}, {upper_bound})",
+        error_code=StarkErrorCode.OUT_OF_RANGE_FIELD_ELEMENT,
+        formatter=hex,
+    )
 
 
 def felt(name_in_error_message: str) -> RangeValidatedField:

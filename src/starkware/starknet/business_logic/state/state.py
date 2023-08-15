@@ -584,7 +584,7 @@ class UpdatesTrackerState(SyncState):
         nonce = self.state.get_nonce_at(
             storage_domain=storage_domain, contract_address=contract_address
         )
-        if contract_address not in self.cache.address_to_class_hash:
+        if contract_address not in self.cache.address_to_nonce:
             self.cache._nonce_initial_values[contract_address] = nonce
 
         return nonce
@@ -603,6 +603,26 @@ class UpdatesTrackerState(SyncState):
         )
         self.cache._nonce_writes[contract_address] = new_nonce
 
+    def get_compiled_class_hash(self, class_hash: int) -> int:
+        # Delegate the request to the actual state anyway (even if the value is already cached).
+        compiled_class_hash = self.state.get_compiled_class_hash(class_hash=class_hash)
+        if class_hash not in self.cache.class_hash_to_compiled_class_hash:
+            # First access (read or write) to this cell; cache initial value.
+            self.cache._compiled_class_hash_initial_values[class_hash] = compiled_class_hash
+
+        return compiled_class_hash
+
+    def set_compiled_class_hash(self, class_hash: int, compiled_class_hash: int):
+        if class_hash not in self.cache.class_hash_to_compiled_class_hash:
+            # First access (read or write) to this cell; cache initial value.
+            self.cache._compiled_class_hash_initial_values[
+                class_hash
+            ] = self.state.get_compiled_class_hash(class_hash=class_hash)
+        self.cache._compiled_class_hash_writes[class_hash] = compiled_class_hash
+        self.state.set_compiled_class_hash(
+            class_hash=class_hash, compiled_class_hash=compiled_class_hash
+        )
+
     @property
     def block_info(self) -> BlockInfo:
         return self.state.block_info
@@ -612,14 +632,6 @@ class UpdatesTrackerState(SyncState):
 
     def get_compiled_class(self, compiled_class_hash: int) -> CompiledClassBase:
         return self.state.get_compiled_class(compiled_class_hash=compiled_class_hash)
-
-    def get_compiled_class_hash(self, class_hash: int) -> int:
-        return self.state.get_compiled_class_hash(class_hash=class_hash)
-
-    def set_compiled_class_hash(self, class_hash: int, compiled_class_hash: int):
-        self.state.set_compiled_class_hash(
-            class_hash=class_hash, compiled_class_hash=compiled_class_hash
-        )
 
     def count_actual_updates_for_fee_charge(
         self,

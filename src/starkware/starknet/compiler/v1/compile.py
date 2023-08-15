@@ -6,32 +6,12 @@ from typing import Any, Dict, List, Optional
 
 import shlex
 
+from starkware.starknet.compiler.v1.compiler_exe_paths import (
+    STARKNET_COMPILE_EXE,
+    STARKNET_SIERRA_COMPILE_EXE,
+)
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starkware_utils.error_handling import StarkException
-
-COMPILER_DIR_NAME = "sierra-compiler-major-1/bin"
-# This path might be invalid and shouldn't be used outside the following `if`.
-_COMPILER_DIR = os.path.join(os.path.dirname(__file__), COMPILER_DIR_NAME)
-
-if os.path.exists(_COMPILER_DIR):
-    STARKNET_COMPILE_EXE = os.path.join(_COMPILER_DIR, "starknet-compile")
-    STARKNET_SIERRA_COMPILE = os.path.join(_COMPILER_DIR, "starknet-sierra-compile")
-else:
-    # Bazel flow.
-    from bazel_tools.tools.python.runfiles import runfiles
-
-    r = runfiles.Create()
-    STARKNET_COMPILE_EXE = r.Rlocation(os.path.join(COMPILER_DIR_NAME, "starknet-compile"))
-    STARKNET_SIERRA_COMPILE = r.Rlocation(
-        os.path.join(COMPILER_DIR_NAME, "starknet-sierra-compile")
-    )
-
-assert os.path.exists(
-    STARKNET_COMPILE_EXE
-), f"starknet-compile exe doesn't exist at: {STARKNET_COMPILE_EXE}."
-assert os.path.exists(
-    STARKNET_SIERRA_COMPILE
-), f"starknet-sierra-compile exe doesn't exist at: {STARKNET_SIERRA_COMPILE}."
 
 JsonObject = Dict[str, Any]
 
@@ -126,7 +106,7 @@ def compile_sierra_to_casm(
     Returns the resulting Casm as json.
     """
     if compiler_dir is None:
-        compiler_path = STARKNET_SIERRA_COMPILE
+        compiler_path = STARKNET_SIERRA_COMPILE_EXE
     else:
         compiler_path = os.path.join(compiler_dir, "starknet-sierra-compile")
     additional_args = build_sierra_to_casm_compilation_args(

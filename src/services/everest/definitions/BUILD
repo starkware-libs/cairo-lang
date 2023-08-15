@@ -12,7 +12,9 @@ py_library(
     deps = [
         "//src/starkware/crypto:starkware_crypto_lib",
         "//src/starkware/eth:web3_wrapper_lib",
+        "//src/starkware/python:starkware_python_utils_lib",
         "//src/starkware/starkware_utils:starkware_dataclasses_field_utils_lib",
+        "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
         "//src/starkware/starkware_utils:starkware_error_handling_lib",
         requirement("marshmallow"),
         requirement("web3"),

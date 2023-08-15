@@ -403,7 +403,7 @@ func contract_call_helper{
     outputs: OsCarriedOutputs*,
 }(remaining_gas: felt, block_context: BlockContext*, execution_context: ExecutionContext*) {
     with remaining_gas {
-        let (retdata_size, retdata) = select_execute_entry_point_func(
+        let (retdata_size, retdata, _is_deprecated) = select_execute_entry_point_func(
             block_context=block_context, execution_context=execution_context
         );
     }

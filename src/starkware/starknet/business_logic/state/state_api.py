@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Tuple
 
 from services.everest.business_logic.state_api import StateProxy
 from starkware.python.utils import to_bytes

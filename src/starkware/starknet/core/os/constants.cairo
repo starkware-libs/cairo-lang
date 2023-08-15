@@ -110,3 +110,6 @@ const ERROR_BLOCK_NUMBER_OUT_OF_RANGE = 'Block number out of range';
 const ERROR_OUT_OF_GAS = 'Out of gas';
 const ERROR_INVALID_INPUT_LEN = 'Invalid input length';
 const ERROR_INVALID_ARGUMENT = 'Invalid argument';
+
+// The expected return value of the `__validate*__` functions of a Cairo 1.0 account contract.
+const VALIDATED = 'VALID';

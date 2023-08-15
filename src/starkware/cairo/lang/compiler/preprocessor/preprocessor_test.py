@@ -4950,3 +4950,29 @@ Preprocessed instruction:
 """,
         exc_type=InstructionBuilderError,
     )
+
+
+def test_type_alias_member_access():
+    code = """
+struct MyStruct {
+    a: felt,
+}
+
+using DirectAlias = MyStruct;
+using IndirectAlias = DirectAlias;
+
+func main(arg: DirectAlias) {
+    tempvar a = arg.a;
+    tempvar size = IndirectAlias.SIZE;
+    return ();
+}
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert (
+        program.format()
+        == """\
+[ap] = [fp + (-3)], ap++;
+[ap] = 1, ap++;
+ret;
+"""
+    )
