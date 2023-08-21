@@ -127,8 +127,9 @@ func verify_zero{range_check_ptr}(val: UnreducedBigInt3) {
         ids.q = q % PRIME
     %}
 
-    // 164 + 255.99 - 2 * 86 = 247.99, so we can require `q` to be in the range [-2**164, 2**164)
-    // as long as the most significant limb of `val` is in the range (-2**247.99, 2**247.99).
+    // Assuming the absolute values of the limbs are bounded by 2**247.99, the absolute value
+    // of q = (val.d2 * BASE**2 + val.d1 * BASE + val.d0) / secp256r1, is bounded by
+    // 2**247.995 * (2 ** 86)**2 / 2**255.995 = 2**164.
     assert_165_bit(q + 2 ** 164);
 
     tempvar r1 = (val.d0 + q * SECP_REM0) / BASE;

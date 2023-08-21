@@ -85,9 +85,9 @@ def calculate_state_diff_commitment(
     """
     Calculates the commitment on the given state diff.
 
-    We assume that the state diff is well formed. For example:
-    * In the storage_diff, for a given contract there will be no contradicting storage entries.
-    * In the declared_classes, any class hash points to a single compiled class hash.
+    We assume that state_diff represents a valid state_diff. For example:
+    * In storage_diff, any storage entry key points to a single storage entry value.
+    * In declared_classes, any class hash points to a single compiled class hash.
 
     We do not assume the state diff to be sorted. The function sorts the state diff before computing
     the hash.
