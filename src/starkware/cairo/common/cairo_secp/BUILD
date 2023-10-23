@@ -17,8 +17,10 @@ cairo_library(
     name = "cairo_secp256k1",
     srcs = [
         "bigint.cairo",
+        "bigint3.cairo",
         "constants.cairo",
         "ec.cairo",
+        "ec_point.cairo",
         "field.cairo",
         "signature.cairo",
     ],

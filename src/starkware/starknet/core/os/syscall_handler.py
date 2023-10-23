@@ -19,7 +19,7 @@ from typing import (
 import cachetools
 
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
-from starkware.cairo.common.cairo_secp.secp_utils import SECP256K1, Curve
+from starkware.cairo.common.cairo_secp.secp_utils import SECP256K1, SECP256R1, Curve
 from starkware.cairo.common.keccak_utils.keccak_utils import keccak_f
 from starkware.cairo.common.structs import CairoStructProxy
 from starkware.cairo.lang.vm.memory_segments import MemorySegmentManager
@@ -76,6 +76,7 @@ from starkware.starknet.core.os.syscall_utils import (
 from starkware.starknet.definitions import constants
 from starkware.starknet.definitions.constants import GasCost
 from starkware.starknet.definitions.error_codes import CairoErrorCode, StarknetErrorCode
+from starkware.starknet.definitions.execution_mode import ExecutionMode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public.abi import CONSTRUCTOR_ENTRY_POINT_SELECTOR
 from starkware.starknet.services.api.contract_class.contract_class import EntryPointType
@@ -157,23 +158,48 @@ class SyscallHandlerBase(ABC):
             ),
             get_selector("secp256k1_add"): SyscallInfo(
                 name="secp256k1_add",
-                execute_callback=cls.secp256k1_add,
+                execute_callback=functools.partial(cls.secp_add, curve=SECP256K1),
                 request_struct=structs.Secp256k1AddRequest,
+            ),
+            get_selector("secp256r1_add"): SyscallInfo(
+                name="secp256r1_add",
+                execute_callback=functools.partial(cls.secp_add, curve=SECP256R1),
+                request_struct=structs.Secp256r1AddRequest,
             ),
             get_selector("secp256k1_mul"): SyscallInfo(
                 name="secp256k1_mul",
-                execute_callback=cls.secp256k1_mul,
+                execute_callback=functools.partial(cls.secp_mul, curve=SECP256K1),
                 request_struct=structs.Secp256k1MulRequest,
+            ),
+            get_selector("secp256r1_mul"): SyscallInfo(
+                name="secp256r1_mul",
+                execute_callback=functools.partial(cls.secp_mul, curve=SECP256R1),
+                request_struct=structs.Secp256r1MulRequest,
             ),
             get_selector("secp256k1_get_point_from_x"): SyscallInfo(
                 name="secp256k1_get_point_from_x",
                 execute_callback=cls.secp256k1_get_point_from_x,
                 request_struct=structs.Secp256k1GetPointFromXRequest,
             ),
+            get_selector("secp256r1_get_point_from_x"): SyscallInfo(
+                name="secp256r1_get_point_from_x",
+                execute_callback=cls.secp256r1_get_point_from_x,
+                request_struct=structs.Secp256r1GetPointFromXRequest,
+            ),
             get_selector("secp256k1_get_xy"): SyscallInfo(
                 name="secp256k1_get_xy",
-                execute_callback=cls.secp256k1_get_xy,
+                execute_callback=cls.secp_get_xy,
                 request_struct=structs.Secp256k1GetXyRequest,
+            ),
+            get_selector("secp256r1_get_xy"): SyscallInfo(
+                name="secp256r1_get_xy",
+                execute_callback=cls.secp_get_xy,
+                request_struct=structs.Secp256r1GetXyRequest,
+            ),
+            get_selector("secp256r1_new"): SyscallInfo(
+                name="secp256r1_new",
+                execute_callback=cls.secp256r1_new,
+                request_struct=structs.Secp256r1NewRequest,
             ),
             get_selector("keccak"): SyscallInfo(
                 name="keccak",
@@ -395,51 +421,66 @@ class SyscallHandlerBase(ABC):
             response_struct=self.structs.Secp256k1NewResponse,
         )
 
-    def secp256k1_add(self, remaining_gas: int, request: CairoStructProxy) -> SyscallFullResponse:
+    def secp256r1_new(self, remaining_gas: int, request: CairoStructProxy) -> SyscallFullResponse:
+        return self._secp_new(
+            remaining_gas=remaining_gas,
+            request=request,
+            curve=SECP256R1,
+            response_struct=self.structs.Secp256r1NewResponse,
+        )
+
+    def secp_add(
+        self, remaining_gas: int, request: CairoStructProxy, curve: Curve
+    ) -> SyscallFullResponse:
         response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
-        response = self.structs.Secp256k1OpResponse(
+        response = self.structs.SecpOpResponse(
             ec_point=self._new_ec_point(
                 ec_point=ec_safe_add(
                     point1=self._get_ec_point(request.p0),
                     point2=self._get_ec_point(request.p1),
-                    alpha=SECP256K1.alpha,
-                    p=SECP256K1.prime,
+                    alpha=curve.alpha,
+                    p=curve.prime,
                 )
             ),
         )
 
         return response_header, response
 
-    def secp256k1_mul(self, remaining_gas: int, request: CairoStructProxy) -> SyscallFullResponse:
+    def secp_mul(
+        self, remaining_gas: int, request: CairoStructProxy, curve: Curve
+    ) -> SyscallFullResponse:
         response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
-        response = self.structs.Secp256k1OpResponse(
+        response = self.structs.SecpOpResponse(
             ec_point=self._new_ec_point(
                 ec_point=ec_safe_mult(
                     m=from_uint256(request.scalar),
                     point=self.ec_points[cast(RelocatableValue, request.p)],
-                    alpha=SECP256K1.alpha,
-                    p=SECP256K1.prime,
+                    alpha=curve.alpha,
+                    p=curve.prime,
                 )
             ),
         )
         return response_header, response
 
-    def secp256k1_get_point_from_x(
-        self, remaining_gas: int, request: CairoStructProxy
+    def secp_get_point_from_x(
+        self,
+        remaining_gas: int,
+        request: CairoStructProxy,
+        curve: Curve,
     ) -> SyscallFullResponse:
         x = from_uint256(request.x)
 
-        if x >= SECP256K1.prime:
+        if x >= curve.prime:
             return self._handle_failure(
                 final_gas=remaining_gas,
                 error_code=CairoErrorCode.INVALID_ARGUMENT,
             )
 
-        prime = SECP256K1.prime
+        prime = curve.prime
         y_squared = y_squared_from_x(
             x=x,
-            alpha=SECP256K1.alpha,
-            beta=SECP256K1.beta,
+            alpha=curve.alpha,
+            beta=curve.beta,
             field_prime=prime,
         )
 
@@ -449,12 +490,12 @@ class SyscallHandlerBase(ABC):
 
         response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
         response = (
-            self.structs.Secp256k1NewResponse(
+            self.structs.SecpNewResponse(
                 not_on_curve=0,
                 ec_point=self._new_ec_point(ec_point=(x, y)),
             )
             if (y * y) % prime == y_squared
-            else self.structs.Secp256k1NewResponse(
+            else self.structs.SecpNewResponse(
                 not_on_curve=1,
                 ec_point=0,
             )
@@ -462,9 +503,21 @@ class SyscallHandlerBase(ABC):
 
         return response_header, response
 
-    def secp256k1_get_xy(
+    def secp256k1_get_point_from_x(
         self, remaining_gas: int, request: CairoStructProxy
     ) -> SyscallFullResponse:
+        return self.secp_get_point_from_x(
+            remaining_gas=remaining_gas, request=request, curve=SECP256K1
+        )
+
+    def secp256r1_get_point_from_x(
+        self, remaining_gas: int, request: CairoStructProxy
+    ) -> SyscallFullResponse:
+        return self.secp_get_point_from_x(
+            remaining_gas=remaining_gas, request=request, curve=SECP256R1
+        )
+
+    def secp_get_xy(self, remaining_gas: int, request: CairoStructProxy) -> SyscallFullResponse:
         ec_point = self.ec_points[cast(RelocatableValue, request.ec_point)]
         response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
         if isinstance(ec_point, EcInfinity):
@@ -472,8 +525,7 @@ class SyscallHandlerBase(ABC):
         else:
             x, y = ec_point
 
-        # Note that we can't use self.structs.Secp256k1GetXyResponse here
-        # as it is not flat.
+        # Note that we can't use self.structs.SecpGetXyResponse here as it is not flat.
         response = to_uint256(self.structs, x) + to_uint256(self.structs, y)  # type: ignore
 
         return response_header, response
@@ -789,6 +841,18 @@ class BusinessLogicSyscallHandler(SyscallHandlerBase):
 
     # Syscalls.
 
+    def get_block_hash(self, remaining_gas: int, request: CairoStructProxy) -> SyscallFullResponse:
+        syscall_name = "get_block_hash"
+        stark_assert(
+            not self._is_validate_execution_mode(),
+            code=StarknetErrorCode.UNAUTHORIZED_ACTION_ON_VALIDATE,
+            message=(
+                f"Unauthorized syscall {syscall_name} "
+                f"in execution mode {self.tx_execution_context.execution_mode.name}."
+            ),
+        )
+        return super().get_block_hash(remaining_gas=remaining_gas, request=request)
+
     def _call_contract_helper(
         self, remaining_gas: int, request: CairoStructProxy, syscall_name: str
     ) -> CallResult:
@@ -800,6 +864,15 @@ class BusinessLogicSyscallHandler(SyscallHandlerBase):
             contract_address = cast_to_int(request.contract_address)
             caller_address = self.entry_point.contract_address
             call_type = CallType.CALL
+            if self._is_validate_execution_mode():
+                stark_assert(
+                    self.entry_point.contract_address == contract_address,
+                    code=StarknetErrorCode.UNAUTHORIZED_ACTION_ON_VALIDATE,
+                    message=(
+                        f"Unauthorized syscall {syscall_name} "
+                        f"in execution mode {self.tx_execution_context.execution_mode.name}."
+                    ),
+                )
         elif syscall_name == "library_call":
             contract_address = self.entry_point.contract_address
             caller_address = self.entry_point.caller_address
@@ -860,10 +933,14 @@ class BusinessLogicSyscallHandler(SyscallHandlerBase):
         if self._execution_info_ptr is None:
             # Prepare block info.
             python_block_info = self.storage.state.block_info
-            block_info = self.structs.BlockInfo(
-                block_number=python_block_info.block_number,
-                block_timestamp=python_block_info.block_timestamp,
-                sequencer_address=as_non_optional(python_block_info.sequencer_address),
+            block_info = (
+                self.structs.BlockInfo(block_number=0, block_timestamp=0, sequencer_address=0)
+                if self._is_validate_execution_mode()
+                else self.structs.BlockInfo(
+                    block_number=python_block_info.block_number,
+                    block_timestamp=python_block_info.block_timestamp,
+                    sequencer_address=as_non_optional(python_block_info.sequencer_address),
+                )
             )
             # Prepare transaction info.
             signature = self.tx_execution_context.signature
@@ -1033,6 +1110,9 @@ class BusinessLogicSyscallHandler(SyscallHandlerBase):
     def _count_syscall(self, syscall_name: str, count: int = 1):
         previous_syscall_count = self.resources_manager.syscall_counter.get(syscall_name, 0)
         self.resources_manager.syscall_counter[syscall_name] = previous_syscall_count + count
+
+    def _is_validate_execution_mode(self):
+        return self.tx_execution_context.execution_mode is ExecutionMode.VALIDATE
 
 
 class OsExecutionHelper:

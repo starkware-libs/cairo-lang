@@ -62,7 +62,7 @@ CHAIN_IDS = {
 # Mapping from the network's name to the corresponding allowed libfuncs list file.
 LIBFUNC_LIST_FILES = {
     "alpha-goerli": "testnet_libfuncs",
-    "alpha-goerli2": "testnet2_libfuncs",
+    "alpha-goerli2": "testnet_libfuncs",
     "alpha-mainnet": "mainnet_libfuncs",
 }
 

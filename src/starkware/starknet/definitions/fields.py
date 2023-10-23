@@ -10,6 +10,7 @@ from starkware.cairo.lang.tracer.tracer_data import field_element_repr
 from starkware.python.utils import from_bytes
 from starkware.starknet.definitions import constants
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
+from starkware.starknet.definitions.execution_mode import ExecutionMode
 from starkware.starknet.definitions.transaction_type import TransactionType
 from starkware.starkware_utils.field_validators import (
     validate_max_length,
@@ -480,6 +481,9 @@ storage_updates_metadata = dict(
         ),
     )
 )
+
+# ExecutionMode.
+execution_mode_metadata = dict(marshmallow_field=EnumField(enum_cls=ExecutionMode, required=True))
 
 
 # ExecutionInfo.

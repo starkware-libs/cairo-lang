@@ -361,14 +361,14 @@ class SharedState(SharedStateBase):
         )
 
         # Apply contract changes on global root.
-        updated_global_contract_root = await self.contract_states.update(
+        updated_global_contract_root = await self.contract_states.update_efficiently(
             ffc=ffc, modifications=list(safe_zip(accessed_addresses, updated_contract_states))
         )
 
         ffc_for_contract_class = get_ffc_for_contract_class_facts(ffc=ffc)
         updated_contract_classes: Optional[PatriciaTree] = None
         if self.contract_classes is not None:
-            updated_contract_classes = await self.contract_classes.update(
+            updated_contract_classes = await self.contract_classes.update_efficiently(
                 ffc=ffc_for_contract_class,
                 modifications=[
                     (key, ContractClassLeaf.create(compiled_class_hash=value))

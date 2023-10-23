@@ -8,6 +8,9 @@ from starkware.starkware_utils.commitment_tree.binary_fact_tree import (
     TLeafFact,
 )
 from starkware.starkware_utils.commitment_tree.leaf_fact import LeafFact
+from starkware.starkware_utils.commitment_tree.patricia_tree.fast_patricia_update import (
+    update_tree as update_tree_efficiently,
+)
 from starkware.starkware_utils.commitment_tree.patricia_tree.nodes import EmptyNodeFact
 from starkware.starkware_utils.commitment_tree.patricia_tree.virtual_calculation_node import (
     VirtualCalculationNode,
@@ -77,6 +80,21 @@ class PatriciaTree(BinaryFactTree):
         # In case root is an edge node, its fact must be explicitly written to DB.
         root_hash = await updated_virtual_root_node.commit(ffc=ffc, facts=facts)
         return PatriciaTree(root=root_hash, height=updated_virtual_root_node.height)
+
+    async def update_efficiently(
+        self,
+        ffc: FactFetchingContext,
+        modifications: Collection[Tuple[int, LeafFact]],
+    ) -> "PatriciaTree":
+        """
+        Updates the tree with the given list of modifications, writes all the new facts to the
+        storage and returns a new PatriciaTree representing the fact of the root of the new tree.
+        This method is more efficient than `update`.
+        """
+        updated_root = await update_tree_efficiently(
+            height=self.height, root=self.root, modifications=modifications, ffc=ffc
+        )
+        return PatriciaTree(root=updated_root, height=self.height)
 
     async def get_diff_between_patricia_trees(
         self,

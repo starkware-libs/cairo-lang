@@ -9,10 +9,15 @@ const EMIT_EVENT_SELECTOR = 'EmitEvent';
 const GET_BLOCK_HASH_SELECTOR = 'GetBlockHash';
 const GET_EXECUTION_INFO_SELECTOR = 'GetExecutionInfo';
 const SECP256K1_ADD_SELECTOR = 'Secp256k1Add';
-const SECP256K1_MUL_SELECTOR = 'Secp256k1Mul';
-const SECP256K1_NEW_SELECTOR = 'Secp256k1New';
 const SECP256K1_GET_POINT_FROM_X_SELECTOR = 'Secp256k1GetPointFromX';
 const SECP256K1_GET_XY_SELECTOR = 'Secp256k1GetXy';
+const SECP256K1_MUL_SELECTOR = 'Secp256k1Mul';
+const SECP256K1_NEW_SELECTOR = 'Secp256k1New';
+const SECP256R1_ADD_SELECTOR = 'Secp256r1Add';
+const SECP256R1_GET_POINT_FROM_X_SELECTOR = 'Secp256r1GetPointFromX';
+const SECP256R1_GET_XY_SELECTOR = 'Secp256r1GetXy';
+const SECP256R1_MUL_SELECTOR = 'Secp256r1Mul';
+const SECP256R1_NEW_SELECTOR = 'Secp256r1New';
 const KECCAK_SELECTOR = 'Keccak';
 const LIBRARY_CALL_SELECTOR = 'LibraryCall';
 const REPLACE_CLASS_SELECTOR = 'ReplaceClass';
@@ -135,32 +140,47 @@ struct KeccakRequest {
     input_end: felt*,
 }
 
-struct Secp256k1AddRequest {
+struct SecpAddRequest {
     p0: EcPoint*,
     p1: EcPoint*,
 }
 
-struct Secp256k1MulRequest {
+using Secp256k1AddRequest = SecpAddRequest;
+using Secp256r1AddRequest = SecpAddRequest;
+
+struct SecpMulRequest {
     p: EcPoint*,
     scalar: Uint256,
 }
 
-struct Secp256k1NewRequest {
-    // The x and y coordinates of the requested point on the Secp256k1 curve.
+using Secp256k1MulRequest = SecpMulRequest;
+using Secp256r1MulRequest = SecpMulRequest;
+
+struct SecpNewRequest {
+    // The x and y coordinates of the requested point on the Secp curve.
     // The point at infinity, can be created by passing (0, 0).
     x: Uint256,
     y: Uint256,
 }
 
-struct Secp256k1GetPointFromXRequest {
+using Secp256k1NewRequest = SecpNewRequest;
+using Secp256r1NewRequest = SecpNewRequest;
+
+struct SecpGetPointFromXRequest {
     x: Uint256,
     y_parity: felt,
 }
 
-struct Secp256k1GetXyRequest {
+using Secp256k1GetPointFromXRequest = SecpGetPointFromXRequest;
+using Secp256r1GetPointFromXRequest = SecpGetPointFromXRequest;
+
+struct SecpGetXyRequest {
     // A pointer to the point.
     ec_point: EcPoint*,
 }
+
+using Secp256k1GetXyRequest = SecpGetXyRequest;
+using Secp256r1GetXyRequest = SecpGetXyRequest;
 
 struct StorageReadRequest {
     reserved: felt,
@@ -208,14 +228,17 @@ struct KeccakResponse {
     result_high: felt,
 }
 
-struct Secp256k1GetXyResponse {
+struct SecpGetXyResponse {
     // The x and y coordinates of the given point. Returns (0, 0) for the point at infinity.
     x: Uint256,
     y: Uint256,
 }
 
-struct Secp256k1NewResponse {
-    // The syscall returns `Option<Secp256k1Point>` which is represented as two felts in Cairo0.
+using Secp256k1GetXyResponse = SecpGetXyResponse;
+using Secp256r1GetXyResponse = SecpGetXyResponse;
+
+struct SecpNewResponse {
+    // The syscall returns `Option<SecpPoint>` which is represented as two felts in memory.
 
     // 1 if the point is not on the curve, 0 otherwise.
     not_on_curve: felt,
@@ -223,10 +246,18 @@ struct Secp256k1NewResponse {
     ec_point: EcPoint*,
 }
 
-struct Secp256k1OpResponse {
-    // The result of Secp256k1 add or mul operations.
+using Secp256k1NewResponse = SecpNewResponse;
+using Secp256r1NewResponse = SecpNewResponse;
+
+struct SecpOpResponse {
+    // The result of Secp256k1 or Secp256r1 add or mul operations.
     ec_point: EcPoint*,
 }
+
+using Secp256k1AddResponse = SecpOpResponse;
+using Secp256k1MulResponse = SecpOpResponse;
+using Secp256r1AddResponse = SecpOpResponse;
+using Secp256r1MulResponse = SecpOpResponse;
 
 struct StorageReadResponse {
     value: felt,

@@ -5,7 +5,7 @@ import os
 import ssl
 from abc import abstractmethod
 from http import HTTPStatus
-from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Union
+from typing import Any, Dict, List, Mapping, NamedTuple, Optional, Sequence, Union
 from urllib.parse import urljoin
 
 import aiohttp
@@ -159,7 +159,11 @@ class ClientBase(HasUriPrefix):
         """
 
     async def _send_request(
-        self, send_method: str, uri: str, data: Optional[FlexibleJsonObject] = None
+        self,
+        send_method: str,
+        uri: str,
+        data: Optional[FlexibleJsonObject] = None,
+        params: Optional[Mapping[str, str]] = None,
     ) -> str:
         """
         Sends an HTTP request to the target URI.
@@ -182,7 +186,10 @@ class ClientBase(HasUriPrefix):
                 async with aiohttp.TCPConnector(ssl=self.ssl_context) as connector:
                     async with aiohttp.ClientSession(connector=connector) as session:
                         async with session.request(
-                            method=send_method, url=url, data=self._prepare_data(data=data)
+                            method=send_method,
+                            url=url,
+                            data=self._prepare_data(data=data),
+                            params=params,
                         ) as response:
                             return await self._parse_response(
                                 request_url=url,

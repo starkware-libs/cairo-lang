@@ -41,7 +41,9 @@ class StarknetErrorCode(ErrorCode):
     MULTIPLE_ENTRY_POINTS_MATCH_SELECTOR = auto()
     NON_EMPTY_SIGNATURE = auto()
     NON_PERMITTED_CONTRACT = auto()
+    NO_BLOCK_HEADER = auto()
     NO_SIGNATURE_FOR_PENDING_BLOCK = auto()
+    NO_STATE_UPDATE = auto()
     NO_TRACE = auto()
     OUT_OF_RANGE_ADDRESS = auto()
     OUT_OF_RANGE_BLOCK_HASH = auto()
@@ -140,6 +142,7 @@ common_error_codes: List[ErrorCode] = [
     StarknetErrorCode.TRANSACTION_FAILED,
     StarknetErrorCode.UNDECLARED_CLASS,
     StarknetErrorCode.UNEXPECTED_FAILURE,
+    StarknetErrorCode.UNINITIALIZED_CONTRACT,
 ]
 
 main_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
@@ -171,12 +174,13 @@ feeder_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
         # Requests that fail after quering the DB.
         StarknetErrorCode.BLOCK_NOT_FOUND,
         StarknetErrorCode.INVALID_TRANSACTION_HASH,
+        StarknetErrorCode.NO_STATE_UPDATE,
         StarknetErrorCode.NO_TRACE,
         StarknetErrorCode.TRANSACTION_NOT_FOUND,
-        StarknetErrorCode.UNINITIALIZED_CONTRACT,
         # Request parsing errors.
         StarkErrorCode.MALFORMED_REQUEST,
         StarknetErrorCode.INVALID_STATUS_MODE,
+        StarknetErrorCode.NO_BLOCK_HEADER,
         StarknetErrorCode.NO_SIGNATURE_FOR_PENDING_BLOCK,
         StarknetErrorCode.OUT_OF_RANGE_BLOCK_HASH,
         StarknetErrorCode.OUT_OF_RANGE_BLOCK_ID,

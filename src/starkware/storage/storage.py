@@ -1,9 +1,10 @@
 import asyncio
+import codecs
 import contextlib
 import dataclasses
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, Generic, Optional, Sequence, Tuple, Type, TypeVar
+from typing import Any, Callable, Dict, Generic, Optional, Sequence, Tuple, Type, TypeVar, cast
 
 from starkware.python.object_utils import generic_object_repr
 from starkware.python.utils import from_bytes, get_exception_repr, to_bytes
@@ -57,12 +58,29 @@ class Storage(ABC):
         pass
 
     async def mset(self, updates: Dict[bytes, bytes]):
-        await asyncio.gather(
-            *(self.set_value(key=key, value=value) for key, value in updates.items())
-        )
+        """
+        Writes the given updates to storage.
+        Raises an exception when one or more of the operations failed;
+        in this case, the write might not be atomic.
+        """
+        raise NotImplementedError
 
     async def mget(self, keys: Sequence[bytes]) -> Tuple[Optional[bytes], ...]:
-        return tuple(await asyncio.gather(*(self.get_value(key=key) for key in keys)))
+        """
+        Reads and returns the values of the given keys.
+        Returns None for each nonexistent key.
+        """
+        raise NotImplementedError
+
+    async def mget_or_fail(self, keys: Sequence[bytes]) -> Tuple[bytes, ...]:
+        """
+        Same as mget, but raises an exception if one or more of the keys don't exist.
+        """
+        result = await self.mget(keys=keys)
+        for i, value in enumerate(result):
+            assert value is not None, f"Key {keys[i]!r} does not exist in storage."
+
+        return cast(Tuple[bytes, ...], result)
 
     async def get_value_or_fail(self, key: bytes) -> bytes:
         assert isinstance(key, bytes)
@@ -142,6 +160,21 @@ class Storage(ABC):
     async def get_time(self, key: bytes) -> Optional[float]:
         assert isinstance(key, bytes)
         return await self.get_float(key=key)
+
+
+class LargeStorage(Storage, ABC):
+    def __init__(self, bucket_name: str, prefix: str) -> None:
+        self.bucket = bucket_name
+        self.prefix = f"files/{prefix}"
+
+    @abstractmethod
+    async def set_file(self, file: str, key: bytes):
+        """
+        Upload file to large storage.
+        """
+
+    def escape(self, key: bytes) -> str:
+        return codecs.escape_encode(key)[0].decode("ascii")  # type: ignore
 
 
 class DBObject(Serializable):
@@ -365,11 +398,16 @@ class FactFetchingContext:
     """
 
     def __init__(
-        self, storage: Storage, hash_func: HashFunctionType, n_workers: Optional[int] = None
+        self,
+        storage: Storage,
+        hash_func: HashFunctionType,
+        n_workers: Optional[int] = None,
+        n_hash_workers: Optional[int] = None,
     ):
         self.storage = storage
         self.hash_func = hash_func
         self.n_workers = n_workers
+        self.n_hash_workers = n_hash_workers
 
     def __repr__(self) -> str:
         return generic_object_repr(obj=self)

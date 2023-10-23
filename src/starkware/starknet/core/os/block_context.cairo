@@ -29,6 +29,9 @@ struct BlockContext {
 
     // Information about the block.
     block_info: BlockInfo*,
+    // All-zeros version of block_info. This block info will be returned by the 'get_execution_info'
+    // syscall during '__validate__'.
+    block_info_for_validate: BlockInfo*,
     // StarknetOsConfig instance.
     starknet_os_config: StarknetOsConfig,
     // A function pointer to the 'execute_syscalls' function.
@@ -59,6 +62,9 @@ func get_block_context{poseidon_ptr: PoseidonBuiltin*, pedersen_ptr: HashBuiltin
             block_number=nondet %{ deprecated_syscall_handler.block_info.block_number %},
             block_timestamp=nondet %{ deprecated_syscall_handler.block_info.block_timestamp %},
             sequencer_address=nondet %{ os_input.general_config.sequencer_address %},
+        ),
+        block_info_for_validate=new BlockInfo(
+            block_number=0, block_timestamp=0, sequencer_address=0
         ),
         starknet_os_config=StarknetOsConfig(
             chain_id=nondet %{ os_input.general_config.chain_id.value %},

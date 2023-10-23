@@ -33,6 +33,7 @@ from starkware.starknet.core.os.syscall_utils import (
 )
 from starkware.starknet.definitions.constants import GasCost
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
+from starkware.starknet.definitions.execution_mode import ExecutionMode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public.abi import CONSTRUCTOR_ENTRY_POINT_SELECTOR
 from starkware.starknet.services.api.contract_class.contract_class import EntryPointType
@@ -123,6 +124,8 @@ class DeprecatedSysCallHandlerBase(ABC):
             syscall_name="get_block_number", syscall_ptr=syscall_ptr
         )
 
+        self._verify_execution_mode(syscall_name="get_block_number")
+
         block_number = self.block_info.block_number
 
         response = self.syscall_structs.GetBlockNumberResponse(block_number=block_number)
@@ -137,6 +140,8 @@ class DeprecatedSysCallHandlerBase(ABC):
         self._read_and_validate_syscall_request(
             syscall_name="get_sequencer_address", syscall_ptr=syscall_ptr
         )
+
+        self._verify_execution_mode(syscall_name="get_sequencer_address")
 
         response = self.syscall_structs.GetSequencerAddressResponse(
             sequencer_address=0
@@ -168,6 +173,8 @@ class DeprecatedSysCallHandlerBase(ABC):
         self._read_and_validate_syscall_request(
             syscall_name="get_block_timestamp", syscall_ptr=syscall_ptr
         )
+
+        self._verify_execution_mode(syscall_name="get_block_timestamp")
 
         block_timestamp = self.block_info.block_timestamp
 
@@ -307,6 +314,24 @@ class DeprecatedSysCallHandlerBase(ABC):
         self._write_syscall_response(
             syscall_name="CallContract", response=response, syscall_ptr=syscall_ptr
         )
+
+    def _verify_execution_mode(self, syscall_name: str):
+        stark_assert(
+            not self._is_validate_execution_mode(),
+            code=StarknetErrorCode.UNAUTHORIZED_ACTION_ON_VALIDATE,
+            message=(
+                f"Unauthorized syscall {syscall_name} "
+                f"in execution mode {ExecutionMode.VALIDATE.name}."
+            ),
+        )
+
+    def _is_validate_execution_mode(self) -> bool:
+        """
+        Returns False if there is no execution mode, for example when self is
+        DeprecatedOsSysCallHandler.
+        Returns True if the current execution mode is ExecutionMode.VALIDATE.
+        """
+        return False
 
     @abstractmethod
     def _get_caller_address(self, syscall_ptr: RelocatableValue) -> int:
@@ -485,6 +510,17 @@ class DeprecatedBlSyscallHandler(DeprecatedSysCallHandlerBase):
             call_type = CallType.DELEGATE
         else:
             raise NotImplementedError(f"Unsupported call type {syscall_name}.")
+
+        if self._is_validate_execution_mode():
+            # Enforce here the no calls to other contracts.
+            stark_assert(
+                self.contract_address == contract_address,
+                code=StarknetErrorCode.UNAUTHORIZED_ACTION_ON_VALIDATE,
+                message=(
+                    f"Unauthorized syscall {syscall_name} "
+                    f"in execution mode {self.tx_execution_context.execution_mode.name}."
+                ),
+            )
 
         call = self.execute_entry_point_cls(
             call_type=call_type,
@@ -708,6 +744,12 @@ class DeprecatedBlSyscallHandler(DeprecatedSysCallHandlerBase):
         )
 
         self.validate_read_only_segments(runner=runner)
+
+    def _is_validate_execution_mode(self):
+        """
+        Returns True if the current execution mode is ExecutionMode.VALIDATE.
+        """
+        return self.tx_execution_context.execution_mode is ExecutionMode.VALIDATE
 
 
 class DeprecatedOsSysCallHandler(DeprecatedSysCallHandlerBase):

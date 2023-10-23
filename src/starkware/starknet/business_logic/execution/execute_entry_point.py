@@ -42,6 +42,7 @@ from starkware.starknet.core.os.syscall_handler import BusinessLogicSyscallHandl
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.constants import GasCost
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
+from starkware.starknet.definitions.execution_mode import ExecutionMode
 from starkware.starknet.definitions.general_config import (
     STARKNET_LAYOUT_INSTANCE,
     StarknetGeneralConfig,
@@ -84,7 +85,7 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
         entry_point_type: EntryPointType,
         call_type: Optional[CallType] = None,
         class_hash: Optional[int] = None,
-    ):
+    ) -> "ExecuteEntryPoint":
         return cls(
             call_type=CallType.CALL if call_type is None else call_type,
             contract_address=contract_address,
@@ -108,7 +109,7 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
         initial_gas: int = GasCost.INITIAL.value,
         call_type: Optional[CallType] = None,
         class_hash: Optional[int] = None,
-    ):
+    ) -> "ExecuteEntryPoint":
         return cls.create(
             call_type=call_type,
             contract_address=contract_address,
@@ -144,10 +145,11 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
         general_config: StarknetGeneralConfig,
         resources_manager: Optional[ExecutionResourcesManager] = None,
         tx_execution_context: Optional[TransactionExecutionContext] = None,
+        execution_mode: ExecutionMode = ExecutionMode.EXECUTE,
     ) -> CallInfo:
         if tx_execution_context is None:
             tx_execution_context = TransactionExecutionContext.create_for_testing(
-                n_steps=general_config.invoke_tx_max_n_steps
+                n_steps=general_config.invoke_tx_max_n_steps, execution_mode=execution_mode
             )
 
         if resources_manager is None:

@@ -18,9 +18,7 @@ py_library(
         "test_utils.py",
     ],
     visibility = ["//visibility:public"],
-    deps = [
-        "//src/starkware/storage:starkware_storage_lib",
-    ],
+    deps = [":starkware_abstract_storage_lib"],
 )
 
 package(default_visibility = ["//visibility:public"])
@@ -35,6 +33,7 @@ py_library(
     deps = [
         "//src/starkware/python:starkware_python_utils_lib",
         "//src/starkware/starkware_utils:starkware_config_utils_lib",
+        "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
         "//src/starkware/starkware_utils:starkware_serializability_utils_lib",
     ],
 )
@@ -46,8 +45,9 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "starkware_abstract_storage_lib",
-        "starkware_storage_metric_lib",
+        ":starkware_abstract_storage_lib",
+        ":starkware_storage_metric_lib",
+        "//src/starkware/python:starkware_python_utils_lib",
         requirement("cachetools"),
     ],
 )
@@ -70,9 +70,9 @@ pytest_test(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "starkware_abstract_storage_lib",
-        "starkware_dict_storage_lib",
-        "starkware_storage_test_utils_lib",
+        ":starkware_abstract_storage_lib",
+        ":starkware_dict_storage_lib",
+        ":starkware_storage_test_utils_lib",
         requirement("pytest_asyncio"),
     ],
 )
@@ -85,11 +85,8 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "starkware_abstract_storage_lib",
-        "starkware_imm_storage_lib",
-        "starkware_storage_metric_lib",
+        ":starkware_abstract_storage_lib",
         "//src/starkware/starkware_utils/time:starkware_utils_time_lib",
-        requirement("cachetools"),
     ],
 )
 

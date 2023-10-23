@@ -22,6 +22,7 @@ from starkware.python.utils import (
     is_in_sorted_sequence,
     iter_blockify,
     multiply_counter_by_scalar,
+    process_concurrently,
     safe_zip,
     subtract_mappings,
     to_ascii_string,
@@ -111,6 +112,21 @@ def test_blockify_iterable():
         [4, 5],
         [6],
     ]
+
+
+@pytest.mark.asyncio
+async def test_process_concurrently():
+    def bump(x: int) -> int:
+        return x + 1
+
+    items = [1, 2, 3, 4, 5]
+    result = [2, 3, 4, 5, 6]
+    assert await process_concurrently(func=bump, items=items, n_chunks=3) == result
+
+    # Edge cases.
+    assert await process_concurrently(func=bump, items=[], n_chunks=3) == []
+    with pytest.raises(expected_exception=AssertionError, match="n_chunks"):
+        await process_concurrently(func=bump, items=[7], n_chunks=0)
 
 
 @pytest.mark.asyncio

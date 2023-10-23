@@ -38,7 +38,7 @@ def format_fee_info(gas_price: int, overall_fee: int) -> FeeEstimationInfo:
 @dataclasses.dataclass(frozen=True)  # type: ignore[misc]
 class InternalAccountTransactionForSimulate(InternalAccountTransaction):
     """
-    Represents an internal transaction in the StarkNet network for the simulate transaction API.
+    Represents an internal transaction in the Starknet network for the simulate transaction API.
     """
 
     # Simulation flags; should be replaced with actual values after construction.

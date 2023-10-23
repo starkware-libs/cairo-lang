@@ -1007,6 +1007,12 @@ class BlockTransactionTraces(ValidatedResponseObject):
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
+class BlockHeader(ValidatedResponseObject):
+    block_hash: int = field(metadata=fields.block_hash_metadata)
+    block_number: int = field(metadata=fields.block_number_metadata)
+
+
+@marshmallow_dataclass.dataclass(frozen=True)
 class StarknetBlock(ValidatedResponseObject):
     """
     Represents a response StarkNet block.

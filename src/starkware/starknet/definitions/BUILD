@@ -9,6 +9,7 @@ py_library(
     srcs = [
         "constants.py",
         "error_codes.py",
+        "execution_mode.py",
         "fields.py",
         "transaction_type.py",
     ],

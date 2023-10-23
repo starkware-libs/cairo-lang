@@ -129,7 +129,7 @@ class ContractState(ValidatedMarshmallowDataclass, LeafFact):
 
         modifications = [(key, StorageLeaf(value=value)) for key, value in updates.items()]
 
-        updated_storage_commitment_tree = await self.storage_commitment_tree.update(
+        updated_storage_commitment_tree = await self.storage_commitment_tree.update_efficiently(
             ffc=ffc, modifications=modifications
         )
 
