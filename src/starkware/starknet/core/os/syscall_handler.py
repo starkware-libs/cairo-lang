@@ -934,7 +934,11 @@ class BusinessLogicSyscallHandler(SyscallHandlerBase):
             # Prepare block info.
             python_block_info = self.storage.state.block_info
             block_info = (
-                self.structs.BlockInfo(block_number=0, block_timestamp=0, sequencer_address=0)
+                self.structs.BlockInfo(
+                    block_number=python_block_info.block_number,
+                    block_timestamp=python_block_info.block_timestamp,
+                    sequencer_address=0,
+                )
                 if self._is_validate_execution_mode()
                 else self.structs.BlockInfo(
                     block_number=python_block_info.block_number,

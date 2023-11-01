@@ -203,6 +203,9 @@ func get_point_from_x{range_check_ptr}(x: BigInt3, v: felt) -> (point: EcPoint) 
 // If the point is on the curve, `true` is returned and the point is written to `result`,
 // Otherwise `false` is returned and nothing is written to `result`.
 //
+// The y coordinate of the result is guaranteed to be in reduced form (less than the secp256k1
+// prime).
+//
 // Prover assumptions:
 //   * The limbs of x are in the range (-2**87.99, 2**87.99).
 // Soundness assumptions:

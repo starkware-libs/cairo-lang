@@ -123,9 +123,6 @@ class DeprecatedSysCallHandlerBase(ABC):
         self._read_and_validate_syscall_request(
             syscall_name="get_block_number", syscall_ptr=syscall_ptr
         )
-
-        self._verify_execution_mode(syscall_name="get_block_number")
-
         block_number = self.block_info.block_number
 
         response = self.syscall_structs.GetBlockNumberResponse(block_number=block_number)
@@ -173,9 +170,6 @@ class DeprecatedSysCallHandlerBase(ABC):
         self._read_and_validate_syscall_request(
             syscall_name="get_block_timestamp", syscall_ptr=syscall_ptr
         )
-
-        self._verify_execution_mode(syscall_name="get_block_timestamp")
-
         block_timestamp = self.block_info.block_timestamp
 
         response = self.syscall_structs.GetBlockTimestampResponse(block_timestamp=block_timestamp)

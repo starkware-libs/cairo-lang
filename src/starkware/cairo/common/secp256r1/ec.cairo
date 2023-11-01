@@ -325,12 +325,15 @@ func ec_mul_by_uint256{range_check_ptr}(point: EcPoint, scalar: Uint256) -> (res
 }
 
 // Returns a point on the secp256r1 curve with the given x coordinate. Chooses the y that has the
-//   same parity as v (there are two y values that correspond to x, with different parities).
-
+// same parity as v (there are two y values that correspond to x, with a different parity).
+//
 // If there is a point on the curve with the given `x`, `true` is returned and the point is written
 // to `result`. Otherwise, `false` is returned and nothing is written to `result`.
 //
-// Has the same guarantees as in unreduced_mul(x, x).
+// The y coordinate of the result is guaranteed to be in reduced form (less than the secp256r1
+// prime).
+//
+// Assumption: x satisfies the guarantees of nondet_bigint3.
 func try_get_point_from_x{range_check_ptr}(x: BigInt3, v: felt, result: EcPoint*) -> (
     is_on_curve: felt
 ) {

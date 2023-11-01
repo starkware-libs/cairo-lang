@@ -1,10 +1,8 @@
-import asyncio
-import functools
-from typing import Callable, Iterable, List, Sequence
+from typing import Callable, Iterable, List, Sequence, Tuple
 
 from starkware.cairo.common.hash_state import compute_hash_on_elements
 from starkware.cairo.lang.vm.crypto import pedersen_hash
-from starkware.python.utils import from_bytes, safe_zip, to_bytes
+from starkware.python.utils import from_bytes, process_concurrently, safe_zip, to_bytes
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
 from starkware.storage.dict_storage import DictStorage
@@ -48,14 +46,10 @@ async def calculate_block_hash(
 
     ffc = FactFetchingContext(storage=DictStorage(), hash_func=bytes_hash_function)
 
-    # Include signatures in transaction hashes on a separate thread (due to it being CPU-intensive).
-    calculate_tx_hashes = functools.partial(
-        calculate_tx_hashes_with_signatures,
-        tx_hashes=tx_hashes,
-        tx_signatures=tx_signatures,
-        hash_function=hash_function,
+    # Include signatures in transaction hashes.
+    tx_final_hashes = await calculate_tx_hashes_with_signatures(
+        tx_hashes=tx_hashes, tx_signatures=tx_signatures, hash_function=hash_function
     )
-    tx_final_hashes = await asyncio.get_event_loop().run_in_executor(None, calculate_tx_hashes)
 
     # Calculate transaction commitment.
     tx_commitment = await calculate_patricia_root(
@@ -89,30 +83,29 @@ async def calculate_block_hash(
     )
 
 
-def calculate_tx_hashes_with_signatures(
+async def calculate_tx_hashes_with_signatures(
     tx_hashes: Iterable[int],
     tx_signatures: Iterable[List[int]],
     hash_function: Callable[[int, int], int],
 ) -> Iterable[int]:
-    return (
-        calculate_single_tx_hash_with_signature(
-            tx_hash=tx_hash, tx_signature=tx_signature, hash_function=hash_function
-        )
-        for (tx_hash, tx_signature) in safe_zip(tx_hashes, tx_signatures)
+    """
+    Hashes the signature with the transaction hash, for every transaction, to get hash that
+    takes into account the entire transaction, as the original hash does not include the
+    signature.
+    """
+
+    def calculate_single_tx_hash_with_signature(
+        tx_hash_signature_pair: Tuple[int, List[int]],
+    ) -> int:
+        tx_hash, tx_signature = tx_hash_signature_pair
+        signature_hash = compute_hash_on_elements(data=tx_signature, hash_func=hash_function)
+        return hash_function(tx_hash, signature_hash)
+
+    return await process_concurrently(
+        func=calculate_single_tx_hash_with_signature,
+        items=list(safe_zip(tx_hashes, tx_signatures)),
+        n_chunks=32,
     )
-
-
-def calculate_single_tx_hash_with_signature(
-    tx_hash: int,
-    tx_signature: List[int],
-    hash_function: Callable[[int, int], int],
-) -> int:
-    """
-    Hashes the signature with the given transaction hash, to get a hash that takes into account the
-    entire transaction, as the original hash does not include the signature.
-    """
-    signature_hash = compute_hash_on_elements(data=tx_signature, hash_func=hash_function)
-    return hash_function(tx_hash, signature_hash)
 
 
 async def calculate_patricia_root(
@@ -125,7 +118,7 @@ async def calculate_patricia_root(
         ffc=ffc, height=height, leaf_fact=SimpleLeafFact.empty()
     )
     modifications = [(index, SimpleLeafFact(value=value)) for index, value in enumerate(leaves)]
-    final_tree = await empty_tree.update(ffc=ffc, modifications=modifications)
+    final_tree = await empty_tree.update_efficiently(ffc=ffc, modifications=modifications)
 
     return from_bytes(final_tree.root)
 

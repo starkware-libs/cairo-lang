@@ -14,7 +14,6 @@ py_library(
         "//src/starkware/starkware_utils:starkware_utils_lib",
         "//src/starkware/storage:starkware_abstract_storage_lib",
         "//src/starkware/storage:starkware_dict_storage_lib",
-        "//src/starkware/storage:starkware_storage_lib",
         "//src/starkware/storage:starkware_storage_utils_lib",
     ],
 )

@@ -10,7 +10,8 @@ from starkware.cairo.common.cairo_secp.bigint import (
     uint256_to_bigint,
 )
 from starkware.cairo.common.cairo_secp.bigint3 import BigInt3, UnreducedBigInt3
-from starkware.cairo.common.cairo_secp.constants import BETA, SECP_PRIME_HIGH, SECP_PRIME_LOW
+from starkware.cairo.common.cairo_secp.constants import SECP_PRIME_HIGH as SECP256K1_PRIME_HIGH
+from starkware.cairo.common.cairo_secp.constants import SECP_PRIME_LOW as SECP256K1_PRIME_LOW
 from starkware.cairo.common.cairo_secp.ec import ec_add as secp256k1_ec_add
 from starkware.cairo.common.cairo_secp.ec import ec_mul_by_uint256 as secp256k1_ec_mul_by_uint256
 from starkware.cairo.common.cairo_secp.ec_point import EcPoint as SecpPoint
@@ -42,7 +43,7 @@ from starkware.cairo.common.secp256r1.ec import (
     try_get_point_from_x as secp256r1_try_get_point_from_x,
 )
 from starkware.cairo.common.segments import relocate_segment
-from starkware.cairo.common.uint256 import Uint256, uint256_lt
+from starkware.cairo.common.uint256 import Uint256, assert_uint256_lt, uint256_lt
 from starkware.starknet.common.new_syscalls import (
     CALL_CONTRACT_SELECTOR,
     DEPLOY_SELECTOR,
@@ -345,7 +346,10 @@ func execute_syscalls{
     }
 
     if (selector == SECP256K1_GET_XY_SELECTOR) {
-        execute_secp_get_xy(SECP256K1_GET_XY_GAS_COST);
+        execute_secp_get_xy(
+            curve_prime=Uint256(low=SECP256K1_PRIME_LOW, high=SECP256K1_PRIME_HIGH),
+            gas_cost=SECP256K1_GET_XY_GAS_COST,
+        );
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -354,7 +358,10 @@ func execute_syscalls{
     }
 
     if (selector == SECP256R1_GET_XY_SELECTOR) {
-        execute_secp_get_xy(SECP256R1_GET_XY_GAS_COST);
+        execute_secp_get_xy(
+            curve_prime=Uint256(low=SECP256R1_PRIME_LOW, high=SECP256R1_PRIME_HIGH),
+            gas_cost=SECP256R1_GET_XY_GAS_COST,
+        );
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -1026,7 +1033,7 @@ func execute_secp256k1_new{range_check_ptr, syscall_ptr: felt*}() {
         return ();
     }
 
-    let secp_prime = Uint256(low=SECP_PRIME_LOW, high=SECP_PRIME_HIGH);
+    let secp_prime = Uint256(low=SECP256K1_PRIME_LOW, high=SECP256K1_PRIME_HIGH);
     let (is_x_valid) = uint256_lt(request.x, secp_prime);
     let (is_y_valid) = uint256_lt(request.y, secp_prime);
 
@@ -1055,7 +1062,9 @@ func execute_secp256k1_new{range_check_ptr, syscall_ptr: felt*}() {
         nondet %{ ids.response.ec_point.address_ if ids.not_on_curve == 0 else segments.add() %},
         SecpPoint*,
     );
+
     // Note that there are no constraints on response.ec_point in the failure case.
+
     let (is_on_curve) = secp256k1_try_get_point_from_x(x=x, v=request.y.low, result=result_ptr);
     if (is_on_curve == 0) {
         // Return early to avoid dealing with range_check_ptr divergence.
@@ -1064,12 +1073,9 @@ func execute_secp256k1_new{range_check_ptr, syscall_ptr: felt*}() {
     }
 
     let (point_y) = bigint_to_uint256(result_ptr.y);
-    if (point_y.low == request.y.low) {
-        if (point_y.high == request.y.high) {
-            assert response.ec_point = result_ptr;
-            assert response.not_on_curve = 0;
-            return ();
-        }
+    if (point_y.low == request.y.low and point_y.high == request.y.high) {
+        assert [response] = Secp256k1NewResponse(not_on_curve=0, ec_point=result_ptr);
+        return ();
     }
     assert response.not_on_curve = 1;
     return ();
@@ -1117,9 +1123,10 @@ func execute_secp256r1_new{range_check_ptr, syscall_ptr: felt*}() {
         nondet %{ ids.response.ec_point.address_ if ids.not_on_curve == 0 else segments.add() %},
         SecpPoint*,
     );
-    // Note that there are no constraints on response.ec_point in the failure case.
-    let (is_on_curve) = secp256r1_try_get_point_from_x(x=x, v=request.y.low, result=result_ptr);
 
+    // Note that there are no constraints on response.ec_point in the failure case.
+
+    let (is_on_curve) = secp256r1_try_get_point_from_x(x=x, v=request.y.low, result=result_ptr);
     if (is_on_curve == 0) {
         // Return early to avoid dealing with range_check_ptr divergence.
         assert response.not_on_curve = 1;
@@ -1127,12 +1134,9 @@ func execute_secp256r1_new{range_check_ptr, syscall_ptr: felt*}() {
     }
 
     let (point_y) = bigint_to_uint256(result_ptr.y);
-    if (point_y.low == request.y.low) {
-        if (point_y.high == request.y.high) {
-            assert response.ec_point = result_ptr;
-            assert response.not_on_curve = 0;
-            return ();
-        }
+    if (point_y.low == request.y.low and point_y.high == request.y.high) {
+        assert [response] = Secp256r1NewResponse(not_on_curve=0, ec_point=result_ptr);
+        return ();
     }
     assert response.not_on_curve = 1;
     return ();
@@ -1151,7 +1155,7 @@ func execute_secp256k1_get_point_from_x{range_check_ptr, syscall_ptr: felt*}() {
         return ();
     }
 
-    let secp_prime = Uint256(low=SECP_PRIME_LOW, high=SECP_PRIME_HIGH);
+    let secp_prime = Uint256(low=SECP256K1_PRIME_LOW, high=SECP256K1_PRIME_HIGH);
     let (is_x_valid) = uint256_lt(request.x, secp_prime);
 
     if (is_x_valid == 0) {
@@ -1215,8 +1219,10 @@ func execute_secp256r1_get_point_from_x{range_check_ptr, syscall_ptr: felt*}() {
 }
 
 // Executes the secp256k1_get_xy system call.
-// Take the gas cost of the syscall as an argument.
-func execute_secp_get_xy{range_check_ptr, syscall_ptr: felt*}(gas_cost: felt) {
+// Takes the curve prime and the gas cost of the syscall as arguments.
+func execute_secp_get_xy{range_check_ptr, syscall_ptr: felt*}(
+    curve_prime: Uint256, gas_cost: felt
+) {
     alloc_locals;
     let request = cast(syscall_ptr + RequestHeader.SIZE, SecpGetXyRequest*);
 
@@ -1232,6 +1238,9 @@ func execute_secp_get_xy{range_check_ptr, syscall_ptr: felt*}(gas_cost: felt) {
     tempvar ec_point = request.ec_point;
     let (x) = bigint_to_uint256(ec_point.x);
     let (y) = bigint_to_uint256(ec_point.y);
+
+    assert_uint256_lt(x, curve_prime);
+    assert_uint256_lt(y, curve_prime);
 
     assert [cast(syscall_ptr, SecpGetXyResponse*)] = SecpGetXyResponse(x=x, y=y);
 

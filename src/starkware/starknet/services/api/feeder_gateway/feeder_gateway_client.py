@@ -34,13 +34,13 @@ class FeederGatewayClient(EverestFeederGatewayClient):
     A client class for the StarkNet FeederGateway.
     """
 
-    async def get_number_of_transactions_in_backlog(self) -> JsonObject:
+    async def get_number_of_transactions_in_backlog(self) -> int:
         raw_response = await self._send_request(
             send_method="GET", uri="/get_number_of_transactions_in_backlog"
         )
         return json.loads(raw_response)
 
-    async def get_oldest_transaction_age(self) -> JsonObject:
+    async def get_oldest_transaction_age(self) -> int:
         raw_response = await self._send_request(
             send_method="GET", uri="/get_oldest_transaction_age"
         )
