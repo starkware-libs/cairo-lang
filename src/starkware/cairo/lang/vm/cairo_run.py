@@ -147,7 +147,11 @@ def main():
         default="plain",
         help="The layout of the Cairo AIR.",
     )
-    parser.add_argument("--tracer", action="store_true", help="Run the tracer.")
+    parser.add_argument(
+            "--tracer", 
+            nargs='?',
+            const="localhost:8100",
+            help="Run the tracer at the given host and port (default: localhost:8100.")
     parser.add_argument(
         "--profile_output",
         type=str,
@@ -423,7 +427,12 @@ def cairo_run(args):
             debug_info_file=debug_info_file, debug_info=runner.get_relocated_debug_info()
         )
 
-    if args.tracer:
+    if args.tracer is not None:
+        # Tracer set, split host and port. 
+        splits = args.tracer.split(':')
+        host = splits[0]
+        port = int(splits[1])
+
         CAIRO_TRACER = "starkware.cairo.lang.tracer.tracer"
         subprocess.call(
             list(
@@ -435,6 +444,8 @@ def cairo_run(args):
                         CAIRO_TRACER,
                         f"--program={args.program.name}",
                         f"--trace={trace_file.name}",
+                        f"--host={host}",
+                        f"--port={port}",
                         f"--memory={memory_file.name}",
                         f"--air_public_input={args.air_public_input.name}"
                         if args.air_public_input
