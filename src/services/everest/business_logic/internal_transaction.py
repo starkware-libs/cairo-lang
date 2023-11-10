@@ -97,13 +97,13 @@ class EverestInternalTransaction(EverestInternalStateTransaction):
         cls, external_tx: EverestTransaction, general_config: Config
     ) -> "EverestInternalTransaction":
         """
-        Returns an internal transaction genearated based on an external one.
+        Returns an internal transaction generated based on an external one.
         """
 
     @abstractmethod
     def to_external(self) -> EverestTransaction:
         """
-        Returns an external transaction genearated based on an internal one.
+        Returns an external transaction generated based on an internal one.
         """
 
     @abstractmethod
