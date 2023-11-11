@@ -121,6 +121,15 @@ class OpenZeppelinAccount(Account):
             )
         return accounts_for_network[self.account_name]
 
+    def list_accounts(self, accounts_for_network: dict):
+        print("Accounts:")
+        for account_name, account in accounts_for_network.items():
+            print(f"  {account_name}:")
+            print(f"    Address: 0x{int(account['address'], 16):064x}")
+            print(f"    Deployed: {account['deployed']}")
+            print(f"    Public key: 0x{int(account['public_key'], 16):064x}")
+            print(f"    Private key: 0x{int(account['private_key'], 16):064x}")
+
     def new_account(self) -> int:
         # Read the account file.
         accounts = self._get_accounts()
