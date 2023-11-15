@@ -215,7 +215,7 @@
                 "range_check_builtin": 83
             },
             "n_memory_holes": 0,
-            "n_steps": 3626
+            "n_steps": 3658
         },
         "INVOKE_FUNCTION": {
             "builtin_instance_counter": {
@@ -223,7 +223,7 @@
                 "range_check_builtin": 80
             },
             "n_memory_holes": 0,
-            "n_steps": 3382
+            "n_steps": 3418
         },
         "L1_HANDLER": {
             "builtin_instance_counter": {

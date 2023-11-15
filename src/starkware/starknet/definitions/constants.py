@@ -77,8 +77,6 @@ MIN_SIERRA_VERSION = [1, 1, 0]
 
 # Versions older than this compute the state diff from scratch at the feeder gateway.
 MIN_GET_STATE_UPDATE_CALCULATION_VERSION = "0.12.3"
-MIN_GET_STATE_UPDATE_CALCULATION_TIMESTAMP = 1695149985
-
 
 # The version of contract class leaf.
 CONTRACT_CLASS_LEAF_VERSION: bytes = b"CONTRACT_CLASS_LEAF_V0"

@@ -13,6 +13,7 @@ class StarknetErrorCode(ErrorCode):
     CONTRACT_ADDRESS_UNAVAILABLE = auto()
     CONTRACT_BYTECODE_SIZE_TOO_LARGE = auto()
     CONTRACT_CLASS_OBJECT_SIZE_TOO_LARGE = auto()
+    DEPRECATED_ENDPOINT = auto()
     DEPRECATED_TRANSACTION = auto()
     DUPLICATED_TRANSACTION = auto()
     ENTRY_POINT_NOT_FOUND_IN_CONTRACT = auto()
@@ -191,6 +192,8 @@ feeder_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
         StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_HASH,
         StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_ID,
         StarknetErrorCode.UNSUPPORTED_TRANSACTION,
+        # Deprecation errors.
+        StarknetErrorCode.DEPRECATED_ENDPOINT,
     ]
 )
 

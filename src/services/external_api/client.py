@@ -196,14 +196,6 @@ class ClientBase(HasUriPrefix):
                                 request_data=data,
                                 response=response,
                             )
-            except aiohttp.ClientError as exception:
-                error_message = f"Got {type(exception).__name__} while trying to access {url}."
-
-                if limited_retries and n_retries_left == 0:
-                    logger.error(error_message, exc_info=True)
-                    raise
-
-                logger.debug(f"{error_message}, retrying...")
             except BadRequest as exception:
                 error_message = f"Got {type(exception).__name__} while trying to access {url}."
 
@@ -219,8 +211,16 @@ class ClientBase(HasUriPrefix):
                     raise
 
                 logger.debug(f"{error_message}, retrying...")
+            except Exception as exception:
+                error_message = f"Got {type(exception).__name__} while trying to access {url}."
 
-            await asyncio.sleep(1)
+                if limited_retries and n_retries_left == 0:
+                    logger.error(error_message, exc_info=True)
+                    raise
+
+                logger.debug(f"{error_message}, retrying...")
+
+            await asyncio.sleep(5)
 
     async def is_alive(self) -> str:
         return await self._send_request(send_method="GET", uri="/is_alive")
