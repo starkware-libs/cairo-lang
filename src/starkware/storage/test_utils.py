@@ -1,7 +1,7 @@
 import asyncio
 import hashlib
 from contextlib import contextmanager
-from typing import Optional
+from typing import Dict, Optional, Sequence, Tuple
 
 from starkware.storage.storage import HASH_BYTES, LockError, LockManager, LockObject, Storage
 
@@ -75,6 +75,12 @@ class MockStorage(Storage):
     async def get_value(self, key: bytes) -> Optional[bytes]:
         assert isinstance(key, bytes)
         return self.db.get(key, None)
+
+    async def mset(self, updates: Dict[bytes, bytes]):
+        self.db.update(updates)
+
+    async def mget(self, keys: Sequence[bytes]) -> Tuple[Optional[bytes], ...]:
+        return tuple(self.db.get(key, None) for key in keys)
 
     async def del_value(self, key: bytes):
         assert isinstance(key, bytes)

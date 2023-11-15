@@ -5,7 +5,7 @@ import os
 import ssl
 from abc import abstractmethod
 from http import HTTPStatus
-from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Union
+from typing import Any, Dict, List, Mapping, NamedTuple, Optional, Sequence, Union
 from urllib.parse import urljoin
 
 import aiohttp
@@ -159,7 +159,11 @@ class ClientBase(HasUriPrefix):
         """
 
     async def _send_request(
-        self, send_method: str, uri: str, data: Optional[FlexibleJsonObject] = None
+        self,
+        send_method: str,
+        uri: str,
+        data: Optional[FlexibleJsonObject] = None,
+        params: Optional[Mapping[str, str]] = None,
     ) -> str:
         """
         Sends an HTTP request to the target URI.
@@ -182,21 +186,16 @@ class ClientBase(HasUriPrefix):
                 async with aiohttp.TCPConnector(ssl=self.ssl_context) as connector:
                     async with aiohttp.ClientSession(connector=connector) as session:
                         async with session.request(
-                            method=send_method, url=url, data=self._prepare_data(data=data)
+                            method=send_method,
+                            url=url,
+                            data=self._prepare_data(data=data),
+                            params=params,
                         ) as response:
                             return await self._parse_response(
                                 request_url=url,
                                 request_data=data,
                                 response=response,
                             )
-            except aiohttp.ClientError as exception:
-                error_message = f"Got {type(exception).__name__} while trying to access {url}."
-
-                if limited_retries and n_retries_left == 0:
-                    logger.error(error_message, exc_info=True)
-                    raise
-
-                logger.debug(f"{error_message}, retrying...")
             except BadRequest as exception:
                 error_message = f"Got {type(exception).__name__} while trying to access {url}."
 
@@ -212,8 +211,16 @@ class ClientBase(HasUriPrefix):
                     raise
 
                 logger.debug(f"{error_message}, retrying...")
+            except Exception as exception:
+                error_message = f"Got {type(exception).__name__} while trying to access {url}."
 
-            await asyncio.sleep(1)
+                if limited_retries and n_retries_left == 0:
+                    logger.error(error_message, exc_info=True)
+                    raise
+
+                logger.debug(f"{error_message}, retrying...")
+
+            await asyncio.sleep(5)
 
     async def is_alive(self) -> str:
         return await self._send_request(send_method="GET", uri="/is_alive")

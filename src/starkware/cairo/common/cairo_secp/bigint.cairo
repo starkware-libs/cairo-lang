@@ -1,26 +1,8 @@
+from starkware.cairo.common.cairo_secp.bigint3 import BigInt3, UnreducedBigInt3
 from starkware.cairo.common.cairo_secp.constants import BASE
 from starkware.cairo.common.math import assert_nn, assert_nn_le, unsigned_div_rem
 from starkware.cairo.common.math_cmp import RC_BOUND
 from starkware.cairo.common.uint256 import Uint256
-
-// Represents a big integer defined by:
-//   d0 + BASE * d1 + BASE**2 * d2.
-// Note that the limbs (d_i) are NOT restricted to the range [0, BASE) and in particular they
-// can be negative.
-// In most cases this is used to represent a secp256k1 field element.
-struct UnreducedBigInt3 {
-    d0: felt,
-    d1: felt,
-    d2: felt,
-}
-
-// Same as UnreducedBigInt3, except that d0, d1 and d2 must be in the range [0, 3 * BASE).
-// In most cases this is used to represent a secp256k1 field element.
-struct BigInt3 {
-    d0: felt,
-    d1: felt,
-    d2: felt,
-}
 
 // Represents a big integer defined by:
 //   sum_i(BASE**i * d_i).

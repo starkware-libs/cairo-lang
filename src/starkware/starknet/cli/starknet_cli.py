@@ -455,13 +455,20 @@ async def tx_status(args, command_args):
     tx_status_response = await feeder_gateway_client.get_transaction_status(tx_hash=args.hash)
 
     # Print the error message with reconstructed location information in traceback, if necessary.
+    execution_status: str = tx_status_response["execution_status"]
     has_error_message = (
-        "tx_failure_reason" in tx_status_response
+        execution_status == "REJECTED"
+        and "tx_failure_reason" in tx_status_response
         and "error_message" in tx_status_response["tx_failure_reason"]
-    )
-    error_message = ""
+    ) or (execution_status == "REVERTED" and "tx_revert_reason" in tx_status_response)
+    error_message: str = ""
     if has_error_message:
-        error_message = tx_status_response["tx_failure_reason"]["error_message"]
+        error_message = (
+            tx_status_response["tx_failure_reason"]["error_message"]
+            if execution_status == "REJECTED"
+            else tx_status_response["tx_revert_reason"]
+        )
+        error_message = error_message.replace(" \n ", "\n")
         if args.contracts is not None:
             contracts: Dict[Optional[int], Program] = {}
             for addr_and_path in args.contracts.split(","):
@@ -475,7 +482,10 @@ async def tx_status(args, command_args):
             error_message = reconstruct_starknet_traceback(
                 contracts=contracts, traceback_txt=error_message
             )
-            tx_status_response["tx_failure_reason"]["error_message"] = error_message
+            if execution_status == "REJECTED":
+                tx_status_response["tx_failure_reason"]["error_message"] = error_message
+            else:
+                tx_status_response["tx_revert_reason"] = error_message
 
     if args.error_message:
         print(error_message)

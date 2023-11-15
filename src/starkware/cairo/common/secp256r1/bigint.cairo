@@ -1,4 +1,4 @@
-from starkware.cairo.common.cairo_secp.bigint import BigInt3
+from starkware.cairo.common.cairo_secp.bigint3 import BigInt3
 from starkware.cairo.common.secp256r1.constants import BASE, D2_BOUND
 
 // Returns a BigInt3 instance whose value is controlled by a prover hint.

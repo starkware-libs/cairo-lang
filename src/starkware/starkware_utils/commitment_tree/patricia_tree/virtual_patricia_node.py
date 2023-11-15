@@ -187,6 +187,9 @@ class VirtualPatriciaNode(BinaryFactTreeNode):
         if len(indices) == 0:
             return {}
 
+        if self.is_empty:
+            return await get_empty_leaves(ffc=ffc, indices=indices, fact_cls=fact_cls)
+
         if self.is_leaf:
             return await self._get_leaf(ffc=ffc, indices=indices, fact_cls=fact_cls)
 

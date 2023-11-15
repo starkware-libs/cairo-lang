@@ -27,7 +27,7 @@
                 "range_check_builtin": 18
             },
             "n_memory_holes": 0,
-            "n_steps": 944
+            "n_steps": 946
         },
         "emit_event": {
             "builtin_instance_counter": {},
@@ -114,35 +114,70 @@
                 "range_check_builtin": 29
             },
             "n_memory_holes": 0,
-            "n_steps": 354
+            "n_steps": 406
         },
         "secp256k1_get_point_from_x": {
             "builtin_instance_counter": {
                 "range_check_builtin": 30
             },
-            "n_memory_holes": 0,
-            "n_steps": 360
+            "n_memory_holes": 20,
+            "n_steps": 391
         },
         "secp256k1_get_xy": {
             "builtin_instance_counter": {
                 "range_check_builtin": 9
             },
             "n_memory_holes": 0,
-            "n_steps": 124
+            "n_steps": 175
         },
         "secp256k1_mul": {
             "builtin_instance_counter": {
                 "range_check_builtin": 10739
             },
             "n_memory_holes": 0,
-            "n_steps": 121910
+            "n_steps": 121956
         },
         "secp256k1_new": {
             "builtin_instance_counter": {
-                "range_check_builtin": 36
+                "range_check_builtin": 35
+            },
+            "n_memory_holes": 40,
+            "n_steps": 475
+        },
+        "secp256r1_add": {
+            "builtin_instance_counter": {
+                "range_check_builtin": 57
             },
             "n_memory_holes": 0,
-            "n_steps": 440
+            "n_steps": 589
+        },
+        "secp256r1_get_point_from_x": {
+            "builtin_instance_counter": {
+                "range_check_builtin": 44
+            },
+            "n_memory_holes": 20,
+            "n_steps": 510
+        },
+        "secp256r1_get_xy": {
+            "builtin_instance_counter": {
+                "range_check_builtin": 9
+            },
+            "n_memory_holes": 0,
+            "n_steps": 177
+        },
+        "secp256r1_mul": {
+            "builtin_instance_counter": {
+                "range_check_builtin": 21477
+            },
+            "n_memory_holes": 0,
+            "n_steps": 195595
+        },
+        "secp256r1_new": {
+            "builtin_instance_counter": {
+                "range_check_builtin": 49
+            },
+            "n_memory_holes": 40,
+            "n_steps": 594
         },
         "send_message_to_l1": {
             "builtin_instance_counter": {},
@@ -180,7 +215,7 @@
                 "range_check_builtin": 83
             },
             "n_memory_holes": 0,
-            "n_steps": 3628
+            "n_steps": 3658
         },
         "INVOKE_FUNCTION": {
             "builtin_instance_counter": {
@@ -188,7 +223,7 @@
                 "range_check_builtin": 80
             },
             "n_memory_holes": 0,
-            "n_steps": 3382
+            "n_steps": 3418
         },
         "L1_HANDLER": {
             "builtin_instance_counter": {

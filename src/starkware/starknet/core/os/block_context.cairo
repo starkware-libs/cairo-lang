@@ -29,6 +29,10 @@ struct BlockContext {
 
     // Information about the block.
     block_info: BlockInfo*,
+    // A version of `block_info` that will be returned by the 'get_execution_info'
+    // syscall during '__validate__'.
+    // Some of the fields, which cannot be used in validate mode, are zeroed out.
+    block_info_for_validate: BlockInfo*,
     // StarknetOsConfig instance.
     starknet_os_config: StarknetOsConfig,
     // A function pointer to the 'execute_syscalls' function.
@@ -49,6 +53,8 @@ func get_block_context{poseidon_ptr: PoseidonBuiltin*, pedersen_ptr: HashBuiltin
         n_deprecated_compiled_class_facts, deprecated_compiled_class_facts
     ) = deprecated_load_compiled_class_facts();
     let (builtin_params) = get_builtin_params();
+    tempvar block_number = nondet %{ deprecated_syscall_handler.block_info.block_number %};
+    tempvar block_timestamp = nondet %{ deprecated_syscall_handler.block_info.block_timestamp %};
     local block_context: BlockContext = BlockContext(
         builtin_params=builtin_params,
         n_compiled_class_facts=n_compiled_class_facts,
@@ -56,9 +62,12 @@ func get_block_context{poseidon_ptr: PoseidonBuiltin*, pedersen_ptr: HashBuiltin
         n_deprecated_compiled_class_facts=n_deprecated_compiled_class_facts,
         deprecated_compiled_class_facts=deprecated_compiled_class_facts,
         block_info=new BlockInfo(
-            block_number=nondet %{ deprecated_syscall_handler.block_info.block_number %},
-            block_timestamp=nondet %{ deprecated_syscall_handler.block_info.block_timestamp %},
+            block_number=block_number,
+            block_timestamp=block_timestamp,
             sequencer_address=nondet %{ os_input.general_config.sequencer_address %},
+        ),
+        block_info_for_validate=new BlockInfo(
+            block_number=block_number, block_timestamp=block_timestamp, sequencer_address=0
         ),
         starknet_os_config=StarknetOsConfig(
             chain_id=nondet %{ os_input.general_config.chain_id.value %},

@@ -138,27 +138,23 @@ class EdgeNodeFact(PatriciaNodeFact):
         verify_path_value(path=self.edge_path, length=self.edge_length)
 
     def serialize(self) -> bytes:
-        return self.bottom_node + to_bytes(self.edge_path) + to_bytes(self.edge_length, length=1)
+        return serialize_edge(bottom=self.bottom_node, path=self.edge_path, length=self.edge_length)
 
     @classmethod
     def deserialize(cls, data: bytes) -> "EdgeNodeFact":
-        bottom_node, edge_path, edge_length = blockify(data=data, chunk_size=cls.HASH_BYTES_LENGTH)
-        return cls(
-            bottom_node=bottom_node,
-            edge_path=from_bytes(edge_path),
-            edge_length=from_bytes(edge_length),
-        )
+        bottom_node, edge_path, edge_length = deserialize_edge(data=data)
+        return cls(bottom_node=bottom_node, edge_path=edge_path, edge_length=edge_length)
 
     def _hash(self, hash_func: HashFunctionType) -> bytes:
         """
         Computes the hash value of the edge node: hash(bottom_node, edge_path) + edge_length.
         """
-        bottom_path_hash = hash_func(self.bottom_node, to_bytes(self.edge_path))
-
-        # Add the edge length.
-        hash_value = from_bytes(bottom_path_hash) + self.edge_length
-
-        return to_bytes(hash_value)
+        return hash_edge(
+            bottom=self.bottom_node,
+            path=self.edge_path,
+            length=self.edge_length,
+            hash_func=hash_func,
+        )
 
     def to_tuple(self) -> Tuple[int, ...]:
         return self.edge_length, self.edge_path, from_bytes(self.bottom_node)
@@ -176,3 +172,24 @@ def get_node_type(fact_preimage: bytes) -> Type["PatriciaNodeFact"]:
             return node_fact_cls
 
     raise NotImplementedError(f"Unsupported fact preimage length: {preimage_length}.")
+
+
+# Shared code with another Patricia implementation.
+
+
+def serialize_edge(bottom: bytes, path: int, length: int) -> bytes:
+    return bottom + to_bytes(path) + to_bytes(length, length=1)
+
+
+def deserialize_edge(data: bytes) -> Tuple[bytes, int, int]:
+    bottom, path, length = blockify(data=data, chunk_size=EdgeNodeFact.HASH_BYTES_LENGTH)
+    return bottom, from_bytes(path), from_bytes(length)
+
+
+def hash_edge(bottom: bytes, path: int, length: int, hash_func: HashFunctionType) -> bytes:
+    bottom_path_hash = hash_func(bottom, to_bytes(path))
+
+    # Add the edge length.
+    hash_value = from_bytes(bottom_path_hash) + length
+
+    return to_bytes(hash_value)

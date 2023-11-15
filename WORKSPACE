@@ -73,6 +73,10 @@ load("@rules_python//python:pip.bzl", "pip_parse")
 
 pip_parse(
     name = "cpython_reqs",
+    extra_pip_args = [
+        "--retries=10",
+        "--timeout=300",
+    ],
     python_interpreter_target = interpreter,
     requirements_lock = "//scripts:requirements.txt",
 )
@@ -83,6 +87,10 @@ install_deps()
 
 pip_parse(
     name = "pypy_reqs",
+    extra_pip_args = [
+        "--retries=10",
+        "--timeout=300",
+    ],
     python_interpreter_target = "@pypy3.9//:bin/pypy3",
     requirements_lock = "//scripts:pypy-requirements.txt",
 )

@@ -34,7 +34,6 @@ from starkware.starknet.business_logic.transaction.state_objects import (
 from starkware.starknet.business_logic.utils import (
     calculate_tx_resources,
     preprocess_invoke_function_fields,
-    verify_no_calls_to_other_contracts,
     verify_version,
     write_deprecated_compiled_class_fact,
 )
@@ -55,6 +54,7 @@ from starkware.starknet.core.os.transaction_hash.transaction_hash import (
 )
 from starkware.starknet.definitions import constants, fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
+from starkware.starknet.definitions.execution_mode import ExecutionMode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.definitions.transaction_type import TransactionType
 from starkware.starknet.public import abi as starknet_abi
@@ -361,7 +361,7 @@ class InternalAccountTransaction(InternalTransaction):
             resources_manager=resources_manager,
             general_config=general_config,
             tx_execution_context=self.get_execution_context(
-                n_steps=general_config.validate_max_n_steps
+                n_steps=general_config.validate_max_n_steps, execution_mode=ExecutionMode.VALIDATE
             ),
         )
 
@@ -381,11 +381,12 @@ class InternalAccountTransaction(InternalTransaction):
             )
 
         remaining_gas -= call_info.gas_consumed
-        verify_no_calls_to_other_contracts(call_info=call_info, function_name="'validate'")
 
         return call_info, remaining_gas
 
-    def get_execution_context(self, n_steps: int) -> TransactionExecutionContext:
+    def get_execution_context(
+        self, n_steps: int, execution_mode: ExecutionMode
+    ) -> TransactionExecutionContext:
         return TransactionExecutionContext.create(
             account_contract_address=self.sender_address,
             transaction_hash=self.hash_value,
@@ -394,6 +395,7 @@ class InternalAccountTransaction(InternalTransaction):
             nonce=self.nonce,
             n_steps=n_steps,
             version=self.version,
+            execution_mode=execution_mode,
         )
 
     def charge_fee(
@@ -413,7 +415,7 @@ class InternalAccountTransaction(InternalTransaction):
             general_config=general_config,
             state=state,
             tx_execution_context=self.get_execution_context(
-                n_steps=general_config.invoke_tx_max_n_steps
+                n_steps=general_config.invoke_tx_max_n_steps, execution_mode=ExecutionMode.EXECUTE
             ),
             actual_fee=actual_fee,
         )
@@ -963,11 +965,8 @@ class InternalDeployAccount(InternalAccountTransaction):
             resources_manager=resources_manager,
             general_config=general_config,
             tx_execution_context=self.get_execution_context(
-                n_steps=general_config.validate_max_n_steps
+                n_steps=general_config.validate_max_n_steps, execution_mode=ExecutionMode.VALIDATE
             ),
-        )
-        verify_no_calls_to_other_contracts(
-            call_info=constructor_call_info, function_name="DeployAccount's constructor"
         )
 
         return constructor_call_info
@@ -1189,6 +1188,7 @@ class InternalDeploy(InternalTransaction):
             nonce=0,
             n_steps=general_config.invoke_tx_max_n_steps,
             version=self.version,
+            execution_mode=ExecutionMode.EXECUTE,
         )
 
         resources_manager = ExecutionResourcesManager.empty()
@@ -1502,7 +1502,7 @@ class InternalInvokeFunction(InternalAccountTransaction):
             resources_manager=resources_manager,
             general_config=general_config,
             tx_execution_context=self.get_execution_context(
-                n_steps=general_config.invoke_tx_max_n_steps
+                n_steps=general_config.invoke_tx_max_n_steps, execution_mode=ExecutionMode.EXECUTE
             ),
         )
         remaining_gas -= call_info.gas_consumed
@@ -1704,6 +1704,7 @@ class InternalL1Handler(InternalTransaction):
             nonce=as_non_optional(self.nonce),
             n_steps=n_steps,
             version=constants.L1_HANDLER_VERSION,
+            execution_mode=ExecutionMode.EXECUTE,
         )
 
     def get_payload_size(self) -> int:

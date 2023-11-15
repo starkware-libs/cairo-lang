@@ -3,15 +3,15 @@ from starkware.cairo.common.cairo_builtins import BitwiseBuiltin
 from starkware.cairo.common.cairo_keccak.keccak import cairo_keccak_uint256s_bigend, finalize_keccak
 from starkware.cairo.common.cairo_secp.bigint import (
     BASE,
-    BigInt3,
-    UnreducedBigInt3,
     bigint_mul,
     bigint_to_uint256,
     nondet_bigint3,
     uint256_to_bigint,
 )
+from starkware.cairo.common.cairo_secp.bigint3 import BigInt3, UnreducedBigInt3
 from starkware.cairo.common.cairo_secp.constants import BETA, N0, N1, N2
-from starkware.cairo.common.cairo_secp.ec import EcPoint, ec_add, ec_mul, ec_negate
+from starkware.cairo.common.cairo_secp.ec import ec_add, ec_mul, ec_negate
+from starkware.cairo.common.cairo_secp.ec_point import EcPoint
 from starkware.cairo.common.cairo_secp.field import (
     is_zero,
     reduce,
@@ -202,6 +202,9 @@ func get_point_from_x{range_check_ptr}(x: BigInt3, v: felt) -> (point: EcPoint) 
 // curve gracefully.
 // If the point is on the curve, `true` is returned and the point is written to `result`,
 // Otherwise `false` is returned and nothing is written to `result`.
+//
+// The y coordinate of the result is guaranteed to be in reduced form (less than the secp256k1
+// prime).
 //
 // Prover assumptions:
 //   * The limbs of x are in the range (-2**87.99, 2**87.99).

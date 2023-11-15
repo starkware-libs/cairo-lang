@@ -7,6 +7,7 @@ cairo_library(
     srcs = [
         "bigint.cairo",
         "constants.cairo",
+        "ec.cairo",
         "field.cairo",
     ],
     visibility = ["//visibility:public"],

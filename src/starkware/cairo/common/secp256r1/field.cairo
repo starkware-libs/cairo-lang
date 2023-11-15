@@ -1,4 +1,5 @@
-from starkware.cairo.common.cairo_secp.bigint import BigInt3, UnreducedBigInt3
+from starkware.cairo.common.cairo_secp.bigint3 import BigInt3, SumBigInt3, UnreducedBigInt3
+from starkware.cairo.common.math import assert_nn_le
 from starkware.cairo.common.secp256r1.bigint import nondet_bigint3
 from starkware.cairo.common.secp256r1.constants import (
     BASE,
@@ -8,6 +9,9 @@ from starkware.cairo.common.secp256r1.constants import (
     BASE4_MOD_P0,
     BASE4_MOD_P1,
     BASE4_MOD_P2,
+    P0,
+    P1,
+    P2,
     SECP_REM0,
     SECP_REM1,
     SECP_REM2,
@@ -155,8 +159,9 @@ func verify_zero{range_check_ptr}(val: UnreducedBigInt3) {
 
 // Returns 1 if x == 0 (mod secp256r1_prime), and 0 otherwise.
 //
-// The assumptions are the same as unreduced_mul.
-func is_zero{range_check_ptr}(x: BigInt3) -> (res: felt) {
+// We assume that 'x' satisfies the bounds of nondet_bigint3, or that it is the sum or difference
+// of two such values.
+func is_zero{range_check_ptr}(x: SumBigInt3) -> (res: felt) {
     %{
         from starkware.cairo.common.cairo_secp.secp256r1_utils import SECP256R1_P
         from starkware.cairo.common.cairo_secp.secp_utils import pack
@@ -174,7 +179,9 @@ func is_zero{range_check_ptr}(x: BigInt3) -> (res: felt) {
         value = div_mod(1, x, SECP256R1_P)
     %}
     let (x_inv) = nondet_bigint3();
-    let (x_x_inv) = unreduced_mul(x, x_inv);
+    // Note that we pass `SumBigInt3` to `unreduced_mul` so the bounds on
+    // `x_x_inv` are (-2**245.01, 2**245.01).
+    let (x_x_inv) = unreduced_mul(BigInt3(d0=x.d0, d1=x.d1, d2=x.d2), x_inv);
 
     // Check that x * x_inv = 1 to verify that x != 0.
     verify_zero(UnreducedBigInt3(d0=x_x_inv.d0 - 1, d1=x_x_inv.d1, d2=x_x_inv.d2));
@@ -202,4 +209,22 @@ func reduce{range_check_ptr}(x: UnreducedBigInt3) -> (reduced_x: BigInt3) {
         ),
     );
     return (reduced_x=reduced_x);
+}
+
+// Verifies that val is in the range [0, p) (where p is secp256r1 prime) and that the limbs of
+// val are in the range [0, BASE). This guarantees unique representation.
+func validate_reduced_field_element{range_check_ptr}(val: BigInt3) {
+    assert_nn_le(val.d2, P2);
+    assert_nn_le(val.d1, BASE - 1);
+    assert_nn_le(val.d0, BASE - 1);
+
+    if (val.d2 == P2) {
+        if (val.d1 == P1) {
+            assert_nn_le(val.d0, P0 - 1);
+            return ();
+        }
+        assert_nn_le(val.d1, P1 - 1);
+        return ();
+    }
+    return ();
 }

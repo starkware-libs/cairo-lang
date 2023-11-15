@@ -21,7 +21,7 @@ from starkware.starknet.common.constants import (
     L1_HANDLER_HASH_PREFIX,
     ORIGIN_ADDRESS,
 )
-from starkware.starknet.common.new_syscalls import ExecutionInfo, TxInfo
+from starkware.starknet.common.new_syscalls import BlockInfo, ExecutionInfo, TxInfo
 from starkware.starknet.common.syscalls import Deploy
 from starkware.starknet.common.syscalls import TxInfo as DeprecatedTxInfo
 from starkware.starknet.core.os.block_context import BlockContext
@@ -380,11 +380,14 @@ func execute_invoke_function_transaction{
     %}
 
     run_validate(block_context=block_context, tx_execution_context=tx_execution_context);
+    let updated_tx_execution_context = update_class_hash_in_execution_context(
+        execution_context=tx_execution_context
+    );
 
     // Execute only non-reverted transactions.
     if (nondet %{ execution_helper.tx_execution_info.is_reverted %} == 0) {
         select_execute_entry_point_func(
-            block_context=block_context, execution_context=tx_execution_context
+            block_context=block_context, execution_context=updated_tx_execution_context
         );
     } else {
         // Align the stack with the if branch to avoid revoked references.
@@ -398,7 +401,7 @@ func execute_invoke_function_transaction{
     }
     local remaining_gas = remaining_gas;
 
-    charge_fee(block_context=block_context, tx_execution_context=tx_execution_context);
+    charge_fee(block_context=block_context, tx_execution_context=updated_tx_execution_context);
 
     %{ execution_helper.end_tx() %}
 
@@ -506,6 +509,25 @@ func get_invoke_tx_execution_context{range_check_ptr, contract_state_changes: Di
     return (tx_execution_context=tx_execution_context);
 }
 
+// Changes the class_hash according to the class that belongs to the executed contract address.
+// Therefore, it shouldn't be used for execution_context that was created for library_call
+// (since the class hash has nothing to do with the contract address in that case).
+func update_class_hash_in_execution_context{range_check_ptr, contract_state_changes: DictAccess*}(
+    execution_context: ExecutionContext*
+) -> ExecutionContext* {
+    let (state_entry: StateEntry*) = dict_read{dict_ptr=contract_state_changes}(
+        key=execution_context.execution_info.contract_address
+    );
+    return new ExecutionContext(
+        entry_point_type=execution_context.entry_point_type,
+        class_hash=state_entry.class_hash,
+        calldata_size=execution_context.calldata_size,
+        calldata=execution_context.calldata,
+        execution_info=execution_context.execution_info,
+        deprecated_tx_info=execution_context.deprecated_tx_info,
+    );
+}
+
 // Initializes the given DeprecatedTxInfo (dst) based on the given TxInfo.
 func fill_deprecated_tx_info(tx_info: TxInfo*, dst: DeprecatedTxInfo*) {
     tempvar signature_start = tx_info.signature_start;
@@ -592,7 +614,7 @@ func run_validate{
         calldata_size=tx_execution_context.calldata_size,
         calldata=tx_execution_context.calldata,
         execution_info=new ExecutionInfo(
-            block_info=tx_execution_info.block_info,
+            block_info=block_context.block_info_for_validate,
             tx_info=tx_execution_info.tx_info,
             caller_address=tx_execution_info.caller_address,
             contract_address=tx_execution_info.contract_address,
@@ -646,7 +668,7 @@ func consume_l1_to_l2_message{outputs: OsCarriedOutputs*}(
 // Prepares a constructor execution context based on the 'tx' hint variable.
 // Leaves 'execution_info.tx_info' and 'deprecated_tx_info' empty - should be filled later on.
 func prepare_constructor_execution_context{range_check_ptr, builtin_ptrs: BuiltinPointers*}(
-    block_context: BlockContext*
+    block_info: BlockInfo*
 ) -> (constructor_execution_context: ExecutionContext*, salt: felt) {
     alloc_locals;
 
@@ -692,7 +714,7 @@ func prepare_constructor_execution_context{range_check_ptr, builtin_ptrs: Builti
         calldata_size=constructor_calldata_size,
         calldata=constructor_calldata,
         execution_info=new ExecutionInfo(
-            block_info=block_context.block_info,
+            block_info=block_info,
             tx_info=cast(nondet %{ segments.add() %}, TxInfo*),
             caller_address=ORIGIN_ADDRESS,
             contract_address=contract_address,
@@ -719,7 +741,7 @@ func execute_deploy_account_transaction{
     // Calculate address and prepare constructor execution context.
     let (
         local constructor_execution_context: ExecutionContext*, local salt
-    ) = prepare_constructor_execution_context(block_context=block_context);
+    ) = prepare_constructor_execution_context(block_info=block_context.block_info_for_validate);
     local constructor_execution_info: ExecutionInfo* = constructor_execution_context.execution_info;
 
     // Prepare validate_deploy calldata.
@@ -741,7 +763,7 @@ func execute_deploy_account_transaction{
         calldata_size=constructor_execution_context.calldata_size + 2,
         calldata=validate_deploy_calldata,
         execution_info=new ExecutionInfo(
-            block_info=constructor_execution_info.block_info,
+            block_info=block_context.block_info_for_validate,
             tx_info=tx_info,
             caller_address=constructor_execution_info.caller_address,
             contract_address=constructor_execution_info.contract_address,
@@ -792,22 +814,23 @@ func execute_deploy_account_transaction{
     deploy_contract(
         block_context=block_context, constructor_execution_context=constructor_execution_context
     );
+    let updated_execution_context = update_class_hash_in_execution_context(
+        execution_context=validate_deploy_execution_context
+    );
 
     // Handle nonce here since 'deploy_contract' verifies that the nonce is zeroed.
-    check_and_increment_nonce(
-        execution_context=validate_deploy_execution_context, nonce=[nonce_ptr]
-    );
+    check_and_increment_nonce(execution_context=updated_execution_context, nonce=[nonce_ptr]);
 
     // Runs the account contract's "__validate_deploy__" entry point,
     // which is responsible for signature verification.
     let (retdata_size, retdata, is_deprecated) = select_execute_entry_point_func(
-        block_context=block_context, execution_context=validate_deploy_execution_context
+        block_context=block_context, execution_context=updated_execution_context
     );
     if (is_deprecated == 0) {
         assert retdata_size = 1;
         assert retdata[0] = VALIDATED;
     }
-    charge_fee(block_context=block_context, tx_execution_context=validate_deploy_execution_context);
+    charge_fee(block_context=block_context, tx_execution_context=updated_execution_context);
 
     %{ execution_helper.end_tx() %}
     return ();
@@ -825,7 +848,7 @@ func execute_deploy_transaction{
 
     let (
         local constructor_execution_context: ExecutionContext*, _
-    ) = prepare_constructor_execution_context(block_context=block_context);
+    ) = prepare_constructor_execution_context(block_info=block_context.block_info);
 
     // Guess tx version and make sure it's valid.
     local tx_version = nondet %{ tx.version %};
@@ -940,7 +963,7 @@ func execute_declare_transaction{
         calldata_size=1,
         calldata=calldata,
         execution_info=new ExecutionInfo(
-            block_info=block_context.block_info,
+            block_info=block_context.block_info_for_validate,
             tx_info=cast(nondet %{ segments.add() %}, TxInfo*),
             caller_address=ORIGIN_ADDRESS,
             contract_address=sender_address,

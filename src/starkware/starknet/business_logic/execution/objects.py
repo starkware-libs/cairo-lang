@@ -22,6 +22,7 @@ from starkware.starknet.business_logic.fact_state.contract_state_objects import 
 from starkware.starknet.business_logic.state.state import StorageEntry
 from starkware.starknet.definitions import constants, fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
+from starkware.starknet.definitions.execution_mode import ExecutionMode
 from starkware.starknet.definitions.transaction_type import TransactionType
 from starkware.starknet.public.abi import CONSTRUCTOR_ENTRY_POINT_SELECTOR
 from starkware.starknet.services.api.contract_class.contract_class import EntryPointType
@@ -74,6 +75,8 @@ class TransactionExecutionContext(ValidatedDataclass):
     n_emitted_events: int = field(metadata=sequential_id_metadata("Number of emitted events"))
     # Used for tracking global L2-to-L1 messages order.
     n_sent_messages: int = field(metadata=sequential_id_metadata("Number of messages sent to L1"))
+    # The execution mode for the appropriate part of the execution.
+    execution_mode: ExecutionMode = field(metadata=fields.execution_mode_metadata)
 
     @classmethod
     def create(
@@ -85,6 +88,7 @@ class TransactionExecutionContext(ValidatedDataclass):
         nonce: Optional[int],
         n_steps: int,
         version: int,
+        execution_mode: ExecutionMode,
     ) -> "TransactionExecutionContext":
         nonce = 0 if version in [0, constants.QUERY_VERSION_BASE] else as_non_optional(nonce)
         return cls(
@@ -97,6 +101,7 @@ class TransactionExecutionContext(ValidatedDataclass):
             run_resources=RunResources(n_steps=n_steps),
             n_emitted_events=0,
             n_sent_messages=0,
+            execution_mode=execution_mode,
         )
 
     @classmethod
@@ -107,6 +112,7 @@ class TransactionExecutionContext(ValidatedDataclass):
         nonce: int = 0,
         n_steps: int = 100000,
         version: int = constants.TRANSACTION_VERSION,
+        execution_mode=ExecutionMode.EXECUTE,
     ) -> "TransactionExecutionContext":
         return cls(
             account_contract_address=account_contract_address,
@@ -118,6 +124,7 @@ class TransactionExecutionContext(ValidatedDataclass):
             run_resources=RunResources(n_steps=n_steps),
             n_emitted_events=0,
             n_sent_messages=0,
+            execution_mode=execution_mode,
         )
 
 

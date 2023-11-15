@@ -13,6 +13,7 @@ class StarknetErrorCode(ErrorCode):
     CONTRACT_ADDRESS_UNAVAILABLE = auto()
     CONTRACT_BYTECODE_SIZE_TOO_LARGE = auto()
     CONTRACT_CLASS_OBJECT_SIZE_TOO_LARGE = auto()
+    DEPRECATED_ENDPOINT = auto()
     DEPRECATED_TRANSACTION = auto()
     DUPLICATED_TRANSACTION = auto()
     ENTRY_POINT_NOT_FOUND_IN_CONTRACT = auto()
@@ -41,7 +42,9 @@ class StarknetErrorCode(ErrorCode):
     MULTIPLE_ENTRY_POINTS_MATCH_SELECTOR = auto()
     NON_EMPTY_SIGNATURE = auto()
     NON_PERMITTED_CONTRACT = auto()
+    NO_BLOCK_HEADER = auto()
     NO_SIGNATURE_FOR_PENDING_BLOCK = auto()
+    NO_STATE_UPDATE = auto()
     NO_TRACE = auto()
     OUT_OF_RANGE_ADDRESS = auto()
     OUT_OF_RANGE_BLOCK_HASH = auto()
@@ -140,6 +143,7 @@ common_error_codes: List[ErrorCode] = [
     StarknetErrorCode.TRANSACTION_FAILED,
     StarknetErrorCode.UNDECLARED_CLASS,
     StarknetErrorCode.UNEXPECTED_FAILURE,
+    StarknetErrorCode.UNINITIALIZED_CONTRACT,
 ]
 
 main_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
@@ -171,12 +175,13 @@ feeder_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
         # Requests that fail after quering the DB.
         StarknetErrorCode.BLOCK_NOT_FOUND,
         StarknetErrorCode.INVALID_TRANSACTION_HASH,
+        StarknetErrorCode.NO_STATE_UPDATE,
         StarknetErrorCode.NO_TRACE,
         StarknetErrorCode.TRANSACTION_NOT_FOUND,
-        StarknetErrorCode.UNINITIALIZED_CONTRACT,
         # Request parsing errors.
         StarkErrorCode.MALFORMED_REQUEST,
         StarknetErrorCode.INVALID_STATUS_MODE,
+        StarknetErrorCode.NO_BLOCK_HEADER,
         StarknetErrorCode.NO_SIGNATURE_FOR_PENDING_BLOCK,
         StarknetErrorCode.OUT_OF_RANGE_BLOCK_HASH,
         StarknetErrorCode.OUT_OF_RANGE_BLOCK_ID,
@@ -187,6 +192,8 @@ feeder_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
         StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_HASH,
         StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_ID,
         StarknetErrorCode.UNSUPPORTED_TRANSACTION,
+        # Deprecation errors.
+        StarknetErrorCode.DEPRECATED_ENDPOINT,
     ]
 )
 

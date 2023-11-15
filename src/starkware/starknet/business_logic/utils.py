@@ -356,13 +356,3 @@ def validate_entrypoint_execution_context(resources_manager: ExecutionResourcesM
             f"{[name for name, count in diff.items() if count > 0]}."
         ),
     )
-
-
-def verify_no_calls_to_other_contracts(call_info: CallInfo, function_name: str):
-    invoked_contract_address = call_info.contract_address
-    for internal_call in call_info.gen_call_topology():
-        if internal_call.contract_address != invoked_contract_address:
-            raise StarkException(
-                code=StarknetErrorCode.UNAUTHORIZED_ACTION_ON_VALIDATE,
-                message=f"Calling other contracts during {function_name} execution is forbidden.",
-            )

@@ -10,6 +10,7 @@ import subprocess
 import threading
 import time
 from collections import UserDict
+from concurrent.futures import Executor
 from typing import (
     Any,
     AsyncContextManager,
@@ -33,6 +34,8 @@ from typing import (
 
 import yaml
 from typing_extensions import Literal, ParamSpec, Protocol
+
+from starkware.python.math_utils import div_ceil
 
 # All functions with stubs are imported from this module.
 from starkware.python.utils_stub_module import *  # noqa
@@ -130,15 +133,15 @@ def get_build_dir_path(rel_path=""):
     """
     Returns a path to a file inside the build directory (or the docker).
 
-    rel_path is the relative path of the file with respect to the build
-    directory.
+    rel_path is the relative path of the file with respect to the build directory, e.g.:
+    src/starkware/python/utils.py.
     """
 
     if "RUNFILES_DIR" in os.environ:
+        # We run in a bazel test context, hence the 'RUNFILES_DIR' environment variable is defined.
         build_root = os.path.join(os.environ["RUNFILES_DIR"], "__main__")
-    elif "BUILD_ROOT" in os.environ:
-        build_root = os.environ["BUILD_ROOT"]
     else:
+        # Get the workspace path, which is at distance three, due to the location of this file.
         assert DIR.endswith("starkware/python"), f"Wrong path : DIR = {DIR}"
         build_root = climb(path=DIR, levels_to_climb=3)
 
@@ -151,17 +154,12 @@ def get_source_dir_path(rel_path: str = "", default_value: Optional[str] = None)
     rel_path is the relative path of the file with respect to the source directory.
     """
 
-    if "BUILD_ROOT" in os.environ:
-        source_root = os.path.join(os.environ["BUILD_ROOT"], "../../")
-        assert os.path.exists(os.path.join(source_root, "src"))
-        return os.path.join(source_root, rel_path)
-
     if "BUILD_WORKSPACE_DIRECTORY" in os.environ:
         source_root = os.environ["BUILD_WORKSPACE_DIRECTORY"]
         assert os.path.exists(os.path.join(source_root, "src"))
         return os.path.join(source_root, rel_path)
 
-    # If both BUILD_ROOT and BUILD_WORKSPACE_DIRECTORY are missing, return the default value.
+    # If we don't run in a Bazel context, return the default value.
     if default_value is not None:
         return default_value
 
@@ -499,6 +497,39 @@ async def gen_gather_in_chunks(
 
         for element in chunk:
             yield element
+
+
+async def process_concurrently(
+    func: Callable[[T], V], items: Sequence[T], n_chunks: int, executor: Optional[Executor] = None
+) -> List[V]:
+    """
+    Divides the items into `n_chunks` chunks, and for each chunk, in an executor,
+    executes the specified function on each item.
+
+    The reason for working in chunks (instead of submitting each item to a thread) is to control
+    the overhead caused by having many threads and tasks open in case of a big item list
+    (a few dozen).
+
+    An alternative way to control this overhead is to use `gather_in_chunks`, but it is
+    less efficient (probably because it waits until the entire chunk is ready before starting a new
+    one, and eventually it still opens many tasks).
+    """
+    if len(items) == 0:
+        return []
+
+    assert n_chunks > 0, f"n_chunks must be greater than 0; got: {n_chunks}."
+
+    def chunkified_func(chunk: Sequence[T]) -> List[V]:
+        return list(map(func, chunk))
+
+    loop = asyncio.get_event_loop()
+    result_chunks: List[List[V]] = await asyncio.gather(
+        *(
+            loop.run_in_executor(executor, chunkified_func, chunk)
+            for chunk in blockify(items, chunk_size=div_ceil(len(items), n_chunks))
+        )
+    )
+    return [v for chunk in result_chunks for v in chunk]
 
 
 def all_subclasses(cls: type) -> List[type]:

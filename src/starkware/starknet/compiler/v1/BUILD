@@ -10,7 +10,6 @@ py_library(
     data = [
         "@" + CAIRO_COMPILER_ARCHIVE,
         "mainnet_libfuncs.json",
-        "testnet2_libfuncs.json",
         "testnet_libfuncs.json",
     ],
     visibility = ["//visibility:public"],
