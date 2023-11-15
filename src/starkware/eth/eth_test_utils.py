@@ -296,7 +296,7 @@ class EthContractFunction:
         except (web3.exceptions.ContractLogicError, ValueError) as ex:
             raise EthRevertException(str(ex)) from None
 
-    def __call__(self, *args, transact_args=None):
+    def __call__(self, *args, transact_args=None) -> "EthReceipt":
         return self.transact(*args, transact_args=transact_args)
 
 

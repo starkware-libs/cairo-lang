@@ -72,6 +72,9 @@ class EcOpBuiltinRunner(SimpleBuiltinRunner):
         self.ec_op_builtin: EcOpInstanceDef = ec_op_builtin
         self.cache: Dict[MaybeRelocatable, int] = {}
 
+    def get_instance_def(self):
+        return self.ec_op_builtin
+
     def add_auto_deduction_rules(self, runner):
         def rule(vm, addr):
             memory = vm.run_context.memory

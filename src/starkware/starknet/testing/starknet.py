@@ -3,8 +3,8 @@ from typing import List, MutableMapping, Optional, Union
 
 from starkware.python.utils import as_non_optional
 from starkware.starknet.business_logic.execution.objects import TransactionExecutionInfo
-from starkware.starknet.business_logic.transaction.objects import (
-    InternalDeployAccount,
+from starkware.starknet.business_logic.transaction.deprecated_objects import (
+    DeprecatedInternalDeployAccount,
     InternalL1Handler,
 )
 from starkware.starknet.compiler.v1.compile import JsonObject
@@ -82,7 +82,7 @@ class Starknet:
         disable_hint_validation: bool = False,
     ) -> DeclaredClass:
         """
-        Declares a DeprecatedCompiledClass in the StarkNet network.
+        Declares a `DeprecatedCompiledClass` in the StarkNet network.
         Returns the class hash and the ABI of the contract.
         """
         contract_class = gather_deprecated_compiled_class(
@@ -221,13 +221,13 @@ class Starknet:
         general_config = self.state.general_config
         salt = fields.ContractAddressSalt.get_random_value()
         # Deploy the dummy_account contract.
-        deploy_account_tx = InternalDeployAccount.create(
+        deploy_account_tx = DeprecatedInternalDeployAccount.create(
             class_hash=compute_deprecated_class_hash(contract_class=dummy_account_contract_class),
             constructor_calldata=[],
             contract_address_salt=salt,
             nonce=0,
             max_fee=0,
-            version=constants.TRANSACTION_VERSION,
+            version=constants.DEPRECATED_TRANSACTION_VERSION,
             chain_id=general_config.chain_id.value,
             signature=[],
         )

@@ -45,6 +45,7 @@ cairo_library(
     deps = [
         "//src/starkware/cairo/common:cairo_common_cairo_lib",
         "//src/starkware/cairo/stark_verifier/core:cairo",
+        "//src/starkware/cairo/stark_verifier/core:serialize",
     ],
 )
 
@@ -58,7 +59,6 @@ py_library(
     visibility = ["//visibility:public"],
     deps = [
         "//src/starkware/cairo/common:cairo_common_lib",
-        "//src/starkware/cairo/lang:cairo_instances_lib",
         "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
         "//src/starkware/cairo/lang/vm:cairo_vm_lib",
         "//src/starkware/python:starkware_python_utils_lib",

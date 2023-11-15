@@ -6,7 +6,7 @@ from typing import List
 from services.everest.definitions import fields as everest_fields
 from starkware.cairo.bootloaders.compute_fact import keccak_ints
 from starkware.python.utils import as_non_optional
-from starkware.starknet.business_logic.transaction.objects import InternalL1Handler
+from starkware.starknet.business_logic.transaction.deprecated_objects import InternalL1Handler
 from starkware.starknet.definitions import fields
 from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 

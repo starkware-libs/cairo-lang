@@ -1,11 +1,11 @@
 from starkware.cairo.common.alloc import alloc
-from starkware.cairo.common.cairo_builtins import BitwiseBuiltin, HashBuiltin
+from starkware.cairo.common.cairo_builtins import BitwiseBuiltin, PoseidonBuiltin
 from starkware.cairo.common.uint256 import Uint256
 from starkware.cairo.stark_verifier.core.channel import (
     Channel,
+    channel_new,
     ChannelSentFelt,
     ChannelUnsentFelt,
-    channel_new,
     random_felts_to_prover,
     random_uint256_to_prover,
     read_felt_from_prover,
@@ -36,7 +36,10 @@ func test_to{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: felt*}(
 }
 
 func test_from{
-    range_check_ptr, pedersen_ptr: HashBuiltin*, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: felt*
+    range_check_ptr,
+    bitwise_ptr: BitwiseBuiltin*,
+    poseidon_ptr: PoseidonBuiltin*,
+    blake2s_ptr: felt*,
 }() {
     alloc_locals;
     let (channel) = channel_new(digest=Uint256(0, 0));
@@ -55,7 +58,7 @@ func test_from{
         %{ segments.write_arg(ids.unsent_values.address_, [2, 3, -1]) %}
         let (values: ChannelSentFelt*) = read_felts_from_prover(n_values=3, values=unsent_values);
         assert channel.digest = Uint256(
-            295335566410811725414215363086094601243, 235943495558589014390324160323936214827
+            47547812859369363998814902207770993924, 1608236828616150246586483550494227200
         );
         assert channel.counter = 0;
         %{
@@ -69,7 +72,7 @@ func test_from{
             n_values=3, values=unsent_values
         );
         assert channel.digest = Uint256(
-            107293173750539804415118856895235527826, 287334618810652651334396317613525936033
+            99187703120054526272510070059613554509, 86706774425421007726473690540494703876
         );
         assert channel.counter = 0;
         %{
@@ -83,7 +86,10 @@ func test_from{
 }
 
 func main_test{
-    range_check_ptr, pedersen_ptr: HashBuiltin*, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: felt*
+    range_check_ptr,
+    bitwise_ptr: BitwiseBuiltin*,
+    poseidon_ptr: PoseidonBuiltin*,
+    blake2s_ptr: felt*,
 }() -> () {
     test_to();
     test_from();

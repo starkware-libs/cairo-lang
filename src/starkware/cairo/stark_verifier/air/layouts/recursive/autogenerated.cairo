@@ -1,19 +1,24 @@
 from starkware.cairo.stark_verifier.air.layouts.recursive.global_values import GlobalValues
-from starkware.cairo.stark_verifier.air.oods import OodsGlobalValues
+from starkware.cairo.common.math import safe_div, safe_mult
 from starkware.cairo.common.pow import pow
 
 const N_DYNAMIC_PARAMS = 0;
 const N_CONSTRAINTS = 93;
 const MASK_SIZE = 133;
+const CPU_COMPONENT_STEP = 1;
+const CPU_COMPONENT_HEIGHT = 16;
 const PUBLIC_MEMORY_STEP = 16;
 const HAS_DILUTED_POOL = 1;
 const DILUTED_SPACING = 4;
 const DILUTED_N_BITS = 16;
 const PEDERSEN_BUILTIN_RATIO = 128;
+const PEDERSEN_BUILTIN_ROW_RATIO = 2048;
 const PEDERSEN_BUILTIN_REPETITIONS = 1;
-const RC_BUILTIN_RATIO = 8;
-const RC_N_PARTS = 8;
+const RANGE_CHECK_BUILTIN_RATIO = 8;
+const RANGE_CHECK_BUILTIN_ROW_RATIO = 128;
+const RANGE_CHECK_N_PARTS = 8;
 const BITWISE__RATIO = 8;
+const BITWISE__ROW_RATIO = 128;
 const BITWISE__TOTAL_N_BITS = 251;
 const HAS_OUTPUT_BUILTIN = 1;
 const HAS_PEDERSEN_BUILTIN = 1;
@@ -25,9 +30,7 @@ const HAS_KECCAK_BUILTIN = 0;
 const HAS_POSEIDON_BUILTIN = 0;
 const LAYOUT_CODE = 0x726563757273697665;
 const CONSTRAINT_DEGREE = 2;
-const CPU_COMPONENT_HEIGHT = 16;
 const LOG_CPU_COMPONENT_HEIGHT = 4;
-const MEMORY_STEP = 2;
 const NUM_COLUMNS_FIRST = 7;
 const NUM_COLUMNS_SECOND = 3;
 const IS_DYNAMIC_AIR = 0;
@@ -42,78 +45,82 @@ func eval_composition_polynomial{range_check_ptr}(
     alloc_locals;
 
     // Compute powers.
-    let (local pow0) = pow(point, global_values.trace_length / 2048);
-    local pow1 = pow0 * pow0;
-    let (local pow2) = pow(point, global_values.trace_length / 128);
-    let (local pow3) = pow(point, global_values.trace_length / 32);
-    local pow4 = pow3 * pow3;
-    let (local pow5) = pow(point, global_values.trace_length / 4);
-    local pow6 = pow5 * pow5;
-    local pow7 = pow6 * pow6;
-    let (local pow8) = pow(trace_generator, global_values.trace_length / 64);
-    local pow9 = pow8 * pow8;
-    local pow10 = pow8 * pow9;
-    local pow11 = pow8 * pow10;
-    local pow12 = pow8 * pow11;
-    local pow13 = pow8 * pow12;
-    local pow14 = pow8 * pow13;
-    local pow15 = pow8 * pow14;
-    local pow16 = pow8 * pow15;
-    local pow17 = pow8 * pow16;
-    local pow18 = pow8 * pow17;
-    local pow19 = pow8 * pow18;
-    local pow20 = pow8 * pow19;
-    local pow21 = pow8 * pow20;
-    local pow22 = pow8 * pow21;
-    let (local pow23) = pow(trace_generator, global_values.trace_length / 2);
-    let (local pow24) = pow(trace_generator, 3 * global_values.trace_length / 4);
-    local pow25 = pow19 * pow24;
-    local pow26 = pow10 * pow25;
-    let (local pow27) = pow(trace_generator, 255 * global_values.trace_length / 256);
-    let (local pow28) = pow(trace_generator, 16 * (global_values.trace_length / 16 - 1));
-    let (local pow29) = pow(trace_generator, 2 * (global_values.trace_length / 2 - 1));
-    let (local pow30) = pow(trace_generator, 4 * (global_values.trace_length / 4 - 1));
-    let (local pow31) = pow(trace_generator, global_values.trace_length - 1);
-    let (local pow32) = pow(trace_generator, 2048 * (global_values.trace_length / 2048 - 1));
-    let (local pow33) = pow(trace_generator, 128 * (global_values.trace_length / 128 - 1));
+    let (local pow0) = pow(point, (safe_div(global_values.trace_length, 2048)));
+    local pow1 = pow0 * pow0;  // pow(point, (safe_div(global_values.trace_length, 1024))).
+    let (local pow2) = pow(point, (safe_div(global_values.trace_length, 128)));
+    let (local pow3) = pow(point, (safe_div(global_values.trace_length, 32)));
+    local pow4 = pow3 * pow3;  // pow(point, (safe_div(global_values.trace_length, 16))).
+    let (local pow5) = pow(point, (safe_div(global_values.trace_length, 4)));
+    local pow6 = pow5 * pow5;  // pow(point, (safe_div(global_values.trace_length, 2))).
+    local pow7 = pow6 * pow6;  // pow(point, global_values.trace_length).
+    let (local pow8) = pow(trace_generator, global_values.trace_length - 128);
+    let (local pow9) = pow(trace_generator, global_values.trace_length - 2048);
+    let (local pow10) = pow(trace_generator, global_values.trace_length - 1);
+    let (local pow11) = pow(trace_generator, global_values.trace_length - 4);
+    let (local pow12) = pow(trace_generator, global_values.trace_length - 2);
+    let (local pow13) = pow(trace_generator, global_values.trace_length - 16);
+    let (local pow14) = pow(trace_generator, (safe_div(global_values.trace_length, 2)));
+    let (local pow15) = pow(
+        trace_generator, (safe_div((safe_mult(255, global_values.trace_length)), 256))
+    );
+    let (local pow16) = pow(trace_generator, (safe_div(global_values.trace_length, 64)));
+    local pow17 = pow16 * pow16;  // pow(trace_generator, (safe_div(global_values.trace_length, 32))).
+    local pow18 = pow16 * pow17;  // pow(trace_generator, (safe_div((safe_mult(3, global_values.trace_length)), 64))).
+    local pow19 = pow16 * pow18;  // pow(trace_generator, (safe_div(global_values.trace_length, 16))).
+    local pow20 = pow16 * pow19;  // pow(trace_generator, (safe_div((safe_mult(5, global_values.trace_length)), 64))).
+    local pow21 = pow16 * pow20;  // pow(trace_generator, (safe_div((safe_mult(3, global_values.trace_length)), 32))).
+    local pow22 = pow16 * pow21;  // pow(trace_generator, (safe_div((safe_mult(7, global_values.trace_length)), 64))).
+    local pow23 = pow16 * pow22;  // pow(trace_generator, (safe_div(global_values.trace_length, 8))).
+    local pow24 = pow16 * pow23;  // pow(trace_generator, (safe_div((safe_mult(9, global_values.trace_length)), 64))).
+    local pow25 = pow16 * pow24;  // pow(trace_generator, (safe_div((safe_mult(5, global_values.trace_length)), 32))).
+    local pow26 = pow16 * pow25;  // pow(trace_generator, (safe_div((safe_mult(11, global_values.trace_length)), 64))).
+    local pow27 = pow16 * pow26;  // pow(trace_generator, (safe_div((safe_mult(3, global_values.trace_length)), 16))).
+    local pow28 = pow16 * pow27;  // pow(trace_generator, (safe_div((safe_mult(13, global_values.trace_length)), 64))).
+    local pow29 = pow16 * pow28;  // pow(trace_generator, (safe_div((safe_mult(7, global_values.trace_length)), 32))).
+    local pow30 = pow16 * pow29;  // pow(trace_generator, (safe_div((safe_mult(15, global_values.trace_length)), 64))).
+    let (local pow31) = pow(
+        trace_generator, (safe_div((safe_mult(3, global_values.trace_length)), 4))
+    );
+    local pow32 = pow27 * pow31;  // pow(trace_generator, (safe_div((safe_mult(15, global_values.trace_length)), 16))).
+    local pow33 = pow18 * pow32;  // pow(trace_generator, (safe_div((safe_mult(63, global_values.trace_length)), 64))).
 
     // Compute domains.
     tempvar domain0 = pow7 - 1;
     tempvar domain1 = pow6 - 1;
     tempvar domain2 = pow5 - 1;
-    tempvar domain3 = pow4 - pow25;
+    tempvar domain3 = pow4 - pow32;
     tempvar domain4 = pow4 - 1;
     tempvar domain5 = pow3 - 1;
     tempvar domain6 = pow2 - 1;
-    tempvar domain7 = pow2 - pow24;
-    tempvar domain8 = pow2 - pow8;
-    tempvar domain8 = domain8 * (pow2 - pow9);
-    tempvar domain8 = domain8 * (pow2 - pow10);
-    tempvar domain8 = domain8 * (pow2 - pow11);
-    tempvar domain8 = domain8 * (pow2 - pow12);
-    tempvar domain8 = domain8 * (pow2 - pow13);
-    tempvar domain8 = domain8 * (pow2 - pow14);
-    tempvar domain8 = domain8 * (pow2 - pow15);
-    tempvar domain8 = domain8 * (pow2 - pow16);
-    tempvar domain8 = domain8 * (pow2 - pow17);
-    tempvar domain8 = domain8 * (pow2 - pow18);
-    tempvar domain8 = domain8 * (pow2 - pow19);
-    tempvar domain8 = domain8 * (pow2 - pow20);
-    tempvar domain8 = domain8 * (pow2 - pow21);
-    tempvar domain8 = domain8 * (pow2 - pow22);
-    tempvar domain8 = domain8 * (domain6);
+    tempvar domain7 = pow2 - pow31;
+    tempvar temp = pow2 - pow16;
+    tempvar temp = temp * (pow2 - pow17);
+    tempvar temp = temp * (pow2 - pow18);
+    tempvar temp = temp * (pow2 - pow19);
+    tempvar temp = temp * (pow2 - pow20);
+    tempvar temp = temp * (pow2 - pow21);
+    tempvar temp = temp * (pow2 - pow22);
+    tempvar temp = temp * (pow2 - pow23);
+    tempvar temp = temp * (pow2 - pow24);
+    tempvar temp = temp * (pow2 - pow25);
+    tempvar temp = temp * (pow2 - pow26);
+    tempvar temp = temp * (pow2 - pow27);
+    tempvar temp = temp * (pow2 - pow28);
+    tempvar temp = temp * (pow2 - pow29);
+    tempvar temp = temp * (pow2 - pow30);
+    tempvar domain8 = temp * (domain6);
     tempvar domain9 = pow1 - 1;
-    tempvar domain10 = pow1 - pow27;
-    tempvar domain11 = pow1 - pow26;
-    tempvar domain12 = pow0 - pow23;
+    tempvar domain10 = pow1 - pow15;
+    tempvar domain11 = pow1 - pow33;
+    tempvar domain12 = pow0 - pow14;
     tempvar domain13 = pow0 - 1;
-    tempvar domain14 = point - pow28;
+    tempvar domain14 = point - pow13;
     tempvar domain15 = point - 1;
-    tempvar domain16 = point - pow29;
-    tempvar domain17 = point - pow30;
-    tempvar domain18 = point - pow31;
-    tempvar domain19 = point - pow32;
-    tempvar domain20 = point - pow33;
+    tempvar domain16 = point - pow12;
+    tempvar domain17 = point - pow11;
+    tempvar domain18 = point - pow10;
+    tempvar domain19 = point - pow9;
+    tempvar domain20 = point - pow8;
 
     // Fetch mask variables.
     tempvar column0_row0 = mask_values[0];
@@ -251,54 +258,69 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar column9_inter1_row5 = mask_values[132];
 
     // Compute intermediate values.
-    tempvar cpu__decode__opcode_rc__bit_0 = column0_row0 - (column0_row1 + column0_row1);
-    tempvar cpu__decode__opcode_rc__bit_2 = column0_row2 - (column0_row3 + column0_row3);
-    tempvar cpu__decode__opcode_rc__bit_4 = column0_row4 - (column0_row5 + column0_row5);
-    tempvar cpu__decode__opcode_rc__bit_3 = column0_row3 - (column0_row4 + column0_row4);
+    tempvar cpu__decode__opcode_range_check__bit_0 = column0_row0 - (column0_row1 + column0_row1);
+    tempvar cpu__decode__opcode_range_check__bit_2 = column0_row2 - (column0_row3 + column0_row3);
+    tempvar cpu__decode__opcode_range_check__bit_4 = column0_row4 - (column0_row5 + column0_row5);
+    tempvar cpu__decode__opcode_range_check__bit_3 = column0_row3 - (column0_row4 + column0_row4);
     tempvar cpu__decode__flag_op1_base_op0_0 = 1 - (
-        cpu__decode__opcode_rc__bit_2 +
-        cpu__decode__opcode_rc__bit_4 +
-        cpu__decode__opcode_rc__bit_3
+        cpu__decode__opcode_range_check__bit_2 +
+        cpu__decode__opcode_range_check__bit_4 +
+        cpu__decode__opcode_range_check__bit_3
     );
-    tempvar cpu__decode__opcode_rc__bit_5 = column0_row5 - (column0_row6 + column0_row6);
-    tempvar cpu__decode__opcode_rc__bit_6 = column0_row6 - (column0_row7 + column0_row7);
-    tempvar cpu__decode__opcode_rc__bit_9 = column0_row9 - (column0_row10 + column0_row10);
+    tempvar cpu__decode__opcode_range_check__bit_5 = column0_row5 - (column0_row6 + column0_row6);
+    tempvar cpu__decode__opcode_range_check__bit_6 = column0_row6 - (column0_row7 + column0_row7);
+    tempvar cpu__decode__opcode_range_check__bit_9 = column0_row9 - (column0_row10 + column0_row10);
     tempvar cpu__decode__flag_res_op1_0 = 1 - (
-        cpu__decode__opcode_rc__bit_5 +
-        cpu__decode__opcode_rc__bit_6 +
-        cpu__decode__opcode_rc__bit_9
+        cpu__decode__opcode_range_check__bit_5 +
+        cpu__decode__opcode_range_check__bit_6 +
+        cpu__decode__opcode_range_check__bit_9
     );
-    tempvar cpu__decode__opcode_rc__bit_7 = column0_row7 - (column0_row8 + column0_row8);
-    tempvar cpu__decode__opcode_rc__bit_8 = column0_row8 - (column0_row9 + column0_row9);
+    tempvar cpu__decode__opcode_range_check__bit_7 = column0_row7 - (column0_row8 + column0_row8);
+    tempvar cpu__decode__opcode_range_check__bit_8 = column0_row8 - (column0_row9 + column0_row9);
     tempvar cpu__decode__flag_pc_update_regular_0 = 1 - (
-        cpu__decode__opcode_rc__bit_7 +
-        cpu__decode__opcode_rc__bit_8 +
-        cpu__decode__opcode_rc__bit_9
+        cpu__decode__opcode_range_check__bit_7 +
+        cpu__decode__opcode_range_check__bit_8 +
+        cpu__decode__opcode_range_check__bit_9
     );
-    tempvar cpu__decode__opcode_rc__bit_12 = column0_row12 - (column0_row13 + column0_row13);
-    tempvar cpu__decode__opcode_rc__bit_13 = column0_row13 - (column0_row14 + column0_row14);
+    tempvar cpu__decode__opcode_range_check__bit_12 = column0_row12 - (
+        column0_row13 + column0_row13
+    );
+    tempvar cpu__decode__opcode_range_check__bit_13 = column0_row13 - (
+        column0_row14 + column0_row14
+    );
     tempvar cpu__decode__fp_update_regular_0 = 1 - (
-        cpu__decode__opcode_rc__bit_12 + cpu__decode__opcode_rc__bit_13
+        cpu__decode__opcode_range_check__bit_12 + cpu__decode__opcode_range_check__bit_13
     );
-    tempvar cpu__decode__opcode_rc__bit_1 = column0_row1 - (column0_row2 + column0_row2);
-    tempvar npc_reg_0 = column3_row0 + cpu__decode__opcode_rc__bit_2 + 1;
-    tempvar cpu__decode__opcode_rc__bit_10 = column0_row10 - (column0_row11 + column0_row11);
-    tempvar cpu__decode__opcode_rc__bit_11 = column0_row11 - (column0_row12 + column0_row12);
-    tempvar cpu__decode__opcode_rc__bit_14 = column0_row14 - (column0_row15 + column0_row15);
+    tempvar cpu__decode__opcode_range_check__bit_1 = column0_row1 - (column0_row2 + column0_row2);
+    tempvar npc_reg_0 = column3_row0 + cpu__decode__opcode_range_check__bit_2 + 1;
+    tempvar cpu__decode__opcode_range_check__bit_10 = column0_row10 - (
+        column0_row11 + column0_row11
+    );
+    tempvar cpu__decode__opcode_range_check__bit_11 = column0_row11 - (
+        column0_row12 + column0_row12
+    );
+    tempvar cpu__decode__opcode_range_check__bit_14 = column0_row14 - (
+        column0_row15 + column0_row15
+    );
     tempvar memory__address_diff_0 = column4_row2 - column4_row0;
-    tempvar rc16__diff_0 = column5_row6 - column5_row2;
+    tempvar range_check16__diff_0 = column5_row6 - column5_row2;
     tempvar pedersen__hash0__ec_subset_sum__bit_0 = column6_row0 - (column6_row4 + column6_row4);
     tempvar pedersen__hash0__ec_subset_sum__bit_neg_0 = 1 - pedersen__hash0__ec_subset_sum__bit_0;
-    tempvar rc_builtin__value0_0 = column5_row12;
-    tempvar rc_builtin__value1_0 = rc_builtin__value0_0 * global_values.offset_size + column5_row28;
-    tempvar rc_builtin__value2_0 = rc_builtin__value1_0 * global_values.offset_size + column5_row44;
-    tempvar rc_builtin__value3_0 = rc_builtin__value2_0 * global_values.offset_size + column5_row60;
-    tempvar rc_builtin__value4_0 = rc_builtin__value3_0 * global_values.offset_size + column5_row76;
-    tempvar rc_builtin__value5_0 = rc_builtin__value4_0 * global_values.offset_size + column5_row92;
-    tempvar rc_builtin__value6_0 = rc_builtin__value5_0 * global_values.offset_size +
-        column5_row108;
-    tempvar rc_builtin__value7_0 = rc_builtin__value6_0 * global_values.offset_size +
-        column5_row124;
+    tempvar range_check_builtin__value0_0 = column5_row12;
+    tempvar range_check_builtin__value1_0 = range_check_builtin__value0_0 *
+        global_values.offset_size + column5_row28;
+    tempvar range_check_builtin__value2_0 = range_check_builtin__value1_0 *
+        global_values.offset_size + column5_row44;
+    tempvar range_check_builtin__value3_0 = range_check_builtin__value2_0 *
+        global_values.offset_size + column5_row60;
+    tempvar range_check_builtin__value4_0 = range_check_builtin__value3_0 *
+        global_values.offset_size + column5_row76;
+    tempvar range_check_builtin__value5_0 = range_check_builtin__value4_0 *
+        global_values.offset_size + column5_row92;
+    tempvar range_check_builtin__value6_0 = range_check_builtin__value5_0 *
+        global_values.offset_size + column5_row108;
+    tempvar range_check_builtin__value7_0 = range_check_builtin__value6_0 *
+        global_values.offset_size + column5_row124;
     tempvar bitwise__sum_var_0_0 = column1_row0 + column1_row2 * 2 + column1_row4 * 4 +
         column1_row6 * 8 + column1_row8 * 18446744073709551616 + column1_row10 *
         36893488147419103232 + column1_row12 * 73786976294838206464 + column1_row14 *
@@ -315,18 +337,18 @@ func eval_composition_polynomial{range_check_ptr}(
     // Sum constraints.
     tempvar total_sum = 0;
 
-    // Constraint: cpu/decode/opcode_rc/bit.
+    // Constraint: cpu/decode/opcode_range_check/bit.
     tempvar value = (
-        cpu__decode__opcode_rc__bit_0 * cpu__decode__opcode_rc__bit_0 -
-        cpu__decode__opcode_rc__bit_0
+        cpu__decode__opcode_range_check__bit_0 * cpu__decode__opcode_range_check__bit_0 -
+        cpu__decode__opcode_range_check__bit_0
     ) * domain3 / domain0;
     tempvar total_sum = total_sum + constraint_coefficients[0] * value;
 
-    // Constraint: cpu/decode/opcode_rc/zero.
+    // Constraint: cpu/decode/opcode_range_check/zero.
     tempvar value = (column0_row0) / domain3;
     tempvar total_sum = total_sum + constraint_coefficients[1] * value;
 
-    // Constraint: cpu/decode/opcode_rc_input.
+    // Constraint: cpu/decode/opcode_range_check_input.
     tempvar value = (
         column3_row1 -
         (
@@ -372,8 +394,8 @@ func eval_composition_polynomial{range_check_ptr}(
         column3_row8 +
         global_values.half_offset_size -
         (
-            cpu__decode__opcode_rc__bit_0 * column6_row9 +
-            (1 - cpu__decode__opcode_rc__bit_0) * column6_row1 +
+            cpu__decode__opcode_range_check__bit_0 * column6_row9 +
+            (1 - cpu__decode__opcode_range_check__bit_0) * column6_row1 +
             column5_row0
         )
     ) / domain4;
@@ -384,8 +406,8 @@ func eval_composition_polynomial{range_check_ptr}(
         column3_row4 +
         global_values.half_offset_size -
         (
-            cpu__decode__opcode_rc__bit_1 * column6_row9 +
-            (1 - cpu__decode__opcode_rc__bit_1) * column6_row1 +
+            cpu__decode__opcode_range_check__bit_1 * column6_row9 +
+            (1 - cpu__decode__opcode_range_check__bit_1) * column6_row1 +
             column5_row8
         )
     ) / domain4;
@@ -396,9 +418,9 @@ func eval_composition_polynomial{range_check_ptr}(
         column3_row12 +
         global_values.half_offset_size -
         (
-            cpu__decode__opcode_rc__bit_2 * column3_row0 +
-            cpu__decode__opcode_rc__bit_4 * column6_row1 +
-            cpu__decode__opcode_rc__bit_3 * column6_row9 +
+            cpu__decode__opcode_range_check__bit_2 * column3_row0 +
+            cpu__decode__opcode_range_check__bit_4 * column6_row1 +
+            cpu__decode__opcode_range_check__bit_3 * column6_row9 +
             cpu__decode__flag_op1_base_op0_0 * column3_row5 +
             column5_row4
         )
@@ -411,18 +433,18 @@ func eval_composition_polynomial{range_check_ptr}(
 
     // Constraint: cpu/operands/res.
     tempvar value = (
-        (1 - cpu__decode__opcode_rc__bit_9) * column6_row13 -
+        (1 - cpu__decode__opcode_range_check__bit_9) * column6_row13 -
         (
-            cpu__decode__opcode_rc__bit_5 * (column3_row5 + column3_row13) +
-            cpu__decode__opcode_rc__bit_6 * column6_row5 +
+            cpu__decode__opcode_range_check__bit_5 * (column3_row5 + column3_row13) +
+            cpu__decode__opcode_range_check__bit_6 * column6_row5 +
             cpu__decode__flag_res_op1_0 * column3_row13
         )
     ) / domain4;
     tempvar total_sum = total_sum + constraint_coefficients[11] * value;
 
     // Constraint: cpu/update_registers/update_pc/tmp0.
-    tempvar value = (column6_row3 - cpu__decode__opcode_rc__bit_9 * column3_row9) * domain14 /
-        domain4;
+    tempvar value = (column6_row3 - cpu__decode__opcode_range_check__bit_9 * column3_row9) *
+        domain14 / domain4;
     tempvar total_sum = total_sum + constraint_coefficients[12] * value;
 
     // Constraint: cpu/update_registers/update_pc/tmp1.
@@ -431,19 +453,19 @@ func eval_composition_polynomial{range_check_ptr}(
 
     // Constraint: cpu/update_registers/update_pc/pc_cond_negative.
     tempvar value = (
-        (1 - cpu__decode__opcode_rc__bit_9) * column3_row16 +
+        (1 - cpu__decode__opcode_range_check__bit_9) * column3_row16 +
         column6_row3 * (column3_row16 - (column3_row0 + column3_row13)) -
         (
             cpu__decode__flag_pc_update_regular_0 * npc_reg_0 +
-            cpu__decode__opcode_rc__bit_7 * column6_row13 +
-            cpu__decode__opcode_rc__bit_8 * (column3_row0 + column6_row13)
+            cpu__decode__opcode_range_check__bit_7 * column6_row13 +
+            cpu__decode__opcode_range_check__bit_8 * (column3_row0 + column6_row13)
         )
     ) * domain14 / domain4;
     tempvar total_sum = total_sum + constraint_coefficients[14] * value;
 
     // Constraint: cpu/update_registers/update_pc/pc_cond_positive.
     tempvar value = (
-        (column6_row11 - cpu__decode__opcode_rc__bit_9) * (column3_row16 - npc_reg_0)
+        (column6_row11 - cpu__decode__opcode_range_check__bit_9) * (column3_row16 - npc_reg_0)
     ) * domain14 / domain4;
     tempvar total_sum = total_sum + constraint_coefficients[15] * value;
 
@@ -452,9 +474,9 @@ func eval_composition_polynomial{range_check_ptr}(
         column6_row17 -
         (
             column6_row1 +
-            cpu__decode__opcode_rc__bit_10 * column6_row13 +
-            cpu__decode__opcode_rc__bit_11 +
-            cpu__decode__opcode_rc__bit_12 * 2
+            cpu__decode__opcode_range_check__bit_10 * column6_row13 +
+            cpu__decode__opcode_range_check__bit_11 +
+            cpu__decode__opcode_range_check__bit_12 * 2
         )
     ) * domain14 / domain4;
     tempvar total_sum = total_sum + constraint_coefficients[16] * value;
@@ -464,66 +486,73 @@ func eval_composition_polynomial{range_check_ptr}(
         column6_row25 -
         (
             cpu__decode__fp_update_regular_0 * column6_row9 +
-            cpu__decode__opcode_rc__bit_13 * column3_row9 +
-            cpu__decode__opcode_rc__bit_12 * (column6_row1 + 2)
+            cpu__decode__opcode_range_check__bit_13 * column3_row9 +
+            cpu__decode__opcode_range_check__bit_12 * (column6_row1 + 2)
         )
     ) * domain14 / domain4;
     tempvar total_sum = total_sum + constraint_coefficients[17] * value;
 
     // Constraint: cpu/opcodes/call/push_fp.
-    tempvar value = (cpu__decode__opcode_rc__bit_12 * (column3_row9 - column6_row9)) / domain4;
+    tempvar value = (cpu__decode__opcode_range_check__bit_12 * (column3_row9 - column6_row9)) /
+        domain4;
     tempvar total_sum = total_sum + constraint_coefficients[18] * value;
 
     // Constraint: cpu/opcodes/call/push_pc.
     tempvar value = (
-        cpu__decode__opcode_rc__bit_12 * (
-            column3_row5 - (column3_row0 + cpu__decode__opcode_rc__bit_2 + 1)
+        cpu__decode__opcode_range_check__bit_12 * (
+            column3_row5 - (column3_row0 + cpu__decode__opcode_range_check__bit_2 + 1)
         )
     ) / domain4;
     tempvar total_sum = total_sum + constraint_coefficients[19] * value;
 
     // Constraint: cpu/opcodes/call/off0.
     tempvar value = (
-        cpu__decode__opcode_rc__bit_12 * (column5_row0 - global_values.half_offset_size)
+        cpu__decode__opcode_range_check__bit_12 * (column5_row0 - global_values.half_offset_size)
     ) / domain4;
     tempvar total_sum = total_sum + constraint_coefficients[20] * value;
 
     // Constraint: cpu/opcodes/call/off1.
     tempvar value = (
-        cpu__decode__opcode_rc__bit_12 * (column5_row8 - (global_values.half_offset_size + 1))
+        cpu__decode__opcode_range_check__bit_12 * (
+            column5_row8 - (global_values.half_offset_size + 1)
+        )
     ) / domain4;
     tempvar total_sum = total_sum + constraint_coefficients[21] * value;
 
     // Constraint: cpu/opcodes/call/flags.
     tempvar value = (
-        cpu__decode__opcode_rc__bit_12 * (
-            cpu__decode__opcode_rc__bit_12 +
-            cpu__decode__opcode_rc__bit_12 +
+        cpu__decode__opcode_range_check__bit_12 * (
+            cpu__decode__opcode_range_check__bit_12 +
+            cpu__decode__opcode_range_check__bit_12 +
             1 +
             1 -
-            (cpu__decode__opcode_rc__bit_0 + cpu__decode__opcode_rc__bit_1 + 4)
+            (cpu__decode__opcode_range_check__bit_0 + cpu__decode__opcode_range_check__bit_1 + 4)
         )
     ) / domain4;
     tempvar total_sum = total_sum + constraint_coefficients[22] * value;
 
     // Constraint: cpu/opcodes/ret/off0.
     tempvar value = (
-        cpu__decode__opcode_rc__bit_13 * (column5_row0 + 2 - global_values.half_offset_size)
+        cpu__decode__opcode_range_check__bit_13 * (
+            column5_row0 + 2 - global_values.half_offset_size
+        )
     ) / domain4;
     tempvar total_sum = total_sum + constraint_coefficients[23] * value;
 
     // Constraint: cpu/opcodes/ret/off2.
     tempvar value = (
-        cpu__decode__opcode_rc__bit_13 * (column5_row4 + 1 - global_values.half_offset_size)
+        cpu__decode__opcode_range_check__bit_13 * (
+            column5_row4 + 1 - global_values.half_offset_size
+        )
     ) / domain4;
     tempvar total_sum = total_sum + constraint_coefficients[24] * value;
 
     // Constraint: cpu/opcodes/ret/flags.
     tempvar value = (
-        cpu__decode__opcode_rc__bit_13 * (
-            cpu__decode__opcode_rc__bit_7 +
-            cpu__decode__opcode_rc__bit_0 +
-            cpu__decode__opcode_rc__bit_3 +
+        cpu__decode__opcode_range_check__bit_13 * (
+            cpu__decode__opcode_range_check__bit_7 +
+            cpu__decode__opcode_range_check__bit_0 +
+            cpu__decode__opcode_range_check__bit_3 +
             cpu__decode__flag_res_op1_0 -
             4
         )
@@ -531,7 +560,8 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[25] * value;
 
     // Constraint: cpu/opcodes/assert_eq/assert_eq.
-    tempvar value = (cpu__decode__opcode_rc__bit_14 * (column3_row9 - column6_row13)) / domain4;
+    tempvar value = (cpu__decode__opcode_range_check__bit_14 * (column3_row9 - column6_row13)) /
+        domain4;
     tempvar total_sum = total_sum + constraint_coefficients[26] * value;
 
     // Constraint: initial_ap.
@@ -620,35 +650,37 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar value = (column3_row3) / domain4;
     tempvar total_sum = total_sum + constraint_coefficients[40] * value;
 
-    // Constraint: rc16/perm/init0.
+    // Constraint: range_check16/perm/init0.
     tempvar value = (
-        (global_values.rc16__perm__interaction_elm - column5_row2) * column9_inter1_row1 +
+        (global_values.range_check16__perm__interaction_elm - column5_row2) * column9_inter1_row1 +
         column5_row0 -
-        global_values.rc16__perm__interaction_elm
+        global_values.range_check16__perm__interaction_elm
     ) / domain15;
     tempvar total_sum = total_sum + constraint_coefficients[41] * value;
 
-    // Constraint: rc16/perm/step0.
+    // Constraint: range_check16/perm/step0.
     tempvar value = (
-        (global_values.rc16__perm__interaction_elm - column5_row6) * column9_inter1_row5 -
-        (global_values.rc16__perm__interaction_elm - column5_row4) * column9_inter1_row1
+        (global_values.range_check16__perm__interaction_elm - column5_row6) * column9_inter1_row5 -
+        (global_values.range_check16__perm__interaction_elm - column5_row4) * column9_inter1_row1
     ) * domain17 / domain2;
     tempvar total_sum = total_sum + constraint_coefficients[42] * value;
 
-    // Constraint: rc16/perm/last.
-    tempvar value = (column9_inter1_row1 - global_values.rc16__perm__public_memory_prod) / domain17;
+    // Constraint: range_check16/perm/last.
+    tempvar value = (column9_inter1_row1 - global_values.range_check16__perm__public_memory_prod) /
+        domain17;
     tempvar total_sum = total_sum + constraint_coefficients[43] * value;
 
-    // Constraint: rc16/diff_is_bit.
-    tempvar value = (rc16__diff_0 * rc16__diff_0 - rc16__diff_0) * domain17 / domain2;
+    // Constraint: range_check16/diff_is_bit.
+    tempvar value = (range_check16__diff_0 * range_check16__diff_0 - range_check16__diff_0) *
+        domain17 / domain2;
     tempvar total_sum = total_sum + constraint_coefficients[44] * value;
 
-    // Constraint: rc16/minimum.
-    tempvar value = (column5_row2 - global_values.rc_min) / domain15;
+    // Constraint: range_check16/minimum.
+    tempvar value = (column5_row2 - global_values.range_check_min) / domain15;
     tempvar total_sum = total_sum + constraint_coefficients[45] * value;
 
-    // Constraint: rc16/maximum.
-    tempvar value = (column5_row2 - global_values.rc_max) / domain17;
+    // Constraint: range_check16/maximum.
+    tempvar value = (column5_row2 - global_values.range_check_max) / domain17;
     tempvar total_sum = total_sum + constraint_coefficients[46] * value;
 
     // Constraint: diluted_check/permutation/init0.
@@ -832,16 +864,16 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar value = (column3_row522 - (column3_row1034 + 1)) / domain13;
     tempvar total_sum = total_sum + constraint_coefficients[78] * value;
 
-    // Constraint: rc_builtin/value.
-    tempvar value = (rc_builtin__value7_0 - column3_row75) / domain6;
+    // Constraint: range_check_builtin/value.
+    tempvar value = (range_check_builtin__value7_0 - column3_row75) / domain6;
     tempvar total_sum = total_sum + constraint_coefficients[79] * value;
 
-    // Constraint: rc_builtin/addr_step.
+    // Constraint: range_check_builtin/addr_step.
     tempvar value = (column3_row202 - (column3_row74 + 1)) * domain20 / domain6;
     tempvar total_sum = total_sum + constraint_coefficients[80] * value;
 
-    // Constraint: rc_builtin/init_addr.
-    tempvar value = (column3_row74 - global_values.initial_rc_addr) / domain15;
+    // Constraint: range_check_builtin/init_addr.
+    tempvar value = (column3_row74 - global_values.initial_range_check_addr) / domain15;
     tempvar total_sum = total_sum + constraint_coefficients[81] * value;
 
     // Constraint: bitwise/init_var_pool_addr.
@@ -901,83 +933,82 @@ func eval_oods_polynomial{range_check_ptr}(
     point: felt,
     oods_point: felt,
     trace_generator: felt,
-    global_values: OodsGlobalValues*,
 ) -> (res: felt) {
     alloc_locals;
 
     // Compute powers.
     let (local pow0) = pow(trace_generator, 0);
-    let (local pow1) = pow(trace_generator, 1);
-    local pow2 = pow1 * pow1;
-    local pow3 = pow1 * pow2;
-    local pow4 = pow1 * pow3;
-    local pow5 = pow1 * pow4;
-    local pow6 = pow1 * pow5;
-    local pow7 = pow1 * pow6;
-    local pow8 = pow1 * pow7;
-    local pow9 = pow1 * pow8;
-    local pow10 = pow1 * pow9;
-    local pow11 = pow1 * pow10;
-    local pow12 = pow1 * pow11;
-    local pow13 = pow1 * pow12;
-    local pow14 = pow1 * pow13;
-    local pow15 = pow1 * pow14;
-    local pow16 = pow1 * pow15;
-    local pow17 = pow1 * pow16;
-    local pow18 = pow1 * pow17;
-    local pow19 = pow2 * pow18;
-    local pow20 = pow2 * pow19;
-    local pow21 = pow2 * pow20;
-    local pow22 = pow1 * pow21;
-    local pow23 = pow1 * pow22;
-    local pow24 = pow1 * pow23;
-    local pow25 = pow1 * pow24;
-    local pow26 = pow2 * pow25;
-    local pow27 = pow2 * pow26;
-    local pow28 = pow1 * pow27;
-    local pow29 = pow9 * pow28;
-    local pow30 = pow1 * pow29;
-    local pow31 = pow1 * pow30;
-    local pow32 = pow14 * pow31;
-    local pow33 = pow2 * pow32;
-    local pow34 = pow4 * pow33;
-    local pow35 = pow1 * pow34;
-    local pow36 = pow9 * pow35;
-    local pow37 = pow1 * pow36;
-    local pow38 = pow1 * pow37;
-    local pow39 = pow12 * pow38;
-    local pow40 = pow2 * pow39;
-    local pow41 = pow1 * pow40;
-    local pow42 = pow1 * pow41;
-    local pow43 = pow2 * pow42;
-    local pow44 = pow2 * pow43;
-    local pow45 = pow1 * pow44;
-    local pow46 = pow11 * pow45;
-    local pow47 = pow12 * pow46;
-    local pow48 = pow2 * pow47;
-    local pow49 = pow1 * pow48;
-    local pow50 = pow1 * pow49;
-    local pow51 = pow2 * pow50;
-    local pow52 = pow25 * pow51;
-    local pow53 = pow38 * pow51;
-    let (local pow54) = pow(trace_generator, 522);
-    local pow55 = pow1 * pow54;
-    let (local pow56) = pow(trace_generator, 768);
-    local pow57 = pow4 * pow56;
-    local pow58 = pow12 * pow57;
-    local pow59 = pow4 * pow58;
-    let (local pow60) = pow(trace_generator, 1004);
-    local pow61 = pow4 * pow60;
-    local pow62 = pow13 * pow61;
-    local pow63 = pow1 * pow62;
-    local pow64 = pow1 * pow63;
-    local pow65 = pow1 * pow64;
-    local pow66 = pow1 * pow65;
-    local pow67 = pow2 * pow66;
-    local pow68 = pow7 * pow67;
-    local pow69 = pow1 * pow68;
-    local pow70 = pow62 * pow65;
-    local pow71 = pow13 * pow70;
+    let (local pow1) = pow(trace_generator, 1004);
+    let (local pow2) = pow(trace_generator, 768);
+    let (local pow3) = pow(trace_generator, 522);
+    let (local pow4) = pow(trace_generator, 1);
+    local pow5 = pow3 * pow4;  // pow(trace_generator, 523).
+    local pow6 = pow4 * pow4;  // pow(trace_generator, 2).
+    local pow7 = pow4 * pow6;  // pow(trace_generator, 3).
+    local pow8 = pow4 * pow7;  // pow(trace_generator, 4).
+    local pow9 = pow1 * pow8;  // pow(trace_generator, 1008).
+    local pow10 = pow2 * pow8;  // pow(trace_generator, 772).
+    local pow11 = pow4 * pow8;  // pow(trace_generator, 5).
+    local pow12 = pow4 * pow11;  // pow(trace_generator, 6).
+    local pow13 = pow4 * pow12;  // pow(trace_generator, 7).
+    local pow14 = pow4 * pow13;  // pow(trace_generator, 8).
+    local pow15 = pow4 * pow14;  // pow(trace_generator, 9).
+    local pow16 = pow4 * pow15;  // pow(trace_generator, 10).
+    local pow17 = pow4 * pow16;  // pow(trace_generator, 11).
+    local pow18 = pow4 * pow17;  // pow(trace_generator, 12).
+    local pow19 = pow4 * pow18;  // pow(trace_generator, 13).
+    local pow20 = pow4 * pow19;  // pow(trace_generator, 14).
+    local pow21 = pow4 * pow20;  // pow(trace_generator, 15).
+    local pow22 = pow4 * pow21;  // pow(trace_generator, 16).
+    local pow23 = pow2 * pow22;  // pow(trace_generator, 784).
+    local pow24 = pow4 * pow22;  // pow(trace_generator, 17).
+    local pow25 = pow1 * pow24;  // pow(trace_generator, 1021).
+    local pow26 = pow4 * pow24;  // pow(trace_generator, 18).
+    local pow27 = pow1 * pow26;  // pow(trace_generator, 1022).
+    local pow28 = pow4 * pow27;  // pow(trace_generator, 1023).
+    local pow29 = pow6 * pow26;  // pow(trace_generator, 20).
+    local pow30 = pow6 * pow29;  // pow(trace_generator, 22).
+    local pow31 = pow6 * pow30;  // pow(trace_generator, 24).
+    local pow32 = pow4 * pow31;  // pow(trace_generator, 25).
+    local pow33 = pow4 * pow32;  // pow(trace_generator, 26).
+    local pow34 = pow1 * pow29;  // pow(trace_generator, 1024).
+    local pow35 = pow25 * pow34;  // pow(trace_generator, 2045).
+    local pow36 = pow4 * pow34;  // pow(trace_generator, 1025).
+    local pow37 = pow6 * pow36;  // pow(trace_generator, 1027).
+    local pow38 = pow4 * pow33;  // pow(trace_generator, 27).
+    local pow39 = pow4 * pow38;  // pow(trace_generator, 28).
+    local pow40 = pow6 * pow39;  // pow(trace_generator, 30).
+    local pow41 = pow6 * pow40;  // pow(trace_generator, 32).
+    local pow42 = pow4 * pow41;  // pow(trace_generator, 33).
+    local pow43 = pow1 * pow40;  // pow(trace_generator, 1034).
+    local pow44 = pow4 * pow43;  // pow(trace_generator, 1035).
+    local pow45 = pow19 * pow35;  // pow(trace_generator, 2058).
+    local pow46 = pow15 * pow42;  // pow(trace_generator, 42).
+    local pow47 = pow4 * pow46;  // pow(trace_generator, 43).
+    local pow48 = pow4 * pow47;  // pow(trace_generator, 44).
+    local pow49 = pow20 * pow48;  // pow(trace_generator, 58).
+    local pow50 = pow6 * pow49;  // pow(trace_generator, 60).
+    local pow51 = pow2 * pow29;  // pow(trace_generator, 788).
+    local pow52 = pow8 * pow50;  // pow(trace_generator, 64).
+    local pow53 = pow4 * pow52;  // pow(trace_generator, 65).
+    local pow54 = pow15 * pow53;  // pow(trace_generator, 74).
+    local pow55 = pow4 * pow54;  // pow(trace_generator, 75).
+    local pow56 = pow4 * pow55;  // pow(trace_generator, 76).
+    local pow57 = pow18 * pow56;  // pow(trace_generator, 88).
+    local pow58 = pow6 * pow57;  // pow(trace_generator, 90).
+    local pow59 = pow4 * pow58;  // pow(trace_generator, 91).
+    local pow60 = pow4 * pow59;  // pow(trace_generator, 92).
+    local pow61 = pow6 * pow60;  // pow(trace_generator, 94).
+    local pow62 = pow6 * pow61;  // pow(trace_generator, 96).
+    local pow63 = pow4 * pow62;  // pow(trace_generator, 97).
+    local pow64 = pow17 * pow63;  // pow(trace_generator, 108).
+    local pow65 = pow18 * pow64;  // pow(trace_generator, 120).
+    local pow66 = pow6 * pow65;  // pow(trace_generator, 122).
+    local pow67 = pow4 * pow66;  // pow(trace_generator, 123).
+    local pow68 = pow4 * pow67;  // pow(trace_generator, 124).
+    local pow69 = pow6 * pow68;  // pow(trace_generator, 126).
+    local pow70 = pow56 * pow69;  // pow(trace_generator, 202).
+    local pow71 = pow39 * pow69;  // pow(trace_generator, 154).
 
     // Fetch columns.
     tempvar column0 = column_values[0];
@@ -997,400 +1028,400 @@ func eval_oods_polynomial{range_check_ptr}(
     tempvar value = (column0 - oods_values[0]) / (point - pow0 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[0] * value;
 
-    tempvar value = (column0 - oods_values[1]) / (point - pow1 * oods_point);
+    tempvar value = (column0 - oods_values[1]) / (point - pow4 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[1] * value;
 
-    tempvar value = (column0 - oods_values[2]) / (point - pow2 * oods_point);
+    tempvar value = (column0 - oods_values[2]) / (point - pow6 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[2] * value;
 
-    tempvar value = (column0 - oods_values[3]) / (point - pow3 * oods_point);
+    tempvar value = (column0 - oods_values[3]) / (point - pow7 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[3] * value;
 
-    tempvar value = (column0 - oods_values[4]) / (point - pow4 * oods_point);
+    tempvar value = (column0 - oods_values[4]) / (point - pow8 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[4] * value;
 
-    tempvar value = (column0 - oods_values[5]) / (point - pow5 * oods_point);
+    tempvar value = (column0 - oods_values[5]) / (point - pow11 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[5] * value;
 
-    tempvar value = (column0 - oods_values[6]) / (point - pow6 * oods_point);
+    tempvar value = (column0 - oods_values[6]) / (point - pow12 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[6] * value;
 
-    tempvar value = (column0 - oods_values[7]) / (point - pow7 * oods_point);
+    tempvar value = (column0 - oods_values[7]) / (point - pow13 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[7] * value;
 
-    tempvar value = (column0 - oods_values[8]) / (point - pow8 * oods_point);
+    tempvar value = (column0 - oods_values[8]) / (point - pow14 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[8] * value;
 
-    tempvar value = (column0 - oods_values[9]) / (point - pow9 * oods_point);
+    tempvar value = (column0 - oods_values[9]) / (point - pow15 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[9] * value;
 
-    tempvar value = (column0 - oods_values[10]) / (point - pow10 * oods_point);
+    tempvar value = (column0 - oods_values[10]) / (point - pow16 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[10] * value;
 
-    tempvar value = (column0 - oods_values[11]) / (point - pow11 * oods_point);
+    tempvar value = (column0 - oods_values[11]) / (point - pow17 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[11] * value;
 
-    tempvar value = (column0 - oods_values[12]) / (point - pow12 * oods_point);
+    tempvar value = (column0 - oods_values[12]) / (point - pow18 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[12] * value;
 
-    tempvar value = (column0 - oods_values[13]) / (point - pow13 * oods_point);
+    tempvar value = (column0 - oods_values[13]) / (point - pow19 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[13] * value;
 
-    tempvar value = (column0 - oods_values[14]) / (point - pow14 * oods_point);
+    tempvar value = (column0 - oods_values[14]) / (point - pow20 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[14] * value;
 
-    tempvar value = (column0 - oods_values[15]) / (point - pow15 * oods_point);
+    tempvar value = (column0 - oods_values[15]) / (point - pow21 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[15] * value;
 
     tempvar value = (column1 - oods_values[16]) / (point - pow0 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[16] * value;
 
-    tempvar value = (column1 - oods_values[17]) / (point - pow1 * oods_point);
+    tempvar value = (column1 - oods_values[17]) / (point - pow4 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[17] * value;
 
-    tempvar value = (column1 - oods_values[18]) / (point - pow2 * oods_point);
+    tempvar value = (column1 - oods_values[18]) / (point - pow6 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[18] * value;
 
-    tempvar value = (column1 - oods_values[19]) / (point - pow4 * oods_point);
+    tempvar value = (column1 - oods_values[19]) / (point - pow8 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[19] * value;
 
-    tempvar value = (column1 - oods_values[20]) / (point - pow6 * oods_point);
+    tempvar value = (column1 - oods_values[20]) / (point - pow12 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[20] * value;
 
-    tempvar value = (column1 - oods_values[21]) / (point - pow8 * oods_point);
+    tempvar value = (column1 - oods_values[21]) / (point - pow14 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[21] * value;
 
-    tempvar value = (column1 - oods_values[22]) / (point - pow10 * oods_point);
+    tempvar value = (column1 - oods_values[22]) / (point - pow16 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[22] * value;
 
-    tempvar value = (column1 - oods_values[23]) / (point - pow12 * oods_point);
+    tempvar value = (column1 - oods_values[23]) / (point - pow18 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[23] * value;
 
-    tempvar value = (column1 - oods_values[24]) / (point - pow14 * oods_point);
+    tempvar value = (column1 - oods_values[24]) / (point - pow20 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[24] * value;
 
-    tempvar value = (column1 - oods_values[25]) / (point - pow16 * oods_point);
+    tempvar value = (column1 - oods_values[25]) / (point - pow22 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[25] * value;
 
-    tempvar value = (column1 - oods_values[26]) / (point - pow18 * oods_point);
+    tempvar value = (column1 - oods_values[26]) / (point - pow26 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[26] * value;
 
-    tempvar value = (column1 - oods_values[27]) / (point - pow19 * oods_point);
+    tempvar value = (column1 - oods_values[27]) / (point - pow29 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[27] * value;
 
-    tempvar value = (column1 - oods_values[28]) / (point - pow20 * oods_point);
+    tempvar value = (column1 - oods_values[28]) / (point - pow30 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[28] * value;
 
-    tempvar value = (column1 - oods_values[29]) / (point - pow21 * oods_point);
+    tempvar value = (column1 - oods_values[29]) / (point - pow31 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[29] * value;
 
-    tempvar value = (column1 - oods_values[30]) / (point - pow23 * oods_point);
+    tempvar value = (column1 - oods_values[30]) / (point - pow33 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[30] * value;
 
-    tempvar value = (column1 - oods_values[31]) / (point - pow25 * oods_point);
+    tempvar value = (column1 - oods_values[31]) / (point - pow39 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[31] * value;
 
-    tempvar value = (column1 - oods_values[32]) / (point - pow26 * oods_point);
+    tempvar value = (column1 - oods_values[32]) / (point - pow40 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[32] * value;
 
-    tempvar value = (column1 - oods_values[33]) / (point - pow27 * oods_point);
+    tempvar value = (column1 - oods_values[33]) / (point - pow41 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[33] * value;
 
-    tempvar value = (column1 - oods_values[34]) / (point - pow28 * oods_point);
+    tempvar value = (column1 - oods_values[34]) / (point - pow42 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[34] * value;
 
-    tempvar value = (column1 - oods_values[35]) / (point - pow34 * oods_point);
+    tempvar value = (column1 - oods_values[35]) / (point - pow52 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[35] * value;
 
-    tempvar value = (column1 - oods_values[36]) / (point - pow35 * oods_point);
+    tempvar value = (column1 - oods_values[36]) / (point - pow53 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[36] * value;
 
-    tempvar value = (column1 - oods_values[37]) / (point - pow39 * oods_point);
+    tempvar value = (column1 - oods_values[37]) / (point - pow57 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[37] * value;
 
-    tempvar value = (column1 - oods_values[38]) / (point - pow40 * oods_point);
+    tempvar value = (column1 - oods_values[38]) / (point - pow58 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[38] * value;
 
-    tempvar value = (column1 - oods_values[39]) / (point - pow42 * oods_point);
+    tempvar value = (column1 - oods_values[39]) / (point - pow60 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[39] * value;
 
-    tempvar value = (column1 - oods_values[40]) / (point - pow43 * oods_point);
+    tempvar value = (column1 - oods_values[40]) / (point - pow61 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[40] * value;
 
-    tempvar value = (column1 - oods_values[41]) / (point - pow44 * oods_point);
+    tempvar value = (column1 - oods_values[41]) / (point - pow62 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[41] * value;
 
-    tempvar value = (column1 - oods_values[42]) / (point - pow45 * oods_point);
+    tempvar value = (column1 - oods_values[42]) / (point - pow63 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[42] * value;
 
-    tempvar value = (column1 - oods_values[43]) / (point - pow47 * oods_point);
+    tempvar value = (column1 - oods_values[43]) / (point - pow65 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[43] * value;
 
-    tempvar value = (column1 - oods_values[44]) / (point - pow48 * oods_point);
+    tempvar value = (column1 - oods_values[44]) / (point - pow66 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[44] * value;
 
-    tempvar value = (column1 - oods_values[45]) / (point - pow50 * oods_point);
+    tempvar value = (column1 - oods_values[45]) / (point - pow68 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[45] * value;
 
-    tempvar value = (column1 - oods_values[46]) / (point - pow51 * oods_point);
+    tempvar value = (column1 - oods_values[46]) / (point - pow69 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[46] * value;
 
     tempvar value = (column2 - oods_values[47]) / (point - pow0 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[47] * value;
 
-    tempvar value = (column2 - oods_values[48]) / (point - pow1 * oods_point);
+    tempvar value = (column2 - oods_values[48]) / (point - pow4 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[48] * value;
 
     tempvar value = (column3 - oods_values[49]) / (point - pow0 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[49] * value;
 
-    tempvar value = (column3 - oods_values[50]) / (point - pow1 * oods_point);
+    tempvar value = (column3 - oods_values[50]) / (point - pow4 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[50] * value;
 
-    tempvar value = (column3 - oods_values[51]) / (point - pow2 * oods_point);
+    tempvar value = (column3 - oods_values[51]) / (point - pow6 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[51] * value;
 
-    tempvar value = (column3 - oods_values[52]) / (point - pow3 * oods_point);
+    tempvar value = (column3 - oods_values[52]) / (point - pow7 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[52] * value;
 
-    tempvar value = (column3 - oods_values[53]) / (point - pow4 * oods_point);
+    tempvar value = (column3 - oods_values[53]) / (point - pow8 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[53] * value;
 
-    tempvar value = (column3 - oods_values[54]) / (point - pow5 * oods_point);
+    tempvar value = (column3 - oods_values[54]) / (point - pow11 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[54] * value;
 
-    tempvar value = (column3 - oods_values[55]) / (point - pow8 * oods_point);
+    tempvar value = (column3 - oods_values[55]) / (point - pow14 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[55] * value;
 
-    tempvar value = (column3 - oods_values[56]) / (point - pow9 * oods_point);
+    tempvar value = (column3 - oods_values[56]) / (point - pow15 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[56] * value;
 
-    tempvar value = (column3 - oods_values[57]) / (point - pow10 * oods_point);
+    tempvar value = (column3 - oods_values[57]) / (point - pow16 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[57] * value;
 
-    tempvar value = (column3 - oods_values[58]) / (point - pow11 * oods_point);
+    tempvar value = (column3 - oods_values[58]) / (point - pow17 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[58] * value;
 
-    tempvar value = (column3 - oods_values[59]) / (point - pow12 * oods_point);
+    tempvar value = (column3 - oods_values[59]) / (point - pow18 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[59] * value;
 
-    tempvar value = (column3 - oods_values[60]) / (point - pow13 * oods_point);
+    tempvar value = (column3 - oods_values[60]) / (point - pow19 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[60] * value;
 
-    tempvar value = (column3 - oods_values[61]) / (point - pow16 * oods_point);
+    tempvar value = (column3 - oods_values[61]) / (point - pow22 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[61] * value;
 
-    tempvar value = (column3 - oods_values[62]) / (point - pow23 * oods_point);
+    tempvar value = (column3 - oods_values[62]) / (point - pow33 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[62] * value;
 
-    tempvar value = (column3 - oods_values[63]) / (point - pow24 * oods_point);
+    tempvar value = (column3 - oods_values[63]) / (point - pow38 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[63] * value;
 
-    tempvar value = (column3 - oods_values[64]) / (point - pow29 * oods_point);
+    tempvar value = (column3 - oods_values[64]) / (point - pow46 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[64] * value;
 
-    tempvar value = (column3 - oods_values[65]) / (point - pow30 * oods_point);
+    tempvar value = (column3 - oods_values[65]) / (point - pow47 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[65] * value;
 
-    tempvar value = (column3 - oods_values[66]) / (point - pow32 * oods_point);
+    tempvar value = (column3 - oods_values[66]) / (point - pow49 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[66] * value;
 
-    tempvar value = (column3 - oods_values[67]) / (point - pow36 * oods_point);
+    tempvar value = (column3 - oods_values[67]) / (point - pow54 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[67] * value;
 
-    tempvar value = (column3 - oods_values[68]) / (point - pow37 * oods_point);
+    tempvar value = (column3 - oods_values[68]) / (point - pow55 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[68] * value;
 
-    tempvar value = (column3 - oods_values[69]) / (point - pow41 * oods_point);
+    tempvar value = (column3 - oods_values[69]) / (point - pow59 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[69] * value;
 
-    tempvar value = (column3 - oods_values[70]) / (point - pow48 * oods_point);
+    tempvar value = (column3 - oods_values[70]) / (point - pow66 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[70] * value;
 
-    tempvar value = (column3 - oods_values[71]) / (point - pow49 * oods_point);
+    tempvar value = (column3 - oods_values[71]) / (point - pow67 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[71] * value;
 
-    tempvar value = (column3 - oods_values[72]) / (point - pow52 * oods_point);
+    tempvar value = (column3 - oods_values[72]) / (point - pow71 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[72] * value;
 
-    tempvar value = (column3 - oods_values[73]) / (point - pow53 * oods_point);
+    tempvar value = (column3 - oods_values[73]) / (point - pow70 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[73] * value;
 
-    tempvar value = (column3 - oods_values[74]) / (point - pow54 * oods_point);
+    tempvar value = (column3 - oods_values[74]) / (point - pow3 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[74] * value;
 
-    tempvar value = (column3 - oods_values[75]) / (point - pow55 * oods_point);
+    tempvar value = (column3 - oods_values[75]) / (point - pow5 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[75] * value;
 
-    tempvar value = (column3 - oods_values[76]) / (point - pow68 * oods_point);
+    tempvar value = (column3 - oods_values[76]) / (point - pow43 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[76] * value;
 
-    tempvar value = (column3 - oods_values[77]) / (point - pow69 * oods_point);
+    tempvar value = (column3 - oods_values[77]) / (point - pow44 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[77] * value;
 
-    tempvar value = (column3 - oods_values[78]) / (point - pow71 * oods_point);
+    tempvar value = (column3 - oods_values[78]) / (point - pow45 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[78] * value;
 
     tempvar value = (column4 - oods_values[79]) / (point - pow0 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[79] * value;
 
-    tempvar value = (column4 - oods_values[80]) / (point - pow1 * oods_point);
+    tempvar value = (column4 - oods_values[80]) / (point - pow4 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[80] * value;
 
-    tempvar value = (column4 - oods_values[81]) / (point - pow2 * oods_point);
+    tempvar value = (column4 - oods_values[81]) / (point - pow6 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[81] * value;
 
-    tempvar value = (column4 - oods_values[82]) / (point - pow3 * oods_point);
+    tempvar value = (column4 - oods_values[82]) / (point - pow7 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[82] * value;
 
     tempvar value = (column5 - oods_values[83]) / (point - pow0 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[83] * value;
 
-    tempvar value = (column5 - oods_values[84]) / (point - pow1 * oods_point);
+    tempvar value = (column5 - oods_values[84]) / (point - pow4 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[84] * value;
 
-    tempvar value = (column5 - oods_values[85]) / (point - pow2 * oods_point);
+    tempvar value = (column5 - oods_values[85]) / (point - pow6 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[85] * value;
 
-    tempvar value = (column5 - oods_values[86]) / (point - pow3 * oods_point);
+    tempvar value = (column5 - oods_values[86]) / (point - pow7 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[86] * value;
 
-    tempvar value = (column5 - oods_values[87]) / (point - pow4 * oods_point);
+    tempvar value = (column5 - oods_values[87]) / (point - pow8 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[87] * value;
 
-    tempvar value = (column5 - oods_values[88]) / (point - pow5 * oods_point);
+    tempvar value = (column5 - oods_values[88]) / (point - pow11 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[88] * value;
 
-    tempvar value = (column5 - oods_values[89]) / (point - pow6 * oods_point);
+    tempvar value = (column5 - oods_values[89]) / (point - pow12 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[89] * value;
 
-    tempvar value = (column5 - oods_values[90]) / (point - pow7 * oods_point);
+    tempvar value = (column5 - oods_values[90]) / (point - pow13 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[90] * value;
 
-    tempvar value = (column5 - oods_values[91]) / (point - pow8 * oods_point);
+    tempvar value = (column5 - oods_values[91]) / (point - pow14 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[91] * value;
 
-    tempvar value = (column5 - oods_values[92]) / (point - pow12 * oods_point);
+    tempvar value = (column5 - oods_values[92]) / (point - pow18 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[92] * value;
 
-    tempvar value = (column5 - oods_values[93]) / (point - pow25 * oods_point);
+    tempvar value = (column5 - oods_values[93]) / (point - pow39 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[93] * value;
 
-    tempvar value = (column5 - oods_values[94]) / (point - pow31 * oods_point);
+    tempvar value = (column5 - oods_values[94]) / (point - pow48 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[94] * value;
 
-    tempvar value = (column5 - oods_values[95]) / (point - pow33 * oods_point);
+    tempvar value = (column5 - oods_values[95]) / (point - pow50 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[95] * value;
 
-    tempvar value = (column5 - oods_values[96]) / (point - pow38 * oods_point);
+    tempvar value = (column5 - oods_values[96]) / (point - pow56 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[96] * value;
 
-    tempvar value = (column5 - oods_values[97]) / (point - pow42 * oods_point);
+    tempvar value = (column5 - oods_values[97]) / (point - pow60 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[97] * value;
 
-    tempvar value = (column5 - oods_values[98]) / (point - pow46 * oods_point);
+    tempvar value = (column5 - oods_values[98]) / (point - pow64 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[98] * value;
 
-    tempvar value = (column5 - oods_values[99]) / (point - pow50 * oods_point);
+    tempvar value = (column5 - oods_values[99]) / (point - pow68 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[99] * value;
 
-    tempvar value = (column5 - oods_values[100]) / (point - pow62 * oods_point);
+    tempvar value = (column5 - oods_values[100]) / (point - pow25 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[100] * value;
 
-    tempvar value = (column5 - oods_values[101]) / (point - pow64 * oods_point);
+    tempvar value = (column5 - oods_values[101]) / (point - pow28 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[101] * value;
 
-    tempvar value = (column5 - oods_values[102]) / (point - pow66 * oods_point);
+    tempvar value = (column5 - oods_values[102]) / (point - pow36 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[102] * value;
 
-    tempvar value = (column5 - oods_values[103]) / (point - pow67 * oods_point);
+    tempvar value = (column5 - oods_values[103]) / (point - pow37 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[103] * value;
 
-    tempvar value = (column5 - oods_values[104]) / (point - pow70 * oods_point);
+    tempvar value = (column5 - oods_values[104]) / (point - pow35 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[104] * value;
 
     tempvar value = (column6 - oods_values[105]) / (point - pow0 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[105] * value;
 
-    tempvar value = (column6 - oods_values[106]) / (point - pow1 * oods_point);
+    tempvar value = (column6 - oods_values[106]) / (point - pow4 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[106] * value;
 
-    tempvar value = (column6 - oods_values[107]) / (point - pow2 * oods_point);
+    tempvar value = (column6 - oods_values[107]) / (point - pow6 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[107] * value;
 
-    tempvar value = (column6 - oods_values[108]) / (point - pow3 * oods_point);
+    tempvar value = (column6 - oods_values[108]) / (point - pow7 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[108] * value;
 
-    tempvar value = (column6 - oods_values[109]) / (point - pow4 * oods_point);
+    tempvar value = (column6 - oods_values[109]) / (point - pow8 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[109] * value;
 
-    tempvar value = (column6 - oods_values[110]) / (point - pow5 * oods_point);
+    tempvar value = (column6 - oods_values[110]) / (point - pow11 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[110] * value;
 
-    tempvar value = (column6 - oods_values[111]) / (point - pow7 * oods_point);
+    tempvar value = (column6 - oods_values[111]) / (point - pow13 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[111] * value;
 
-    tempvar value = (column6 - oods_values[112]) / (point - pow9 * oods_point);
+    tempvar value = (column6 - oods_values[112]) / (point - pow15 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[112] * value;
 
-    tempvar value = (column6 - oods_values[113]) / (point - pow11 * oods_point);
+    tempvar value = (column6 - oods_values[113]) / (point - pow17 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[113] * value;
 
-    tempvar value = (column6 - oods_values[114]) / (point - pow13 * oods_point);
+    tempvar value = (column6 - oods_values[114]) / (point - pow19 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[114] * value;
 
-    tempvar value = (column6 - oods_values[115]) / (point - pow17 * oods_point);
+    tempvar value = (column6 - oods_values[115]) / (point - pow24 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[115] * value;
 
-    tempvar value = (column6 - oods_values[116]) / (point - pow22 * oods_point);
+    tempvar value = (column6 - oods_values[116]) / (point - pow32 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[116] * value;
 
-    tempvar value = (column6 - oods_values[117]) / (point - pow56 * oods_point);
+    tempvar value = (column6 - oods_values[117]) / (point - pow2 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[117] * value;
 
-    tempvar value = (column6 - oods_values[118]) / (point - pow57 * oods_point);
+    tempvar value = (column6 - oods_values[118]) / (point - pow10 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[118] * value;
 
-    tempvar value = (column6 - oods_values[119]) / (point - pow58 * oods_point);
+    tempvar value = (column6 - oods_values[119]) / (point - pow23 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[119] * value;
 
-    tempvar value = (column6 - oods_values[120]) / (point - pow59 * oods_point);
+    tempvar value = (column6 - oods_values[120]) / (point - pow51 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[120] * value;
 
-    tempvar value = (column6 - oods_values[121]) / (point - pow60 * oods_point);
+    tempvar value = (column6 - oods_values[121]) / (point - pow1 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[121] * value;
 
-    tempvar value = (column6 - oods_values[122]) / (point - pow61 * oods_point);
+    tempvar value = (column6 - oods_values[122]) / (point - pow9 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[122] * value;
 
-    tempvar value = (column6 - oods_values[123]) / (point - pow63 * oods_point);
+    tempvar value = (column6 - oods_values[123]) / (point - pow27 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[123] * value;
 
-    tempvar value = (column6 - oods_values[124]) / (point - pow65 * oods_point);
+    tempvar value = (column6 - oods_values[124]) / (point - pow34 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[124] * value;
 
     tempvar value = (column7 - oods_values[125]) / (point - pow0 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[125] * value;
 
-    tempvar value = (column7 - oods_values[126]) / (point - pow1 * oods_point);
+    tempvar value = (column7 - oods_values[126]) / (point - pow4 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[126] * value;
 
     tempvar value = (column8 - oods_values[127]) / (point - pow0 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[127] * value;
 
-    tempvar value = (column8 - oods_values[128]) / (point - pow1 * oods_point);
+    tempvar value = (column8 - oods_values[128]) / (point - pow4 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[128] * value;
 
     tempvar value = (column9 - oods_values[129]) / (point - pow0 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[129] * value;
 
-    tempvar value = (column9 - oods_values[130]) / (point - pow1 * oods_point);
+    tempvar value = (column9 - oods_values[130]) / (point - pow4 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[130] * value;
 
-    tempvar value = (column9 - oods_values[131]) / (point - pow2 * oods_point);
+    tempvar value = (column9 - oods_values[131]) / (point - pow6 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[131] * value;
 
-    tempvar value = (column9 - oods_values[132]) / (point - pow5 * oods_point);
+    tempvar value = (column9 - oods_values[132]) / (point - pow11 * oods_point);
     tempvar total_sum = total_sum + constraint_coefficients[132] * value;
 
     // Sum the OODS boundary constraints on the composition polynomials.

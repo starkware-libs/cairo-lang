@@ -294,7 +294,7 @@ def gather_deprecated_compiled_class(
     disable_hint_validation: bool = False,
 ) -> DeprecatedCompiledClass:
     """
-    Given either a DeprecatedCompiledClass instance or a source file path, returns the respective
+    Given either a `DeprecatedCompiledClass` instance or a source file path, returns the respective
     DeprecatedCompiledClass instance.
     """
     assert (source is None) != (

@@ -20,7 +20,7 @@ contract FactRegistry is IQueryableFactRegistry {
     /*
       The internal implementation that checks if the fact was registered.
     */
-    function internalIsValid(bytes32 fact) internal view returns (bool) {
+    function internalIsValid(bytes32 fact) internal view virtual returns (bool) {
         return verifiedFact[fact];
     }
 

@@ -431,7 +431,7 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
 
         selector_formatter = fields.EntryPointSelectorField.format
         hash_formatter = fields.ClassHashIntField.format
-        # Non-unique entry points are not possible in a DeprecatedCompiledClass object, thus
+        # Non-unique entry points are not possible in a `DeprecatedCompiledClass` object, thus
         # len(filtered_entry_points) <= 1.
         stark_assert(
             len(filtered_entry_points) == 1,

@@ -8,23 +8,23 @@ from starkware.starknet.business_logic.execution.objects import (
     ResourcesMapping,
 )
 from starkware.starknet.business_logic.state.state_api import SyncState
-from starkware.starknet.business_logic.transaction.fee import calculate_tx_fee
-from starkware.starknet.business_logic.transaction.objects import (
-    InternalAccountTransaction,
-    InternalDeclare,
-    InternalDeployAccount,
-    InternalInvokeFunction,
-    InternalTransaction,
+from starkware.starknet.business_logic.transaction.deprecated_objects import (
+    DeprecatedInternalAccountTransaction,
+    DeprecatedInternalDeclare,
+    DeprecatedInternalDeployAccount,
+    DeprecatedInternalInvokeFunction,
+    DeprecatedInternalTransaction,
 )
+from starkware.starknet.business_logic.transaction.fee import calculate_tx_fee
 from starkware.starknet.business_logic.transaction.state_objects import FeeInfo
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.services.api.feeder_gateway.response_objects import FeeEstimationInfo
-from starkware.starknet.services.api.gateway.transaction import (
-    AccountTransaction,
-    Declare,
-    DeployAccount,
+from starkware.starknet.services.api.gateway.deprecated_transaction import (
+    DeprecatedAccountTransaction,
     DeprecatedDeclare,
-    InvokeFunction,
+    DeprecatedDeployAccount,
+    DeprecatedInvokeFunction,
+    DeprecatedOldDeclare,
 )
 from starkware.starkware_utils.config_base import Config
 
@@ -36,7 +36,7 @@ def format_fee_info(gas_price: int, overall_fee: int) -> FeeEstimationInfo:
 
 
 @dataclasses.dataclass(frozen=True)  # type: ignore[misc]
-class InternalAccountTransactionForSimulate(InternalAccountTransaction):
+class InternalAccountTransactionForSimulate(DeprecatedInternalAccountTransaction):
     """
     Represents an internal transaction in the Starknet network for the simulate transaction API.
     """
@@ -44,14 +44,14 @@ class InternalAccountTransactionForSimulate(InternalAccountTransaction):
     # Simulation flags; should be replaced with actual values after construction.
     skip_validate: Optional[bool] = None
 
-    # Override InternalAccountTransaction flag; enable query-version transactions to be created and
-    # executed.
+    # Override internal account transaction flag; enable query-version transactions to be created
+    # and  executed.
     only_query: ClassVar[bool] = True
 
     @classmethod
     def create_for_simulate(
         cls, external_tx: EverestTransaction, general_config: Config, skip_validate: bool
-    ) -> InternalTransaction:
+    ) -> DeprecatedInternalTransaction:
         """
         Returns an internal transaction for simulation with the related simulation flags.
         """
@@ -63,20 +63,20 @@ class InternalAccountTransactionForSimulate(InternalAccountTransaction):
     @classmethod
     def _from_external(
         cls, external_tx: EverestTransaction, general_config: Config
-    ) -> InternalTransaction:
+    ) -> DeprecatedInternalTransaction:
         """
         Returns an internal transaction for simulation, generated based on an external one.
         """
         # Downcast arguments to application-specific types.
-        assert isinstance(external_tx, AccountTransaction)
+        assert isinstance(external_tx, DeprecatedAccountTransaction)
         assert isinstance(general_config, StarknetGeneralConfig)
 
         internal_cls: Type[InternalAccountTransactionForSimulate]
-        if isinstance(external_tx, InvokeFunction):
+        if isinstance(external_tx, DeprecatedInvokeFunction):
             internal_cls = InternalInvokeFunctionForSimulate
-        elif isinstance(external_tx, (Declare, DeprecatedDeclare)):
-            internal_cls = InternalDeclareForSimulate
-        elif isinstance(external_tx, DeployAccount):
+        elif isinstance(external_tx, (DeprecatedDeclare, DeprecatedOldDeclare)):
+            internal_cls = InternalDeprecatedDeclareForSimulate
+        elif isinstance(external_tx, DeprecatedDeployAccount):
             internal_cls = InternalDeployAccountForSimulate
         else:
             raise NotImplementedError(f"Unexpected type {type(external_tx).__name__}.")
@@ -92,7 +92,9 @@ class InternalAccountTransactionForSimulate(InternalAccountTransaction):
         Overrides the charge fee method. Only calculates the actual fee and does not charge any fee.
         """
         actual_fee = calculate_tx_fee(
-            gas_price=state.block_info.gas_price, resources=resources, general_config=general_config
+            l1_gas_price=state.block_info.eth_l1_gas_price,
+            resources=resources,
+            general_config=general_config,
         )
 
         return None, actual_fee
@@ -121,7 +123,7 @@ class InternalAccountTransactionForSimulate(InternalAccountTransaction):
 
 @dataclasses.dataclass(frozen=True)
 class InternalInvokeFunctionForSimulate(
-    InternalAccountTransactionForSimulate, InternalInvokeFunction
+    InternalAccountTransactionForSimulate, DeprecatedInternalInvokeFunction
 ):
     """
     Represents an internal invoke function in the StarkNet network for the simulate transaction API.
@@ -129,7 +131,9 @@ class InternalInvokeFunctionForSimulate(
 
 
 @dataclasses.dataclass(frozen=True)
-class InternalDeclareForSimulate(InternalAccountTransactionForSimulate, InternalDeclare):
+class InternalDeprecatedDeclareForSimulate(
+    InternalAccountTransactionForSimulate, DeprecatedInternalDeclare
+):
     """
     Represents an internal declare in the StarkNet network for the simulate transaction API.
     """
@@ -137,7 +141,7 @@ class InternalDeclareForSimulate(InternalAccountTransactionForSimulate, Internal
 
 @dataclasses.dataclass(frozen=True)
 class InternalDeployAccountForSimulate(
-    InternalAccountTransactionForSimulate, InternalDeployAccount
+    InternalAccountTransactionForSimulate, DeprecatedInternalDeployAccount
 ):
     """
     Represents an internal deploy account in the StarkNet network for the simulate transaction API.

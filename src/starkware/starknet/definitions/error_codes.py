@@ -54,13 +54,17 @@ class StarknetErrorCode(ErrorCode):
     OUT_OF_RANGE_COMPILED_CLASS_HASH = auto()
     OUT_OF_RANGE_CONTRACT_ADDRESS = auto()
     OUT_OF_RANGE_CONTRACT_STORAGE_KEY = auto()
+    OUT_OF_RANGE_DATA_AVAILABILITY_MODE = auto()
     OUT_OF_RANGE_ENTRY_POINT_FUNCTION_IDX = auto()
     OUT_OF_RANGE_ENTRY_POINT_OFFSET = auto()
     OUT_OF_RANGE_ENTRY_POINT_SELECTOR = auto()
     OUT_OF_RANGE_FEE = auto()
     OUT_OF_RANGE_GAS_PRICE = auto()
+    OUT_OF_RANGE_MAX_AMOUNT = auto()
+    OUT_OF_RANGE_MAX_PRICE_PER_UNIT = auto()
     OUT_OF_RANGE_NONCE = auto()
     OUT_OF_RANGE_SEQUENCER_ADDRESS = auto()
+    OUT_OF_RANGE_TIP = auto()
     OUT_OF_RANGE_TRANSACTION_HASH = auto()
     OUT_OF_RANGE_TRANSACTION_ID = auto()
     OUT_OF_RANGE_TRANSACTION_VERSION = auto()
@@ -84,6 +88,7 @@ class StarknetErrorCode(ErrorCode):
     PY_STATE_ERROR = auto()
     PY_STORAGE_ERROR = auto()
     PY_TRANSACTION_EXECUTION_ERROR = auto()
+    PY_TRANSACTION_PRE_VALIDATION_ERROR = auto()
     VALIDATE_FAILURE = auto()
 
     @classmethod
@@ -111,11 +116,18 @@ common_error_codes: List[ErrorCode] = [
     StarkErrorCode.SCHEMA_VALIDATION_ERROR,
     StarknetErrorCode.INVALID_TRANSACTION_NONCE,
     StarknetErrorCode.NON_EMPTY_SIGNATURE,
+    StarknetErrorCode.OUT_OF_RANGE_CLASS_HASH,
+    StarknetErrorCode.OUT_OF_RANGE_COMPILED_CLASS_HASH,
     StarknetErrorCode.OUT_OF_RANGE_CONTRACT_ADDRESS,
+    StarknetErrorCode.OUT_OF_RANGE_DATA_AVAILABILITY_MODE,
     StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_FUNCTION_IDX,
     StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_OFFSET,
     StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_SELECTOR,
     StarknetErrorCode.OUT_OF_RANGE_FEE,
+    StarknetErrorCode.OUT_OF_RANGE_MAX_AMOUNT,
+    StarknetErrorCode.OUT_OF_RANGE_MAX_PRICE_PER_UNIT,
+    StarknetErrorCode.OUT_OF_RANGE_NONCE,
+    StarknetErrorCode.OUT_OF_RANGE_TIP,
     StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_VERSION,
     # External-to-internal conversion errors.
     StarknetErrorCode.EXTERNAL_TO_INTERNAL_CONVERSION_ERROR,
@@ -185,8 +197,6 @@ feeder_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
         StarknetErrorCode.NO_SIGNATURE_FOR_PENDING_BLOCK,
         StarknetErrorCode.OUT_OF_RANGE_BLOCK_HASH,
         StarknetErrorCode.OUT_OF_RANGE_BLOCK_ID,
-        StarknetErrorCode.OUT_OF_RANGE_CLASS_HASH,
-        StarknetErrorCode.OUT_OF_RANGE_COMPILED_CLASS_HASH,
         StarknetErrorCode.OUT_OF_RANGE_CONTRACT_ADDRESS,
         StarknetErrorCode.OUT_OF_RANGE_CONTRACT_STORAGE_KEY,
         StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_HASH,

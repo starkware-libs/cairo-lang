@@ -14,7 +14,7 @@ class BitwiseInstanceDef(BuiltinInstanceDef):
     total_n_bits: int
 
     @property
-    def cells_per_builtin(self) -> int:
+    def memory_cells_per_instance(self) -> int:
         return CELLS_PER_BITWISE
 
     @property

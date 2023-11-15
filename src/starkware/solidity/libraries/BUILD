@@ -1,5 +1,9 @@
 load("//bazel_utils:solidity.bzl", "sol_library")
 
+package(default_visibility = ["//visibility:public"])
+
+exports_files(glob(["*.sol"]))
+
 sol_library(
     name = "named_storage_sol",
     srcs = [
@@ -17,3 +21,7 @@ sol_library(
     visibility = ["//visibility:public"],
     deps = [],
 )
+
+exports_files([
+    "Addresses.sol",
+])

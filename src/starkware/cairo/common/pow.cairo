@@ -1,4 +1,4 @@
-from starkware.cairo.common.math import assert_le
+from starkware.cairo.common.math import assert_le, sign
 from starkware.cairo.common.registers import get_ap, get_fp_and_pc
 
 // Returns base ** exp, for 0 <= exp < 2**251.
@@ -48,4 +48,18 @@ func pow{range_check_ptr}(base, exp) -> (res: felt) {
     let n_steps = (__ap__ - cast(initial_locs, felt*)) / LoopLocals.SIZE - 1;
     assert_le(n_steps, 251);
     return (res=locs.res);
+}
+
+// Returns base ** exp, for -rc_bound < exp < rc_bound.
+// exp < PRIME / 2 is considered positive and exp > PRIME / 2 is considered negative.
+func signed_pow{range_check_ptr}(base, exp) -> felt {
+    let exp_sign = sign(exp);
+    if (exp_sign == -1) {
+        %{ assert ids.base != 0, "Cannot raise 0 to a negative power." %}
+        let pos_exp = exp * (-1);
+        let (pow_res) = pow(base, pos_exp);
+        return 1 / pow_res;
+    }
+    let (res) = pow(base, exp);
+    return res;
 }

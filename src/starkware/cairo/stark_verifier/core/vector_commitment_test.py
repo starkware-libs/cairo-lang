@@ -52,7 +52,7 @@ def test_vector_commitment(program, structs):
         commitment_hash=int(data["expected_root"], 16),
     )
 
-    runner = CairoFunctionRunner(program, layout="small")
+    runner = CairoFunctionRunner(program, layout="starknet")
     query_indices = data["merkle_queue_indices"]
     query_values = [int(query, 16) for query in data["merkle_queue_values"]]
     n_queries = len(query_indices)
@@ -75,8 +75,8 @@ def test_vector_commitment(program, structs):
         "vector_commitment_decommit",
         range_check_ptr=runner.range_check_builtin.base,
         blake2s_ptr=blake2s_ptr,
-        pedersen_ptr=runner.pedersen_builtin.base,
         bitwise_ptr=runner.bitwise_builtin.base,
+        poseidon_ptr=runner.poseidon_builtin.base,
         commitment=commitment,
         n_queries=n_queries,
         queries=queries,
@@ -84,15 +84,14 @@ def test_vector_commitment(program, structs):
             n_authentications=len(data["proof"]),
             authentications=proof_values,
         ),
-        n_columns=1,
     )
     (
         res_range_check_ptr,
         res_blake2s_ptr,
-        res_pedersen_ptr,
         res_bitwise_ptr,
+        res_poseidon_ptr,
     ) = runner.get_return_values(4)
     validate_builtin_usage(runner.range_check_builtin, res_range_check_ptr)
     assert res_blake2s_ptr.segment_index == blake2s_ptr.segment_index
-    validate_builtin_usage(runner.pedersen_builtin, res_pedersen_ptr)
     validate_builtin_usage(runner.bitwise_builtin, res_bitwise_ptr)
+    validate_builtin_usage(runner.poseidon_builtin, res_poseidon_ptr)

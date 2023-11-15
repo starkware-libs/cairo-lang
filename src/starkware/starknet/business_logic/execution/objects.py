@@ -26,7 +26,9 @@ from starkware.starknet.definitions.execution_mode import ExecutionMode
 from starkware.starknet.definitions.transaction_type import TransactionType
 from starkware.starknet.public.abi import CONSTRUCTOR_ENTRY_POINT_SELECTOR
 from starkware.starknet.services.api.contract_class.contract_class import EntryPointType
-from starkware.starknet.services.api.gateway.transaction import DEFAULT_DECLARE_SENDER_ADDRESS
+from starkware.starknet.services.api.gateway.deprecated_transaction import (
+    DEFAULT_DECLARE_SENDER_ADDRESS,
+)
 from starkware.starkware_utils.error_handling import stark_assert
 from starkware.starkware_utils.marshmallow_dataclass_fields import (
     SetField,
@@ -111,7 +113,7 @@ class TransactionExecutionContext(ValidatedDataclass):
         max_fee: int = 0,
         nonce: int = 0,
         n_steps: int = 100000,
-        version: int = constants.TRANSACTION_VERSION,
+        version: int = constants.DEPRECATED_TRANSACTION_VERSION,
         execution_mode=ExecutionMode.EXECUTE,
     ) -> "TransactionExecutionContext":
         return cls(
@@ -462,7 +464,7 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
 
     # Transaction-specific validation call info.
     validate_info: Optional[CallInfo]
-    # Transaction-specific execution call info, None for Declare.
+    # Transaction-specific execution call info, `None` for declare transaction.
     call_info: Optional[CallInfo]
     # Fee transfer call info, executed by the BE for account contract transactions (e.g., declare
     # and invoke).

@@ -12,7 +12,8 @@ from typing import IO, Dict, List, Tuple
 import starkware.python.python_dependencies as python_dependencies
 from starkware.cairo.lang.compiler.debug_info import DebugInfo
 from starkware.cairo.lang.compiler.program import Program, ProgramBase
-from starkware.cairo.lang.instances import LAYOUTS
+from starkware.cairo.lang.dynamic_layout_params import CairoLayoutParams
+from starkware.cairo.lang.instances import LAYOUTS, CairoLayout
 from starkware.cairo.lang.version import __version__
 from starkware.cairo.lang.vm.air_public_input import PublicInput, PublicMemoryEntry
 from starkware.cairo.lang.vm.cairo_pie import CairoPie
@@ -143,9 +144,17 @@ def main():
     )
     parser.add_argument(
         "--layout",
-        choices=LAYOUTS.keys(),
+        choices=list(LAYOUTS.keys()),
         default="plain",
         help="The layout of the Cairo AIR.",
+    )
+    parser.add_argument(
+        "--cairo_layout_params_file",
+        type=argparse.FileType("r"),
+        help=(
+            "Path to a json file representing a CairoLayoutParams object. Must be given for "
+            "dynamic layouts only."
+        ),
     )
     parser.add_argument("--tracer", action="store_true", help="Run the tracer.")
     parser.add_argument(
@@ -168,6 +177,15 @@ def main():
         choices=["Debug", "Release", "RelWithDebInfo"],
         help="Build flavor.",
     )
+    parser.add_argument(
+        "--allow_missing_builtins",
+        nargs="?",
+        type=lambda x: {"True": True, "False": False}[x],
+        choices=[None, True, False],
+        const=True,
+        default=None,
+        help="Allow cairo_run to run without all the builtins.",
+    )
     python_dependencies.add_argparse_argument(parser)
 
     args = parser.parse_args()
@@ -189,10 +207,14 @@ def main():
         assert args.proof_mode, "--air_public_input can only be used in proof_mode."
     if args.air_private_input:
         assert args.proof_mode, "--air_private_input can only be used in proof_mode."
+    if args.layout == "dynamic":
+        assert args.cairo_layout_params_file is not None
 
     # If secure_run is not specified, the default is False in proof mode and True otherwise.
     if args.secure_run is None:
         args.secure_run = not args.proof_mode
+    if args.allow_missing_builtins is None:
+        args.allow_missing_builtins = args.proof_mode
 
     with get_crypto_lib_context_manager(args.flavor):
         try:
@@ -271,13 +293,19 @@ def cairo_run(args):
         initial_memory = cairo_pie_input.memory
         steps_input = cairo_pie_input.execution_resources.n_steps
 
-    layout = LAYOUTS[args.layout]
+    layout: CairoLayout
+    if args.layout == "dynamic":
+        cairo_layout_params_dict = json.load(args.cairo_layout_params_file)
+        layout = CairoLayoutParams(**cairo_layout_params_dict).to_cairo_layout()
+    else:
+        layout = LAYOUTS[args.layout]
+
     runner = CairoRunner(
         program=program,
         layout=layout,
         memory=initial_memory,
         proof_mode=args.proof_mode,
-        allow_missing_builtins=args.proof_mode,
+        allow_missing_builtins=args.allow_missing_builtins,
     )
 
     runner.initialize_segments()

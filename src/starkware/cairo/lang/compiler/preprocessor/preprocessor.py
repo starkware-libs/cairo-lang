@@ -1158,7 +1158,7 @@ Expected 'elm.element_type' to be a 'namespace'. Found: '{elm.element_type}'."""
             if isinstance(elm.expr, ExprHint):
                 if not isinstance(dest_type, (TypeFelt, TypePointer)):
                     raise PreprocessorError(
-                        "Hint tempvars must be of type felt or a pointer.",
+                        "Only a felt or a pointer can be initialized using nondet.",
                         location=elm.expr.location,
                     )
                 self.visit(

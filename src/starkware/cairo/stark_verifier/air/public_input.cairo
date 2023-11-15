@@ -1,4 +1,5 @@
 from starkware.cairo.common.alloc import alloc
+from starkware.cairo.common.builtin_poseidon.poseidon import poseidon_hash_many
 from starkware.cairo.common.cairo_blake2s.blake2s import (
     blake2s_add_felt,
     blake2s_add_felts,
@@ -6,10 +7,10 @@ from starkware.cairo.common.cairo_blake2s.blake2s import (
     blake2s_bigend,
     blake2s_felts,
 )
-from starkware.cairo.common.cairo_builtins import BitwiseBuiltin
+from starkware.cairo.common.cairo_builtins import BitwiseBuiltin, PoseidonBuiltin
 from starkware.cairo.common.hash import HashBuiltin
 from starkware.cairo.common.hash_state import hash_finalize, hash_init, hash_update
-from starkware.cairo.common.math import assert_le, assert_nn, assert_nn_le
+from starkware.cairo.common.math import assert_le, assert_nn, assert_nn_le, split_felt
 from starkware.cairo.common.pow import pow
 from starkware.cairo.common.uint256 import Uint256
 from starkware.cairo.stark_verifier.air.layout import AirWithLayout
@@ -19,14 +20,19 @@ from starkware.cairo.stark_verifier.air.public_memory import (
     get_continuous_pages_product,
     get_page_product,
 )
+from starkware.cairo.stark_verifier.core.serialize_utils import (
+    append_felt,
+    append_felts,
+    append_uint256,
+)
 
 struct PublicInput {
     // Base 2 log of the number of steps.
     log_n_steps: felt,
     // Minimum value of range check component.
-    rc_min: felt,
+    range_check_min: felt,
     // Maximum value of range check component.
-    rc_max: felt,
+    range_check_max: felt,
     // Layout ID.
     layout: felt,
     // Dynamic layout params.
@@ -58,9 +64,9 @@ struct SegmentInfo {
 
 // Computes the hash of the public input, which is used as the initial seed for the Fiat-Shamir
 // heuristic.
-func public_input_hash{
-    range_check_ptr, pedersen_ptr: HashBuiltin*, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: felt*
-}(air: AirWithLayout*, public_input: PublicInput*) -> (res: Uint256) {
+func public_input_hash{range_check_ptr, pedersen_ptr: HashBuiltin*, poseidon_ptr: PoseidonBuiltin*}(
+    air: AirWithLayout*, public_input: PublicInput*
+) -> (res: Uint256) {
     alloc_locals;
 
     // Main page hash.
@@ -73,52 +79,47 @@ func public_input_hash{
     let (main_page_hash) = hash_finalize{hash_ptr=pedersen_ptr}(hash_state_ptr=hash_state_ptr);
 
     let (data: felt*) = alloc();
-    let data_start = data;
+    local data_start: felt* = data;
     with data {
-        blake2s_add_felt(num=public_input.log_n_steps, bigend=1);
-        blake2s_add_felt(num=public_input.rc_min, bigend=1);
-        blake2s_add_felt(num=public_input.rc_max, bigend=1);
-        blake2s_add_felt(num=public_input.layout, bigend=1);
+        append_felt(elem=public_input.log_n_steps);
+        append_felt(elem=public_input.range_check_min);
+        append_felt(elem=public_input.range_check_max);
+        append_felt(elem=public_input.layout);
 
-        blake2s_add_felts(
-            n_elements=air.air.n_dynamic_params, elements=public_input.dynamic_params, bigend=1
-        );
+        append_felts(len=air.air.n_dynamic_params, arr=public_input.dynamic_params);
 
         // n_segments is not written, it is assumed to be fixed.
-        blake2s_add_felts(
-            n_elements=public_input.n_segments * SegmentInfo.SIZE,
-            elements=public_input.segments,
-            bigend=1,
-        );
-        blake2s_add_felt(num=public_input.padding_addr, bigend=1);
-        blake2s_add_felt(num=public_input.padding_value, bigend=1);
-        blake2s_add_felt(num=1 + public_input.n_continuous_pages, bigend=1);
+        append_felts(len=public_input.n_segments * SegmentInfo.SIZE, arr=public_input.segments);
+        append_felt(elem=public_input.padding_addr);
+        append_felt(elem=public_input.padding_value);
+        append_felt(elem=1 + public_input.n_continuous_pages);
 
         // Main page.
-        blake2s_add_felt(num=public_input.main_page_len, bigend=1);
-        blake2s_add_felt(num=main_page_hash, bigend=1);
+        append_felt(elem=public_input.main_page_len);
+        append_felt(elem=main_page_hash);
 
         // Add the rest of the pages.
         add_continuous_page_headers(
             n_pages=public_input.n_continuous_pages, pages=public_input.continuous_page_headers
         );
     }
-    // Each word in data is 4 bytes. This is specific to the blake implementation.
-    let n_bytes = (data - data_start) * 4;
-    let (res) = blake2s_bigend(data=data_start, n_bytes=n_bytes);
-    return (res=res);
+
+    let (res) = poseidon_hash_many(n=data - data_start, elements=data_start);
+    let (high, low) = split_felt(value=res);
+    return (res=Uint256(low=low, high=high));
 }
 
-func add_continuous_page_headers{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, data: felt*}(
+func add_continuous_page_headers{range_check_ptr, data: felt*}(
     n_pages: felt, pages: ContinuousPageHeader*
 ) {
     if (n_pages == 0) {
         return ();
     }
 
-    blake2s_add_felt(num=pages.start_address, bigend=1);
-    blake2s_add_felt(num=pages.size, bigend=1);
-    blake2s_add_uint256_bigend(pages.hash);
+    assert data[0] = pages.start_address;
+    assert data[1] = pages.size;
+    assert data[2] = pages.hash;
+    let data = data + 3;
 
     return add_continuous_page_headers(n_pages=n_pages - 1, pages=&pages[1]);
 }

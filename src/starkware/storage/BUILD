@@ -110,8 +110,8 @@ pytest_test(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "starkware_storage_lib",
-        "starkware_storage_test_utils_lib",
+        ":starkware_storage_lib",
+        ":starkware_storage_test_utils_lib",
         requirement("pytest_asyncio"),
     ],
 )

@@ -78,12 +78,10 @@ class CodeElementConst(CodeElement):
 
         identifier_particles.add_prefix("const ")
         identifier_particles.add_suffix(f" = {expr_particles.pop_prefix()}")
-        expr_particles.add_suffix(";")
+        particles = identifier_particles + expr_particles
+        particles.add_suffix(";")
 
-        return code_particles_in_lines(
-            particles=identifier_particles + expr_particles,
-            allowed_line_length=allowed_line_length,
-        )
+        return code_particles_in_lines(particles=particles, allowed_line_length=allowed_line_length)
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.identifier, self.expr]
@@ -113,12 +111,10 @@ class CodeElementReference(CodeElement):
 
         identifier_particle.add_prefix("let ")
         identifier_particle.add_suffix(f" = {expr_particles.pop_prefix()}")
-        expr_particles.add_suffix(";")
+        particles = ParticleList(elements=[identifier_particle]) + expr_particles
+        particles.add_suffix(";")
 
-        return code_particles_in_lines(
-            particles=ParticleList(elements=[identifier_particle]) + expr_particles,
-            allowed_line_length=allowed_line_length,
-        )
+        return code_particles_in_lines(particles=particles, allowed_line_length=allowed_line_length)
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.typed_identifier, self.expr]
@@ -128,7 +124,7 @@ class CodeElementReference(CodeElement):
 class CodeElementLocalVariable(CodeElement):
     """
     Represents a statement of the form:
-      local x [: expr_type] = [expr];
+      local x [: expr_type] [= expr];
 
     Both the expr_type and the initialization expr are optional.
     """
@@ -158,7 +154,9 @@ class CodeElementLocalVariable(CodeElement):
 class CodeElementTemporaryVariable(CodeElement):
     """
     Represents a statement of the form:
-      tempvar x = expr;
+      tempvar x [: expr_type] [= expr];
+
+    Both the expr_type and the initialization expr are optional.
     """
 
     typed_identifier: TypedIdentifier
@@ -201,11 +199,10 @@ class CodeElementCompoundAssertEq(CodeElement):
         a_particles.add_prefix("assert ")
         a_particles.add_suffix(" = ")
         a_particles.add_suffix(b_particles.pop_prefix())
-        b_particles.add_suffix(";")
+        particles = a_particles + b_particles
+        particles.add_suffix(";")
 
-        return code_particles_in_lines(
-            particles=a_particles + b_particles, allowed_line_length=allowed_line_length
-        )
+        return code_particles_in_lines(particles=particles, allowed_line_length=allowed_line_length)
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.a, self.b]
@@ -224,11 +221,10 @@ class CodeElementStaticAssert(CodeElement):
         a_particles.add_prefix("static_assert ")
         a_particles.add_suffix(" == ")
         a_particles.add_suffix(b_particles.pop_prefix())
-        b_particles.add_suffix(";")
+        particles = a_particles + b_particles
+        particles.add_suffix(";")
 
-        return code_particles_in_lines(
-            particles=a_particles + b_particles, allowed_line_length=allowed_line_length
-        )
+        return code_particles_in_lines(particles=particles, allowed_line_length=allowed_line_length)
 
     def get_children(self) -> Sequence[Optional[AstNode]]:
         return [self.a, self.b]
@@ -612,16 +608,14 @@ class CodeElementTypeDef(CodeElement):
 
     def format(self, allowed_line_length):
         identifier_particles = self.identifier.get_particles()
-        type_particle = self.cairo_type.to_particle()
+        type_particles = ParticleList(elements=[self.cairo_type.to_particle()])
 
         identifier_particles.add_prefix("using ")
-        identifier_particles.add_suffix(f" = {type_particle.pop_prefix()}")
-        type_particle.add_suffix(";")
+        identifier_particles.add_suffix(f" = {type_particles.pop_prefix()}")
+        particles = identifier_particles + type_particles
+        particles.add_suffix(";")
 
-        return code_particles_in_lines(
-            particles=identifier_particles + ParticleList(elements=[type_particle]),
-            allowed_line_length=allowed_line_length,
-        )
+        return code_particles_in_lines(particles=particles, allowed_line_length=allowed_line_length)
 
     @property
     def name(self) -> str:

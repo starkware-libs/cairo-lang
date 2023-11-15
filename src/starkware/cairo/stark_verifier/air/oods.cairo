@@ -1,11 +1,6 @@
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.memcpy import memcpy
-from starkware.cairo.stark_verifier.air.layout import (
-    AirWithLayout,
-    Layout,
-    OodsGlobalValues,
-    eval_oods_polynomial,
-)
+from starkware.cairo.stark_verifier.air.layout import AirWithLayout, Layout, eval_oods_polynomial
 from starkware.cairo.stark_verifier.air.public_input import PublicInput
 from starkware.cairo.stark_verifier.air.traces import (
     CONSTRAINT_DEGREE,
@@ -32,13 +27,9 @@ func eval_oods_boundary_poly_at_points{range_check_ptr}(
     local n_interaction_columns = air.layout.n_interaction_columns;
     assert decommitment.interaction.n_values = n_points * n_interaction_columns;
     assert composition_decommitment.n_values = n_points * N_COMPOSITION_COLUMNS;
-    tempvar global_values: OodsGlobalValues* = new OodsGlobalValues(
-        dynamic_params=public_input.dynamic_params
-    );
     let (evaluations: felt*) = alloc();
     eval_oods_boundary_poly_at_points_inner(
         layout=&air.layout,
-        global_values=global_values,
         eval_info=eval_info,
         n_points=n_points,
         points=points,
@@ -53,7 +44,6 @@ func eval_oods_boundary_poly_at_points{range_check_ptr}(
 
 func eval_oods_boundary_poly_at_points_inner{range_check_ptr}(
     layout: Layout*,
-    global_values: OodsGlobalValues*,
     eval_info: OodsEvaluationInfo*,
     n_points: felt,
     points: felt*,
@@ -88,13 +78,11 @@ func eval_oods_boundary_poly_at_points_inner{range_check_ptr}(
         point=points[0],
         oods_point=eval_info.oods_point,
         trace_generator=eval_info.trace_generator,
-        global_values=global_values,
     );
     assert evaluations[0] = res;
 
     return eval_oods_boundary_poly_at_points_inner(
         layout=layout,
-        global_values=global_values,
         eval_info=eval_info,
         n_points=n_points - 1,
         points=&points[1],

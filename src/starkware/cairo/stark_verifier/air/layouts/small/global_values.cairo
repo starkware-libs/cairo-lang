@@ -18,10 +18,10 @@ struct GlobalValues {
     initial_ap: felt,
     final_ap: felt,
     initial_pedersen_addr: felt,
-    initial_rc_addr: felt,
+    initial_range_check_addr: felt,
     initial_ecdsa_addr: felt,
-    rc_min: felt,
-    rc_max: felt,
+    range_check_min: felt,
+    range_check_max: felt,
 
     // Constants.
     offset_size: felt,
@@ -38,11 +38,11 @@ struct GlobalValues {
     // Interaction elements.
     memory__multi_column_perm__perm__interaction_elm: felt,
     memory__multi_column_perm__hash_interaction_elm0: felt,
-    rc16__perm__interaction_elm: felt,
+    range_check16__perm__interaction_elm: felt,
 
     // Permutation products.
     memory__multi_column_perm__perm__public_memory_prod: felt,
-    rc16__perm__public_memory_prod: felt,
+    range_check16__perm__public_memory_prod: felt,
 }
 
 // Elements that are sent from the prover after the commitment on the original trace.
@@ -50,5 +50,5 @@ struct GlobalValues {
 struct InteractionElements {
     memory__multi_column_perm__perm__interaction_elm: felt,
     memory__multi_column_perm__hash_interaction_elm0: felt,
-    rc16__perm__interaction_elm: felt,
+    range_check16__perm__interaction_elm: felt,
 }

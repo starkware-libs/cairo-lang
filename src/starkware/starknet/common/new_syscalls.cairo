@@ -48,6 +48,15 @@ struct BlockInfo {
     sequencer_address: felt,
 }
 
+struct ResourceBounds {
+    // The name of the resource (e.g., 'L1_GAS').
+    resource: felt,
+    // The maximum amount of the resource allowed for usage during the execution.
+    max_amount: felt,
+    // The maximum price the user is willing to pay for the resource unit.
+    max_price_per_unit: felt,
+}
+
 struct TxInfo {
     // The version of the transaction. It is fixed in the OS, and should be signed by the account
     // contract.
@@ -68,6 +77,24 @@ struct TxInfo {
     chain_id: felt,
     // The transaction's nonce.
     nonce: felt,
+    // An array of ResourceBounds structs.
+    resource_bounds_start: ResourceBounds*,
+    resource_bounds_end: ResourceBounds*,
+    // The tip.
+    tip: felt,
+    // If specified, the paymaster should pay for the execution of the tx.
+    // The data includes the address of the paymaster sponsoring the transaction, followed by extra
+    // data to send to the paymaster.
+    paymaster_data_start: felt*,
+    paymaster_data_end: felt*,
+    // The data availability mode for the nonce.
+    nonce_data_availabilty_mode: felt,
+    // The data availability mode for the account balance from which fee will be taken.
+    fee_data_availabilty_mode: felt,
+    // If nonempty, will contain the required data for deploying and initializing an account
+    // contract: its class hash, address salt and constructor calldata.
+    account_deployment_data_start: felt*,
+    account_deployment_data_end: felt*,
 }
 
 // Shared attributes.

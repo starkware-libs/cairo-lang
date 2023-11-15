@@ -20,10 +20,10 @@ from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 class ExecuteEntryPointBase(ABC, ValidatedDataclass):
     """
     Represents a StarkNet contract call. This interface is meant to prevent a cyclic dependency
-    with the BusinessLogicSyscallHandler.
+    with the `BusinessLogicSyscallHandler`.
     """
 
-    # For fields that are shared with InternalInvokeFunction, see documentation there.
+    # For fields that are shared with the internal invoke transaction, see documentation there.
     call_type: CallType
     contract_address: int
     # The address that holds the code to execute.

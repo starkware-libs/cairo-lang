@@ -7,6 +7,11 @@ Generates an executable file that runs a python module.
 
 from argparse import ArgumentParser
 
+SUPPRESS_SIGINT_CODE = """\
+import signal
+signal.signal(signal.SIGINT, signal.SIG_IGN)
+"""
+
 
 def main():
     parser = ArgumentParser(description="Generates an executable file for py_exe().")
@@ -25,6 +30,12 @@ def main():
         help="Path for the output of the shell binary that wraps the py_binary",
         required=True,
     )
+    parser.add_argument(
+        "--suppress_sigint",
+        help="Suppress SIGINT in the shell binary.",
+        required=False,
+        action="store_true",
+    )
     args = parser.parse_args()
 
     with open(args.output_py, "w") as f:
@@ -33,7 +44,7 @@ def main():
 import os
 import subprocess
 import sys
-
+{SUPPRESS_SIGINT_CODE if args.suppress_sigint else ""}
 cmd = [
     sys.executable, "-u", "-s", "-m", {args.module!r}
 ] + sys.argv[1:]

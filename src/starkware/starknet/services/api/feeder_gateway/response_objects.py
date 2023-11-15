@@ -1,16 +1,14 @@
 import dataclasses
-from abc import abstractmethod
 from dataclasses import field
 from enum import Enum, auto
-from typing import Any, ClassVar, Dict, Iterable, List, Optional, Tuple, Type, TypeVar, Union
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Type, TypeVar, Union
 
 import marshmallow
 import marshmallow.exceptions
 import marshmallow.fields as mfields
 import marshmallow.utils
 import marshmallow_dataclass
-from marshmallow.decorators import post_dump, pre_load
-from marshmallow_oneofschema import OneOfSchema
+from marshmallow.decorators import pre_load
 from typing_extensions import Literal
 
 from services.everest.api.feeder_gateway.response_objects import (
@@ -22,7 +20,7 @@ from services.everest.definitions import fields as everest_fields
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
 from starkware.crypto.signature.signature import ECSignature
 from starkware.eth.web3_wrapper import Web3
-from starkware.python.utils import as_non_optional, from_bytes, to_bytes
+from starkware.python.utils import as_non_optional, to_bytes
 from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
     CallType,
@@ -30,19 +28,24 @@ from starkware.starknet.business_logic.execution.objects import (
     OrderedEvent,
     OrderedL2ToL1Message,
 )
-from starkware.starknet.business_logic.transaction.objects import (
-    InternalDeclare,
-    InternalDeploy,
-    InternalDeployAccount,
-    InternalInvokeFunction,
-    InternalL1Handler,
-    InternalTransaction,
+from starkware.starknet.business_logic.state.state_api_objects import rename_old_gas_price_field
+from starkware.starknet.business_logic.transaction.deprecated_objects import (
+    DeprecatedInternalTransaction,
 )
-from starkware.starknet.definitions import constants, fields
-from starkware.starknet.definitions.transaction_type import TransactionType
+from starkware.starknet.business_logic.transaction.objects import InternalTransaction
+from starkware.starknet.definitions import fields
 from starkware.starknet.services.api.contract_class.contract_class import EntryPointType
-from starkware.starknet.services.api.gateway.transaction_utils import (
-    rename_contract_address_to_sender_address_pre_load,
+from starkware.starknet.services.api.feeder_gateway.account_transaction_specific_info import (
+    AccountTransactionSpecificInfo,
+)
+from starkware.starknet.services.api.feeder_gateway.deprecated_transaction_specific_info import (
+    DeprecatedTransactionSpecificInfo,
+)
+from starkware.starknet.services.api.feeder_gateway.transaction_specific_info import (
+    TransactionSpecificInfo,
+)
+from starkware.starknet.services.api.feeder_gateway.transaction_specific_info_schema import (
+    TransactionSpecificInfoSchema,
 )
 from starkware.starkware_utils.marshmallow_dataclass_fields import (
     VariadicLengthTupleField,
@@ -63,6 +66,19 @@ TBlockInfo = TypeVar("TBlockInfo", bound="StarknetBlock")
 
 LATEST_BLOCK_ID: LatestBlock = "latest"
 PENDING_BLOCK_ID: PendingBlock = "pending"
+
+
+def transaction_specific_info_from_internal(
+    internal_tx: InternalTransaction,
+) -> TransactionSpecificInfo:
+    """
+    Returns a TransactionSpecificInfo object from an InternalTransaction object.
+    Used for backward compatibility.
+    """
+    if isinstance(internal_tx, DeprecatedInternalTransaction):
+        return DeprecatedTransactionSpecificInfo.from_internal(internal_tx=internal_tx)
+    else:
+        return AccountTransactionSpecificInfo.from_internal(internal_tx=internal_tx)
 
 
 class BlockStatus(Enum):
@@ -353,252 +369,18 @@ class TransactionInBlockInfo(ValidatedResponseObject):
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
-class TransactionSpecificInfo(ValidatedResponseObject):
-    transaction_hash: int = field(metadata=fields.transaction_hash_metadata)
-    tx_type: ClassVar[TransactionType]
-    version: int = field(metadata=fields.non_required_tx_version_metadata)
-
-    @classmethod
-    def from_internal(cls, internal_tx: InternalTransaction) -> "TransactionSpecificInfo":
-        if isinstance(internal_tx, InternalDeclare):
-            return DeclareSpecificInfo.from_internal_declare(internal_tx=internal_tx)
-        elif isinstance(internal_tx, InternalDeploy):
-            return DeploySpecificInfo.from_internal_deploy(internal_tx=internal_tx)
-        elif isinstance(internal_tx, InternalDeployAccount):
-            return DeployAccountSpecificInfo.from_internal_deploy_account(internal_tx=internal_tx)
-        elif isinstance(internal_tx, InternalInvokeFunction):
-            if internal_tx.entry_point_type is EntryPointType.L1_HANDLER:
-                return L1HandlerSpecificInfo.from_internal_invoke(internal_tx=internal_tx)
-            assert (
-                internal_tx.entry_point_type is EntryPointType.EXTERNAL
-            ), "An InternalInvokeFunction transaction must have EXTERNAL entry point type."
-            return InvokeSpecificInfo.from_internal_invoke(internal_tx=internal_tx)
-        elif isinstance(internal_tx, InternalL1Handler):
-            return L1HandlerSpecificInfo.from_internal_l1_handler(internal_tx=internal_tx)
-        else:
-            raise NotImplementedError(f"No response object for {internal_tx}.")
-
-
-# Mypy has a problem with dataclasses that contain unimplemented abstract methods.
-# See https://github.com/python/mypy/issues/5374 for details on this problem.
-@marshmallow_dataclass.dataclass(frozen=True)  # type: ignore[misc]
-class AccountTransactionSpecificInfo(TransactionSpecificInfo):
-    max_fee: int = field(metadata=fields.fee_metadata)
-    signature: List[int] = field(metadata=fields.signature_metadata)
-    nonce: Optional[int] = field(metadata=fields.optional_nonce_metadata)
-
-    @property
-    @abstractmethod
-    def account_contract_address(self) -> int:
-        """
-        The address of the account contract initiating this transaction.
-        """
-
-
-@marshmallow_dataclass.dataclass(frozen=True)
-class DeclareSpecificInfo(AccountTransactionSpecificInfo):
-    class_hash: int = field(metadata=fields.ClassHashIntField.metadata())
-    compiled_class_hash: Optional[int] = field(
-        metadata=fields.optional_compiled_class_hash_metadata
-    )
-    sender_address: int = field(metadata=fields.contract_address_metadata)
-    # Repeat `nonce` to narrow its type to non-optional int.
-    nonce: int = field(metadata=fields.nonce_metadata)
-
-    tx_type: ClassVar[TransactionType] = TransactionType.DECLARE
-
-    @property
-    def account_contract_address(self) -> int:
-        return self.sender_address
-
-    @classmethod
-    def from_internal_declare(cls, internal_tx: InternalDeclare) -> "DeclareSpecificInfo":
-        return cls(
-            class_hash=internal_tx.class_hash,
-            compiled_class_hash=internal_tx.compiled_class_hash,
-            sender_address=internal_tx.sender_address,
-            nonce=as_non_optional(internal_tx.nonce),
-            max_fee=internal_tx.max_fee,
-            version=internal_tx.version,
-            transaction_hash=internal_tx.hash_value,
-            signature=internal_tx.signature,
-        )
-
-
-@marshmallow_dataclass.dataclass(frozen=True)
-class DeploySpecificInfo(TransactionSpecificInfo):
-    contract_address: int = field(metadata=fields.contract_address_metadata)
-    contract_address_salt: int = field(metadata=fields.contract_address_salt_metadata)
-    class_hash: Optional[int] = field(metadata=fields.optional_new_class_hash_metadata)
-    constructor_calldata: List[int] = field(metadata=fields.calldata_as_hex_metadata)
-
-    tx_type: ClassVar[TransactionType] = TransactionType.DEPLOY
-
-    @classmethod
-    def from_internal_deploy(cls, internal_tx: InternalDeploy) -> "DeploySpecificInfo":
-        return cls(
-            contract_address=internal_tx.contract_address,
-            contract_address_salt=internal_tx.contract_address_salt,
-            class_hash=from_bytes(internal_tx.contract_hash),
-            constructor_calldata=internal_tx.constructor_calldata,
-            version=internal_tx.version,
-            transaction_hash=internal_tx.hash_value,
-        )
-
-
-@marshmallow_dataclass.dataclass(frozen=True)
-class DeployAccountSpecificInfo(AccountTransactionSpecificInfo):
-    contract_address: int = field(metadata=fields.contract_address_metadata)
-    contract_address_salt: int = field(metadata=fields.contract_address_salt_metadata)
-    class_hash: int = field(metadata=fields.ClassHashIntField.metadata())
-    constructor_calldata: List[int] = field(metadata=fields.calldata_as_hex_metadata)
-    version: int = field(metadata=fields.tx_version_metadata)
-    # Repeat `nonce` to narrow its type to non-optional int.
-    nonce: int = field(metadata=fields.nonce_metadata)
-
-    tx_type: ClassVar[TransactionType] = TransactionType.DEPLOY_ACCOUNT
-
-    @property
-    def account_contract_address(self) -> int:
-        return self.contract_address
-
-    @classmethod
-    def from_internal_deploy_account(
-        cls, internal_tx: InternalDeployAccount
-    ) -> "DeployAccountSpecificInfo":
-        return cls(
-            # Currently, we keep the old field name `contract_address` in the response object to not
-            # break API.
-            contract_address=internal_tx.sender_address,
-            contract_address_salt=internal_tx.contract_address_salt,
-            class_hash=internal_tx.class_hash,
-            constructor_calldata=internal_tx.constructor_calldata,
-            nonce=internal_tx.nonce,
-            max_fee=internal_tx.max_fee,
-            version=internal_tx.version,
-            transaction_hash=internal_tx.hash_value,
-            signature=internal_tx.signature,
-        )
-
-
-@marshmallow_dataclass.dataclass(frozen=True)
-class InvokeSpecificInfo(AccountTransactionSpecificInfo):
-    sender_address: int = field(metadata=fields.contract_address_metadata)
-    entry_point_selector: Optional[int] = field(
-        metadata=fields.optional_entry_point_selector_metadata
-    )
-    calldata: List[int] = field(metadata=fields.calldata_as_hex_metadata)
-
-    tx_type: ClassVar[TransactionType] = TransactionType.INVOKE_FUNCTION
-
-    @property
-    def account_contract_address(self) -> int:
-        return self.sender_address
-
-    @pre_load
-    def remove_entry_point_type_and_make_selector_optional(
-        self, data: Dict[str, Any], many: bool, **kwargs
-    ) -> Dict[str, List[str]]:
-        if "entry_point_type" in data:
-            del data["entry_point_type"]
-
-        # Version field may be missing in old transactions.
-        raw_version = data.get("version", "0x0")
-        version = fields.TransactionVersionField.load_value(raw_version)
-        if version != 0:
-            data["entry_point_selector"] = None
-        return data
-
-    @pre_load
-    def rename_contract_address_to_sender_address(
-        self, data: Dict[str, Any], many: bool, **kwargs
-    ) -> Dict[str, List[str]]:
-        return rename_contract_address_to_sender_address_pre_load(data=data)
-
-    @post_dump
-    def rename_sender_address_for_old_versions(
-        self, data: Dict[str, Any], many: bool, **kwargs
-    ) -> Dict[str, Any]:
-        version = fields.TransactionVersionField.load_value(data["version"])
-        if version == 0 and "sender_address" in data:
-            assert "contract_address" not in data
-            data["contract_address"] = data.pop("sender_address")
-        return data
-
-    @classmethod
-    def from_internal_invoke(cls, internal_tx: InternalInvokeFunction) -> "InvokeSpecificInfo":
-        return cls(
-            sender_address=internal_tx.sender_address,
-            entry_point_selector=(
-                None if internal_tx.version != 0 else internal_tx.entry_point_selector
-            ),
-            nonce=internal_tx.nonce,
-            calldata=internal_tx.calldata,
-            version=internal_tx.version,
-            signature=internal_tx.signature,
-            transaction_hash=internal_tx.hash_value,
-            max_fee=internal_tx.max_fee,
-        )
-
-
-@marshmallow_dataclass.dataclass(frozen=True)
-class L1HandlerSpecificInfo(TransactionSpecificInfo):
-    contract_address: int = field(metadata=fields.contract_address_metadata)
-    entry_point_selector: int = field(metadata=fields.entry_point_selector_metadata)
-    nonce: Optional[int] = field(metadata=fields.optional_nonce_metadata)
-    calldata: List[int] = field(metadata=fields.calldata_as_hex_metadata)
-
-    tx_type: ClassVar[TransactionType] = TransactionType.L1_HANDLER
-
-    @classmethod
-    def from_internal_l1_handler(cls, internal_tx: InternalL1Handler) -> "L1HandlerSpecificInfo":
-        return cls(
-            contract_address=internal_tx.contract_address,
-            entry_point_selector=internal_tx.entry_point_selector,
-            nonce=internal_tx.nonce,
-            calldata=internal_tx.calldata,
-            version=constants.L1_HANDLER_VERSION,
-            transaction_hash=internal_tx.hash_value,
-        )
-
-    @classmethod
-    def from_internal_invoke(cls, internal_tx: InternalInvokeFunction) -> "L1HandlerSpecificInfo":
-        assert (
-            internal_tx.entry_point_type is EntryPointType.L1_HANDLER
-        ), "This method only accepts InternalInvokeFunction objects that represent L1 Handlers"
-        return cls(
-            contract_address=internal_tx.sender_address,
-            entry_point_selector=internal_tx.entry_point_selector,
-            nonce=internal_tx.nonce,
-            calldata=internal_tx.calldata,
-            version=constants.L1_HANDLER_VERSION,
-            transaction_hash=internal_tx.hash_value,
-        )
-
-
-class TransactionSpecificInfoSchema(OneOfSchema):
-    type_schemas: Dict[str, Type[marshmallow.Schema]] = {
-        TransactionType.DECLARE.name: DeclareSpecificInfo.Schema,
-        TransactionType.DEPLOY.name: DeploySpecificInfo.Schema,
-        TransactionType.DEPLOY_ACCOUNT.name: DeployAccountSpecificInfo.Schema,
-        TransactionType.INVOKE_FUNCTION.name: InvokeSpecificInfo.Schema,
-        TransactionType.L1_HANDLER.name: L1HandlerSpecificInfo.Schema,
-    }
-
-    def get_obj_type(self, obj: TransactionSpecificInfo) -> str:
-        return obj.tx_type.name
-
-
-TransactionSpecificInfo.Schema = TransactionSpecificInfoSchema
-
-
-@marshmallow_dataclass.dataclass(frozen=True)
 class TransactionInfo(TransactionInBlockInfo):
     """
     Represents the information regarding a StarkNet transaction.
     """
 
-    transaction: Optional[TransactionSpecificInfo]
+    transaction: Optional[TransactionSpecificInfo] = field(
+        metadata=additional_metadata(
+            marshmallow_field=mfields.Nested(TransactionSpecificInfoSchema),
+            required=False,
+            load_default=None,
+        )
+    )
 
     @classmethod
     def create(
@@ -618,7 +400,7 @@ class TransactionInfo(TransactionInBlockInfo):
             finality_status=finality_status,
             transaction=None
             if transaction is None
-            else TransactionSpecificInfo.from_internal(internal_tx=transaction),
+            else transaction_specific_info_from_internal(internal_tx=transaction),
             status=TransactionStatus.from_new_status(
                 finality_status=finality_status, execution_status=execution_status
             ),
@@ -972,7 +754,7 @@ class TransactionTrace(ValidatedResponseObject):
     validate_invocation: Optional[FunctionInvocation]
     function_invocation: Optional[FunctionInvocation]
     fee_transfer_invocation: Optional[FunctionInvocation]
-    signature: List[int] = field(metadata=fields.signature_metadata)
+    signature: List[int] = field(metadata=fields.deprecated_signature_metadata)
 
     def __post_init__(self):
         super().__post_init__()
@@ -1025,11 +807,12 @@ class StarknetBlock(ValidatedResponseObject):
         metadata=fields.backward_compatible_optional_state_root_metadata
     )
     status: Optional[BlockStatus]
-    gas_price: int = field(metadata=fields.gas_price_metadata)
+    eth_l1_gas_price: int = field(metadata=fields.gas_price_metadata)
+    strk_l1_gas_price: int = field(metadata=fields.gas_price_metadata)
     transactions: Tuple[TransactionSpecificInfo, ...] = field(
         metadata=additional_metadata(
             marshmallow_field=VariadicLengthTupleField(
-                mfields.Nested(TransactionSpecificInfo.Schema)
+                mfields.Nested(TransactionSpecificInfoSchema)
             )
         )
     )
@@ -1044,6 +827,12 @@ class StarknetBlock(ValidatedResponseObject):
     )
     starknet_version: Optional[str] = field(metadata=fields.starknet_version_metadata)
 
+    @pre_load
+    def rename_old_gas_price_field(
+        self, data: Dict[str, Any], many: bool, **kwargs
+    ) -> Dict[str, List[str]]:
+        return rename_old_gas_price_field(data=data)
+
     @classmethod
     def create(
         cls: Type[TBlockInfo],
@@ -1055,7 +844,8 @@ class StarknetBlock(ValidatedResponseObject):
         timestamp: int,
         sequencer_address: Optional[int],
         status: Optional[BlockStatus],
-        gas_price: int,
+        eth_l1_gas_price: int,
+        strk_l1_gas_price: int,
         transaction_receipts: Optional[Tuple[TransactionExecution, ...]],
         starknet_version: Optional[str],
     ) -> TBlockInfo:
@@ -1065,12 +855,13 @@ class StarknetBlock(ValidatedResponseObject):
             block_number=block_number,
             state_root=state_root,
             transactions=tuple(
-                TransactionSpecificInfo.from_internal(internal_tx=tx) for tx in transactions
+                transaction_specific_info_from_internal(internal_tx=tx) for tx in transactions
             ),
             timestamp=timestamp,
             sequencer_address=sequencer_address,
             status=status,
-            gas_price=gas_price,
+            eth_l1_gas_price=eth_l1_gas_price,
+            strk_l1_gas_price=strk_l1_gas_price,
             transaction_receipts=transaction_receipts,
             starknet_version=starknet_version,
         )

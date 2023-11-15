@@ -36,7 +36,7 @@ contract StarknetMessaging is IStarknetMessaging {
       Returns the msg_fee + 1 for the message with the given 'msgHash',
       or 0 if no message with such a hash is pending.
     */
-    function l1ToL2Messages(bytes32 msgHash) external view returns (uint256) {
+    function l1ToL2Messages(bytes32 msgHash) external view override returns (uint256) {
         return l1ToL2Messages()[msgHash];
     }
 

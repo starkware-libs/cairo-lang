@@ -40,6 +40,17 @@ library NamedStorage {
         }
     }
 
+    function addressToAddressMapping(string memory tag_)
+        internal
+        pure
+        returns (mapping(address => address) storage randomVariable)
+    {
+        bytes32 location = keccak256(abi.encodePacked(tag_));
+        assembly {
+            randomVariable_slot := location
+        }
+    }
+
     function addressToBoolMapping(string memory tag_)
         internal
         pure

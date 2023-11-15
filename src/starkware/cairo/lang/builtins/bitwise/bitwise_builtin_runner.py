@@ -20,6 +20,9 @@ class BitwiseBuiltinRunner(SimpleBuiltinRunner):
         )
         self.bitwise_builtin: BitwiseInstanceDef = bitwise_builtin
 
+    def get_instance_def(self):
+        return self.bitwise_builtin
+
     def add_auto_deduction_rules(self, runner):
         def rule(vm, addr):
             memory = vm.run_context.memory

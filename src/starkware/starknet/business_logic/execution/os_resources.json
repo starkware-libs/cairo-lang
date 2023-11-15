@@ -27,7 +27,7 @@
                 "range_check_builtin": 18
             },
             "n_memory_holes": 0,
-            "n_steps": 946
+            "n_steps": 944
         },
         "emit_event": {
             "builtin_instance_counter": {},
@@ -125,10 +125,10 @@
         },
         "secp256k1_get_xy": {
             "builtin_instance_counter": {
-                "range_check_builtin": 9
+                "range_check_builtin": 11
             },
-            "n_memory_holes": 0,
-            "n_steps": 175
+            "n_memory_holes": 40,
+            "n_steps": 239
         },
         "secp256k1_mul": {
             "builtin_instance_counter": {
@@ -160,10 +160,10 @@
         },
         "secp256r1_get_xy": {
             "builtin_instance_counter": {
-                "range_check_builtin": 9
+                "range_check_builtin": 11
             },
-            "n_memory_holes": 0,
-            "n_steps": 177
+            "n_memory_holes": 40,
+            "n_steps": 241
         },
         "secp256r1_mul": {
             "builtin_instance_counter": {
@@ -202,7 +202,7 @@
                 "range_check_builtin": 63
             },
             "n_memory_holes": 0,
-            "n_steps": 2711
+            "n_steps": 2797
         },
         "DEPLOY": {
             "builtin_instance_counter": {},
@@ -215,7 +215,7 @@
                 "range_check_builtin": 83
             },
             "n_memory_holes": 0,
-            "n_steps": 3658
+            "n_steps": 3743
         },
         "INVOKE_FUNCTION": {
             "builtin_instance_counter": {
@@ -223,7 +223,7 @@
                 "range_check_builtin": 80
             },
             "n_memory_holes": 0,
-            "n_steps": 3418
+            "n_steps": 3496
         },
         "L1_HANDLER": {
             "builtin_instance_counter": {
@@ -231,7 +231,7 @@
                 "range_check_builtin": 17
             },
             "n_memory_holes": 0,
-            "n_steps": 1069
+            "n_steps": 1114
         }
     }
 }

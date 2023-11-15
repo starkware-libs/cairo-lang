@@ -138,7 +138,8 @@ the arguments of '{VALIDATE_DEPLOY_ENTRY_POINT_NAME}' are expected to start with
 followed by the constructor's arguments (if exist). Found:
 '{format_inputs(inputs=optional_validate_deploy_entry_point['inputs'])}'.
 
-Deploying this contract using DeployAccount transaction is not recommended and would probably fail.
+Deploying this contract using a deploy account transaction is not recommended and would probably
+fail.
 """
             print(message)
 

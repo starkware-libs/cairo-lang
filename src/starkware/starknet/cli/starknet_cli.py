@@ -19,19 +19,19 @@ from starkware.starknet.cli.starknet_cli_utils import (
     LIBFUNC_LIST_FILES,
     AbiFormatError,
     DeclareArgs,
-    DeprecatedDeclareArgs,
     InvokeFunctionArgs,
     NetworkData,
     NetworkNameError,
+    OldDeclareArgs,
     compute_max_fee_for_tx,
-    construct_declare_tx,
-    construct_deploy_account_tx,
     construct_deprecated_declare_tx,
+    construct_deprecated_deploy_account_tx,
+    construct_deprecated_invoke_tx,
+    construct_deprecated_invoke_tx_for_deploy,
     construct_feeder_gateway_client,
     construct_gateway_client,
-    construct_invoke_tx,
-    construct_invoke_tx_for_deploy,
     construct_nonce_callback,
+    construct_old_declare_tx,
     create_call_function,
     create_call_l1_handler,
     get_chain_id_from_str,
@@ -63,15 +63,15 @@ from starkware.starknet.services.api.feeder_gateway.response_objects import (
     FeeEstimationInfo,
     TransactionSimulationInfo,
 )
-from starkware.starknet.services.api.gateway.gateway_client import GatewayClient
-from starkware.starknet.services.api.gateway.transaction import (
-    AccountTransaction,
-    Declare,
-    DeployAccount,
+from starkware.starknet.services.api.gateway.deprecated_transaction import (
+    DeprecatedAccountTransaction,
     DeprecatedDeclare,
-    InvokeFunction,
-    Transaction,
+    DeprecatedDeployAccount,
+    DeprecatedInvokeFunction,
+    DeprecatedOldDeclare,
 )
+from starkware.starknet.services.api.gateway.gateway_client import GatewayClient
+from starkware.starknet.services.api.gateway.transaction_schema import DeprecatedTransactionSchema
 from starkware.starknet.utils.api_utils import cast_to_felts
 from starkware.starknet.wallets.account import DEFAULT_ACCOUNT_DIR, Account
 from starkware.starknet.wallets.starknet_context import StarknetContext
@@ -81,11 +81,11 @@ from starkware.starknet.wallets.starknet_context import StarknetContext
 
 async def declare(args: argparse.Namespace, command_args: List[str]):
     """
-    If the `--deprecated` flag is used, creates a version 1 - Declare transaction (which is used to
-    declare Cairo 0 contracts) and sends it to the gateway. If the `--deprecated` flag is not used,
-    creates a version 2 - Declare transaction (which is used to declare Cairo 1.0 contracts) and
-    sends it to the gateway. In case a wallet is provided, the transaction is wrapped and signed by
-    the wallet provider. Otherwise, a sender address and a valid signature must be provided as
+    If the `--deprecated` flag is used, creates a version 1 - declare transaction (which is used
+    to declare Cairo 0 contracts) and sends it to the gateway. If the `--deprecated` flag is not
+    used, creates a version 2 - declare transaction (which is used to declare Cairo 1.0 contracts)
+    and sends it to the gateway. In case a wallet is provided, the transaction is wrapped and signed
+    by the wallet provider. Otherwise, a sender address and a valid signature must be provided as
     arguments.
     """
 
@@ -101,55 +101,6 @@ async def declare(args: argparse.Namespace, command_args: List[str]):
 
     has_wallet = get_wallet_provider(args=args) is not None
     declare_tx_args = parse_declare_tx_args(args=args)
-
-    declare_tx_for_simulate: Optional[Declare] = None
-    if need_simulate_tx(args=args, has_wallet=has_wallet):
-        declare_tx_for_simulate = await create_declare_tx(
-            args=args,
-            declare_tx_args=declare_tx_args,
-            max_fee=args.max_fee if args.max_fee is not None else 0,
-            has_wallet=has_wallet,
-            query=True,
-        )
-        if args.simulate or args.estimate_fee:
-            await simulate_or_estimate_fee(args=args, tx=declare_tx_for_simulate)
-            return
-
-    max_fee = await compute_max_fee(
-        args=args,
-        tx=declare_tx_for_simulate,
-        has_wallet=has_wallet,
-        skip_validate=args.skip_validate,
-    )
-
-    tx = await create_declare_tx(
-        args=args,
-        declare_tx_args=declare_tx_args,
-        max_fee=max_fee,
-        has_wallet=has_wallet,
-        query=False,
-    )
-    gateway_client = get_gateway_client(args)
-    gateway_response = await gateway_client.add_transaction(tx=tx)
-    assert_tx_received(gateway_response=gateway_response)
-    # Don't end sentences with '.', to allow easy double-click copy-pasting of the values.
-    print(
-        f"""\
-Declare transaction was sent.
-Contract class hash: {gateway_response['class_hash']}
-Transaction hash: {gateway_response['transaction_hash']}"""
-    )
-
-
-async def deprecated_declare(args: argparse.Namespace):
-    """
-    Creates a DeprecatedDeclare transaction and sends it to the gateway. In case a wallet is
-    provided, the transaction is wrapped and signed by the wallet provider. Otherwise, a sender
-    address and a valid signature must be provided as arguments.
-    """
-
-    declare_tx_args = parse_deprecated_declare_tx_args(args=args)
-    has_wallet = get_wallet_provider(args=args) is not None
 
     declare_tx_for_simulate: Optional[DeprecatedDeclare] = None
     if need_simulate_tx(args=args, has_wallet=has_wallet):
@@ -172,6 +123,55 @@ async def deprecated_declare(args: argparse.Namespace):
     )
 
     tx = await create_deprecated_declare_tx(
+        args=args,
+        declare_tx_args=declare_tx_args,
+        max_fee=max_fee,
+        has_wallet=has_wallet,
+        query=False,
+    )
+    gateway_client = get_gateway_client(args)
+    gateway_response = await gateway_client.add_transaction(tx=tx)
+    assert_tx_received(gateway_response=gateway_response)
+    # Don't end sentences with '.', to allow easy double-click copy-pasting of the values.
+    print(
+        f"""\
+Declare transaction was sent.
+Contract class hash: {gateway_response['class_hash']}
+Transaction hash: {gateway_response['transaction_hash']}"""
+    )
+
+
+async def deprecated_declare(args: argparse.Namespace):
+    """
+    Creates an old declare transaction and sends it to the gateway. In case a wallet is
+    provided, the transaction is wrapped and signed by the wallet provider. Otherwise, a sender
+    address and a valid signature must be provided as arguments.
+    """
+
+    declare_tx_args = parse_old_declare_tx_args(args=args)
+    has_wallet = get_wallet_provider(args=args) is not None
+
+    declare_tx_for_simulate: Optional[DeprecatedOldDeclare] = None
+    if need_simulate_tx(args=args, has_wallet=has_wallet):
+        declare_tx_for_simulate = await create_old_declare_tx(
+            args=args,
+            declare_tx_args=declare_tx_args,
+            max_fee=args.max_fee if args.max_fee is not None else 0,
+            has_wallet=has_wallet,
+            query=True,
+        )
+        if args.simulate or args.estimate_fee:
+            await simulate_or_estimate_fee(args=args, tx=declare_tx_for_simulate)
+            return
+
+    max_fee = await compute_max_fee(
+        args=args,
+        tx=declare_tx_for_simulate,
+        has_wallet=has_wallet,
+        skip_validate=args.skip_validate,
+    )
+
+    tx = await create_old_declare_tx(
         args=args,
         declare_tx_args=declare_tx_args,
         max_fee=max_fee,
@@ -238,7 +238,7 @@ async def deploy_with_invoke(args: argparse.Namespace):
     salt = get_salt(salt=args.salt)
     class_hash = parse_hex_arg(arg=args.class_hash, arg_name="class_hash")
     constructor_calldata = cast_to_felts(values=args.inputs)
-    invoke_tx_for_fee_estimation, _ = await create_invoke_tx_for_deploy(
+    invoke_tx_for_fee_estimation, _ = await create_deprecated_invoke_tx_for_deploy(
         args=args,
         salt=salt,
         class_hash=class_hash,
@@ -249,7 +249,7 @@ async def deploy_with_invoke(args: argparse.Namespace):
     max_fee = await compute_max_fee(
         args=args, tx=invoke_tx_for_fee_estimation, has_wallet=True, skip_validate=False
     )
-    tx, contract_address = await create_invoke_tx_for_deploy(
+    tx, contract_address = await create_deprecated_invoke_tx_for_deploy(
         args=args,
         salt=salt,
         class_hash=class_hash,
@@ -291,9 +291,9 @@ async def deploy_account(args: argparse.Namespace, command_args: List[str]):
     validate_max_fee(max_fee=args.max_fee)
     account = await load_account_from_args(args)
 
-    deploy_account_tx_for_simulate: Optional[DeployAccount] = None
+    deploy_account_tx_for_simulate: Optional[DeprecatedDeployAccount] = None
     if need_simulate_tx(args=args, has_wallet=True):
-        deploy_account_tx_for_simulate, _ = await create_deploy_account_tx(
+        deploy_account_tx_for_simulate, _ = await create_deprecated_deploy_account_tx(
             args=args,
             account=account,
             max_fee=args.max_fee if args.max_fee is not None else 0,
@@ -310,7 +310,7 @@ async def deploy_account(args: argparse.Namespace, command_args: List[str]):
         skip_validate=args.skip_validate,
     )
 
-    tx, contract_address = await create_deploy_account_tx(
+    tx, contract_address = await create_deprecated_deploy_account_tx(
         args=args,
         account=account,
         max_fee=max_fee,
@@ -362,9 +362,9 @@ async def invoke(args: argparse.Namespace, command_args: List[str]):
     invoke_tx_args = parse_invoke_tx_args(args=args)
 
     has_wallet = get_wallet_provider(args=args) is not None
-    invoke_tx_for_simulate: Optional[InvokeFunction] = None
+    invoke_tx_for_simulate: Optional[DeprecatedInvokeFunction] = None
     if need_simulate_tx(args=args, has_wallet=has_wallet):
-        invoke_tx_for_simulate = await create_invoke_tx(
+        invoke_tx_for_simulate = await create_deprecated_invoke_tx(
             args=args,
             invoke_tx_args=invoke_tx_args,
             max_fee=args.max_fee if args.max_fee is not None else 0,
@@ -386,7 +386,7 @@ async def invoke(args: argparse.Namespace, command_args: List[str]):
         skip_validate=args.skip_validate,
     )
 
-    tx = await create_invoke_tx(
+    tx = await create_deprecated_invoke_tx(
         args=args,
         invoke_tx_args=invoke_tx_args,
         max_fee=max_fee,
@@ -914,7 +914,7 @@ def validate_max_fee(max_fee: Optional[int]):
 
 async def compute_max_fee(
     args: argparse.Namespace,
-    tx: Optional[AccountTransaction],
+    tx: Optional[DeprecatedAccountTransaction],
     has_wallet: bool,
     skip_validate: bool,
 ) -> int:
@@ -1068,29 +1068,29 @@ def parse_declare_tx_args(args: argparse.Namespace) -> DeclareArgs:
     )
 
 
-def parse_deprecated_declare_tx_args(args: argparse.Namespace) -> DeprecatedDeclareArgs:
+def parse_old_declare_tx_args(args: argparse.Namespace) -> OldDeclareArgs:
     validate_max_fee(max_fee=args.max_fee)
     sender = parse_hex_arg(arg=args.sender, arg_name="sender") if args.sender is not None else None
-    return DeprecatedDeclareArgs(
+    return OldDeclareArgs(
         sender=sender,
         signature=cast_to_felts(values=args.signature),
         contract_class=DeprecatedCompiledClass.loads(data=args.contract.read()),
     )
 
 
-async def create_invoke_tx_for_deploy(
+async def create_deprecated_invoke_tx_for_deploy(
     args: argparse.Namespace,
     salt: int,
     class_hash: int,
     constructor_calldata: List[int],
     max_fee: int,
     call: bool,
-) -> Tuple[InvokeFunction, int]:
+) -> Tuple[DeprecatedInvokeFunction, int]:
     """
-    Creates and returns an InvokeFunction transaction to deploy a contract with the given arguments,
-    which is wrapped and signed by the wallet provider.
+    Creates and returns an invoke transaction to deploy a contract with the given
+    arguments, which is wrapped and signed by the wallet provider.
     """
-    return await construct_invoke_tx_for_deploy(
+    return await construct_deprecated_invoke_tx_for_deploy(
         feeder_client=get_feeder_gateway_client(args=args),
         account=await load_account_from_args(args=args),
         salt=salt,
@@ -1104,18 +1104,18 @@ async def create_invoke_tx_for_deploy(
     )
 
 
-async def create_invoke_tx(
+async def create_deprecated_invoke_tx(
     args: argparse.Namespace,
     invoke_tx_args: InvokeFunctionArgs,
     max_fee: int,
     has_wallet: bool,
     query: bool,
-) -> InvokeFunction:
+) -> DeprecatedInvokeFunction:
     """
-    Creates and returns an InvokeFunction transaction with the given parameters.
+    Creates and returns a deprecated invoke transaction with the given parameters.
     If a wallet provider was provided in args, that transaction will be wrapped and signed.
     """
-    return await construct_invoke_tx(
+    return await construct_deprecated_invoke_tx(
         feeder_client=get_feeder_gateway_client(args=args),
         invoke_tx_args=invoke_tx_args,
         chain_id=get_chain_id(args=args),
@@ -1127,37 +1127,15 @@ async def create_invoke_tx(
     )
 
 
-async def create_declare_tx(
+async def create_deprecated_declare_tx(
     args: argparse.Namespace,
     declare_tx_args: DeclareArgs,
     max_fee: int,
     has_wallet: bool,
     query: bool,
-) -> Declare:
-    """
-    Creates and returns a DeprecatedDeclare transaction with the given parameters.
-    If a wallet provider was provided in args, that transaction will be wrapped and signed.
-    """
-    return await construct_declare_tx(
-        feeder_client=get_feeder_gateway_client(args=args),
-        declare_tx_args=declare_tx_args,
-        chain_id=get_chain_id(args=args),
-        max_fee=max_fee,
-        account=await load_account_from_args(args=args) if has_wallet else None,
-        explicit_nonce=args.nonce,
-        simulate=query,
-    )
-
-
-async def create_deprecated_declare_tx(
-    args: argparse.Namespace,
-    declare_tx_args: DeprecatedDeclareArgs,
-    max_fee: int,
-    has_wallet: bool,
-    query: bool,
 ) -> DeprecatedDeclare:
     """
-    Creates and returns a DeprecatedDeclare transaction with the given parameters.
+    Creates and returns an old declare transaction with the given parameters.
     If a wallet provider was provided in args, that transaction will be wrapped and signed.
     """
     return await construct_deprecated_declare_tx(
@@ -1171,17 +1149,39 @@ async def create_deprecated_declare_tx(
     )
 
 
-async def create_deploy_account_tx(
+async def create_old_declare_tx(
+    args: argparse.Namespace,
+    declare_tx_args: OldDeclareArgs,
+    max_fee: int,
+    has_wallet: bool,
+    query: bool,
+) -> DeprecatedOldDeclare:
+    """
+    Creates and returns an old declare transaction with the given parameters.
+    If a wallet provider was provided in args, that transaction will be wrapped and signed.
+    """
+    return await construct_old_declare_tx(
+        feeder_client=get_feeder_gateway_client(args=args),
+        declare_tx_args=declare_tx_args,
+        chain_id=get_chain_id(args=args),
+        max_fee=max_fee,
+        account=await load_account_from_args(args=args) if has_wallet else None,
+        explicit_nonce=args.nonce,
+        simulate=query,
+    )
+
+
+async def create_deprecated_deploy_account_tx(
     args: argparse.Namespace,
     account: Account,
     max_fee: int,
     query: bool,
-) -> Tuple[DeployAccount, int]:
+) -> Tuple[DeprecatedDeployAccount, int]:
     """
-    Creates and returns a Deploy Account transaction with the given parameters along with the new
-    account address.
+    Creates and returns a deprecated Deploy Account transaction with the given parameters along with
+    the new account address.
     """
-    return await construct_deploy_account_tx(
+    return await construct_deprecated_deploy_account_tx(
         account=account,
         max_fee=max_fee,
         chain_id=get_chain_id(args),
@@ -1192,7 +1192,7 @@ async def create_deploy_account_tx(
 
 async def simulate_tx_inner(
     args: argparse.Namespace,
-    tx: AccountTransaction,
+    tx: DeprecatedAccountTransaction,
     has_block_info: bool,
 ) -> TransactionSimulationInfo:
     """
@@ -1214,13 +1214,13 @@ async def simulate_tx_inner(
     )
 
 
-def print_invoke_tx(tx: InvokeFunction, chain_id: int):
+def print_invoke_tx(tx: DeprecatedInvokeFunction, chain_id: int):
     sn_config_dict = StarknetGeneralConfig().dump()
     sn_config_dict["starknet_os_config"]["chain_id"] = StarknetChainId(chain_id).value
     sn_config = StarknetGeneralConfig.load(sn_config_dict)
     tx_hash = tx.calculate_hash(sn_config)
     out_dict = {
-        "transaction": Transaction.Schema().dump(obj=tx),
+        "transaction": DeprecatedTransactionSchema().dump(obj=tx),
         "transaction_hash": hex(tx_hash),
     }
     print(json.dumps(out_dict, indent=4))
@@ -1252,7 +1252,7 @@ def assert_tx_received(gateway_response: Dict[str, str]):
     ), f"Failed to send transaction. Response: {gateway_response}."
 
 
-async def simulate_or_estimate_fee(args: argparse.Namespace, tx: AccountTransaction):
+async def simulate_or_estimate_fee(args: argparse.Namespace, tx: DeprecatedAccountTransaction):
     args.block_hash, args.block_number = parse_block_identifiers(args.block_hash, args.block_number)
     tx_simulate_info = await simulate_tx_inner(args=args, tx=tx, has_block_info=True)
     print_fee_info(fee_info=tx_simulate_info.fee_estimation)

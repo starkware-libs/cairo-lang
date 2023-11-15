@@ -43,9 +43,9 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "starkware_custom_dict_utils_lib",
-        "starkware_error_handling_lib",
-        "starkware_serializability_utils_lib",
+        ":starkware_custom_dict_utils_lib",
+        ":starkware_error_handling_lib",
+        ":starkware_serializability_utils_lib",
         "//src/starkware/python:starkware_python_utils_lib",
         requirement("frozendict"),
         requirement("marshmallow"),
@@ -76,7 +76,7 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "starkware_dataclasses_utils_lib",
+        ":starkware_dataclasses_utils_lib",
         "//src/starkware/crypto:starkware_crypto_lib",
         requirement("eth_utils"),
         requirement("marshmallow"),

@@ -130,7 +130,8 @@ the arguments of '__validate_deploy__' are expected to start with:
 followed by the constructor's arguments (if exist). Found:
 '{actual_inputs}'.
 
-Deploying this contract using DeployAccount transaction is not recommended and would probably fail.
+Deploying this contract using a deploy account transaction is not recommended and would probably
+fail.
 
 """
 

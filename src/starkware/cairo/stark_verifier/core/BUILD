@@ -7,6 +7,17 @@ package(default_visibility = ["//visibility:public"])
 exports_files(glob(["*.cairo"]))
 
 cairo_library(
+    name = "serialize",
+    srcs = [
+        "serialize_utils.cairo",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//src/starkware/cairo/common:cairo_common_cairo_lib",
+    ],
+)
+
+cairo_library(
     name = "cairo",
     srcs = [
         "air_interface.cairo",
@@ -57,7 +68,10 @@ pytest_test(
         "//src/starkware/cairo/common:cairo_common_lib",
         "//src/starkware/cairo/common:cairo_common_validate_utils_lib",
         "//src/starkware/cairo/common:cairo_function_runner_lib",
+        "//src/starkware/cairo/lang:cairo_constants_lib",
+        "//src/starkware/cairo/lang/builtins:cairo_run_builtins_lib",
         "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
+        "//src/starkware/cairo/lang/vm:cairo_vm_lib",
         "//src/starkware/python:starkware_python_test_utils_lib",
         requirement("pytest_asyncio"),
     ],

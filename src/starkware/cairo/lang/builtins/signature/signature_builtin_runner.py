@@ -1,8 +1,9 @@
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from starkware.cairo.lang.builtins.signature.instance_def import (
     CELLS_PER_SIGNATURE,
     INPUT_CELLS_PER_SIGNATURE,
+    EcdsaInstanceDef,
 )
 from starkware.cairo.lang.vm.builtin_runner import BuiltinVerifier, SimpleBuiltinRunner
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
@@ -10,7 +11,15 @@ from starkware.python.math_utils import safe_div
 
 
 class SignatureBuiltinRunner(SimpleBuiltinRunner):
-    def __init__(self, name: str, included: bool, ratio, process_signature, verify_signature):
+    def __init__(
+        self,
+        name: str,
+        included: bool,
+        ratio,
+        process_signature,
+        verify_signature,
+        instance_def: Optional[EcdsaInstanceDef] = None,
+    ):
         """
         'process_signature' is a function that takes signatures as saved in 'signatures' and
         returns a dict representing the signature in the format expected by the component used by
@@ -26,9 +35,13 @@ class SignatureBuiltinRunner(SimpleBuiltinRunner):
         )
         self.process_signature = process_signature
         self.verify_signature = verify_signature
+        self.instance_def = instance_def
 
         # A dict of address -> signature.
         self.signatures: Dict = {}
+
+    def get_instance_def(self):
+        return self.instance_def
 
     def add_validation_rules(self, runner):
         def rule(memory, addr):

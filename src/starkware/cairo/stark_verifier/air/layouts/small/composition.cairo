@@ -90,10 +90,10 @@ func traces_eval_composition_polynomial{range_check_ptr}(
         initial_ap=public_input.segments[segments.EXECUTION].begin_addr,
         final_ap=public_input.segments[segments.EXECUTION].stop_ptr,
         initial_pedersen_addr=public_input.segments[segments.PEDERSEN].begin_addr,
-        initial_rc_addr=public_input.segments[segments.RANGE_CHECK].begin_addr,
+        initial_range_check_addr=public_input.segments[segments.RANGE_CHECK].begin_addr,
         initial_ecdsa_addr=public_input.segments[segments.ECDSA].begin_addr,
-        rc_min=public_input.rc_min,
-        rc_max=public_input.rc_max,
+        range_check_min=public_input.range_check_min,
+        range_check_max=public_input.range_check_max,
         offset_size=2 ** 16,
         half_offset_size=2 ** 15,
         pedersen__shift_point=EcPoint(x=SHIFT_POINT_X, y=SHIFT_POINT_Y),
@@ -108,9 +108,11 @@ func traces_eval_composition_polynomial{range_check_ptr}(
         ecdsa__generator_points__y=ecdsa__generator_points__y,
         memory__multi_column_perm__perm__interaction_elm=memory_z,
         memory__multi_column_perm__hash_interaction_elm0=memory_alpha,
-        rc16__perm__interaction_elm=interaction_elements.rc16__perm__interaction_elm,
+        range_check16__perm__interaction_elm=(
+            interaction_elements.range_check16__perm__interaction_elm
+        ),
         memory__multi_column_perm__perm__public_memory_prod=public_memory_prod_ratio,
-        rc16__perm__public_memory_prod=1,
+        range_check16__perm__public_memory_prod=1,
     );
 
     return eval_composition_polynomial(

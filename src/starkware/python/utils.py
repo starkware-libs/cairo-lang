@@ -448,6 +448,14 @@ def from_bytes(
     return int.from_bytes(value, byteorder=byte_order, signed=signed)
 
 
+def hex_to_bytes(hex_str: str) -> bytes:
+    hex_chars = hex_str.replace("0x", "").lower()
+    assert set(hex_chars).issubset(set("0123456789abcdef")), f"Invalid hex string: {hex_str}."
+    if len(hex_chars) % 2 == 1:
+        hex_chars = "0" + hex_chars
+    return bytes.fromhex(hex_chars)
+
+
 def blockify(data, chunk_size: int) -> Iterable:
     """
     Returns the given data partitioned to chunks of chunks_size (last chunk might be smaller).

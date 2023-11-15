@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from starkware.cairo.lang.builtins.instance_def import BuiltinInstanceDef
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 from starkware.cairo.lang.vm.utils import MemorySegmentRelocatableAddresses
 from starkware.python.math_utils import div_ceil, next_power_of_2, safe_div
@@ -199,6 +200,12 @@ class SimpleBuiltinRunner(BuiltinRunner):
         self.cells_per_instance = cells_per_instance
         self.n_input_cells = n_input_cells
 
+    def get_instance_def(self) -> Optional[BuiltinInstanceDef]:
+        """
+        Returns a BuiltinInstanceDef object that represents the builtin if such object exists.
+        """
+        return None
+
     def initialize_segments(self, runner):
         self._base = runner.segments.add()
 
@@ -234,9 +241,13 @@ class SimpleBuiltinRunner(BuiltinRunner):
         if self.ratio is None:
             # Dynamic layout has the exact number of instances it needs (up to a power of 2).
             instances = self.get_used_instances(runner)
-            components = next_power_of_2(max(1, div_ceil(instances, self.instances_per_component)))
+            needed_components = div_ceil(instances, self.instances_per_component)
+            components = next_power_of_2(needed_components) if needed_components > 0 else 0
             return self.instances_per_component * components
         assert isinstance(self.ratio, int), "ratio is not an int"
+        if self.ratio == 0:
+            # The builtin is not used.
+            return 0
         min_steps = self.ratio * self.instances_per_component
         if runner.vm.current_step < min_steps:
             raise InsufficientAllocatedCells(

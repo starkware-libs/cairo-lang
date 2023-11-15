@@ -4,7 +4,7 @@ from typing import List
 import marshmallow_dataclass
 
 from starkware.starknet.business_logic.execution.execute_entry_point import ExecuteEntryPoint
-from starkware.starknet.business_logic.transaction.objects import InternalL1Handler
+from starkware.starknet.business_logic.transaction.deprecated_objects import InternalL1Handler
 from starkware.starknet.definitions import fields
 from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
 

@@ -1,8 +1,9 @@
 from starkware.cairo.common.alloc import alloc
+from starkware.cairo.common.builtin_poseidon.poseidon import poseidon_hash_many
 from starkware.cairo.common.cairo_blake2s.blake2s import blake2s_add_felts, blake2s_bigend
-from starkware.cairo.common.cairo_builtins import BitwiseBuiltin
-from starkware.cairo.common.hash import HashBuiltin
+from starkware.cairo.common.cairo_builtins import BitwiseBuiltin, PoseidonBuiltin
 from starkware.cairo.common.math import assert_nn, split_felt, unsigned_div_rem
+from starkware.cairo.common.math_cmp import is_nn
 from starkware.cairo.common.uint256 import Uint256
 from starkware.cairo.stark_verifier.core.channel import MONTGOMERY_R, Channel, ChannelUnsentFelt
 from starkware.cairo.stark_verifier.core.vector_commitment import (
@@ -65,7 +66,10 @@ func table_commit{
 // decommitment - the claimed values at those indices.
 // witness - the decommitment witness.
 func table_decommit{
-    range_check_ptr, blake2s_ptr: felt*, pedersen_ptr: HashBuiltin*, bitwise_ptr: BitwiseBuiltin*
+    range_check_ptr,
+    blake2s_ptr: felt*,
+    bitwise_ptr: BitwiseBuiltin*,
+    poseidon_ptr: PoseidonBuiltin*,
 }(
     commitment: TableCommitment*,
     n_queries: felt,
@@ -74,6 +78,18 @@ func table_decommit{
     witness: TableCommitmentWitness*,
 ) {
     alloc_locals;
+
+    // Determine if the table commitment should use a verifier friendly hash function for the bottom
+    // layer. The other layers' hash function will be determined in the vector_commitment logic.
+    let n_verifier_friendly_layers = (
+        commitment.vector_commitment.config.n_verifier_friendly_commitment_layers
+    );
+    // An extra layer is added to the height since the table is considered as a layer, which is not
+    // included in vector_commitment.config.
+    let bottom_layer_depth = commitment.vector_commitment.config.height + 1;
+    let non_verifier_friendly_layers = n_verifier_friendly_layers - bottom_layer_depth;
+
+    let is_bottom_layer_verifier_friendly = is_nn(non_verifier_friendly_layers);
 
     // Must have at least 1 column.
     local n_columns = commitment.config.n_columns;
@@ -94,6 +110,7 @@ func table_decommit{
         values=montgomery_values,
         vector_queries=vector_queries,
         n_columns=n_columns,
+        is_verifier_friendly=is_bottom_layer_verifier_friendly,
     );
 
     vector_commitment_decommit(
@@ -101,7 +118,6 @@ func table_decommit{
         n_queries=n_queries,
         queries=vector_queries,
         witness=witness.vector,
-        n_columns=n_columns,
     );
 
     return ();
@@ -123,8 +139,19 @@ func to_montgomery(n_values: felt, values: felt*, output: felt*) {
 // decommitment - input table values.
 // vector_queries - output vector queries.
 // n_columns - number of columns in table.
-func generate_vector_queries{range_check_ptr, blake2s_ptr: felt*, bitwise_ptr: BitwiseBuiltin*}(
-    n_queries: felt, queries: felt*, values: felt*, vector_queries: VectorQuery*, n_columns: felt
+// is_verifier_friendly - true if the bottom layer uses a verifier friendly hash function.
+func generate_vector_queries{
+    range_check_ptr,
+    blake2s_ptr: felt*,
+    bitwise_ptr: BitwiseBuiltin*,
+    poseidon_ptr: PoseidonBuiltin*,
+}(
+    n_queries: felt,
+    queries: felt*,
+    values: felt*,
+    vector_queries: VectorQuery*,
+    n_columns: felt,
+    is_verifier_friendly: felt,
 ) {
     if (n_queries == 0) {
         return ();
@@ -141,23 +168,39 @@ func generate_vector_queries{range_check_ptr, blake2s_ptr: felt*, bitwise_ptr: B
             values=&values[n_columns],
             vector_queries=&vector_queries[1],
             n_columns=n_columns,
+            is_verifier_friendly=is_verifier_friendly,
         );
     }
 
-    let (data: felt*) = alloc();
-    let data_start = data;
-    blake2s_add_felts{data=data}(n_elements=n_columns, elements=values, bigend=1);
-    let (hash) = blake2s_bigend(data=data_start, n_bytes=32 * n_columns);
+    if (is_verifier_friendly == 0) {
+        let (data: felt*) = alloc();
+        let data_start = data;
+        blake2s_add_felts{data=data}(n_elements=n_columns, elements=values, bigend=1);
+        let (hash) = blake2s_bigend(data=data_start, n_bytes=32 * n_columns);
 
-    // Truncate hash - convert value to felt, by taking the 160 least significant bits.
-    let (high_h, high_l) = unsigned_div_rem(hash.high, 2 ** 32);
-    assert vector_queries.value = high_l * 2 ** 128 + hash.low;
+        // Truncate hash - convert value to felt, by taking the 160 least significant bits.
+        let (high_h, high_l) = unsigned_div_rem(hash.high, 2 ** 32);
+        assert vector_queries.value = high_l * 2 ** 128 + hash.low;
 
-    return generate_vector_queries(
-        n_queries=n_queries - 1,
-        queries=&queries[1],
-        values=&values[n_columns],
-        vector_queries=&vector_queries[1],
-        n_columns=n_columns,
-    );
+        return generate_vector_queries(
+            n_queries=n_queries - 1,
+            queries=&queries[1],
+            values=&values[n_columns],
+            vector_queries=&vector_queries[1],
+            n_columns=n_columns,
+            is_verifier_friendly=is_verifier_friendly,
+        );
+    } else {
+        let (hash_poseidon) = poseidon_hash_many(n=n_columns, elements=values);
+        assert vector_queries.value = hash_poseidon;
+
+        return generate_vector_queries(
+            n_queries=n_queries - 1,
+            queries=&queries[1],
+            values=&values[n_columns],
+            vector_queries=&vector_queries[1],
+            n_columns=n_columns,
+            is_verifier_friendly=is_verifier_friendly,
+        );
+    }
 }

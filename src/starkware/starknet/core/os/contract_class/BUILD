@@ -1,5 +1,6 @@
 load("//src/starkware/cairo/lang:cairo_rules.bzl", "cairo_library")
 load("//bazel_utils/python:defs.bzl", "requirement")
+load("//bazel_utils:python.bzl", "pytest_test")
 
 cairo_library(
     name = "starknet_os_abi_cairo_lib",
@@ -33,12 +34,12 @@ py_library(
         "compiled_class.cairo",
         "contract_class.cairo",
         "deprecated_compiled_class.cairo",
+        "//src/starkware/starknet/common:starknet_common_cairo_lib",
     ],
     visibility = ["//visibility:public"],
     deps = [
         "//src/starkware/cairo/common:cairo_common_lib",
         "//src/starkware/cairo/common:cairo_function_runner_lib",
-        "//src/starkware/cairo/common:poseidon_utils_lib",
         "//src/starkware/cairo/lang:cairo_constants_lib",
         "//src/starkware/cairo/lang/builtins:cairo_run_builtins_lib",
         "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
@@ -48,6 +49,20 @@ py_library(
         "//src/starkware/starknet/public:starknet_abi_lib",
         "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",
         "//src/starkware/starkware_utils:starkware_error_handling_lib",
+        requirement("cachetools"),
+    ],
+)
+
+pytest_test(
+    name = "compiled_class_hash_test",
+    srcs = [
+        "compiled_class_hash_test.py",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":starknet_os_abi_lib",
+        "//src/starkware/starknet/core/test_contract:starknet_test_external_contract_test_utils_lib",
+        "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",
         requirement("cachetools"),
     ],
 )

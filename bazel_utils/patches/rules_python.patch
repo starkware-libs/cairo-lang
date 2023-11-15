@@ -1,0 +1,12 @@
+diff --git a/python/pip_install/repositories.bzl b/python/pip_install/repositories.bzl
+index b322a70..14f2e30 100644
+--- a/python/pip_install/repositories.bzl
++++ b/python/pip_install/repositories.bzl
+@@ -116,6 +116,7 @@ py_library(
+         "**/*.pyc.*",  # During pyc creation, temp files named *.pyc.NNN are created
+         "**/* *",
+         "**/*.dist-info/RECORD",
++        "**/__pycache__/**",
+         "BUILD",
+         "WORKSPACE",
+     ]),

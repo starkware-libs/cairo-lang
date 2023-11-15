@@ -35,14 +35,14 @@ from starkware.starknet.services.api.feeder_gateway.response_objects import (
     BlockIdentifier,
     TransactionSimulationInfo,
 )
-from starkware.starknet.services.api.gateway.gateway_client import GatewayClient
-from starkware.starknet.services.api.gateway.transaction import (
-    AccountTransaction,
-    Declare,
-    DeployAccount,
+from starkware.starknet.services.api.gateway.deprecated_transaction import (
+    DeprecatedAccountTransaction,
     DeprecatedDeclare,
-    InvokeFunction,
+    DeprecatedDeployAccount,
+    DeprecatedInvokeFunction,
+    DeprecatedOldDeclare,
 )
+from starkware.starknet.services.api.gateway.gateway_client import GatewayClient
 from starkware.starknet.wallets.account import Account
 from starkware.starknet.wallets.starknet_context import StarknetContext
 from starkware.starkware_utils.error_handling import StarkErrorCode
@@ -133,7 +133,7 @@ class InvokeFunctionArgs:
 
 
 @dataclasses.dataclass
-class DeprecatedDeclareArgs:
+class OldDeclareArgs:
     contract_class: DeprecatedCompiledClass
     sender: Optional[int]
     signature: List[int]
@@ -324,7 +324,7 @@ async def load_account(
 
 
 async def simulate_tx_at_pending_block(
-    feeder_client: FeederGatewayClient, tx: AccountTransaction, skip_validate: bool
+    feeder_client: FeederGatewayClient, tx: DeprecatedAccountTransaction, skip_validate: bool
 ) -> TransactionSimulationInfo:
     """
     Simulates a transaction with the given parameters, relative to the state of the latest PENDING
@@ -341,7 +341,7 @@ async def simulate_tx_at_pending_block(
 
 async def simulate_tx_at_block(
     feeder_client: FeederGatewayClient,
-    tx: AccountTransaction,
+    tx: DeprecatedAccountTransaction,
     skip_validate: bool,
     block_hash: Optional[CastableToHash] = None,
     block_number: Optional[BlockIdentifier] = None,
@@ -356,7 +356,7 @@ async def simulate_tx_at_block(
 
 
 async def compute_max_fee_for_tx(
-    feeder_client: FeederGatewayClient, tx: AccountTransaction, skip_validate: bool
+    feeder_client: FeederGatewayClient, tx: DeprecatedAccountTransaction, skip_validate: bool
 ) -> int:
     """
     Given a transaction, estimates and returns the max fee.
@@ -427,7 +427,7 @@ def create_call_l1_handler(
     )
 
 
-async def construct_invoke_tx_for_deploy(
+async def construct_deprecated_invoke_tx_for_deploy(
     feeder_client: FeederGatewayClient,
     account: Account,
     salt: int,
@@ -438,27 +438,29 @@ async def construct_invoke_tx_for_deploy(
     call: bool,
     deploy_from_zero: bool,
     explicit_nonce: Optional[int],
-) -> Tuple[InvokeFunction, int]:
+) -> Tuple[DeprecatedInvokeFunction, int]:
     """
-    Creates and returns an InvokeFunction transaction to deploy a contract with the given arguments,
-    which is wrapped and signed by the wallet provider.
+    Creates and returns a deprecated invoke transaction to deploy a contract with the given
+    arguments, which is wrapped and signed by the wallet provider.
     Returns the transaction and the new account address.
     """
-    return await account.deploy_contract(
+    return await account.deprecated_deploy_contract(
         class_hash=class_hash,
         salt=salt,
         constructor_calldata=constructor_calldata,
         deploy_from_zero=deploy_from_zero,
         chain_id=chain_id,
         max_fee=max_fee,
-        version=constants.QUERY_VERSION if call else constants.TRANSACTION_VERSION,
+        version=constants.DEPRECATED_QUERY_VERSION
+        if call
+        else constants.DEPRECATED_TRANSACTION_VERSION,
         nonce_callback=construct_nonce_callback(
             explicit_nonce=explicit_nonce, feeder_client=feeder_client
         ),
     )
 
 
-async def construct_invoke_tx(
+async def construct_deprecated_invoke_tx(
     feeder_client: FeederGatewayClient,
     invoke_tx_args: InvokeFunctionArgs,
     chain_id: int,
@@ -467,12 +469,14 @@ async def construct_invoke_tx(
     explicit_nonce: Optional[int],
     simulate: bool,
     dry_run: bool,
-) -> InvokeFunction:
+) -> DeprecatedInvokeFunction:
     """
-    Creates and returns an InvokeFunction transaction with the given parameters.
-    If an account is provided, that transaction will be wrapped and signed.
+    Creates and returns a deprecated invoke transaction with the given parameters.
+    If an account is provided, the transaction will be wrapped and signed.
     """
-    version = constants.QUERY_VERSION if simulate else constants.TRANSACTION_VERSION
+    version = (
+        constants.DEPRECATED_QUERY_VERSION if simulate else constants.DEPRECATED_TRANSACTION_VERSION
+    )
     nonce_callback = construct_nonce_callback(
         feeder_client=feeder_client, explicit_nonce=explicit_nonce
     )
@@ -481,7 +485,7 @@ async def construct_invoke_tx(
             f"'--function' can only be {EXECUTE_ENTRY_POINT_NAME} "
             "when invoking with the '--no_wallet' flag."
         )
-        return InvokeFunction(
+        return DeprecatedInvokeFunction(
             sender_address=invoke_tx_args.address,
             calldata=invoke_tx_args.calldata,
             max_fee=max_fee,
@@ -494,7 +498,7 @@ async def construct_invoke_tx(
         "Signature cannot be passed explicitly when using an account contract. "
         "Consider making a direct contract call using --no_wallet."
     )
-    return await account.invoke(
+    return await account.deprecated_invoke(
         contract_address=invoke_tx_args.address,
         selector=invoke_tx_args.selector,
         calldata=invoke_tx_args.calldata,
@@ -506,7 +510,7 @@ async def construct_invoke_tx(
     )
 
 
-async def construct_declare_tx(
+async def construct_deprecated_declare_tx(
     feeder_client: FeederGatewayClient,
     declare_tx_args: DeclareArgs,
     chain_id: int,
@@ -514,12 +518,16 @@ async def construct_declare_tx(
     account: Optional[Account],
     explicit_nonce: Optional[int],
     simulate: bool,
-) -> Declare:
+) -> DeprecatedDeclare:
     """
-    Creates and returns a DeprecatedDeclare transaction with the given parameters.
-    If an account is provided, that transaction will be wrapped and signed.
+    Creates and returns a deprecated declare transaction with the given parameters.
+    If an account is provided, the transaction will be wrapped and signed.
     """
-    version = constants.QUERY_DECLARE_VERSION if simulate else constants.DECLARE_VERSION
+    version = (
+        constants.DEPRECATED_QUERY_DECLARE_VERSION
+        if simulate
+        else constants.DEPRECATED_DECLARE_VERSION
+    )
     nonce_callback = construct_nonce_callback(
         feeder_client=feeder_client, explicit_nonce=explicit_nonce
     )
@@ -528,7 +536,7 @@ async def construct_declare_tx(
         assert (
             declare_tx_args.sender is not None
         ), "Sender must be passed explicitly when making a direct declaration using --no_wallet."
-        return Declare(
+        return DeprecatedDeclare(
             contract_class=declare_tx_args.contract_class,
             compiled_class_hash=declare_tx_args.compiled_class_hash,
             sender_address=declare_tx_args.sender,
@@ -547,7 +555,7 @@ async def construct_declare_tx(
         "Signature cannot be passed explicitly when using an account contract. "
         "Consider making a direct declaration using --no_wallet."
     )
-    return await account.declare(
+    return await account.deprecated_declare(
         contract_class=declare_tx_args.contract_class,
         compiled_class_hash=declare_tx_args.compiled_class_hash,
         chain_id=chain_id,
@@ -557,20 +565,22 @@ async def construct_declare_tx(
     )
 
 
-async def construct_deprecated_declare_tx(
+async def construct_old_declare_tx(
     feeder_client: FeederGatewayClient,
-    declare_tx_args: DeprecatedDeclareArgs,
+    declare_tx_args: OldDeclareArgs,
     chain_id: int,
     max_fee: int,
     account: Optional[Account],
     explicit_nonce: Optional[int],
     simulate: bool,
-) -> DeprecatedDeclare:
+) -> DeprecatedOldDeclare:
     """
-    Creates and returns a DeprecatedDeclare transaction with the given parameters.
+    Creates and returns an old declare transaction with the given parameters.
     If an account is provided, that transaction will be wrapped and signed.
     """
-    version = constants.QUERY_VERSION if simulate else constants.TRANSACTION_VERSION
+    version = (
+        constants.DEPRECATED_QUERY_VERSION if simulate else constants.DEPRECATED_TRANSACTION_VERSION
+    )
     nonce_callback = construct_nonce_callback(
         feeder_client=feeder_client, explicit_nonce=explicit_nonce
     )
@@ -579,7 +589,7 @@ async def construct_deprecated_declare_tx(
         assert (
             declare_tx_args.sender is not None
         ), "Sender must be passed explicitly when making a direct declaration using --no_wallet."
-        return DeprecatedDeclare(
+        return DeprecatedOldDeclare(
             contract_class=declare_tx_args.contract_class,
             sender_address=declare_tx_args.sender,
             max_fee=max_fee,
@@ -597,7 +607,7 @@ async def construct_deprecated_declare_tx(
         "Signature cannot be passed explicitly when using an account contract. "
         "Consider making a direct declaration using --no_wallet."
     )
-    return await account.deprecated_declare(
+    return await account.deprecated_old_declare(
         contract_class=declare_tx_args.contract_class,
         chain_id=chain_id,
         max_fee=max_fee,
@@ -606,19 +616,21 @@ async def construct_deprecated_declare_tx(
     )
 
 
-async def construct_deploy_account_tx(
+async def construct_deprecated_deploy_account_tx(
     account: Account,
     max_fee: int,
     chain_id: int,
     dry_run: bool,
     force_deploy: bool,
-) -> Tuple[DeployAccount, int]:
+) -> Tuple[DeprecatedDeployAccount, int]:
     """
-    Creates and returns a Deploy Account transaction with the given parameters along with the new
-    account address.
+    Creates and returns a deprecated Deploy Account transaction with the given parameters along with
+    the new account address.
     """
-    version = constants.QUERY_VERSION if dry_run else constants.TRANSACTION_VERSION
-    return await account.deploy_account(
+    version = (
+        constants.DEPRECATED_QUERY_VERSION if dry_run else constants.DEPRECATED_TRANSACTION_VERSION
+    )
+    return await account.deprecated_deploy_account(
         max_fee=max_fee,
         version=version,
         chain_id=chain_id,

@@ -1,6 +1,6 @@
 import dataclasses
 from dataclasses import field
-from typing import Any, Dict, List
+from typing import Any, Dict, Sequence
 
 import marshmallow_dataclass
 
@@ -36,7 +36,7 @@ class StarknetOsInput(ValidatedMarshmallowDataclass):
     contracts: Dict[int, ContractState]
     class_hash_to_compiled_class_hash: Dict[int, int]
     general_config: StarknetGeneralConfig
-    transactions: List[InternalTransaction]
+    transactions: Sequence[InternalTransaction]
     block_hash: int
 
 

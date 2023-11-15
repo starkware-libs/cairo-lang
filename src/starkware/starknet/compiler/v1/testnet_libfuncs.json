@@ -59,6 +59,7 @@
         "get_block_hash_syscall",
         "get_builtin_costs",
         "get_execution_info_syscall",
+        "get_execution_info_v2_syscall",
         "hades_permutation",
         "into_box",
         "jump",

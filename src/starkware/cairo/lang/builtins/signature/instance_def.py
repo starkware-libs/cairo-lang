@@ -16,7 +16,7 @@ class EcdsaInstanceDef(BuiltinInstanceDef):
     n_hash_bits: int
 
     @property
-    def cells_per_builtin(self) -> int:
+    def memory_cells_per_instance(self) -> int:
         return CELLS_PER_SIGNATURE
 
     @property

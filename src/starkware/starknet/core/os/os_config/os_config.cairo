@@ -2,12 +2,14 @@ from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.hash_state import hash_finalize, hash_init, hash_update_single
 from starkware.cairo.common.registers import get_fp_and_pc
 
-const STARKNET_OS_CONFIG_VERSION = 'StarknetOsConfig1';
+const STARKNET_OS_CONFIG_VERSION = 'StarknetOsConfig2';
 
 struct StarknetOsConfig {
     // The identifier of the chain.
     // This field can be used to prevent replay of testnet transactions on mainnet.
     chain_id: felt,
+    // The (L2) address of the old fee token contract.
+    deprecated_fee_token_address: felt,
     // The (L2) address of the fee token contract.
     fee_token_address: felt,
 }
@@ -24,18 +26,13 @@ func get_starknet_os_config_hash{hash_ptr: HashBuiltin*}(starknet_os_config: Sta
         hash_state_ptr=hash_state_ptr, item=starknet_os_config.chain_id
     );
     let (hash_state_ptr) = hash_update_single(
+        hash_state_ptr=hash_state_ptr, item=starknet_os_config.deprecated_fee_token_address
+    );
+    let (hash_state_ptr) = hash_update_single(
         hash_state_ptr=hash_state_ptr, item=starknet_os_config.fee_token_address
     );
 
     let (starknet_os_config_hash) = hash_finalize(hash_state_ptr=hash_state_ptr);
 
     return (starknet_os_config_hash=starknet_os_config_hash);
-}
-
-func starknet_os_config_new(chain_id: felt, fee_token_address: felt) -> (
-    starknet_os_config: StarknetOsConfig*
-) {
-    let (fp_val, pc_val) = get_fp_and_pc();
-    static_assert StarknetOsConfig.SIZE == Args.SIZE;
-    return (starknet_os_config=cast(fp_val - 2 - StarknetOsConfig.SIZE, StarknetOsConfig*));
 }

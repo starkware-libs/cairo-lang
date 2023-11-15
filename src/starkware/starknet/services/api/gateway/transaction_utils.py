@@ -1,10 +1,33 @@
 import base64
 import gzip
 import json
+from typing import Set
 
 from services.external_api.client import JsonObject
+from starkware.starknet.definitions import constants
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
+from starkware.starknet.definitions.transaction_type import TransactionType
 from starkware.starkware_utils.error_handling import wrap_with_stark_exception
+
+# The following transaction types will only be supported from a certain version after regenesis.
+DEPRECATED_TX_TYPES_FOR_SCHEMA: Set[str] = {
+    TransactionType.DECLARE.name,
+    TransactionType.DEPLOY_ACCOUNT.name,
+    TransactionType.INVOKE_FUNCTION.name,
+}
+
+
+def is_deprecated_tx(raw_tx_type: str, version: int) -> bool:
+    """
+    Returns whether the given parameters represent a deprecated transaction.
+    """
+    is_deprecated_external_version = version < 3
+    is_deprecated_simulation_version = (
+        constants.QUERY_VERSION_BASE <= version < constants.QUERY_VERSION_BASE + 3
+    )
+    is_version_deprecated = is_deprecated_external_version or is_deprecated_simulation_version
+
+    return raw_tx_type in DEPRECATED_TX_TYPES_FOR_SCHEMA and is_version_deprecated
 
 
 def compress_program(program_json: JsonObject) -> str:

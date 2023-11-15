@@ -1,6 +1,6 @@
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.cairo_blake2s.blake2s import finalize_blake2s
-from starkware.cairo.common.cairo_builtins import BitwiseBuiltin
+from starkware.cairo.common.cairo_builtins import BitwiseBuiltin, PoseidonBuiltin
 from starkware.cairo.common.hash import HashBuiltin
 from starkware.cairo.common.uint256 import Uint256
 from starkware.cairo.stark_verifier.core.air_interface import (
@@ -143,9 +143,12 @@ struct InteractionValuesAfterOods {
 }
 
 // Verifies a STARK proof.
-func verify_stark_proof{range_check_ptr, pedersen_ptr: HashBuiltin*, bitwise_ptr: BitwiseBuiltin*}(
-    air: AirInstance*, proof: StarkProof*, security_bits: felt
-) -> () {
+func verify_stark_proof{
+    range_check_ptr,
+    pedersen_ptr: HashBuiltin*,
+    bitwise_ptr: BitwiseBuiltin*,
+    poseidon_ptr: PoseidonBuiltin*,
+}(air: AirInstance*, proof: StarkProof*, security_bits: felt) -> () {
     alloc_locals;
 
     // Validate config.
@@ -161,9 +164,7 @@ func verify_stark_proof{range_check_ptr, pedersen_ptr: HashBuiltin*, bitwise_ptr
     local blake2s_ptr_start: felt* = blake2s_ptr;
 
     // Compute the initial hash seed for the Fiat-Shamir channel.
-    let (digest) = public_input_hash{blake2s_ptr=blake2s_ptr}(
-        air=air, public_input=proof.public_input
-    );
+    let (digest) = public_input_hash(air=air, public_input=proof.public_input);
 
     // Construct the channel.
     let (channel: Channel) = channel_new(digest=digest);
@@ -204,6 +205,7 @@ func stark_commit{
     blake2s_ptr: felt*,
     pedersen_ptr: HashBuiltin*,
     bitwise_ptr: BitwiseBuiltin*,
+    poseidon_ptr: PoseidonBuiltin*,
     channel: Channel,
 }(
     air: AirInstance*,
@@ -326,7 +328,11 @@ func verify_oods{range_check_ptr}(
 
 // STARK decommitment phase.
 func stark_decommit{
-    range_check_ptr, blake2s_ptr: felt*, pedersen_ptr: HashBuiltin*, bitwise_ptr: BitwiseBuiltin*
+    range_check_ptr,
+    blake2s_ptr: felt*,
+    pedersen_ptr: HashBuiltin*,
+    bitwise_ptr: BitwiseBuiltin*,
+    poseidon_ptr: PoseidonBuiltin*,
 }(
     air: AirInstance*,
     public_input: PublicInput*,

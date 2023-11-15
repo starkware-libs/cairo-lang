@@ -13,10 +13,8 @@ from starkware.python.math_utils import safe_log2
 
 
 def compute_continuous_page_headers(
-    public_memory: List[PublicMemoryEntry],
-    z: int,
-    alpha: int,
-) -> List[Tuple[int, int, int, int, int]]:
+    public_memory: List[PublicMemoryEntry], z: int, alpha: int
+) -> List[Tuple[int, int, int, int]]:
     """
     Computes continuous page headers from a list of public memory entries.
     Returns a list of tuples for each page: (start_address, size, hash_low, hash_high, product).
@@ -45,8 +43,7 @@ def compute_continuous_page_headers(
             (
                 start_address[page],
                 size[page],
-                hash_value % 2**128,
-                hash_value >> 128,
+                hash_value,
                 page_prods[page],
             )
         )
@@ -79,8 +76,8 @@ def public_input_to_cairo(structs, public_input: PublicInput, z: int, alpha: int
     memory_segments = sort_segments(public_input.memory_segments)
     cairo_public_input = structs.PublicInput(
         log_n_steps=safe_log2(public_input.n_steps),
-        rc_min=public_input.rc_min,
-        rc_max=public_input.rc_max,
+        range_check_min=public_input.rc_min,
+        range_check_max=public_input.rc_max,
         layout=int.from_bytes(public_input.layout.encode("ascii"), "big"),
         dynamic_params=dynamic_params,
         n_segments=len(public_input.memory_segments),

@@ -12,7 +12,7 @@ class RangeCheckInstanceDef(BuiltinInstanceDef):
     n_parts: int
 
     @property
-    def cells_per_builtin(self) -> int:
+    def memory_cells_per_instance(self) -> int:
         return CELLS_PER_RANGE_CHECK
 
     @property

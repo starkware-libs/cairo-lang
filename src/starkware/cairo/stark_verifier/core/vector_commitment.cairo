@@ -6,9 +6,8 @@ from starkware.cairo.common.cairo_blake2s.blake2s import (
     blake2s_bigend,
 )
 from starkware.cairo.common.cairo_builtins import BitwiseBuiltin, PoseidonBuiltin
-from starkware.cairo.common.hash import HashBuiltin, hash2
 from starkware.cairo.common.math import assert_nn, assert_nn_le, split_felt, unsigned_div_rem
-from starkware.cairo.common.math_cmp import is_le_felt
+from starkware.cairo.common.math_cmp import is_nn
 from starkware.cairo.common.pow import pow
 from starkware.cairo.common.uint256 import Uint256
 from starkware.cairo.stark_verifier.core.channel import (
@@ -77,34 +76,18 @@ func vector_commit{
     return (res=new VectorCommitment(config=config, commitment_hash=commitment_hash_value));
 }
 
-// Computes the effective number of verifier-friendly commitment layers for a given Merkle tree
-// height. In the case of n_columns=1, the bottom layer must be non-verifier-friendly, for
-// compatibility with the current prover. In the current implementation of the prover, in case of
-// committing to a trace with a single column, the prover uses the non-verifier-friendly hash for
-// the bottom layer even if it should be verifier-friendly hash according to
-// n_verifier_friendly_commitment_layers.
-func calc_n_verifier_friendly_layers{range_check_ptr}(
-    n_columns: felt, n_verifier_friendly_commitment_layers: felt, height: felt
-) -> felt {
-    if (n_columns != 1) {
-        return n_verifier_friendly_commitment_layers;
-    }
-    if (is_le_felt(height, n_verifier_friendly_commitment_layers) != 0) {
-        return (height - 1);
-    }
-    return n_verifier_friendly_commitment_layers;
-}
-
 // Decommits a VectorCommitment at multiple indices.
 // Indices must be sorted and unique.
 func vector_commitment_decommit{
-    range_check_ptr, blake2s_ptr: felt*, pedersen_ptr: HashBuiltin*, bitwise_ptr: BitwiseBuiltin*
+    range_check_ptr,
+    blake2s_ptr: felt*,
+    bitwise_ptr: BitwiseBuiltin*,
+    poseidon_ptr: PoseidonBuiltin*,
 }(
     commitment: VectorCommitment*,
     n_queries: felt,
     queries: VectorQuery*,
     witness: VectorCommitmentWitness*,
-    n_columns: felt,
 ) {
     alloc_locals;
 
@@ -120,17 +103,11 @@ func vector_commitment_decommit{
     );
 
     let authentications = witness.authentications;
-    let config = commitment.config;
-    let n_verifier_friendly_layers = calc_n_verifier_friendly_layers(
-        n_columns=n_columns,
-        n_verifier_friendly_commitment_layers=config.n_verifier_friendly_commitment_layers,
-        height=config.height,
-    );
 
     let (expected_commitment) = compute_root_from_queries{authentications=authentications}(
         queue_head=shifted_queries,
         queue_tail=&shifted_queries[n_queries],
-        n_verifier_friendly_commitment_layers=n_verifier_friendly_layers,
+        n_verifier_friendly_layers=commitment.config.n_verifier_friendly_commitment_layers,
     );
     assert authentications = &witness.authentications[witness.n_authentications];
 
@@ -170,12 +147,12 @@ func compute_root_from_queries{
     range_check_ptr,
     blake2s_ptr: felt*,
     bitwise_ptr: BitwiseBuiltin*,
-    pedersen_ptr: HashBuiltin*,
+    poseidon_ptr: PoseidonBuiltin*,
     authentications: felt*,
 }(
     queue_head: VectorQueryWithDepth*,
     queue_tail: VectorQueryWithDepth*,
-    n_verifier_friendly_commitment_layers: felt,
+    n_verifier_friendly_layers: felt,
 ) -> (hash: felt) {
     alloc_locals;
 
@@ -201,25 +178,25 @@ func compute_root_from_queries{
     // Write parent to queue.
     assert queue_tail.index = parent_idx;
     assert queue_tail.depth = current.depth - 1;
-    let is_verifier_friendly = is_le_felt(current.depth, n_verifier_friendly_commitment_layers);
+    let is_verifier_friendly = is_nn(n_verifier_friendly_layers - current.depth);
     if (bit == 0) {
         // Left child.
         if (next != queue_tail and current.index + 1 == next.index) {
             // Next holds the sibling.
-            let (hash) = hash_blake_or_pedersen(current.value, next.value, is_verifier_friendly);
+            let (hash) = hash_blake_or_poseidon(current.value, next.value, is_verifier_friendly);
             assert queue_tail.value = hash;
             return compute_root_from_queries(
                 queue_head=&queue_head[2],
                 queue_tail=&queue_tail[1],
-                n_verifier_friendly_commitment_layers=n_verifier_friendly_commitment_layers,
+                n_verifier_friendly_layers=n_verifier_friendly_layers,
             );
         }
-        let (hash) = hash_blake_or_pedersen(
+        let (hash) = hash_blake_or_poseidon(
             current.value, authentications[0], is_verifier_friendly
         );
     } else {
         // Right child.
-        let (hash) = hash_blake_or_pedersen(
+        let (hash) = hash_blake_or_poseidon(
             authentications[0], current.value, is_verifier_friendly
         );
     }
@@ -229,19 +206,8 @@ func compute_root_from_queries{
     return compute_root_from_queries(
         queue_head=&queue_head[1],
         queue_tail=&queue_tail[1],
-        n_verifier_friendly_commitment_layers=n_verifier_friendly_commitment_layers,
+        n_verifier_friendly_layers=n_verifier_friendly_layers,
     );
-}
-func hash_blake_or_pedersen{
-    range_check_ptr, blake2s_ptr: felt*, bitwise_ptr: BitwiseBuiltin*, pedersen_ptr: HashBuiltin*
-}(x: felt, y: felt, is_verifier_friendly: felt) -> (res: felt) {
-    if (is_verifier_friendly == 1) {
-        let (res) = hash2{hash_ptr=pedersen_ptr}(x=x, y=y);
-        return (res=res);
-    } else {
-        let (res) = truncated_blake2s(x, y);
-        return (res=res);
-    }
 }
 
 func hash_blake_or_poseidon{

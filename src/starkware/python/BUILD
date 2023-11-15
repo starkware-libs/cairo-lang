@@ -65,6 +65,7 @@ py_library(
     visibility = ["//visibility:public"],
     deps = [
         requirement("mypy_extensions"),
+        requirement("pytest"),
     ],
 )
 

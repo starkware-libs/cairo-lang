@@ -14,7 +14,7 @@ async def calculate_block_hash(
     general_config: StarknetGeneralConfig,
     parent_hash: int,
     block_number: int,
-    global_state_root: bytes,
+    global_state_root: int,
     sequencer_address: int,
     block_timestamp: int,
     tx_hashes: Sequence[int],
@@ -65,7 +65,7 @@ async def calculate_block_hash(
     return compute_hash_on_elements(
         data=[
             block_number,
-            from_bytes(global_state_root),
+            global_state_root,
             sequencer_address,
             block_timestamp,
             len(tx_hashes),  # Number of transactions.

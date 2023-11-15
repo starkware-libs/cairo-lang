@@ -29,17 +29,19 @@ def run_test(proof_file: str, layout: str):
     program = get_program_for_layout(layout)
     proof = parse_proof(identifiers=program.identifiers, proof_json=proof_json)
 
-    runner = CairoFunctionRunner(program, layout="small")
+    runner = CairoFunctionRunner(program, layout=layout)
     runner.run(
         "verify_proof",
         range_check_ptr=runner.range_check_builtin.base,
         pedersen_ptr=runner.pedersen_builtin.base,
         bitwise_ptr=runner.bitwise_builtin.base,
+        poseidon_ptr=runner.poseidon_builtin.base,
         proof=proof,
         security_bits=80,
     )
     print("Steps:", runner.vm.current_step)
-    (range_check_ptr, pedersen_ptr, bitwise_ptr) = runner.get_return_values(3)
+    (range_check_ptr, pedersen_ptr, bitwise_ptr, poseidon_ptr) = runner.get_return_values(4)
     validate_builtin_usage(runner.range_check_builtin, range_check_ptr)
     validate_builtin_usage(runner.pedersen_builtin, pedersen_ptr)
     validate_builtin_usage(runner.bitwise_builtin, bitwise_ptr)
+    validate_builtin_usage(runner.poseidon_builtin, poseidon_ptr)

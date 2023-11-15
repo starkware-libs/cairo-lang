@@ -15,7 +15,7 @@ struct ContinuousPageHeader {
     // Size of the page.
     size: felt,
     // Hash of the page.
-    hash: Uint256,
+    hash: felt,
     // Cumulative product of the page.
     prod: felt,
 }
