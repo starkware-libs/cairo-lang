@@ -28,12 +28,12 @@ class StateReader(ABC):
         Raises an exception if said class was not declared.
         """
 
-    async def get_raw_compiled_class(self, compiled_class_hash: int) -> RawCompiledClass:
+    async def get_raw_compiled_class(self, class_hash: int) -> RawCompiledClass:
         """
-        Returns the raw compiled class of the given compiled class hash.
+        Returns the raw compiled class of the given class hash.
         Raises an exception if said class was not declared.
         """
-        compiled_class = await self.get_compiled_class(compiled_class_hash=compiled_class_hash)
+        compiled_class = await self.get_compiled_class_by_class_hash(class_hash=class_hash)
         if isinstance(compiled_class, CompiledClass):
             return RawCompiledClass(
                 raw_compiled_class=CompiledClass.Schema().dumps(compiled_class), version=1
@@ -172,8 +172,8 @@ class SyncStateReader(ABC):
     def get_compiled_class(self, compiled_class_hash: int) -> CompiledClassBase:
         pass
 
-    def get_raw_compiled_class(self, compiled_class_hash: int) -> RawCompiledClass:
-        compiled_class = self.get_compiled_class(compiled_class_hash=compiled_class_hash)
+    def get_raw_compiled_class(self, class_hash: int) -> RawCompiledClass:
+        compiled_class = self.get_compiled_class_by_class_hash(class_hash=class_hash)
         if isinstance(compiled_class, CompiledClass):
             return RawCompiledClass(
                 raw_compiled_class=CompiledClass.Schema().dumps(compiled_class), version=1

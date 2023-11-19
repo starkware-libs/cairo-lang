@@ -277,15 +277,13 @@ class CachedState(State):
 
         return self.compiled_classes[compiled_class_hash]
 
-    async def get_raw_compiled_class(self, compiled_class_hash: int) -> RawCompiledClass:
-        if compiled_class_hash not in self.raw_compiled_classes:
-            self.raw_compiled_classes[
-                compiled_class_hash
-            ] = await self.state_reader.get_raw_compiled_class(
-                compiled_class_hash=compiled_class_hash
+    async def get_raw_compiled_class(self, class_hash: int) -> RawCompiledClass:
+        if class_hash not in self.raw_compiled_classes:
+            self.raw_compiled_classes[class_hash] = await self.state_reader.get_raw_compiled_class(
+                class_hash=class_hash
             )
 
-        return self.raw_compiled_classes[compiled_class_hash]
+        return self.raw_compiled_classes[class_hash]
 
     async def get_compiled_class_hash(self, class_hash: int) -> int:
         if class_hash not in self.cache.class_hash_to_compiled_class_hash:
@@ -444,13 +442,13 @@ class CachedSyncState(SyncState):
 
         return self.compiled_classes[compiled_class_hash]
 
-    def get_raw_compiled_class(self, compiled_class_hash: int) -> RawCompiledClass:
-        if compiled_class_hash not in self.raw_compiled_classes:
-            self.raw_compiled_classes[
-                compiled_class_hash
-            ] = self.state_reader.get_raw_compiled_class(compiled_class_hash=compiled_class_hash)
+    def get_raw_compiled_class(self, class_hash: int) -> RawCompiledClass:
+        if class_hash not in self.raw_compiled_classes:
+            self.raw_compiled_classes[class_hash] = self.state_reader.get_raw_compiled_class(
+                class_hash=class_hash
+            )
 
-        return self.raw_compiled_classes[compiled_class_hash]
+        return self.raw_compiled_classes[class_hash]
 
     def get_compiled_class_hash(self, class_hash: int) -> int:
         if class_hash not in self.cache.class_hash_to_compiled_class_hash:

@@ -197,6 +197,7 @@ func execute_transactions_inner{
     contract_class_changes: DictAccess*,
     outputs: OsCarriedOutputs*,
 }(block_context: BlockContext*, n_txs) {
+    %{ print(f"execute_transactions_inner: {ids.n_txs} transactions remaining.") %}
     if (n_txs == 0) {
         return ();
     }
@@ -641,7 +642,7 @@ func check_and_increment_nonce{contract_state_changes: DictAccess*}(tx_info: TxI
     %}
 
     tempvar current_nonce = state_entry.nonce;
-    with_attr error_message("Unexpected nonce. Expected {current_nonce}, got {tx_info.nonce}.") {
+    with_attr error_message("Unexpected nonce.") {
         assert current_nonce = tx_info.nonce;
     }
 
@@ -701,6 +702,15 @@ func run_validate{
         block_context=block_context, execution_context=validate_execution_context
     );
     if (is_deprecated == 0) {
+        %{
+            # Fetch the result, up to 100 elements.
+            result = memory.get_range(ids.retdata, min(100, ids.retdata_size))
+
+            if result != [ids.VALIDATED]:
+                print("Invalid return value from __validate__:")
+                print(f"  Size: {ids.retdata_size}")
+                print(f"  Result (at most 100 elements): {result}")
+        %}
         assert retdata_size = 1;
         assert retdata[0] = VALIDATED;
     }
@@ -805,8 +815,10 @@ func execute_deploy_account_transaction{
         local constructor_execution_context: ExecutionContext*, local salt
     ) = prepare_constructor_execution_context(block_info=block_context.block_info_for_validate);
     local constructor_execution_info: ExecutionInfo* = constructor_execution_context.execution_info;
+    local sender_address = constructor_execution_info.contract_address;
 
     // Prepare validate_deploy calldata.
+    local validate_deploy_calldata_size = constructor_execution_context.calldata_size + 2;
     let (validate_deploy_calldata: felt*) = alloc();
     assert validate_deploy_calldata[0] = constructor_execution_context.class_hash;
     assert validate_deploy_calldata[1] = salt;
@@ -814,24 +826,6 @@ func execute_deploy_account_transaction{
         dst=&validate_deploy_calldata[2],
         src=constructor_execution_context.calldata,
         len=constructor_execution_context.calldata_size,
-    );
-
-    // Note that the members of execution_info.tx_info are not initialized at this point.
-    local tx_info: TxInfo* = constructor_execution_info.tx_info;
-    local deprecated_tx_info: DeprecatedTxInfo* = constructor_execution_context.deprecated_tx_info;
-    local validate_deploy_execution_context: ExecutionContext* = new ExecutionContext(
-        entry_point_type=ENTRY_POINT_TYPE_EXTERNAL,
-        class_hash=constructor_execution_context.class_hash,
-        calldata_size=constructor_execution_context.calldata_size + 2,
-        calldata=validate_deploy_calldata,
-        execution_info=new ExecutionInfo(
-            block_info=block_context.block_info_for_validate,
-            tx_info=tx_info,
-            caller_address=constructor_execution_info.caller_address,
-            contract_address=constructor_execution_info.contract_address,
-            selector=VALIDATE_DEPLOY_ENTRY_POINT_SELECTOR,
-        ),
-        deprecated_tx_info=deprecated_tx_info,
     );
 
     // Guess tx fields.
@@ -853,7 +847,7 @@ func execute_deploy_account_transaction{
     local common_tx_fields: CommonTxFields = CommonTxFields(
         tx_hash_prefix=DEPLOY_ACCOUNT_HASH_PREFIX,
         version=nondet %{ tx.version %},
-        sender_address=constructor_execution_info.contract_address,
+        sender_address=sender_address,
         max_fee=nondet %{ tx.max_fee if tx.version < 3 else 0 %},
         chain_id=block_context.starknet_os_config.chain_id,
         nonce=nondet %{ tx.nonce %},
@@ -875,7 +869,9 @@ func execute_deploy_account_transaction{
     let poseidon_ptr = builtin_ptrs.selectable.poseidon;
     with pedersen_ptr, poseidon_ptr {
         let transaction_hash = compute_deploy_account_transaction_hash(
-            common_fields=&common_tx_fields, execution_context=validate_deploy_execution_context
+            common_fields=&common_tx_fields,
+            calldata_size=validate_deploy_calldata_size,
+            calldata=validate_deploy_calldata,
         );
     }
     update_builtin_ptrs(pedersen_ptr=pedersen_ptr, poseidon_ptr=poseidon_ptr);
@@ -886,9 +882,10 @@ func execute_deploy_account_transaction{
             f"Computed hash = {ids.transaction_hash}, Expected hash = {tx.hash_value}.")
     %}
 
-    // Assign the transaction info to both calls.
-    // Note that both constructor_execution_context and
-    // validate_deploy_execution_context hold this pointer.
+    // Initialize and fill the transaction info structs.
+    local tx_info: TxInfo* = constructor_execution_info.tx_info;
+    local deprecated_tx_info: DeprecatedTxInfo* = constructor_execution_context.deprecated_tx_info;
+
     local signature_start: felt*;
     local signature_len: felt;
     %{
@@ -898,7 +895,7 @@ func execute_deploy_account_transaction{
     assert_nn_le(signature_len, SIERRA_ARRAY_LEN_BOUND - 1);
     assert [tx_info] = TxInfo(
         version=common_tx_fields.version,
-        account_contract_address=constructor_execution_info.contract_address,
+        account_contract_address=sender_address,
         max_fee=common_tx_fields.max_fee,
         signature_start=signature_start,
         signature_end=&signature_start[signature_len],
@@ -923,23 +920,38 @@ func execute_deploy_account_transaction{
     deploy_contract(
         block_context=block_context, constructor_execution_context=constructor_execution_context
     );
-    let updated_execution_context = update_class_hash_in_execution_context(
-        execution_context=validate_deploy_execution_context
-    );
 
     // Handle nonce here since 'deploy_contract' verifies that the nonce is zeroed.
     check_and_increment_nonce(tx_info=tx_info);
 
-    // Runs the account contract's "__validate_deploy__" entry point,
-    // which is responsible for signature verification.
+    // Run the account contract's "__validate_deploy__" entry point.
+
+    // Fetch the newest state entry, after constructor invocation.
+    let (state_entry: StateEntry*) = dict_read{dict_ptr=contract_state_changes}(key=sender_address);
+    // Prepare execution context.
+    local validate_deploy_execution_context: ExecutionContext* = new ExecutionContext(
+        entry_point_type=ENTRY_POINT_TYPE_EXTERNAL,
+        class_hash=state_entry.class_hash,
+        calldata_size=validate_deploy_calldata_size,
+        calldata=validate_deploy_calldata,
+        execution_info=new ExecutionInfo(
+            block_info=block_context.block_info_for_validate,
+            tx_info=tx_info,
+            caller_address=constructor_execution_info.caller_address,
+            contract_address=sender_address,
+            selector=VALIDATE_DEPLOY_ENTRY_POINT_SELECTOR,
+        ),
+        deprecated_tx_info=deprecated_tx_info,
+    );
+    // Run the entrypoint.
     let (retdata_size, retdata, is_deprecated) = select_execute_entry_point_func(
-        block_context=block_context, execution_context=updated_execution_context
+        block_context=block_context, execution_context=validate_deploy_execution_context
     );
     if (is_deprecated == 0) {
         assert retdata_size = 1;
         assert retdata[0] = VALIDATED;
     }
-    charge_fee(block_context=block_context, tx_execution_context=updated_execution_context);
+    charge_fee(block_context=block_context, tx_execution_context=validate_deploy_execution_context);
 
     %{ execution_helper.end_tx() %}
     return ();

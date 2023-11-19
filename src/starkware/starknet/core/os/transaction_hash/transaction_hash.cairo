@@ -252,7 +252,7 @@ func compute_l1_handler_transaction_hash{pedersen_ptr: HashBuiltin*}(
 // See comment above `compute_invoke_transaction_hash()`.
 func compute_deploy_account_transaction_hash{
     range_check_ptr, pedersen_ptr: HashBuiltin*, poseidon_ptr: PoseidonBuiltin*
-}(common_fields: CommonTxFields*, execution_context: ExecutionContext*) -> felt {
+}(common_fields: CommonTxFields*, calldata_size: felt, calldata: felt*) -> felt {
     alloc_locals;
 
     local version = common_fields.version;
@@ -263,8 +263,8 @@ func compute_deploy_account_transaction_hash{
             version=version,
             contract_address=common_fields.sender_address,
             entry_point_selector=0,
-            calldata_size=execution_context.calldata_size,
-            calldata=execution_context.calldata,
+            calldata_size=calldata_size,
+            calldata=calldata,
             max_fee=common_fields.max_fee,
             chain_id=common_fields.chain_id,
             additional_data_size=1,
@@ -283,11 +283,9 @@ func compute_deploy_account_transaction_hash{
     with hash_state {
         hash_tx_common_fields(common_fields=common_fields);
         // Hash and add the constructor calldata to the hash state.
-        poseidon_hash_update_with_nested_hash(
-            data_ptr=&execution_context.calldata[2], data_length=execution_context.calldata_size - 2
-        );
+        poseidon_hash_update_with_nested_hash(data_ptr=&calldata[2], data_length=calldata_size - 2);
         // Add the class hash and the contract address salt to the hash state.
-        poseidon_hash_update(data_ptr=execution_context.calldata, data_length=2);
+        poseidon_hash_update(data_ptr=calldata, data_length=2);
     }
     let transaction_hash = poseidon_hash_finalize(hash_state=hash_state);
 

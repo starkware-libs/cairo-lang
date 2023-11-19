@@ -205,11 +205,8 @@ def run_cairo_deploy_account_transaction_hash(
             n_resource_bounds=n_resource_bounds,
             resource_bounds=resource_bounds,
         ),
-        execution_context=create_execution_context(
-            program=program,
-            contract_address=contract_address,
-            calldata=calldata,
-        ),
+        calldata_size=len(calldata),
+        calldata=calldata,
         use_full_name=True,
         verify_secure=False,
     )

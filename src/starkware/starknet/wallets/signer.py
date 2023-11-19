@@ -465,7 +465,7 @@ class SignerBase(ABC):
             deploy_from_zero=deploy_from_zero,
             salt=salt,
         )
-        deploy_tx = OpenZeppelinSigner.sign_deprecated_invoke_tx(
+        deploy_tx = cls.sign_deprecated_invoke_tx(
             signer_address=account_address,
             private_key=private_key,
             call_function=CallFunction(
@@ -508,7 +508,7 @@ class SignerBase(ABC):
             deploy_from_zero=deploy_from_zero,
             salt=salt,
         )
-        deploy_tx = OpenZeppelinSigner.sign_invoke_tx(
+        deploy_tx = cls.sign_invoke_tx(
             sender_address=account_address,
             private_key=private_key,
             contract_address=account_address,
@@ -522,19 +522,33 @@ class SignerBase(ABC):
         return contract_address, deploy_tx
 
 
-class OpenZeppelinSigner(SignerBase):
+class EcdsaSignerBase(SignerBase):
+    """
+    Base class for signing transactions using ECDSA.
+    """
+
+    @classmethod
+    def sign_tx_hash(cls, tx_hash: int, private_key: Optional[int]) -> List[int]:
+        return [] if private_key is None else list(sign(msg_hash=tx_hash, priv_key=private_key))
+
+
+class OpenZeppelinSigner(EcdsaSignerBase):
+    """
+    Contains signing logic for the OpenZeppelin Cairo 0 account contract.
+    """
+
     @classmethod
     def format_multicall_calldata(cls, calls: List[CallFunction]) -> List[int]:
         call_array_len = len(calls)
         multicall_calldata = [call_array_len]
         data_offset = 0
         flat_calldata_list = []
-        for call_function in calls:
-            flat_calldata_list.extend(call_function.calldata)
-            data_len = len(call_function.calldata)
+        for call in calls:
+            flat_calldata_list.extend(call.calldata)
+            data_len = len(call.calldata)
             call_entry = [
-                call_function.contract_address,
-                call_function.entry_point_selector,
+                call.contract_address,
+                call.entry_point_selector,
                 data_offset,
                 data_len,
             ]
@@ -544,6 +558,50 @@ class OpenZeppelinSigner(SignerBase):
         multicall_calldata.extend([len(flat_calldata_list), *flat_calldata_list])
         return multicall_calldata
 
+
+class StandardSigner(EcdsaSignerBase):
+    """
+    Contains signing logic for the starndard Cairo 1 account contract from the Cairo compiler repo.
+
+    Assumes the following calldata format: `calls: Array<Call>`, where `Call` struct is
+    struct Call {
+        to: ContractAddress,
+        selector: felt252,
+        calldata: Array<felt252>
+    }
+    """
+
+    @classmethod
+    def format_multicall_calldata(cls, calls: List[CallFunction]) -> List[int]:
+        multicall_calldata = [len(calls)]
+        for call in calls:
+            multicall_calldata += [
+                call.contract_address,
+                call.entry_point_selector,
+                len(call.calldata),
+                *call.calldata,
+            ]
+
+        return multicall_calldata
+
+
+class TrivialSigner(SignerBase):
+    """
+    Trivial implementation for accounts without multicalls nor signature verfication.
+    """
+
     @classmethod
     def sign_tx_hash(cls, tx_hash: int, private_key: Optional[int]) -> List[int]:
-        return [] if private_key is None else list(sign(msg_hash=tx_hash, priv_key=private_key))
+        assert private_key is None, "Sigining is not supproted for the TrivialSigner."
+        return []
+
+    @classmethod
+    def format_multicall_calldata(cls, calls: List[CallFunction]) -> List[int]:
+        assert len(calls) == 1, "Multicall is not supported for the TrivialSigner."
+        (call,) = calls
+        return [
+            call.contract_address,
+            call.entry_point_selector,
+            len(call.calldata),
+            *call.calldata,
+        ]
