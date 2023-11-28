@@ -10,17 +10,12 @@ py_library(
     visibility = ["//visibility:public"],
     deps = [
         "//src/services/everest/api/gateway:everest_transaction_lib",
-        "//src/services/everest/business_logic:everest_business_logic_state_api_lib",
         "//src/services/everest/business_logic:everest_internal_transaction_lib",
-        "//src/starkware/starknet/business_logic/execution:starknet_transaction_execution_objects_lib",
         "//src/starkware/starknet/business_logic/fact_state:starknet_business_logic_patricia_state_lib",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
         "//src/starkware/starknet/definitions:starknet_general_config_lib",
         "//src/starkware/starknet/services/api/gateway:starknet_transaction_lib",
-        "//src/starkware/starknet/services/api/gateway:starknet_transaction_utils_lib",
         "//src/starkware/starkware_utils:starkware_config_utils_lib",
-        requirement("marshmallow"),
-        requirement("marshmallow_oneofschema"),
     ],
 )
 
@@ -47,7 +42,6 @@ py_library(
         "//src/starkware/starknet/services/api/gateway:starknet_transaction_lib",
         "//src/starkware/starkware_utils:starkware_config_utils_lib",
         "//src/starkware/storage:starkware_abstract_storage_lib",
-        requirement("marshmallow"),
         requirement("marshmallow_dataclass"),
     ],
 )
@@ -87,6 +81,23 @@ py_library(
         "//src/starkware/storage:starkware_abstract_storage_lib",
         requirement("marshmallow"),
         requirement("marshmallow_dataclass"),
+    ],
+)
+
+py_library(
+    name = "internal_transaction_schema",
+    srcs = [
+        "internal_transaction_schema.py",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":starknet_account_transaction_objects_lib",
+        ":starknet_transaction_deprecated_objects_lib",
+        ":starknet_transaction_objects_lib",
+        "//src/starkware/starknet/definitions:starknet_definitions_lib",
+        "//src/starkware/starknet/services/api/gateway:starknet_transaction_utils_lib",
+        "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
+        requirement("marshmallow"),
         requirement("marshmallow_oneofschema"),
     ],
 )

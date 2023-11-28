@@ -132,10 +132,10 @@
         },
         "secp256k1_mul": {
             "builtin_instance_counter": {
-                "range_check_builtin": 10739
+                "range_check_builtin": 7045
             },
             "n_memory_holes": 0,
-            "n_steps": 121956
+            "n_steps": 76401
         },
         "secp256k1_new": {
             "builtin_instance_counter": {
@@ -167,10 +167,10 @@
         },
         "secp256r1_mul": {
             "builtin_instance_counter": {
-                "range_check_builtin": 21477
+                "range_check_builtin": 13961
             },
             "n_memory_holes": 0,
-            "n_steps": 195595
+            "n_steps": 125240
         },
         "secp256r1_new": {
             "builtin_instance_counter": {

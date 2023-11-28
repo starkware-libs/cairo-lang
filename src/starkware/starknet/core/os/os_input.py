@@ -2,9 +2,13 @@ import dataclasses
 from dataclasses import field
 from typing import Any, Dict, Sequence
 
+import marshmallow.fields as mfields
 import marshmallow_dataclass
 
 from starkware.starknet.business_logic.fact_state.contract_state_objects import ContractState
+from starkware.starknet.business_logic.transaction.internal_transaction_schema import (
+    InternalTransactionSchema,
+)
 from starkware.starknet.business_logic.transaction.objects import InternalTransaction
 from starkware.starknet.core.os.deprecated_syscall_handler import DeprecatedOsSysCallHandler
 from starkware.starknet.core.os.syscall_handler import OsExecutionHelper, OsSyscallHandler
@@ -36,7 +40,9 @@ class StarknetOsInput(ValidatedMarshmallowDataclass):
     contracts: Dict[int, ContractState]
     class_hash_to_compiled_class_hash: Dict[int, int]
     general_config: StarknetGeneralConfig
-    transactions: Sequence[InternalTransaction]
+    transactions: Sequence[InternalTransaction] = field(
+        metadata=dict(marshmallow_field=mfields.List(mfields.Nested(InternalTransactionSchema)))
+    )
     block_hash: int
 
 

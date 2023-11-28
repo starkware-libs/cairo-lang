@@ -64,8 +64,8 @@ def create_common_tx_fields(
         resource_bounds=resource_bounds if resource_bounds is not None else [],
         paymaster_data_length=0,
         paymaster_data=[],
-        nonce_data_availabilty_mode=0,
-        fee_data_availabilty_mode=0,
+        nonce_data_availability_mode=0,
+        fee_data_availability_mode=0,
     )
 
 

@@ -6,7 +6,6 @@ from typing import Any, ClassVar, Dict, Iterable, List, Optional, Tuple, Type, c
 
 import marshmallow
 import marshmallow_dataclass
-from marshmallow_oneofschema import OneOfSchema
 
 from services.everest.api.gateway.transaction import EverestTransaction
 from services.everest.business_logic.internal_transaction import EverestInternalStateTransaction
@@ -26,11 +25,7 @@ from starkware.starknet.business_logic.state.state import UpdatesTrackerState
 from starkware.starknet.business_logic.state.state_api import SyncState
 from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
 from starkware.starknet.business_logic.transaction.fee import calculate_tx_fee, execute_fee_transfer
-from starkware.starknet.business_logic.transaction.objects import (
-    BaseInternalTransactionSchema,
-    InternalTransaction,
-    InternalTransactionSchema,
-)
+from starkware.starknet.business_logic.transaction.objects import InternalTransaction
 from starkware.starknet.business_logic.transaction.state_objects import (
     FeeInfo,
     InternalStateTransaction,
@@ -61,12 +56,7 @@ from starkware.starknet.definitions.data_availability_mode import DataAvailabili
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.execution_mode import ExecutionMode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
-from starkware.starknet.definitions.transaction_type import (
-    DEPRECATED_DECLARE_SCHEMA_NAME,
-    DEPRECATED_DEPLOY_ACCOUNT_SCHEMA_NAME,
-    DEPRECATED_INVOKE_FUNCTION_SCHEMA_NAME,
-    TransactionType,
-)
+from starkware.starknet.definitions.transaction_type import TransactionType
 from starkware.starknet.public import abi as starknet_abi
 from starkware.starknet.services.api.contract_class.contract_class import (
     CompiledClassBase,
@@ -1629,53 +1619,3 @@ class InternalL1Handler(DeprecatedInternalTransaction):
         # The calldata includes the "from" field, which is not a part of the payload.
         # We thus subtract 1.
         return len(self.calldata) - 1
-
-
-class DeprecatedInternalTransactionSchema(BaseInternalTransactionSchema):
-    """
-    Schema for transaction.
-    OneOfSchema adds a "type" field.
-
-    Allows the use of load / dump of different transaction type data directly via the
-    `DeprecatedInternalTransaction` class (e.g.,
-    `DeprecatedInternalTransaction.load(invoke_function_dict)`,
-    where {"type": "INVOKE_FUNCTION"} is in `invoke_function_dict`, will produce a
-    `DeprecatedInternalInvokeFunction` object).
-    """
-
-    type_schemas: Dict[str, Type[marshmallow.Schema]] = {
-        DEPRECATED_DECLARE_SCHEMA_NAME: DeprecatedInternalDeclare.Schema,
-        DEPRECATED_DEPLOY_ACCOUNT_SCHEMA_NAME: DeprecatedInternalDeployAccount.Schema,
-        DEPRECATED_INVOKE_FUNCTION_SCHEMA_NAME: DeprecatedInternalInvokeFunction.Schema,
-        TransactionType.DEPLOY.name: InternalDeploy.Schema,
-        TransactionType.L1_HANDLER.name: InternalL1Handler.Schema,
-    }
-
-    InternalTransactionSchema.type_schemas.update(type_schemas)
-
-
-# Note that the line that assigns a schema to a class must appear in the same file as the
-# class definition, since they are coupled.
-DeprecatedInternalTransaction.Schema = DeprecatedInternalTransactionSchema
-
-
-class SyntheticTransactionSchema(OneOfSchema):
-    """
-    Schema for synthetic transaction.
-    OneOfSchema adds a "type" field.
-
-    Allows the use of load / dump of different transaction type data directly via the
-    DeprecatedTransaction class.
-    """
-
-    type_schemas: Dict[str, Type[marshmallow.Schema]] = {
-        TransactionType.INITIALIZE_BLOCK_INFO.name: InitializeBlockInfo.Schema
-    }
-
-    def get_obj_type(self, obj: SyntheticTransaction) -> str:
-        return obj.tx_type.name
-
-
-# Note that the line that assigns a schema to a class must appear in the same file as the
-# class definition, since they are coupled.
-SyntheticTransaction.Schema = SyntheticTransactionSchema

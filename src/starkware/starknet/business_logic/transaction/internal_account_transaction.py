@@ -1,20 +1,15 @@
 import dataclasses
 from abc import abstractmethod
 from dataclasses import field
-from typing import ClassVar, Dict, List, Optional, Type
+from typing import ClassVar, List, Optional, Type
 
-import marshmallow
 import marshmallow_dataclass
 
 import starkware.starknet.public.abi as abi_constants
 from services.everest.business_logic.state_api import StateProxy
 from services.everest.business_logic.transaction_execution_objects import TransactionExecutionInfo
 from starkware.starknet.business_logic.fact_state.contract_state_objects import StateSelector
-from starkware.starknet.business_logic.transaction.objects import (
-    BaseInternalTransactionSchema,
-    InternalTransaction,
-    InternalTransactionSchema,
-)
+from starkware.starknet.business_logic.transaction.objects import InternalTransaction
 from starkware.starknet.business_logic.utils import verify_version, write_class_facts
 from starkware.starknet.core.os.contract_address.contract_address import (
     calculate_contract_address_from_hash,
@@ -600,30 +595,3 @@ class InternalInvokeFunction(InternalAccountTransaction):
     @property
     def entry_point_selector(self) -> int:
         return abi_constants.EXECUTE_ENTRY_POINT_SELECTOR
-
-
-class InternalAccountTransactionSchema(BaseInternalTransactionSchema):
-
-    """
-    Schema for transaction.
-    OneOfSchema adds a "type" field.
-
-    Allows the use of load / dump of different transaction type data directly via the
-    `InternalAccountTransaction` class (e.g.,
-    `InternalAccountTransaction.load(invoke_function_dict)`,
-    where {"type": "INVOKE_FUNCTION"} is in `invoke_function_dict`, will produce a
-    `InternalInvokeFunction` object).
-    """
-
-    type_schemas: Dict[str, Type[marshmallow.Schema]] = {
-        TransactionType.DECLARE.name: InternalDeclare.Schema,
-        TransactionType.DEPLOY_ACCOUNT.name: InternalDeployAccount.Schema,
-        TransactionType.INVOKE_FUNCTION.name: InternalInvokeFunction.Schema,
-    }
-
-    InternalTransactionSchema.type_schemas.update(type_schemas)
-
-
-# Note that the line that assigns a schema to a class must appear in the same file as the
-# class definition, since they are coupled.
-InternalAccountTransaction.Schema = InternalAccountTransactionSchema

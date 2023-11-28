@@ -88,9 +88,9 @@ struct TxInfo {
     paymaster_data_start: felt*,
     paymaster_data_end: felt*,
     // The data availability mode for the nonce.
-    nonce_data_availabilty_mode: felt,
+    nonce_data_availability_mode: felt,
     // The data availability mode for the account balance from which fee will be taken.
-    fee_data_availabilty_mode: felt,
+    fee_data_availability_mode: felt,
     // If nonempty, will contain the required data for deploying and initializing an account
     // contract: its class hash, address salt and constructor calldata.
     account_deployment_data_start: felt*,

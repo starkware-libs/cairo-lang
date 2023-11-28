@@ -965,8 +965,8 @@ class BusinessLogicSyscallHandler(SyscallHandlerBase):
                 tip=0,
                 paymaster_data_start=0,
                 paymaster_data_end=0,
-                nonce_data_availabilty_mode=0,
-                fee_data_availabilty_mode=0,
+                nonce_data_availability_mode=0,
+                fee_data_availability_mode=0,
                 account_deployment_data_start=0,
                 account_deployment_data_end=0,
             )

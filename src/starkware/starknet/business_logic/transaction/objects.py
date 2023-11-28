@@ -2,10 +2,7 @@ import dataclasses
 import inspect
 from abc import abstractmethod
 from dataclasses import field
-from typing import Any, ClassVar, Dict, Iterable, Set, Type, cast
-
-import marshmallow
-from marshmallow_oneofschema import OneOfSchema
+from typing import ClassVar, Dict, Iterable, Set, Type, cast
 
 from services.everest.api.gateway.transaction import EverestTransaction
 from services.everest.business_logic.internal_transaction import (
@@ -17,10 +14,6 @@ from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.definitions.transaction_type import TransactionType
 from starkware.starknet.services.api.gateway.transaction import Transaction
-from starkware.starknet.services.api.gateway.transaction_utils import (
-    DEPRECATED_TX_TYPES_FOR_SCHEMA,
-    is_deprecated_tx,
-)
 from starkware.starkware_utils.config_base import Config
 
 # Do not use `__post_init__` on internal transactions.
@@ -163,73 +156,3 @@ class InternalTransaction(EverestInternalTransaction):
         Returns an internal transaction generated based on an external one, where the input
         arguments are downcasted to application-specific types.
         """
-
-
-class BaseInternalTransactionSchema(OneOfSchema):
-    """
-    Represents the base class of Starknet internal transaction marshmallow schema class.
-    Contains custom logic of selecting the appropriate transaction class to de/serialize from/into.
-
-    Note that externally there are four transaction types, even though internally there are more.
-    Hence, we need to manually “wire” the given transaction data to the corresponding type.
-    """
-
-    def get_obj_type(self, obj: InternalTransaction) -> str:
-        """
-        Returns the name of key of type-to-schema mapping,
-        which will be used while loading the object currently dumped.
-        """
-        obj_type = obj.tx_type.name
-
-        if obj_type in DEPRECATED_TX_TYPES_FOR_SCHEMA and type(obj).__name__.startswith(
-            "Deprecated"
-        ):
-            return f"DEPRECATED_{obj_type}"
-
-        return obj_type
-
-    def get_data_type(self, data: Dict[str, Any]) -> str:
-        """
-        Returns the name of key of type-to-schema mapping,
-        for the raw data currently being loaded into an object.
-        """
-        raw_tx_type = cast(str, data.get(self.type_field))
-
-        # Version field may be missing in old transactions.
-        raw_version = data.get("version", "0x0")
-        version = fields.TransactionVersionField.load_value(value=raw_version)
-
-        if (
-            raw_tx_type == TransactionType.INVOKE_FUNCTION.name
-            and data.get("entry_point_type") == TransactionType.L1_HANDLER.name
-        ):
-            data.pop(self.type_field)
-            return TransactionType.L1_HANDLER.name
-
-        if is_deprecated_tx(raw_tx_type=raw_tx_type, version=version):
-            data.pop(self.type_field)
-            return f"DEPRECATED_{raw_tx_type}"
-
-        return super().get_data_type(data=data)
-
-
-class InternalTransactionSchema(BaseInternalTransactionSchema):
-
-    """
-    Schema for transaction.
-    OneOfSchema adds a "type" field.
-
-    Allows the use of load / dump of different transaction type data directly via the
-    `InternalAccountTransaction` class (e.g.,
-    `InternalAccountTransaction.load(invoke_function_dict)`,
-    where {"type": "INVOKE_FUNCTION"} is in `invoke_function_dict`, will produce a
-    `InternalInvokeFunction` object).
-    """
-
-    # This is filled afterwards, together with derived class definition.
-    type_schemas: Dict[str, Type[marshmallow.Schema]] = {}
-
-
-# Note that the line that assigns a schema to a class must appear in the same file as the
-# class definition, since they are coupled.
-InternalTransaction.Schema = InternalTransactionSchema

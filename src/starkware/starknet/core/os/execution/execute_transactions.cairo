@@ -85,8 +85,8 @@ func assert_deprecated_tx_fields_consistency(tx_info: TxInfo*) {
         assert tx_info.resource_bounds_end = cast(0, ResourceBounds*);
         assert tx_info.paymaster_data_start = nullptr;
         assert tx_info.paymaster_data_end = nullptr;
-        assert tx_info.nonce_data_availabilty_mode = 0;
-        assert tx_info.fee_data_availabilty_mode = 0;
+        assert tx_info.nonce_data_availability_mode = 0;
+        assert tx_info.fee_data_availability_mode = 0;
         assert tx_info.account_deployment_data_start = nullptr;
         assert tx_info.account_deployment_data_end = nullptr;
     } else {
@@ -376,10 +376,10 @@ func execute_invoke_function_transaction{
         paymaster_data=cast(
             nondet %{ 0 if tx.version < 3 else segments.gen_arg(tx.paymaster_data) %}, felt*
         ),
-        nonce_data_availabilty_mode=(
+        nonce_data_availability_mode=(
             nondet %{ 0 if tx.version < 3 else tx.nonce_data_availability_mode %}
         ),
-        fee_data_availabilty_mode=(
+        fee_data_availability_mode=(
             nondet %{ 0 if tx.version < 3 else tx.fee_data_availability_mode %}
         ),
     );
@@ -430,8 +430,8 @@ func execute_invoke_function_transaction{
         tip=common_tx_fields.tip,
         paymaster_data_start=common_tx_fields.paymaster_data,
         paymaster_data_end=&common_tx_fields.paymaster_data[common_tx_fields.paymaster_data_length],
-        nonce_data_availabilty_mode=common_tx_fields.nonce_data_availabilty_mode,
-        fee_data_availabilty_mode=common_tx_fields.fee_data_availabilty_mode,
+        nonce_data_availability_mode=common_tx_fields.nonce_data_availability_mode,
+        fee_data_availability_mode=common_tx_fields.fee_data_availability_mode,
         account_deployment_data_start=account_deployment_data,
         account_deployment_data_end=&account_deployment_data[account_deployment_data_size],
     );
@@ -529,8 +529,8 @@ func execute_l1_handler_transaction{
         tip=0,
         paymaster_data_start=cast(0, felt*),
         paymaster_data_end=cast(0, felt*),
-        nonce_data_availabilty_mode=0,
-        fee_data_availabilty_mode=0,
+        nonce_data_availability_mode=0,
+        fee_data_availability_mode=0,
         account_deployment_data_start=cast(0, felt*),
         account_deployment_data_end=cast(0, felt*),
     );
@@ -858,10 +858,10 @@ func execute_deploy_account_transaction{
         paymaster_data=cast(
             nondet %{ 0 if tx.version < 3 else segments.gen_arg(tx.paymaster_data) %}, felt*
         ),
-        nonce_data_availabilty_mode=(
+        nonce_data_availability_mode=(
             nondet %{ 0 if tx.version < 3 else tx.nonce_data_availability_mode %}
         ),
-        fee_data_availabilty_mode=(
+        fee_data_availability_mode=(
             nondet %{ 0 if tx.version < 3 else tx.fee_data_availability_mode %}
         ),
     );
@@ -907,8 +907,8 @@ func execute_deploy_account_transaction{
         tip=common_tx_fields.tip,
         paymaster_data_start=common_tx_fields.paymaster_data,
         paymaster_data_end=&common_tx_fields.paymaster_data[common_tx_fields.paymaster_data_length],
-        nonce_data_availabilty_mode=common_tx_fields.nonce_data_availabilty_mode,
-        fee_data_availabilty_mode=common_tx_fields.fee_data_availabilty_mode,
+        nonce_data_availability_mode=common_tx_fields.nonce_data_availability_mode,
+        fee_data_availability_mode=common_tx_fields.fee_data_availability_mode,
         account_deployment_data_start=cast(0, felt*),
         account_deployment_data_end=cast(0, felt*),
     );
@@ -1056,10 +1056,10 @@ func execute_declare_transaction{
         paymaster_data=cast(
             nondet %{ 0 if tx.version < 3 else segments.gen_arg(tx.paymaster_data) %}, felt*
         ),
-        nonce_data_availabilty_mode=(
+        nonce_data_availability_mode=(
             nondet %{ 0 if tx.version < 3 else tx.nonce_data_availability_mode %}
         ),
-        fee_data_availabilty_mode=(
+        fee_data_availability_mode=(
             nondet %{ 0 if tx.version < 3 else tx.fee_data_availability_mode %}
         ),
     );
@@ -1105,8 +1105,8 @@ func execute_declare_transaction{
         tip=common_tx_fields.tip,
         paymaster_data_start=common_tx_fields.paymaster_data,
         paymaster_data_end=&common_tx_fields.paymaster_data[common_tx_fields.paymaster_data_length],
-        nonce_data_availabilty_mode=common_tx_fields.nonce_data_availabilty_mode,
-        fee_data_availabilty_mode=common_tx_fields.fee_data_availabilty_mode,
+        nonce_data_availability_mode=common_tx_fields.nonce_data_availability_mode,
+        fee_data_availability_mode=common_tx_fields.fee_data_availability_mode,
         account_deployment_data_start=account_deployment_data,
         account_deployment_data_end=&account_deployment_data[account_deployment_data_size],
     );

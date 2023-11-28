@@ -60,9 +60,9 @@ struct CommonTxFields {
     paymaster_data_length: felt,
     paymaster_data: felt*,
     // The data availability mode for the nonce.
-    nonce_data_availabilty_mode: felt,
+    nonce_data_availability_mode: felt,
     // The data availability mode for the account balance from which fee will be taken.
-    fee_data_availabilty_mode: felt,
+    fee_data_availability_mode: felt,
 }
 
 func deprecated_get_transaction_hash{hash_ptr: HashBuiltin*}(
@@ -145,10 +145,10 @@ func hash_tx_common_fields{
         n_resource_bounds=common_fields.n_resource_bounds,
     );
 
-    assert common_fields.nonce_data_availabilty_mode = 0;
-    assert common_fields.fee_data_availabilty_mode = 0;
-    let data_availabilty_modes = common_fields.nonce_data_availabilty_mode * 2 ** 32 +
-        common_fields.fee_data_availabilty_mode;
+    assert common_fields.nonce_data_availability_mode = 0;
+    assert common_fields.fee_data_availability_mode = 0;
+    let data_availability_modes = common_fields.nonce_data_availability_mode * 2 ** 32 +
+        common_fields.fee_data_availability_mode;
 
     poseidon_hash_update_single(item=common_fields.tx_hash_prefix);
     poseidon_hash_update_single(item=common_fields.version);
@@ -159,7 +159,7 @@ func hash_tx_common_fields{
     );
     poseidon_hash_update_single(item=common_fields.chain_id);
     poseidon_hash_update_single(item=common_fields.nonce);
-    poseidon_hash_update_single(item=data_availabilty_modes);
+    poseidon_hash_update_single(item=data_availability_modes);
 
     return ();
 }
