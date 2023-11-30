@@ -282,7 +282,7 @@ func unpack_composite_packed_task{
     // Make sure the program hash is one of the supported verifier program hashes.
     find_element(
         array_ptr=bootloader_config.supported_cairo_verifier_program_hashes,
-        elm_size=1,
+        elm_size=2,
         n_elms=bootloader_config.supported_cairo_verifier_program_hashes_len,
         key=task_header.program_hash,
     );
