@@ -307,7 +307,7 @@ func unpack_composite_packed_task{
 
     // Assert that the entire subtask output was used.
     assert nested_subtasks_output = nested_subtasks_output_start + nested_subtasks_output_len;
-    return ();
+    return (0);
 }
 
 // Unpacks a plain packed task output to the output builtin.
