@@ -310,7 +310,7 @@ func unpack_composite_packed_task{
     return (0);
 }
 
-// Unpacks a plain packed task output to the output builtin.
+// Unpacks a plain packed task output to the output builtin 0.
 //
 // Arguments:
 // bootloader_config.
