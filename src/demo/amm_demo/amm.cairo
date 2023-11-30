@@ -10,8 +10,8 @@ from starkware.cairo.common.small_merkle_tree import small_merkle_tree_update
 
 struct Account {
     public_key: felt,
-    token_a_balance: felt,
-    token_b_balance: felt,
+    token_a_balance: a_felt,
+    token_b_balance: a_felt,
 }
 
 // The maximum amount of each token that belongs to the AMM.
