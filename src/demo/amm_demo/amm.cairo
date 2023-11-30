@@ -48,7 +48,7 @@ func modify_account{range_check_ptr}(state: AmmState, account_id, diff_a, diff_b
     assert_nn_le(new_token_b_balance, MAX_BALANCE);
 
     // Create a new Account instance.
-    local new_account: Account;
+    local new_account: Account2;
     assert new_account.public_key = old_account.public_key;
     assert new_account.token_a_balance = new_token_a_balance;
     assert new_account.token_b_balance = new_token_b_balance;
