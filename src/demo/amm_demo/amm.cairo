@@ -10,8 +10,8 @@ from starkware.cairo.common.small_merkle_tree import small_merkle_tree_update
 
 struct Account {
     public_key: felt,
-    token_a_balance: a_felt,
-    token_b_balance: a_felt,
+    token_a_balance: felt,
+    token_b_balance: felt,
 }
 
 // The maximum amount of each token that belongs to the AMM.
@@ -48,7 +48,7 @@ func modify_account{range_check_ptr}(state: AmmState, account_id, diff_a, diff_b
     assert_nn_le(new_token_b_balance, MAX_BALANCE);
 
     // Create a new Account instance.
-    local new_account: Account2;
+    local new_account: Account;
     assert new_account.public_key = old_account.public_key;
     assert new_account.token_a_balance = new_token_a_balance;
     assert new_account.token_b_balance = new_token_b_balance;

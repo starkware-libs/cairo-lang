@@ -282,7 +282,7 @@ func unpack_composite_packed_task{
     // Make sure the program hash is one of the supported verifier program hashes.
     find_element(
         array_ptr=bootloader_config.supported_cairo_verifier_program_hashes,
-        elm_size=3,
+        elm_size=1,
         n_elms=bootloader_config.supported_cairo_verifier_program_hashes_len,
         key=task_header.program_hash,
     );
@@ -307,10 +307,10 @@ func unpack_composite_packed_task{
 
     // Assert that the entire subtask output was used.
     assert nested_subtasks_output = nested_subtasks_output_start + nested_subtasks_output_len;
-    return (0);
+    return ();
 }
 
-// Unpacks a plain packed task output to the output builtin 0.
+// Unpacks a plain packed task output to the output builtin.
 //
 // Arguments:
 // bootloader_config.
