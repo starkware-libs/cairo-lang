@@ -1,5 +1,5 @@
 {
-    "expected_root": "0x4446e221e267aa28ba0ccef5e11814961572a7bad62c5d02838398223d13a5",
+    "expected_root": "0x211d8f9b32744f50e53562d338a8135f0ee5a4dd756e2ba6505064e71b7be58",
     "merkle_height": 20,
     "merkle_queue_indices": [
         1057520,

@@ -39,7 +39,6 @@ py_library(
         "memory_dict_backend.py",
         "memory_segments.py",
         "output_builtin_runner.py",
-        "security.py",
         "trace_entry.py",
         "utils.py",
         "validated_memory_dict.py",
@@ -51,12 +50,17 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "cairo_relocatable_lib",
-        "cairo_vm_crypto_lib",
+        ":cairo_relocatable_lib",
+        "//src/starkware/cairo/lang:cairo_constants_lib",
         "//src/starkware/cairo/lang/builtins:cairo_all_builtins_lib",
+        "//src/starkware/cairo/lang/builtins:instance_def_lib",
         "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
         "//src/starkware/python:starkware_python_utils_lib",
         "//src/starkware/starknet/security:starknet_security_lib",
+        "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
+        requirement("marshmallow"),
+        requirement("marshmallow_dataclass"),
+        requirement("typing_extensions"),
     ],
 )
 
@@ -65,6 +69,7 @@ py_library(
     srcs = [
         "cairo_run.py",
         "cairo_runner.py",
+        "security.py",
     ],
     visibility = ["//visibility:public"],
     deps = [
@@ -73,6 +78,7 @@ py_library(
         ":cairo_vm_lib",
         "//src/starkware/cairo/lang:cairo_instances_lib",
         "//src/starkware/cairo/lang:cairo_version_lib",
+        "//src/starkware/cairo/lang:dynamic_layout_params_lib",
         "//src/starkware/cairo/lang/builtins:cairo_run_builtins_lib",
         "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
         # A tracer module is loaded dynamically in runtime and available with the following

@@ -20,6 +20,7 @@ py_library(
         "//src/starkware/starkware_utils:starkware_config_utils_lib",
         "//src/starkware/starkware_utils:starkware_utils_lib",
         "//src/starkware/storage:starkware_abstract_storage_lib",
+        requirement("marshmallow"),
         requirement("marshmallow_dataclass"),
     ],
 )
@@ -58,5 +59,6 @@ py_library(
     visibility = ["//visibility:public"],
     deps = [
         "//src/starkware/starknet/business_logic/state:starknet_business_logic_state_lib",
+        "//src/starkware/starknet/definitions:starknet_definitions_lib",
     ],
 )

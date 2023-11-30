@@ -19,7 +19,12 @@ from starkware.starknet.services.api.feeder_gateway.response_objects import (
     TransactionSimulationInfo,
     TransactionTrace,
 )
-from starkware.starknet.services.api.gateway.transaction import AccountTransaction
+from starkware.starknet.services.api.gateway.deprecated_transaction import (
+    DeprecatedAccountTransaction,
+)
+from starkware.starknet.services.api.gateway.transaction_schema import (
+    DeprecatedAccountTransactionSchema,
+)
 from starkware.starkware_utils.validated_fields import RangeValidatedField
 
 CastableToHash = Union[int, str]
@@ -84,7 +89,7 @@ class FeederGatewayClient(EverestFeederGatewayClient):
 
     async def estimate_fee(
         self,
-        tx: AccountTransaction,
+        tx: DeprecatedAccountTransaction,
         block_hash: Optional[CastableToHash] = None,
         block_number: Optional[BlockIdentifier] = None,
         skip_validate: bool = False,
@@ -95,13 +100,13 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         raw_response = await self._send_request(
             send_method="POST",
             uri=f"/estimate_fee?{formatted_simulate_tx_arguments}",
-            data=AccountTransaction.Schema().dumps(obj=tx),
+            data=DeprecatedAccountTransactionSchema().dumps(obj=tx),
         )
         return FeeEstimationInfo.loads(data=raw_response)
 
     async def estimate_fee_bulk(
         self,
-        txs: List[AccountTransaction],
+        txs: List[DeprecatedAccountTransaction],
         block_hash: Optional[CastableToHash] = None,
         block_number: Optional[BlockIdentifier] = None,
         skip_validate: bool = False,
@@ -112,7 +117,7 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         raw_response = await self._send_request(
             send_method="POST",
             uri=f"/estimate_fee_bulk?{formatted_simulate_tx_arguments}",
-            data=AccountTransaction.Schema().dumps(obj=txs, many=True),
+            data=DeprecatedAccountTransactionSchema().dumps(obj=txs, many=True),
         )
         return FeeEstimationInfo.Schema().loads(json_data=raw_response, many=True)
 
@@ -134,7 +139,7 @@ class FeederGatewayClient(EverestFeederGatewayClient):
 
     async def simulate_transaction(
         self,
-        tx: AccountTransaction,
+        tx: DeprecatedAccountTransaction,
         block_hash: Optional[CastableToHash] = None,
         block_number: Optional[BlockIdentifier] = None,
         skip_validate: bool = False,
@@ -145,7 +150,7 @@ class FeederGatewayClient(EverestFeederGatewayClient):
         raw_response = await self._send_request(
             send_method="POST",
             uri=f"/simulate_transaction?{formatted_simulate_tx_arguments}",
-            data=AccountTransaction.Schema().dumps(obj=tx),
+            data=DeprecatedAccountTransactionSchema().dumps(obj=tx),
         )
         return TransactionSimulationInfo.loads(data=raw_response)
 

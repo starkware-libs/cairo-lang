@@ -1,8 +1,8 @@
-%builtins output pedersen range_check bitwise
+%builtins output pedersen range_check bitwise poseidon
 
 from starkware.cairo.cairo_verifier.objects import CairoVerifierOutput
 from starkware.cairo.common.alloc import alloc
-from starkware.cairo.common.cairo_builtins import BitwiseBuiltin, HashBuiltin
+from starkware.cairo.common.cairo_builtins import BitwiseBuiltin, HashBuiltin, PoseidonBuiltin
 from starkware.cairo.common.hash_state import hash_felts
 from starkware.cairo.common.math import assert_nn_le
 from starkware.cairo.common.registers import get_label_location
@@ -44,16 +44,22 @@ func get_program_builtins() -> (n_builtins: felt, builtins: felt*) {
 // Verifies a complete Cairo proof of a Cairo program with a "start" section, with a single output
 // page.
 // Returns the program hash and the output hash.
-func verify_cairo_proof{range_check_ptr, pedersen_ptr: HashBuiltin*, bitwise_ptr: BitwiseBuiltin*}(
-    proof: StarkProof*
-) -> (program_hash: felt, output_hash: felt) {
+func verify_cairo_proof{
+    range_check_ptr,
+    pedersen_ptr: HashBuiltin*,
+    bitwise_ptr: BitwiseBuiltin*,
+    poseidon_ptr: PoseidonBuiltin*,
+}(proof: StarkProof*) -> (program_hash: felt, output_hash: felt) {
     alloc_locals;
     verify_proof(proof=proof, security_bits=SECURITY_BITS);
     return _verify_public_input(public_input=cast(proof.public_input, PublicInput*));
 }
 
 func _verify_public_input{
-    range_check_ptr, pedersen_ptr: HashBuiltin*, bitwise_ptr: BitwiseBuiltin*
+    range_check_ptr,
+    pedersen_ptr: HashBuiltin*,
+    bitwise_ptr: BitwiseBuiltin*,
+    poseidon_ptr: PoseidonBuiltin*,
 }(public_input: PublicInput*) -> (program_hash: felt, output_hash: felt) {
     alloc_locals;
     local public_segments: SegmentInfo* = public_input.segments;
@@ -185,7 +191,11 @@ func extract_range{memory: AddrValue*}(addr: felt, length: felt, output: felt*) 
 //
 // Outputs the program hash and the hash of the output.
 func main{
-    output_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr, bitwise_ptr: BitwiseBuiltin*
+    output_ptr: felt*,
+    pedersen_ptr: HashBuiltin*,
+    range_check_ptr,
+    bitwise_ptr: BitwiseBuiltin*,
+    poseidon_ptr: PoseidonBuiltin*,
 }() {
     alloc_locals;
     local proof: StarkProof*;

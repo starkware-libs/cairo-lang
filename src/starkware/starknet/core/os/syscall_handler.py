@@ -60,7 +60,6 @@ from starkware.starknet.business_logic.fact_state.contract_state_objects import 
 from starkware.starknet.business_logic.state.state import ContractStorageState
 from starkware.starknet.business_logic.state.state_api import SyncState
 from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
-from starkware.starknet.business_logic.state.storage_domain import StorageDomain
 from starkware.starknet.core.os.contract_address.contract_address import (
     calculate_contract_address_from_hash,
 )
@@ -75,6 +74,7 @@ from starkware.starknet.core.os.syscall_utils import (
 )
 from starkware.starknet.definitions import constants
 from starkware.starknet.definitions.constants import GasCost
+from starkware.starknet.definitions.data_availability_mode import DataAvailabilityMode
 from starkware.starknet.definitions.error_codes import CairoErrorCode, StarknetErrorCode
 from starkware.starknet.definitions.execution_mode import ExecutionMode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
@@ -924,7 +924,7 @@ class BusinessLogicSyscallHandler(SyscallHandlerBase):
 
     def _get_block_hash(self, block_number: int) -> int:
         return self.state.get_storage_at(
-            storage_domain=StorageDomain.ON_CHAIN,
+            data_availability_mode=DataAvailabilityMode.L1,
             contract_address=constants.BLOCK_HASH_CONTRACT_ADDRESS,
             key=block_number,
         )
@@ -958,6 +958,17 @@ class BusinessLogicSyscallHandler(SyscallHandlerBase):
                 transaction_hash=self.tx_execution_context.transaction_hash,
                 chain_id=self.general_config.chain_id.value,
                 nonce=self.tx_execution_context.nonce,
+                # We only support execution of transactions with version < 3, hence we set the new
+                # additional fields to zero.
+                resource_bounds_start=0,
+                resource_bounds_end=0,
+                tip=0,
+                paymaster_data_start=0,
+                paymaster_data_end=0,
+                nonce_data_availability_mode=0,
+                fee_data_availability_mode=0,
+                account_deployment_data_start=0,
+                account_deployment_data_end=0,
             )
             # Gather all info.
             execution_info = self.structs.ExecutionInfo(
@@ -1126,7 +1137,7 @@ class OsExecutionHelper:
 
     def __init__(
         self,
-        tx_execution_infos: List[TransactionExecutionInfo],
+        tx_execution_infos: Iterable[TransactionExecutionInfo],
         storage_by_address: Mapping[int, OsSingleStarknetStorage],
         old_block_number_and_hash: Optional[Tuple[int, int]],
         loop: asyncio.AbstractEventLoop,
@@ -1181,7 +1192,7 @@ class OsExecutionHelper:
     @classmethod
     async def create(
         cls,
-        tx_execution_infos: List[TransactionExecutionInfo],
+        tx_execution_infos: Iterable[TransactionExecutionInfo],
         storage_by_address: Mapping[int, OsSingleStarknetStorage],
         block_info: BlockInfo,
         updated_block_hash_contract_state: ContractState,

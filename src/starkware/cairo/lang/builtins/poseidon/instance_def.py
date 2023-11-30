@@ -13,7 +13,7 @@ class PoseidonInstanceDef(BuiltinInstanceDef):
     partial_rounds_partition: List[int]
 
     @property
-    def cells_per_builtin(self) -> int:
+    def memory_cells_per_instance(self) -> int:
         return 2 * POSEIDON_M
 
     @property

@@ -1,17 +1,25 @@
 from dataclasses import field
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 import marshmallow_dataclass
+from marshmallow.decorators import pre_load
 
 from starkware.cairo.lang.version import __version__ as STARKNET_VERSION
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import (
-    DEFAULT_GAS_PRICE,
+    DEFAULT_DEPRECATED_L1_GAS_PRICE,
+    DEFAULT_MIN_STRK_L1_GAS_PRICE,
     DEFAULT_SEQUENCER_ADDRESS,
 )
 from starkware.starkware_utils.error_handling import stark_assert_eq, stark_assert_le
 from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
+
+
+def rename_old_gas_price_field(data: Dict[str, Any]) -> Dict[str, Any]:
+    if "gas_price" in data:
+        data["eth_l1_gas_price"] = data.pop("gas_price")
+    return data
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -23,13 +31,22 @@ class BlockInfo(ValidatedMarshmallowDataclass):
     block_timestamp: int = field(metadata=fields.timestamp_metadata)
 
     # L1 gas price (in Wei) measured at the beginning of the last block creation attempt.
-    gas_price: int = field(metadata=fields.gas_price_metadata)
+    eth_l1_gas_price: int = field(metadata=fields.gas_price_metadata)
+
+    # L1 gas price (in STRK) measured at the beginning of the last block creation attempt.
+    strk_l1_gas_price: int = field(metadata=fields.gas_price_metadata)
 
     # The sequencer address of this block.
     sequencer_address: Optional[int] = field(metadata=fields.optional_sequencer_address_metadata)
 
-    # The version of Starknet system (e.g. "0.12.3").
+    # The version of Starknet system (e.g. "0.13.0").
     starknet_version: Optional[str] = field(metadata=fields.starknet_version_metadata)
+
+    @pre_load
+    def rename_old_gas_price_field(
+        self, data: Dict[str, Any], many: bool, **kwargs
+    ) -> Dict[str, List[str]]:
+        return rename_old_gas_price_field(data=data)
 
     @classmethod
     def empty(cls, sequencer_address: Optional[int]) -> "BlockInfo":
@@ -39,7 +56,8 @@ class BlockInfo(ValidatedMarshmallowDataclass):
         return cls(
             block_number=-1,
             block_timestamp=0,
-            gas_price=0,
+            eth_l1_gas_price=0,
+            strk_l1_gas_price=0,
             sequencer_address=sequencer_address,
             starknet_version=STARKNET_VERSION,
         )
@@ -49,7 +67,8 @@ class BlockInfo(ValidatedMarshmallowDataclass):
         cls,
         block_number: int,
         block_timestamp: int,
-        gas_price: int = DEFAULT_GAS_PRICE,
+        eth_l1_gas_price: int = DEFAULT_DEPRECATED_L1_GAS_PRICE,
+        strk_l1_gas_price: int = DEFAULT_MIN_STRK_L1_GAS_PRICE,
         sequencer_address: int = DEFAULT_SEQUENCER_ADDRESS,
     ) -> "BlockInfo":
         """
@@ -58,7 +77,8 @@ class BlockInfo(ValidatedMarshmallowDataclass):
         return cls(
             block_number=block_number,
             block_timestamp=block_timestamp,
-            gas_price=gas_price,
+            eth_l1_gas_price=eth_l1_gas_price,
+            strk_l1_gas_price=strk_l1_gas_price,
             sequencer_address=sequencer_address,
             starknet_version=STARKNET_VERSION,
         )

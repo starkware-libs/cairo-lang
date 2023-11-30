@@ -8,6 +8,7 @@ py_library(
     name = "starknet_definitions_lib",
     srcs = [
         "constants.py",
+        "data_availability_mode.py",
         "error_codes.py",
         "execution_mode.py",
         "fields.py",
@@ -24,7 +25,9 @@ py_library(
         "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
         "//src/starkware/starkware_utils:starkware_error_handling_lib",
         "//src/starkware/storage:starkware_abstract_storage_lib",
+        requirement("frozendict"),
         requirement("marshmallow"),
+        requirement("marshmallow_dataclass"),
     ],
 )
 

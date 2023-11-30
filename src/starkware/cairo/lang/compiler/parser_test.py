@@ -1059,3 +1059,71 @@ if (a == 0 and b == 0 and c == 0 and
 """
     ret = parse_code_element(code)
     assert ret.format(allowed_line_length=40) == code
+
+
+def check_just_right_splitting(code, expected_splitting):
+    """
+    Parses the one-line code element `code`, and verifies that it is formatted as itself in a line
+    long enough to contain it, and that it is formatted as `expected_splitting` in a line which is
+    just-too-short by one character (i.e. the ending semicolon).
+    """
+    ret = parse_code_element(code)
+    assert ret.format(allowed_line_length=len(code)) == code
+    assert ret.format(allowed_line_length=len(code) - 1) == expected_splitting
+
+
+def test_trailing_semicolons():
+    """
+    Tests that a split does not occur before a semicolon that is at the end of a just-too-long line.
+    """
+    # Tests that semicolons aren't split into new lines where the line cannot be split,
+    # but would fit without the semicolon.
+    atomic_codes = [
+        "local untyped_identifier;",
+        "tempvar untyped_identifier;",
+        "using identifier = type;",
+        "const identifier = expr;",
+        "let untyped_identifier = expr;",
+        "return expr;",
+        "local untyped_identifier = expr;",
+        "tempvar untyped_identifier = expr;",
+        "assert expr = expr;",
+        "static_assert expr == expr;",
+        "let untyped_identifier = call foo;",
+    ]
+    for code in atomic_codes:
+        check_just_right_splitting(code, code)
+
+    # Test that the line is split correctly when the beginning is atomic, and the semicolon is
+    # attached to a non-atmoic particle, or when the beginning is splittable and the end atomic.
+    expr_patterns = [
+        "const identifier = {};",
+        "let untyped_identifier = {};",
+        "return {};",
+        "local untyped_identifier = {};",
+        "tempvar untyped_identifier = {};",
+        "assert expr = {};",
+        "static_assert expr == {};",
+        "assert {} = expr;",
+        "static_assert {} == expr;",
+    ]
+    for pattern in expr_patterns:
+        check_just_right_splitting(pattern.format("expr[1]"), pattern.format("expr[\n    1\n]"))
+
+    func_call_patterns = ["let untyped_identifier = {};", "return {};", "{};"]
+    for pattern in func_call_patterns:
+        check_just_right_splitting(pattern.format("foo(arg)"), pattern.format("foo(\n    arg\n)"))
+
+    type_patterns = [
+        "local typed_identifer: {};",
+        "tempvar typed_identifer: {};",
+        "using new_type = {};",
+        "let typed_identifer: {} = call foo;",
+        "let typed_identifer: {} = expr;",
+        "local typed_identifer: {} = expr;",
+        "tempvar typed_identifer: {} = expr;",
+    ]
+    for pattern in type_patterns:
+        check_just_right_splitting(
+            pattern.format("(x: felt, y: felt)"), pattern.format("(\n    x: felt, y: felt\n)")
+        )

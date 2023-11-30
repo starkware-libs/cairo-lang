@@ -34,6 +34,10 @@ def cairo_verifier_program(layout_name):
             "//src/starkware/cairo/stark_verifier/air:cairo",
         ],
         tags = ["external_cairo", "external_cairo-docs"],
+        exec_properties = {
+            "Pool": "highcpu",
+            "dockerSiblingContainers": "True",
+        },
     )
 
     return struct(program_name = program_name, compiled_program_name = compiled_program_name)

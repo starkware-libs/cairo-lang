@@ -64,9 +64,19 @@ class GatedStorage(Storage):
             return None
         if (value[: len(MAGIC_HEADER)]) == MAGIC_HEADER:
             ukey = value[len(MAGIC_HEADER) :]
-            return await self.storage1.get_value(key=ukey)
+            return await self.storage1.get_value_or_fail(key=ukey)
 
         return value
+
+    async def get_value_or_fail(self, key: bytes) -> bytes:
+        value = await self.storage0.get_value_or_fail(key=key)
+        if (value[: len(MAGIC_HEADER)]) == MAGIC_HEADER:
+            ukey = value[len(MAGIC_HEADER) :]
+            return await self.storage1.get_value_or_fail(key=ukey)
+        return value
+
+    async def has_key(self, key: bytes) -> bool:
+        return await self.storage0.has_key(key=key)
 
     async def del_value(self, key: bytes):
         """

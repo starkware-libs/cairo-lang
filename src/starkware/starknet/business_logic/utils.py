@@ -2,7 +2,7 @@ import asyncio
 import contextlib
 import dataclasses
 import logging
-from typing import Dict, Iterable, List, Optional, Tuple, cast
+from typing import Dict, Iterable, List, Optional, Tuple
 
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.lang.builtins.all_builtins import with_suffix
@@ -33,6 +33,7 @@ from starkware.starknet.services.api.contract_class.contract_class import (
     ContractClass,
     DeprecatedCompiledClass,
 )
+from starkware.starknet.services.api.gateway.deprecated_transaction import DeprecatedInvokeFunction
 from starkware.starkware_utils.error_handling import (
     StarkException,
     stark_assert,
@@ -121,47 +122,12 @@ def verify_version(
     )
 
 
-def preprocess_invoke_function_fields(
-    entry_point_selector: int,
-    nonce: Optional[int],
-    max_fee: int,
-    version: int,
-) -> Tuple[int, List[int]]:
-    """
-    Performs validation on fields related to function invocation transaction.
-    Deduces and returns fields required for hash calculation of
-    InvokeFunction transaction.
-    """
-    # Validate entry point type-related fields.
-    additional_data: List[int]
-    validate_selector_for_fee(selector=entry_point_selector, max_fee=max_fee)
-
-    if version in [0, constants.QUERY_VERSION_BASE]:
-        stark_assert(
-            nonce is None,
-            code=StarknetErrorCode.INVALID_TRANSACTION_NONCE,
-            message="An InvokeFunction transaction (version = 0) cannot have a nonce.",
-        )
-        additional_data = []
-        entry_point_selector_field = entry_point_selector
-    else:
-        stark_assert(
-            nonce is not None,
-            code=StarknetErrorCode.INVALID_TRANSACTION_NONCE,
-            message="An InvokeFunction transaction (version != 0) must have a nonce.",
-        )
-        additional_data = [cast(int, nonce)]
-        entry_point_selector_field = 0
-
-    return entry_point_selector_field, additional_data
-
-
-def validate_selector_for_fee(selector: int, max_fee: int):
-    if max_fee == 0:
+def validate_selector_for_fee(tx: DeprecatedInvokeFunction):
+    if tx.zero_max_fee or tx.entry_point_selector is None:
         return
 
     stark_assert(
-        selector == starknet_abi.EXECUTE_ENTRY_POINT_SELECTOR,
+        tx.entry_point_selector == starknet_abi.EXECUTE_ENTRY_POINT_SELECTOR,
         code=StarknetErrorCode.UNAUTHORIZED_ENTRY_POINT_FOR_INVOKE,
         message=(
             "All transactions should go through the "

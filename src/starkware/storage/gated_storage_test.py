@@ -13,8 +13,10 @@ async def test_gated_storage():
     keys_values = [(b"k0", b"v0"), (b"k1", b"v1" * 6)]
     for k, v in keys_values:
         assert await storage.get_value(key=k) is None
+        assert not await storage.has_key(key=k)
         await storage.set_value(key=k, value=v)
         assert await storage.get_value_or_fail(key=k) == v
+        assert await storage.has_key(key=k)
         assert not await storage.setnx_value(key=k, value=b"wrong")
         assert await storage.get_value_or_fail(key=k) == v
 

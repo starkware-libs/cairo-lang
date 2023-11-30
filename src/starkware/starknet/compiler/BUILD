@@ -69,8 +69,12 @@ pytest_test(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "starknet_compile_lib",
-        "starknet_compile_test_utils_lib",
+        ":starknet_compile_lib",
+        ":starknet_compile_test_utils_lib",
+        "//src/starkware/cairo/lang:cairo_constants_lib",
+        "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
         "//src/starkware/cairo/lang/compiler:cairo_compile_test_utils_lib",
+        "//src/starkware/starknet/public:starknet_abi_lib",
+        "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",
     ],
 )

@@ -13,16 +13,16 @@ from starkware.starknet.business_logic.fact_state.state import SharedState
 from starkware.starknet.business_logic.state.state import CachedState
 from starkware.starknet.business_logic.state.state_api import State
 from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
-from starkware.starknet.business_logic.state.storage_domain import StorageDomain
-from starkware.starknet.business_logic.transaction.objects import (
-    InternalDeclare,
-    InternalInvokeFunction,
-    InternalTransaction,
+from starkware.starknet.business_logic.transaction.deprecated_objects import (
+    DeprecatedInternalDeclare,
+    DeprecatedInternalInvokeFunction,
+    DeprecatedInternalTransaction,
 )
 from starkware.starknet.core.os.contract_class.compiled_class_hash import (
     compute_compiled_class_hash,
 )
 from starkware.starknet.definitions import constants, fields
+from starkware.starknet.definitions.data_availability_mode import DataAvailabilityMode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public.abi import get_selector_from_name
 from starkware.starknet.services.api.contract_class.contract_class import (
@@ -33,7 +33,9 @@ from starkware.starknet.services.api.contract_class.contract_class import (
 from starkware.starknet.services.api.contract_class.contract_class_utils import (
     compile_contract_class,
 )
-from starkware.starknet.services.api.gateway.transaction import DEFAULT_DECLARE_SENDER_ADDRESS
+from starkware.starknet.services.api.gateway.deprecated_transaction import (
+    DEFAULT_DECLARE_SENDER_ADDRESS,
+)
 from starkware.starknet.services.api.messages import StarknetMessageToL1
 from starkware.starknet.testing.contract_utils import (
     CastableToAddress,
@@ -113,7 +115,7 @@ class StarknetState:
         Args:
         contract_class - a compiled StarkNet contract returned by compile_starknet_files().
         """
-        tx = InternalDeclare.create_deprecated(
+        tx = DeprecatedInternalDeclare.create_deprecated(
             contract_class=contract_class,
             chain_id=self.general_config.chain_id.value,
             sender_address=DEFAULT_DECLARE_SENDER_ADDRESS,
@@ -149,16 +151,16 @@ class StarknetState:
         )
         compiled_class_hash = compute_compiled_class_hash(compiled_class=compiled_class)
         sender_address = cast_to_int(sender_address)
-        tx = InternalDeclare.create(
+        tx = DeprecatedInternalDeclare.create(
             contract_class=contract_class,
             compiled_class_hash=compiled_class_hash,
             chain_id=self.general_config.chain_id.value,
             sender_address=sender_address,
             max_fee=0,
-            version=constants.DECLARE_VERSION,
+            version=constants.DEPRECATED_DECLARE_VERSION,
             signature=[],
             nonce=await self.state.get_nonce_at(
-                storage_domain=StorageDomain.ON_CHAIN, contract_address=sender_address
+                data_availability_mode=DataAvailabilityMode.L1, contract_address=sender_address
             ),
         )
         self.state.compiled_classes[compiled_class_hash] = compiled_class
@@ -192,7 +194,7 @@ class StarknetState:
 
         sender_address = cast_to_int(sender_address)
         nonce = await self.state.get_nonce_at(
-            storage_domain=StorageDomain.ON_CHAIN, contract_address=sender_address
+            data_availability_mode=DataAvailabilityMode.L1, contract_address=sender_address
         )
         contract_address, tx = create_internal_deploy_tx_for_testing(
             sender_address=sender_address,
@@ -232,7 +234,7 @@ class StarknetState:
             selector=selector,
             calldata=calldata,
             max_fee=max_fee,
-            version=constants.TRANSACTION_VERSION,
+            version=constants.DEPRECATED_TRANSACTION_VERSION,
             signature=signature,
             nonce=nonce,
             chain_id=self.general_config.chain_id.value,
@@ -277,7 +279,7 @@ class StarknetState:
 
         return call_info
 
-    async def execute_tx(self, tx: InternalTransaction) -> TransactionExecutionInfo:
+    async def execute_tx(self, tx: DeprecatedInternalTransaction) -> TransactionExecutionInfo:
         with self.state.copy_and_apply() as state_copy:
             tx_execution_info = await tx.apply_state_updates(
                 state=state_copy, general_config=self.general_config
@@ -324,7 +326,7 @@ async def create_invoke_function(
     nonce: Optional[int],
     chain_id: int,
     only_query: bool = False,
-) -> InternalInvokeFunction:
+) -> DeprecatedInternalInvokeFunction:
     contract_address = cast_to_int(contract_address)
     if isinstance(selector, str):
         selector = get_selector_from_name(selector)
@@ -336,10 +338,10 @@ async def create_invoke_function(
     # We allow not specifying nonce. In this case, the current nonce of the contract will be used.
     if nonce is None:
         nonce = await state.get_nonce_at(
-            storage_domain=StorageDomain.ON_CHAIN, contract_address=contract_address
+            data_availability_mode=DataAvailabilityMode.L1, contract_address=contract_address
         )
 
-    return InternalInvokeFunction.create(
+    return DeprecatedInternalInvokeFunction.create(
         sender_address=contract_address,
         entry_point_selector=selector,
         calldata=calldata,

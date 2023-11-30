@@ -17,7 +17,7 @@ class EcOpInstanceDef(BuiltinInstanceDef):
     scalar_limit: Optional[int] = None
 
     @property
-    def cells_per_builtin(self) -> int:
+    def memory_cells_per_instance(self) -> int:
         return CELLS_PER_EC_OP
 
     @property

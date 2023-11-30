@@ -15,11 +15,14 @@ class KeccakBuiltinRunner(SimpleBuiltinRunner):
             included=included,
             ratio=None if instance_def is None else instance_def.ratio,
             instances_per_component=instance_def.instances_per_component,
-            cells_per_instance=instance_def.cells_per_builtin,
-            n_input_cells=safe_div(instance_def.cells_per_builtin, 2),
+            cells_per_instance=instance_def.memory_cells_per_instance,
+            n_input_cells=safe_div(instance_def.memory_cells_per_instance, 2),
         )
         self.instance_def: KeccakInstanceDef = instance_def
         self.cache: Dict[MaybeRelocatable, int] = {}
+
+    def get_instance_def(self):
+        return self.instance_def
 
     def is_input_cell(self, index: int) -> bool:
         return index < self.n_input_cells

@@ -2,6 +2,8 @@ load("//bazel_utils:solidity.bzl", "sol_library")
 
 package(default_visibility = ["//visibility:public"])
 
+exports_files(glob(["*.sol"]))
+
 sol_library(
     name = "governance_contract_sol",
     srcs = [

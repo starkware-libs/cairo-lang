@@ -295,7 +295,7 @@ struct T {
 tempvar a: T = nondet %{ 1 %};
 """,
         """
-file:?:?: Hint tempvars must be of type felt or a pointer.
+file:?:?: Only a felt or a pointer can be initialized using nondet.
 tempvar a: T = nondet %{ 1 %};
                ^************^
 """,
@@ -1771,7 +1771,8 @@ func h() {
     program = preprocess_codes(
         codes=[(files["."], ".")],
         pass_manager=default_pass_manager(
-            prime=PRIME, read_module=read_file_from_dict(dct={**files, **CAIRO_TEST_MODULES})
+            prime=PRIME,
+            read_module=read_file_from_dict(dct={**files, **CAIRO_TEST_MODULES}),
         ),
     )
 
@@ -1820,7 +1821,8 @@ const xi = 42;
     program = preprocess_codes(
         codes=[(files["."], ".")],
         pass_manager=default_pass_manager(
-            prime=PRIME, read_module=read_file_from_dict(dct={**files, **CAIRO_TEST_MODULES})
+            prime=PRIME,
+            read_module=read_file_from_dict(dct={**files, **CAIRO_TEST_MODULES}),
         ),
         main_scope=scope("__main__"),
     )
@@ -4481,7 +4483,8 @@ func2();
     program = preprocess_codes(
         codes=[(files["."], ".")],
         pass_manager=default_pass_manager(
-            prime=PRIME, read_module=read_file_from_dict(dct={**files, **CAIRO_TEST_MODULES})
+            prime=PRIME,
+            read_module=read_file_from_dict(dct={**files, **CAIRO_TEST_MODULES}),
         ),
     )
     assert (
@@ -4973,6 +4976,91 @@ func main(arg: DirectAlias) {
         == """\
 [ap] = [fp + (-3)], ap++;
 [ap] = 1, ap++;
+ret;
+"""
+    )
+
+
+def test_local_initialization_with_hint_expr():
+    code = """
+func main() {
+    alloc_locals;
+    local a = nondet %{ 5 %};
+    local b = nondet %{ 17 %};
+    local c;
+    local d = 0;
+    local e =  nondet %{ 4 %};
+    return ();
+}
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert (
+        program.format()
+        == """\
+ap += 5;
+%{ memory[fp + 0] = to_felt_or_relocatable(5) %}
+%{ memory[fp + 1] = to_felt_or_relocatable(17) %}
+[fp + 3] = 0;
+%{ memory[fp + 4] = to_felt_or_relocatable(4) %}
+ret;
+"""
+    )
+
+
+def test_local_initialization_with_hint_before_label():
+    verify_exception(
+        """
+func main() {
+    alloc_locals;
+    local a = nondet %{ 5 %};
+label:
+    return ();
+}
+""",
+        """
+file:?:?: Hints before labels are not allowed.
+    local a = nondet %{ 5 %};
+              ^************^
+""",
+    )
+
+
+def test_local_initialization_with_hint_wrong_type():
+    verify_exception(
+        """
+func main() {
+    alloc_locals;
+    local a: (felt) = nondet %{ 5 %};
+    return ();
+}
+""",
+        """
+file:?:?: Only a felt or a pointer can be initialized using nondet.
+    local a: (felt) = nondet %{ 5 %};
+                      ^************^
+""",
+    )
+
+
+def test_struct_member_nondet_initialization():
+    code = """
+func main() {
+    alloc_locals;
+    struct A {
+        b: felt,
+    }
+    local a: A = A(b=nondet %{5 %});
+    return ();
+}
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert (
+        program.format()
+        == """\
+ap += 1;
+%{ memory[ap] = to_felt_or_relocatable(5) %}
+ap += 1;
+[fp] = [ap + (-1)];
 ret;
 """
     )

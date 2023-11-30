@@ -22,7 +22,7 @@ class PedersenInstanceDef(BuiltinInstanceDef):
     hash_limit: Optional[int] = None
 
     @property
-    def cells_per_builtin(self) -> int:
+    def memory_cells_per_instance(self) -> int:
         return CELLS_PER_HASH
 
     @property

@@ -35,10 +35,16 @@ http_file(
 
 http_archive(
     name = "rules_python",
-    sha256 = "a3a6e99f497be089f81ec082882e40246bfd435f52f4e82f37e89449b04573f6",
-    strip_prefix = "rules_python-0.10.2",
-    url = "https://github.com/bazelbuild/rules_python/archive/refs/tags/0.10.2.tar.gz",
+    patch_args = ["-p1"],
+    patches = ["//bazel_utils/patches:rules_python.patch"],
+    sha256 = "9d04041ac92a0985e344235f5d946f71ac543f1b1565f2cdbc9a2aaee8adf55b",
+    strip_prefix = "rules_python-0.26.0",
+    url = "https://github.com/bazelbuild/rules_python/releases/download/0.26.0/rules_python-0.26.0.tar.gz",
 )
+
+load("@rules_python//python:repositories.bzl", "py_repositories", "python_register_toolchains")
+
+py_repositories()
 
 http_archive(
     name = CAIRO_COMPILER_ARCHIVE,
@@ -46,7 +52,7 @@ http_archive(
         "//src/starkware/starknet/compiler/v1:BUILD." + CAIRO_COMPILER_ARCHIVE,
     ),
     strip_prefix = "cairo",
-    url = "https://github.com/starkware-libs/cairo/releases/download/v2.1.0/release-x86_64-unknown-linux-musl.tar.gz",
+    url = "https://github.com/starkware-libs/cairo/releases/download/v2.4.0-rc6/release-x86_64-unknown-linux-musl.tar.gz",
 )
 
 http_archive(
@@ -58,8 +64,6 @@ http_archive(
 )
 
 register_toolchains("//bazel_utils/python:py_stub_toolchain")
-
-load("@rules_python//python:repositories.bzl", "python_register_toolchains")
 
 python_register_toolchains(
     name = "python3",
@@ -74,8 +78,8 @@ load("@rules_python//python:pip.bzl", "pip_parse")
 pip_parse(
     name = "cpython_reqs",
     extra_pip_args = [
-        "--retries=10",
-        "--timeout=300",
+        "--retries=100",
+        "--timeout=3000",
     ],
     python_interpreter_target = interpreter,
     requirements_lock = "//scripts:requirements.txt",
@@ -88,8 +92,8 @@ install_deps()
 pip_parse(
     name = "pypy_reqs",
     extra_pip_args = [
-        "--retries=10",
-        "--timeout=300",
+        "--retries=100",
+        "--timeout=3000",
     ],
     python_interpreter_target = "@pypy3.9//:bin/pypy3",
     requirements_lock = "//scripts:pypy-requirements.txt",

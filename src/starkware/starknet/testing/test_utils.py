@@ -1,6 +1,8 @@
 from typing import Dict, List, Optional, Tuple
 
-from starkware.starknet.business_logic.transaction.objects import InternalInvokeFunction
+from starkware.starknet.business_logic.transaction.deprecated_objects import (
+    DeprecatedInternalInvokeFunction,
+)
 from starkware.starknet.core.os.contract_address.contract_address import (
     calculate_contract_address_from_hash,
 )
@@ -60,10 +62,10 @@ def create_internal_deploy_tx_for_testing(
     nonce: int,
     signature: Optional[List[int]] = None,
     chain_id: Optional[int] = None,
-) -> Tuple[int, InternalInvokeFunction]:
+) -> Tuple[int, DeprecatedInternalInvokeFunction]:
     """
-    Returns an InternalInvokeFunction object that deploys a contract
-    by calling the dummy_account's `deploy_contract` function.
+    Returns an invoke transaction object that deploys a contract by calling the `dummy_account`'s
+    `deploy_contract` function.
     """
     contract_address = calculate_contract_address_from_hash(
         salt=salt,
@@ -77,7 +79,7 @@ def create_internal_deploy_tx_for_testing(
         len(constructor_calldata),
         *constructor_calldata,
     ]
-    deploy_tx = InternalInvokeFunction.create_wrapped_with_account(
+    deploy_tx = DeprecatedInternalInvokeFunction.create_wrapped_with_account(
         account_address=sender_address,
         contract_address=sender_address,
         calldata=deploy_contract_calldata,

@@ -237,6 +237,19 @@ func execute_entry_point{
     %}
 
     // Check that the execution was successful.
+    %{
+        return_values = ids.entry_point_return_values
+        if return_values.failure_flag != 0:
+            # Fetch the error, up to 100 elements.
+            retdata_size = return_values.retdata_end - return_values.retdata_start
+            error = memory.get_range(return_values.retdata_start, max(0, min(100, retdata_size)))
+
+            print("Invalid return value in execute_entry_point:")
+            print(f"  Class hash: {hex(ids.execution_context.class_hash)}")
+            print(f"  Selector: {hex(ids.execution_context.execution_info.selector)}")
+            print(f"  Size: {retdata_size}")
+            print(f"  Error (at most 100 elements): {error}")
+    %}
     assert entry_point_return_values.failure_flag = 0;
 
     let remaining_gas = entry_point_return_values.gas_builtin;

@@ -3,14 +3,15 @@ from abc import ABC, abstractmethod
 from services.everest.business_logic.state_api import StateProxy
 from starkware.python.utils import to_bytes
 from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
-from starkware.starknet.business_logic.state.storage_domain import StorageDomain
 from starkware.starknet.definitions import constants, fields
+from starkware.starknet.definitions.data_availability_mode import DataAvailabilityMode
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.public.abi import get_uint256_storage_var_keys
 from starkware.starknet.services.api.contract_class.contract_class import (
     CompiledClass,
     CompiledClassBase,
     DeprecatedCompiledClass,
+    RawCompiledClass,
 )
 from starkware.starkware_utils.error_handling import StarkException, stark_assert
 
@@ -27,6 +28,23 @@ class StateReader(ABC):
         Raises an exception if said class was not declared.
         """
 
+    async def get_raw_compiled_class(self, class_hash: int) -> RawCompiledClass:
+        """
+        Returns the raw compiled class of the given class hash.
+        Raises an exception if said class was not declared.
+        """
+        compiled_class = await self.get_compiled_class_by_class_hash(class_hash=class_hash)
+        if isinstance(compiled_class, CompiledClass):
+            return RawCompiledClass(
+                raw_compiled_class=CompiledClass.Schema().dumps(compiled_class), version=1
+            )
+        assert isinstance(
+            compiled_class, DeprecatedCompiledClass
+        ), "Unexpected CompiledClass object."
+        return RawCompiledClass(
+            raw_compiled_class=DeprecatedCompiledClass.Schema().dumps(compiled_class), version=0
+        )
+
     @abstractmethod
     async def get_compiled_class_hash(self, class_hash: int) -> int:
         """
@@ -40,14 +58,16 @@ class StateReader(ABC):
         """
 
     @abstractmethod
-    async def get_nonce_at(self, storage_domain: StorageDomain, contract_address: int) -> int:
+    async def get_nonce_at(
+        self, data_availability_mode: DataAvailabilityMode, contract_address: int
+    ) -> int:
         """
         Returns the nonce of the given contract instance.
         """
 
     @abstractmethod
     async def get_storage_at(
-        self, storage_domain: StorageDomain, contract_address: int, key: int
+        self, data_availability_mode: DataAvailabilityMode, contract_address: int, key: int
     ) -> int:
         """
         Returns the storage value under the given key in the given contract instance.
@@ -123,14 +143,20 @@ class State(StateProxy, StateReader):
         """
 
     @abstractmethod
-    async def increment_nonce(self, storage_domain: StorageDomain, contract_address: int):
+    async def increment_nonce(
+        self, data_availability_mode: DataAvailabilityMode, contract_address: int
+    ):
         """
         Increments the nonce of the given contract instance.
         """
 
     @abstractmethod
     async def set_storage_at(
-        self, storage_domain: StorageDomain, contract_address: int, key: int, value: int
+        self,
+        data_availability_mode: DataAvailabilityMode,
+        contract_address: int,
+        key: int,
+        value: int,
     ):
         """
         Sets the storage value under the given key in the given contract instance.
@@ -146,6 +172,19 @@ class SyncStateReader(ABC):
     def get_compiled_class(self, compiled_class_hash: int) -> CompiledClassBase:
         pass
 
+    def get_raw_compiled_class(self, class_hash: int) -> RawCompiledClass:
+        compiled_class = self.get_compiled_class_by_class_hash(class_hash=class_hash)
+        if isinstance(compiled_class, CompiledClass):
+            return RawCompiledClass(
+                raw_compiled_class=CompiledClass.Schema().dumps(compiled_class), version=1
+            )
+        assert isinstance(
+            compiled_class, DeprecatedCompiledClass
+        ), "Unexpected CompiledClass object."
+        return RawCompiledClass(
+            raw_compiled_class=DeprecatedCompiledClass.Schema().dumps(compiled_class), version=0
+        )
+
     @abstractmethod
     def get_compiled_class_hash(self, class_hash: int) -> int:
         pass
@@ -155,16 +194,20 @@ class SyncStateReader(ABC):
         pass
 
     @abstractmethod
-    def get_nonce_at(self, storage_domain: StorageDomain, contract_address: int) -> int:
+    def get_nonce_at(
+        self, data_availability_mode: DataAvailabilityMode, contract_address: int
+    ) -> int:
         pass
 
     @abstractmethod
-    def get_storage_at(self, storage_domain: StorageDomain, contract_address: int, key: int) -> int:
+    def get_storage_at(
+        self, data_availability_mode: DataAvailabilityMode, contract_address: int, key: int
+    ) -> int:
         pass
 
     def get_fee_token_balance(
         self,
-        storage_domain: StorageDomain,
+        data_availability_mode: DataAvailabilityMode,
         contract_address: int,
         fee_token_address: int,
     ) -> int:
@@ -172,18 +215,18 @@ class SyncStateReader(ABC):
         Returns the fee-token balance at the given address.
         The balance is of type Uint256.
         """
-        storage_domain.assert_onchain()
+        data_availability_mode.assert_l1()
         low_key, high_key = get_uint256_storage_var_keys(
             "ERC20_balances",
             contract_address,
         )
         low = self.get_storage_at(
-            storage_domain=storage_domain,
+            data_availability_mode=data_availability_mode,
             contract_address=fee_token_address,
             key=low_key,
         )
         high = self.get_storage_at(
-            storage_domain=storage_domain,
+            data_availability_mode=data_availability_mode,
             contract_address=fee_token_address,
             key=high_key,
         )
@@ -240,7 +283,7 @@ class SyncState(SyncStateReader, StateProxy):
         pass
 
     @abstractmethod
-    def increment_nonce(self, storage_domain: StorageDomain, contract_address: int):
+    def increment_nonce(self, data_availability_mode: DataAvailabilityMode, contract_address: int):
         pass
 
     @abstractmethod
@@ -251,7 +294,11 @@ class SyncState(SyncStateReader, StateProxy):
 
     @abstractmethod
     def set_storage_at(
-        self, storage_domain: StorageDomain, contract_address: int, key: int, value: int
+        self,
+        data_availability_mode: DataAvailabilityMode,
+        contract_address: int,
+        key: int,
+        value: int,
     ):
         pass
 

@@ -143,8 +143,8 @@ struct DeprecatedCompiledClassFact {
     compiled_class: DeprecatedCompiledClass*,
 }
 
-// Loads the compiled classes from the 'os_input' hint variable.
-// Returns DeprecatedCompiledClassFact list that maps a hash to a DeprecatedCompiledClass.
+// Loads the compiled classes from the `os_input` hint variable.
+// Returns DeprecatedCompiledClassFact list that maps a hash to a `DeprecatedCompiledClass`.
 func deprecated_load_compiled_class_facts{pedersen_ptr: HashBuiltin*, range_check_ptr}() -> (
     n_compiled_class_facts: felt, compiled_class_facts: DeprecatedCompiledClassFact*
 ) {

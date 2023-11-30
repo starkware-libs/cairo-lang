@@ -71,6 +71,9 @@ func get_block_context{poseidon_ptr: PoseidonBuiltin*, pedersen_ptr: HashBuiltin
         ),
         starknet_os_config=StarknetOsConfig(
             chain_id=nondet %{ os_input.general_config.chain_id.value %},
+            deprecated_fee_token_address=(
+                nondet %{ os_input.general_config.deprecated_fee_token_address %}
+            ),
             fee_token_address=nondet %{ os_input.general_config.fee_token_address %},
         ),
         execute_syscalls_ptr=execute_syscalls_ptr,

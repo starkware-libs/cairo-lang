@@ -129,7 +129,7 @@ def main():
 
     # Initialize Ethereum account for on-chain transaction sending.
     operator_private_key_str = input(
-        "Please enter an operator private key, " "or press Enter to generate a new private key: "
+        "Please enter an operator private key, or press Enter to generate a new private key: "
     )
     try:
         operator_private_key = int(operator_private_key_str, 16)

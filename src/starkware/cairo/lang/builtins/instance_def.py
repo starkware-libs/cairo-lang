@@ -14,7 +14,7 @@ class BuiltinInstanceDef:
 
     @property
     @abstractmethod
-    def cells_per_builtin(self) -> int:
+    def memory_cells_per_instance(self) -> int:
         """
         The number of memory cells used by one builtin.
         """
@@ -38,3 +38,10 @@ class BuiltinInstanceDef:
         """
         Returns the number of diluted check units used by one builtin.
         """
+
+    def uses_dynamic_ratio(self) -> bool:
+        return self.ratio is None
+
+    def is_used(self) -> bool:
+        assert self.ratio is not None, "ratio must be non-dynamic - it must have an integer value."
+        return self.ratio != 0

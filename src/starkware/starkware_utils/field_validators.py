@@ -60,7 +60,7 @@ def validate_url(
     allow_none: bool = False,
 ) -> ValidatorType:
     error_message = (
-        "Invalid {url_name} URL: {{input}}; " "must be a legal URL starting with {schemes}"
+        "Invalid {url_name} URL: {{input}}; must be a legal URL starting with {schemes}"
     ).format(url_name=url_name, schemes=",".join(schemes))
     url_validator = marshmallow.validate.URL(
         schemes=schemes, require_tld=require_full_url, error=error_message
@@ -73,6 +73,13 @@ def validate_url(
         return url_validator(value)
 
     return validator
+
+
+validate_strk_price_oracle_url = validate_url(
+    url_name="STRK price oracle endpoint",
+    schemes={"http", "https"},
+    require_full_url=False,
+)
 
 
 validate_feeder_gateway_url = validate_url(

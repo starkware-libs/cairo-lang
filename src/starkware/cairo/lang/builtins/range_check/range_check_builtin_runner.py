@@ -1,5 +1,6 @@
 from typing import Any, Dict, Optional, Tuple
 
+from starkware.cairo.lang.builtins.range_check.instance_def import RangeCheckInstanceDef
 from starkware.cairo.lang.vm.builtin_runner import BuiltinVerifier, SimpleBuiltinRunner
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
 from starkware.python.math_utils import safe_div
@@ -17,6 +18,9 @@ class RangeCheckBuiltinRunner(SimpleBuiltinRunner):
         self.inner_rc_bound = inner_rc_bound
         self.bound = inner_rc_bound**n_parts
         self.n_parts = n_parts
+
+    def get_instance_def(self):
+        return RangeCheckInstanceDef(ratio=self.ratio, n_parts=self.n_parts)
 
     def add_validation_rules(self, runner):
         def rule(memory, addr):

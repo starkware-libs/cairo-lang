@@ -1,18 +1,24 @@
 import dataclasses
-from typing import Any, Dict, Optional, Type
+from dataclasses import field
+from enum import Enum
+from typing import Any, Dict, Mapping, Optional, Type
 
 import marshmallow
 import marshmallow.fields as mfields
 import marshmallow.utils
+import marshmallow_dataclass
+from frozendict import frozendict
 
 from services.everest.definitions import fields as everest_fields
 from starkware.cairo.lang.tracer.tracer_data import field_element_repr
 from starkware.python.utils import from_bytes
 from starkware.starknet.definitions import constants
+from starkware.starknet.definitions.data_availability_mode import DataAvailabilityMode
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.execution_mode import ExecutionMode
 from starkware.starknet.definitions.transaction_type import TransactionType
 from starkware.starkware_utils.field_validators import (
+    validate_equal,
     validate_max_length,
     validate_non_negative,
     validate_positive,
@@ -24,8 +30,10 @@ from starkware.starkware_utils.marshmallow_dataclass_fields import (
     FrozenDictField,
     StrictRequiredInteger,
     VariadicLengthTupleField,
+    enum_field_metadata,
 )
 from starkware.starkware_utils.marshmallow_fields_metadata import sequential_id_metadata
+from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
 from starkware.starkware_utils.validated_fields import OptionalField, RangeValidatedField
 
 # Fields data: validation data, dataclass metadata.
@@ -37,14 +45,25 @@ felt_as_hex_list_metadata = dict(
     marshmallow_field=mfields.List(everest_fields.FeltField.get_marshmallow_field())
 )
 
-felt_as_hex_bounded_list_metadata = dict(
-    marshmallow_field=mfields.List(
-        everest_fields.FeltField.get_marshmallow_field(),
-        validate=validate_max_length(
-            field_name="felt_list", max_length=constants.SIERRA_ARRAY_LEN_BOUND - 1
-        ),
+
+def create_felt_as_hex_bounded_list_metadata(
+    required: bool = True,
+    list_max_length: int = constants.SIERRA_ARRAY_LEN_BOUND - 1,
+) -> Dict[str, Any]:
+    return dict(
+        marshmallow_field=mfields.List(
+            everest_fields.FeltField.get_marshmallow_field(),
+            required=required,
+            validate=validate_max_length(field_name="felt_list", max_length=list_max_length),
+        )
     )
+
+
+felt_as_hex_bounded_list_metadata = create_felt_as_hex_bounded_list_metadata()
+felt_as_hex_bounded_list_metadata_empty_list = create_felt_as_hex_bounded_list_metadata(
+    list_max_length=0
 )
+
 
 felt_as_hex_or_str_list_metadata = dict(
     marshmallow_field=mfields.List(
@@ -90,7 +109,8 @@ timestamp_metadata = dict(
 )
 
 calldata_metadata = felt_as_hex_or_str_bounded_list_metadata
-signature_metadata = felt_as_hex_or_str_bounded_list_metadata
+deprecated_signature_metadata = felt_as_hex_or_str_bounded_list_metadata
+signature_metadata = felt_as_hex_bounded_list_metadata
 calldata_as_hex_metadata = felt_as_hex_bounded_list_metadata
 retdata_as_hex_metadata = felt_as_hex_list_metadata
 
@@ -153,6 +173,10 @@ optional_nonce_metadata = OptionalNonceField.metadata()
 
 non_required_nonce_metadata = NonceField.metadata(required=False, load_default=0)
 
+
+# Paymaster data.
+
+paymaster_data_metadata = felt_as_hex_bounded_list_metadata_empty_list
 
 # Block.
 
@@ -221,7 +245,7 @@ contract_address_salt_metadata = ContractAddressSalt.metadata()
 
 def validate_class_hash(class_hash: bytes):
     value = from_bytes(value=class_hash, byte_order="big")
-    ClassHashIntField.validate(value=value, name="Class hash must represent a field element.")
+    ClassHashIntField.validate(value=value)
 
 
 ClassHashField = BytesAsHex(required=True, validate=validate_class_hash)
@@ -289,15 +313,6 @@ OptionalNewClassHashField = BackwardCompatibleIntAsHex(
 optional_new_class_hash_metadata = dict(marshmallow_field=OptionalNewClassHashField)
 
 
-class_hash_to_compiled_class_hash_metadata = dict(
-    marshmallow_field=mfields.Dict(
-        keys=ClassHashIntField.get_marshmallow_field(),
-        values=ClassHashIntField.get_marshmallow_field(),
-        load_default=dict,
-    )
-)
-
-
 # Compiled Class hash.
 
 
@@ -359,6 +374,85 @@ fee_metadata = FeeField.metadata(required=False, load_default=0)
 OptionalFeeField = OptionalField(field=FeeField, none_probability=0)
 optional_fee_metadata = OptionalFeeField.metadata()
 
+TipField = RangeValidatedField(
+    lower_bound=constants.TIP_LOWER_BOUND,
+    upper_bound=constants.TIP_UPPER_BOUND,
+    name="Tip",
+    error_code=StarknetErrorCode.OUT_OF_RANGE_TIP,
+    formatter=hex,
+)
+tip_metadata = dict(
+    marshmallow_field=TipField.get_marshmallow_field(),
+    validate=validate_equal("Tip", allowed_value=0),
+    required=True,
+)
+
+
+MaxAmountField = RangeValidatedField(
+    lower_bound=constants.MAX_AMOUNT_LOWER_BOUND,
+    upper_bound=constants.MAX_AMOUNT_UPPER_BOUND,
+    name="Max amount",
+    error_code=StarknetErrorCode.OUT_OF_RANGE_MAX_AMOUNT,
+    formatter=hex,
+)
+max_amount_metadata = MaxAmountField.metadata()
+
+MaxPricePerUnitField = RangeValidatedField(
+    lower_bound=constants.MAX_PRICE_PER_UNIT_LOWER_BOUND,
+    upper_bound=constants.MAX_PRICE_PER_UNIT_UPPER_BOUND,
+    name="Max amount",
+    error_code=StarknetErrorCode.OUT_OF_RANGE_MAX_PRICE_PER_UNIT,
+    formatter=hex,
+)
+max_price_per_unit_metadata = MaxPricePerUnitField.metadata()
+
+
+class Resource(Enum):
+    L1_GAS = from_bytes(b"L1_GAS")
+    L2_GAS = from_bytes(b"L2_GAS")
+
+
+@marshmallow_dataclass.dataclass(frozen=True)
+class ResourceBounds(ValidatedMarshmallowDataclass):
+    # The maximum amount of the resource allowed for usage during the execution.
+    max_amount: int = field(metadata=max_amount_metadata)
+    # The maximum price the user is willing to pay for the resource unit.
+    max_price_per_unit: int = field(metadata=max_price_per_unit_metadata)
+
+
+ResourceBoundsMapping = Mapping[Resource, ResourceBounds]
+
+
+def validate_resource_bounds(resource_bounds: ResourceBoundsMapping) -> bool:
+    if resource_bounds.keys() != set(Resource):
+        return False
+
+    l2_gas_bounds = resource_bounds[Resource.L2_GAS]
+    if not (l2_gas_bounds.max_amount == l2_gas_bounds.max_price_per_unit == 0):
+        return False
+
+    return True
+
+
+resource_bounds_mapping_metadata = dict(
+    marshmallow_field=mfields.Dict(
+        keys=EnumField(enum_cls=Resource),
+        values=mfields.Nested(ResourceBounds.Schema),
+        validate=validate_resource_bounds,
+    )
+)
+
+resource_bounds_frozen_dict_metadata: frozendict = frozendict(
+    marshmallow_field=FrozenDictField(
+        keys=enum_field_metadata(enum_class=Resource)["marshmallow_field"],
+        values=mfields.Nested(ResourceBounds.Schema),
+    ),
+    validate=validate_resource_bounds,
+    description="resource bounds.",
+)
+
+account_deployment_data_metadata = felt_as_hex_bounded_list_metadata_empty_list
+
 # Gas price.
 
 GasPriceField = RangeValidatedField(
@@ -368,8 +462,7 @@ GasPriceField = RangeValidatedField(
     error_code=StarknetErrorCode.OUT_OF_RANGE_GAS_PRICE,
     formatter=hex,
 )
-LOAD_DEFAULT_GAS_PRICE = 0
-gas_price_metadata = GasPriceField.metadata(required=False, load_default=LOAD_DEFAULT_GAS_PRICE)
+gas_price_metadata = GasPriceField.metadata(required=False, load_default=0)
 
 
 # Transaction version.
@@ -458,32 +551,9 @@ gas_price = dict(
     marshmallow_field=StrictRequiredInteger(validate=validate_non_negative("gas_price"))
 )
 
-
-# Nonces.
-
-address_to_nonce_metadata = dict(
-    marshmallow_field=mfields.Dict(
-        keys=L2AddressField.get_marshmallow_field(),
-        values=NonceField.get_marshmallow_field(),
-        load_default=dict,
-    )
+eth_price_in_strk_wei = dict(
+    marshmallow_field=StrictRequiredInteger(validate=validate_positive("eth_price_in_strk_wei"))
 )
-
-
-# Storage.
-
-storage_updates_metadata = dict(
-    marshmallow_field=mfields.Dict(
-        keys=L2AddressField.get_marshmallow_field(),
-        values=mfields.Dict(
-            keys=everest_fields.FeltField.get_marshmallow_field(),
-            values=everest_fields.FeltField.get_marshmallow_field(),
-        ),
-    )
-)
-
-# ExecutionMode.
-execution_mode_metadata = dict(marshmallow_field=EnumField(enum_cls=ExecutionMode, required=True))
 
 
 # ExecutionInfo.
@@ -526,6 +596,81 @@ commitment_facts_metadata = dict(
         load_default=dict,
     )
 )
+
+# ExecutionMode.
+execution_mode_metadata = dict(marshmallow_field=EnumField(enum_cls=ExecutionMode, required=True))
+
+# Data availability.
+
+DataAvailabilityModeEnumField = EnumField(
+    enum_cls=DataAvailabilityMode,
+    required=False,
+    load_default=DataAvailabilityMode.L1,
+    allow_none=False,
+)
+
+data_availability_mode_enum_metadata = dict(marshmallow_field=DataAvailabilityModeEnumField)
+
+DataAvailabilityModeField = RangeValidatedField(
+    lower_bound=DataAvailabilityMode.L1.value,
+    upper_bound=DataAvailabilityMode.L2.value + 1,
+    name="Data availability mode",
+    error_code=StarknetErrorCode.OUT_OF_RANGE_DATA_AVAILABILITY_MODE,
+    formatter=None,
+)
+data_availability_mode_metadata = dict(
+    marshmallow_field=DataAvailabilityModeField.get_marshmallow_field(),
+    validate=validate_equal("Data availability mode", allowed_value=DataAvailabilityMode.L1.value),
+    required=True,
+)
+
+# State Diff.
+
+NoncesField = mfields.Dict(
+    keys=L2AddressField.get_marshmallow_field(),
+    values=NonceField.get_marshmallow_field(),
+    load_default=dict,
+)
+
+address_to_nonce_metadata = dict(
+    marshmallow_field=NoncesField,
+)
+
+data_availability_mode_to_nonces_metadata = dict(
+    marshmallow_field=mfields.Dict(
+        keys=DataAvailabilityModeEnumField,
+        values=NoncesField,
+        load_default=dict,
+    )
+)
+
+StorageUpdatesField = mfields.Dict(
+    keys=L2AddressField.get_marshmallow_field(),
+    values=mfields.Dict(
+        keys=everest_fields.FeltField.get_marshmallow_field(),
+        values=everest_fields.FeltField.get_marshmallow_field(),
+    ),
+)
+
+storage_updates_metadata = dict(
+    marshmallow_field=StorageUpdatesField,
+)
+
+data_availability_mode_to_storage_updates_metadata = dict(
+    marshmallow_field=mfields.Dict(
+        keys=DataAvailabilityModeEnumField,
+        values=StorageUpdatesField,
+        load_default=dict,
+    )
+)
+
+state_diff_declared_classes_metadata = dict(
+    marshmallow_field=mfields.Dict(
+        keys=ClassHashIntField.get_marshmallow_field(),
+        values=ClassHashIntField.get_marshmallow_field(),
+    )
+)
+
 
 # State diff commitment.
 

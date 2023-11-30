@@ -114,6 +114,8 @@ class ClientBase(HasUriPrefix):
         url: str,
         certificates_path: Optional[str] = None,
         retry_config: Optional[RetryConfig] = None,
+        request_timeout: Optional[int] = None,
+        headers: Optional[Mapping[str, str]] = None,
     ):
         self.url = url
         self.ssl_context: Optional[ssl.SSLContext] = None
@@ -122,6 +124,12 @@ class ClientBase(HasUriPrefix):
         assert (
             self.retry_config.n_retries > 0 or self.retry_config.n_retries == -1
         ), "RetryConfig n_retries parameter value must be either a positive int or equals to -1."
+
+        self.request_kwargs: Dict[str, Any] = {}
+        if request_timeout is not None:
+            self.request_kwargs["timeout"] = request_timeout
+        if headers is not None:
+            self.request_kwargs["headers"] = headers
 
         if certificates_path is not None:
             self.ssl_context = ssl.SSLContext(protocol=ssl.PROTOCOL_TLSv1_2)
@@ -190,6 +198,7 @@ class ClientBase(HasUriPrefix):
                             url=url,
                             data=self._prepare_data(data=data),
                             params=params,
+                            **self.request_kwargs,
                         ) as response:
                             return await self._parse_response(
                                 request_url=url,

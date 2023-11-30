@@ -139,7 +139,7 @@ func verify_non_negative(num: felt, n_bits: felt) {
 // Hint arguments:
 // tasks - A list of tasks to execute.
 func execute_tasks{builtin_ptrs: BuiltinData*, self_range_check_ptr}(
-    builtin_encodings: BuiltinData*, builtin_instance_sizes: BuiltinData*, n_tasks
+    builtin_encodings: BuiltinData*, builtin_instance_sizes: BuiltinData*, n_tasks: felt
 ) {
     if (n_tasks == 0) {
         return ();
@@ -152,9 +152,12 @@ func execute_tasks{builtin_ptrs: BuiltinData*, self_range_check_ptr}(
         task_id = len(simple_bootloader_input.tasks) - ids.n_tasks
         task = simple_bootloader_input.tasks[task_id].load_task()
     %}
+    tempvar use_poseidon = nondet %{ 0 %};
     // Call execute_task to execute the current task.
     execute_task(
-        builtin_encodings=builtin_encodings, builtin_instance_sizes=builtin_instance_sizes
+        builtin_encodings=builtin_encodings,
+        builtin_instance_sizes=builtin_instance_sizes,
+        use_poseidon=use_poseidon,
     );
 
     return execute_tasks(

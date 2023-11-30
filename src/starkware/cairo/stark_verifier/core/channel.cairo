@@ -1,10 +1,11 @@
 from starkware.cairo.common.alloc import alloc
+from starkware.cairo.common.builtin_poseidon.poseidon import poseidon_hash_many
 from starkware.cairo.common.cairo_blake2s.blake2s import (
     blake2s_add_felt,
     blake2s_add_uint256_bigend,
     blake2s_bigend,
 )
-from starkware.cairo.common.cairo_builtins import BitwiseBuiltin, HashBuiltin
+from starkware.cairo.common.cairo_builtins import BitwiseBuiltin, PoseidonBuiltin
 from starkware.cairo.common.hash_state import hash_felts
 from starkware.cairo.common.math import (
     assert_nn,
@@ -144,13 +145,13 @@ func read_uint64_from_prover{
 // Calls read_felt_from_prover on the hash chain of values. See Channel.
 func read_felts_from_prover{
     range_check_ptr,
-    pedersen_ptr: HashBuiltin*,
     blake2s_ptr: felt*,
     bitwise_ptr: BitwiseBuiltin*,
+    poseidon_ptr: PoseidonBuiltin*,
     channel: Channel,
 }(n_values: felt, values: ChannelUnsentFelt*) -> (values: ChannelSentFelt*) {
     alloc_locals;
-    let (unsent_felt_hash: felt) = hash_felts{hash_ptr=pedersen_ptr}(data=values, length=n_values);
+    let (unsent_felt_hash: felt) = poseidon_hash_many(n=n_values, elements=values);
     read_felt_from_prover(ChannelUnsentFelt(unsent_felt_hash));
     return (values=cast(values, ChannelSentFelt*));
 }

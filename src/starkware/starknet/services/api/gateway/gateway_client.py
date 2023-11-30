@@ -3,6 +3,7 @@ from typing import Dict, Optional
 
 from services.everest.api.gateway.gateway_client import EverestGatewayClient
 from starkware.starknet.services.api.gateway.transaction import Transaction
+from starkware.starknet.services.api.gateway.transaction_schema import TransactionSchema
 
 
 class GatewayClient(EverestGatewayClient):
@@ -16,6 +17,6 @@ class GatewayClient(EverestGatewayClient):
         raw_response = await self._send_request(
             send_method="POST",
             uri=f"/add_transaction{uri_suffix}",
-            data=Transaction.Schema().dumps(obj=tx),
+            data=TransactionSchema().dumps(obj=tx),
         )
         return json.loads(raw_response)

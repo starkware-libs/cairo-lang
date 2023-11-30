@@ -8,4 +8,4 @@ def join_routes(route_list: List[str]) -> str:
     used, is that urljoin ignores preceding strings in the path if a leading slash is encountered.
     """
     assert None not in route_list and "" not in route_list
-    return "/" + "/".join(s.strip("/") for s in route_list)
+    return "" if len(route_list) == 0 else "/" + "/".join(s.strip("/") for s in route_list)

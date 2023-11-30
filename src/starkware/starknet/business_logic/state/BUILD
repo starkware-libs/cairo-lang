@@ -8,7 +8,6 @@ py_library(
         "state.py",
         "state_api.py",
         "state_api_objects.py",
-        "storage_domain.py",
     ],
     visibility = ["//visibility:public"],
     deps = [
@@ -21,6 +20,7 @@ py_library(
         "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",
         "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
         "//src/starkware/starkware_utils:starkware_error_handling_lib",
+        requirement("marshmallow"),
         requirement("marshmallow_dataclass"),
     ],
 )

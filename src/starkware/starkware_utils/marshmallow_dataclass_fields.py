@@ -3,11 +3,13 @@ import functools
 import re
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Callable, Dict, Type
+from typing import Any, Callable, Dict, Optional, Type
 
+import marshmallow
+import marshmallow.exceptions
 import marshmallow.fields as mfields
+import marshmallow.utils
 from frozendict import frozendict
-from marshmallow import ValidationError
 from marshmallow.base import FieldABC
 from mypy_extensions import KwArg, VarArg
 
@@ -63,10 +65,21 @@ class EnumField(mfields.Field):
     """
 
     def __init__(
-        self, enum_cls: Type[Enum], required: bool = False, allow_none: bool = False, **kwargs
+        self,
+        enum_cls: Type[Enum],
+        required: Optional[bool] = None,
+        allow_none: Optional[bool] = None,
+        load_default: Optional[Enum] = None,
+        **kwargs,
     ):
         self.enum_cls = enum_cls
-        super().__init__(required=required, allow_none=allow_none, **kwargs)
+        super().__init__(
+            required=True if required is None else required,
+            # If `load_default` is None, `allow_none` will default to True; otherwise, False.
+            allow_none=allow_none,
+            load_default=marshmallow.utils.missing if load_default is None else load_default,
+            **kwargs,
+        )
 
     def _serialize(self, value, attr, obj, **kwargs):
         if value is not None:
@@ -76,7 +89,7 @@ class EnumField(mfields.Field):
             # value is None and None is allowed.
             return None
 
-        raise ValidationError(
+        raise marshmallow.exceptions.ValidationError(
             message=f"Field of type {type(self).__name__} is None, but allow_none=False"
         )
 
@@ -278,10 +291,16 @@ def additional_metadata(**kwargs) -> FieldMetadata:
 
 
 def enum_field_metadata(
-    *, enum_class: type, require: bool = True, allow_none: bool = False
+    *,
+    enum_class: type,
+    required: Optional[bool] = None,
+    allow_none: Optional[bool] = None,
+    load_default: Optional[Enum] = None,
 ) -> FieldMetadata:
     return additional_metadata(
-        marshmallow_field=EnumField(enum_cls=enum_class, required=require, allow_none=allow_none)
+        marshmallow_field=EnumField(
+            enum_cls=enum_class, required=required, allow_none=allow_none, load_default=load_default
+        ),
     )
 
 

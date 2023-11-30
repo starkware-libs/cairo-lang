@@ -3,8 +3,8 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from starkware.cairo.lang.vm.crypto import poseidon_hash_many
 from starkware.crypto.signature.signature import ECSignature, sign
-from starkware.starknet.business_logic.state.storage_domain import StorageDomain
 from starkware.starknet.definitions import constants
+from starkware.starknet.definitions.data_availability_mode import DataAvailabilityMode
 from starkware.starknet.services.api.feeder_gateway.response_objects import (
     BlockSignature,
     BlockSignatureInput,
@@ -18,9 +18,9 @@ HashManyFunction = Callable[[List[int]], int]
 
 
 @dataclasses.dataclass
-class FlatStorageDomainDiff:
+class FlatDataAvailabilityModeDiff:
     """
-    A flat representation of a specific storage domain diff.
+    A flat representation of a specific data availability mode diff.
     """
 
     storage_diff: List[int]
@@ -37,7 +37,7 @@ class FlatStateDiff:
     deployed_contracts: List[int]
     declared_classes: List[int]
     old_declared_contracts: List[int]
-    storage_domains: Dict[int, FlatStorageDomainDiff]
+    data_availability_mode_diffs: Dict[int, FlatDataAvailabilityModeDiff]
 
 
 def sign_block(
@@ -109,23 +109,25 @@ def calculate_flat_state_diff_commitment(
     deployed_contracts_commitment = hash_func(flat_state_diff.deployed_contracts)
     declared_classes_commitment = hash_func(flat_state_diff.declared_classes)
     old_declared_contracts_commitment = hash_func(flat_state_diff.old_declared_contracts)
-    on_chain_members = [
+    l1_members = [
         deployed_contracts_commitment,
         declared_classes_commitment,
         old_declared_contracts_commitment,
     ]
     assert (
-        len(on_chain_members) == 3
-    ), "Unexpected number of members that are not storage domain specific."
-    commitment_members += on_chain_members
+        len(l1_members) == 3
+    ), "Unexpected number of members that are not data availability mode specific."
+    commitment_members += l1_members
 
-    # Flatten each storage domain diff and add it to the commitment in ascending order.
-    commitment_members += [len(flat_state_diff.storage_domains)]
-    for storage_domain, storage_domain_diff in sorted(flat_state_diff.storage_domains.items()):
-        storage_domain_diff_commitment = hash_storage_domain_diff(
-            flat_storage_domain_diff=storage_domain_diff, hash_func=hash_func
+    # Flatten each data availability mode diff and add it to the commitment in ascending order.
+    commitment_members += [len(flat_state_diff.data_availability_mode_diffs)]
+    for data_availability_mode, data_availability_mode_diff in sorted(
+        flat_state_diff.data_availability_mode_diffs.items()
+    ):
+        data_availability_mode_diff_commitment = hash_data_availability_mode_diff(
+            flat_data_availability_mode_diff=data_availability_mode_diff, hash_func=hash_func
         )
-        commitment_members += [storage_domain, storage_domain_diff_commitment]
+        commitment_members += [data_availability_mode, data_availability_mode_diff_commitment]
 
     return hash_func(commitment_members)
 
@@ -143,7 +145,7 @@ def flatten_state_diff(state_diff: StateDiff, version: int = 0) -> FlatStateDiff
     flattened_old_declared_contracts = flatten_old_declared_contracts(
         old_declared_contracts=state_diff.old_declared_contracts
     )
-    flattened_on_chain_storage_domain_diff = flatten_storage_domain_diff(
+    flattened_l1_data_availability_mode_diff = flatten_data_availability_mode_diff(
         storage_diff=state_diff.storage_diffs,
         nonces=state_diff.nonces,
     )
@@ -153,37 +155,40 @@ def flatten_state_diff(state_diff: StateDiff, version: int = 0) -> FlatStateDiff
         deployed_contracts=flattened_deployed_contracts,
         declared_classes=flattened_declared_classes,
         old_declared_contracts=flattened_old_declared_contracts,
-        storage_domains={StorageDomain.ON_CHAIN.value: flattened_on_chain_storage_domain_diff},
+        data_availability_mode_diffs={
+            DataAvailabilityMode.L1.value: flattened_l1_data_availability_mode_diff
+        },
     )
 
 
-def hash_storage_domain_diff(
-    flat_storage_domain_diff: FlatStorageDomainDiff,
+def hash_data_availability_mode_diff(
+    flat_data_availability_mode_diff: FlatDataAvailabilityModeDiff,
     hash_func: HashManyFunction,
 ) -> int:
     """
-    Computes the hash of a storage domain diff for commitment purposes.
-    Returns the identifier of this storage domain and the hash of the storage domain diff.
+    Computes the hash of a data availability mode diff for commitment purposes.
+    Returns the identifier of the data availability mode and the hash of the data availability mode
+    diff.
     """
-    storage_domain_diff_members = (
-        flat_storage_domain_diff.storage_diff,
-        flat_storage_domain_diff.nonces,
+    data_availability_mode_diff_members = (
+        flat_data_availability_mode_diff.storage_diff,
+        flat_data_availability_mode_diff.nonces,
     )
     assert (
-        len(storage_domain_diff_members) == 2
-    ), "Unexpected number of members in storage domain diff commitment."
-    flat_storage_domain_state_diff: List[int] = []
-    for member in storage_domain_diff_members:
-        flat_storage_domain_state_diff += member
+        len(data_availability_mode_diff_members) == 2
+    ), "Unexpected number of members in data availability mode diff commitment."
+    flat_data_availability_mode_state_diff: List[int] = []
+    for member in data_availability_mode_diff_members:
+        flat_data_availability_mode_state_diff += member
 
-    return hash_func(flat_storage_domain_state_diff)
+    return hash_func(flat_data_availability_mode_state_diff)
 
 
-def flatten_storage_domain_diff(
+def flatten_data_availability_mode_diff(
     storage_diff: Dict[int, List[StorageEntry]],
     nonces: Dict[int, int],
-) -> FlatStorageDomainDiff:
-    return FlatStorageDomainDiff(
+) -> FlatDataAvailabilityModeDiff:
+    return FlatDataAvailabilityModeDiff(
         storage_diff=flatten_storage_diff(storage_diff=storage_diff),
         nonces=flatten_nonces(nonces=nonces),
     )

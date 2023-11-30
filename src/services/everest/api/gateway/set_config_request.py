@@ -16,8 +16,8 @@ from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDa
 @marshmallow_dataclass.dataclass
 class AlternativeEndpointSettingRequest(ValidatedMarshmallowDataclass):
     """
-    This type of request is allowed only in setups that support dynamically configuring the
-    endpoint for alternative transactions.
+    In order to use this request, StarkWare must configure your setup to support dynamically
+    configuring the endpoint for alternative transactions.
 
     AlternativeEndpointSettingRequest is sent from the client to the gateway
     when the configuration of the alternative transaction request endpoint is changed.

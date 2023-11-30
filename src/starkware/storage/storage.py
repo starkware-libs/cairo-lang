@@ -53,6 +53,9 @@ class Storage(ABC):
     async def get_value(self, key: bytes) -> Optional[bytes]:
         pass
 
+    async def has_key(self, key: bytes) -> bool:
+        return await self.get_value(key=key) is not None
+
     @abstractmethod
     async def del_value(self, key: bytes):
         pass

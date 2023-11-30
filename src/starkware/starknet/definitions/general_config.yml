@@ -1,16 +1,20 @@
 cairo_resource_fee_weights:
-  n_steps: 1.0
+  n_steps: 0.01
 compiled_class_hash_commitment_tree_height: 251
 constant_gas_price: false
 contract_storage_commitment_tree_height: 251
+default_eth_price_in_strk_wei: 1000000000000000000000
 enforce_l1_handler_fee: true
 event_commitment_tree_height: 64
 global_state_commitment_tree_height: 251
 invoke_tx_max_n_steps: 1000000
-min_gas_price: 100000000000
-sequencer_address: '0xfb3d5e8dec6dfef87f2b48dd3fbe9a455ed188636f6638a8f8bce4555f7938'
+max_strk_l1_gas_price: 100000000000000
+min_eth_l1_gas_price: 100000000000
+min_strk_l1_gas_price: 1000000000000
+sequencer_address: '0x1b7c57a9323f1b11656d289df9241d795c1622ffdd6c6661660944557042dd8'
 starknet_os_config:
   chain_id: 1536727068981429685321
-  fee_token_address: '0x5918ac769b3ea52f25cca3d9eecfb2a95310bda58bec91b254cdd1c9303a700'
+  deprecated_fee_token_address: '0x7278efe258062e1ca40b9fb32d6e71bc6418a0148d5aed864555b7617a98edb'
+  fee_token_address: '0x59710ff54ce780319088f1ab07c00348ae53d135aefd286344c05d1492ff47a'
 tx_commitment_tree_height: 64
 validate_max_n_steps: 1000000

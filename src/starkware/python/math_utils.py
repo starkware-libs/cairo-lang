@@ -82,6 +82,15 @@ def safe_log2(x: int):
     return res
 
 
+def exponent_to_numerator_denominator(exponent: int) -> Tuple[int, int]:
+    """
+    Returns the numerator and denominator of 2**exponent.
+    """
+    numerator = 2**exponent if exponent >= 0 else 1
+    denominator = 1 if exponent >= 0 else 2 ** (-exponent)
+    return numerator, denominator
+
+
 def sqrt(n, p):
     """
     Finds the minimum non-negative integer m such that (m*m) % p == n.

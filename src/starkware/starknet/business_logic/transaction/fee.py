@@ -34,7 +34,7 @@ def execute_fee_transfer(
         message="Actual fee exceeded max fee.",
     )
 
-    fee_token_address = general_config.fee_token_address
+    fee_token_address = general_config.deprecated_fee_token_address
     fee_transfer_call = ExecuteEntryPoint.create(
         caller_address=tx_execution_context.account_contract_address,
         contract_address=fee_token_address,
@@ -83,7 +83,7 @@ def calculate_l1_gas_by_cairo_usage(
 
 
 def calculate_tx_fee(
-    resources: ResourcesMapping, gas_price: int, general_config: StarknetGeneralConfig
+    resources: ResourcesMapping, l1_gas_price: int, general_config: StarknetGeneralConfig
 ) -> int:
     """
     Calculates the fee of a transaction given its execution resources.
@@ -96,4 +96,4 @@ def calculate_tx_fee(
         cairo_resource_usage=cairo_resource_usage,
     )
     total_l1_gas_usage = l1_gas_usage + l1_gas_by_cairo_usage
-    return math.ceil(total_l1_gas_usage) * gas_price
+    return math.ceil(total_l1_gas_usage) * l1_gas_price

@@ -50,7 +50,7 @@ def test_table_commitment(program, structs):
                 height=5,
                 n_verifier_friendly_commitment_layers=2,
             ),
-            commitment_hash=0x77814A8D523E263E544747B743D672CAA538A648BF7B85C7FD0C0F87C63D66D,
+            commitment_hash=0x65AB11B61229977B507F7B37C4E95769A0F9F8939042B2029D92CFF0D96FD07,
         ),
         config=structs.TableCommitmentConfig(
             n_columns=4,
@@ -61,14 +61,14 @@ def test_table_commitment(program, structs):
     queries = [1, 4]
     values = [10] * 4 + [20] * 4
 
-    runner = CairoFunctionRunner(program, layout="small")
+    runner = CairoFunctionRunner(program, layout="starknet")
     blake2s_ptr = runner.segments.add()
     runner.run(
         "table_decommit",
         range_check_ptr=runner.range_check_builtin.base,
         blake2s_ptr=blake2s_ptr,
-        pedersen_ptr=runner.pedersen_builtin.base,
         bitwise_ptr=runner.bitwise_builtin.base,
+        poseidon_ptr=runner.poseidon_builtin.base,
         commitment=commitment,
         n_queries=len(queries),
         queries=queries,
@@ -86,10 +86,10 @@ def test_table_commitment(program, structs):
     (
         res_range_check_ptr,
         res_blake2s_ptr,
-        res_pedersen_ptr,
         res_bitwise_ptr,
+        res_poseidon_ptr,
     ) = runner.get_return_values(4)
     validate_builtin_usage(runner.range_check_builtin, res_range_check_ptr)
     assert res_blake2s_ptr.segment_index == blake2s_ptr.segment_index
-    validate_builtin_usage(runner.pedersen_builtin, res_pedersen_ptr)
     validate_builtin_usage(runner.bitwise_builtin, res_bitwise_ptr)
+    validate_builtin_usage(runner.poseidon_builtin, res_poseidon_ptr)

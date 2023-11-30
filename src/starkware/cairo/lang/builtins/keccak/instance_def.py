@@ -5,6 +5,7 @@ from starkware.cairo.lang.builtins.instance_def import BuiltinInstanceDef
 from starkware.python.math_utils import safe_div
 
 HEIGHT = 32768
+KECCAK_BATCH_SIZE = 16
 
 
 @dataclasses.dataclass
@@ -20,7 +21,7 @@ class KeccakInstanceDef(BuiltinInstanceDef):
     instances_per_component: int
 
     @property
-    def cells_per_builtin(self) -> int:
+    def memory_cells_per_instance(self) -> int:
         return 2 * len(self.state_rep)
 
     @property

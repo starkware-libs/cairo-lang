@@ -7,7 +7,7 @@ from starkware.python.math_utils import safe_div
 
 
 class HashBuiltinRunner(SimpleBuiltinRunner):
-    def __init__(self, name: str, included: bool, ratio: int, hash_func):
+    def __init__(self, name: str, included: bool, ratio: int, hash_func, instance_def=None):
         super().__init__(
             name=name,
             included=included,
@@ -17,6 +17,10 @@ class HashBuiltinRunner(SimpleBuiltinRunner):
         )
         self.hash_func = hash_func
         self.verified_addresses: Set[MaybeRelocatable] = set()
+        self.instance_def = instance_def
+
+    def get_instance_def(self):
+        return self.instance_def
 
     def add_auto_deduction_rules(self, runner):
         def rule(vm, addr, verified_addresses):

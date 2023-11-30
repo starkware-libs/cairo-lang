@@ -325,3 +325,13 @@ class DeprecatedCompiledClass(CompiledClassBase):
         """
         altered_program = dataclasses.replace(self.program, debug_info=None)
         return dataclasses.replace(self, program=altered_program)
+
+
+@dataclasses.dataclass(frozen=True)
+class RawCompiledClass:
+    """
+    Represents a raw compiled contract class in the Starknet network.
+    """
+
+    raw_compiled_class: str
+    version: int

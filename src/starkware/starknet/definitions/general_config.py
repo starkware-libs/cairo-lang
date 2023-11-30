@@ -7,7 +7,18 @@ import marshmallow.fields as mfields
 import marshmallow_dataclass
 
 from services.everest.definitions.general_config import EverestGeneralConfig
-from starkware.cairo.lang.builtins.all_builtins import ALL_BUILTINS, OUTPUT_BUILTIN, with_suffix
+from starkware.cairo.lang.builtins.all_builtins import (
+    ALL_BUILTINS,
+    BITWISE_BUILTIN,
+    EC_OP_BUILTIN,
+    ECDSA_BUILTIN,
+    KECCAK_BUILTIN,
+    OUTPUT_BUILTIN,
+    PEDERSEN_BUILTIN,
+    POSEIDON_BUILTIN,
+    RANGE_CHECK_BUILTIN,
+    with_suffix,
+)
 from starkware.cairo.lang.instances import starknet_instance, starknet_with_keccak_instance
 from starkware.python.utils import from_bytes
 from starkware.starknet.definitions import constants, fields
@@ -38,6 +49,8 @@ default_general_config = load_config(
 TOKEN_NAME = from_bytes(b"Wrapped Ether")
 TOKEN_SYMBOL = from_bytes(b"WETH")
 TOKEN_DECIMALS = 18
+ETH_TOKEN_SALT = 0
+STRK_TOKEN_SALT = 1
 
 
 # Default configuration values.
@@ -45,6 +58,10 @@ TOKEN_DECIMALS = 18
 DEFAULT_VALIDATE_MAX_STEPS = 10**6
 DEFAULT_TX_MAX_STEPS = 3 * 10**6
 DEFAULT_CHAIN_ID = StarknetChainId.TESTNET.value
+DEFAULT_DEPRECATED_FEE_TOKEN_ADDRESS = load_int_value(
+    field_metadata=fields.fee_token_address_metadata,
+    value=default_general_config["starknet_os_config"]["deprecated_fee_token_address"],
+)
 DEFAULT_FEE_TOKEN_ADDRESS = load_int_value(
     field_metadata=fields.fee_token_address_metadata,
     value=default_general_config["starknet_os_config"]["fee_token_address"],
@@ -56,11 +73,22 @@ DEFAULT_SEQUENCER_ADDRESS = load_int_value(
 DEFAULT_ENFORCE_L1_FEE = True
 
 # Given in units of wei.
-DEFAULT_GAS_PRICE = 10**8
+DEFAULT_DEPRECATED_L1_GAS_PRICE = 10**11
 DEFAULT_CAIRO_RESOURCE_FEE_WEIGHTS = {
-    N_STEPS_RESOURCE: 1.0,
+    N_STEPS_RESOURCE: 0.01,
     **{builtin: 0.0 for builtin in ALL_BUILTINS.with_suffix()},
+    with_suffix(PEDERSEN_BUILTIN): 0.32,
+    with_suffix(RANGE_CHECK_BUILTIN): 0.16,
+    with_suffix(ECDSA_BUILTIN): 20.48,
+    with_suffix(KECCAK_BUILTIN): 20.48,
+    with_suffix(BITWISE_BUILTIN): 0.64,
+    with_suffix(EC_OP_BUILTIN): 10.24,
+    with_suffix(POSEIDON_BUILTIN): 0.32,
 }
+
+DEFAULT_ETH_IN_STRK_WEI = 10**21
+DEFAULT_MIN_STRK_L1_GAS_PRICE = 10**10
+DEFAULT_MAX_STRK_L1_GAS_PRICE = 10**12
 
 
 # Configuration schema definition.
@@ -70,9 +98,16 @@ DEFAULT_CAIRO_RESOURCE_FEE_WEIGHTS = {
 class StarknetOsConfig(Config):
     chain_id: int = field(default=DEFAULT_CHAIN_ID)
 
+    deprecated_fee_token_address: int = field(
+        metadata=additional_metadata(
+            **fields.fee_token_address_metadata, description="Starknet old fee token L2 address."
+        ),
+        default=DEFAULT_DEPRECATED_FEE_TOKEN_ADDRESS,
+    )
+
     fee_token_address: int = field(
         metadata=additional_metadata(
-            **fields.fee_token_address_metadata, description="StarkNet fee token L2 address."
+            **fields.fee_token_address_metadata, description="Starknet fee token L2 address."
         ),
         default=DEFAULT_FEE_TOKEN_ADDRESS,
     )
@@ -105,14 +140,29 @@ class StarknetGeneralConfig(EverestGeneralConfig):
         metadata=fields.validate_n_steps_metadata, default=DEFAULT_VALIDATE_MAX_STEPS
     )
 
-    min_gas_price: int = field(metadata=fields.gas_price, default=DEFAULT_GAS_PRICE)
+    min_eth_l1_gas_price: int = field(
+        metadata=fields.gas_price, default=DEFAULT_DEPRECATED_L1_GAS_PRICE
+    )
+
+    min_strk_l1_gas_price: int = field(
+        metadata=fields.gas_price, default=DEFAULT_MIN_STRK_L1_GAS_PRICE
+    )
+
+    max_strk_l1_gas_price: int = field(
+        metadata=fields.gas_price, default=DEFAULT_MAX_STRK_L1_GAS_PRICE
+    )
+
+    # The default price of one ETH (10**18 Wei) in STRK units. Used in case of oracle failure.
+    default_eth_price_in_strk_wei: int = field(
+        metadata=fields.eth_price_in_strk_wei, default=DEFAULT_ETH_IN_STRK_WEI
+    )
 
     constant_gas_price: bool = field(
         metadata=additional_metadata(
             marshmallow_field=RequiredBoolean(),
             description=(
-                "If True, sets the gas price to the `min_gas_price` value, regardless of the L1 "
-                "gas prices."
+                "If true, sets ETH gas price and STRK gas price to their minimum price "
+                "configurations, regardless of the sampled gas prices."
             ),
         ),
         default=False,
@@ -120,7 +170,7 @@ class StarknetGeneralConfig(EverestGeneralConfig):
 
     sequencer_address: int = field(
         metadata=additional_metadata(
-            **fields.sequencer_address_metadata, description="StarkNet sequencer address."
+            **fields.sequencer_address_metadata, description="Starknet sequencer address."
         ),
         default=DEFAULT_SEQUENCER_ADDRESS,
     )
@@ -172,6 +222,10 @@ class StarknetGeneralConfig(EverestGeneralConfig):
     @property
     def chain_id(self) -> StarknetChainId:
         return StarknetChainId(self.starknet_os_config.chain_id)
+
+    @property
+    def deprecated_fee_token_address(self) -> int:
+        return self.starknet_os_config.deprecated_fee_token_address
 
     @property
     def fee_token_address(self) -> int:

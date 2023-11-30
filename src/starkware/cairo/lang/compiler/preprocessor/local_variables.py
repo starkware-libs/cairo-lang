@@ -1,13 +1,20 @@
 import dataclasses
 from typing import Callable, List, Optional, Tuple
 
-from starkware.cairo.lang.compiler.ast.cairo_types import CairoType, CastType, TypeTuple
+from starkware.cairo.lang.compiler.ast.cairo_types import (
+    CairoType,
+    CastType,
+    TypeFelt,
+    TypePointer,
+    TypeTuple,
+)
 from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeBlock,
     CodeElement,
     CodeElementAllocLocals,
     CodeElementCompoundAssertEq,
     CodeElementConst,
+    CodeElementHint,
     CodeElementIf,
     CodeElementInstruction,
     CodeElementLocalVariable,
@@ -18,7 +25,7 @@ from starkware.cairo.lang.compiler.ast.code_elements import (
     CodeElementWithAttr,
     CommentedCodeElement,
 )
-from starkware.cairo.lang.compiler.ast.expr import ExprCast, ExprConst, ExprIdentifier
+from starkware.cairo.lang.compiler.ast.expr import ExprCast, ExprConst, ExprHint, ExprIdentifier
 from starkware.cairo.lang.compiler.ast.instructions import AddApInstruction, InstructionAst
 from starkware.cairo.lang.compiler.error_handling import Location
 from starkware.cairo.lang.compiler.expression_transformer import ExpressionTransformer
@@ -142,18 +149,37 @@ class LocalVariableHandler:
 
         result: List[CodeElement] = []
         if elm.expr is not None:
-            result.append(
-                CodeElementCompoundAssertEq(
-                    a=ref_expr,
-                    b=ExprCast(
-                        expr=elm.expr,
-                        dest_type=local_type,
-                        cast_type=CastType.ASSIGN,
+            if isinstance(elm.expr, ExprHint):
+                if not isinstance(local_type, (TypeFelt, TypePointer)):
+                    raise PreprocessorError(
+                        "Only a felt or a pointer can be initialized using nondet.",
                         location=elm.expr.location,
-                    ),
-                    location=elm.location,
+                    )
+                location = elm.expr.location
+                result.append(
+                    CodeElementHint(
+                        hint=ExprHint(
+                            hint_code=f"memory[fp + {self.local_vars_size}] = "
+                            f"to_felt_or_relocatable({elm.expr.hint_code})",
+                            n_prefix_newlines=0,
+                            location=location,
+                        ),
+                        location=location,
+                    )
                 )
-            )
+            else:
+                result.append(
+                    CodeElementCompoundAssertEq(
+                        a=ref_expr,
+                        b=ExprCast(
+                            expr=elm.expr,
+                            dest_type=local_type,
+                            cast_type=CastType.ASSIGN,
+                            location=elm.expr.location,
+                        ),
+                        location=elm.location,
+                    )
+                )
 
         result.append(
             CodeElementReference(

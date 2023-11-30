@@ -86,7 +86,7 @@ def _py_wrappers_impl(ctx):
             ctx.attr.py_exe_name,
             "--module",
             ctx.attr.module,
-        ],
+        ] + (["--suppress_sigint"] if ctx.attr.suppress_sigint else []),
     )
 
 _py_wrappers = rule(
@@ -102,6 +102,7 @@ _py_wrappers = rule(
         ),
         "py_exe_name": attr.string(),
         "module": attr.string(),
+        "suppress_sigint": attr.bool(default = False),
     },
 )
 
@@ -115,6 +116,7 @@ def py_exe(
         env = {},
         is_pypy = False,
         legacy_create_init = False,
+        suppress_sigint = False,
         **kwargs):
     py_exe_module = name + "_exe.py"
     sh_file = name + "_exe.sh"
@@ -124,6 +126,7 @@ def py_exe(
         name = name + "_wrappers",
         py_exe_name = name,
         module = module,
+        suppress_sigint = suppress_sigint,
         py_binary_name = py_binary_name,
         py_wrapper = py_exe_module,
         sh_wrapper = sh_file,

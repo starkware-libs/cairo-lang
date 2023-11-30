@@ -32,7 +32,7 @@ from starkware.cairo.lang.compiler.expression_simplifier import to_field_element
 from starkware.cairo.lang.compiler.preprocessor.default_pass_manager import default_pass_manager
 from starkware.cairo.lang.compiler.preprocessor.preprocessor import Preprocessor
 from starkware.cairo.lang.compiler.program import Program, ProgramBase
-from starkware.cairo.lang.instances import DYNAMIC_LAYOUT_NAME, LAYOUTS, CairoLayout
+from starkware.cairo.lang.instances import LAYOUTS, CairoLayout
 from starkware.cairo.lang.vm.builtin_runner import BuiltinRunner, InsufficientAllocatedCells
 from starkware.cairo.lang.vm.cairo_pie import (
     CairoPie,
@@ -117,6 +117,7 @@ class CairoRunner:
                 included=included,
                 ratio=self.layout.builtins["pedersen"].ratio,
                 hash_func=pedersen_hash,
+                instance_def=self.layout.builtins["pedersen"],
             ),
             range_check=lambda name, included: RangeCheckBuiltinRunner(
                 included=included,
@@ -130,6 +131,7 @@ class CairoRunner:
                 ratio=self.layout.builtins["ecdsa"].ratio,
                 process_signature=process_ecdsa,
                 verify_signature=verify_ecdsa_sig,
+                instance_def=self.layout.builtins["ecdsa"],
             ),
             bitwise=lambda name, included: BitwiseBuiltinRunner(
                 included=included, bitwise_builtin=self.layout.builtins["bitwise"]
@@ -436,11 +438,10 @@ class CairoRunner:
         If not, the number of steps should be increased or a different layout should be used.
         """
         try:
-            if self.layout.layout_name != DYNAMIC_LAYOUT_NAME:
-                for builtin_runner in self.builtin_runners.values():
-                    builtin_runner.get_used_cells_and_allocated_size(self)
-                self.check_range_check_usage()
-                self.check_memory_usage()
+            for builtin_runner in self.builtin_runners.values():
+                builtin_runner.get_used_cells_and_allocated_size(self)
+            self.check_range_check_usage()
+            self.check_memory_usage()
             self.check_diluted_check_usage()
         except InsufficientAllocatedCells as e:
             print(f"Warning: {e} Increasing number of steps.")
@@ -501,11 +502,14 @@ class CairoRunner:
         """
         Checks that there are enough trace cells to fill the entire range checks range.
         """
+        assert self.layout.rc_units is not None, "RC units should not be None in proof mode."
+
         rc_min, rc_max = self.get_perm_range_check_limits()
         rc_units_used_by_builtins = sum(
             builtin_runner.get_used_perm_range_check_units(self)
             for builtin_runner in self.builtin_runners.values()
         )
+
         # Out of the range check units allowed per step three are used for the instruction.
         unused_rc_units = (
             self.layout.rc_units - 3
@@ -534,10 +538,15 @@ class CairoRunner:
         """
         Checks that there are enough trace cells to fill the entire memory range.
         """
+        assert (
+            self.layout.memory_units_per_step is not None
+        ), "Memory units per step should not be None in proof mode."
+
         builtins_memory_units = sum(
             builtin_runner.get_allocated_memory_units(self)
             for builtin_runner in self.builtin_runners.values()
         )
+
         # Out of the memory units available per step, a fraction is used for public memory, and
         # four are used for the instruction.
         total_memory_units = self.layout.memory_units_per_step * self.vm.current_step
@@ -559,6 +568,10 @@ class CairoRunner:
         """
         if self.layout.diluted_pool_instance_def is None:
             return
+        log_units_per_step = self.layout.diluted_pool_instance_def.log_units_per_step
+        assert (
+            log_units_per_step is not None
+        ), "Diluted log units per step should not be None in proof mode."
 
         diluted_units_used_by_builtins = sum(
             builtin_runner.get_used_diluted_check_units(
@@ -569,7 +582,6 @@ class CairoRunner:
             for builtin_runner in self.builtin_runners.values()
         )
 
-        log_units_per_step = self.layout.diluted_pool_instance_def.log_units_per_step
         diluted_units = (
             pow(2, log_units_per_step) * self.vm.current_step
             if log_units_per_step >= 0

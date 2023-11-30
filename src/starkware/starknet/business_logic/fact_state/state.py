@@ -1,7 +1,8 @@
 import logging
 from dataclasses import field
-from typing import Dict, Mapping, MutableMapping, Optional
+from typing import Any, Dict, Mapping, MutableMapping, Optional
 
+import marshmallow
 import marshmallow_dataclass
 
 from services.everest.business_logic.state import (
@@ -35,6 +36,7 @@ from starkware.starknet.business_logic.state.state import CachedState
 from starkware.starknet.business_logic.state.state_api import StateReader
 from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
 from starkware.starknet.definitions import constants, fields
+from starkware.starknet.definitions.data_availability_mode import DataAvailabilityMode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
 from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
@@ -132,13 +134,13 @@ class CarriedState(CarriedStateBase):
 
     @property
     def state_selector(self) -> StateSelectorBase:
-        raise NotImplementedError("state_selector() is not implemented on StarkNet CarriedState.")
+        raise NotImplementedError("state_selector() is not implemented on Starknet CarriedState.")
 
     def select(self, state_selector: StateSelectorBase) -> "CarriedState":
-        raise NotImplementedError("select() is not implemented on StarkNet CarriedState.")
+        raise NotImplementedError("select() is not implemented on Starknet CarriedState.")
 
     def _fill_missing(self, other: "CarriedState"):
-        raise NotImplementedError("_fill_missing() is not implemented on StarkNet CarriedState.")
+        raise NotImplementedError("_fill_missing() is not implemented on Starknet CarriedState.")
 
     def __eq__(self, other: object) -> bool:
         raise NotImplementedError
@@ -149,7 +151,7 @@ class CarriedState(CarriedStateBase):
         since it is very unlikely contract state will not change throughout a block.
         """
         raise NotImplementedError(
-            "subtract_merkle_facts() is not implemented on StarkNet CarriedState."
+            "subtract_merkle_facts() is not implemented on Starknet CarriedState."
         )
 
     def _apply(self):
@@ -246,7 +248,7 @@ class SharedState(SharedStateBase):
             else await self.create_empty_contract_class_tree(ffc=ffc, general_config=general_config)
         )
 
-    def get_global_state_root(self) -> bytes:
+    def get_global_state_root(self) -> int:
         """
         Returns the global state root.
         If both the contract class and contract state trees are empty, the global root is set to 0.
@@ -262,13 +264,13 @@ class SharedState(SharedStateBase):
 
         if contract_states_root == to_bytes(0) and contract_classes_root == to_bytes(0):
             # The shared state is empty.
-            return to_bytes(0)
+            return 0
 
         # Backward compatibility; Used during the migration from a state without a
         # contract class tree to a state with a contract class tree.
         if contract_classes_root == to_bytes(0):
             # The contract classes' state is empty.
-            return contract_states_root
+            return from_bytes(contract_states_root)
 
         # Return H(contract_state_root, contract_class_root, state_version).
         hash_value = poseidon_hash_many(
@@ -278,7 +280,7 @@ class SharedState(SharedStateBase):
                 from_bytes(contract_classes_root),
             ]
         )
-        return to_bytes(hash_value)
+        return hash_value
 
     def to_carried_state(self, ffc: FactFetchingContext) -> CarriedState:
         state = CachedState(
@@ -296,7 +298,7 @@ class SharedState(SharedStateBase):
         self, ffc: FactFetchingContext, state_selector: StateSelectorBase
     ) -> CarriedState:
         raise NotImplementedError(
-            "get_filled_carried_state() is not implemented on StarkNet SharedState."
+            "get_filled_carried_state() is not implemented on Starknet SharedState."
         )
 
     async def apply_state_updates(
@@ -390,18 +392,41 @@ class SharedState(SharedStateBase):
 @marshmallow_dataclass.dataclass(frozen=True)
 class StateDiff(EverestStateDiff, DBObject):
     """
-    Holds uncommitted changes induced on StarkNet contracts.
+    Holds changes induced on Starknet state.
     """
 
     address_to_class_hash: Mapping[int, int] = field(metadata=fields.address_to_class_hash_metadata)
-    address_to_nonce: Mapping[int, int] = field(metadata=fields.address_to_nonce_metadata)
-    class_hash_to_compiled_class_hash: Mapping[int, int] = field(
-        metadata=fields.class_hash_to_compiled_class_hash_metadata
+    nonces: Mapping[DataAvailabilityMode, Mapping[int, int]] = field(
+        metadata=fields.data_availability_mode_to_nonces_metadata
     )
-    storage_updates: Mapping[int, Mapping[int, int]] = field(
-        metadata=fields.storage_updates_metadata
+    storage_updates: Mapping[DataAvailabilityMode, Mapping[int, Mapping[int, int]]] = field(
+        metadata=fields.data_availability_mode_to_storage_updates_metadata
+    )
+    declared_classes: Mapping[int, int] = field(
+        metadata=fields.state_diff_declared_classes_metadata
     )
     block_info: BlockInfo
+
+    @marshmallow.pre_load
+    def backward_compatibility_before_data_availability_modes(
+        self, data: Dict[str, Any], many: bool, **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Backward compatibility for state diffs that were created before the introduction of data
+        availability modes.
+        """
+        if "address_to_nonce" in data.keys():
+            data["nonces"] = {DataAvailabilityMode.L1.name: data.pop("address_to_nonce")}
+            data["storage_updates"] = {DataAvailabilityMode.L1.name: data.pop("storage_updates")}
+
+            assert "declared_classes" not in data.keys()
+            if "class_hash_to_compiled_class_hash" in data.keys():
+                data["declared_classes"] = data.pop("class_hash_to_compiled_class_hash")
+            else:
+                # Older versions of the state diff did not have this field.
+                data["declared_classes"] = {}
+
+        return data
 
     async def write(self, storage: Storage) -> bytes:
         """
@@ -418,9 +443,9 @@ class StateDiff(EverestStateDiff, DBObject):
         """
         return cls(
             address_to_class_hash={},
-            address_to_nonce={},
+            nonces={},
             storage_updates={},
-            class_hash_to_compiled_class_hash={},
+            declared_classes={},
             block_info=block_info,
         )
 
@@ -432,20 +457,20 @@ class StateDiff(EverestStateDiff, DBObject):
                 state_cache._storage_writes, state_cache._storage_initial_values
             )
         )
-        address_to_nonce = subtract_mappings(
-            state_cache._nonce_writes, state_cache._nonce_initial_values
-        )
+        nonces = subtract_mappings(state_cache._nonce_writes, state_cache._nonce_initial_values)
         address_to_class_hash = subtract_mappings(
             state_cache._class_hash_writes, state_cache._class_hash_initial_values
         )
-        class_hash_to_compiled_class_hash = subtract_mappings(
+        declared_classes = subtract_mappings(
             state_cache._compiled_class_hash_writes, state_cache._compiled_class_hash_initial_values
         )
         return cls(
             address_to_class_hash=address_to_class_hash,
-            address_to_nonce=address_to_nonce,
-            class_hash_to_compiled_class_hash=class_hash_to_compiled_class_hash,
-            storage_updates=storage_updates,
+            nonces={DataAvailabilityMode.L1: nonces} if len(nonces) > 0 else {},
+            storage_updates=(
+                {DataAvailabilityMode.L1: storage_updates} if len(storage_updates) > 0 else {}
+            ),
+            declared_classes=declared_classes,
             block_info=cached_state.block_info,
         )
 
@@ -453,32 +478,40 @@ class StateDiff(EverestStateDiff, DBObject):
         cached_state = CachedState(block_info=self.block_info, state_reader=state_reader)
         cached_state.cache.set_initial_values(
             address_to_class_hash=self.address_to_class_hash,
-            address_to_nonce=self.address_to_nonce,
-            class_hash_to_compiled_class_hash=self.class_hash_to_compiled_class_hash,
-            storage_updates=to_cached_state_storage_mapping(storage_updates=self.storage_updates),
+            address_to_nonce=self.nonces.get(DataAvailabilityMode.L1, {}),
+            class_hash_to_compiled_class_hash=self.declared_classes,
+            storage_updates=to_cached_state_storage_mapping(
+                storage_updates=self.storage_updates.get(DataAvailabilityMode.L1, {})
+            ),
         )
 
         return cached_state
 
     def squash(self, other: "StateDiff") -> "StateDiff":
         address_to_class_hash = {**self.address_to_class_hash, **other.address_to_class_hash}
-        address_to_nonce = {**self.address_to_nonce, **other.address_to_nonce}
-        class_hash_to_compiled_class_hash = {
-            **self.class_hash_to_compiled_class_hash,
-            **other.class_hash_to_compiled_class_hash,
-        }
-        storage_updates: Dict[int, Dict[int, int]] = {}
-        for address in self.storage_updates.keys() | other.storage_updates.keys():
-            storage_updates[address] = {
-                **self.storage_updates.get(address, {}),
-                **other.storage_updates.get(address, {}),
+        declared_classes = {**self.declared_classes, **other.declared_classes}
+        nonces: Dict[DataAvailabilityMode, Dict[int, int]] = {}
+        storage_updates: Dict[DataAvailabilityMode, Dict[int, Dict[int, int]]] = {}
+        for data_availability_mode in self.nonces.keys() | other.nonces.keys():
+            nonces[data_availability_mode] = {
+                **self.nonces.get(data_availability_mode, {}),
+                **other.nonces.get(data_availability_mode, {}),
             }
+        for data_availability_mode in self.storage_updates.keys() | other.storage_updates.keys():
+            storage_updates[data_availability_mode] = {}
+            self_storage_updates = self.storage_updates.get(data_availability_mode, {})
+            other_storage_updates = other.storage_updates.get(data_availability_mode, {})
+            for address in self_storage_updates.keys() | other_storage_updates.keys():
+                storage_updates[data_availability_mode][address] = {
+                    **self_storage_updates.get(address, {}),
+                    **other_storage_updates.get(address, {}),
+                }
         self.block_info.validate_legal_progress(next_block_info=other.block_info)
 
         return StateDiff(
             address_to_class_hash=address_to_class_hash,
-            address_to_nonce=address_to_nonce,
-            class_hash_to_compiled_class_hash=class_hash_to_compiled_class_hash,
+            nonces=nonces,
+            declared_classes=declared_classes,
             storage_updates=storage_updates,
             block_info=other.block_info,
         )
@@ -492,8 +525,48 @@ class StateDiff(EverestStateDiff, DBObject):
         return await previous_state.apply_updates(
             ffc=ffc,
             address_to_class_hash=self.address_to_class_hash,
-            address_to_nonce=self.address_to_nonce,
-            class_hash_to_compiled_class_hash=self.class_hash_to_compiled_class_hash,
-            storage_updates=self.storage_updates,
+            address_to_nonce=self.nonces.get(DataAvailabilityMode.L1, {}),
+            class_hash_to_compiled_class_hash=self.declared_classes,
+            storage_updates=self.storage_updates.get(DataAvailabilityMode.L1, {}),
             block_info=self.block_info,
         )
+
+
+@marshmallow_dataclass.dataclass(frozen=True)
+class DeprecatedStateDiff(EverestStateDiff, DBObject):
+    """
+    Holds changes induced on Starknet state.
+
+    BACKWARD-COMPATIBILITY
+    ----------------------
+    This class is used to support the old state diff format when communicating with the
+    blockifier.
+    """
+
+    address_to_class_hash: Mapping[int, int] = field(metadata=fields.address_to_class_hash_metadata)
+    address_to_nonce: Mapping[int, int] = field(metadata=fields.address_to_nonce_metadata)
+    class_hash_to_compiled_class_hash: Mapping[int, int] = field(
+        metadata=fields.state_diff_declared_classes_metadata
+    )
+    storage_updates: Mapping[int, Mapping[int, int]] = field(
+        metadata=fields.storage_updates_metadata
+    )
+    block_info: BlockInfo
+
+    @classmethod
+    def from_new_state_diff(cls, state_diff: StateDiff) -> "DeprecatedStateDiff":
+        return cls(
+            address_to_class_hash=state_diff.address_to_class_hash,
+            address_to_nonce=state_diff.nonces.get(DataAvailabilityMode.L1, {}),
+            class_hash_to_compiled_class_hash=state_diff.declared_classes,
+            storage_updates=state_diff.storage_updates.get(DataAvailabilityMode.L1, {}),
+            block_info=state_diff.block_info,
+        )
+
+    def squash(self, other: "DeprecatedStateDiff") -> "DeprecatedStateDiff":
+        raise NotImplementedError("squash is not implemented for {type(self).__name__}.")
+
+    async def commit(
+        self, ffc: FactFetchingContext, previous_state: SharedStateBase
+    ) -> SharedState:
+        raise NotImplementedError("commit is not implemented for {type(self).__name__}.")
