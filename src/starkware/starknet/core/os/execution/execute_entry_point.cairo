@@ -229,12 +229,6 @@ func execute_entry_point{
     local entry_point_return_values: EntryPointReturnValues* = cast(
         return_values_ptr, EntryPointReturnValues*
     );
-    %{
-        syscall_handler.validate_and_discard_syscall_ptr(
-            syscall_ptr_end=ids.entry_point_return_values.syscall_ptr
-        )
-        execution_helper.exit_call()
-    %}
 
     // Check that the execution was successful.
     %{
@@ -249,6 +243,21 @@ func execute_entry_point{
             print(f"  Selector: {hex(ids.execution_context.execution_info.selector)}")
             print(f"  Size: {retdata_size}")
             print(f"  Error (at most 100 elements): {error}")
+
+        if execution_helper.perform_extended_checks:
+            # Validate the predicted gas cost.
+            actual = ids.remaining_gas - ids.entry_point_return_values.gas_builtin
+            predicted = execution_helper.call_info.gas_consumed
+            assert actual == predicted, (
+                "Predicted gas costs are inconsistent with the actual execution; "
+                f"{predicted=}, {actual=}."
+            )
+
+        # Exit call.
+        syscall_handler.validate_and_discard_syscall_ptr(
+            syscall_ptr_end=ids.entry_point_return_values.syscall_ptr
+        )
+        execution_helper.exit_call()
     %}
     assert entry_point_return_values.failure_flag = 0;
 

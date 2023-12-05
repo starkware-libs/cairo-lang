@@ -7,6 +7,7 @@ from starkware.starkware_utils.error_handling import ErrorCode, StarkErrorCode
 
 class StarknetErrorCode(ErrorCode):
     BLOCK_NOT_FOUND = 0
+    BLOCKED_TRANSACTION_TYPE = auto()
     SENDER_ADDRESS_IS_BLOCKED = auto()
     CLASS_ALREADY_DECLARED = auto()
     COMPILATION_FAILED = auto()
@@ -161,6 +162,7 @@ common_error_codes: List[ErrorCode] = [
 main_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
     [
         *common_error_codes,
+        StarknetErrorCode.BLOCKED_TRANSACTION_TYPE,
         StarknetErrorCode.DEPRECATED_TRANSACTION,
         StarknetErrorCode.DUPLICATED_TRANSACTION,
         StarknetErrorCode.SENDER_ADDRESS_IS_BLOCKED,

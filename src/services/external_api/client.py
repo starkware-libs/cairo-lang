@@ -116,9 +116,11 @@ class ClientBase(HasUriPrefix):
         retry_config: Optional[RetryConfig] = None,
         request_timeout: Optional[int] = None,
         headers: Optional[Mapping[str, str]] = None,
+        log_errors: bool = True,
     ):
         self.url = url
         self.ssl_context: Optional[ssl.SSLContext] = None
+        self.log_errors = log_errors
 
         self.retry_config = RetryConfig() if retry_config is None else retry_config
         assert (
@@ -216,7 +218,8 @@ class ClientBase(HasUriPrefix):
                         f"{error_message} "
                         f"Status code: {exception.status_code}; text: {exception.text}."
                     )
-                    logger.error(full_error_message, exc_info=True)
+                    if self.log_errors:
+                        logger.error(full_error_message, exc_info=True)
                     raise
 
                 logger.debug(f"{error_message}, retrying...")
@@ -224,7 +227,8 @@ class ClientBase(HasUriPrefix):
                 error_message = f"Got {type(exception).__name__} while trying to access {url}."
 
                 if limited_retries and n_retries_left == 0:
-                    logger.error(error_message, exc_info=True)
+                    if self.log_errors:
+                        logger.error(error_message, exc_info=True)
                     raise
 
                 logger.debug(f"{error_message}, retrying...")

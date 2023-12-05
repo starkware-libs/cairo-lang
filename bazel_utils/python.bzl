@@ -68,16 +68,19 @@ def test_and_debug_targets(name, srcs, timeout, is_pypy, **kwargs):
     )
 
 def _py_wrappers_impl(ctx):
+    # Construct py_binary path.
+    # Note that the label package may be empty - it happens in the case that the label is defined in
+    # the BUILD file adjacent to the WORKSPACE file.
+    workspace_part = "%s/" % (ctx.label.workspace_name or ctx.workspace_name)
+    package_part = ("%s/" % ctx.label.package) if ctx.label.package else ""
+    py_binary_path = workspace_part + package_part + ctx.attr.py_binary_name
+
     ctx.actions.run(
         outputs = [ctx.outputs.py_wrapper, ctx.outputs.sh_wrapper],
         executable = ctx.executable._gen_python_exe,
         arguments = [
             "--py_binary_path",
-            "%s/%s/%s" % (
-                ctx.label.workspace_name or ctx.workspace_name,
-                ctx.label.package,
-                ctx.attr.py_binary_name,
-            ),
+            py_binary_path,
             "--output_py",
             ctx.outputs.py_wrapper.path,
             "--output_sh",

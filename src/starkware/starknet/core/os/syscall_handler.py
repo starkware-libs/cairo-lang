@@ -1141,10 +1141,12 @@ class OsExecutionHelper:
         storage_by_address: Mapping[int, OsSingleStarknetStorage],
         old_block_number_and_hash: Optional[Tuple[int, int]],
         loop: asyncio.AbstractEventLoop,
+        perform_extended_checks: bool,
     ):
         """
         Private constructor.
         """
+        self.perform_extended_checks = perform_extended_checks
         self.tx_execution_info_iterator: Iterator[TransactionExecutionInfo] = iter(
             tx_execution_infos
         )
@@ -1197,6 +1199,7 @@ class OsExecutionHelper:
         block_info: BlockInfo,
         updated_block_hash_contract_state: ContractState,
         ffc: FactFetchingContext,
+        perform_extended_checks: bool,
     ) -> "OsExecutionHelper":
         # Fetch the hash of the (current_block_number - buffer) block from the updated state
         # (was written by the Batcher).
@@ -1214,6 +1217,7 @@ class OsExecutionHelper:
             storage_by_address=storage_by_address,
             old_block_number_and_hash=old_block_number_and_hash,
             loop=asyncio.get_running_loop(),
+            perform_extended_checks=perform_extended_checks,
         )
 
     def compute_storage_commitments(self) -> Mapping[int, CommitmentInfo]:
