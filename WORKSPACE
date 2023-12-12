@@ -52,7 +52,7 @@ http_archive(
         "//src/starkware/starknet/compiler/v1:BUILD." + CAIRO_COMPILER_ARCHIVE,
     ),
     strip_prefix = "cairo",
-    url = "https://github.com/starkware-libs/cairo/releases/download/v2.4.0-rc6/release-x86_64-unknown-linux-musl.tar.gz",
+    url = "https://github.com/starkware-libs/cairo/releases/download/v2.4.0/release-x86_64-unknown-linux-musl.tar.gz",
 )
 
 http_archive(

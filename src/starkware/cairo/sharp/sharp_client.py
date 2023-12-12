@@ -221,7 +221,7 @@ def submit(args, command_args):
 
 
 def get_job_status(args, command_args):
-    parser = argparse.ArgumentParser(description="Retreive the status of a SHARP Cairo job.")
+    parser = argparse.ArgumentParser(description="Retrieve the status of a SHARP Cairo job.")
     parser.add_argument("job_key", type=str, help="The key identifying the job.")
 
     parser.parse_args(command_args, namespace=args)
@@ -242,7 +242,7 @@ def is_verified(args, command_args):
     )
     parser.add_argument("fact", type=str, help="The fact to verify if registered.")
     parser.add_argument(
-        "--node_url", required=True, type=str, help="URL for a Goerli Ethereum node RPC API."
+        "--node_url", required=True, type=str, help="URL for a Sepolia Ethereum node RPC API."
     )
 
     parser.parse_args(command_args, namespace=args)

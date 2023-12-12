@@ -121,7 +121,7 @@ LOG_MSG_TO_L1_ENCODED_DATA_SIZE = (L2_TO_L1_MSG_HEADER_SIZE + 1) - LOG_MSG_TO_L1
 CONSUMED_MSG_TO_L2_ENCODED_DATA_SIZE = (L1_TO_L2_MSG_HEADER_SIZE + 1) - CONSUMED_MSG_TO_L2_N_TOPICS
 
 # The (empirical) L1 gas cost of each Cairo step.
-N_STEPS_FEE_WEIGHT = 0.01
+N_STEPS_FEE_WEIGHT = 0.005
 
 # Expected return values of a 'validate' entry point.
 VALIDATE_RETDATA = [from_bytes(b"VALID")]

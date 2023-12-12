@@ -49,9 +49,10 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "fact_checker_lib",
+        ":fact_checker_lib",
         "//src/starkware/cairo/bootloaders:cairo_bootloader_generate_fact_lib",
         "//src/starkware/cairo/bootloaders:cairo_hash_program_lib",
+        "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
         "//src/starkware/cairo/lang/vm:cairo_vm_crypto_lib",
         "//src/starkware/cairo/lang/vm:cairo_vm_lib",
         requirement("urllib3"),

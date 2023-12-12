@@ -75,15 +75,15 @@ DEFAULT_ENFORCE_L1_FEE = True
 # Given in units of wei.
 DEFAULT_DEPRECATED_L1_GAS_PRICE = 10**11
 DEFAULT_CAIRO_RESOURCE_FEE_WEIGHTS = {
-    N_STEPS_RESOURCE: 0.01,
+    N_STEPS_RESOURCE: 0.005,
     **{builtin: 0.0 for builtin in ALL_BUILTINS.with_suffix()},
-    with_suffix(PEDERSEN_BUILTIN): 0.32,
-    with_suffix(RANGE_CHECK_BUILTIN): 0.16,
-    with_suffix(ECDSA_BUILTIN): 20.48,
-    with_suffix(KECCAK_BUILTIN): 20.48,
-    with_suffix(BITWISE_BUILTIN): 0.64,
-    with_suffix(EC_OP_BUILTIN): 10.24,
-    with_suffix(POSEIDON_BUILTIN): 0.32,
+    with_suffix(PEDERSEN_BUILTIN): 0.16,
+    with_suffix(RANGE_CHECK_BUILTIN): 0.08,
+    with_suffix(ECDSA_BUILTIN): 10.24,
+    with_suffix(KECCAK_BUILTIN): 10.24,
+    with_suffix(BITWISE_BUILTIN): 0.32,
+    with_suffix(EC_OP_BUILTIN): 5.12,
+    with_suffix(POSEIDON_BUILTIN): 0.16,
 }
 
 DEFAULT_ETH_IN_STRK_WEI = 10**21

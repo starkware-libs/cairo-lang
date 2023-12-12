@@ -1,5 +1,5 @@
 cairo_resource_fee_weights:
-  n_steps: 0.01
+  n_steps: 0.005
 compiled_class_hash_commitment_tree_height: 251
 constant_gas_price: false
 contract_storage_commitment_tree_height: 251
