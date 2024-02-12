@@ -2,9 +2,10 @@ import asyncio
 import functools
 import logging
 from abc import ABC, abstractmethod
-from typing import Optional, Tuple
+from typing import Iterable, Optional, Tuple
 
 from services.everest.business_logic.internal_transaction import EverestInternalStateTransaction
+from services.everest.business_logic.state import StateSelectorBase
 from services.everest.business_logic.state_api import StateProxy
 from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
@@ -31,6 +32,15 @@ class InternalStateTransaction(EverestInternalStateTransaction, ABC):
     but do not necessarily have an external transaction counterpart.
     See for example, SyntheticTransaction.
     """
+
+    @staticmethod
+    def get_state_selector_of_many(
+        txs: Iterable[EverestInternalStateTransaction], general_config: Config
+    ) -> StateSelectorBase:
+        raise NotImplementedError
+
+    def get_state_selector(self, general_config: Config) -> StateSelectorBase:
+        raise NotImplementedError
 
     async def apply_state_updates(
         self, state: StateProxy, general_config: Config

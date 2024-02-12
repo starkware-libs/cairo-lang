@@ -8,6 +8,7 @@ layouts = [
     "small",
     "starknet",
     "starknet_with_keccak",
+    "recursive_with_poseidon",
 ]
 
 generate_layouts_libs(layouts)

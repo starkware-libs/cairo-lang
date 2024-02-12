@@ -1,9 +1,9 @@
 import math
 
+from starkware.starknet.business_logic.execution.deprecated_objects import ExecutionResourcesManager
 from starkware.starknet.business_logic.execution.execute_entry_point import ExecuteEntryPoint
 from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
-    ExecutionResourcesManager,
     ResourcesMapping,
     TransactionExecutionContext,
 )

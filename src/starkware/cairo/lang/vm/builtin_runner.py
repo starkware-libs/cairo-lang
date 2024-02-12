@@ -182,6 +182,7 @@ class SimpleBuiltinRunner(BuiltinRunner):
         cells_per_instance: int,
         n_input_cells: int,
         instances_per_component: int = 1,
+        additional_memory_units_per_instance: int = 0,
     ):
         """
         Constructs a SimpleBuiltinRunner.
@@ -199,6 +200,7 @@ class SimpleBuiltinRunner(BuiltinRunner):
         self.stop_ptr: Optional[RelocatableValue] = None
         self.cells_per_instance = cells_per_instance
         self.n_input_cells = n_input_cells
+        self.additional_memory_units_per_instance = additional_memory_units_per_instance
 
     def get_instance_def(self) -> Optional[BuiltinInstanceDef]:
         """
@@ -256,11 +258,13 @@ class SimpleBuiltinRunner(BuiltinRunner):
         return safe_div(runner.vm.current_step, self.ratio)
 
     def get_allocated_memory_units(self, runner):
-        return self.cells_per_instance * self.get_allocated_instances(runner)
+        return (
+            self.cells_per_instance + self.additional_memory_units_per_instance
+        ) * self.get_allocated_instances(runner)
 
     def get_used_cells_and_allocated_size(self, runner):
         used = self.get_used_cells(runner)
-        size = self.get_allocated_memory_units(runner)
+        size = self.cells_per_instance * self.get_allocated_instances(runner)
         if used > size:
             raise InsufficientAllocatedCells(
                 f"The {self.name} builtin used {used} cells but the capacity is {size}."

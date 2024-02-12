@@ -1,4 +1,5 @@
 load("//src/starkware/starknet:starknet_rules_v0.bzl", "starknet_contract_v0")
+load("//bazel_utils:get_from_cairo_lang.bzl", "get_from_cairo_lang")
 
 starknet_contract_v0(
     name = "delegate_proxy",
@@ -33,11 +34,13 @@ py_library(
     srcs = [
         "test_utils.py",
     ],
+    data = [
+        "delegate_proxy.json",
+        "dummy_account.json",
+    ],
     visibility = ["//visibility:public"],
     deps = [
-        "starknet_external_compiled_contracts_lib",
-        "//src/starkware/cairo/lang:cairo_constants_lib",
-        "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
-        "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",
+        get_from_cairo_lang("//src/starkware/cairo/lang:cairo_constants_lib"),
+        get_from_cairo_lang("//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib"),
     ],
 )

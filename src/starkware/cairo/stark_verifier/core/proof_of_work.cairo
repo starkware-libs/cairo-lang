@@ -1,9 +1,9 @@
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.cairo_blake2s.blake2s import blake2s_add_uint256_bigend, blake2s_bigend
-from starkware.cairo.common.cairo_builtins import BitwiseBuiltin
+from starkware.cairo.common.cairo_builtins import BitwiseBuiltin, PoseidonBuiltin
 from starkware.cairo.common.math import assert_in_range, assert_lt, assert_nn_le, unsigned_div_rem
 from starkware.cairo.common.pow import pow
-from starkware.cairo.common.uint256 import Uint256
+from starkware.cairo.common.uint256 import Uint256, felt_to_uint256
 from starkware.cairo.stark_verifier.core.channel import (
     Channel,
     ChannelSentFelt,
@@ -33,10 +33,14 @@ func proof_of_work_config_validate{range_check_ptr}(config: ProofOfWorkConfig*) 
 
 // Assumption: 0 < n_bits <= 64.
 func proof_of_work_commit{
-    range_check_ptr, blake2s_ptr: felt*, bitwise_ptr: BitwiseBuiltin*, channel: Channel
+    range_check_ptr,
+    blake2s_ptr: felt*,
+    bitwise_ptr: BitwiseBuiltin*,
+    poseidon_ptr: PoseidonBuiltin*,
+    channel: Channel,
 }(unsent_commitment: ProofOfWorkUnsentCommitment*, config: ProofOfWorkConfig*) {
     alloc_locals;
-    let digest = channel.digest;
+    let digest = felt_to_uint256(channel.digest);
     let (nonce) = read_uint64_from_prover(unsent_commitment.nonce);
     verify_proof_of_work(digest=digest, n_bits=config.n_bits, nonce=nonce);
     return ();

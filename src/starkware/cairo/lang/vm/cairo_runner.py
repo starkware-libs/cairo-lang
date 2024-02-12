@@ -120,6 +120,7 @@ class CairoRunner:
                 instance_def=self.layout.builtins["pedersen"],
             ),
             range_check=lambda name, included: RangeCheckBuiltinRunner(
+                name="range_check",
                 included=included,
                 ratio=self.layout.builtins["range_check"].ratio,
                 inner_rc_bound=2**16,
@@ -144,6 +145,13 @@ class CairoRunner:
             ),
             poseidon=lambda name, included: PoseidonBuiltinRunner(
                 included=included, instance_def=self.layout.builtins["poseidon"]
+            ),
+            range_check96=lambda name, included: RangeCheckBuiltinRunner(
+                name="range_check96",
+                included=included,
+                ratio=self.layout.builtins["range_check96"].ratio,
+                inner_rc_bound=2**16,
+                n_parts=self.layout.builtins["range_check96"].n_parts,
             ),
             **additional_builtin_factories,
         )
@@ -870,12 +878,19 @@ def get_runner_from_code(
     return get_main_runner(program=program, hint_locals={}, layout=layout)
 
 
-def get_main_runner(program: Program, hint_locals: Dict[str, Any], layout: str) -> CairoRunner:
+def get_main_runner(
+    program: Program,
+    hint_locals: Dict[str, Any],
+    layout: str,
+    allow_missing_builtins: Optional[bool] = None,
+) -> CairoRunner:
     """
     Creates a Cairo runner and runs its main-entrypoint.
     Returns the runner.
     """
-    runner = CairoRunner(program=program, layout=layout)
+    runner = CairoRunner(
+        program=program, layout=layout, allow_missing_builtins=allow_missing_builtins
+    )
     run_main_entrypoint(runner=runner, hint_locals=hint_locals)
     return runner
 

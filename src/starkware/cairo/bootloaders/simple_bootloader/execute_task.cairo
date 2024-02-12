@@ -33,6 +33,7 @@ struct BuiltinData {
     ec_op: felt,
     keccak: felt,
     poseidon: felt,
+    range_check96: felt,
 }
 
 // Computes the hash of a program.
@@ -107,8 +108,9 @@ func execute_task{builtin_ptrs: BuiltinData*, self_range_check_ptr}(
         # Validate hash.
         from starkware.cairo.bootloaders.hash_program import compute_program_hash_chain
 
-        assert memory[ids.output_ptr + 1] == compute_program_hash_chain(task.get_program()), \
-          'Computed hash does not match input.'
+        assert memory[ids.output_ptr + 1] == compute_program_hash_chain(
+            program=task.get_program(),
+            use_poseidon=bool(ids.use_poseidon)), 'Computed hash does not match input.'
     %}
 
     // Set the program entry point, so the bootloader can later run the program.
@@ -134,6 +136,7 @@ func execute_task{builtin_ptrs: BuiltinData*, self_range_check_ptr}(
         ec_op=input_builtin_ptrs.ec_op,
         keccak=input_builtin_ptrs.keccak,
         poseidon=cast(poseidon_ptr, felt),
+        range_check96=input_builtin_ptrs.range_check96,
     );
 
     // Call select_input_builtins to get the relevant input builtin pointers for the task.

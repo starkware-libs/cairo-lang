@@ -66,9 +66,7 @@ struct TracesWitness {
 
 // Reads the traces commitment from the channel.
 // Returns the commitment, along with GlobalValue required to evaluate the constraint polynomial.
-func traces_commit{
-    range_check_ptr, blake2s_ptr: felt*, bitwise_ptr: BitwiseBuiltin*, channel: Channel
-}(
+func traces_commit{range_check_ptr, poseidon_ptr: PoseidonBuiltin*, channel: Channel}(
     air: AirWithLayout*,
     public_input: PublicInput*,
     unsent_commitment: TracesUnsentCommitment*,

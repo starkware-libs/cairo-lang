@@ -1,5 +1,6 @@
 import json
 import os
+import resource
 import subprocess
 import tempfile
 from typing import Any, Dict, List, Optional
@@ -26,6 +27,7 @@ def build_sierra_to_casm_compilation_args(
     compiler_args: Optional[str] = None,
     allowed_libfuncs_list_name: Optional[str] = None,
     allowed_libfuncs_list_file: Optional[str] = None,
+    max_bytecode_size: Optional[int] = None,
 ) -> List[str]:
     """
     Returns the compilation arguments for a given starknet contract.
@@ -44,6 +46,9 @@ def build_sierra_to_casm_compilation_args(
 
     if add_pythonic_hints:
         additional_args.append("--add-pythonic-hints")
+
+    if max_bytecode_size is not None:
+        additional_args.append(f"--max-bytecode-size={max_bytecode_size}")
 
     additional_args += build_allowed_libfuncs_args(
         allowed_libfuncs_list_name=allowed_libfuncs_list_name,
@@ -99,6 +104,8 @@ def compile_sierra_to_casm(
     allowed_libfuncs_list_name: Optional[str] = None,
     allowed_libfuncs_list_file: Optional[str] = None,
     compiler_dir: Optional[str] = None,
+    memory_limit_in_mb: Optional[int] = None,
+    max_bytecode_size: Optional[int] = None,
 ) -> JsonObject:
     """
     Compiles a Starknet Sierra contract.
@@ -114,10 +121,11 @@ def compile_sierra_to_casm(
         add_pythonic_hints=add_pythonic_hints,
         allowed_libfuncs_list_name=allowed_libfuncs_list_name,
         allowed_libfuncs_list_file=allowed_libfuncs_list_file,
+        max_bytecode_size=max_bytecode_size,
     )
 
     command = [compiler_path, sierra_path, *additional_args]
-    return run_compile_command(command=command)
+    return run_compile_command(command=command, memory_limit_in_mb=memory_limit_in_mb)
 
 
 def compile_cairo_to_casm(
@@ -145,9 +153,21 @@ def compile_cairo_to_casm(
         )
 
 
-def run_compile_command(command: List[str]) -> JsonObject:
+def set_memory_limit(memory_limit_in_mb: Optional[int]):
+    if not memory_limit_in_mb:
+        limit_in_bytes = resource.RLIM_INFINITY
+    else:
+        limit_in_bytes = memory_limit_in_mb * 1024 * 1024
+    resource.setrlimit(resource.RLIMIT_AS, (limit_in_bytes, resource.RLIM_INFINITY))
+
+
+def run_compile_command(command: List[str], memory_limit_in_mb: Optional[int] = None) -> JsonObject:
     try:
-        result: subprocess.CompletedProcess = subprocess.run(command, capture_output=True)
+        result: subprocess.CompletedProcess = subprocess.run(
+            command,
+            preexec_fn=(lambda: set_memory_limit(memory_limit_in_mb=memory_limit_in_mb)),
+            capture_output=True,
+        )
     except subprocess.CalledProcessError:
         # The inner command is responsible for printing the error message. No need to print the
         # stack trace of this script.

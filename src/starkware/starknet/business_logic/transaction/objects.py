@@ -2,14 +2,14 @@ import dataclasses
 import inspect
 from abc import abstractmethod
 from dataclasses import field
-from typing import ClassVar, Dict, Iterable, Set, Type, cast
+from typing import ClassVar, Dict, Iterable, Type
 
 from services.everest.api.gateway.transaction import EverestTransaction
 from services.everest.business_logic.internal_transaction import (
     EverestInternalStateTransaction,
     EverestInternalTransaction,
 )
-from starkware.starknet.business_logic.fact_state.contract_state_objects import StateSelector
+from services.everest.business_logic.state import StateSelectorBase
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.definitions.transaction_type import TransactionType
@@ -115,37 +115,14 @@ class InternalTransaction(EverestInternalTransaction):
         Unused in StarkNet.
         """
 
-    @abstractmethod
-    def get_state_selector(self, general_config: Config) -> StateSelector:
-        """
-        See base class for documentation.
-        Declared here for return type downcast.
-        """
+    def get_state_selector(self, general_config: Config) -> StateSelectorBase:
+        raise NotImplementedError("Starknet's state selector is obtained from the execution info.")
 
     @staticmethod
     def get_state_selector_of_many(
         txs: Iterable[EverestInternalStateTransaction], general_config: Config
-    ) -> StateSelector:
-        """
-        Returns the state selector of a collection of transactions (i.e., union of selectors).
-        """
-        # Downcast arguments to application-specific types.
-        assert isinstance(general_config, StarknetGeneralConfig)
-        txs = cast(Iterable[InternalTransaction], txs)
-
-        contract_addresses: Set[int] = set()
-        class_hashes: Set[int] = set()
-
-        for tx in txs:
-            state_selector = tx.get_state_selector(general_config=general_config)
-            contract_addresses.update(state_selector.contract_addresses)
-            class_hashes.update(state_selector.class_hashes)
-
-        frozen_contract_addresses = frozenset(contract_addresses)
-        frozen_class_hashes = frozenset(class_hashes)
-        return StateSelector(
-            contract_addresses=frozen_contract_addresses, class_hashes=frozen_class_hashes
-        )
+    ) -> StateSelectorBase:
+        raise NotImplementedError("Starknet's state selector is obtained from the execution info.")
 
     @classmethod
     @abstractmethod

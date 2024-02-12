@@ -6,6 +6,7 @@ py_library(
         "starknet",
         "starknet-class-hash",
         "starknet-compile-deprecated",
+        "starknet-compiled-class-hash",
     ],
     visibility = ["//visibility:public"],
     deps = [

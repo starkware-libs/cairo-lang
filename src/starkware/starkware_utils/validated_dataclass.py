@@ -16,6 +16,18 @@ TValidatedDataclass = TypeVar("TValidatedDataclass", bound="ValidatedDataclass")
 T = TypeVar("T")
 
 
+def rename_old_field_in_pre_load(
+    data: Dict[str, Any], old_field_name: str, new_field_name: str
+) -> Dict[str, Any]:
+    if old_field_name in data:
+        assert new_field_name not in data, (
+            f"Error while renaming {old_field_name} to {new_field_name}. "
+            "It is unexpected to have both fields in the data."
+        )
+        data[new_field_name] = data.pop(old_field_name)
+    return data
+
+
 def get_from_nested_metadata(metadata: Mapping[str, Any], key: str) -> Any:
     """
     Returns the value for the given key in the metadata dict, or in an additional metadata dict

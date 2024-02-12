@@ -155,6 +155,7 @@ func traces_eval_composition_polynomial{range_check_ptr}(
         initial_ec_op_addr=public_input.segments[segments.EC_OP].begin_addr,
         initial_keccak_addr=public_input.segments[segments.KECCAK].begin_addr,
         initial_poseidon_addr=public_input.segments[segments.POSEIDON].begin_addr,
+        initial_range_check96_addr=public_input.segments[segments.RANGE_CHECK96].begin_addr,
         range_check_min=public_input.range_check_min,
         range_check_max=public_input.range_check_max,
         offset_size=2 ** 16,

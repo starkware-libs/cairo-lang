@@ -31,6 +31,7 @@ cairo_library(
     visibility = ["//visibility:public"],
     deps = [
         "//src/starkware/cairo/common:cairo_common_cairo_lib",
+        "//src/starkware/cairo/stark_verifier/core:serialize",
     ],
 )
 
@@ -46,6 +47,13 @@ cairo_library(
         ":cairo",
         "//src/starkware/cairo/common:cairo_common_cairo_lib",
         "//src/starkware/cairo/stark_verifier/core/fri",
+    ],
+)
+
+py_library(
+    name = "supported_proof_params",
+    srcs = [
+        "supported_proof_params.py",
     ],
 )
 

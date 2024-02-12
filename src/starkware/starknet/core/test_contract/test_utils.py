@@ -23,10 +23,11 @@ def get_test_deprecated_compiled_class() -> DeprecatedCompiledClass:
     return get_deprecated_compiled_class("test_contract")
 
 
-def get_test_compiled_class() -> CompiledClass:
+def get_test_compiled_class(contract_segmentation: bool = True) -> CompiledClass:
     return CompiledClass(
         prime=DEFAULT_PRIME,
-        bytecode=[1, 2, 3],
+        bytecode=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        bytecode_segment_lengths=[3, [1, 1, [1]], 4] if contract_segmentation else 10,
         hints=[],
         pythonic_hints={},
         compiler_version="",

@@ -1,6 +1,7 @@
+import copy
 import io
 import random
-from typing import Dict, Mapping
+from typing import Dict, Mapping, no_type_check
 
 import pytest
 
@@ -238,3 +239,66 @@ def test_cairo_pie_merge_extra_segments(cairo_pie: CairoPie):
         RelocatableValue(8, 13): RelocatableValue(8, 17),
     }
     assert actual_cairo_pie.memory == MemoryDict(expected_memory_initializer)
+
+
+@pytest.mark.parametrize(
+    "has_pedersen1,has_pedersen2,are_compatible",
+    [
+        (True, True, True),
+        (True, True, False),
+        (True, False, True),
+        (True, False, False),
+        (False, False, True),
+        (False, False, False),
+    ],
+)
+def test_cairo_pie_is_compatible_with(
+    cairo_pie: CairoPie,
+    has_pedersen1: bool,
+    has_pedersen2: bool,
+    are_compatible: bool,
+):
+    """
+    Tests CairoPie.is_compatible_with().
+    """
+    cairo_pie.additional_data = {}
+    another_cairo_pie = copy.deepcopy(cairo_pie)
+    if has_pedersen1:
+        cairo_pie.additional_data["pedersen_builtin"] = 1
+    if has_pedersen2:
+        another_cairo_pie.additional_data["pedersen_builtin"] = 2
+    if not are_compatible:
+        cairo_pie.additional_data["test"] = 1
+        another_cairo_pie.additional_data["test"] = 2
+    assert cairo_pie.is_compatible_with(another_cairo_pie) == are_compatible
+    assert another_cairo_pie.is_compatible_with(cairo_pie) == are_compatible
+
+
+@no_type_check
+def test_cairo_pie_diff():
+    cairo_pie = CairoPie(
+        metadata=1,
+        memory=1,
+        additional_data={"a": 1, "b": 2, "c": 3},
+        execution_resources=1,
+        version=1,
+    )
+    another_cairo_pie = CairoPie(
+        metadata=2,
+        memory=2,
+        additional_data={"b": 2, "c": 4, "d": 5},
+        execution_resources=2,
+        version=2,
+    )
+    assert (
+        cairo_pie.diff(another_cairo_pie)
+        == """CairoPie diff:
+ * metadata mismatch.
+ * memory mismatch.
+ * additional_data mismatch:
+   * a mismatch.
+   * c mismatch.
+   * d mismatch.
+ * execution_resources mismatch: 1 != 2.
+ * version mismatch: 1 != 2."""
+    )

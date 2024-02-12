@@ -19,5 +19,5 @@ def test_decode():
 
 
 def test_unsupported_instruction():
-    with pytest.raises(AssertionError, match="Unsupported instruction."):
+    with pytest.raises(AssertionError, match="Unsupported instruction: 0x8000000000000000."):
         decode_instruction_values(1 << (3 * OFFSET_BITS + N_FLAGS))

@@ -206,8 +206,11 @@ class VirtualMachine(VirtualMachineBase):
                 (instruction.res is Instruction.Res.MUL)
                 and isinstance(dst, int)
                 and isinstance(op1, int)
-                and op1 != 0
             ):
+                assert (
+                    op1 != 0
+                ), f"Cannot deduce operand in '0 = ? * {dst}' (possibly due to division by 0)."
+
                 return div_mod(dst, op1, self.prime), dst
         return None, None
 

@@ -33,7 +33,7 @@ library OnchainDataFactTreeEncoder {
 
         // Compute the hash without the two additional fields.
         uint256 mainPublicInputLen = programOutput.length;
-        bytes32 mainPublicInputHash = keccak256(abi.encodePacked(programOutput));
+        bytes32 mainPublicInputHash = hashMainPublicInput(programOutput);
 
         // Compute the hash of the fact Merkle tree.
         bytes32 hashResult = keccak256(
@@ -46,5 +46,12 @@ library OnchainDataFactTreeEncoder {
         );
         // Add one to the hash to indicate it represents an inner node, rather than a leaf.
         return bytes32(uint256(hashResult) + 1);
+    }
+
+    /*
+      Hashes the main public input.
+    */
+    function hashMainPublicInput(uint256[] calldata programOutput) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(programOutput));
     }
 }

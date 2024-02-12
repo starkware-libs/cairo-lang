@@ -29,7 +29,7 @@ class AuxiliaryInfoCollector(ABC):
         start_pc: int,
         implicit_args_struct: StructDefinition,
         args_struct: StructDefinition,
-        ret_types: Optional[CairoType],
+        ret_type: Optional[CairoType],
     ):
         pass
 
@@ -97,6 +97,10 @@ class AuxiliaryInfoCollector(ABC):
         pass
 
     @abstractmethod
+    def add_func_ret_types(self, ret_types: List[CairoType]):
+        pass
+
+    @abstractmethod
     def start_return(self):
         pass
 
@@ -132,4 +136,8 @@ class AuxiliaryInfoCollector(ABC):
 
     @abstractmethod
     def add_const(self, name: ScopedName, expr: Expression, val: int):
+        pass
+
+    @abstractmethod
+    def set_flow_tracking_after_instr(self):
         pass

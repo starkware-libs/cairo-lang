@@ -43,6 +43,7 @@ from starkware.python.utils import (
     safe_zip,
     to_bytes,
 )
+from starkware.starknet.business_logic.execution.deprecated_objects import ExecutionResourcesManager
 from starkware.starknet.business_logic.execution.execute_entry_point_base import (
     ExecuteEntryPointBase,
 )
@@ -50,7 +51,6 @@ from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
     CallResult,
     CallType,
-    ExecutionResourcesManager,
     OrderedEvent,
     OrderedL2ToL1Message,
     TransactionExecutionContext,
@@ -63,6 +63,7 @@ from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
 from starkware.starknet.core.os.contract_address.contract_address import (
     calculate_contract_address_from_hash,
 )
+from starkware.starknet.core.os.os_logger import OptionalSegmentManager, OsLogger
 from starkware.starknet.core.os.syscall_utils import (
     STARKNET_SYSCALLS_COMPILED_PATH,
     cast_to_int,
@@ -93,6 +94,10 @@ ExecuteSyscallCallback = Callable[
     ["SyscallHandlerBase", int, CairoStructProxy], SyscallFullResponse
 ]
 
+# Input: polynomial in coefficients representation.
+# Output: KZG commitment on the polynomial, split into two Uint192.
+CoefficientsToKzgCommitmentCallback = Callable[[List[int]], Tuple[int, int]]
+
 KECCAK_FULL_RATE_IN_U64S = 17
 
 
@@ -114,7 +119,7 @@ class SyscallInfo:
 class SyscallHandlerBase(ABC):
     def __init__(
         self,
-        segments: Optional[MemorySegmentManager],
+        segments: OptionalSegmentManager,
         initial_syscall_ptr: Optional[RelocatableValue],
     ):
         # Static syscall information.
@@ -250,8 +255,7 @@ class SyscallHandlerBase(ABC):
 
     @property
     def segments(self) -> MemorySegmentManager:
-        assert self._segments is not None, "segments must be set before using the SyscallHandler."
-        return self._segments
+        return self._segments.segments
 
     @property
     def syscall_ptr(self) -> RelocatableValue:
@@ -753,8 +757,11 @@ class SyscallHandlerBase(ABC):
         # Write response and update syscall pointer.
         self._syscall_ptr = self.segments.write_arg(ptr=self.syscall_ptr, arg=response)
 
+    @abstractmethod
     def _count_syscall(self, syscall_name: str):
-        return
+        """
+        Counts syscalls.
+        """
 
     def _new_ec_point(self, ec_point: EcPoint) -> RelocatableValue:
         """
@@ -800,7 +807,10 @@ class BusinessLogicSyscallHandler(SyscallHandlerBase):
         entry_point: ExecuteEntryPointBase,
         support_reverted: bool,
     ):
-        super().__init__(segments=segments, initial_syscall_ptr=initial_syscall_ptr)
+        super().__init__(
+            segments=OptionalSegmentManager(segments=segments),
+            initial_syscall_ptr=initial_syscall_ptr,
+        )
 
         # Entry point info.
         self.entry_point = entry_point
@@ -863,7 +873,7 @@ class BusinessLogicSyscallHandler(SyscallHandlerBase):
         if syscall_name == "call_contract":
             contract_address = cast_to_int(request.contract_address)
             caller_address = self.entry_point.contract_address
-            call_type = CallType.CALL
+            call_type = CallType.Call
             if self._is_validate_execution_mode():
                 stark_assert(
                     self.entry_point.contract_address == contract_address,
@@ -876,7 +886,7 @@ class BusinessLogicSyscallHandler(SyscallHandlerBase):
         elif syscall_name == "library_call":
             contract_address = self.entry_point.contract_address
             caller_address = self.entry_point.caller_address
-            call_type = CallType.DELEGATE
+            call_type = CallType.Delegate
             class_hash = cast_to_int(request.class_hash)
         else:
             raise NotImplementedError(f"Unsupported call type {syscall_name}.")
@@ -933,19 +943,25 @@ class BusinessLogicSyscallHandler(SyscallHandlerBase):
         if self._execution_info_ptr is None:
             # Prepare block info.
             python_block_info = self.storage.state.block_info
-            block_info = (
-                self.structs.BlockInfo(
-                    block_number=python_block_info.block_number,
-                    block_timestamp=python_block_info.block_timestamp,
+            if self._is_validate_execution_mode():
+                block_number_for_validate = (
+                    python_block_info.block_number // constants.VALIDATE_BLOCK_NUMBER_ROUNDING
+                ) * constants.VALIDATE_BLOCK_NUMBER_ROUNDING
+                block_timestamp_for_validate = (
+                    python_block_info.block_timestamp // constants.VALIDATE_TIMESTAMP_ROUNDING
+                ) * constants.VALIDATE_TIMESTAMP_ROUNDING
+                block_info = self.structs.BlockInfo(
+                    block_number=block_number_for_validate,
+                    block_timestamp=block_timestamp_for_validate,
                     sequencer_address=0,
                 )
-                if self._is_validate_execution_mode()
-                else self.structs.BlockInfo(
+            else:
+                block_info = self.structs.BlockInfo(
                     block_number=python_block_info.block_number,
                     block_timestamp=python_block_info.block_timestamp,
                     sequencer_address=as_non_optional(python_block_info.sequencer_address),
                 )
-            )
+
             # Prepare transaction info.
             signature = self.tx_execution_context.signature
             signature_start = self.allocate_segment(data=signature)
@@ -990,7 +1006,9 @@ class BusinessLogicSyscallHandler(SyscallHandlerBase):
 
     def _emit_event(self, keys: List[int], data: List[int]):
         self.events.append(
-            OrderedEvent(order=self.tx_execution_context.n_emitted_events, keys=keys, data=data)
+            OrderedEvent.create(
+                order=self.tx_execution_context.n_emitted_events, keys=keys, data=data
+            )
         )
 
         # Update events count.
@@ -1013,7 +1031,7 @@ class BusinessLogicSyscallHandler(SyscallHandlerBase):
         self.l2_to_l1_messages.append(
             # Note that the constructor of OrderedL2ToL1Message might fail as it is
             # more restrictive than the Cairo code.
-            OrderedL2ToL1Message(
+            OrderedL2ToL1Message.create(
                 order=self.tx_execution_context.n_sent_messages,
                 to_address=to_address,
                 payload=payload,
@@ -1063,7 +1081,7 @@ class BusinessLogicSyscallHandler(SyscallHandlerBase):
             return call_info.result()
 
         call = self.execute_entry_point_cls(
-            call_type=CallType.CALL,
+            call_type=CallType.Call,
             contract_address=contract_address,
             entry_point_selector=CONSTRUCTOR_ENTRY_POINT_SELECTOR,
             entry_point_type=EntryPointType.CONSTRUCTOR,
@@ -1141,12 +1159,23 @@ class OsExecutionHelper:
         storage_by_address: Mapping[int, OsSingleStarknetStorage],
         old_block_number_and_hash: Optional[Tuple[int, int]],
         loop: asyncio.AbstractEventLoop,
-        perform_extended_checks: bool,
+        debug_mode: bool,
+        segments: OptionalSegmentManager,
+        polynomial_coefficients_to_kzg_commitment_callback: CoefficientsToKzgCommitmentCallback,
     ):
         """
         Private constructor.
         """
-        self.perform_extended_checks = perform_extended_checks
+        self.debug_mode = debug_mode
+
+        # Stores the state diff computed by the OS, in case that KZG commitment is used (since
+        # it won't be part of the OS output).
+        self._da_segment: Optional[List[int]] = None
+
+        # Callback that computes the KZG commitment of a polynomial in coefficient representation.
+        self.polynomial_coefficients_to_kzg_commitment_callback = (
+            polynomial_coefficients_to_kzg_commitment_callback
+        )
         self.tx_execution_info_iterator: Iterator[TransactionExecutionInfo] = iter(
             tx_execution_infos
         )
@@ -1191,6 +1220,8 @@ class OsExecutionHelper:
         # It is the hash that is going to be written by this OS run.
         self.old_block_number_and_hash = old_block_number_and_hash
 
+        self.os_logger = OsLogger(debug=debug_mode, segments=segments)
+
     @classmethod
     async def create(
         cls,
@@ -1199,7 +1230,9 @@ class OsExecutionHelper:
         block_info: BlockInfo,
         updated_block_hash_contract_state: ContractState,
         ffc: FactFetchingContext,
-        perform_extended_checks: bool,
+        debug_mode: bool,
+        segments: Optional[MemorySegmentManager],
+        polynomial_coefficients_to_kzg_commitment_callback: CoefficientsToKzgCommitmentCallback,
     ) -> "OsExecutionHelper":
         # Fetch the hash of the (current_block_number - buffer) block from the updated state
         # (was written by the Batcher).
@@ -1217,8 +1250,25 @@ class OsExecutionHelper:
             storage_by_address=storage_by_address,
             old_block_number_and_hash=old_block_number_and_hash,
             loop=asyncio.get_running_loop(),
-            perform_extended_checks=perform_extended_checks,
+            debug_mode=debug_mode,
+            segments=OptionalSegmentManager(segments=segments),
+            polynomial_coefficients_to_kzg_commitment_callback=(
+                polynomial_coefficients_to_kzg_commitment_callback
+            ),
         )
+
+    @property
+    def da_segment(self) -> List[int]:
+        assert self._da_segment is not None, "DA segment is not initialized."
+        return self._da_segment
+
+    def store_da_segment(self, da_segment: List[int]):
+        """
+        Stores the data-availabilty segment, to be used for computing the KZG commitment
+        and published on L1 using a blob transaction.
+        """
+        assert self._da_segment is None, "DA segment is already initialized."
+        self._da_segment = da_segment
 
     def compute_storage_commitments(self) -> Mapping[int, CommitmentInfo]:
         coroutine = gather_in_chunks(
@@ -1322,20 +1372,15 @@ class OsSyscallHandler(SyscallHandlerBase):
         self,
         execution_helper: OsExecutionHelper,
         block_info: BlockInfo,
-        # Note that a non-optional segments must be set before using the SyscallHandler.
-        segments: Optional[MemorySegmentManager] = None,
     ):
-        super().__init__(segments=segments, initial_syscall_ptr=None)
+        super().__init__(segments=execution_helper.os_logger.segments, initial_syscall_ptr=None)
         self.execution_helper = execution_helper
         self.block_info = block_info
+        self.syscall_counter: Dict[str, int] = {}
 
     @property
     def current_block_number(self) -> int:
         return self.block_info.block_number
-
-    def set_segments(self, segments: MemorySegmentManager):
-        assert self._segments is None, "segments is already set."
-        self._segments = segments
 
     def set_syscall_ptr(self, syscall_ptr: RelocatableValue):
         assert self._syscall_ptr is None, "syscall_ptr is already set."
@@ -1399,3 +1444,7 @@ class OsSyscallHandler(SyscallHandlerBase):
 
     def _keccak(self, n_rounds: int):
         return
+
+    def _count_syscall(self, syscall_name: str):
+        previous_syscall_count = self.syscall_counter.get(syscall_name, 0)
+        self.syscall_counter[syscall_name] = previous_syscall_count + 1

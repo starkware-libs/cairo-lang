@@ -36,6 +36,7 @@ def test_validate_builtins(old_builtins, new_builtins, builtin_instance_sizes, e
     assert len(runner.program.hints) == 0, "Expecting validator to have no hints."
 
     range_check_builtin = RangeCheckBuiltinRunner(
+        name="range_check",
         included=True,
         ratio=None,
         inner_rc_bound=2**16,

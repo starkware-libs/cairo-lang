@@ -18,6 +18,7 @@ from starkware.starknet.core.os.transaction_hash.transaction_hash import (
 )
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.data_availability_mode import DataAvailabilityMode
+from starkware.starknet.definitions.transaction_type import TransactionType
 from starkware.starknet.public.abi import get_selector_from_name
 from starkware.starknet.services.api.contract_class.contract_class import (
     ContractClass,
@@ -39,7 +40,7 @@ from starkware.starknet.services.api.gateway.deprecated_transaction import (
 
 class SignerBase(ABC):
     """
-    Base class for sigining transactions.
+    Base class for signing transactions.
     """
 
     @classmethod
@@ -51,7 +52,13 @@ class SignerBase(ABC):
 
     @classmethod
     @abstractmethod
-    def sign_tx_hash(cls, tx_hash: int, private_key: Optional[int]) -> List[int]:
+    def sign_tx_hash(
+        cls,
+        tx_hash: int,
+        private_key: Optional[int],
+        tx_type: Optional[TransactionType] = None,
+        additional_data: Optional[List[int]] = None,
+    ) -> List[int]:
         """
         Signs the transaction hash.
         """
@@ -181,7 +188,9 @@ class SignerBase(ABC):
         function.
         """
         call_function = CallFunction(
-            contract_address=contract_address, entry_point_selector=selector, calldata=calldata
+            contract_address=contract_address,
+            entry_point_selector=selector,
+            calldata=calldata,
         )
 
         return cls.sign_multicall_tx(
@@ -528,7 +537,13 @@ class EcdsaSignerBase(SignerBase):
     """
 
     @classmethod
-    def sign_tx_hash(cls, tx_hash: int, private_key: Optional[int]) -> List[int]:
+    def sign_tx_hash(
+        cls,
+        tx_hash: int,
+        private_key: Optional[int],
+        tx_type: Optional[TransactionType] = None,
+        additional_data: Optional[List[int]] = None,
+    ) -> List[int]:
         return [] if private_key is None else list(sign(msg_hash=tx_hash, priv_key=private_key))
 
 
@@ -561,7 +576,7 @@ class OpenZeppelinSigner(EcdsaSignerBase):
 
 class StandardSigner(EcdsaSignerBase):
     """
-    Contains signing logic for the starndard Cairo 1 account contract from the Cairo compiler repo.
+    Contains signing logic for the standard Cairo 1 account contract from the Cairo compiler repo.
 
     Assumes the following calldata format: `calls: Array<Call>`, where `Call` struct is
     struct Call {
@@ -591,7 +606,13 @@ class TrivialSigner(SignerBase):
     """
 
     @classmethod
-    def sign_tx_hash(cls, tx_hash: int, private_key: Optional[int]) -> List[int]:
+    def sign_tx_hash(
+        cls,
+        tx_hash: int,
+        private_key: Optional[int],
+        tx_type: Optional[TransactionType] = None,
+        additional_data: Optional[List[int]] = None,
+    ) -> List[int]:
         assert private_key is None, "Sigining is not supproted for the TrivialSigner."
         return []
 

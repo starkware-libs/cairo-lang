@@ -161,3 +161,14 @@ def test_segment_relocation_failures():
         memory.add_relocation_rule(
             src_ptr=RelocatableValue(segment_index=-3, offset=0), dest_ptr=relocation_target
         )
+
+    relocation_target = RelocatableValue(segment_index=100, offset=0)
+    src_ptr = RelocatableValue(segment_index=-6, offset=0)
+    memory[src_ptr] = 1
+    memory.add_relocation_rule(src_ptr=src_ptr, dest_ptr=relocation_target)
+    memory[relocation_target] = 2
+    with pytest.raises(
+        InconsistentMemoryError,
+        match=f"Inconsistent memory assignment at address {relocation_target}. 1 != 2.",
+    ):
+        memory.relocate_memory()

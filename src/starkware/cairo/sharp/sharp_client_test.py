@@ -68,7 +68,7 @@ def test_get_fact(monkeypatch: MonkeyPatch):
     )
 
     monkeypatch.setattr(
-        sharp_client, "compute_program_hash_chain", lambda program: f"hash({program})"
+        sharp_client, "compute_program_hash_chain", lambda program, use_poseidon: f"hash({program})"
     )
 
     monkeypatch.setattr(

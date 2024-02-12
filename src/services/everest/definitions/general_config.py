@@ -1,8 +1,8 @@
 import marshmallow_dataclass
 
-from starkware.starkware_utils.config_base import Config
+from services.config.general_config import GeneralConfigBase
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
-class EverestGeneralConfig(Config):
+class EverestGeneralConfig(GeneralConfigBase):
     pass

@@ -1,16 +1,16 @@
 from starkware.cairo.common.alloc import alloc
-from starkware.cairo.common.cairo_builtins import BitwiseBuiltin
-from starkware.cairo.common.math import assert_le, unsigned_div_rem
+from starkware.cairo.common.cairo_builtins import BitwiseBuiltin, PoseidonBuiltin
+from starkware.cairo.common.math import assert_le, split_felt, unsigned_div_rem
 from starkware.cairo.common.pow import pow
 from starkware.cairo.common.usort import usort
-from starkware.cairo.stark_verifier.core.channel import Channel, random_uint256_to_prover
+from starkware.cairo.stark_verifier.core.channel import Channel, random_felt_to_prover
 from starkware.cairo.stark_verifier.core.config import FIELD_GENERATOR, StarkDomains
 from starkware.cairo.stark_verifier.core.utils import bit_reverse_u64
 
 // Samples random queries from the verifier.
-func generate_queries{
-    blake2s_ptr: felt*, bitwise_ptr: BitwiseBuiltin*, channel: Channel, range_check_ptr
-}(n_samples: felt, stark_domains: StarkDomains*) -> (n_queries: felt, queries: felt*) {
+func generate_queries{poseidon_ptr: PoseidonBuiltin*, channel: Channel, range_check_ptr}(
+    n_samples: felt, stark_domains: StarkDomains*
+) -> (n_queries: felt, queries: felt*) {
     alloc_locals;
 
     // Sample query indices from the channel.
@@ -26,27 +26,20 @@ func generate_queries{
     return (n_queries=n_queries, queries=queries);
 }
 
-func sample_random_queries{
-    blake2s_ptr: felt*, bitwise_ptr: BitwiseBuiltin*, channel: Channel, range_check_ptr
-}(n_samples: felt, samples: felt*, query_upper_bound: felt) {
-    // Since samples are generated in quadruplets, we might generate up to 3 extra query indices.
-    // Return if we n_samples is 0, -1, -2 or -3.
-    if (n_samples * (n_samples + 1) * (n_samples + 2) * (n_samples + 3) == 0) {
+func sample_random_queries{poseidon_ptr: PoseidonBuiltin*, channel: Channel, range_check_ptr}(
+    n_samples: felt, samples: felt*, query_upper_bound: felt
+) {
+    if (n_samples == 0) {
         return ();
     }
-    let (res) = random_uint256_to_prover();
-    let (hh, hl) = unsigned_div_rem(res.high, 2 ** 64);
-    let (lh, ll) = unsigned_div_rem(res.low, 2 ** 64);
-    let (_, r0) = unsigned_div_rem(hh, query_upper_bound);
-    let (_, r1) = unsigned_div_rem(hl, query_upper_bound);
-    let (_, r2) = unsigned_div_rem(lh, query_upper_bound);
-    let (_, r3) = unsigned_div_rem(ll, query_upper_bound);
-    assert samples[0] = r0;
-    assert samples[1] = r1;
-    assert samples[2] = r2;
-    assert samples[3] = r3;
+
+    let (rand_felt) = random_felt_to_prover();
+    let (_, low128) = split_felt(rand_felt);
+    let (_, sample) = unsigned_div_rem(low128, query_upper_bound);
+    assert samples[0] = sample;
+
     return sample_random_queries(
-        n_samples=n_samples - 4, samples=&samples[4], query_upper_bound=query_upper_bound
+        n_samples=n_samples - 1, samples=&samples[1], query_upper_bound=query_upper_bound
     );
 }
 

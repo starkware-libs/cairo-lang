@@ -1,4 +1,8 @@
+import dataclasses
+import json
 from enum import Enum
+from pathlib import Path
+from typing import Dict
 
 from starkware.crypto.signature.signature import FIELD_PRIME
 from starkware.python.utils import from_bytes
@@ -16,6 +20,8 @@ FELT_LOWER_BOUND = 0
 FELT_UPPER_BOUND = FIELD_SIZE
 BLOCK_HASH_LOWER_BOUND = 0
 BLOCK_HASH_UPPER_BOUND = FIELD_SIZE
+COMMITMENT_LOWER_BOUND = 0
+COMMITMENT_UPPER_BOUND = FIELD_SIZE
 # Address 0 is reserved to distinguish an external transaction from an inner (L2<>L2) one.
 L2_ADDRESS_LOWER_BOUND = 1
 # The address upper bound is defined to be congruent with the storage var address upper bound (see
@@ -81,7 +87,7 @@ DEPRECATED_OLD_DECLARE_VERSIONS = (
 )
 
 # Sierra -> Casm compilation version.
-SIERRA_VERSION = [1, 4, 0]
+SIERRA_VERSION = [1, 5, 0]
 # Contract classes with sierra version older than MIN_SIERRA_VERSION are not supported.
 MIN_SIERRA_VERSION = [1, 1, 0]
 
@@ -133,13 +139,21 @@ STORED_BLOCK_HASH_BUFFER = 10
 L1_GAS_RESOURCE_NAME_VALUE = from_bytes(b"L1_GAS")
 L2_GAS_RESOURCE_NAME_VALUE = from_bytes(b"L2_GAS")
 
+# Flooring factor for block number in validate mode.
+VALIDATE_BLOCK_NUMBER_ROUNDING = 100
+# Flooring factor for timestamp in validate mode.
+VALIDATE_TIMESTAMP_ROUNDING = 3600
+
 
 class OsOutputConstant(Enum):
     MERKLE_UPDATE_OFFSET = 0
     BLOCK_NUMBER_OFFSET = 2
     BLOCK_HASH_OFFSET = 3
     CONFIG_HASH_OFFSET = 4
-    HEADER_SIZE = 5
+    USE_KZG_DA_OFFSET = 5
+    HEADER_SIZE = 6
+    # Two Uint256 and one felt.
+    KZG_SEGMENT_SIZE = 5
 
 
 class GasCost(Enum):
@@ -170,14 +184,14 @@ class GasCost(Enum):
     SECP256K1_ADD = 406 * STEP + 29 * RANGE_CHECK
     SECP256K1_GET_POINT_FROM_X = 391 * STEP + 30 * RANGE_CHECK + 20 * MEMORY_HOLE
     SECP256K1_GET_XY = 239 * STEP + 11 * RANGE_CHECK + 40 * MEMORY_HOLE
-    SECP256K1_MUL = 76401 * STEP + 7045 * RANGE_CHECK
+    SECP256K1_MUL = 76501 * STEP + 7045 * RANGE_CHECK + 2 * MEMORY_HOLE
     SECP256K1_NEW = 475 * STEP + 35 * RANGE_CHECK + 40 * MEMORY_HOLE
 
     # Secp256r1.
     SECP256R1_ADD = 589 * STEP + 57 * RANGE_CHECK
     SECP256R1_GET_POINT_FROM_X = 510 * STEP + 44 * RANGE_CHECK + 20 * MEMORY_HOLE
     SECP256R1_GET_XY = 241 * STEP + 11 * RANGE_CHECK + 40 * MEMORY_HOLE
-    SECP256R1_MUL = 125240 * STEP + 13961 * RANGE_CHECK
+    SECP256R1_MUL = 125340 * STEP + 13961 * RANGE_CHECK + 2 * MEMORY_HOLE
     SECP256R1_NEW = 594 * STEP + 49 * RANGE_CHECK + 40 * MEMORY_HOLE
 
     KECCAK = SYSCALL_BASE
@@ -193,3 +207,40 @@ class GasCost(Enum):
     def int_value(self) -> int:
         assert isinstance(self.value, int)
         return self.value
+
+
+@dataclasses.dataclass(frozen=True)
+class ThinVersionedConstants:
+    VERSIONED_CONSTANTS_FILE_NAME = "versioned_constants.json"
+    VERSIONED_CONSTANTS_PATH = Path(__file__).parent / VERSIONED_CONSTANTS_FILE_NAME
+
+    # General config.
+    invoke_tx_max_n_steps: int
+    validate_max_n_steps: int
+
+    # State manager config.
+    max_recursion_depth: int
+
+    # Gateway config.
+    max_calldata_length: int
+    max_contract_bytecode_size: int
+
+    cairo_resource_fee_weights: Dict[str, float]
+
+    @classmethod
+    def create(cls):
+        versioned_constants_json = json.load(cls.VERSIONED_CONSTANTS_PATH.open())
+
+        return ThinVersionedConstants(
+            invoke_tx_max_n_steps=versioned_constants_json["invoke_tx_max_n_steps"],
+            validate_max_n_steps=versioned_constants_json["validate_max_n_steps"],
+            max_recursion_depth=versioned_constants_json["max_recursion_depth"],
+            max_calldata_length=versioned_constants_json["gateway"]["max_calldata_length"],
+            max_contract_bytecode_size=versioned_constants_json["gateway"][
+                "max_contract_bytecode_size"
+            ],
+            cairo_resource_fee_weights=versioned_constants_json["vm_resource_fee_cost"],
+        )
+
+
+VERSIONED_CONSTANTS = ThinVersionedConstants.create()

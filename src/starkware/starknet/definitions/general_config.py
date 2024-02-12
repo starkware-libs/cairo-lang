@@ -7,27 +7,16 @@ import marshmallow.fields as mfields
 import marshmallow_dataclass
 
 from services.everest.definitions.general_config import EverestGeneralConfig
-from starkware.cairo.lang.builtins.all_builtins import (
-    ALL_BUILTINS,
-    BITWISE_BUILTIN,
-    EC_OP_BUILTIN,
-    ECDSA_BUILTIN,
-    KECCAK_BUILTIN,
-    OUTPUT_BUILTIN,
-    PEDERSEN_BUILTIN,
-    POSEIDON_BUILTIN,
-    RANGE_CHECK_BUILTIN,
-    with_suffix,
-)
+from starkware.cairo.lang.builtins.all_builtins import ALL_BUILTINS, OUTPUT_BUILTIN, with_suffix
 from starkware.cairo.lang.instances import starknet_instance, starknet_with_keccak_instance
 from starkware.python.utils import from_bytes
-from starkware.starknet.definitions import constants, fields
+from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.chain_ids import StarknetChainId
+from starkware.starknet.definitions.constants import VERSIONED_CONSTANTS
 from starkware.starkware_utils.config_base import Config, load_config
 from starkware.starkware_utils.field_validators import validate_dict, validate_non_negative
 from starkware.starkware_utils.marshmallow_dataclass_fields import (
     RequiredBoolean,
-    StrictRequiredInteger,
     additional_metadata,
     load_int_value,
 )
@@ -36,6 +25,9 @@ GENERAL_CONFIG_FILE_NAME = "general_config.yml"
 DOCKER_GENERAL_CONFIG_PATH = os.path.join("/", GENERAL_CONFIG_FILE_NAME)
 GENERAL_CONFIG_PATH = os.path.join(os.path.dirname(__file__), GENERAL_CONFIG_FILE_NAME)
 N_STEPS_RESOURCE = "n_steps"
+N_STEPS_WITH_KECCAK_RESOURCE = "n_steps_with_keccak"
+STATE_DIFF_SIZE_WEIGHT_NAME = "state_diff_size"
+STATE_DIFF_SIZE_WITH_KZG_WEIGHT_NAME = "state_diff_size_with_kzg"
 STARKNET_LAYOUT_INSTANCE_WITHOUT_KECCAK = starknet_instance
 STARKNET_LAYOUT_INSTANCE = starknet_with_keccak_instance
 
@@ -55,8 +47,6 @@ STRK_TOKEN_SALT = 1
 
 # Default configuration values.
 
-DEFAULT_VALIDATE_MAX_STEPS = 10**6
-DEFAULT_TX_MAX_STEPS = 3 * 10**6
 DEFAULT_CHAIN_ID = StarknetChainId.TESTNET.value
 DEFAULT_DEPRECATED_FEE_TOKEN_ADDRESS = load_int_value(
     field_metadata=fields.fee_token_address_metadata,
@@ -71,24 +61,17 @@ DEFAULT_SEQUENCER_ADDRESS = load_int_value(
     value=default_general_config["sequencer_address"],
 )
 DEFAULT_ENFORCE_L1_FEE = True
+DEFAULT_USE_KZG_DA = False
 
 # Given in units of wei.
 DEFAULT_DEPRECATED_L1_GAS_PRICE = 10**11
-DEFAULT_CAIRO_RESOURCE_FEE_WEIGHTS = {
-    N_STEPS_RESOURCE: 0.005,
-    **{builtin: 0.0 for builtin in ALL_BUILTINS.with_suffix()},
-    with_suffix(PEDERSEN_BUILTIN): 0.16,
-    with_suffix(RANGE_CHECK_BUILTIN): 0.08,
-    with_suffix(ECDSA_BUILTIN): 10.24,
-    with_suffix(KECCAK_BUILTIN): 10.24,
-    with_suffix(BITWISE_BUILTIN): 0.32,
-    with_suffix(EC_OP_BUILTIN): 5.12,
-    with_suffix(POSEIDON_BUILTIN): 0.16,
-}
+DEFAULT_DEPRECATED_L1_DATA_GAS_PRICE = 10**5
 
-DEFAULT_ETH_IN_STRK_WEI = 10**21
-DEFAULT_MIN_STRK_L1_GAS_PRICE = 10**6
-DEFAULT_MAX_STRK_L1_GAS_PRICE = 10**18
+DEFAULT_ETH_IN_FRI = 10**21
+DEFAULT_MIN_FRI_L1_GAS_PRICE = 10**6
+DEFAULT_MAX_FRI_L1_GAS_PRICE = 10**18
+DEFAULT_MIN_FRI_L1_DATA_GAS_PRICE = 10**5
+DEFAULT_MAX_FRI_L1_DATA_GAS_PRICE = 10**10
 
 
 # Configuration schema definition.
@@ -114,47 +97,53 @@ class StarknetOsConfig(Config):
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
-class StarknetGeneralConfig(EverestGeneralConfig):
-    starknet_os_config: StarknetOsConfig = field(default_factory=StarknetOsConfig)
-
-    contract_storage_commitment_tree_height: int = field(
-        metadata=fields.contract_storage_commitment_tree_height_metadata,
-        default=constants.CONTRACT_STATES_COMMITMENT_TREE_HEIGHT,
-    )
-
-    compiled_class_hash_commitment_tree_height: int = field(
-        metadata=fields.compiled_class_hash_commitment_tree_height_metadata,
-        default=constants.COMPILED_CLASS_HASH_COMMITMENT_TREE_HEIGHT,
-    )
-
-    global_state_commitment_tree_height: int = field(
-        metadata=fields.global_state_commitment_tree_height_metadata,
-        default=constants.CONTRACT_ADDRESS_BITS,
-    )
-
-    invoke_tx_max_n_steps: int = field(
-        metadata=fields.invoke_tx_n_steps_metadata, default=DEFAULT_TX_MAX_STEPS
-    )
-
-    validate_max_n_steps: int = field(
-        metadata=fields.validate_n_steps_metadata, default=DEFAULT_VALIDATE_MAX_STEPS
-    )
-
-    min_eth_l1_gas_price: int = field(
+class GasPriceBounds:
+    min_wei_l1_gas_price: int = field(
         metadata=fields.gas_price, default=DEFAULT_DEPRECATED_L1_GAS_PRICE
     )
 
-    min_strk_l1_gas_price: int = field(
-        metadata=fields.gas_price, default=DEFAULT_MIN_STRK_L1_GAS_PRICE
+    min_fri_l1_gas_price: int = field(
+        metadata=fields.gas_price, default=DEFAULT_MIN_FRI_L1_GAS_PRICE
     )
 
-    max_strk_l1_gas_price: int = field(
-        metadata=fields.gas_price, default=DEFAULT_MAX_STRK_L1_GAS_PRICE
+    max_fri_l1_gas_price: int = field(
+        metadata=fields.gas_price, default=DEFAULT_MAX_FRI_L1_GAS_PRICE
+    )
+
+    min_wei_l1_data_gas_price: int = field(
+        metadata=fields.gas_price, default=DEFAULT_DEPRECATED_L1_DATA_GAS_PRICE
+    )
+
+    min_fri_l1_data_gas_price: int = field(
+        metadata=fields.gas_price, default=DEFAULT_MIN_FRI_L1_DATA_GAS_PRICE
+    )
+
+    max_fri_l1_data_gas_price: int = field(
+        metadata=fields.gas_price, default=DEFAULT_MAX_FRI_L1_DATA_GAS_PRICE
+    )
+
+
+@marshmallow_dataclass.dataclass(frozen=True)
+class StarknetGeneralConfig(EverestGeneralConfig):
+    starknet_os_config: StarknetOsConfig = field(default_factory=StarknetOsConfig)
+
+    gas_price_bounds: GasPriceBounds = field(default_factory=GasPriceBounds)
+
+    invoke_tx_max_n_steps: int = field(
+        metadata=fields.invoke_tx_n_steps_metadata,
+        default=VERSIONED_CONSTANTS.invoke_tx_max_n_steps,
+    )
+
+    # IMPORTANT: when editing this in production, make sure to only decrease the value.
+    # Increasing it in production may cause issue to nodes during execution, so only increase it
+    # during a new release.
+    validate_max_n_steps: int = field(
+        metadata=fields.validate_n_steps_metadata, default=VERSIONED_CONSTANTS.validate_max_n_steps
     )
 
     # The default price of one ETH (10**18 Wei) in STRK units. Used in case of oracle failure.
-    default_eth_price_in_strk_wei: int = field(
-        metadata=fields.eth_price_in_strk_wei, default=DEFAULT_ETH_IN_STRK_WEI
+    default_eth_price_in_fri: int = field(
+        metadata=fields.eth_price_in_fri, default=DEFAULT_ETH_IN_FRI
     )
 
     constant_gas_price: bool = field(
@@ -175,26 +164,6 @@ class StarknetGeneralConfig(EverestGeneralConfig):
         default=DEFAULT_SEQUENCER_ADDRESS,
     )
 
-    tx_commitment_tree_height: int = field(
-        metadata=additional_metadata(
-            marshmallow_field=StrictRequiredInteger(
-                validate=validate_non_negative("Transaction commitment tree height"),
-            ),
-            description="Height of Patricia tree of the transaction commitment in a block.",
-        ),
-        default=constants.TRANSACTION_COMMITMENT_TREE_HEIGHT,
-    )
-
-    event_commitment_tree_height: int = field(
-        metadata=additional_metadata(
-            marshmallow_field=StrictRequiredInteger(
-                validate=validate_non_negative("Event commitment tree height"),
-            ),
-            description="Height of Patricia tree of the event commitment in a block.",
-        ),
-        default=constants.EVENT_COMMITMENT_TREE_HEIGHT,
-    )
-
     cairo_resource_fee_weights: Dict[str, float] = field(
         metadata=additional_metadata(
             marshmallow_field=mfields.Dict(
@@ -209,7 +178,7 @@ class StarknetGeneralConfig(EverestGeneralConfig):
                 "fee calculation."
             ),
         ),
-        default_factory=lambda: DEFAULT_CAIRO_RESOURCE_FEE_WEIGHTS.copy(),
+        default_factory=lambda: VERSIONED_CONSTANTS.cairo_resource_fee_weights,
     )
 
     enforce_l1_handler_fee: bool = field(
@@ -217,6 +186,14 @@ class StarknetGeneralConfig(EverestGeneralConfig):
             marshmallow_field=RequiredBoolean(), description="Enabler for L1 fee enforcement."
         ),
         default=DEFAULT_ENFORCE_L1_FEE,
+    )
+
+    use_kzg_da: bool = field(
+        metadata=additional_metadata(
+            marshmallow_field=RequiredBoolean(),
+            description="Enabler for using KZG commitment scheme in created blocks.",
+        ),
+        default=DEFAULT_USE_KZG_DA,
     )
 
     @property
@@ -230,6 +207,30 @@ class StarknetGeneralConfig(EverestGeneralConfig):
     @property
     def fee_token_address(self) -> int:
         return self.starknet_os_config.fee_token_address
+
+    @property
+    def min_wei_l1_gas_price(self) -> int:
+        return self.gas_price_bounds.min_wei_l1_gas_price
+
+    @property
+    def min_fri_l1_gas_price(self) -> int:
+        return self.gas_price_bounds.min_fri_l1_gas_price
+
+    @property
+    def max_fri_l1_gas_price(self) -> int:
+        return self.gas_price_bounds.max_fri_l1_gas_price
+
+    @property
+    def min_wei_l1_data_gas_price(self) -> int:
+        return self.gas_price_bounds.min_wei_l1_data_gas_price
+
+    @property
+    def min_fri_l1_data_gas_price(self) -> int:
+        return self.gas_price_bounds.min_fri_l1_data_gas_price
+
+    @property
+    def max_fri_l1_data_gas_price(self) -> int:
+        return self.gas_price_bounds.max_fri_l1_data_gas_price
 
 
 def build_general_config(raw_general_config: Dict[str, Any]) -> StarknetGeneralConfig:

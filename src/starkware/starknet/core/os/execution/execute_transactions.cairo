@@ -63,7 +63,7 @@ from starkware.starknet.core.os.output import (
     OsCarriedOutputs,
     os_carried_outputs_new,
 )
-from starkware.starknet.core.os.state import StateEntry
+from starkware.starknet.core.os.state.commitment import StateEntry
 from starkware.starknet.core.os.transaction_hash.transaction_hash import (
     CommonTxFields,
     compute_declare_transaction_hash,
@@ -197,7 +197,6 @@ func execute_transactions_inner{
     contract_class_changes: DictAccess*,
     outputs: OsCarriedOutputs*,
 }(block_context: BlockContext*, n_txs) {
-    %{ print(f"execute_transactions_inner: {ids.n_txs} transactions remaining.") %}
     if (n_txs == 0) {
         return ();
     }
@@ -213,6 +212,19 @@ func execute_transactions_inner{
 
         tx_type_bytes = tx.tx_type.name.encode("ascii")
         ids.tx_type = int.from_bytes(tx_type_bytes, "big")
+        execution_helper.os_logger.enter_tx(
+            tx=tx,
+            n_steps=current_step,
+            builtin_ptrs=ids.builtin_ptrs,
+            range_check_ptr=ids.range_check_ptr,
+        )
+
+        # Prepare a short callable to save code duplication.
+        exit_tx = lambda: execution_helper.os_logger.exit_tx(
+            n_steps=current_step,
+            builtin_ptrs=ids.builtin_ptrs,
+            range_check_ptr=ids.range_check_ptr,
+        )
     %}
 
     let remaining_gas = INITIAL_GAS_COST - TRANSACTION_GAS_COST;
@@ -220,22 +232,26 @@ func execute_transactions_inner{
         if (tx_type == 'INVOKE_FUNCTION') {
             // Handle the invoke-function transaction.
             execute_invoke_function_transaction(block_context=block_context);
+            %{ exit_tx() %}
             return execute_transactions_inner(block_context=block_context, n_txs=n_txs - 1);
         }
         if (tx_type == 'L1_HANDLER') {
             // Handle the L1-handler transaction.
             execute_l1_handler_transaction(block_context=block_context);
+            %{ exit_tx() %}
             return execute_transactions_inner(block_context=block_context, n_txs=n_txs - 1);
         }
         if (tx_type == 'DEPLOY_ACCOUNT') {
             // Handle the deploy-account transaction.
             execute_deploy_account_transaction(block_context=block_context);
+            %{ exit_tx() %}
             return execute_transactions_inner(block_context=block_context, n_txs=n_txs - 1);
         }
 
         assert tx_type = 'DECLARE';
         // Handle the declare transaction.
         execute_declare_transaction(block_context=block_context);
+        %{ exit_tx() %}
         return execute_transactions_inner(block_context=block_context, n_txs=n_txs - 1);
     }
 }
@@ -303,13 +319,15 @@ func charge_fee{
         key=fee_token_address
     );
     let (__fp__, _) = get_fp_and_pc();
+    // Use block_info directly from block_context, so that charge_fee will always run in
+    // execute-mode rather than validate-mode.
     local execution_context: ExecutionContext = ExecutionContext(
         entry_point_type=ENTRY_POINT_TYPE_EXTERNAL,
         class_hash=fee_state_entry.class_hash,
         calldata_size=TransferCallData.SIZE,
         calldata=&calldata,
         execution_info=new ExecutionInfo(
-            block_info=execution_info.block_info,
+            block_info=block_context.block_info,
             tx_info=tx_info,
             caller_address=tx_info.account_contract_address,
             contract_address=fee_token_address,
@@ -456,7 +474,7 @@ func execute_invoke_function_transaction{
             block_context=block_context, execution_context=updated_tx_execution_context
         );
     } else {
-        // Align the stack with the if branch to avoid revoked references.
+        // Align the stack with the `if` branch to avoid revoked references.
         tempvar range_check_ptr = range_check_ptr;
         tempvar remaining_gas = remaining_gas;
         tempvar builtin_ptrs = builtin_ptrs;
@@ -467,6 +485,7 @@ func execute_invoke_function_transaction{
     }
     local remaining_gas = remaining_gas;
 
+    // Charge fee.
     charge_fee(block_context=block_context, tx_execution_context=updated_tx_execution_context);
 
     %{ execution_helper.end_tx() %}
@@ -951,6 +970,8 @@ func execute_deploy_account_transaction{
         assert retdata_size = 1;
         assert retdata[0] = VALIDATED;
     }
+
+    // Charge fee.
     charge_fee(block_context=block_context, tx_execution_context=validate_deploy_execution_context);
 
     %{ execution_helper.end_tx() %}
@@ -1131,6 +1152,8 @@ func execute_declare_transaction{
         assert retdata_size = 1;
         assert retdata[0] = VALIDATED;
     }
+
+    // Charge fee.
     charge_fee(
         block_context=block_context, tx_execution_context=validate_declare_execution_context
     );

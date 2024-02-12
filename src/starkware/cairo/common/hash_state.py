@@ -13,3 +13,11 @@ def compute_hash_on_elements(data, hash_func=pedersen_hash):
     H([x,y,z]) = h(h(x,y),z) = H([w, z]) where w = h(x,y).
     """
     return functools.reduce(lambda x, y: hash_func(x, y), [*data, len(data)], 0)
+
+
+def compute_hash_on_elements_without_length(data, hash_func=pedersen_hash):
+    """
+    Similar to `compute_hash_on_elements` but without appending the length.
+    May be used for hashing a prefix of a hash chain.
+    """
+    return functools.reduce(lambda x, y: hash_func(x, y), data, 0)

@@ -48,13 +48,15 @@ def _sol_contract_impl(ctx):
             inputs = srcs_list + ctx.files.solc_exe,
             outputs = [combined_json],
         )
-    else:  # solc-0.8.16
+    else:  # solc-0.8.x
         ctx.actions.run(
             executable = ctx.executable.solc_exe,
             arguments = [
                 "--optimize",
                 "--optimize-runs",
                 str(ctx.attr.optimize_runs),
+                "--evm-version",
+                ctx.attr.evm_version,
                 "--combined-json",
                 "abi,bin",
                 "--base-path",
@@ -97,6 +99,7 @@ sol_contract = rule(
         "deps": attr.label_list(),
         "contracts": attr.string_list(mandatory = True, allow_empty = False),
         "optimize_runs": attr.int(default = 200),
+        "evm_version": attr.string(default = "london"),
         "include_path": attr.string(default = "src"),
         "solc_exe": attr.label(
             default = Label("//bazel_utils:solc-0.6.12"),

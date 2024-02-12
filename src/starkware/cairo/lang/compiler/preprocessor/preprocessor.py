@@ -1866,10 +1866,12 @@ Consider separating the function call and the return statement.""",
         # Visit call_elm to advance pc.
         self.visit(call_elm)
 
+        cairo_type = self.resolve_type(expr_type)
+
         if self.auxiliary_info is not None:
             self.auxiliary_info.add_func_ret_vars([elm.typed_identifier.name])
+            self.auxiliary_info.add_func_ret_types([cairo_type])
 
-        cairo_type = self.resolve_type(expr_type)
         struct_size = self.get_size(cairo_type)
         self.add_simple_reference(
             name=self.current_scope + elm.typed_identifier.identifier.name,
@@ -1973,6 +1975,9 @@ Expected {expected_len} unpacking identifier{suffix}, found {len(unpacking_ident
                 cairo_type = self.resolve_type(typed_identifier.get_type())
             else:
                 cairo_type = member.typ
+
+            if self.auxiliary_info is not None:
+                self.auxiliary_info.add_func_ret_types([cairo_type])
 
             if not check_cast(
                 src_type=member.typ,
@@ -2087,13 +2092,19 @@ Expected expression of type '{member.typ.format()}', got '{cairo_type.format()}'
         for label, change in flows.jumps.items():
             self.flow_tracking.add_flow_to_label(label, change + added_ap)
 
+        if self.auxiliary_info is not None:
+            self.auxiliary_info.set_flow_tracking_after_instr()
+
         # Add flow to next instruction if needed.
         if flows.next_inst is not None:
             # There is a flow to the next instruction. Add ap change.
             self.flow_tracking.add_ap(flows.next_inst + added_ap)
+            if self.auxiliary_info is not None:
+                self.auxiliary_info.set_flow_tracking_after_instr()
         else:
             # There is no flow to the next instruction. Revoke.
             self.flow_tracking.revoke()
+
         return res
 
     def visit_AssertEqInstruction(self, instruction: AssertEqInstruction):
@@ -2125,9 +2136,6 @@ Expected expression of type '{member.typ.format()}', got '{cairo_type.format()}'
         res_instruction: InstructionBody
         if label_pc is None:
             condition = instruction.condition
-            if condition is not None:
-                condition = self.simplify_expr_as_felt(condition)
-            res_instruction = dataclasses.replace(instruction, condition=condition)
             if self.auxiliary_info is not None:
                 self.auxiliary_info.record_jump_to_labeled_instruction(
                     label_name=label_full_name,
@@ -2135,6 +2143,9 @@ Expected expression of type '{member.typ.format()}', got '{cairo_type.format()}'
                     current_pc=self.current_pc,
                     pc_dest=None,
                 )
+            if condition is not None:
+                condition = self.simplify_expr_as_felt(condition)
+            res_instruction = dataclasses.replace(instruction, condition=condition)
         else:
             jump_offset = ExprConst(
                 val=label_pc - self.current_pc, location=instruction.label.location
@@ -2154,9 +2165,7 @@ Expected expression of type '{member.typ.format()}', got '{cairo_type.format()}'
             if self.auxiliary_info is not None:
                 self.auxiliary_info.record_jump_to_labeled_instruction(
                     label_name=label_full_name,
-                    condition=self.simplify_expr_as_felt(instruction.condition)
-                    if instruction.condition is not None
-                    else None,
+                    condition=instruction.condition,
                     current_pc=self.current_pc,
                     pc_dest=label_pc,
                 )

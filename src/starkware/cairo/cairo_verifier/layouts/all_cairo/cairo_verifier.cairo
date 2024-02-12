@@ -2,8 +2,8 @@
 
 from starkware.cairo.cairo_verifier.objects import CairoVerifierOutput
 from starkware.cairo.common.alloc import alloc
+from starkware.cairo.common.builtin_poseidon.poseidon import poseidon_hash_many
 from starkware.cairo.common.cairo_builtins import BitwiseBuiltin, HashBuiltin, PoseidonBuiltin
-from starkware.cairo.common.hash_state import hash_felts
 from starkware.cairo.common.math import assert_nn_le
 from starkware.cairo.common.registers import get_label_location
 from starkware.cairo.stark_verifier.air.layouts.all_cairo.public_verify import (
@@ -25,7 +25,7 @@ const INITIAL_PC = 1;
 // See verify_stack() for more detail.
 func get_program_builtins() -> (n_builtins: felt, builtins: felt*) {
     let (builtins_address) = get_label_location(data);
-    let n_builtins = 8;
+    let n_builtins = 9;
     assert builtins_address[n_builtins] = 0;
     return (n_builtins=n_builtins, builtins=builtins_address);
 
@@ -38,6 +38,7 @@ func get_program_builtins() -> (n_builtins: felt, builtins: felt*) {
     dw 'ec_op';
     dw 'keccak';
     dw 'poseidon';
+    dw 'range_check96';
     dw 0;
 }
 
@@ -101,7 +102,7 @@ func _verify_public_input{
         assert program[4] = 0x10780017fff7fff;  // Instruction: jmp rel 0.
         assert program[5] = 0x0;
         // Program hash.
-        let (program_hash) = hash_felts{hash_ptr=pedersen_ptr}(data=program, length=program_len);
+        let (program_hash: felt) = poseidon_hash_many(n=program_len, elements=program);
 
         // 2. Execution segment.
         // 2.1. initial_fp, initial_pc.
@@ -130,7 +131,7 @@ func _verify_public_input{
         let (output: felt*) = alloc();
         local output_len = output_stop - output_start;
         extract_range(addr=output_start, length=output_len, output=output);
-        let (output_hash) = hash_felts{hash_ptr=pedersen_ptr}(data=output, length=output_len);
+        let (output_hash: felt) = poseidon_hash_many(n=output_len, elements=output);
     }
 
     // Make sure main_page_len is correct.

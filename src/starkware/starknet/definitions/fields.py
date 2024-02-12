@@ -7,7 +7,6 @@ import marshmallow
 import marshmallow.fields as mfields
 import marshmallow.utils
 import marshmallow_dataclass
-from frozendict import frozendict
 
 from services.everest.definitions import fields as everest_fields
 from starkware.cairo.lang.tracer.tracer_data import field_element_repr
@@ -16,6 +15,7 @@ from starkware.starknet.definitions import constants
 from starkware.starknet.definitions.data_availability_mode import DataAvailabilityMode
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.execution_mode import ExecutionMode
+from starkware.starknet.definitions.l1_da_mode import L1DaMode
 from starkware.starknet.definitions.transaction_type import TransactionType
 from starkware.starkware_utils.field_validators import (
     validate_equal,
@@ -30,7 +30,6 @@ from starkware.starkware_utils.marshmallow_dataclass_fields import (
     FrozenDictField,
     StrictRequiredInteger,
     VariadicLengthTupleField,
-    enum_field_metadata,
 )
 from starkware.starkware_utils.marshmallow_fields_metadata import sequential_id_metadata
 from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
@@ -40,10 +39,6 @@ from starkware.starkware_utils.validated_fields import OptionalField, RangeValid
 
 
 # Common.
-
-felt_as_hex_list_metadata = dict(
-    marshmallow_field=mfields.List(everest_fields.FeltField.get_marshmallow_field())
-)
 
 
 def create_felt_as_hex_bounded_list_metadata(
@@ -112,7 +107,7 @@ calldata_metadata = felt_as_hex_or_str_bounded_list_metadata
 deprecated_signature_metadata = felt_as_hex_or_str_bounded_list_metadata
 signature_metadata = felt_as_hex_bounded_list_metadata
 calldata_as_hex_metadata = felt_as_hex_bounded_list_metadata
-retdata_as_hex_metadata = felt_as_hex_list_metadata
+retdata_as_hex_metadata = everest_fields.felt_as_hex_list_metadata
 
 
 # Address.
@@ -147,6 +142,8 @@ optional_sequencer_address_metadata = OptionalSequencerAddressField.metadata()
 starknet_version_metadata = dict(
     marshmallow_field=mfields.String(required=False, load_default=None)
 )
+
+use_kzg_da_metadata = dict(marshmallow_field=mfields.Boolean(required=False, load_default=False))
 
 caller_address_metadata = address_metadata(
     name="Caller address", error_code=StarknetErrorCode.OUT_OF_RANGE_CALLER_ADDRESS
@@ -197,13 +194,25 @@ block_hash_metadata = BlockHashField.metadata()
 OptionalBlockHashField = OptionalField(field=BlockHashField, none_probability=0)
 optional_block_hash_metadata = OptionalBlockHashField.metadata()
 
+CommitmentField = RangeValidatedField(
+    lower_bound=constants.COMMITMENT_LOWER_BOUND,
+    upper_bound=constants.COMMITMENT_UPPER_BOUND,
+    name="Commitment",
+    error_code=StarknetErrorCode.OUT_OF_RANGE_BLOCK_HASH,
+    formatter=hex,
+)
+commitment_metadata = CommitmentField.metadata()
+
+OptionalCommitmentField = OptionalField(field=CommitmentField, none_probability=0)
+optional_commitment_metadata = OptionalCommitmentField.metadata()
+
 default_optional_transaction_index_metadata = sequential_id_metadata(
     field_name="Transaction index", required=False, load_default=None
 )
 
 # L1Handler.
 
-payload_metadata = felt_as_hex_list_metadata
+payload_metadata = everest_fields.felt_as_hex_list_metadata
 
 # Used in the CallL1Handler, to solve compatibility bug.
 FromAddressEthAddressField = BackwardCompatibleIntAsHex(
@@ -328,6 +337,38 @@ compiled_class_hash_metadata = CompiledClassHashField.metadata()
 OptionalCompiledClassHashField = OptionalField(field=CompiledClassHashField, none_probability=0)
 optional_compiled_class_hash_metadata = OptionalCompiledClassHashField.metadata()
 
+sierra_program_size_metadata = dict(
+    marshmallow_field=mfields.Integer(required=False, load_default=0)
+)
+abi_size_metadata = dict(marshmallow_field=mfields.Integer(required=False, load_default=0))
+
+
+class NestedIntListField(mfields.Field):
+    """
+    Represents a nested list of integers.
+    E.g., [0, [1, 2], [3, [4]]].
+    """
+
+    default_error_messages = {
+        "invalid": "Expected an integer in NestedIntList field. Found {input_type}.",
+    }
+
+    def _serialize(self, value, attr, obj, **kwargs):
+        return value
+
+    def _deserialize(self, value, attr, data, **kwargs):
+        # Recursively validate the nested list.
+        def validate(inner_value):
+            if isinstance(inner_value, list):
+                for item in inner_value:
+                    validate(item)
+            elif not isinstance(inner_value, int):
+                raise self.make_error("invalid", input_type=type(inner_value).__name__)
+
+        validate(inner_value=value)
+        return value
+
+
 # Entry point.
 
 EntryPointSelectorField = RangeValidatedField(
@@ -381,12 +422,7 @@ TipField = RangeValidatedField(
     error_code=StarknetErrorCode.OUT_OF_RANGE_TIP,
     formatter=hex,
 )
-tip_metadata = dict(
-    marshmallow_field=TipField.get_marshmallow_field(),
-    validate=validate_equal("Tip", allowed_value=0),
-    required=True,
-)
-
+tip_metadata = TipField.metadata(required=True)
 
 MaxAmountField = RangeValidatedField(
     lower_bound=constants.MAX_AMOUNT_LOWER_BOUND,
@@ -424,12 +460,22 @@ ResourceBoundsMapping = Mapping[Resource, ResourceBounds]
 
 
 def validate_resource_bounds(resource_bounds: ResourceBoundsMapping) -> bool:
+    error_message_wrong_keys = (
+        "Invalid resource bounds keys; Input's keys: {input}; Input keys must be {resources_set}."
+    )
+    error_message_wrong_bounds = (
+        "Invalid resource bounds; Resource.L2_GAS input: {input}; L2_GAS values must be 0."
+    )
     if resource_bounds.keys() != set(Resource):
-        return False
+        raise marshmallow.ValidationError(
+            error_message_wrong_keys.format(
+                input=list(resource_bounds.keys()), resources_set=list(set(Resource))
+            )
+        )
 
     l2_gas_bounds = resource_bounds[Resource.L2_GAS]
     if not (l2_gas_bounds.max_amount == l2_gas_bounds.max_price_per_unit == 0):
-        return False
+        raise marshmallow.ValidationError(error_message_wrong_bounds.format(input=l2_gas_bounds))
 
     return True
 
@@ -440,15 +486,6 @@ resource_bounds_mapping_metadata = dict(
         values=mfields.Nested(ResourceBounds.Schema),
         validate=validate_resource_bounds,
     )
-)
-
-resource_bounds_frozen_dict_metadata: frozendict = frozendict(
-    marshmallow_field=FrozenDictField(
-        keys=enum_field_metadata(enum_class=Resource)["marshmallow_field"],
-        values=mfields.Nested(ResourceBounds.Schema),
-    ),
-    validate=validate_resource_bounds,
-    description="resource bounds.",
 )
 
 account_deployment_data_metadata = felt_as_hex_bounded_list_metadata_empty_list
@@ -495,6 +532,17 @@ optional_state_diff_hash_metadata = dict(
     marshmallow_field=BytesAsHex(required=False, load_default=None)
 )
 
+# L1 da mode.
+
+L1DaModeEnumField = EnumField(
+    enum_cls=L1DaMode,
+    required=False,
+    load_default=L1DaMode.CALLDATA,
+    allow_none=False,
+)
+
+l1_da_mode_enum_metadata = dict(marshmallow_field=L1DaModeEnumField)
+
 
 # Declared contracts.
 
@@ -521,24 +569,6 @@ transaction_hash_metadata = TransactionHashField.metadata()
 
 # General config.
 
-contract_storage_commitment_tree_height_metadata = dict(
-    marshmallow_field=StrictRequiredInteger(
-        validate=validate_positive("contract_storage_commitment_tree_height")
-    )
-)
-
-compiled_class_hash_commitment_tree_height_metadata = dict(
-    marshmallow_field=StrictRequiredInteger(
-        validate=validate_positive("compiled_class_hash_commitment_tree_height")
-    )
-)
-
-global_state_commitment_tree_height_metadata = dict(
-    marshmallow_field=StrictRequiredInteger(
-        validate=validate_non_negative("global_state_commitment_tree_height"),
-    )
-)
-
 invoke_tx_n_steps_metadata = dict(
     marshmallow_field=StrictRequiredInteger(validate=validate_non_negative("invoke_tx_n_steps"))
 )
@@ -551,10 +581,9 @@ gas_price = dict(
     marshmallow_field=StrictRequiredInteger(validate=validate_non_negative("gas_price"))
 )
 
-eth_price_in_strk_wei = dict(
-    marshmallow_field=StrictRequiredInteger(validate=validate_positive("eth_price_in_strk_wei"))
+eth_price_in_fri = dict(
+    marshmallow_field=StrictRequiredInteger(validate=validate_positive("eth_price_in_fri"))
 )
-
 
 # ExecutionInfo.
 
@@ -579,6 +608,7 @@ revert_error_metadata = dict(
 
 # CallInfo.
 
+felt_metadata = everest_fields.FeltField.metadata()
 failure_flag_metadata = everest_fields.FeltField.metadata(
     field_name="failure_flag", required=False, load_default=0
 )
@@ -619,9 +649,12 @@ DataAvailabilityModeField = RangeValidatedField(
     formatter=None,
 )
 data_availability_mode_metadata = dict(
-    marshmallow_field=DataAvailabilityModeField.get_marshmallow_field(),
-    validate=validate_equal("Data availability mode", allowed_value=DataAvailabilityMode.L1.value),
-    required=True,
+    marshmallow_field=DataAvailabilityModeField.get_marshmallow_field(
+        validate=validate_equal(
+            "Data availability mode", allowed_value=DataAvailabilityMode.L1.value
+        ),
+        required=True,
+    ),
 )
 
 # State Diff.

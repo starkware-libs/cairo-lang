@@ -7,9 +7,9 @@ from starkware.python.math_utils import safe_div
 
 
 class RangeCheckBuiltinRunner(SimpleBuiltinRunner):
-    def __init__(self, included: bool, ratio, inner_rc_bound, n_parts):
+    def __init__(self, name: str, included: bool, ratio, inner_rc_bound, n_parts):
         super().__init__(
-            name="range_check",
+            name=name,
             included=included,
             ratio=ratio,
             cells_per_instance=1,
@@ -54,7 +54,7 @@ class RangeCheckBuiltinRunner(SimpleBuiltinRunner):
             assert isinstance(val, int)
             res[idx] = {"index": idx, "value": hex(val)}
 
-        return {"range_check": sorted(res.values(), key=lambda item: item["index"])}
+        return {self.name: sorted(res.values(), key=lambda item: item["index"])}
 
     def get_range_check_usage(self, runner) -> Optional[Tuple[int, int]]:
         assert self.base is not None, "Uninitialized self.base."
@@ -88,7 +88,8 @@ class RangeCheckBuiltinRunner(SimpleBuiltinRunner):
 
 
 class RangeCheckBuiltinVerifier(BuiltinVerifier):
-    def __init__(self, included: bool, ratio):
+    def __init__(self, name: str, included: bool, ratio):
+        self.name = name
         self.included = included
         self.ratio = ratio
 
@@ -96,7 +97,7 @@ class RangeCheckBuiltinVerifier(BuiltinVerifier):
         if not self.included:
             return [], []
 
-        addresses = public_input.memory_segments["range_check"]
+        addresses = public_input.memory_segments[self.name]
         max_size = safe_div(public_input.n_steps, self.ratio)
         assert (
             0

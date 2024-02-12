@@ -8,11 +8,11 @@ from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.lang.builtins.all_builtins import with_suffix
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
 from starkware.python.utils import from_bytes, sub_counters, to_bytes
+from starkware.starknet.business_logic.execution.deprecated_objects import ExecutionResourcesManager
 from starkware.starknet.business_logic.execution.gas_usage import calculate_tx_gas_usage
 from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
     CallResult,
-    ExecutionResourcesManager,
     ResourcesMapping,
     TransactionExecutionInfo,
 )

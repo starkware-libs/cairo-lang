@@ -45,4 +45,4 @@ def get_cairo_pie_fact_info(cairo_pie: CairoPie, program_hash: Optional[int] = N
 
 
 def get_program_hash(cairo_pie: CairoPie) -> int:
-    return compute_program_hash_chain(cairo_pie.metadata.program)
+    return compute_program_hash_chain(program=cairo_pie.metadata.program, use_poseidon=False)

@@ -29,12 +29,34 @@ py_library(
 )
 
 py_library(
+    name = "starknet_deprecated_transaction_execution_objects_lib",
+    srcs = [
+        "deprecated_objects.py",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":starknet_transaction_execution_objects_lib",
+        "//src/services/everest/business_logic:everest_transaction_execution_objects_lib",
+        "//src/services/everest/definitions:everest_definitions_lib",
+        "//src/starkware/cairo/lang/vm:cairo_vm_lib",
+        "//src/starkware/starknet/business_logic/fact_state:starknet_business_logic_patricia_state_lib",
+        "//src/starkware/starknet/definitions:starknet_definitions_lib",
+        "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",
+        "//src/starkware/starkware_utils:starkware_dataclasses_field_utils_lib",
+        "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
+        requirement("marshmallow"),
+        requirement("marshmallow_dataclass"),
+    ],
+)
+
+py_library(
     name = "starknet_execute_entry_point_base_lib",
     srcs = [
         "execute_entry_point_base.py",
     ],
     visibility = ["//visibility:public"],
     deps = [
+        ":starknet_deprecated_transaction_execution_objects_lib",
         ":starknet_transaction_execution_objects_lib",
         "//src/starkware/starknet/business_logic/state:starknet_business_logic_state_lib",
         "//src/starkware/starknet/definitions:starknet_general_config_lib",
@@ -50,6 +72,7 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
+        ":starknet_deprecated_transaction_execution_objects_lib",
         ":starknet_execute_entry_point_base_lib",
         ":starknet_transaction_execution_objects_lib",
         "//src/services/everest/definitions:everest_definitions_lib",
@@ -79,13 +102,14 @@ py_library(
         "os_usage.py",
     ],
     data = [
-        "os_resources.json",
+        "//src/starkware/starknet/definitions:versioned_constants.json",
     ],
     visibility = ["//visibility:public"],
     deps = [
         ":starknet_transaction_execution_objects_lib",
         "//src/services/external_api:services_eth_gas_constants_lib",
         "//src/starkware/cairo/lang/vm:cairo_vm_lib",
+        "//src/starkware/python:starkware_python_utils_lib",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
         "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
         requirement("marshmallow_dataclass"),

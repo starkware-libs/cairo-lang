@@ -95,7 +95,7 @@ class SharpClient:
         The verification is trust worthy when this fact is registered
         on the Verifier Fact-Registry.
         """
-        program_hash = compute_program_hash_chain(cairo_pie.program)
+        program_hash = compute_program_hash_chain(program=cairo_pie.program, use_poseidon=False)
         return get_cairo_pie_fact_info(cairo_pie, program_hash).fact
 
     def fact_registered(self, fact: str) -> bool:

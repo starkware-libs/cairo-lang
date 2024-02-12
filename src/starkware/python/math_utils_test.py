@@ -1,6 +1,8 @@
 import math
 import random
+from typing import List
 
+import numpy as np
 import pytest
 
 from starkware.python.math_utils import (
@@ -9,6 +11,7 @@ from starkware.python.math_utils import (
     ec_add,
     ec_double,
     ec_mult,
+    fft,
     horner_eval,
     is_power_of_2,
     is_quad_residue,
@@ -171,3 +174,47 @@ def test_safe_random_ec_point():
     x, y = safe_random_ec_point(prime=PRIME, alpha=ALPHA, generator=generator, curve_order=EC_ORDER)
     # Check that the returned point is on the curve.
     assert pow(y, 2, PRIME) == (pow(x, 3, PRIME) + x * ALPHA + BETA) % PRIME
+
+
+@pytest.mark.parametrize("bit_reversed", [True, False])
+def test_fft(bit_reversed: bool):
+    PRIME = 52435875175126190479447740508185965837690552500527637822603658699938581184513
+    GENERATOR = 39033254847818212395286706435128746857159659164139250548781411570340225835782
+    WIDTH = 12
+    ORDER = 2**WIDTH
+
+    def generate(generator: int) -> List[int]:
+        array = [1]
+        for _ in range(ORDER - 1):
+            array.append((generator * array[-1]) % PRIME)
+
+        return array
+
+    subgroup = generate(GENERATOR)
+    if bit_reversed:
+        perm = [int("{:0{width}b}".format(i, width=WIDTH)[::-1], 2) for i in range(ORDER)]
+        subgroup = [subgroup[i] for i in perm]
+
+    # Sanity checks.
+    assert (GENERATOR**ORDER) % PRIME == 1
+    assert len(set(subgroup)) == len(subgroup)
+
+    coeffs = [random.randint(0, PRIME) for _ in range(ORDER)]
+
+    # Evaluate naively.
+    expexted_eval = [0] * ORDER
+    for i, x in enumerate(subgroup):
+        expexted_eval[i] = np.dot(coeffs, generate(x)) % PRIME
+
+    # Evaluate using FFT.
+    actual_eval = fft(coeffs=coeffs, generator=GENERATOR, prime=PRIME, bit_reversed=bit_reversed)
+
+    assert actual_eval == expexted_eval
+
+    # Trivial cases.
+    assert actual_eval[0] == sum(coeffs) % PRIME
+    assert (
+        fft(coeffs=[0] * ORDER, generator=GENERATOR, prime=PRIME, bit_reversed=bit_reversed)
+        == [0] * ORDER
+    )
+    assert fft(coeffs=[121212], generator=1, prime=PRIME, bit_reversed=bit_reversed) == [121212]

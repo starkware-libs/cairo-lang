@@ -34,7 +34,6 @@ StrictOptionalInteger: Callable[[VarArg(), KwArg()], mfields.Integer] = functool
     mfields.Integer, strict=True, allow_none=True
 )
 
-
 # Class definitions.
 
 
@@ -311,3 +310,11 @@ nonrequired_optional_metadata: FieldMetadata = additional_metadata(
     load_default=None, required=False
 )
 nonrequired_list_metadata: FieldMetadata = additional_metadata(load_default=list, required=False)
+
+bytes_as_hex_list_metadata = additional_metadata(
+    marshmallow_field=mfields.List(BytesAsHex(required=True))
+)
+
+optional_bytes_as_hex_list_metadata = additional_metadata(
+    marshmallow_field=mfields.List(BytesAsHex, required=False, allow_none=True, load_default=None),
+)

@@ -26,25 +26,17 @@ func poseidon_hash_single{poseidon_ptr: PoseidonBuiltin*}(x: felt) -> (res: felt
 
 // Hashes n elements and retrieves a single field element output.
 func poseidon_hash_many{poseidon_ptr: PoseidonBuiltin*}(n: felt, elements: felt*) -> (res: felt) {
+    let elements_end = &elements[n];
     // Apply the sponge construction to digest many elements.
     // To distinguish between the use cases the capacity element is initialized to 0.
     // To distinguish between different input sizes always pad with 1 and possibly with another 0 to
     // complete to an even sized input.
-    let state = PoseidonBuiltinState(s0=0, s1=0, s2=0);
-    _poseidon_hash_many_inner(state, n, elements);
-    let res = poseidon_ptr.output.s0;
-    let poseidon_ptr = poseidon_ptr + PoseidonBuiltin.SIZE;
-    return (res=res);
-}
+    tempvar state = PoseidonBuiltinState(s0=0, s1=0, s2=0);
+    tempvar elements = elements;
+    tempvar poseidon_ptr = poseidon_ptr;
 
-// An inner function of the sponge construction. Recursively adds the new elements to the previous
-// state and applies the permutation until all elements and the padding are digested.
-// At the end of this function poseidon_ptr points to an instance of PoseidonBuiltin with the output
-// ready to be used. The caller function must advance poseidon_ptr.
-func _poseidon_hash_many_inner{poseidon_ptr: PoseidonBuiltin*}(
-    state: PoseidonBuiltinState, n: felt, elements: felt*
-) {
-    if (nondet %{ ids.n >= 10 %} != 0) {
+    loop:
+    if (nondet %{ ids.elements_end - ids.elements >= 10 %} != 0) {
         assert poseidon_ptr.input = PoseidonBuiltinState(
             s0=state.s0 + elements[0], s1=state.s1 + elements[1], s2=state.s2
         );
@@ -75,22 +67,33 @@ func _poseidon_hash_many_inner{poseidon_ptr: PoseidonBuiltin*}(
         let state = poseidon_ptr.output;
         let poseidon_ptr = poseidon_ptr + PoseidonBuiltin.SIZE;
 
-        return _poseidon_hash_many_inner(state, n - 10, &elements[10]);
+        tempvar state = state;
+        tempvar elements = &elements[10];
+        tempvar poseidon_ptr = poseidon_ptr;
+        jmp loop;
     }
 
-    if (nondet %{ ids.n >= 2 %} != 0) {
+    if (nondet %{ ids.elements_end - ids.elements >= 2 %} != 0) {
         assert poseidon_ptr.input = PoseidonBuiltinState(
             s0=state.s0 + elements[0], s1=state.s1 + elements[1], s2=state.s2
         );
         let state = poseidon_ptr.output;
         let poseidon_ptr = poseidon_ptr + PoseidonBuiltin.SIZE;
-        return _poseidon_hash_many_inner(state, n - 2, &elements[2]);
+
+        tempvar state = state;
+        tempvar elements = &elements[2];
+        tempvar poseidon_ptr = poseidon_ptr;
+        jmp loop;
     }
+
+    tempvar n = elements_end - elements;
 
     if (n == 0) {
         // Pad input with [1, 0].
         assert poseidon_ptr.input = PoseidonBuiltinState(s0=state.s0 + 1, s1=state.s1, s2=state.s2);
-        return ();
+        let res = poseidon_ptr.output.s0;
+        let poseidon_ptr = poseidon_ptr + PoseidonBuiltin.SIZE;
+        return (res=res);
     }
 
     assert n = 1;
@@ -98,5 +101,7 @@ func _poseidon_hash_many_inner{poseidon_ptr: PoseidonBuiltin*}(
     assert poseidon_ptr.input = PoseidonBuiltinState(
         s0=state.s0 + elements[0], s1=state.s1 + 1, s2=state.s2
     );
-    return ();
+    let res = poseidon_ptr.output.s0;
+    let poseidon_ptr = poseidon_ptr + PoseidonBuiltin.SIZE;
+    return (res=res);
 }

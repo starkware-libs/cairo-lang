@@ -13,7 +13,11 @@ pytest_test(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "sharp_client_lib",
+        ":sharp_client_lib",
+        "//src/starkware/cairo/bootloaders:cairo_bootloader_fact_topology_lib",
+        "//src/starkware/cairo/bootloaders:cairo_bootloader_generate_fact_lib",
+        "//src/starkware/python:starkware_python_utils_lib",
+        requirement("urllib3"),
     ],
 )
 

@@ -82,6 +82,8 @@ FeltField = RangeValidatedField(
     formatter=hex,
 )
 
+felt_as_hex_list_metadata = dict(marshmallow_field=mfields.List(FeltField.get_marshmallow_field()))
+
 
 def get_bounded_int_range_validator(
     lower_bound: int = 0, upper_bound: int = FIELD_PRIME

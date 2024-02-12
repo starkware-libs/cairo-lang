@@ -2,6 +2,7 @@
 A CairoPie represents a position independent execution of a Cairo program.
 """
 
+import contextlib
 import copy
 import dataclasses
 import functools
@@ -25,6 +26,8 @@ from starkware.starkware_utils.marshmallow_dataclass_fields import additional_me
 
 DEFAULT_CAIRO_PIE_VERSION = "1.0"
 CURRENT_CAIRO_PIE_VERSION = "1.1"
+
+MAX_N_STEPS = 2**30
 
 
 @dataclasses.dataclass
@@ -136,7 +139,7 @@ class ExecutionResources:
 
     def run_validity_checks(self):
         assert (
-            isinstance(self.n_steps, int) and 1 <= self.n_steps < 2**30
+            isinstance(self.n_steps, int) and 1 <= self.n_steps < MAX_N_STEPS
         ), f"Invalid n_steps: {self.n_steps}."
         assert (
             isinstance(self.n_memory_holes, int) and 0 <= self.n_memory_holes < 2**30
@@ -241,7 +244,7 @@ class CairoPie:
         ADDITIONAL_DATA_FILENAME,
         EXECUTION_RESOURCES_FILENAME,
     ] + OPTIONAL_FILES
-    MAX_SIZE = 1024**3
+    MAX_SIZE = 5 * 1024**3
 
     @classmethod
     def from_file(cls, fileobj) -> "CairoPie":
@@ -333,7 +336,7 @@ class CairoPie:
         with zipfile.ZipFile(file, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
             with zf.open(self.METADATA_FILENAME, "w") as fp:
                 fp.write(json.dumps(CairoPieMetadata.Schema().dump(metadata)).encode("ascii"))
-            with zf.open(self.MEMORY_FILENAME, "w") as fp:
+            with zf.open(self.MEMORY_FILENAME, "w", force_zip64=True) as fp:
                 fp.write(
                     self.memory.serialize(
                         field_bytes=self.metadata.field_bytes,
@@ -439,6 +442,39 @@ class CairoPie:
             RelocatableValue(segment_index=segment_info.index, offset=0), size=segment_info.size
         )
 
+    def is_compatible_with(self, other: "CairoPie") -> bool:
+        """
+        Checks equality between two CairoPies. Ignores .additional_data["pedersen_builtin"]
+        to avoid an issue where a stricter run checks more Pedersen addresses and results
+        in a different address list.
+        """
+        with ignore_pedersen_data(self):
+            with ignore_pedersen_data(other):
+                return self == other
+
+    def diff(self, other: "CairoPie") -> str:
+        """
+        Returns a short description of the diff between two CairoPies.
+        """
+        res = ["CairoPie diff:"]
+        if self.metadata != other.metadata:
+            res.append(f" * metadata mismatch.")
+        if self.memory != other.memory:
+            res.append(f" * memory mismatch.")
+        if self.additional_data != other.additional_data:
+            res.append(f" * additional_data mismatch:")
+            for key in sorted(self.additional_data.keys() | other.additional_data.keys()):
+                if self.additional_data.get(key) != other.additional_data.get(key):
+                    res.append(f"   * {key} mismatch.")
+        if self.execution_resources != other.execution_resources:
+            res.append(
+                " * execution_resources mismatch: "
+                f"{self.execution_resources} != {other.execution_resources}."
+            )
+        if self.version != other.version:
+            res.append(f" * version mismatch: {self.version} != {other.version}.")
+        return "\n".join(res)
+
 
 def verify_zip_file_prefix(fileobj):
     """
@@ -447,3 +483,24 @@ def verify_zip_file_prefix(fileobj):
     fileobj.seek(0)
     # Make sure this is a zip file.
     assert fileobj.read(2) in ["PK", b"PK"], "Invalid prefix for zip file."
+
+
+@contextlib.contextmanager
+def ignore_pedersen_data(pie: CairoPie):
+    """
+    Context manager under which pie.additional_data["pedersen_builtin"] is set to None and
+    reverted to its original value (or removed if it didn't exist before) when the context
+    terminates.
+    """
+    should_pop = "pedersen_builtin" not in pie.additional_data
+    original_pedersen_data, pie.additional_data["pedersen_builtin"] = (
+        pie.additional_data.get("pedersen_builtin"),
+        None,
+    )
+    try:
+        yield
+    finally:
+        if should_pop:
+            pie.additional_data.pop("pedersen_builtin")
+        else:
+            pie.additional_data["pedersen_builtin"] = original_pedersen_data

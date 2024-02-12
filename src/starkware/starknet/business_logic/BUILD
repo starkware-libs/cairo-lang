@@ -11,6 +11,7 @@ py_library(
         "//src/starkware/cairo/lang/builtins:cairo_all_builtins_lib",
         "//src/starkware/cairo/lang/vm:cairo_vm_lib",
         "//src/starkware/python:starkware_python_utils_lib",
+        "//src/starkware/starknet/business_logic/execution:starknet_deprecated_transaction_execution_objects_lib",
         "//src/starkware/starknet/business_logic/execution:starknet_execution_usage_lib",
         "//src/starkware/starknet/business_logic/execution:starknet_transaction_execution_objects_lib",
         "//src/starkware/starknet/business_logic/fact_state:starknet_business_logic_patricia_state_lib",

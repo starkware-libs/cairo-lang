@@ -210,27 +210,23 @@ class ClientBase(HasUriPrefix):
             except BadRequest as exception:
                 error_message = f"Got {type(exception).__name__} while trying to access {url}."
 
-                if limited_retries and (
-                    n_retries_left == 0
-                    or exception.status_code not in self.retry_config.retry_codes
+                if (limited_retries and n_retries_left == 0) or (
+                    exception.status_code not in self.retry_config.retry_codes
                 ):
                     full_error_message = (
                         f"{error_message} "
                         f"Status code: {exception.status_code}; text: {exception.text}."
                     )
                     if self.log_errors:
-                        logger.error(full_error_message, exc_info=True)
+                        logger.error(msg=full_error_message, exc_info=True)
                     raise
-
-                logger.debug(f"{error_message}, retrying...")
+                logger.debug(msg=f"{error_message}, retrying...")
             except Exception as exception:
                 error_message = f"Got {type(exception).__name__} while trying to access {url}."
-
                 if limited_retries and n_retries_left == 0:
                     if self.log_errors:
-                        logger.error(error_message, exc_info=True)
+                        logger.error(msg=error_message, exc_info=True)
                     raise
-
                 logger.debug(f"{error_message}, retrying...")
 
             await asyncio.sleep(5)

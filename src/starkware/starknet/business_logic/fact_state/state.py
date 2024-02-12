@@ -185,32 +185,28 @@ class SharedState(SharedStateBase):
         return constants.GLOBAL_STATE_VERSION
 
     @classmethod
-    async def create_empty_contract_states(
-        cls, ffc: FactFetchingContext, general_config: StarknetGeneralConfig
-    ) -> PatriciaTree:
+    async def create_empty_contract_states(cls, ffc: FactFetchingContext) -> PatriciaTree:
         """
         Returns an empty contract state tree.
         """
         empty_contract_state = await ContractState.empty(
-            storage_commitment_tree_height=general_config.contract_storage_commitment_tree_height,
+            storage_commitment_tree_height=constants.CONTRACT_STATES_COMMITMENT_TREE_HEIGHT,
             ffc=ffc,
         )
         return await PatriciaTree.empty_tree(
             ffc=ffc,
-            height=general_config.global_state_commitment_tree_height,
+            height=constants.CONTRACT_ADDRESS_BITS,
             leaf_fact=empty_contract_state,
         )
 
     @classmethod
-    async def create_empty_contract_class_tree(
-        cls, ffc: FactFetchingContext, general_config: StarknetGeneralConfig
-    ) -> PatriciaTree:
+    async def create_empty_contract_class_tree(cls, ffc: FactFetchingContext) -> PatriciaTree:
         """
         Returns an empty contract class tree.
         """
         return await PatriciaTree.empty_tree(
             ffc=ffc,
-            height=general_config.compiled_class_hash_commitment_tree_height,
+            height=constants.COMPILED_CLASS_HASH_COMMITMENT_TREE_HEIGHT,
             leaf_fact=ContractClassLeaf.empty(),
         )
 
@@ -222,17 +218,16 @@ class SharedState(SharedStateBase):
         # Downcast arguments to application-specific types.
         assert isinstance(general_config, StarknetGeneralConfig)
 
-        empty_contract_states = await cls.create_empty_contract_states(
-            ffc=ffc, general_config=general_config
-        )
-        empty_contract_classes = await cls.create_empty_contract_class_tree(
-            ffc=ffc, general_config=general_config
-        )
+        empty_contract_states = await cls.create_empty_contract_states(ffc=ffc)
+        empty_contract_classes = await cls.create_empty_contract_class_tree(ffc=ffc)
 
         return cls(
             contract_states=empty_contract_states,
             contract_classes=empty_contract_classes,
-            block_info=BlockInfo.empty(sequencer_address=general_config.sequencer_address),
+            block_info=BlockInfo.empty(
+                sequencer_address=general_config.sequencer_address,
+                use_kzg_da=general_config.use_kzg_da,
+            ),
         )
 
     async def get_contract_class_tree(
@@ -245,7 +240,7 @@ class SharedState(SharedStateBase):
         return (
             self.contract_classes
             if self.contract_classes is not None
-            else await self.create_empty_contract_class_tree(ffc=ffc, general_config=general_config)
+            else await self.create_empty_contract_class_tree(ffc=ffc)
         )
 
     def get_global_state_root(self) -> int:
@@ -363,6 +358,7 @@ class SharedState(SharedStateBase):
         )
 
         # Apply contract changes on global root.
+        logger.info(f"Updating contract state tree with {len(accessed_addresses)} modifications...")
         updated_global_contract_root = await self.contract_states.update_efficiently(
             ffc=ffc, modifications=list(safe_zip(accessed_addresses, updated_contract_states))
         )
@@ -370,6 +366,10 @@ class SharedState(SharedStateBase):
         ffc_for_contract_class = get_ffc_for_contract_class_facts(ffc=ffc)
         updated_contract_classes: Optional[PatriciaTree] = None
         if self.contract_classes is not None:
+            logger.info(
+                f"Updating contract class tree with {len(class_hash_to_compiled_class_hash)} "
+                "modifications..."
+            )
             updated_contract_classes = await self.contract_classes.update_efficiently(
                 ffc=ffc_for_contract_class,
                 modifications=[

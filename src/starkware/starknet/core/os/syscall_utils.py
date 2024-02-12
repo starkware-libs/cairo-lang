@@ -30,6 +30,7 @@ STARKNET_OLD_SYSCALLS_COMPILED_PATH = os.path.join(
 STARKNET_SYSCALLS_COMPILED_PATH = os.path.join(
     os.path.dirname(__file__), "starknet_new_syscalls.json"
 )
+STARKNET_BUILTINS_COMPILED_PATH = os.path.join(os.path.dirname(__file__), "starknet_builtins.json")
 
 # New syscalls utilities.
 
@@ -37,6 +38,12 @@ STARKNET_SYSCALLS_COMPILED_PATH = os.path.join(
 @cachetools.cached(cache={})
 def get_syscall_structs() -> CairoStructProxy:
     syscalls_program = load_program(path=STARKNET_SYSCALLS_COMPILED_PATH)
+    return CairoStructFactory.from_program(program=syscalls_program, additional_imports=[]).structs
+
+
+@cachetools.cached(cache={})
+def get_builtins_structs() -> CairoStructProxy:
+    syscalls_program = load_program(path=STARKNET_BUILTINS_COMPILED_PATH)
     return CairoStructFactory.from_program(program=syscalls_program, additional_imports=[]).structs
 
 

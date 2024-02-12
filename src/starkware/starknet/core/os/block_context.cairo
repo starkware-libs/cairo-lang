@@ -1,4 +1,5 @@
 from starkware.cairo.common.cairo_builtins import HashBuiltin, PoseidonBuiltin
+from starkware.cairo.common.math import unsigned_div_rem
 from starkware.cairo.common.registers import get_fp_and_pc
 from starkware.starknet.common.new_syscalls import BlockInfo
 from starkware.starknet.core.os.builtins import BuiltinParams, get_builtin_params
@@ -11,6 +12,10 @@ from starkware.starknet.core.os.contract_class.deprecated_compiled_class import 
     deprecated_load_compiled_class_facts,
 )
 from starkware.starknet.core.os.os_config.os_config import StarknetOsConfig
+
+// Round down the block number and timestamp when queried inside `__validate__`.
+const VALIDATE_BLOCK_NUMBER_ROUNDING = 100;
+const VALIDATE_TIMESTAMP_ROUNDING = 3600;
 
 // Represents information that is the same throughout the block.
 struct BlockContext {
@@ -53,8 +58,14 @@ func get_block_context{poseidon_ptr: PoseidonBuiltin*, pedersen_ptr: HashBuiltin
         n_deprecated_compiled_class_facts, deprecated_compiled_class_facts
     ) = deprecated_load_compiled_class_facts();
     let (builtin_params) = get_builtin_params();
-    tempvar block_number = nondet %{ deprecated_syscall_handler.block_info.block_number %};
-    tempvar block_timestamp = nondet %{ deprecated_syscall_handler.block_info.block_timestamp %};
+    tempvar block_number = nondet %{ syscall_handler.block_info.block_number %};
+    tempvar block_timestamp = nondet %{ syscall_handler.block_info.block_timestamp %};
+    let (divided_block_number, _) = unsigned_div_rem(block_number, VALIDATE_BLOCK_NUMBER_ROUNDING);
+    tempvar block_number_for_validate = divided_block_number * VALIDATE_BLOCK_NUMBER_ROUNDING;
+    let (divided_block_timestamp, _) = unsigned_div_rem(
+        block_timestamp, VALIDATE_TIMESTAMP_ROUNDING
+    );
+    tempvar block_timestamp_for_validate = divided_block_timestamp * VALIDATE_TIMESTAMP_ROUNDING;
     local block_context: BlockContext = BlockContext(
         builtin_params=builtin_params,
         n_compiled_class_facts=n_compiled_class_facts,
@@ -64,10 +75,12 @@ func get_block_context{poseidon_ptr: PoseidonBuiltin*, pedersen_ptr: HashBuiltin
         block_info=new BlockInfo(
             block_number=block_number,
             block_timestamp=block_timestamp,
-            sequencer_address=nondet %{ os_input.general_config.sequencer_address %},
+            sequencer_address=nondet %{ syscall_handler.block_info.sequencer_address %},
         ),
         block_info_for_validate=new BlockInfo(
-            block_number=block_number, block_timestamp=block_timestamp, sequencer_address=0
+            block_number=block_number_for_validate,
+            block_timestamp=block_timestamp_for_validate,
+            sequencer_address=0,
         ),
         starknet_os_config=StarknetOsConfig(
             chain_id=nondet %{ os_input.general_config.chain_id.value %},

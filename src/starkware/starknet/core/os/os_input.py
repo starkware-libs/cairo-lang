@@ -1,6 +1,6 @@
 import dataclasses
 from dataclasses import field
-from typing import Any, Dict, Sequence
+from typing import Any, Dict, List, Sequence
 
 import marshmallow.fields as mfields
 import marshmallow_dataclass
@@ -37,6 +37,7 @@ class StarknetOsInput(ValidatedMarshmallowDataclass):
     compiled_classes: Dict[int, CompiledClass] = field(
         metadata=fields.new_class_hash_dict_keys_metadata(values_schema=CompiledClass.Schema)
     )
+    compiled_class_visited_pcs: Dict[int, List[int]]
     contracts: Dict[int, ContractState]
     class_hash_to_compiled_class_hash: Dict[int, int]
     general_config: StarknetGeneralConfig

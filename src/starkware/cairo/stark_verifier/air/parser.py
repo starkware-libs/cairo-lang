@@ -8,6 +8,7 @@ from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.vm.air_public_input import PublicInput, extract_z_and_alpha
 from starkware.cairo.stark_verifier.air.utils import public_input_to_cairo
+from starkware.cairo.stark_verifier.core.supported_proof_params import are_parameters_supported
 from starkware.python.math_utils import safe_log2
 from starkware.python.utils import safe_zip
 
@@ -20,6 +21,7 @@ SUPPORTED_LAYOUTS = [
     "starknet",
     "all_cairo",
     "starknet_with_keccak",
+    "recursive_with_poseidon",
 ]
 ADDITIONAL_IMPORTS = [
     "starkware.cairo.stark_verifier.air.config.TracesConfig",
@@ -91,7 +93,7 @@ def parse_proof(identifiers: IdentifierManager, proof_json: dict):
     (composition_commitment_hash,) = annotations(
         "STARK/Out Of Domain Sampling/Commit on Trace", "Hash"
     )
-    oods_values = annotations("STARK/Out Of Domain Sampling/OODS values", "Field Element")
+    oods_values = annotations("STARK/Out Of Domain Sampling/OODS values", "Field Elements")
     fri_layers_commitments = annotations("STARK/FRI/Commitment/Layer [0-9]+", "Hash")
     fri_last_layer_coefficients = annotations("STARK/FRI/Commitment/Last Layer", "Field Elements")
     (proof_of_work_nonce,) = annotations("STARK/FRI/Proof of Work", "Data")
@@ -121,6 +123,8 @@ def parse_proof(identifiers: IdentifierManager, proof_json: dict):
     composition_witness_authentications = get_authentications(
         "STARK/FRI/Decommitment/Layer 0/Virtual Oracle/Trace 2"
     )
+
+    assert are_parameters_supported(proof_json["proof_parameters"])
 
     fri_step_list = proof_json["proof_parameters"]["stark"]["fri"]["fri_step_list"]
     n_fri_layers = len(fri_step_list)

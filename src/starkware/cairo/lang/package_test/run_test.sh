@@ -41,5 +41,6 @@ starknet-compile-deprecated ${root_dir}/src/starkware/starknet/apps/amm_sample/a
 # Test StarkNet CLI.
 starknet --help > /dev/null
 
-# Test starknet-class-hash.
+# Test starknet-class-hash and starknet-compiled-class-hash.
 starknet-class-hash --help > /dev/null
+starknet-compiled-class-hash --help > /dev/null

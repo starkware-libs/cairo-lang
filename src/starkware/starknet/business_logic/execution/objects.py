@@ -4,7 +4,7 @@ import logging
 import operator
 from dataclasses import field
 from enum import Enum, auto
-from typing import Dict, FrozenSet, Iterable, Iterator, List, Mapping, Optional, Set, Union, cast
+from typing import FrozenSet, Iterable, Iterator, List, Mapping, Optional, Set, Union, cast
 
 import marshmallow.fields as mfields
 import marshmallow_dataclass
@@ -30,10 +30,10 @@ from starkware.starknet.services.api.gateway.deprecated_transaction import (
     DEFAULT_DECLARE_SENDER_ADDRESS,
 )
 from starkware.starkware_utils.error_handling import stark_assert
+from starkware.starkware_utils.field_validators import validate_non_negative
 from starkware.starkware_utils.marshmallow_dataclass_fields import (
     SetField,
     additional_metadata,
-    nonrequired_list_metadata,
     nonrequired_optional_metadata,
 )
 from starkware.starkware_utils.marshmallow_fields_metadata import sequential_id_metadata
@@ -45,12 +45,14 @@ from starkware.starkware_utils.validated_dataclass import (
 
 logger = logging.getLogger(__name__)
 ResourcesMapping = Mapping[str, int]
+RawTransactionExecutionInfo = bytes
+RawTransactionExecutionResult = Union[TransactionFailureReason, RawTransactionExecutionInfo]
 TransactionExecutionResult = Union[TransactionFailureReason, "TransactionExecutionInfo"]
 
 
 class CallType(Enum):
-    CALL = 0
-    DELEGATE = auto()
+    Call = 0
+    Delegate = auto()
 
 
 @dataclasses.dataclass
@@ -131,6 +133,14 @@ class TransactionExecutionContext(ValidatedDataclass):
 
 
 @dataclasses.dataclass(frozen=True)
+class EventContent(ValidatedDataclass):
+    # The keys by which the event will be indexed.
+    keys: List[int] = field(metadata=everest_fields.felt_as_hex_list_metadata)
+    # The data of the event.
+    data: List[int] = field(metadata=everest_fields.felt_as_hex_list_metadata)
+
+
+@dataclasses.dataclass(frozen=True)
 class OrderedEvent(ValidatedDataclass):
     """
     Contains the raw content of an event, without the context its origin
@@ -138,10 +148,19 @@ class OrderedEvent(ValidatedDataclass):
     """
 
     order: int = field(metadata=sequential_id_metadata("Event order"))
-    # The keys by which the event will be indexed.
-    keys: List[int] = field(metadata=fields.felt_as_hex_or_str_list_metadata)
-    # The data of the event.
-    data: List[int] = field(metadata=fields.felt_as_hex_or_str_list_metadata)
+    event: EventContent
+
+    @classmethod
+    def create(cls, order: int, keys: List[int], data: List[int]) -> "OrderedEvent":
+        return cls(order=order, event=EventContent(keys=keys, data=data))
+
+    @property
+    def keys(self) -> List[int]:
+        return self.event.keys
+
+    @property
+    def data(self) -> List[int]:
+        return self.event.data
 
 
 @dataclasses.dataclass(frozen=True)
@@ -154,17 +173,23 @@ class Event(ValidatedDataclass):
     # Emitting contract address.
     from_address: int = field(metadata=fields.L2AddressField.metadata(field_name="from_address"))
     # The keys by which the event will be indexed.
-    keys: List[int] = field(metadata=fields.felt_as_hex_list_metadata)
+    keys: List[int] = field(metadata=everest_fields.felt_as_hex_list_metadata)
     # The data of the event.
-    data: List[int] = field(metadata=fields.felt_as_hex_list_metadata)
+    data: List[int] = field(metadata=everest_fields.felt_as_hex_list_metadata)
 
     @classmethod
-    def create(cls, event_content: OrderedEvent, emitting_contract_address: int):
+    def create(cls, event_content: "OrderedEvent", emitting_contract_address: int) -> "Event":
         return cls(
             from_address=emitting_contract_address,
             keys=event_content.keys,
             data=event_content.data,
         )
+
+
+@dataclasses.dataclass(frozen=True)
+class MessageToL1(ValidatedDataclass):
+    to_address: int = field(metadata=fields.felt_metadata)
+    payload: List[int] = field(metadata=everest_fields.felt_as_hex_list_metadata)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -175,10 +200,19 @@ class OrderedL2ToL1Message(ValidatedDataclass):
     """
 
     order: int = field(metadata=sequential_id_metadata("L2-to-L1 message order"))
-    to_address: int = field(
-        metadata=everest_fields.EthAddressIntField.metadata(field_name="to_address")
-    )
-    payload: List[int] = field(metadata=fields.felt_as_hex_or_str_list_metadata)
+    message: MessageToL1
+
+    @classmethod
+    def create(cls, order: int, to_address: int, payload: List[int]) -> "OrderedL2ToL1Message":
+        return cls(order=order, message=MessageToL1(to_address=to_address, payload=payload))
+
+    @property
+    def to_address(self) -> int:
+        return self.message.to_address
+
+    @property
+    def payload(self) -> List[int]:
+        return self.message.payload
 
 
 @dataclasses.dataclass(frozen=True)
@@ -194,7 +228,9 @@ class L2ToL1MessageInfo(ValidatedDataclass):
     payload: List[int] = field(metadata=fields.felt_as_hex_or_str_list_metadata)
 
     @classmethod
-    def create(cls, message_content: OrderedL2ToL1Message, sending_contract_address: int):
+    def create(
+        cls, message_content: "OrderedL2ToL1Message", sending_contract_address: int
+    ) -> "L2ToL1MessageInfo":
         return cls(
             from_address=sending_contract_address,
             to_address=message_content.to_address,
@@ -250,6 +286,42 @@ class CallResult(ValidatedDataclass):
         return self.failure_flag == 0
 
 
+@dataclasses.dataclass(frozen=True)
+class CallEntryPoint(ValidatedDataclass):
+    """
+    Represents a call to an entry point.
+    """
+
+    # Holds the hash of the executed class; in the case of a library call, it may differ from the
+    # class hash of the called contract state.
+    class_hash: Optional[int] = field(metadata=fields.optional_new_class_hash_metadata)
+    entry_point_type: Optional[EntryPointType] = field(metadata=nonrequired_optional_metadata)
+    entry_point_selector: Optional[int] = field(
+        metadata=fields.optional_entry_point_selector_metadata
+    )
+    calldata: List[int] = field(metadata=everest_fields.felt_as_hex_list_metadata)
+    storage_address: int = field(metadata=fields.felt_metadata)
+    caller_address: int = field(metadata=fields.felt_metadata)
+    # We can assume that the initial gas is less than 2^64.
+    initial_gas: int
+
+    # Deprecated fields.
+    # The address that holds the executed code; relevant just for delegate calls (version 1), where
+    # it may differ from the code of the to_address contract.
+    code_address: Optional[int] = field(metadata=fields.optional_l2_address_metadata)
+    call_type: Optional[CallType] = field(metadata=nonrequired_optional_metadata)
+
+
+@dataclasses.dataclass(frozen=True)
+class CallExecution(ValidatedDataclass):
+    retdata: List[int] = field(metadata=fields.felt_as_hex_or_str_list_metadata)
+    # Note that the order starts from a transaction-global offset.
+    events: List[OrderedEvent]
+    l2_to_l1_messages: List[OrderedL2ToL1Message]
+    failed: bool
+    gas_consumed: int
+
+
 # NOTE: This dataclass isn't validated due to a forward-declaration issue.
 @marshmallow_dataclass.dataclass(frozen=True)
 class CallInfo(SerializableMarshmallowDataclass):
@@ -259,33 +331,21 @@ class CallInfo(SerializableMarshmallowDataclass):
     No need for validations here, as the fields are taken from validated objects.
     """
 
-    # Call params.
+    call: CallEntryPoint
+    execution: CallExecution
+    resources: ExecutionResources
 
-    caller_address: int  # Should be zero if the call represents an external transaction.
-    call_type: Optional[CallType] = field(metadata=nonrequired_optional_metadata)
-    contract_address: int
-    # Holds the hash of the executed class; in the case of a library call, it may differ from the
-    # class hash of the called contract state.
-    class_hash: Optional[int] = field(metadata=fields.optional_new_class_hash_metadata)
-    entry_point_selector: Optional[int]
-    entry_point_type: Optional[EntryPointType]
-    calldata: List[int]
-
-    # Call results.
-
-    gas_consumed: int = field(metadata=fields.gas_consumed_metadata)
-    failure_flag: int = field(metadata=fields.failure_flag_metadata)
-    retdata: List[int]
-
-    execution_resources: ExecutionResources
-    # Note that the order starts from a transaction-global offset.
-    events: List[OrderedEvent]
-    l2_to_l1_messages: List[OrderedL2ToL1Message]
+    # Internal calls made by this call.
+    inner_calls: List["CallInfo"] = field(
+        metadata=additional_metadata(
+            marshmallow_field=mfields.List(mfields.Nested(lambda: CallInfo.Schema()))
+        )
+    )
 
     # Information kept for the StarkNet OS run in the GpsAmbassador.
 
     # A list of values read from storage by this call, **excluding** readings from nested calls.
-    storage_read_values: List[int]
+    storage_read_values: List[int] = field(metadata=fields.felt_as_hex_or_str_list_metadata)
     # A set of storage keys accessed by this call, **excluding** keys from nested calls;
     # kept in order to calculate and prepare the commitment tree facts before the StarkNet OS run.
     accessed_storage_keys: Set[int] = field(
@@ -296,18 +356,120 @@ class CallInfo(SerializableMarshmallowDataclass):
         )
     )
 
-    # Internal calls made by this call.
-
-    internal_calls: List["CallInfo"] = field(
-        metadata=additional_metadata(
-            marshmallow_field=mfields.List(mfields.Nested(lambda: CallInfo.Schema()))
+    @classmethod
+    def create(
+        cls,
+        caller_address: int,
+        call_type: Optional[CallType],
+        contract_address: int,
+        class_hash: Optional[int],
+        entry_point_selector: Optional[int],
+        entry_point_type: Optional[EntryPointType],
+        calldata: List[int],
+        gas_consumed: int,
+        failure_flag: int,
+        retdata: List[int],
+        execution_resources: ExecutionResources,
+        events: List[OrderedEvent],
+        l2_to_l1_messages: List[OrderedL2ToL1Message],
+        storage_read_values: List[int],
+        accessed_storage_keys: Set[int],
+        internal_calls: List["CallInfo"],
+        code_address: Optional[int],
+    ) -> "CallInfo":
+        call = CallEntryPoint(
+            caller_address=caller_address,
+            call_type=call_type,
+            storage_address=contract_address,
+            class_hash=class_hash,
+            code_address=code_address,
+            entry_point_type=entry_point_type,
+            entry_point_selector=entry_point_selector,
+            calldata=calldata,
+            initial_gas=0,
         )
-    )
+        execution = CallExecution(
+            retdata=retdata,
+            events=events,
+            l2_to_l1_messages=l2_to_l1_messages,
+            failed=failure_flag != 0,
+            gas_consumed=gas_consumed,
+        )
 
-    # Deprecated fields.
-    # The address that holds the executed code; relevant just for delegate calls (version 1), where
-    # it may differ from the code of the to_address contract.
-    code_address: Optional[int]
+        return cls(
+            call=call,
+            execution=execution,
+            resources=execution_resources,
+            storage_read_values=storage_read_values,
+            accessed_storage_keys=accessed_storage_keys,
+            inner_calls=internal_calls,
+        )
+
+    # CallEntryPoint fields.
+
+    @property
+    def class_hash(self) -> Optional[int]:
+        return self.call.class_hash
+
+    @property
+    def entry_point_type(self) -> Optional[EntryPointType]:
+        return self.call.entry_point_type
+
+    @property
+    def entry_point_selector(self) -> Optional[int]:
+        return self.call.entry_point_selector
+
+    @property
+    def calldata(self) -> List[int]:
+        return self.call.calldata
+
+    @property
+    def contract_address(self) -> int:
+        return self.call.storage_address
+
+    @property
+    def caller_address(self) -> int:
+        return self.call.caller_address
+
+    @property
+    def code_address(self) -> Optional[int]:
+        return self.call.code_address
+
+    @property
+    def call_type(self) -> Optional[CallType]:
+        return self.call.call_type
+
+    # CallExecution fields.
+
+    @property
+    def retdata(self) -> List[int]:
+        return self.execution.retdata
+
+    @property
+    def events(self) -> List[OrderedEvent]:
+        return self.execution.events
+
+    @property
+    def l2_to_l1_messages(self) -> List[OrderedL2ToL1Message]:
+        return self.execution.l2_to_l1_messages
+
+    @property
+    def failure_flag(self) -> int:
+        return self.execution.failed
+
+    @property
+    def gas_consumed(self) -> int:
+        return self.execution.gas_consumed
+
+    # Remaining fields.
+
+    @property
+    def execution_resources(self) -> ExecutionResources:
+        return self.resources
+
+    @property
+    def internal_calls(self) -> List["CallInfo"]:
+        return self.inner_calls
 
     def result(self) -> CallResult:
         return CallResult(
@@ -319,7 +481,7 @@ class CallInfo(SerializableMarshmallowDataclass):
     def get_visited_storage_entries(self) -> Set[StorageEntry]:
         storage_entries = {(self.contract_address, key) for key in self.accessed_storage_keys}
         internal_visited_storage_entries = CallInfo.get_visited_storage_entries_of_many(
-            call_infos=self.internal_calls
+            call_infos=self.inner_calls
         )
         return storage_entries | internal_visited_storage_entries
 
@@ -368,15 +530,15 @@ class CallInfo(SerializableMarshmallowDataclass):
         entry_point_type: Optional[EntryPointType] = None,
         entry_point_selector: Optional[int] = None,
     ) -> "CallInfo":
-        return cls(
+        return cls.create(
             caller_address=caller_address,
             call_type=call_type,
             contract_address=contract_address,
             class_hash=class_hash,
-            code_address=None,
-            entry_point_type=entry_point_type,
             entry_point_selector=entry_point_selector,
+            entry_point_type=entry_point_type,
             calldata=[],
+            gas_consumed=0,
             failure_flag=0,
             retdata=[],
             execution_resources=ExecutionResources.empty(),
@@ -385,7 +547,7 @@ class CallInfo(SerializableMarshmallowDataclass):
             storage_read_values=[],
             accessed_storage_keys=set(),
             internal_calls=[],
-            gas_consumed=0,
+            code_address=None,
         )
 
     @classmethod
@@ -400,7 +562,7 @@ class CallInfo(SerializableMarshmallowDataclass):
             contract_address=contract_address,
             caller_address=caller_address,
             class_hash=class_hash,
-            call_type=CallType.CALL,
+            call_type=CallType.Call,
             entry_point_type=EntryPointType.CONSTRUCTOR,
             entry_point_selector=CONSTRUCTOR_ENTRY_POINT_SELECTOR,
         )
@@ -455,6 +617,30 @@ class CallInfo(SerializableMarshmallowDataclass):
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
+class GasVector(ValidatedMarshmallowDataclass):
+    l1_gas: int = field(
+        metadata=additional_metadata(
+            marshmallow_field=mfields.Integer(
+                strict=True, validate=validate_non_negative("l1_gas")
+            ),
+            description="L1 gas amount",
+        ),
+    )
+    l1_data_gas: int = field(
+        metadata=additional_metadata(
+            marshmallow_field=mfields.Integer(
+                strict=True, validate=validate_non_negative("l1_data_gas")
+            ),
+            description="Blob gas amount",
+        ),
+    )
+
+    @classmethod
+    def empty(cls) -> "GasVector":
+        return cls(l1_gas=0, l1_data_gas=0)
+
+
+@marshmallow_dataclass.dataclass(frozen=True)
 class TransactionExecutionInfo(EverestTransactionExecutionInfo):
     """
     Contains the information gathered by the execution of a transaction. Main usages:
@@ -463,12 +649,12 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
     """
 
     # Transaction-specific validation call info.
-    validate_info: Optional[CallInfo]
+    validate_call_info: Optional[CallInfo]
     # Transaction-specific execution call info, `None` for declare transaction.
-    call_info: Optional[CallInfo]
+    execute_call_info: Optional[CallInfo]
     # Fee transfer call info, executed by the BE for account contract transactions (e.g., declare
     # and invoke).
-    fee_transfer_info: Optional[CallInfo]
+    fee_transfer_call_info: Optional[CallInfo]
     # The actual fee that was charged in Wei.
     actual_fee: int = field(metadata=fields.FeeField.metadata(field_name="actual_fee"))
     # Actual resources the transaction is charged for, including L1 gas
@@ -479,13 +665,50 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
 
     # The reason for the transaction revert, if applicable.
     revert_error: Optional[str] = field(metadata=fields.revert_error_metadata)
+    # Contains the gas cost of data availability (from version 0.13.1).
+    da_gas: Optional[GasVector]
 
     def __post_init__(self):
         super().__post_init__()
         if self.is_reverted:
             assert (
-                self.call_info is None
+                self.execute_call_info is None
             ), "Reverted transactions only execute validation and fee transfer."
+
+    @classmethod
+    def create(
+        cls,
+        validate_info: Optional[CallInfo],
+        call_info: Optional[CallInfo],
+        fee_transfer_info: Optional[CallInfo],
+        actual_fee: int,
+        actual_resources: ResourcesMapping,
+        tx_type: Optional[TransactionType],
+        revert_error: Optional[str],
+        da_gas: Optional[GasVector],
+    ) -> "TransactionExecutionInfo":
+        return cls(
+            validate_call_info=validate_info,
+            execute_call_info=call_info,
+            fee_transfer_call_info=fee_transfer_info,
+            actual_fee=actual_fee,
+            actual_resources=actual_resources,
+            tx_type=tx_type,
+            revert_error=revert_error,
+            da_gas=da_gas,
+        )
+
+    @property
+    def validate_info(self) -> Optional[CallInfo]:
+        return self.validate_call_info
+
+    @property
+    def call_info(self) -> Optional[CallInfo]:
+        return self.execute_call_info
+
+    @property
+    def fee_transfer_info(self) -> Optional[CallInfo]:
+        return self.fee_transfer_call_info
 
     @property
     def is_reverted(self) -> bool:
@@ -495,9 +718,17 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
     def non_optional_calls(self) -> Iterable[CallInfo]:
         if self.tx_type is TransactionType.DEPLOY_ACCOUNT:
             # In deploy account tx, validation will take place after execution of the constructor.
-            ordered_optional_calls = (self.call_info, self.validate_info, self.fee_transfer_info)
+            ordered_optional_calls = (
+                self.execute_call_info,
+                self.validate_call_info,
+                self.fee_transfer_call_info,
+            )
         else:
-            ordered_optional_calls = (self.validate_info, self.call_info, self.fee_transfer_info)
+            ordered_optional_calls = (
+                self.validate_call_info,
+                self.execute_call_info,
+                self.fee_transfer_call_info,
+            )
         return tuple(call for call in ordered_optional_calls if call is not None)
 
     def get_state_selector(self) -> StateSelector:
@@ -518,7 +749,7 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
         fee_transfer_info: Optional[CallInfo] = None,
         revert_error: Optional[str] = None,
     ) -> "TransactionExecutionInfo":
-        return cls(
+        return cls.create(
             validate_info=validate_info,
             call_info=execute_call_info,
             fee_transfer_info=fee_transfer_info,
@@ -526,11 +757,12 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
             actual_resources={},
             tx_type=tx_type,
             revert_error=revert_error,
+            da_gas=GasVector.empty(),
         )
 
     @classmethod
     def empty(cls) -> "TransactionExecutionInfo":
-        return cls(
+        return cls.create(
             validate_info=None,
             call_info=None,
             fee_transfer_info=None,
@@ -538,6 +770,7 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
             actual_resources={},
             tx_type=None,
             revert_error=None,
+            da_gas=GasVector.empty(),
         )
 
     @classmethod
@@ -548,12 +781,13 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
         actual_resources: ResourcesMapping,
         tx_type: TransactionType,
         revert_error: Optional[str],
+        da_gas: Optional[GasVector] = None,
     ) -> "TransactionExecutionInfo":
         """
         Returns TransactionExecutionInfo for the concurrent stage (without
         fee_transfer_info and without fee).
         """
-        return cls(
+        return cls.create(
             validate_info=validate_info,
             call_info=call_info,
             fee_transfer_info=None,
@@ -561,6 +795,7 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
             actual_resources=actual_resources,
             tx_type=tx_type,
             revert_error=revert_error,
+            da_gas=da_gas,
         )
 
     @classmethod
@@ -574,14 +809,15 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
         Fills the given concurrent_execution_info with actual_fee and fee_transfer_info.
         Used when the call infos (except for the fee handling) executed in the concurrent stage.
         """
-        return cls(
-            validate_info=concurrent_execution_info.validate_info,
-            call_info=concurrent_execution_info.call_info,
+        return cls.create(
+            validate_info=concurrent_execution_info.validate_call_info,
+            call_info=concurrent_execution_info.execute_call_info,
             fee_transfer_info=fee_transfer_info,
             actual_fee=actual_fee,
             actual_resources=concurrent_execution_info.actual_resources,
             tx_type=concurrent_execution_info.tx_type,
             revert_error=concurrent_execution_info.revert_error,
+            da_gas=concurrent_execution_info.da_gas,
         )
 
     def gen_call_iterator(self) -> Iterator[CallInfo]:
@@ -626,181 +862,3 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
             for call_info in self.non_optional_calls
             for message in call_info.get_sorted_l2_to_l1_messages()
         ]
-
-
-# Deprecated classes.
-
-
-@dataclasses.dataclass(frozen=True)
-class ContractCallResponse(ValidatedDataclass):
-    """
-    Contains the information needed by the OS to guess the response of a contract call.
-    """
-
-    retdata: List[int]
-
-
-@marshmallow_dataclass.dataclass(frozen=True)
-class ContractCall(ValidatedMarshmallowDataclass):
-    """
-    Represents a contract call, either internal or external.
-    Holds the information needed for the execution of the represented contract call by the OS.
-    No need for validations here, as the fields are taken from validated objects.
-    """
-
-    # Static info.
-
-    from_address: int  # Should be zero if the call represents the parent transaction itself.
-    to_address: int  # The called contract address.
-    # The address that holds the executed code; relevant just for delegate calls, where it may
-    # differ from the code of the to_address contract.
-    code_address: Optional[int] = field(metadata=fields.optional_l2_address_metadata)
-    entry_point_selector: Optional[int] = field(metadata=nonrequired_optional_metadata)
-    entry_point_type: Optional[EntryPointType] = field(metadata=nonrequired_optional_metadata)
-    calldata: List[int]
-    signature: List[int]
-
-    # Execution info.
-
-    cairo_usage: ExecutionResources
-    # Note that the order starts from a transaction-global offset.
-    events: List[OrderedEvent] = field(metadata=nonrequired_list_metadata)
-    l2_to_l1_messages: List[L2ToL1MessageInfo] = field(metadata=nonrequired_list_metadata)
-
-    # Information kept for the StarkNet OS run in the GpsAmbassador.
-
-    # The response of the direct internal calls invoked by this call; kept in the order
-    # the OS "guesses" them.
-    internal_call_responses: List[ContractCallResponse]
-    # A list of values read from storage by this call, **excluding** readings from nested calls.
-    storage_read_values: List[int]
-    # A set of storage addresses accessed by this call, **excluding** addresses from nested calls;
-    # kept in order to calculate and prepare the commitment tree facts before the StarkNet OS run.
-    storage_accessed_addresses: Set[int] = field(
-        metadata=additional_metadata(
-            marshmallow_field=SetField(
-                everest_fields.felt_metadata("storage_accessed_address")["marshmallow_field"]
-            )
-        )
-    )
-
-    @classmethod
-    def empty(cls, to_address: int) -> "ContractCall":
-        return cls(
-            from_address=0,
-            to_address=to_address,
-            code_address=None,
-            entry_point_type=None,
-            entry_point_selector=None,
-            calldata=[],
-            signature=[],
-            cairo_usage=ExecutionResources.empty(),
-            events=[],
-            l2_to_l1_messages=[],
-            internal_call_responses=[],
-            storage_read_values=[],
-            storage_accessed_addresses=set(),
-        )
-
-    @property
-    def state_selector(self) -> StateSelector:
-        code_address = self.to_address if self.code_address is None else self.code_address
-        return StateSelector.create(
-            contract_addresses=[self.to_address, code_address], class_hashes=[]
-        )
-
-
-@marshmallow_dataclass.dataclass(frozen=True)
-class TransactionExecutionInfoDeprecated(EverestTransactionExecutionInfo):
-    """
-    Contains the information gathered by the execution of a transation. Main uses:
-    1. Supplies hints for the OS run on the corresponding transaction; e.g., internal call results.
-    2. Stores useful information for users; e.g., L2-to-L1 messages it sent and emitted events.
-    """
-
-    l2_to_l1_messages: List[L2ToL1MessageInfo]
-    # The retdata of the main transaction.
-    retdata: List[int]
-    call_info: ContractCall
-    # The internal contract calls; arranged in DFS order, which is the order they are invoked by the
-    # OS.
-    internal_calls: List[ContractCall]
-
-    @classmethod
-    def create(
-        cls,
-        call_info: ContractCall,
-        internal_calls: Optional[List[ContractCall]] = None,
-    ) -> "TransactionExecutionInfoDeprecated":
-        return cls(
-            l2_to_l1_messages=[],
-            retdata=[],
-            call_info=call_info,
-            internal_calls=[] if internal_calls is None else internal_calls,
-        )
-
-    @property
-    def contract_calls(self) -> List[ContractCall]:
-        return [self.call_info, *self.internal_calls]
-
-    def get_state_selector(self) -> StateSelector:
-        return functools.reduce(
-            operator.__or__,
-            (contract_call.state_selector for contract_call in self.contract_calls),
-            StateSelector.empty(),
-        )
-
-    def get_sorted_events(self) -> List[Event]:
-        """
-        Returns a list of StarkNet Event objects collected during the execution, sorted by the order
-        in which they were emitted.
-        """
-        n_events = sum(len(contract_call.events) for contract_call in self.contract_calls)
-        starknet_events: List[Optional[Event]] = [None] * n_events
-
-        for contract_call in self.contract_calls:
-            for ordered_event_content in contract_call.events:
-                # Convert OrderedEvent -> Event. I.e., add emitting contract address
-                # and remove the order.
-                starknet_events[ordered_event_content.order] = Event.create(
-                    emitting_contract_address=contract_call.to_address,
-                    event_content=ordered_event_content,
-                )
-
-        assert all(
-            starknet_event is not None for starknet_event in starknet_events
-        ), "Unexpected holes in the event order."
-
-        return cast(List[Event], starknet_events)
-
-    @staticmethod
-    def get_state_selector_of_many(
-        execution_infos: List["TransactionExecutionInfoDeprecated"],
-    ) -> StateSelector:
-        return functools.reduce(
-            operator.__or__,
-            (execution_info.get_state_selector() for execution_info in execution_infos),
-            StateSelector.empty(),
-        )
-
-
-class ExecutionResourcesManager:
-    """
-    Aggregates execution resources throughout transaction stream processing.
-    """
-
-    def __init__(self, cairo_usage: ExecutionResources, syscall_counter: Dict[str, int]):
-        # The accumulated Cairo usage.
-        self.cairo_usage = cairo_usage
-
-        # A mapping from system call to the cumulative times it was invoked.
-        self.syscall_counter = syscall_counter
-
-    # Alternative constructors.
-
-    @classmethod
-    def empty(cls) -> "ExecutionResourcesManager":
-        return cls(
-            cairo_usage=ExecutionResources.empty(),
-            syscall_counter={},
-        )

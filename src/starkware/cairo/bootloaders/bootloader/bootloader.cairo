@@ -1,10 +1,11 @@
-%builtins output pedersen range_check ecdsa bitwise ec_op keccak poseidon
+%builtins output pedersen range_check ecdsa bitwise ec_op keccak poseidon range_check96
 
 from starkware.cairo.bootloaders.simple_bootloader.run_simple_bootloader import (
     run_simple_bootloader,
 )
 from starkware.cairo.cairo_verifier.objects import CairoVerifierOutput
-from starkware.cairo.common.cairo_builtins import HashBuiltin
+from starkware.cairo.common.builtin_poseidon.poseidon import poseidon_hash_many
+from starkware.cairo.common.cairo_builtins import HashBuiltin, PoseidonBuiltin
 from starkware.cairo.common.find_element import find_element
 from starkware.cairo.common.hash_state import hash_felts
 from starkware.cairo.common.memcpy import memcpy
@@ -34,7 +35,8 @@ func main{
     bitwise_ptr,
     ec_op_ptr,
     keccak_ptr,
-    poseidon_ptr,
+    poseidon_ptr: PoseidonBuiltin*,
+    range_check96_ptr,
 }() {
     ap += SIZEOF_LOCALS;
 
@@ -63,7 +65,8 @@ func main{
     local bitwise_ptr = bitwise_ptr;
     local ec_op_ptr = ec_op_ptr;
     local keccak_ptr = keccak_ptr;
-    local poseidon_ptr = poseidon_ptr;
+    local poseidon_ptr: PoseidonBuiltin* = poseidon_ptr;
+    local range_check96_ptr = range_check96_ptr;
     local simple_bootloader_output_end: felt* = simple_bootloader_output_ptr;
 
     %{
@@ -165,6 +168,7 @@ func main{
 func parse_tasks{
     output_ptr: felt*,
     pedersen_ptr: HashBuiltin*,
+    poseidon_ptr: PoseidonBuiltin*,
     range_check_ptr,
     n_total_tasks: felt,
     subtasks_output: felt*,
@@ -255,6 +259,7 @@ func parse_task_header{task_output: felt*}() -> (task_header: TaskOutputHeader*)
 func unpack_composite_packed_task{
     output_ptr: felt*,
     pedersen_ptr: HashBuiltin*,
+    poseidon_ptr: PoseidonBuiltin*,
     range_check_ptr,
     n_total_tasks: felt,
     task_output: felt*,
@@ -271,8 +276,8 @@ func unpack_composite_packed_task{
     %}
 
     // Compute the hash of nested_subtasks_output.
-    let (subtasks_output_hash) = hash_felts{hash_ptr=pedersen_ptr}(
-        data=nested_subtasks_output, length=nested_subtasks_output_len
+    let (subtasks_output_hash: felt) = poseidon_hash_many(
+        n=nested_subtasks_output_len, elements=nested_subtasks_output
     );
 
     // Verify task output header.
@@ -323,6 +328,7 @@ func unpack_composite_packed_task{
 func unpack_plain_packed_task{
     output_ptr: felt*,
     pedersen_ptr: HashBuiltin*,
+    poseidon_ptr: PoseidonBuiltin*,
     range_check_ptr,
     n_total_tasks: felt,
     task_output: felt*,

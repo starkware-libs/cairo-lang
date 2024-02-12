@@ -244,7 +244,7 @@ func execute_entry_point{
             print(f"  Size: {retdata_size}")
             print(f"  Error (at most 100 elements): {error}")
 
-        if execution_helper.perform_extended_checks:
+        if execution_helper.debug_mode:
             # Validate the predicted gas cost.
             actual = ids.remaining_gas - ids.entry_point_return_values.gas_builtin
             predicted = execution_helper.call_info.gas_consumed

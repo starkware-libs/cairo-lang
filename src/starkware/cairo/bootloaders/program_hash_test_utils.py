@@ -6,7 +6,7 @@ from starkware.cairo.lang.compiler.program import Program
 
 def run_generate_hash_test(fix: bool, program_path: str, hash_path: str, command: str):
     compiled_program = Program.Schema().load(json.load(open(program_path)))
-    program_hash = hex(compute_program_hash_chain(program=compiled_program))
+    program_hash = hex(compute_program_hash_chain(program=compiled_program, use_poseidon=False))
     program_hash_key = "program_hash"
 
     if fix:

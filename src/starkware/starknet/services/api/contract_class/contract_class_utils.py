@@ -15,6 +15,8 @@ def compile_contract_class(
     allowed_libfuncs_list_name: Optional[str] = None,
     allowed_libfuncs_list_file: Optional[str] = None,
     compiler_dir: Optional[str] = None,
+    memory_limit_in_mb: Optional[int] = None,
+    max_bytecode_size: Optional[int] = None,
 ) -> CompiledClass:
     """
     Compiles a contract class to a compiled class.
@@ -41,6 +43,8 @@ def compile_contract_class(
             allowed_libfuncs_list_name=allowed_libfuncs_list_name,
             allowed_libfuncs_list_file=allowed_libfuncs_list_file,
             compiler_dir=compiler_dir,
+            memory_limit_in_mb=memory_limit_in_mb,
+            max_bytecode_size=max_bytecode_size,
         )
 
     # Parse the resultant Casm file.

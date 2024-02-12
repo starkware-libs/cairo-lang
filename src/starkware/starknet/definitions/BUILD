@@ -2,7 +2,10 @@ load("//bazel_utils/python:defs.bzl", "requirement")
 
 package(default_visibility = ["//visibility:public"])
 
-exports_files(["general_config.yml"])
+exports_files([
+    "general_config.yml",
+    "versioned_constants.json",
+])
 
 py_library(
     name = "starknet_definitions_lib",
@@ -12,8 +15,11 @@ py_library(
         "error_codes.py",
         "execution_mode.py",
         "fields.py",
+        "l1_da_mode.py",
         "transaction_type.py",
+        "types.py",
     ],
+    data = ["versioned_constants.json"],
     visibility = ["//visibility:public"],
     deps = [
         "//src/services/everest/api/gateway:everest_transaction_type_lib",
@@ -25,7 +31,6 @@ py_library(
         "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
         "//src/starkware/starkware_utils:starkware_error_handling_lib",
         "//src/starkware/storage:starkware_abstract_storage_lib",
-        requirement("frozendict"),
         requirement("marshmallow"),
         requirement("marshmallow_dataclass"),
     ],

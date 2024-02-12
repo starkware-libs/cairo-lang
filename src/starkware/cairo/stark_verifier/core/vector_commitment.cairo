@@ -1,12 +1,8 @@
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.builtin_poseidon.poseidon import poseidon_hash
-from starkware.cairo.common.cairo_blake2s.blake2s import (
-    blake2s_add_felt,
-    blake2s_add_uint256_bigend,
-    blake2s_bigend,
-)
+from starkware.cairo.common.cairo_blake2s.blake2s import blake2s_add_felt, blake2s_bigend
 from starkware.cairo.common.cairo_builtins import BitwiseBuiltin, PoseidonBuiltin
-from starkware.cairo.common.math import assert_nn, assert_nn_le, split_felt, unsigned_div_rem
+from starkware.cairo.common.math import assert_nn, assert_nn_le, unsigned_div_rem
 from starkware.cairo.common.math_cmp import is_nn
 from starkware.cairo.common.pow import pow
 from starkware.cairo.common.uint256 import Uint256
@@ -67,11 +63,9 @@ func validate_vector_commitment{range_check_ptr}(
     return ();
 }
 
-func vector_commit{
-    blake2s_ptr: felt*, bitwise_ptr: BitwiseBuiltin*, channel: Channel, range_check_ptr
-}(unsent_commitment: VectorUnsentCommitment, config: VectorCommitmentConfig*) -> (
-    res: VectorCommitment*
-) {
+func vector_commit{poseidon_ptr: PoseidonBuiltin*, channel: Channel, range_check_ptr}(
+    unsent_commitment: VectorUnsentCommitment, config: VectorCommitmentConfig*
+) -> (res: VectorCommitment*) {
     let (commitment_hash_value) = read_felt_from_prover(value=unsent_commitment.commitment_hash);
     return (res=new VectorCommitment(config=config, commitment_hash=commitment_hash_value));
 }

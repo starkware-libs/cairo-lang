@@ -66,6 +66,14 @@ class CachedStorage(Storage):
 
         self.cache[key] = value
 
+    async def setnx_value(self, key: bytes, value: bytes) -> bool:
+        assert value is not None
+        # Don't check the cache here to avoid race conditions.
+        result = await self.storage.setnx_value(key=key, value=value)
+        if result:
+            self.cache[key] = value
+        return result
+
     async def get_value(self, key: bytes) -> Optional[bytes]:
         if self.metric_active:
             storage_metrics.CACHED_STORAGE_GET_TOTAL.inc()

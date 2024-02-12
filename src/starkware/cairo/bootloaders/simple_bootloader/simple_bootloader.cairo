@@ -1,9 +1,9 @@
-%builtins output pedersen range_check ecdsa bitwise ec_op keccak poseidon
+%builtins output pedersen range_check ecdsa bitwise ec_op keccak poseidon range_check96
 
 from starkware.cairo.bootloaders.simple_bootloader.run_simple_bootloader import (
     run_simple_bootloader,
 )
-from starkware.cairo.common.cairo_builtins import HashBuiltin
+from starkware.cairo.common.cairo_builtins import HashBuiltin, PoseidonBuiltin
 from starkware.cairo.common.registers import get_fp_and_pc
 
 func main{
@@ -14,7 +14,8 @@ func main{
     bitwise_ptr,
     ec_op_ptr,
     keccak_ptr,
-    poseidon_ptr,
+    poseidon_ptr: PoseidonBuiltin*,
+    range_check96_ptr,
 }() {
     %{
         from starkware.cairo.bootloaders.simple_bootloader.objects import SimpleBootloaderInput

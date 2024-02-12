@@ -1,26 +1,25 @@
 import dataclasses
+import json
 import logging
 from abc import abstractmethod
 from dataclasses import field
-from typing import Any, ClassVar, Dict, Iterable, List, Optional, Tuple, Type, cast
+from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type, cast
 
 import marshmallow
 import marshmallow_dataclass
 
 from services.everest.api.gateway.transaction import EverestTransaction
-from services.everest.business_logic.internal_transaction import EverestInternalStateTransaction
 from services.everest.business_logic.state_api import StateProxy
 from services.everest.definitions.fields import format_felt_list
 from starkware.python.utils import as_non_optional, from_bytes, to_bytes
+from starkware.starknet.business_logic.execution.deprecated_objects import ExecutionResourcesManager
 from starkware.starknet.business_logic.execution.execute_entry_point import ExecuteEntryPoint
 from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
-    ExecutionResourcesManager,
     ResourcesMapping,
     TransactionExecutionContext,
     TransactionExecutionInfo,
 )
-from starkware.starknet.business_logic.fact_state.contract_state_objects import StateSelector
 from starkware.starknet.business_logic.state.state import UpdatesTrackerState
 from starkware.starknet.business_logic.state.state_api import SyncState
 from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
@@ -140,12 +139,6 @@ class SyntheticTransaction(InternalStateTransaction):
         Subclasses should define it as a class variable.
         """
 
-    @staticmethod
-    def get_state_selector_of_many(
-        txs: Iterable[EverestInternalStateTransaction], general_config: Config
-    ) -> StateSelector:
-        return StateSelector.empty()
-
 
 @marshmallow_dataclass.dataclass(frozen=True)
 class InitializeBlockInfo(SyntheticTransaction):
@@ -197,9 +190,6 @@ class InitializeBlockInfo(SyntheticTransaction):
         raise NotImplementedError(
             f"_apply_specific_concurrent_changes is not implemented for {type(self).__name__}."
         )
-
-    def get_state_selector(self, general_config: Config) -> StateSelector:
-        return StateSelector.empty()
 
 
 @dataclasses.dataclass(frozen=True)  # type: ignore[misc]
@@ -264,15 +254,6 @@ class DeprecatedInternalAccountTransaction(DeprecatedInternalTransaction):
             only_query=self.only_query,
             old_supported_versions=[0],
         )
-
-    def get_state_selector(self, general_config: Config) -> StateSelector:
-        contract_addresses = {self.sender_address}
-        if not self.zero_max_fee:
-            # Downcast arguments to application-specific types.
-            assert isinstance(general_config, StarknetGeneralConfig)
-            contract_addresses.add(general_config.deprecated_fee_token_address)
-
-        return StateSelector.create(contract_addresses=contract_addresses, class_hashes=[])
 
     def run_validate_entrypoint(
         self,
@@ -349,7 +330,7 @@ class DeprecatedInternalAccountTransaction(DeprecatedInternalTransaction):
             return None, 0
 
         actual_fee = calculate_tx_fee(
-            l1_gas_price=state.block_info.eth_l1_gas_price,
+            l1_gas_price=state.block_info.l1_gas_price.price_in_wei,
             general_config=general_config,
             resources=resources,
         )
@@ -416,6 +397,8 @@ class DeprecatedInternalDeclare(DeprecatedInternalAccountTransaction):
     compiled_class_hash: Optional[int] = field(
         metadata=fields.optional_compiled_class_hash_metadata
     )
+    sierra_program_size: int = field(metadata=fields.sierra_program_size_metadata)
+    abi_size: int = field(metadata=fields.abi_size_metadata)
 
     # Class variables.
     tx_type: ClassVar[TransactionType] = TransactionType.DECLARE
@@ -495,6 +478,8 @@ class DeprecatedInternalDeclare(DeprecatedInternalAccountTransaction):
         internal_declare = cls(
             class_hash=class_hash,
             compiled_class_hash=compiled_class_hash,
+            sierra_program_size=contract_class.get_bytecode_size(),
+            abi_size=contract_class.get_abi_size(),
             sender_address=sender_address,
             max_fee=max_fee,
             version=version,
@@ -525,9 +510,12 @@ class DeprecatedInternalDeclare(DeprecatedInternalAccountTransaction):
         nonce: int,
     ):
         class_hash = compute_deprecated_class_hash(contract_class=contract_class)
+        abi_size = len(json.dumps(contract_class.abi)) if contract_class.abi is not None else 0
         internal_declare = cls(
             class_hash=class_hash,
             compiled_class_hash=None,
+            sierra_program_size=0,
+            abi_size=abi_size,
             sender_address=sender_address,
             max_fee=max_fee,
             version=version,
@@ -603,15 +591,6 @@ class DeprecatedInternalDeclare(DeprecatedInternalAccountTransaction):
 
     def to_external(self) -> DeprecatedOldDeclare:
         raise NotImplementedError("Cannot convert internal declare transaction to external object.")
-
-    def get_state_selector(self, general_config: Config) -> StateSelector:
-        if self.version in [0, constants.QUERY_VERSION_BASE]:
-            return StateSelector.empty()
-
-        account_state_selector = super().get_state_selector(general_config=general_config)
-        return account_state_selector | StateSelector.create(
-            contract_addresses=[], class_hashes=[self.class_hash]
-        )
 
     def _apply_specific_concurrent_changes(
         self, state: UpdatesTrackerState, general_config: StarknetGeneralConfig, remaining_gas: int
@@ -803,12 +782,6 @@ class DeprecatedInternalDeployAccount(DeprecatedInternalAccountTransaction):
             contract_address_salt=self.contract_address_salt,
             class_hash=self.class_hash,
             constructor_calldata=self.constructor_calldata,
-        )
-
-    def get_state_selector(self, general_config: Config) -> StateSelector:
-        account_state_selector = super().get_state_selector(general_config=general_config)
-        return account_state_selector | StateSelector.create(
-            contract_addresses=[], class_hashes=[self.class_hash]
         )
 
     def _apply_specific_concurrent_changes(
@@ -1040,9 +1013,6 @@ class InternalDeploy(DeprecatedInternalTransaction):
     def to_external(self) -> Deploy:
         raise NotImplementedError("Cannot convert internal deploy transaction to external object.")
 
-    def get_state_selector(self, general_config: Config) -> StateSelector:
-        return StateSelector.create(contract_addresses=[self.contract_address], class_hashes=[])
-
     def _apply_specific_concurrent_changes(
         self, state: UpdatesTrackerState, general_config: StarknetGeneralConfig, remaining_gas: int
     ) -> TransactionExecutionInfo:
@@ -1258,9 +1228,11 @@ class DeprecatedInternalInvokeFunction(DeprecatedInternalAccountTransaction):
         return cls.create(
             sender_address=account_address,
             max_fee=max_fee,
-            entry_point_selector=starknet_abi.EXECUTE_ENTRY_POINT_SELECTOR
-            if version in [0, constants.QUERY_VERSION_BASE]
-            else None,
+            entry_point_selector=(
+                starknet_abi.EXECUTE_ENTRY_POINT_SELECTOR
+                if version in [0, constants.QUERY_VERSION_BASE]
+                else None
+            ),
             version=constants.DEPRECATED_TRANSACTION_VERSION if version is None else version,
             calldata=[contract_address, entry_point_selector, len(calldata), *calldata],
             nonce=nonce,
@@ -1310,9 +1282,11 @@ class DeprecatedInternalInvokeFunction(DeprecatedInternalAccountTransaction):
 
         internal_invoke = cls(
             sender_address=sender_address,
-            entry_point_selector=starknet_abi.EXECUTE_ENTRY_POINT_SELECTOR
-            if entry_point_selector is None
-            else entry_point_selector,
+            entry_point_selector=(
+                starknet_abi.EXECUTE_ENTRY_POINT_SELECTOR
+                if entry_point_selector is None
+                else entry_point_selector
+            ),
             max_fee=max_fee,
             version=version,
             entry_point_type=EntryPointType.EXTERNAL,
@@ -1332,9 +1306,11 @@ class DeprecatedInternalInvokeFunction(DeprecatedInternalAccountTransaction):
 
         return DeprecatedInvokeFunction(
             sender_address=self.sender_address,
-            entry_point_selector=self.entry_point_selector
-            if self.version in [0, constants.QUERY_VERSION_BASE]
-            else None,
+            entry_point_selector=(
+                self.entry_point_selector
+                if self.version in [0, constants.QUERY_VERSION_BASE]
+                else None
+            ),
             calldata=self.calldata,
             max_fee=self.max_fee,
             version=self.version,
@@ -1517,9 +1493,6 @@ class InternalL1Handler(DeprecatedInternalTransaction):
             paid_fee_on_l1=paid_fee_on_l1,
         )
 
-    def get_state_selector(self, general_config: Config) -> StateSelector:
-        return StateSelector.create(contract_addresses=[self.contract_address], class_hashes=[])
-
     def _apply_specific_concurrent_changes(
         self, state: UpdatesTrackerState, general_config: StarknetGeneralConfig, remaining_gas: int
     ) -> TransactionExecutionInfo:
@@ -1565,7 +1538,7 @@ class InternalL1Handler(DeprecatedInternalTransaction):
             # the transaction is an old transaction.
             if self.paid_fee_on_l1 is not None:
                 required_fee = calculate_tx_fee(
-                    l1_gas_price=state.block_info.eth_l1_gas_price,
+                    l1_gas_price=state.block_info.l1_gas_price.price_in_wei,
                     general_config=general_config,
                     resources=actual_resources,
                 )

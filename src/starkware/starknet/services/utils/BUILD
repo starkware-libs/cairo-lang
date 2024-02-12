@@ -8,6 +8,7 @@ py_library(
     visibility = ["//visibility:public"],
     deps = [
         "//src/services/everest/api/gateway:everest_transaction_lib",
+        "//src/starkware/starknet/business_logic/execution:starknet_deprecated_transaction_execution_objects_lib",
         "//src/starkware/starknet/business_logic/execution:starknet_transaction_execution_objects_lib",
         "//src/starkware/starknet/business_logic/state:starknet_business_logic_state_lib",
         "//src/starkware/starknet/business_logic/transaction:starknet_transaction_deprecated_objects_lib",

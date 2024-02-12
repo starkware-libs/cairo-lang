@@ -154,7 +154,7 @@ from starkware.starknet.core.os.output import (
     OsCarriedOutputs,
     os_carried_outputs_new,
 )
-from starkware.starknet.core.os.state import StateEntry
+from starkware.starknet.core.os.state.commitment import StateEntry
 
 // Executes the system calls in syscall_ptr.
 // The signature of the function 'call_execute_syscalls' must match this function's signature.
@@ -176,8 +176,27 @@ func execute_syscalls{
     }
 
     tempvar selector = [syscall_ptr];
+    %{
+        execution_helper.os_logger.enter_syscall(
+            n_steps=current_step,
+            builtin_ptrs=ids.builtin_ptrs,
+            range_check_ptr=ids.range_check_ptr,
+            deprecated=False,
+            selector=ids.selector,
+        )
+
+        # Prepare a short callable to save code duplication.
+        exit_syscall = lambda selector: execution_helper.os_logger.exit_syscall(
+            n_steps=current_step,
+            builtin_ptrs=ids.builtin_ptrs,
+            range_check_ptr=ids.range_check_ptr,
+            selector=selector,
+        )
+    %}
+
     if (selector == STORAGE_READ_SELECTOR) {
         execute_storage_read(contract_address=execution_context.execution_info.contract_address);
+        %{ exit_syscall(selector=ids.STORAGE_READ_SELECTOR) %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -187,6 +206,7 @@ func execute_syscalls{
 
     if (selector == STORAGE_WRITE_SELECTOR) {
         execute_storage_write(contract_address=execution_context.execution_info.contract_address);
+        %{ exit_syscall(selector=ids.STORAGE_WRITE_SELECTOR) %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -196,6 +216,7 @@ func execute_syscalls{
 
     if (selector == GET_EXECUTION_INFO_SELECTOR) {
         execute_get_execution_info(execution_info=execution_context.execution_info);
+        %{ exit_syscall(selector=ids.GET_EXECUTION_INFO_SELECTOR) %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -207,6 +228,7 @@ func execute_syscalls{
         execute_call_contract(
             block_context=block_context, caller_execution_context=execution_context
         );
+        %{ exit_syscall(selector=ids.CALL_CONTRACT_SELECTOR) %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -218,6 +240,7 @@ func execute_syscalls{
         execute_library_call(
             block_context=block_context, caller_execution_context=execution_context
         );
+        %{ exit_syscall(selector=ids.LIBRARY_CALL_SELECTOR) %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -230,6 +253,7 @@ func execute_syscalls{
         reduce_syscall_gas_and_write_response_header(
             total_gas_cost=EMIT_EVENT_GAS_COST, request_struct_size=EmitEventRequest.SIZE
         );
+        %{ exit_syscall(selector=ids.EMIT_EVENT_SELECTOR) %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -239,6 +263,7 @@ func execute_syscalls{
 
     if (selector == DEPLOY_SELECTOR) {
         execute_deploy(block_context=block_context, caller_execution_context=execution_context);
+        %{ exit_syscall(selector=ids.DEPLOY_SELECTOR) %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -248,6 +273,7 @@ func execute_syscalls{
 
     if (selector == GET_BLOCK_HASH_SELECTOR) {
         execute_get_block_hash(block_context=block_context);
+        %{ exit_syscall(selector=ids.GET_BLOCK_HASH_SELECTOR) %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -257,6 +283,7 @@ func execute_syscalls{
 
     if (selector == REPLACE_CLASS_SELECTOR) {
         execute_replace_class(contract_address=execution_context.execution_info.contract_address);
+        %{ exit_syscall(selector=ids.REPLACE_CLASS_SELECTOR) %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -266,6 +293,7 @@ func execute_syscalls{
 
     if (selector == KECCAK_SELECTOR) {
         execute_keccak();
+        %{ exit_syscall(selector=ids.KECCAK_SELECTOR) %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -275,6 +303,7 @@ func execute_syscalls{
 
     if (selector == SECP256K1_GET_POINT_FROM_X_SELECTOR) {
         execute_secp256k1_get_point_from_x();
+        %{ exit_syscall(selector=ids.SECP256K1_GET_POINT_FROM_X_SELECTOR) %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -284,6 +313,7 @@ func execute_syscalls{
 
     if (selector == SECP256R1_GET_POINT_FROM_X_SELECTOR) {
         execute_secp256r1_get_point_from_x();
+        %{ exit_syscall(selector=ids.SECP256R1_GET_POINT_FROM_X_SELECTOR) %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -293,6 +323,7 @@ func execute_syscalls{
 
     if (selector == SECP256K1_NEW_SELECTOR) {
         execute_secp256k1_new();
+        %{ exit_syscall(selector=ids.SECP256K1_NEW_SELECTOR) %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -302,6 +333,7 @@ func execute_syscalls{
 
     if (selector == SECP256R1_NEW_SELECTOR) {
         execute_secp256r1_new();
+        %{ exit_syscall(selector=ids.SECP256R1_NEW_SELECTOR) %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -311,6 +343,7 @@ func execute_syscalls{
 
     if (selector == SECP256K1_ADD_SELECTOR) {
         execute_secp256k1_add();
+        %{ exit_syscall(selector=ids.SECP256K1_ADD_SELECTOR) %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -320,6 +353,7 @@ func execute_syscalls{
 
     if (selector == SECP256R1_ADD_SELECTOR) {
         execute_secp256r1_add();
+        %{ exit_syscall(selector=ids.SECP256R1_ADD_SELECTOR) %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -329,6 +363,7 @@ func execute_syscalls{
 
     if (selector == SECP256K1_MUL_SELECTOR) {
         execute_secp256k1_mul();
+        %{ exit_syscall(selector=ids.SECP256K1_MUL_SELECTOR) %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -338,6 +373,7 @@ func execute_syscalls{
 
     if (selector == SECP256R1_MUL_SELECTOR) {
         execute_secp256r1_mul();
+        %{ exit_syscall(selector=ids.SECP256R1_MUL_SELECTOR) %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -350,6 +386,7 @@ func execute_syscalls{
             curve_prime=Uint256(low=SECP256K1_PRIME_LOW, high=SECP256K1_PRIME_HIGH),
             gas_cost=SECP256K1_GET_XY_GAS_COST,
         );
+        %{ exit_syscall(selector=ids.SECP256K1_GET_XY_SELECTOR) %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -362,6 +399,7 @@ func execute_syscalls{
             curve_prime=Uint256(low=SECP256R1_PRIME_LOW, high=SECP256R1_PRIME_HIGH),
             gas_cost=SECP256R1_GET_XY_GAS_COST,
         );
+        %{ exit_syscall(selector=ids.SECP256R1_GET_XY_SELECTOR) %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -372,6 +410,7 @@ func execute_syscalls{
     assert selector = SEND_MESSAGE_TO_L1_SELECTOR;
 
     execute_send_message_to_l1(contract_address=execution_context.execution_info.contract_address);
+    %{ exit_syscall(selector=ids.SEND_MESSAGE_TO_L1_SELECTOR) %}
     return execute_syscalls(
         block_context=block_context,
         execution_context=execution_context,

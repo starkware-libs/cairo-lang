@@ -17,4 +17,4 @@ def get_os_program() -> Program:
 @cachetools.cached(cache={})
 def get_os_program_hash() -> int:
     program = get_os_program()
-    return compute_program_hash_chain(program=program)
+    return compute_program_hash_chain(program=program, use_poseidon=False)

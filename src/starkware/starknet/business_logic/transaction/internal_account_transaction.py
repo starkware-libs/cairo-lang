@@ -8,7 +8,6 @@ import marshmallow_dataclass
 import starkware.starknet.public.abi as abi_constants
 from services.everest.business_logic.state_api import StateProxy
 from services.everest.business_logic.transaction_execution_objects import TransactionExecutionInfo
-from starkware.starknet.business_logic.fact_state.contract_state_objects import StateSelector
 from starkware.starknet.business_logic.transaction.objects import InternalTransaction
 from starkware.starknet.business_logic.utils import verify_version, write_class_facts
 from starkware.starknet.core.os.contract_address.contract_address import (
@@ -27,7 +26,7 @@ from starkware.starknet.definitions import constants, fields
 from starkware.starknet.definitions.data_availability_mode import DataAvailabilityMode
 from starkware.starknet.definitions.fields import Resource, ResourceBounds, ResourceBoundsMapping
 from starkware.starknet.definitions.general_config import (
-    DEFAULT_MAX_STRK_L1_GAS_PRICE,
+    DEFAULT_MAX_FRI_L1_GAS_PRICE,
     StarknetGeneralConfig,
 )
 from starkware.starknet.definitions.transaction_type import TransactionType
@@ -46,7 +45,7 @@ from starkware.starkware_utils.config_base import Config
 from starkware.storage.storage import FactFetchingContext
 
 TRIVIAL_RESOURCE_BOUNDS = {
-    Resource.L1_GAS: ResourceBounds(max_amount=0, max_price_per_unit=DEFAULT_MAX_STRK_L1_GAS_PRICE),
+    Resource.L1_GAS: ResourceBounds(max_amount=0, max_price_per_unit=DEFAULT_MAX_FRI_L1_GAS_PRICE),
     Resource.L2_GAS: ResourceBounds(max_amount=0, max_price_per_unit=0),
 }
 
@@ -98,15 +97,6 @@ class InternalAccountTransaction(InternalTransaction):
             old_supported_versions=[],
         )
 
-    def get_state_selector(self, general_config: Config) -> StateSelector:
-        contract_addresses = {self.sender_address}
-        if not self.zero_max_fee:
-            # Downcast arguments to application-specific types.
-            assert isinstance(general_config, StarknetGeneralConfig)
-            contract_addresses.add(general_config.deprecated_fee_token_address)
-
-        return StateSelector.create(contract_addresses=contract_addresses, class_hashes=[])
-
     @classmethod
     @abstractmethod
     def _specific_from_external(
@@ -139,6 +129,8 @@ class InternalDeclare(InternalAccountTransaction):
 
     class_hash: int = field(metadata=fields.new_class_hash_metadata)
     compiled_class_hash: int = field(metadata=fields.compiled_class_hash_metadata)
+    sierra_program_size: int = field(metadata=fields.sierra_program_size_metadata)
+    abi_size: int = field(metadata=fields.abi_size_metadata)
     account_deployment_data: List[int] = field(metadata=fields.account_deployment_data_metadata)
 
     # Class variables.
@@ -194,6 +186,8 @@ class InternalDeclare(InternalAccountTransaction):
             paymaster_data=paymaster_data,
             class_hash=class_hash,
             compiled_class_hash=compiled_class_hash,
+            sierra_program_size=contract_class.get_bytecode_size(),
+            abi_size=contract_class.get_abi_size(),
             account_deployment_data=[]
             if account_deployment_data is None
             else account_deployment_data,
@@ -245,12 +239,6 @@ class InternalDeclare(InternalAccountTransaction):
 
     def to_external(self) -> Declare:
         raise NotImplementedError("Cannot convert internal declare transaction to external object.")
-
-    def get_state_selector(self, general_config: Config) -> StateSelector:
-        account_state_selector = super().get_state_selector(general_config=general_config)
-        return account_state_selector | StateSelector.create(
-            contract_addresses=[], class_hashes=[self.class_hash]
-        )
 
     @classmethod
     def _specific_from_external(
@@ -388,12 +376,6 @@ class InternalDeployAccount(InternalAccountTransaction):
             resource_bounds=self.resource_bounds,
             paymaster_data=self.paymaster_data,
             tip=self.tip,
-        )
-
-    def get_state_selector(self, general_config: Config) -> StateSelector:
-        account_state_selector = super().get_state_selector(general_config=general_config)
-        return account_state_selector | StateSelector.create(
-            contract_addresses=[], class_hashes=[self.class_hash]
         )
 
     @classmethod

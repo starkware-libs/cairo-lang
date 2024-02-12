@@ -1,13 +1,6 @@
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.builtin_poseidon.poseidon import poseidon_hash_many
-from starkware.cairo.common.cairo_blake2s.blake2s import (
-    blake2s_add_felt,
-    blake2s_add_felts,
-    blake2s_add_uint256_bigend,
-    blake2s_bigend,
-    blake2s_felts,
-)
-from starkware.cairo.common.cairo_builtins import BitwiseBuiltin, PoseidonBuiltin
+from starkware.cairo.common.cairo_builtins import PoseidonBuiltin
 from starkware.cairo.common.hash import HashBuiltin
 from starkware.cairo.common.hash_state import hash_finalize, hash_init, hash_update
 from starkware.cairo.common.math import assert_le, assert_nn, assert_nn_le, split_felt
@@ -20,11 +13,7 @@ from starkware.cairo.stark_verifier.air.public_memory import (
     get_continuous_pages_product,
     get_page_product,
 )
-from starkware.cairo.stark_verifier.core.serialize_utils import (
-    append_felt,
-    append_felts,
-    append_uint256,
-)
+from starkware.cairo.stark_verifier.core.serialize_utils import append_felt, append_felts
 
 struct PublicInput {
     // Base 2 log of the number of steps.
@@ -66,7 +55,7 @@ struct SegmentInfo {
 // heuristic.
 func public_input_hash{range_check_ptr, pedersen_ptr: HashBuiltin*, poseidon_ptr: PoseidonBuiltin*}(
     air: AirWithLayout*, public_input: PublicInput*
-) -> (res: Uint256) {
+) -> (res: felt) {
     alloc_locals;
 
     // Main page hash.
@@ -105,8 +94,7 @@ func public_input_hash{range_check_ptr, pedersen_ptr: HashBuiltin*, poseidon_ptr
     }
 
     let (res) = poseidon_hash_many(n=data - data_start, elements=data_start);
-    let (high, low) = split_felt(value=res);
-    return (res=Uint256(low=low, high=high));
+    return (res=res);
 }
 
 func add_continuous_page_headers{range_check_ptr, data: felt*}(

@@ -1,5 +1,5 @@
 from starkware.cairo.bootloaders.simple_bootloader.execute_task import BuiltinData, execute_task
-from starkware.cairo.common.cairo_builtins import HashBuiltin
+from starkware.cairo.common.cairo_builtins import HashBuiltin, PoseidonBuiltin
 from starkware.cairo.common.registers import get_fp_and_pc
 
 // Loads the programs and executes them.
@@ -18,7 +18,8 @@ func run_simple_bootloader{
     bitwise_ptr,
     ec_op_ptr,
     keccak_ptr,
-    poseidon_ptr,
+    poseidon_ptr: PoseidonBuiltin*,
+    range_check96_ptr,
 }() {
     alloc_locals;
     local task_range_check_ptr;
@@ -48,7 +49,8 @@ func run_simple_bootloader{
         bitwise=bitwise_ptr,
         ec_op=ec_op_ptr,
         keccak=keccak_ptr,
-        poseidon=poseidon_ptr,
+        poseidon=cast(poseidon_ptr, felt),
+        range_check96=range_check96_ptr,
     );
 
     // A struct containing the encoding of each builtin.
@@ -61,10 +63,19 @@ func run_simple_bootloader{
         ec_op='ec_op',
         keccak='keccak',
         poseidon='poseidon',
+        range_check96='range_check96',
     );
 
     local builtin_instance_sizes: BuiltinData = BuiltinData(
-        output=1, pedersen=3, range_check=1, ecdsa=2, bitwise=5, ec_op=7, keccak=16, poseidon=6
+        output=1,
+        pedersen=3,
+        range_check=1,
+        ecdsa=2,
+        bitwise=5,
+        ec_op=7,
+        keccak=16,
+        poseidon=6,
+        range_check96=1,
     );
 
     // Call execute_tasks.
@@ -93,7 +104,8 @@ func run_simple_bootloader{
     let bitwise_ptr = builtin_ptrs.bitwise;
     let ec_op_ptr = builtin_ptrs.ec_op;
     let keccak_ptr = builtin_ptrs.keccak;
-    let poseidon_ptr = builtin_ptrs.poseidon;
+    let poseidon_ptr = cast(builtin_ptrs.poseidon, PoseidonBuiltin*);
+    let range_check96_ptr = builtin_ptrs.range_check96;
 
     // 'execute_tasks' runs untrusted code and uses the range_check builtin to verify that
     // the builtin pointers were advanced correctly by said code.
@@ -152,7 +164,7 @@ func execute_tasks{builtin_ptrs: BuiltinData*, self_range_check_ptr}(
         task_id = len(simple_bootloader_input.tasks) - ids.n_tasks
         task = simple_bootloader_input.tasks[task_id].load_task()
     %}
-    tempvar use_poseidon = nondet %{ 0 %};
+    tempvar use_poseidon = nondet %{ 1 if task.use_poseidon else 0 %};
     // Call execute_task to execute the current task.
     execute_task(
         builtin_encodings=builtin_encodings,

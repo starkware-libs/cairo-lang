@@ -1,10 +1,13 @@
+from typing import Union
+
 from starkware.cairo.lang.compiler.cairo_compile import compile_cairo
+from starkware.cairo.lang.instances import CairoLayout
 from starkware.cairo.lang.vm.cairo_runner import CairoRunner
 
 PRIME = 2**251 + 17 * 2**192 + 1
 
 
-def compile_and_run(code: str, layout: str = "small"):
+def compile_and_run(code: str, layout: Union[str, CairoLayout] = "small"):
     """
     Compiles the given code and runs it in the VM.
     """

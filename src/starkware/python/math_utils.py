@@ -1,7 +1,7 @@
 import math
 import random
 from hashlib import sha256
-from typing import Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import sympy
@@ -289,3 +289,46 @@ def safe_random_ec_point(
     res = ec_safe_mult(m=random.randrange(1, curve_order), point=generator, alpha=alpha, p=prime)
     assert not isinstance(res, EcInfinity)
     return res
+
+
+def fft(coeffs: List[int], generator: int, prime: int, bit_reversed: bool = False) -> List[int]:
+    """
+    Computes the FFT of `coeffs`, assuming the size of the coefficient array is a power of two
+    and equals to the generator's multiplicative order.
+    """
+
+    def _fft(coeffs: np.ndarray, group: np.ndarray) -> np.ndarray:
+        if len(coeffs) == 1:
+            return np.array(coeffs)
+
+        f_even = _fft(coeffs=coeffs[::2], group=group[::2])
+        f_odd = _fft(coeffs=coeffs[1::2], group=group[::2])
+
+        group_mul_f_odd = (group[: len(f_odd)] * f_odd) % prime
+        return np.concatenate(
+            (
+                (f_even + group_mul_f_odd) % prime,
+                (f_even - group_mul_f_odd) % prime,
+            )
+        )
+
+    if len(coeffs) == 0:
+        return []
+
+    coeffs_len = len(coeffs)
+    assert is_power_of_2(coeffs_len), "Length is not a power of two."
+
+    # Prepare sample points.
+    group = [1]
+    for _ in range(coeffs_len - 1):
+        group.append((group[-1] * generator) % prime)
+
+    # Evaluate.
+    values = list(_fft(coeffs=np.array(coeffs), group=np.array(group)))
+
+    if bit_reversed:
+        width = coeffs_len.bit_length() - 1
+        perm = [int("{:0{width}b}".format(i, width=width)[::-1], 2) for i in range(coeffs_len)]
+        return [values[i] for i in perm]
+
+    return values

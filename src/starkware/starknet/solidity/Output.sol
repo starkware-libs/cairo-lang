@@ -30,7 +30,9 @@ library StarknetOutput {
     uint256 internal constant BLOCK_NUMBER_OFFSET = 2;
     uint256 internal constant BLOCK_HASH_OFFSET = 3;
     uint256 internal constant CONFIG_HASH_OFFSET = 4;
-    uint256 internal constant HEADER_SIZE = 5;
+    uint256 internal constant USE_KZG_DA_OFFSET = 5;
+    uint256 internal constant HEADER_SIZE = 6;
+    uint256 internal constant KZG_SEGMENT_SIZE = 5;
 
     uint256 constant MESSAGE_TO_L1_FROM_ADDRESS_OFFSET = 0;
     uint256 constant MESSAGE_TO_L1_TO_ADDRESS_OFFSET = 1;
@@ -57,10 +59,10 @@ library StarknetOutput {
     );
 
     /**
-      Does a sanity check of the output_data length.
+      Returns the offset of the messages segment in the output_data.
     */
-    function validate(uint256[] calldata output_data) internal pure {
-        require(output_data.length > HEADER_SIZE, "STARKNET_OUTPUT_TOO_SHORT");
+    function messageSegmentOffset(uint256 use_kzg_da) internal pure returns (uint256) {
+        return HEADER_SIZE + (use_kzg_da == 1 ? KZG_SEGMENT_SIZE : 0);
     }
 
     /**

@@ -58,12 +58,11 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "cairo_bootloader_fact_topology_lib",
-        "cairo_hash_program_lib",
+        ":cairo_bootloader_fact_topology_lib",
+        ":cairo_hash_program_lib",
         "//src/starkware/cairo/lang/vm:cairo_relocatable_lib",
         "//src/starkware/cairo/lang/vm:cairo_vm_lib",
         "//src/starkware/python:starkware_python_utils_lib",
         requirement("eth_hash"),
-        requirement("pycryptodome"),
     ],
 )

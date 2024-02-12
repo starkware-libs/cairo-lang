@@ -82,6 +82,7 @@ pytest_test(
         ":starkware_expression_string_lib",
         ":starkware_python_test_utils_lib",
         ":starkware_python_utils_lib",
+        requirement("numpy"),
         requirement("pytest_asyncio"),
     ],
 )

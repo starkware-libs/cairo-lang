@@ -16,6 +16,7 @@ from starkware.python.utils import as_non_optional
 from starkware.starknet.builtins.segment_arena.segment_arena_builtin_runner import (
     SegmentArenaBuiltinRunner,
 )
+from starkware.starknet.business_logic.execution.deprecated_objects import ExecutionResourcesManager
 from starkware.starknet.business_logic.execution.execute_entry_point_base import (
     ExecuteEntryPointBase,
 )
@@ -23,7 +24,6 @@ from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
     CallResult,
     CallType,
-    ExecutionResourcesManager,
     OrderedEvent,
     OrderedL2ToL1Message,
     TransactionExecutionContext,
@@ -87,7 +87,7 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
         class_hash: Optional[int] = None,
     ) -> "ExecuteEntryPoint":
         return cls(
-            call_type=CallType.CALL if call_type is None else call_type,
+            call_type=CallType.Call if call_type is None else call_type,
             contract_address=contract_address,
             calldata=calldata,
             code_address=None,
@@ -455,7 +455,7 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
         result: CallResult,
         class_hash: int,
     ) -> CallInfo:
-        return CallInfo(
+        return CallInfo.create(
             # Execution params.
             caller_address=self.caller_address,
             call_type=self.call_type,
@@ -487,12 +487,12 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
         """
         if self.class_hash is not None:
             # Library call.
-            assert self.call_type is CallType.DELEGATE
+            assert self.call_type is CallType.Delegate
             return self.class_hash
 
-        if self.call_type is CallType.CALL:
+        if self.call_type is CallType.Call:
             code_address = self.contract_address
-        elif self.call_type is CallType.DELEGATE:
+        elif self.call_type is CallType.Delegate:
             # Delegate call (deprecated version).
             assert self.code_address is not None
             code_address = self.code_address

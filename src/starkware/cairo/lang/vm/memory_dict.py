@@ -172,9 +172,14 @@ class MemoryDict:
         if len(self.relocation_rules) == 0:
             return
 
-        self.data = {
-            self.relocate_value(addr): self.relocate_value(value) for addr, value in self.items()
-        }
+        relocated_memory: Dict[MaybeRelocatable, MaybeRelocatable] = {}
+        for addr, value in self.items():
+            relocated_addr = self.relocate_value(addr)
+            relocated_value = self.relocate_value(value)
+            current = relocated_memory.setdefault(relocated_addr, relocated_value)
+            self.verify_same_value(addr=relocated_addr, current=current, value=relocated_value)
+
+        self.data = relocated_memory
         self.relocation_rules = {}
 
     def __getitem__(self, addr: MaybeRelocatable) -> MaybeRelocatable:

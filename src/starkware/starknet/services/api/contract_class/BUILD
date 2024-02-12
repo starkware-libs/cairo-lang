@@ -9,6 +9,7 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
+        "//src/services/everest/definitions:everest_definitions_lib",
         "//src/starkware/cairo/lang:cairo_constants_lib",
         "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
         "//src/starkware/python:starkware_python_utils_lib",
@@ -29,8 +30,7 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "starknet_contract_class_lib",
-        "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
+        ":starknet_contract_class_lib",
         "//src/starkware/starknet/compiler/v1:starknet_compile_v1_lib",
     ],
 )

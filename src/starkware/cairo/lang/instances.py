@@ -338,7 +338,7 @@ starknet_with_keccak_instance = CairoLayout(
     n_trace_columns=15,
 )
 
-# A layout for a Cairo verification proof.
+# Layouts for a Cairo verification proof.
 recursive_instance = CairoLayout(
     layout_name="recursive",
     rc_units=4,
@@ -370,6 +370,41 @@ recursive_instance = CairoLayout(
     n_trace_columns=10,
 )
 
+recursive_with_poseidon_instance = CairoLayout(
+    layout_name="recursive_with_poseidon",
+    rc_units=4,
+    public_memory_fraction=8,
+    diluted_pool_instance_def=DilutedPoolInstanceDef(
+        log_units_per_step=3,
+        spacing=4,
+        n_bits=16,
+    ),
+    builtins=dict(
+        output=True,
+        pedersen=PedersenInstanceDef(
+            ratio=256,
+            repetitions=1,
+            element_height=256,
+            element_bits=252,
+            n_inputs=2,
+            hash_limit=PRIME,
+        ),
+        range_check=RangeCheckInstanceDef(
+            ratio=16,
+            n_parts=8,
+        ),
+        bitwise=BitwiseInstanceDef(
+            ratio=16,
+            total_n_bits=251,
+        ),
+        poseidon=PoseidonInstanceDef(
+            ratio=64,
+            partial_rounds_partition=[64, 22],
+        ),
+    ),
+    n_trace_columns=8,
+)
+
 # A layout with a lot of bitwise and pedersen instances (e.g., for Cairo stark verification
 # with long output).
 recursive_large_output_instance = CairoLayout(
@@ -384,7 +419,7 @@ recursive_large_output_instance = CairoLayout(
     builtins=dict(
         output=True,
         pedersen=PedersenInstanceDef(
-            ratio=32,
+            ratio=128,
             repetitions=1,
             element_height=256,
             element_bits=252,
@@ -399,14 +434,18 @@ recursive_large_output_instance = CairoLayout(
             ratio=8,
             total_n_bits=251,
         ),
+        poseidon=PoseidonInstanceDef(
+            ratio=8,
+            partial_rounds_partition=[64, 22],
+        ),
     ),
-    n_trace_columns=13,
+    n_trace_columns=12,
 )
 
 # A layout optimized for a cairo verifier program that is being verified by a cairo verifier.
 all_cairo_instance = CairoLayout(
     layout_name="all_cairo",
-    rc_units=4,
+    rc_units=8,
     public_memory_fraction=8,
     diluted_pool_instance_def=DilutedPoolInstanceDef(
         log_units_per_step=4,
@@ -452,8 +491,12 @@ all_cairo_instance = CairoLayout(
             ratio=256,
             partial_rounds_partition=[64, 22],
         ),
+        range_check96=RangeCheckInstanceDef(
+            ratio=8,
+            n_parts=6,
+        ),
     ),
-    n_trace_columns=11,
+    n_trace_columns=12,
 )
 
 all_solidity_instance = CairoLayout(
@@ -509,4 +552,5 @@ LAYOUTS: Dict[str, CairoLayout] = {
     "all_solidity": all_solidity_instance,
     "starknet_with_keccak": starknet_with_keccak_instance,
     "dynamic": build_dynamic_layout(),
+    "recursive_with_poseidon": recursive_with_poseidon_instance,
 }

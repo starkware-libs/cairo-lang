@@ -2,11 +2,8 @@ import dataclasses
 from typing import ClassVar, Optional, Tuple, Type
 
 from services.everest.api.gateway.transaction import EverestTransaction
-from starkware.starknet.business_logic.execution.objects import (
-    CallInfo,
-    ExecutionResourcesManager,
-    ResourcesMapping,
-)
+from starkware.starknet.business_logic.execution.deprecated_objects import ExecutionResourcesManager
+from starkware.starknet.business_logic.execution.objects import CallInfo, ResourcesMapping
 from starkware.starknet.business_logic.state.state_api import SyncState
 from starkware.starknet.business_logic.transaction.deprecated_objects import (
     DeprecatedInternalAccountTransaction,
@@ -92,7 +89,7 @@ class InternalAccountTransactionForSimulate(DeprecatedInternalAccountTransaction
         Overrides the charge fee method. Only calculates the actual fee and does not charge any fee.
         """
         actual_fee = calculate_tx_fee(
-            l1_gas_price=state.block_info.eth_l1_gas_price,
+            l1_gas_price=state.block_info.l1_gas_price.price_in_wei,
             resources=resources,
             general_config=general_config,
         )

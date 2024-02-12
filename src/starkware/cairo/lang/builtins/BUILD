@@ -53,6 +53,7 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
+        "//src/starkware/cairo/lang:cairo_instances_lib",
         "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
         "//src/starkware/cairo/lang/vm:cairo_run_lib",
     ],

@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
@@ -6,9 +6,21 @@ from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableVal
 from starkware.starknet.core.os import segment_utils
 from starkware.starknet.core.os.deprecated_syscall_handler import DeprecatedBlSyscallHandler
 from starkware.starknet.core.os.syscall_handler import BusinessLogicSyscallHandler
+from starkware.starknet.definitions.constants import OsOutputConstant
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.public.abi import SYSCALL_PTR_OFFSET_IN_VERSION0
 from starkware.starkware_utils.error_handling import wrap_with_stark_exception
+
+# KZG-related fields, outputted by the Starknet OS program.
+
+# Felt252.
+Point = int
+
+# Uint256, split into low and high parts, each of 128 bits.
+PointEvaluation = Tuple[int, int]
+
+# 48bytes (as Uint384), split into low and high parts, each of 192 bits.
+KzgCommitment = Tuple[int, int]
 
 
 def update_builtin_pointers(
@@ -145,3 +157,19 @@ def validate_and_process_os_context_for_version0_class(
         segment_stop_ptr=syscall_stop_ptr,
     )
     syscall_handler.post_run(runner=runner, syscall_stop_ptr=syscall_stop_ptr)
+
+
+def extract_kzg_segment(program_output: List[int]) -> Tuple[KzgCommitment, Point, PointEvaluation]:
+    """
+    Returns the KZG-related fields out of the given Starknet OS program output.
+    """
+    assert (
+        program_output[OsOutputConstant.USE_KZG_DA_OFFSET.value] == 1
+    ), "A blob was attached but the KZG flag is off."
+
+    kzg_segment = program_output[
+        OsOutputConstant.HEADER_SIZE.value : OsOutputConstant.HEADER_SIZE.value
+        + OsOutputConstant.KZG_SEGMENT_SIZE.value
+    ]
+
+    return (kzg_segment[0], kzg_segment[1]), kzg_segment[2], (kzg_segment[3], kzg_segment[4])

@@ -685,9 +685,27 @@ dw -1;
     assert str(exc_info.value) == (
         """\
 :2:1: Error at pc=0:10:
-Unsupported instruction.
+Unsupported instruction: 0x1000000000000000c.
 dw -1;
 ^***^\
+"""
+    )
+
+
+def test_div_by_zero():
+    code = """
+tempvar zero = 0;
+tempvar res = zero / zero;
+"""
+    with pytest.raises(VmException) as exc_info:
+        run_single(code, 2)
+
+    assert str(exc_info.value) == (
+        """\
+:3:15: Error at pc=0:12:
+Cannot deduce operand in '0 = ? * 0' (possibly due to division by 0).
+tempvar res = zero / zero;
+              ^*********^\
 """
     )
 

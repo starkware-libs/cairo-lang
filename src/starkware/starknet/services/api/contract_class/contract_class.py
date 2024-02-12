@@ -3,12 +3,13 @@ import re
 from abc import abstractmethod
 from dataclasses import field
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import marshmallow
 import marshmallow.fields as mfields
 import marshmallow_dataclass
 
+from services.everest.definitions import fields as everest_fields
 from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.preprocessor.flow import ReferenceManager
@@ -74,9 +75,15 @@ class ContractClass(ValidatedMarshmallowDataclass):
     """
 
     contract_class_version: str
-    sierra_program: List[int] = field(metadata=fields.felt_as_hex_list_metadata)
+    sierra_program: List[int] = field(metadata=everest_fields.felt_as_hex_list_metadata)
     entry_points_by_type: Dict[EntryPointType, List[ContractEntryPoint]]
     abi: str
+
+    def get_bytecode_size(self) -> int:
+        return len(self.sierra_program)
+
+    def get_abi_size(self) -> int:
+        return len(self.abi)
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -175,15 +182,25 @@ class CompiledClassBase(ValidatedMarshmallowDataclass):
         return sum(len(eps) for eps in self.entry_points_by_type.values())
 
 
+# Represents a nested list of integers. E.g., [1, [2, [3], 4], 5, 6].
+NestedIntList = Union[int, List[Any]]
+
+
 @marshmallow_dataclass.dataclass(frozen=True)
 class CompiledClass(CompiledClassBase):
     """
-    Represents a compiled contract class in the StarkNet network.
+    Represents a compiled contract class in the Starknet network.
     """
 
     prime: int = field(metadata=additional_metadata(marshmallow_field=IntAsHex(required=True)))
     bytecode: List[int] = field(
         metadata=additional_metadata(marshmallow_field=mfields.List(IntAsHex(), required=True))
+    )
+    # Represents the structure of the bytecode segments, using a nested list of segment lengths.
+    # For example, [2, [3, 4]] represents a bytecode with 2 segments, the first is a leaf of length
+    # 2 and the second is a node with 2 children of lengths 3 and 4.
+    bytecode_segment_lengths: NestedIntList = field(
+        metadata=additional_metadata(marshmallow_field=fields.NestedIntListField())
     )
     # Rust hints.
     hints: List[Any]
@@ -243,6 +260,16 @@ class CompiledClass(CompiledClassBase):
             for hint_id, hint_codes in pythonic_hints
         }
 
+        return data
+
+    @marshmallow.decorators.pre_load
+    def default_bytecode_segment_lengths(
+        self, data: Dict[str, Any], many: bool, **kwargs
+    ) -> Dict[str, Any]:
+        # If bytecode_segment_lengths is missing, use a single leaf (which forces loading the entire
+        # program).
+        if "bytecode_segment_lengths" not in data:
+            data["bytecode_segment_lengths"] = len(data["bytecode"])
         return data
 
     @marshmallow.decorators.post_dump

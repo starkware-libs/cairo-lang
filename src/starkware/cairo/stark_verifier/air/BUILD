@@ -1,6 +1,34 @@
 load("//bazel_utils:python.bzl", "pytest_test")
 load("//src/starkware/cairo/lang:cairo_rules.bzl", "cairo_library")
 
+pytest_test(
+    name = "starkware_cairo_stark_verifier_air_public_input_test",
+    srcs = [
+        "public_input_test.py",
+    ],
+    data = [
+        "example_expected.json",
+        "example_proof.json",
+        "//src/starkware/cairo/stark_verifier/air:dynamic_layout_proof.json",
+        "//src/starkware/cairo/stark_verifier/core:air_interface.cairo",
+        "//src/starkware/cairo/stark_verifier/core:channel.cairo",
+        "//src/starkware/cairo/stark_verifier/core:domains.cairo",
+        "//src/starkware/cairo/stark_verifier/core:table_commitment.cairo",
+        "//src/starkware/cairo/stark_verifier/core:vector_commitment.cairo",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":python",
+        "//src/starkware/cairo/common:cairo_common_lib",
+        "//src/starkware/cairo/common:cairo_common_validate_utils_lib",
+        "//src/starkware/cairo/common:cairo_function_runner_lib",
+        "//src/starkware/cairo/lang:cairo_constants_lib",
+        "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
+        "//src/starkware/cairo/lang/vm:cairo_vm_lib",
+        "//src/starkware/python:starkware_python_utils_lib",
+    ],
+)
+
 py_library(
     name = "starkware_cairo_stark_verifier_air_test_base_lib",
     srcs = [
@@ -61,6 +89,7 @@ py_library(
         "//src/starkware/cairo/common:cairo_common_lib",
         "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
         "//src/starkware/cairo/lang/vm:cairo_vm_lib",
+        "//src/starkware/cairo/stark_verifier/core:supported_proof_params",
         "//src/starkware/python:starkware_python_utils_lib",
     ],
 )

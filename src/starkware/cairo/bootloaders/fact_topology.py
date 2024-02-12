@@ -6,6 +6,7 @@ import marshmallow
 import marshmallow_dataclass
 
 GPS_FACT_TOPOLOGY = "gps_fact_topology"
+MAX_PAGE_SIZE = 3800
 
 
 @dataclasses.dataclass(frozen=True)
@@ -13,6 +14,14 @@ class FactTopology:
     tree_structure: List[int]
     # List of page sizes, in words.
     page_sizes: List[int]
+
+    @classmethod
+    def trivial(cls, page0_size: int) -> "FactTopology":
+        """
+        Creates a fact topology with a single page.
+        """
+        assert page0_size <= MAX_PAGE_SIZE, "Page size exceeded the maximum."
+        return cls(tree_structure=[1, 0], page_sizes=[page0_size])
 
 
 @marshmallow_dataclass.dataclass(frozen=True)

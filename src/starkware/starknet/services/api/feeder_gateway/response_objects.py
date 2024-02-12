@@ -25,15 +25,21 @@ from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
     CallType,
     Event,
+    GasVector,
     OrderedEvent,
     OrderedL2ToL1Message,
 )
-from starkware.starknet.business_logic.state.state_api_objects import rename_old_gas_price_field
+from starkware.starknet.business_logic.state.state_api_objects import (
+    GasPrices,
+    ResourcePrice,
+    rename_old_gas_price_fields,
+)
 from starkware.starknet.business_logic.transaction.deprecated_objects import (
     DeprecatedInternalTransaction,
 )
 from starkware.starknet.business_logic.transaction.objects import InternalTransaction
 from starkware.starknet.definitions import fields
+from starkware.starknet.definitions.l1_da_mode import L1DaMode
 from starkware.starknet.services.api.contract_class.contract_class import EntryPointType
 from starkware.starknet.services.api.feeder_gateway.account_transaction_specific_info import (
     AccountTransactionSpecificInfo,
@@ -79,6 +85,11 @@ def transaction_specific_info_from_internal(
         return DeprecatedTransactionSpecificInfo.from_internal(internal_tx=internal_tx)
     else:
         return AccountTransactionSpecificInfo.from_internal(internal_tx=internal_tx)
+
+
+class ResponseCallType(Enum):
+    CALL = 0
+    DELEGATE = auto()
 
 
 class BlockStatus(Enum):
@@ -430,7 +441,7 @@ class L1ToL2Message(ValidatedResponseObject):
     )
     to_address: int = field(metadata=fields.L2AddressField.metadata(field_name="to_address"))
     selector: int = field(metadata=fields.entry_point_selector_metadata)
-    payload: List[int] = field(metadata=fields.felt_as_hex_list_metadata)
+    payload: List[int] = field(metadata=everest_fields.felt_as_hex_list_metadata)
     nonce: Optional[int] = field(metadata=fields.optional_nonce_metadata)
 
 
@@ -444,7 +455,35 @@ class L2ToL1Message(ValidatedResponseObject):
     to_address: str = field(
         metadata=everest_fields.EthAddressField.metadata(field_name="to_address")
     )
-    payload: List[int] = field(metadata=fields.felt_as_hex_list_metadata)
+    payload: List[int] = field(metadata=everest_fields.felt_as_hex_list_metadata)
+
+
+@marshmallow_dataclass.dataclass
+class ReceiptExecutionResources(ValidatedResponseObject):
+    """
+    Contains the execution resources a transaction uses, e.g., the number of Cairo
+    steps and the data availability gas usage.
+    """
+
+    n_steps: int
+    builtin_instance_counter: Dict[str, int]
+    n_memory_holes: int = field(
+        metadata=additional_metadata(marshmallow_field=mfields.Integer(load_default=0))
+    )
+    # The amount of l1_gas or l1_data_gas charged for data availability.
+    # Optional for backwards compatibility.
+    data_availability: Optional[GasVector]
+
+    @classmethod
+    def create(
+        cls, execution_resources: ExecutionResources, da_gas: Optional[GasVector]
+    ) -> "ReceiptExecutionResources":
+        return cls(
+            n_steps=execution_resources.n_steps,
+            builtin_instance_counter=execution_resources.builtin_instance_counter,
+            n_memory_holes=0,
+            data_availability=da_gas,
+        )
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -471,7 +510,7 @@ class TransactionExecution(ValidatedResponseObject):
     # Events emitted during the execution of the transaction.
     events: List[Event]
     # The resources needed by the transaction.
-    execution_resources: Optional[ExecutionResources]
+    execution_resources: Optional[ReceiptExecutionResources]
     # The actual fee that was charged in Wei.
     actual_fee: Optional[int] = field(metadata=fields.optional_fee_metadata)
 
@@ -517,7 +556,7 @@ class TransactionReceipt(TransactionExecution, TransactionInBlockInfo):
         l1_to_l2_consumed_message: Optional[L1ToL2Message] = None,
         l2_to_l1_messages: Optional[List[L2ToL1Message]] = None,
         events: Optional[List[Event]] = None,
-        execution_resources: Optional[ExecutionResources] = None,
+        execution_resources: Optional[ReceiptExecutionResources] = None,
     ) -> "TransactionReceipt":
         return cls(
             revert_error=tx_info.revert_error,
@@ -650,7 +689,7 @@ class OrderedL2ToL1MessageResponse(ValidatedDataclass):
     to_address: str = field(
         metadata=everest_fields.EthAddressField.metadata(field_name="to_address")
     )
-    payload: List[int] = field(metadata=fields.felt_as_hex_list_metadata)
+    payload: List[int] = field(metadata=everest_fields.felt_as_hex_list_metadata)
 
     @classmethod
     def from_internal(
@@ -675,8 +714,8 @@ class OrderedEventResponse(ValidatedDataclass):
     """
 
     order: int = field(metadata=sequential_id_metadata("Event order"))
-    keys: List[int] = field(metadata=fields.felt_as_hex_list_metadata)
-    data: List[int] = field(metadata=fields.felt_as_hex_list_metadata)
+    keys: List[int] = field(metadata=everest_fields.felt_as_hex_list_metadata)
+    data: List[int] = field(metadata=everest_fields.felt_as_hex_list_metadata)
 
     @classmethod
     def from_internal(cls, events: List[OrderedEvent]) -> List["OrderedEventResponse"]:
@@ -696,7 +735,7 @@ class FunctionInvocation(BaseResponseObject, SerializableMarshmallowDataclass):
     )
     contract_address: int = field(metadata=fields.contract_address_metadata)
     calldata: List[int] = field(metadata=fields.calldata_as_hex_metadata)
-    call_type: Optional[CallType] = field(metadata=nonrequired_optional_metadata)
+    call_type: Optional[ResponseCallType] = field(metadata=nonrequired_optional_metadata)
     class_hash: Optional[int] = field(metadata=fields.optional_new_class_hash_metadata)
     selector: Optional[int] = field(metadata=fields.optional_entry_point_selector_metadata)
     entry_point_type: Optional[EntryPointType]
@@ -713,10 +752,23 @@ class FunctionInvocation(BaseResponseObject, SerializableMarshmallowDataclass):
     messages: List[OrderedL2ToL1MessageResponse]
 
     @classmethod
+    def from_inner(cls, call_type: CallType) -> ResponseCallType:
+        if call_type is CallType.Call:
+            return ResponseCallType.CALL
+        elif call_type is CallType.Delegate:
+            return ResponseCallType.DELEGATE
+        else:
+            raise NotImplementedError(f"Unsupported call type {call_type}.")
+
+    @classmethod
     def from_internal(cls, call_info: CallInfo) -> "FunctionInvocation":
         return cls(
             caller_address=call_info.caller_address,
-            call_type=call_info.call_type,
+            call_type=(
+                None
+                if call_info.call_type is None
+                else cls.from_inner(call_type=call_info.call_type)
+            ),
             contract_address=call_info.contract_address,
             class_hash=call_info.class_hash,
             selector=call_info.entry_point_selector,
@@ -806,9 +858,12 @@ class StarknetBlock(ValidatedResponseObject):
     state_root: Optional[int] = field(
         metadata=fields.backward_compatible_optional_state_root_metadata
     )
+    transaction_commitment: Optional[int] = field(metadata=fields.optional_commitment_metadata)
+    event_commitment: Optional[int] = field(metadata=fields.optional_commitment_metadata)
     status: Optional[BlockStatus]
-    eth_l1_gas_price: int = field(metadata=fields.gas_price_metadata)
-    strk_l1_gas_price: int = field(metadata=fields.gas_price_metadata)
+    l1_da_mode: L1DaMode = field(metadata=fields.l1_da_mode_enum_metadata)
+    l1_gas_price: ResourcePrice
+    l1_data_gas_price: ResourcePrice
     transactions: Tuple[TransactionSpecificInfo, ...] = field(
         metadata=additional_metadata(
             marshmallow_field=VariadicLengthTupleField(
@@ -828,15 +883,17 @@ class StarknetBlock(ValidatedResponseObject):
     starknet_version: Optional[str] = field(metadata=fields.starknet_version_metadata)
 
     @pre_load
-    def rename_old_gas_price_field(
+    def rename_old_gas_price_fields(
         self, data: Dict[str, Any], many: bool, **kwargs
     ) -> Dict[str, List[str]]:
-        return rename_old_gas_price_field(data=data)
+        return rename_old_gas_price_fields(data=data)
 
     @classmethod
     def create(
         cls: Type[TBlockInfo],
         block_hash: Optional[int],
+        transaction_commitment: Optional[int],
+        event_commitment: Optional[int],
         parent_block_hash: int,
         block_number: Optional[int],
         state_root: Optional[int],
@@ -844,13 +901,15 @@ class StarknetBlock(ValidatedResponseObject):
         timestamp: int,
         sequencer_address: Optional[int],
         status: Optional[BlockStatus],
-        eth_l1_gas_price: int,
-        strk_l1_gas_price: int,
+        l1_da_mode: L1DaMode,
+        gas_prices: GasPrices,
         transaction_receipts: Optional[Tuple[TransactionExecution, ...]],
         starknet_version: Optional[str],
     ) -> TBlockInfo:
         return cls(
             block_hash=block_hash,
+            transaction_commitment=transaction_commitment,
+            event_commitment=event_commitment,
             parent_block_hash=parent_block_hash,
             block_number=block_number,
             state_root=state_root,
@@ -860,8 +919,14 @@ class StarknetBlock(ValidatedResponseObject):
             timestamp=timestamp,
             sequencer_address=sequencer_address,
             status=status,
-            eth_l1_gas_price=eth_l1_gas_price,
-            strk_l1_gas_price=strk_l1_gas_price,
+            l1_da_mode=l1_da_mode,
+            l1_gas_price=ResourcePrice(
+                price_in_wei=gas_prices.l1_gas_price_wei, price_in_fri=gas_prices.l1_gas_price_fri
+            ),
+            l1_data_gas_price=ResourcePrice(
+                price_in_wei=gas_prices.l1_data_gas_price_wei,
+                price_in_fri=gas_prices.l1_data_gas_price_fri,
+            ),
             transaction_receipts=transaction_receipts,
             starknet_version=starknet_version,
         )

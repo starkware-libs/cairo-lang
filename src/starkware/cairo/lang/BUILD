@@ -74,6 +74,7 @@ py_library(
     deps = [
         "//src/starkware/cairo/lang/builtins:cairo_all_builtins_lib",
         "//src/starkware/cairo/lang/builtins:cairo_run_builtins_lib",
+        "//src/starkware/cairo/lang/builtins:instance_def_lib",
         "//src/starkware/python:starkware_python_utils_lib",
     ],
 )

@@ -9,6 +9,8 @@ class StarknetErrorCode(ErrorCode):
     BLOCK_NOT_FOUND = 0
     BLOCKED_TRANSACTION_TYPE = auto()
     SENDER_ADDRESS_IS_BLOCKED = auto()
+    CALLDATA_TOO_LONG = auto()
+    SIGNATURE_TOO_LONG = auto()
     CLASS_ALREADY_DECLARED = auto()
     COMPILATION_FAILED = auto()
     CONTRACT_ADDRESS_UNAVAILABLE = auto()
@@ -16,6 +18,7 @@ class StarknetErrorCode(ErrorCode):
     CONTRACT_CLASS_OBJECT_SIZE_TOO_LARGE = auto()
     DEPRECATED_ENDPOINT = auto()
     DEPRECATED_TRANSACTION = auto()
+    DEPRECATED_TRANSACTION_VERSION = auto()
     DUPLICATED_TRANSACTION = auto()
     ENTRY_POINT_NOT_FOUND_IN_CONTRACT = auto()
     EXTERNAL_TO_INTERNAL_CONVERSION_ERROR = auto()
@@ -79,7 +82,7 @@ class StarknetErrorCode(ErrorCode):
     UNDECLARED_CLASS = auto()
     UNEXPECTED_FAILURE = auto()
     UNINITIALIZED_CONTRACT = auto()
-    UNSUPPORTED_TRANSACTION = auto()
+    UNSUPPORTED_TRANSACTION_VERSION = auto()
     # Native blockifier errors.
     PY_NATIVE_BLOCKIFIER_INPUT_ERROR = auto()
     PY_PROGRAM_ERROR = auto()
@@ -163,7 +166,9 @@ main_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
     [
         *common_error_codes,
         StarknetErrorCode.BLOCKED_TRANSACTION_TYPE,
+        StarknetErrorCode.CALLDATA_TOO_LONG,
         StarknetErrorCode.DEPRECATED_TRANSACTION,
+        StarknetErrorCode.DEPRECATED_TRANSACTION_VERSION,
         StarknetErrorCode.DUPLICATED_TRANSACTION,
         StarknetErrorCode.SENDER_ADDRESS_IS_BLOCKED,
         # Signature validation errors.
@@ -203,7 +208,7 @@ feeder_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
         StarknetErrorCode.OUT_OF_RANGE_CONTRACT_STORAGE_KEY,
         StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_HASH,
         StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_ID,
-        StarknetErrorCode.UNSUPPORTED_TRANSACTION,
+        StarknetErrorCode.UNSUPPORTED_TRANSACTION_VERSION,
         # Deprecation errors.
         StarknetErrorCode.DEPRECATED_ENDPOINT,
     ]

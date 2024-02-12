@@ -400,3 +400,8 @@ def validate_power_of_two(field_name: str) -> ValidatorType:
         return True
 
     return validator
+
+
+def validate_probabilities_sum(*probabilities: float):
+    if sum(probabilities) > 1:
+        raise ValueError("The sum of the probabilities must be at most 1.")

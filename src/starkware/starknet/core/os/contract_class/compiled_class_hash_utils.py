@@ -69,10 +69,12 @@ def _get_contract_entry_points(
 
 
 def get_compiled_class_struct(
-    identifiers: IdentifierManager, compiled_class: CompiledClass
+    identifiers: IdentifierManager, compiled_class: CompiledClass, bytecode: List[int]
 ) -> CairoStructProxy:
     """
     Returns the serialization of a compiled class as a list of field elements.
+    Note that the bytecode is passed explicitly (rather than taken from the compiled class) to
+    allow skipping some code segments.
     """
     structs = _get_empty_compiled_class_structs()
 
@@ -100,6 +102,8 @@ def get_compiled_class_struct(
         for entry_points in (external_functions, l1_handlers, constructors)
     )
 
+    assert len(bytecode) == len(compiled_class.bytecode)
+
     return structs.CompiledClass(
         compiled_class_version=COMPILED_CLASS_VERSION_IDENT.value,
         n_external_functions=len(external_functions),
@@ -108,6 +112,6 @@ def get_compiled_class_struct(
         l1_handlers=flat_l1_handlers,
         n_constructors=len(constructors),
         constructors=flat_constructors,
-        bytecode_length=len(compiled_class.bytecode),
-        bytecode_ptr=compiled_class.bytecode,
+        bytecode_length=len(bytecode),
+        bytecode_ptr=bytecode,
     )

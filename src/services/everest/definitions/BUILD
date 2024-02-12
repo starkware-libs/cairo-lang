@@ -28,7 +28,7 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "//src/starkware/starkware_utils:starkware_config_utils_lib",
+        "//src/services/config:base_general_config_lib",
         requirement("marshmallow_dataclass"),
     ],
 )

@@ -37,7 +37,7 @@ class CairoFunctionRunner(CairoRunner):
         )
         self.builtin_runners["pedersen_builtin"] = pedersen_builtin
         range_check_builtin = RangeCheckBuiltinRunner(
-            included=True, ratio=1, inner_rc_bound=2**16, n_parts=8
+            name="range_check", included=True, ratio=1, inner_rc_bound=2**16, n_parts=8
         )
         self.builtin_runners["range_check_builtin"] = range_check_builtin
         output_builtin = OutputBuiltinRunner(included=True)
@@ -81,6 +81,10 @@ class CairoFunctionRunner(CairoRunner):
             ),
         )
         self.builtin_runners["poseidon_builtin"] = poseidon_builtin
+        range_check96_builtin = RangeCheckBuiltinRunner(
+            name="range_check96", included=True, ratio=1, inner_rc_bound=2**16, n_parts=6
+        )
+        self.builtin_runners["range_check96_builtin"] = range_check96_builtin
 
         self.initialize_segments()
 
@@ -115,6 +119,10 @@ class CairoFunctionRunner(CairoRunner):
     @property
     def poseidon_builtin(self) -> PoseidonBuiltinRunner:
         return cast(PoseidonBuiltinRunner, self.builtin_runners["poseidon_builtin"])
+
+    @property
+    def range_check96_builtin(self) -> RangeCheckBuiltinRunner:
+        return cast(RangeCheckBuiltinRunner, self.builtin_runners["range_check96_builtin"])
 
     def assert_eq(self, arg: MaybeRelocatable, expected_value, apply_modulo: bool = True):
         """

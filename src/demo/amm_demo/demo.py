@@ -65,7 +65,7 @@ def deploy_contract(batch_prover: BatchProver, w3: Web3, operator: BaseAccount) 
     account_tree_root = get_merkle_root(batch_prover.accounts)
     amount_token_a = batch_prover.balance.a
     amount_token_b = batch_prover.balance.b
-    program_hash = compute_program_hash_chain(batch_prover.program)
+    program_hash = compute_program_hash_chain(program=batch_prover.program, use_pedersen=False)
     cairo_verifier = batch_prover.sharp_client.contract_client.contract.address
 
     # Compile the smart contract.

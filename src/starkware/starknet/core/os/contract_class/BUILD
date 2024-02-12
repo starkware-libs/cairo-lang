@@ -21,6 +21,14 @@ exports_files([
 ])
 
 py_library(
+    name = "compiled_class_hash_objects",
+    srcs = [
+        "compiled_class_hash_objects.py",
+    ],
+    deps = ["//src/starkware/cairo/lang/vm:cairo_vm_crypto_lib"],
+)
+
+py_library(
     name = "starknet_os_abi_lib",
     srcs = [
         "class_hash.py",
@@ -38,6 +46,7 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
+        ":compiled_class_hash_objects",
         "//src/starkware/cairo/common:cairo_common_lib",
         "//src/starkware/cairo/common:cairo_function_runner_lib",
         "//src/starkware/cairo/lang:cairo_constants_lib",
@@ -61,6 +70,7 @@ pytest_test(
     visibility = ["//visibility:public"],
     deps = [
         ":starknet_os_abi_lib",
+        "//src/starkware/python:starkware_python_test_utils_lib",
         "//src/starkware/starknet/core/test_contract:starknet_test_external_contract_test_utils_lib",
         "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",
         requirement("cachetools"),

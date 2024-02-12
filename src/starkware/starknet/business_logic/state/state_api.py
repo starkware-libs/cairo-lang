@@ -73,6 +73,33 @@ class StateReader(ABC):
         Returns the storage value under the given key in the given contract instance.
         """
 
+    async def get_fee_token_balance(
+        self,
+        data_availability_mode: DataAvailabilityMode,
+        contract_address: int,
+        fee_token_address: int,
+    ) -> int:
+        """
+        Returns the fee-token balance at the given address.
+        The balance is of type Uint256.
+        """
+        data_availability_mode.assert_l1()
+        low_key, high_key = get_uint256_storage_var_keys(
+            "ERC20_balances",
+            contract_address,
+        )
+        low = await self.get_storage_at(
+            data_availability_mode=data_availability_mode,
+            contract_address=fee_token_address,
+            key=low_key,
+        )
+        high = await self.get_storage_at(
+            data_availability_mode=data_availability_mode,
+            contract_address=fee_token_address,
+            key=high_key,
+        )
+        return low + high * 2**128
+
     async def get_compiled_class_by_class_hash(self, class_hash: int) -> CompiledClassBase:
         """
         Returns the compiled class of the given class hash. Handles both class versions.
@@ -204,33 +231,6 @@ class SyncStateReader(ABC):
         self, data_availability_mode: DataAvailabilityMode, contract_address: int, key: int
     ) -> int:
         pass
-
-    def get_fee_token_balance(
-        self,
-        data_availability_mode: DataAvailabilityMode,
-        contract_address: int,
-        fee_token_address: int,
-    ) -> int:
-        """
-        Returns the fee-token balance at the given address.
-        The balance is of type Uint256.
-        """
-        data_availability_mode.assert_l1()
-        low_key, high_key = get_uint256_storage_var_keys(
-            "ERC20_balances",
-            contract_address,
-        )
-        low = self.get_storage_at(
-            data_availability_mode=data_availability_mode,
-            contract_address=fee_token_address,
-            key=low_key,
-        )
-        high = self.get_storage_at(
-            data_availability_mode=data_availability_mode,
-            contract_address=fee_token_address,
-            key=high_key,
-        )
-        return low + high * 2**128
 
     def get_compiled_class_by_class_hash(self, class_hash: int) -> CompiledClassBase:
         compiled_class_hash = self.get_compiled_class_hash(class_hash=class_hash)

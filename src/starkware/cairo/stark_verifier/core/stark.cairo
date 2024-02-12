@@ -2,7 +2,6 @@ from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.cairo_blake2s.blake2s import finalize_blake2s
 from starkware.cairo.common.cairo_builtins import BitwiseBuiltin, PoseidonBuiltin
 from starkware.cairo.common.hash import HashBuiltin
-from starkware.cairo.common.uint256 import Uint256
 from starkware.cairo.stark_verifier.core.air_interface import (
     AirInstance,
     OodsEvaluationInfo,
@@ -25,7 +24,7 @@ from starkware.cairo.stark_verifier.core.channel import (
     ChannelUnsentFelt,
     channel_new,
     random_felts_to_prover,
-    read_felts_from_prover,
+    read_felt_vector_from_prover,
 )
 from starkware.cairo.stark_verifier.core.config import (
     StarkConfig,
@@ -251,7 +250,7 @@ func stark_commit{
 
     // Read OODS values.
     local n_oods_values = air.mask_size + air.constraint_degree;
-    let (sent_oods_values) = read_felts_from_prover(
+    let (sent_oods_values) = read_felt_vector_from_prover(
         n_values=n_oods_values, values=unsent_commitment.oods_values
     );
 

@@ -24,10 +24,16 @@ from starkware.starknet.core.os.execution.deprecated_execute_syscalls import (
 from starkware.starknet.core.os.execution.execute_syscalls import execute_syscalls
 from starkware.starknet.core.os.execution.execute_transactions import execute_transactions
 from starkware.starknet.core.os.os_config.os_config import get_starknet_os_config_hash
-from starkware.starknet.core.os.output import OsCarriedOutputs, os_output_serialize
-from starkware.starknet.core.os.state import StateEntry, state_update
+from starkware.starknet.core.os.output import (
+    OsCarriedOutputs,
+    OsOutput,
+    OsOutputHeader,
+    serialize_os_output,
+)
+from starkware.starknet.core.os.state.commitment import StateEntry
+from starkware.starknet.core.os.state.state import OsStateUpdate, state_update
 
-// Executes transactions on StarkNet.
+// Executes transactions on Starknet.
 func main{
     output_ptr: felt*,
     pedersen_ptr: HashBuiltin*,
@@ -85,30 +91,27 @@ func main{
     }
     let final_carried_outputs = outputs;
 
-    local initial_state_updates_ptr: felt*;
     %{
         # This hint shouldn't be whitelisted.
         vm_enter_scope(dict(
             commitment_info_by_address=execution_helper.compute_storage_commitments(),
             os_input=os_input,
         ))
-        ids.initial_state_updates_ptr = segments.add_temp_segment()
     %}
-    let state_updates_ptr = initial_state_updates_ptr;
 
-    with state_updates_ptr {
-        let (state_update_output) = state_update{hash_ptr=pedersen_ptr}(
+    let (squashed_os_state_update, state_update_output) = state_update{hash_ptr=pedersen_ptr}(
+        os_state_update=OsStateUpdate(
             contract_state_changes_start=contract_state_changes_start,
             contract_state_changes_end=contract_state_changes,
             contract_class_changes_start=contract_class_changes_start,
             contract_class_changes_end=contract_class_changes,
-        );
-    }
+        ),
+    );
 
     %{ vm_exit_scope() %}
 
     // Compute the general config hash.
-    // This is done here to avoid passing pedersen_ptr to os_output_serialize.
+    // This is done here to avoid passing pedersen_ptr to serialize_output_header.
     let hash_ptr = pedersen_ptr;
     with hash_ptr {
         let (starknet_os_config_hash) = get_starknet_os_config_hash(
@@ -117,14 +120,25 @@ func main{
     }
     let pedersen_ptr = hash_ptr;
 
-    os_output_serialize(
-        block_context=block_context,
-        state_update_output=state_update_output,
-        initial_carried_outputs=initial_carried_outputs,
-        final_carried_outputs=final_carried_outputs,
-        state_updates_ptr_start=initial_state_updates_ptr,
-        state_updates_ptr_end=state_updates_ptr,
-        starknet_os_config_hash=starknet_os_config_hash,
+    // Guess whether to use KZG commitment scheme.
+    local use_kzg_da = nondet %{ syscall_handler.block_info.use_kzg_da %};
+
+    // Serialize OS output.
+
+    // Currently, the block hash is not enforced by the OS.
+    serialize_os_output(
+        os_output=new OsOutput(
+            header=new OsOutputHeader(
+                state_update_output=state_update_output,
+                block_number=block_context.block_info.block_number,
+                block_hash=nondet %{ os_input.block_hash %},
+                starknet_os_config_hash=starknet_os_config_hash,
+                use_kzg_da=use_kzg_da,
+            ),
+            squashed_os_state_update=squashed_os_state_update,
+            initial_carried_outputs=initial_carried_outputs,
+            final_carried_outputs=final_carried_outputs,
+        ),
     );
 
     // Make sure that we report using at least 1 range check to guarantee that

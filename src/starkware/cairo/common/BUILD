@@ -130,12 +130,14 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "cairo_common_lib",
+        ":cairo_common_lib",
         "//src/starkware/cairo/lang/builtins:cairo_run_builtins_lib",
         "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
         "//src/starkware/cairo/lang/tracer:cairo_tracer_lib",
+        "//src/starkware/cairo/lang/vm:cairo_relocatable_lib",
         "//src/starkware/cairo/lang/vm:cairo_run_lib",
         "//src/starkware/cairo/lang/vm:cairo_vm_crypto_lib",
         "//src/starkware/cairo/lang/vm:cairo_vm_lib",
+        "//src/starkware/python:starkware_python_utils_lib",
     ],
 )

@@ -137,7 +137,6 @@ func hash_tx_common_fields{
     alloc_locals;
 
     assert common_fields.paymaster_data_length = 0;
-    assert common_fields.tip = 0;
 
     let fee_fields_hash = hash_fee_fields(
         tip=common_fields.tip,

@@ -79,6 +79,7 @@ py_library(
     deps = [
         "//src/services/external_api:services_external_api_lib",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
+        "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
         "//src/starkware/starkware_utils:starkware_error_handling_lib",
     ],
 )

@@ -27,6 +27,7 @@ sol_library(
 sol_library(
     name = "starknet_core_sol",
     srcs = [
+        "BlobHashGetter.sol",
         "Output.sol",
         "Starknet.sol",
         "StarknetOperator.sol",

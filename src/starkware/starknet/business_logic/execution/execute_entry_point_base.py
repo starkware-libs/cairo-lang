@@ -2,10 +2,10 @@ import dataclasses
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
+from starkware.starknet.business_logic.execution.deprecated_objects import ExecutionResourcesManager
 from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
     CallType,
-    ExecutionResourcesManager,
     TransactionExecutionContext,
 )
 from starkware.starknet.business_logic.state.state_api import SyncState

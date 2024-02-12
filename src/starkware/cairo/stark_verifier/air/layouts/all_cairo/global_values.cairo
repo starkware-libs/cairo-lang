@@ -29,6 +29,7 @@ struct GlobalValues {
     initial_ec_op_addr: felt,
     initial_keccak_addr: felt,
     initial_poseidon_addr: felt,
+    initial_range_check96_addr: felt,
     range_check_min: felt,
     range_check_max: felt,
 
