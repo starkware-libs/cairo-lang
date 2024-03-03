@@ -19,8 +19,9 @@ def safe_div(x: int, y: int):
 
 
 def div_ceil(x, y):
-    assert isinstance(x, int) and isinstance(y, int)
-    return -((-x) // y)
+    if not isinstance(x, int) or not isinstance(y, int):
+        raise TypeError("Arguments must be integers.")
+    return (x + y - 1) // y
 
 
 def div_mod(n, m, p):
