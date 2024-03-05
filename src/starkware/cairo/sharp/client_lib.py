@@ -12,11 +12,11 @@ class ClientLib:
     This is a slim wrapper around the SHARP API.
     """
 
-    def __init__(self, service_url: str):
+    def __init__(self, url: str):
         """
         service_url is the SHARP url.
         """
-        self.service_url = service_url
+        self.url = url
 
     def add_job(self, cairo_pie: CairoPie) -> str:
         """
@@ -48,13 +48,12 @@ class ClientLib:
         action: the action to be sent to the SHARP.
         payload: action specific parameters.
         """
-
         data = {
             "action": action,
             "request": payload,
         }
         http = urllib3.PoolManager()
         res = http.request(
-            method="POST", url=self.service_url, body=json.dumps(data).encode("utf-8")
+            method="POST", url=f"{self.url}{action}", body=json.dumps(data).encode("utf-8")
         )
         return json.loads(res.data.decode("utf-8"))

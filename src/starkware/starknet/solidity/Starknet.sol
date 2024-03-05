@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0.
-pragma solidity ^0.6.12;
-pragma experimental ABIEncoderV2;
+pragma solidity ^0.8.24;
 
-import "./BlobHashGetter.sol";
 import "./Output.sol";
 import "./StarknetGovernance.sol";
 import "./StarknetMessaging.sol";
@@ -14,7 +12,7 @@ import "starkware/solidity/interfaces/ContractInitializer.sol";
 import "starkware/solidity/interfaces/Identity.sol";
 import "starkware/solidity/interfaces/IFactRegistry.sol";
 import "starkware/solidity/interfaces/ProxySupport.sol";
-import "starkware/solidity/libraries/NamedStorage.sol";
+import "starkware/solidity/libraries/NamedStorage8.sol";
 
 contract Starknet is
     Identity,
@@ -115,7 +113,7 @@ contract Starknet is
     function state() internal pure returns (StarknetState.State storage stateStruct) {
         bytes32 location = keccak256(abi.encodePacked(STATE_STRUCT_TAG));
         assembly {
-            stateStruct_slot := location
+            stateStruct.slot := location
         }
     }
 
@@ -158,7 +156,7 @@ contract Starknet is
         require(kzgSegment.length == StarknetOutput.KZG_SEGMENT_SIZE, "INVALID_KZG_SEGMENT_SIZE");
         require(kzgProof.length == PROOF_BYTES_LENGTH, "INVALID_KZG_PROOF_SIZE");
 
-        bytes32 blobHash = BlobHashGetter.getBlobHash(
+        bytes32 blobHash = blobhash(
             // blobIndex=
             0
         );
@@ -252,7 +250,7 @@ contract Starknet is
       Returns a string that identifies the contract.
     */
     function identify() external pure override returns (string memory) {
-        return "StarkWare_Starknet_2023_7";
+        return "StarkWare_Starknet_2024_8";
     }
 
     /**

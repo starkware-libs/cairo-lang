@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0.
-pragma solidity ^0.6.12;
+pragma solidity ^0.8.0;
 
 import "starkware/solidity/components/Governance.sol";
 
@@ -12,7 +12,7 @@ contract StarknetGovernance is Governance {
     function getGovernanceInfo() internal view override returns (GovernanceInfoStruct storage gub) {
         bytes32 location = keccak256(abi.encodePacked(STARKNET_GOVERNANCE_INFO_TAG));
         assembly {
-            gub_slot := location
+            gub.slot := location
         }
     }
 

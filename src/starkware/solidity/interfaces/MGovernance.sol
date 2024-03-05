@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0.
-pragma solidity ^0.6.12;
+pragma solidity >=0.6.12;
 
 abstract contract MGovernance {
     function _isGovernor(address user) internal view virtual returns (bool);

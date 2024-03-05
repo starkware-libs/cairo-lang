@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0.
-pragma solidity ^0.6.12;
+pragma solidity ^0.8.0;
+
+import "./IStarknetMessagingEvents.sol";
 
 library CommitmentTreeUpdateOutput {
     /**
@@ -45,18 +47,6 @@ library StarknetOutput {
     uint256 constant MESSAGE_TO_L2_SELECTOR_OFFSET = 3;
     uint256 constant MESSAGE_TO_L2_PAYLOAD_SIZE_OFFSET = 4;
     uint256 constant MESSAGE_TO_L2_PREFIX_SIZE = 5;
-
-    // An event that is raised when a message is sent from L2 to L1.
-    event LogMessageToL1(uint256 indexed fromAddress, address indexed toAddress, uint256[] payload);
-
-    // An event that is raised when a message from L1 to L2 is consumed.
-    event ConsumedMessageToL2(
-        address indexed fromAddress,
-        uint256 indexed toAddress,
-        uint256 indexed selector,
-        uint256[] payload,
-        uint256 nonce
-    );
 
     /**
       Returns the offset of the messages segment in the output_data.
@@ -114,11 +104,11 @@ library StarknetOutput {
                     abi.encodePacked(programOutputSlice[offset:endOffset])
                 );
 
-                emit LogMessageToL1(
+                emit IStarknetMessagingEvents.LogMessageToL1(
                     // from=
                     programOutputSlice[offset + MESSAGE_TO_L1_FROM_ADDRESS_OFFSET],
                     // to=
-                    address(programOutputSlice[offset + MESSAGE_TO_L1_TO_ADDRESS_OFFSET]),
+                    address(uint160(programOutputSlice[offset + MESSAGE_TO_L1_TO_ADDRESS_OFFSET])),
                     // payload=
                     (uint256[])(programOutputSlice[offset + MESSAGE_TO_L1_PREFIX_SIZE:endOffset])
                 );
@@ -139,9 +129,11 @@ library StarknetOutput {
                 uint256[] memory messageSlice = (uint256[])(
                     programOutputSlice[offset + MESSAGE_TO_L2_PREFIX_SIZE:endOffset]
                 );
-                emit ConsumedMessageToL2(
+                emit IStarknetMessagingEvents.ConsumedMessageToL2(
                     // from=
-                    address(programOutputSlice[offset + MESSAGE_TO_L2_FROM_ADDRESS_OFFSET]),
+                    address(
+                        uint160(programOutputSlice[offset + MESSAGE_TO_L2_FROM_ADDRESS_OFFSET])
+                    ),
                     // to=
                     programOutputSlice[offset + MESSAGE_TO_L2_TO_ADDRESS_OFFSET],
                     // selector=

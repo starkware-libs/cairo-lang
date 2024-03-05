@@ -89,9 +89,7 @@ class InternalAccountTransactionForSimulate(DeprecatedInternalAccountTransaction
         Overrides the charge fee method. Only calculates the actual fee and does not charge any fee.
         """
         actual_fee = calculate_tx_fee(
-            l1_gas_price=state.block_info.l1_gas_price.price_in_wei,
-            resources=resources,
-            general_config=general_config,
+            l1_gas_price=state.block_info.l1_gas_price.price_in_wei, resources=resources
         )
 
         return None, actual_fee

@@ -50,12 +50,9 @@ py_library(
         ":starknet_definitions_lib",
         "//src/services/everest/definitions:everest_general_config_lib",
         "//src/starkware/cairo/lang:cairo_instances_lib",
-        "//src/starkware/cairo/lang/builtins:cairo_all_builtins_lib",
         "//src/starkware/python:starkware_python_utils_lib",
         "//src/starkware/starkware_utils:starkware_config_utils_lib",
-        "//src/starkware/starkware_utils:starkware_dataclasses_field_utils_lib",
         "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
-        requirement("marshmallow"),
         requirement("marshmallow_dataclass"),
     ],
 )

@@ -176,6 +176,12 @@ class LargeStorage(Storage, ABC):
         Upload file to large storage.
         """
 
+    @abstractmethod
+    async def set_large_file(self, file: str, key: bytes):
+        """
+        Upload file to large storage.
+        """
+
     def escape(self, key: bytes) -> str:
         return codecs.escape_encode(key)[0].decode("ascii")  # type: ignore
 

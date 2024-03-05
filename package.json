@@ -4,7 +4,7 @@
     "private": true,
     "description": "",
     "dependencies": {
-        "ganache": "7.4.4"
+        "ganache": "7.9.0"
     },
     "devDependencies": {},
     "author": "",

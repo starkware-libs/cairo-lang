@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0.
-pragma solidity ^0.6.12;
+pragma solidity >=0.6.12;
 
 /*
   The Fact Registry design pattern is a way to separate cryptographic verification from the

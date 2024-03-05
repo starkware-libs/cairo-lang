@@ -78,9 +78,11 @@ class SharpClient:
                         self.cairo_run_path,
                         "--layout=all_solidity",
                         f"--program={program_file.name}",
-                        f"--program_input={program_input_path}"
-                        if program_input_path is not None
-                        else None,
+                        (
+                            f"--program_input={program_input_path}"
+                            if program_input_path is not None
+                            else None
+                        ),
                         f"--cairo_pie_output={cairo_pie_file.name}",
                     ],
                 )
@@ -152,7 +154,7 @@ def init_client(bin_dir: str, node_rpc_url: Optional[str] = None) -> SharpClient
 
     # Initialize the SharpClient.
     client = SharpClient(
-        service_client=ClientLib(config["prover_url"]),
+        service_client=ClientLib(url=config["url"]),
         contract_client=FactChecker(
             fact_registry_address=config["verifier_address"],
             node_rpc_url=node_rpc_url if node_rpc_url is not None else "",
@@ -167,9 +169,10 @@ def init_client(bin_dir: str, node_rpc_url: Optional[str] = None) -> SharpClient
 
 def submit(args, command_args):
     parser = argparse.ArgumentParser(
-        description="Submits a Cairo job to SHARP. "
-        "You can provide (1) the source code and the program input OR (2) the compiled program and "
-        "the program input OR (3) the Cairo PIE."
+        description=(
+            "Submits a Cairo job to SHARP. You can provide (1) the source code and the program "
+            "input OR (2) the compiled program and the program input OR (3) the Cairo PIE."
+        )
     )
 
     parser.add_argument(
@@ -242,7 +245,10 @@ def is_verified(args, command_args):
     )
     parser.add_argument("fact", type=str, help="The fact to verify if registered.")
     parser.add_argument(
-        "--node_url", required=True, type=str, help="URL for a Sepolia Ethereum node RPC API."
+        "--node_url",
+        required=True,
+        type=str,
+        help="URL for a Sepolia Ethereum node RPC API.",
     )
 
     parser.parse_args(command_args, namespace=args)
@@ -266,8 +272,10 @@ def main():
         "--bin_dir",
         type=str,
         default="",
-        help="The path to a directory that contains the cairo-compile and cairo-run scripts. "
-        "If not specified, files are assumed to be in the system's PATH.",
+        help=(
+            "The path to a directory that contains the cairo-compile and cairo-run scripts. "
+            "If not specified, files are assumed to be in the system's PATH."
+        ),
     )
     parser.add_argument(
         "--flavor",

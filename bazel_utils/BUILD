@@ -20,6 +20,11 @@ sh_binary(
     srcs = ["@solc-0.6.12//file"],
 )
 
+sh_binary(
+    name = "solc-0.8.24",
+    srcs = ["@solc-0.8.24//file"],
+)
+
 py_library(
     name = "default_extract_artifacts_lib",
     srcs = [

@@ -19,6 +19,7 @@ sol_contract(
     contracts = [
         "MockStarknetMessaging.json",
     ],
+    solc_exe = "//bazel_utils:solc-0.8.24",
     deps = [
         "starknet_mock_messaging_sol",
     ],

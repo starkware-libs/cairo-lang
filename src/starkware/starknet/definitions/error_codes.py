@@ -84,6 +84,7 @@ class StarknetErrorCode(ErrorCode):
     UNINITIALIZED_CONTRACT = auto()
     UNSUPPORTED_TRANSACTION_VERSION = auto()
     # Native blockifier errors.
+    PY_CONTRACT_CLASS_ERROR = auto()
     PY_NATIVE_BLOCKIFIER_INPUT_ERROR = auto()
     PY_PROGRAM_ERROR = auto()
     PY_PYO3_ERROR = auto()
@@ -171,6 +172,7 @@ main_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
         StarknetErrorCode.DEPRECATED_TRANSACTION_VERSION,
         StarknetErrorCode.DUPLICATED_TRANSACTION,
         StarknetErrorCode.SENDER_ADDRESS_IS_BLOCKED,
+        StarknetErrorCode.UNSUPPORTED_TRANSACTION_VERSION,
         # Signature validation errors.
         StarkErrorCode.INVALID_SIGNATURE,
         # External deploy loading errors.
@@ -208,7 +210,6 @@ feeder_gateway_error_code_whitelist: FrozenSet[ErrorCode] = frozenset(
         StarknetErrorCode.OUT_OF_RANGE_CONTRACT_STORAGE_KEY,
         StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_HASH,
         StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_ID,
-        StarknetErrorCode.UNSUPPORTED_TRANSACTION_VERSION,
         # Deprecation errors.
         StarknetErrorCode.DEPRECATED_ENDPOINT,
     ]

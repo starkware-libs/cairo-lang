@@ -330,9 +330,7 @@ class DeprecatedInternalAccountTransaction(DeprecatedInternalTransaction):
             return None, 0
 
         actual_fee = calculate_tx_fee(
-            l1_gas_price=state.block_info.l1_gas_price.price_in_wei,
-            general_config=general_config,
-            resources=resources,
+            l1_gas_price=state.block_info.l1_gas_price.price_in_wei, resources=resources
         )
         fee_transfer_info = execute_fee_transfer(
             general_config=general_config,
@@ -379,9 +377,7 @@ class DeprecatedInternalAccountTransaction(DeprecatedInternalTransaction):
         self._handle_nonce(state=state)
 
         return self.charge_fee(
-            state=state,
-            general_config=general_config,
-            resources=actual_resources,
+            state=state, resources=actual_resources, general_config=general_config
         )
 
 
@@ -1539,7 +1535,6 @@ class InternalL1Handler(DeprecatedInternalTransaction):
             if self.paid_fee_on_l1 is not None:
                 required_fee = calculate_tx_fee(
                     l1_gas_price=state.block_info.l1_gas_price.price_in_wei,
-                    general_config=general_config,
                     resources=actual_resources,
                 )
                 # For now, assert only that any amount of fee was paid.

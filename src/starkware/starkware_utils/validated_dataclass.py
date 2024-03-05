@@ -9,6 +9,7 @@ import marshmallow.fields as mfields
 import marshmallow_dataclass
 import typeguard
 
+from starkware.starkware_utils.error_handling import StarkErrorCode, stark_assert
 from starkware.starkware_utils.serializable_dataclass import SerializableMarshmallowDataclass
 from starkware.starkware_utils.validated_fields import Field, ValidatedField
 
@@ -20,9 +21,13 @@ def rename_old_field_in_pre_load(
     data: Dict[str, Any], old_field_name: str, new_field_name: str
 ) -> Dict[str, Any]:
     if old_field_name in data:
-        assert new_field_name not in data, (
-            f"Error while renaming {old_field_name} to {new_field_name}. "
-            "It is unexpected to have both fields in the data."
+        stark_assert(
+            new_field_name not in data,
+            code=StarkErrorCode.MALFORMED_REQUEST,
+            message=(
+                f"Error while renaming {old_field_name} to {new_field_name}. "
+                "It is unexpected to have both fields in the data."
+            ),
         )
         data[new_field_name] = data.pop(old_field_name)
     return data

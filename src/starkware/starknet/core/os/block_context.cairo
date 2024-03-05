@@ -3,6 +3,10 @@ from starkware.cairo.common.math import unsigned_div_rem
 from starkware.cairo.common.registers import get_fp_and_pc
 from starkware.starknet.common.new_syscalls import BlockInfo
 from starkware.starknet.core.os.builtins import BuiltinParams, get_builtin_params
+from starkware.starknet.core.os.constants import (
+    VALIDATE_BLOCK_NUMBER_ROUNDING,
+    VALIDATE_TIMESTAMP_ROUNDING,
+)
 from starkware.starknet.core.os.contract_class.compiled_class import (
     CompiledClassFact,
     load_compiled_class_facts,
@@ -12,10 +16,6 @@ from starkware.starknet.core.os.contract_class.deprecated_compiled_class import 
     deprecated_load_compiled_class_facts,
 )
 from starkware.starknet.core.os.os_config.os_config import StarknetOsConfig
-
-// Round down the block number and timestamp when queried inside `__validate__`.
-const VALIDATE_BLOCK_NUMBER_ROUNDING = 100;
-const VALIDATE_TIMESTAMP_ROUNDING = 3600;
 
 // Represents information that is the same throughout the block.
 struct BlockContext {

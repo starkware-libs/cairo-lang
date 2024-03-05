@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0.
-pragma solidity ^0.6.12;
+pragma solidity ^0.8.0;
 
 import "./IStarknetMessaging.sol";
-import "starkware/solidity/libraries/NamedStorage.sol";
+import "starkware/solidity/libraries/NamedStorage8.sol";
 
 /**
   Implements sending messages to L2 by adding them to a pipe and consuming messages from L2 by
@@ -94,7 +94,7 @@ contract StarknetMessaging is IStarknetMessaging {
         return
             keccak256(
                 abi.encodePacked(
-                    uint256(msg.sender),
+                    uint256(uint160(msg.sender)),
                     toAddress,
                     nonce,
                     selector,
@@ -135,7 +135,7 @@ contract StarknetMessaging is IStarknetMessaging {
         returns (bytes32)
     {
         bytes32 msgHash = keccak256(
-            abi.encodePacked(fromAddress, uint256(msg.sender), payload.length, payload)
+            abi.encodePacked(fromAddress, uint256(uint160(msg.sender)), payload.length, payload)
         );
 
         require(l2ToL1Messages()[msgHash] > 0, "INVALID_MESSAGE_TO_CONSUME");

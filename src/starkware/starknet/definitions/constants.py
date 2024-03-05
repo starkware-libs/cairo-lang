@@ -126,9 +126,6 @@ CONSUMED_MSG_TO_L2_N_TOPICS = 3
 LOG_MSG_TO_L1_ENCODED_DATA_SIZE = (L2_TO_L1_MSG_HEADER_SIZE + 1) - LOG_MSG_TO_L1_N_TOPICS
 CONSUMED_MSG_TO_L2_ENCODED_DATA_SIZE = (L1_TO_L2_MSG_HEADER_SIZE + 1) - CONSUMED_MSG_TO_L2_N_TOPICS
 
-# The (empirical) L1 gas cost of each Cairo step.
-N_STEPS_FEE_WEIGHT = 0.005
-
 # Expected return values of a 'validate' entry point.
 VALIDATE_RETDATA = [from_bytes(b"VALID")]
 
@@ -227,6 +224,8 @@ class ThinVersionedConstants:
 
     cairo_resource_fee_weights: Dict[str, float]
 
+    l2_resource_gas_costs: Dict[str, int]
+
     @classmethod
     def create(cls):
         versioned_constants_json = json.load(cls.VERSIONED_CONSTANTS_PATH.open())
@@ -240,6 +239,7 @@ class ThinVersionedConstants:
                 "max_contract_bytecode_size"
             ],
             cairo_resource_fee_weights=versioned_constants_json["vm_resource_fee_cost"],
+            l2_resource_gas_costs=versioned_constants_json["l2_resource_gas_costs"],
         )
 
 

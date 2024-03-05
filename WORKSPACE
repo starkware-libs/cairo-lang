@@ -33,6 +33,14 @@ http_file(
     ],
 )
 
+http_file(
+    name = "solc-0.8.24",
+    downloaded_file_path = "solc-0.8.24",
+    executable = True,
+    sha256 = "fb03a29a517452b9f12bcf459ef37d0a543765bb3bbc911e70a87d6a37c30d5f",
+    urls = ["https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v0.8.24+commit.e11b9ed9"],
+)
+
 http_archive(
     name = "rules_python",
     patch_args = ["-p1"],
@@ -52,7 +60,7 @@ http_archive(
         "//src/starkware/starknet/compiler/v1:BUILD." + CAIRO_COMPILER_ARCHIVE,
     ),
     strip_prefix = "cairo",
-    url = "https://github.com/starkware-libs/cairo/releases/download/v2.6.0-rc.0/release-x86_64-unknown-linux-musl.tar.gz",
+    url = "https://github.com/starkware-libs/cairo/releases/download/v2.6.0/release-x86_64-unknown-linux-musl.tar.gz",
 )
 
 http_archive(

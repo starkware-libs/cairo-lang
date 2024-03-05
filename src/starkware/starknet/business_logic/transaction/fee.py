@@ -1,4 +1,5 @@
 import math
+from typing import Mapping
 
 from starkware.starknet.business_logic.execution.deprecated_objects import ExecutionResourcesManager
 from starkware.starknet.business_logic.execution.execute_entry_point import ExecuteEntryPoint
@@ -9,7 +10,7 @@ from starkware.starknet.business_logic.execution.objects import (
 )
 from starkware.starknet.business_logic.state.state_api import SyncState
 from starkware.starknet.business_logic.utils import extract_l1_gas_and_cairo_usage
-from starkware.starknet.definitions.constants import GasCost
+from starkware.starknet.definitions.constants import VERSIONED_CONSTANTS, GasCost
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public import abi as starknet_abi
@@ -59,7 +60,7 @@ def execute_fee_transfer(
 
 
 def calculate_l1_gas_by_cairo_usage(
-    general_config: StarknetGeneralConfig,
+    cairo_resource_fee_weights: Mapping[str, float],
     cairo_resource_usage: ResourcesMapping,
 ) -> float:
     """
@@ -67,7 +68,6 @@ def calculate_l1_gas_by_cairo_usage(
     I.e., returns the heaviest Cairo resource weight (in terms of L1 gas), as the size of
     a proof is determined similarly - by the (normalized) largest segment.
     """
-    cairo_resource_fee_weights = general_config.cairo_resource_fee_weights
     cairo_resource_names = set(cairo_resource_usage.keys())
     assert cairo_resource_names.issubset(
         cairo_resource_fee_weights.keys()
@@ -82,9 +82,7 @@ def calculate_l1_gas_by_cairo_usage(
     return cairo_l1_gas_usage
 
 
-def calculate_tx_fee(
-    resources: ResourcesMapping, l1_gas_price: int, general_config: StarknetGeneralConfig
-) -> int:
+def calculate_tx_fee(resources: ResourcesMapping, l1_gas_price: int) -> int:
     """
     Calculates the fee of a transaction given its execution resources.
     We add the l1_gas_usage (which may include, for example, the direct cost of L2-to-L1
@@ -92,7 +90,7 @@ def calculate_tx_fee(
     """
     l1_gas_usage, cairo_resource_usage = extract_l1_gas_and_cairo_usage(resources=resources)
     l1_gas_by_cairo_usage = calculate_l1_gas_by_cairo_usage(
-        general_config=general_config,
+        cairo_resource_fee_weights=VERSIONED_CONSTANTS.cairo_resource_fee_weights,
         cairo_resource_usage=cairo_resource_usage,
     )
     total_l1_gas_usage = l1_gas_usage + l1_gas_by_cairo_usage

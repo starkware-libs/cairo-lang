@@ -1,4 +1,4 @@
-from starkware.cairo.common.math import assert_le, assert_le_felt, assert_nn_le
+from starkware.cairo.common.math import assert_le, assert_le_felt, assert_lt_felt, assert_nn_le
 
 const FIND_ELEMENT_RANGE_CHECK_USAGE = 2;
 
@@ -67,7 +67,7 @@ func find_element{range_check_ptr}(array_ptr: felt*, elm_size, n_elms, key) -> (
 // Given an array sorted by its first field, returns the pointer to the first element in the array
 // whose first field is at least key. If no such item exists, returns a pointer to the end of the
 // array.
-// Prover assumption: all the keys (the first field in each item) are in [0, RANGE_CHECK_BOUND).
+// Assumption: the array is sorted as unsigned numbers.
 func search_sorted_lower{range_check_ptr}(array_ptr: felt*, elm_size, n_elms, key) -> (
     elm_ptr: felt*
 ) {
@@ -105,7 +105,7 @@ func search_sorted_lower{range_check_ptr}(array_ptr: felt*, elm_size, n_elms, ke
     }
 
     if (index != 0) {
-        assert_le_felt(a=[elm_ptr - elm_size] + 1, b=key);
+        assert_lt_felt(a=[elm_ptr - elm_size], b=key);
     }
 
     return (elm_ptr=elm_ptr);
@@ -114,7 +114,7 @@ func search_sorted_lower{range_check_ptr}(array_ptr: felt*, elm_size, n_elms, ke
 // Given an array sorted by its first field, returns the pointer to the first element in the array
 // whose first field is exactly key. If no such item exists, returns an undefined pointer,
 // and success=0.
-// Prover assumption: all the keys (the first field in each item) are in [0, RANGE_CHECK_BOUND).
+// Assumption: the array is sorted as unsigned numbers.
 func search_sorted{range_check_ptr}(array_ptr: felt*, elm_size, n_elms, key) -> (
     elm_ptr: felt*, success: felt
 ) {

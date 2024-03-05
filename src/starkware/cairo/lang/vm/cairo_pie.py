@@ -420,22 +420,15 @@ class CairoPie:
         ), "Invalid list of inner files in the CairoPIE zip."
 
         # Make sure the file sizes are reasonable.
-        file_size = lambda name: inner_files[name].file_size if name in inner_files else 0
-        assert (
-            file_size(cls.METADATA_FILENAME) < cls.MAX_SIZE
-        ), f"Invalid file size for {cls.METADATA_FILENAME}."
-        assert (
-            file_size(cls.MEMORY_FILENAME) < cls.MAX_SIZE
-        ), f"Invalid file size for {cls.MEMORY_FILENAME}."
-        assert (
-            file_size(cls.ADDITIONAL_DATA_FILENAME) < cls.MAX_SIZE
-        ), f"Invalid file size for {cls.ADDITIONAL_DATA_FILENAME}."
-        assert (
-            file_size(cls.EXECUTION_RESOURCES_FILENAME) < 10000
-        ), f"Invalid file size for {cls.EXECUTION_RESOURCES_FILENAME}."
-        assert (
-            file_size(cls.VERSION_FILENAME) < 10000
-        ), f"Invalid file size for {cls.VERSION_FILENAME}."
+        for name, limit in (
+            (cls.METADATA_FILENAME, cls.MAX_SIZE),
+            (cls.MEMORY_FILENAME, cls.MAX_SIZE),
+            (cls.ADDITIONAL_DATA_FILENAME, cls.MAX_SIZE),
+            (cls.EXECUTION_RESOURCES_FILENAME, 10000),
+            (cls.VERSION_FILENAME, 10000),
+        ):
+            size = inner_files[name].file_size if name in inner_files else 0
+            assert size < limit, f"Invalid file size {size} for {name}; limit is {limit}."
 
     def get_segment(self, segment_info: SegmentInfo):
         return self.memory.get_range(

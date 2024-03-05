@@ -1,4 +1,5 @@
 import dataclasses
+import json
 import re
 from abc import abstractmethod
 from dataclasses import field
@@ -218,6 +219,9 @@ class CompiledClass(CompiledClassBase):
     def get_bytecode(self) -> List[int]:
         return self.bytecode
 
+    def get_bytecode_size(self) -> int:
+        return len(self.get_bytecode())
+
     @marshmallow.decorators.pre_load
     def parse_pythonic_hints(self, data: Dict[str, Any], many: bool, **kwargs) -> Dict[str, Any]:
         """
@@ -328,6 +332,12 @@ class DeprecatedCompiledClass(CompiledClassBase):
 
     def get_bytecode(self) -> List[int]:
         return self.program.data
+
+    def get_bytecode_size(self) -> int:
+        return len(self.get_bytecode())
+
+    def get_abi_size(self) -> int:
+        return len(json.dumps(self.abi)) if self.abi is not None else 0
 
     @marshmallow.decorators.post_dump
     def remove_none_builtins(self, data: Dict[str, Any], many: bool, **kwargs) -> Dict[str, Any]:

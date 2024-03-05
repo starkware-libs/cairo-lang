@@ -1,20 +1,15 @@
-import copy
 import os
 from dataclasses import field
-from typing import Any, Dict
 
-import marshmallow.fields as mfields
 import marshmallow_dataclass
 
 from services.everest.definitions.general_config import EverestGeneralConfig
-from starkware.cairo.lang.builtins.all_builtins import ALL_BUILTINS, OUTPUT_BUILTIN, with_suffix
 from starkware.cairo.lang.instances import starknet_instance, starknet_with_keccak_instance
 from starkware.python.utils import from_bytes
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.chain_ids import StarknetChainId
 from starkware.starknet.definitions.constants import VERSIONED_CONSTANTS
 from starkware.starkware_utils.config_base import Config, load_config
-from starkware.starkware_utils.field_validators import validate_dict, validate_non_negative
 from starkware.starkware_utils.marshmallow_dataclass_fields import (
     RequiredBoolean,
     additional_metadata,
@@ -61,7 +56,7 @@ DEFAULT_SEQUENCER_ADDRESS = load_int_value(
     value=default_general_config["sequencer_address"],
 )
 DEFAULT_ENFORCE_L1_FEE = True
-DEFAULT_USE_KZG_DA = False
+DEFAULT_USE_KZG_DA = True
 
 # Given in units of wei.
 DEFAULT_DEPRECATED_L1_GAS_PRICE = 10**11
@@ -71,7 +66,7 @@ DEFAULT_ETH_IN_FRI = 10**21
 DEFAULT_MIN_FRI_L1_GAS_PRICE = 10**6
 DEFAULT_MAX_FRI_L1_GAS_PRICE = 10**18
 DEFAULT_MIN_FRI_L1_DATA_GAS_PRICE = 10**5
-DEFAULT_MAX_FRI_L1_DATA_GAS_PRICE = 10**10
+DEFAULT_MAX_FRI_L1_DATA_GAS_PRICE = 10**17
 
 
 # Configuration schema definition.
@@ -164,23 +159,6 @@ class StarknetGeneralConfig(EverestGeneralConfig):
         default=DEFAULT_SEQUENCER_ADDRESS,
     )
 
-    cairo_resource_fee_weights: Dict[str, float] = field(
-        metadata=additional_metadata(
-            marshmallow_field=mfields.Dict(
-                keys=mfields.String,
-                values=mfields.Float,
-                validate=validate_dict(
-                    "Cairo resource fee weights", value_validator=validate_non_negative
-                ),
-            ),
-            description=(
-                "A mapping from a Cairo resource to its coefficient in this transaction "
-                "fee calculation."
-            ),
-        ),
-        default_factory=lambda: VERSIONED_CONSTANTS.cairo_resource_fee_weights,
-    )
-
     enforce_l1_handler_fee: bool = field(
         metadata=additional_metadata(
             marshmallow_field=RequiredBoolean(), description="Enabler for L1 fee enforcement."
@@ -231,36 +209,3 @@ class StarknetGeneralConfig(EverestGeneralConfig):
     @property
     def max_fri_l1_data_gas_price(self) -> int:
         return self.gas_price_bounds.max_fri_l1_data_gas_price
-
-
-def build_general_config(raw_general_config: Dict[str, Any]) -> StarknetGeneralConfig:
-    """
-    Updates the fee weights and builds the general config.
-    """
-    raw_general_config = copy.deepcopy(raw_general_config)
-    cairo_resource_fee_weights: Dict[str, float] = raw_general_config["cairo_resource_fee_weights"]
-    assert cairo_resource_fee_weights.keys() == {
-        N_STEPS_RESOURCE
-    }, f"Only {N_STEPS_RESOURCE} weight should be given."
-
-    n_steps_weight = cairo_resource_fee_weights[N_STEPS_RESOURCE]
-
-    # Zero all entries.
-    cairo_resource_fee_weights.update(
-        {resource: 0.0 for resource in [N_STEPS_RESOURCE] + ALL_BUILTINS.with_suffix()}
-    )
-
-    # Update relevant entries.
-    cairo_resource_fee_weights.update(
-        {
-            N_STEPS_RESOURCE: n_steps_weight,
-            # All other weights are deduced from n_steps.
-            **{
-                with_suffix(name): n_steps_weight * instance_def.ratio
-                for name, instance_def in STARKNET_LAYOUT_INSTANCE.builtins.items()
-                if name != OUTPUT_BUILTIN
-            },
-        }
-    )
-
-    return StarknetGeneralConfig.load(data=raw_general_config)
