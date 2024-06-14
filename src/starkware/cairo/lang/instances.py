@@ -553,4 +553,5 @@ LAYOUTS: Dict[str, CairoLayout] = {
     "starknet_with_keccak": starknet_with_keccak_instance,
     "dynamic": build_dynamic_layout(),
     "recursive_with_poseidon": recursive_with_poseidon_instance,
+    "all_cairo": all_cairo_instance,
 }
