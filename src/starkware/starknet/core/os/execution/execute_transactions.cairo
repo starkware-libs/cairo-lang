@@ -3,14 +3,17 @@ from starkware.cairo.common.cairo_builtins import (
     BitwiseBuiltin,
     HashBuiltin,
     KeccakBuiltin,
+    ModBuiltin,
     PoseidonBuiltin,
 )
+from starkware.cairo.common.cairo_sha256.sha256_utils import finalize_sha256
 from starkware.cairo.common.dict import dict_new, dict_read, dict_update
 from starkware.cairo.common.dict_access import DictAccess
 from starkware.cairo.common.math import assert_nn, assert_nn_le, assert_not_zero
 from starkware.cairo.common.memcpy import memcpy
 from starkware.cairo.common.registers import get_fp_and_pc
 from starkware.cairo.common.segments import relocate_segment
+from starkware.cairo.common.sha256_state import Sha256ProcessBlock
 from starkware.cairo.common.uint256 import Uint256
 from starkware.starknet.builtins.segment_arena.segment_arena import new_arena
 from starkware.starknet.common.constants import (
@@ -116,6 +119,9 @@ func execute_transactions{
     ec_op_ptr,
     keccak_ptr: KeccakBuiltin*,
     poseidon_ptr: PoseidonBuiltin*,
+    range_check96_ptr: felt*,
+    add_mod_ptr: ModBuiltin*,
+    mul_mod_ptr: ModBuiltin*,
     contract_state_changes: DictAccess*,
     contract_class_changes: DictAccess*,
     outputs: OsCarriedOutputs*,
@@ -124,6 +130,8 @@ func execute_transactions{
 
     // Prepare builtin pointers.
     let segment_arena_ptr = new_arena();
+    let (sha256_ptr: Sha256ProcessBlock*) = alloc();
+    %{ syscall_handler.sha256_segment = ids.sha256_ptr %}
 
     let (__fp__, _) = get_fp_and_pc();
     local local_builtin_ptrs: BuiltinPointers = BuiltinPointers(
@@ -135,11 +143,15 @@ func execute_transactions{
             ec_op=ec_op_ptr,
             poseidon=poseidon_ptr,
             segment_arena=segment_arena_ptr,
+            range_check96=range_check96_ptr,
+            add_mod=add_mod_ptr,
+            mul_mod=mul_mod_ptr,
         ),
-        non_selectable=NonSelectableBuiltins(keccak=keccak_ptr),
+        non_selectable=NonSelectableBuiltins(keccak=keccak_ptr, sha256=sha256_ptr),
     );
 
     let builtin_ptrs = &local_builtin_ptrs;
+    let sha256_ptr_start = builtin_ptrs.non_selectable.sha256;
 
     // Execute transactions.
     local n_txs = nondet %{ len(os_input.transactions) %};
@@ -174,7 +186,13 @@ func execute_transactions{
     let bitwise_ptr = selectable_builtins.bitwise;
     let ec_op_ptr = selectable_builtins.ec_op;
     let poseidon_ptr = selectable_builtins.poseidon;
+    let range_check96_ptr = selectable_builtins.range_check96;
+    let add_mod_ptr = selectable_builtins.add_mod;
+    let mul_mod_ptr = selectable_builtins.mul_mod;
     let keccak_ptr = builtin_ptrs.non_selectable.keccak;
+
+    // finalize the sha256 segment.
+    finalize_sha256(sha256_ptr_start, builtin_ptrs.non_selectable.sha256);
 
     return (reserved_range_checks_end=reserved_range_checks_end);
 }
@@ -197,6 +215,7 @@ func execute_transactions_inner{
     contract_class_changes: DictAccess*,
     outputs: OsCarriedOutputs*,
 }(block_context: BlockContext*, n_txs) {
+    %{ print(f"execute_transactions_inner: {ids.n_txs} transactions remaining.") %}
     if (n_txs == 0) {
         return ();
     }
@@ -301,7 +320,7 @@ func charge_fee{
     ) * (selector - VALIDATE_DEPLOY_ENTRY_POINT_SELECTOR) = 0;
 
     local calldata: TransferCallData = TransferCallData(
-        recipient=block_context.block_info.sequencer_address,
+        recipient=block_context.block_info_for_execute.sequencer_address,
         amount=Uint256(low=nondet %{ execution_helper.tx_execution_info.actual_fee %}, high=0),
     );
 
@@ -327,7 +346,7 @@ func charge_fee{
         calldata_size=TransferCallData.SIZE,
         calldata=&calldata,
         execution_info=new ExecutionInfo(
-            block_info=block_context.block_info,
+            block_info=block_context.block_info_for_execute,
             tx_info=tx_info,
             caller_address=tx_info.account_contract_address,
             contract_address=fee_token_address,
@@ -596,7 +615,7 @@ func get_invoke_tx_execution_context{range_check_ptr, contract_state_changes: Di
         calldata_size=nondet %{ len(tx.calldata) %},
         calldata=cast(nondet %{ segments.gen_arg(tx.calldata) %}, felt*),
         execution_info=new ExecutionInfo(
-            block_info=block_context.block_info,
+            block_info=block_context.block_info_for_execute,
             tx_info=cast(nondet %{ segments.add() %}, TxInfo*),
             caller_address=ORIGIN_ADDRESS,
             contract_address=contract_address,

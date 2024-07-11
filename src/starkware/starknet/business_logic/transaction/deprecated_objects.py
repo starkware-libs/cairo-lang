@@ -404,6 +404,10 @@ class DeprecatedInternalDeclare(DeprecatedInternalAccountTransaction):
     ] = starknet_abi.VALIDATE_DECLARE_ENTRY_POINT_SELECTOR
 
     @property
+    def is_cairo0(self) -> bool:
+        return self.version < 2
+
+    @property
     def validate_entrypoint_calldata(self) -> List[int]:
         # '__validate_declare__' is expected to get one parameter: 'class_hash'.
         return [self.class_hash]
@@ -635,7 +639,6 @@ class DeprecatedInternalDeclare(DeprecatedInternalAccountTransaction):
             validate_info=validate_info,
             call_info=None,
             actual_resources=actual_resources,
-            tx_type=self.tx_type,
             revert_error=None,
         )
 
@@ -828,7 +831,6 @@ class DeprecatedInternalDeployAccount(DeprecatedInternalAccountTransaction):
             validate_info=validate_info,
             call_info=constructor_call_info,
             actual_resources=actual_resources,
-            tx_type=self.tx_type,
             revert_error=None,
         )
 
@@ -1076,7 +1078,6 @@ class InternalDeploy(DeprecatedInternalTransaction):
             validate_info=None,
             call_info=call_info,
             actual_resources=actual_resources,
-            tx_type=self.tx_type,
             revert_error=None,
         )
 
@@ -1123,7 +1124,6 @@ class InternalDeploy(DeprecatedInternalTransaction):
             validate_info=None,
             call_info=call_info,
             actual_resources=actual_resources,
-            tx_type=self.tx_type,
             revert_error=None,
         )
 
@@ -1356,7 +1356,6 @@ class DeprecatedInternalInvokeFunction(DeprecatedInternalAccountTransaction):
             validate_info=validate_info,
             call_info=call_info,
             actual_resources=actual_resources,
-            tx_type=self.tx_type,
             revert_error=None,
         )
 
@@ -1552,7 +1551,6 @@ class InternalL1Handler(DeprecatedInternalTransaction):
             validate_info=None,
             call_info=call_info,
             actual_resources=actual_resources,
-            tx_type=self.tx_type,
             revert_error=None,
         )
 

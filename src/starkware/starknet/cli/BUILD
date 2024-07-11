@@ -106,7 +106,8 @@ pytest_test(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "starknet_cli_lib",
+        ":starknet_cli_lib",
         "//src/starkware/cairo/lang:cairo_constants_lib",
+        "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
     ],
 )

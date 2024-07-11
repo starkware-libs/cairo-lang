@@ -14,6 +14,8 @@ EC_OP_BUILTIN = "ec_op"
 KECCAK_BUILTIN = "keccak"
 POSEIDON_BUILTIN = "poseidon"
 RANGE_CHECK96_BUILTIN = "range_check96"
+ADD_MOD_BUILTIN = "add_mod"
+MUL_MOD_BUILTIN = "mul_mod"
 
 BUILTIN_NAME_SUFFIX = "_builtin"
 
@@ -59,7 +61,17 @@ ALL_BUILTINS = BuiltinList(
         KECCAK_BUILTIN,
         POSEIDON_BUILTIN,
         RANGE_CHECK96_BUILTIN,
+        ADD_MOD_BUILTIN,
+        MUL_MOD_BUILTIN,
+    ]
+)
+# The list of builtins which may have ratio < 1 (and implement BuiltinInstanceDefWithLowRatio).
+LOW_RATIO_BUILTINS = BuiltinList(
+    [
+        ADD_MOD_BUILTIN,
+        MUL_MOD_BUILTIN,
+        RANGE_CHECK96_BUILTIN,
     ]
 )
 
-SUPPORTED_DYNAMIC_BUILTINS = ALL_BUILTINS.except_for(RANGE_CHECK96_BUILTIN)
+SUPPORTED_DYNAMIC_BUILTINS = ALL_BUILTINS

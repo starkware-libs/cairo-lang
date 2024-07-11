@@ -19,6 +19,8 @@ py_library(
         "//src/starkware/cairo/lang/builtins/hash:instance_def.py",
         "//src/starkware/cairo/lang/builtins/keccak:instance_def.py",
         "//src/starkware/cairo/lang/builtins/keccak:keccak_builtin_runner.py",
+        "//src/starkware/cairo/lang/builtins/modulo:instance_def.py",
+        "//src/starkware/cairo/lang/builtins/modulo:mod_builtin_runner.py",
         "//src/starkware/cairo/lang/builtins/poseidon:instance_def.py",
         "//src/starkware/cairo/lang/builtins/poseidon:poseidon_builtin_runner.py",
         "//src/starkware/cairo/lang/builtins/range_check:instance_def.py",

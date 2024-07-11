@@ -1,3 +1,5 @@
+# Modules should not be named `types`, as this may cause errors:
+# https://stackoverflow.com/questions/43453414 .
 from typing import Dict, Tuple
 
 # Blockifier typedefs:

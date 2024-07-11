@@ -5,7 +5,12 @@ from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import sympy
-from sympy.core.numbers import igcdex
+
+# Custom import of igcdex to support multiple sympy versions.
+try:
+    from sympy.core.numbers import igcdex
+except (ModuleNotFoundError, ImportError):
+    from sympy.core.intfunc import igcdex  # type: ignore[no-redef]
 
 
 def safe_div(x: int, y: int):
@@ -63,6 +68,11 @@ def prev_power_of_2(x: int):
     """
     assert isinstance(x, int) and x > 0
     return next_power_of_2(x + 1) // 2
+
+
+def log2_ceil(x: int):
+    assert x > 0
+    return (x - 1).bit_length()
 
 
 def is_quad_residue(n, p):

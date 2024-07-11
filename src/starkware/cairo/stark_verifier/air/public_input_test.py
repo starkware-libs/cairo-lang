@@ -15,6 +15,7 @@ from starkware.cairo.lang.vm.air_public_input import (
     extract_z_and_alpha,
     get_pages_and_products,
 )
+from starkware.cairo.stark_verifier.air.parser import parse_proof
 from starkware.cairo.stark_verifier.air.utils import (
     compute_continuous_page_headers,
     public_input_to_cairo,
@@ -45,7 +46,7 @@ def structs(program):
             "starkware.cairo.stark_verifier.air.public_input.PublicInput",
             "starkware.cairo.stark_verifier.air.public_input.SegmentInfo",
             "starkware.cairo.stark_verifier.air.public_memory.ContinuousPageHeader",
-            "starkware.cairo.stark_verifier.core.air_interface.AirInstance",
+            "starkware.cairo.stark_verifier.core.air_instances.AirInstance",
         ],
     ).structs
 
@@ -82,6 +83,18 @@ def test_public_input_to_cairo(program, structs, proof_file, expected_json_key):
     )
 
     runner = CairoFunctionRunner(program, layout="small")
+    extra_const_params = {
+        "cpu_component_step": 1,
+        "constraint_degree": 2,
+        "num_columns_first": 23,
+        "num_columns_second": 2,
+    }
+    proof_config = parse_proof(
+        identifiers=program.identifiers,
+        proof_json=proof_json,
+        only_config=True,
+        extra_params=extra_const_params,
+    )
     runner.run(
         "public_input_hash",
         range_check_ptr=runner.range_check_builtin.base,
@@ -89,6 +102,7 @@ def test_public_input_to_cairo(program, structs, proof_file, expected_json_key):
         poseidon_ptr=runner.poseidon_builtin.base,
         air=air_instance,
         public_input=cairo_public_input,
+        config=proof_config,
     )
     (
         range_check_ptr,

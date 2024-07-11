@@ -137,6 +137,11 @@ class InternalDeclare(InternalAccountTransaction):
     tx_type: ClassVar[TransactionType] = TransactionType.DECLARE
     related_external_cls: ClassVar[Type[AccountTransaction]] = Declare
 
+    @property
+    def is_cairo0(self) -> bool:
+        assert self.version >= 3, f"Unexpected version for Declare: {self.version}."
+        return False
+
     @classmethod
     def create(
         cls,
@@ -166,9 +171,9 @@ class InternalDeclare(InternalAccountTransaction):
             tip=tip,
             paymaster_data=paymaster_data,
             compiled_class_hash=compiled_class_hash,
-            account_deployment_data=[]
-            if account_deployment_data is None
-            else account_deployment_data,
+            account_deployment_data=(
+                [] if account_deployment_data is None else account_deployment_data
+            ),
             contract_class=contract_class,
             chain_id=chain_id,
         )
@@ -188,9 +193,9 @@ class InternalDeclare(InternalAccountTransaction):
             compiled_class_hash=compiled_class_hash,
             sierra_program_size=contract_class.get_bytecode_size(),
             abi_size=contract_class.get_abi_size(),
-            account_deployment_data=[]
-            if account_deployment_data is None
-            else account_deployment_data,
+            account_deployment_data=(
+                [] if account_deployment_data is None else account_deployment_data
+            ),
         )
         internal_declare.verify_version()
         return internal_declare
@@ -441,9 +446,9 @@ class InternalInvokeFunction(InternalAccountTransaction):
             tip=tip,
             paymaster_data=paymaster_data,
             calldata=calldata,
-            account_deployment_data=[]
-            if account_deployment_data is None
-            else account_deployment_data,
+            account_deployment_data=(
+                [] if account_deployment_data is None else account_deployment_data
+            ),
             chain_id=chain_id,
         )
 
@@ -459,9 +464,9 @@ class InternalInvokeFunction(InternalAccountTransaction):
             tip=tip,
             paymaster_data=paymaster_data,
             calldata=calldata,
-            account_deployment_data=[]
-            if account_deployment_data is None
-            else account_deployment_data,
+            account_deployment_data=(
+                [] if account_deployment_data is None else account_deployment_data
+            ),
         )
         internal_invoke.verify_version()
         return internal_invoke

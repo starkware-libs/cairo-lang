@@ -4,7 +4,7 @@ from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.cairo_builtins import KeccakBuiltin
 from starkware.cairo.common.dict import dict_read
 from starkware.cairo.common.dict_access import DictAccess
-from starkware.cairo.common.find_element import find_element, search_sorted
+from starkware.cairo.common.find_element import find_element, search_sorted_optimistic
 from starkware.cairo.common.math import assert_not_zero
 from starkware.cairo.common.registers import get_ap
 from starkware.starknet.builtins.segment_arena.segment_arena import (
@@ -111,7 +111,7 @@ func get_entry_point{range_check_ptr}(
 
     // The key must be at offset 0.
     static_assert CompiledClassEntryPoint.selector == 0;
-    let (entry_point_desc: CompiledClassEntryPoint*, success) = search_sorted(
+    let (entry_point_desc: CompiledClassEntryPoint*, success) = search_sorted_optimistic(
         array_ptr=cast(entry_points, felt*),
         elm_size=CompiledClassEntryPoint.SIZE,
         n_elms=n_entry_points,
@@ -214,7 +214,7 @@ func execute_entry_point{
 
     %{
         execution_helper.enter_call(
-            execution_info_ptr=ids.execution_context.execution_info.address_)
+            cairo_execution_info=ids.execution_context.execution_info)
     %}
     %{ vm_enter_scope({'syscall_handler': syscall_handler}) %}
     call abs contract_entry_point;
@@ -319,6 +319,9 @@ func prepare_builtin_ptrs_for_execute(builtin_ptrs: BuiltinPointers*) -> Builtin
             ec_op=selectable_builtins.ec_op,
             poseidon=selectable_builtins.poseidon,
             segment_arena=segment_arena_ptr,
+            range_check96=selectable_builtins.range_check96,
+            add_mod=selectable_builtins.add_mod,
+            mul_mod=selectable_builtins.mul_mod,
         ),
         non_selectable=builtin_ptrs.non_selectable,
     );

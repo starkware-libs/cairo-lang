@@ -5,10 +5,12 @@ from starkware.cairo.common.cairo_builtins import (
     EcOpBuiltin,
     HashBuiltin,
     KeccakBuiltin,
+    ModBuiltin,
     PoseidonBuiltin,
     SignatureBuiltin,
 )
 from starkware.cairo.common.registers import get_fp_and_pc
+from starkware.cairo.common.sha256_state import Sha256ProcessBlock
 from starkware.starknet.builtins.segment_arena.segment_arena import SegmentArenaBuiltin
 
 struct SelectableBuiltins {
@@ -19,10 +21,14 @@ struct SelectableBuiltins {
     ec_op: felt,
     poseidon: PoseidonBuiltin*,
     segment_arena: SegmentArenaBuiltin*,
+    range_check96: felt*,
+    add_mod: ModBuiltin*,
+    mul_mod: ModBuiltin*,
 }
 
 struct NonSelectableBuiltins {
     keccak: KeccakBuiltin*,
+    sha256: Sha256ProcessBlock*,
 }
 
 struct BuiltinPointers {
@@ -39,6 +45,9 @@ struct BuiltinEncodings {
     ec_op: felt,
     poseidon: felt,
     segment_arena: felt,
+    range_check96: felt,
+    add_mod: felt,
+    mul_mod: felt,
 }
 
 // A struct containing the instance size of each builtin.
@@ -50,6 +59,9 @@ struct BuiltinInstanceSizes {
     ec_op: felt,
     poseidon: felt,
     segment_arena: felt,
+    range_check96: felt,
+    add_mod: felt,
+    mul_mod: felt,
 }
 
 struct BuiltinParams {
@@ -72,6 +84,9 @@ func get_builtin_params() -> (builtin_params: BuiltinParams*) {
         ec_op='ec_op',
         poseidon='poseidon',
         segment_arena='segment_arena',
+        range_check96='range_check96',
+        add_mod='add_mod',
+        mul_mod='mul_mod',
     );
 
     local builtin_instance_sizes: BuiltinInstanceSizes = BuiltinInstanceSizes(
@@ -82,6 +97,9 @@ func get_builtin_params() -> (builtin_params: BuiltinParams*) {
         ec_op=EcOpBuiltin.SIZE,
         poseidon=PoseidonBuiltin.SIZE,
         segment_arena=SegmentArenaBuiltin.SIZE,
+        range_check96=1,
+        add_mod=ModBuiltin.SIZE,
+        mul_mod=ModBuiltin.SIZE,
     );
 
     local builtin_params: BuiltinParams = BuiltinParams(

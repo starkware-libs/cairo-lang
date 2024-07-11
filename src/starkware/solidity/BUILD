@@ -6,6 +6,4 @@ py_library(
         "utils.py",
     ],
     visibility = ["//visibility:public"],
-    deps = [
-    ],
 )

@@ -38,6 +38,14 @@ class NonceManager:
         self.address_to_nonce[address] = nonce + 1
         return nonce
 
+    def rollback(self, address: int):
+        """
+        Decrements the nonce of the address by 1.
+        """
+        nonce = self.get(address=address)
+        assert nonce > 0
+        self.address_to_nonce[address] = nonce - 1
+
     def as_dict(self) -> Dict[int, int]:
         """
         Returns a map from contract address to the next expected nonce.

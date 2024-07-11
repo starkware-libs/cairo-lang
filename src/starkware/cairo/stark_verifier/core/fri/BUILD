@@ -4,15 +4,27 @@ load("//src/starkware/cairo/lang:cairo_rules.bzl", "cairo_library")
 package(default_visibility = ["//visibility:public"])
 
 cairo_library(
-    name = "fri",
+    name = "fri_config",
     srcs = [
         "config.cairo",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//src/starkware/cairo/common:cairo_common_cairo_lib",
+        "//src/starkware/cairo/stark_verifier/core:cairo_commitment",
+    ],
+)
+
+cairo_library(
+    name = "fri",
+    srcs = [
         "fri.cairo",
         "fri_formula.cairo",
         "fri_layer.cairo",
     ],
     visibility = ["//visibility:public"],
     deps = [
+        ":fri_config",
         "//src/starkware/cairo/common:cairo_common_cairo_lib",
         "//src/starkware/cairo/stark_verifier/core:cairo",
     ],

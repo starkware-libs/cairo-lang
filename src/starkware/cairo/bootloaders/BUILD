@@ -1,6 +1,6 @@
 load("//bazel_utils:get_from_cairo_lang.bzl", "get_from_cairo_lang")
 load("//bazel_utils/python:defs.bzl", "requirement")
-load("//bazel_utils:python.bzl", "py_exe")
+load("//bazel_utils:python.bzl", "py_exe", "pytest_test")
 
 py_library(
     name = "program_hash_test_utils_lib",
@@ -58,6 +58,7 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
+        ":aggregator_utils",
         ":cairo_bootloader_fact_topology_lib",
         ":cairo_hash_program_lib",
         "//src/starkware/cairo/lang/vm:cairo_relocatable_lib",
@@ -65,4 +66,21 @@ py_library(
         "//src/starkware/python:starkware_python_utils_lib",
         requirement("eth_hash"),
     ],
+)
+
+py_library(
+    name = "aggregator_utils",
+    srcs = [
+        "aggregator_utils.py",
+    ],
+    deps = [
+        "//src/starkware/cairo/lang/vm:cairo_vm_crypto_lib",
+        "//src/starkware/python:starkware_python_utils_lib",
+    ],
+)
+
+pytest_test(
+    name = "aggregator_utils_test",
+    srcs = ["aggregator_utils_test.py"],
+    deps = [":aggregator_utils"],
 )

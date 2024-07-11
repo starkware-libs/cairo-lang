@@ -12,6 +12,7 @@ from starkware.cairo.lang.builtins.ec.instance_def import EcOpInstanceDef
 from starkware.cairo.lang.builtins.hash.instance_def import PedersenInstanceDef
 from starkware.cairo.lang.builtins.instance_def import BuiltinInstanceDef
 from starkware.cairo.lang.builtins.keccak.instance_def import KECCAK_BATCH_SIZE, KeccakInstanceDef
+from starkware.cairo.lang.builtins.modulo.instance_def import AddModInstanceDef, MulModInstanceDef
 from starkware.cairo.lang.builtins.poseidon.instance_def import PoseidonInstanceDef
 from starkware.cairo.lang.builtins.range_check.instance_def import RangeCheckInstanceDef
 from starkware.cairo.lang.builtins.signature.instance_def import EcdsaInstanceDef
@@ -96,7 +97,11 @@ def build_builtins_dict_with_default_params(
     The ratios are allowed to be None - this is used when constructing the AIR before knowing the
     ratios.
     """
-    assert all(builtin in SUPPORTED_DYNAMIC_BUILTINS for builtin in ratios.keys())
+    assert all(
+        builtin in SUPPORTED_DYNAMIC_BUILTINS
+        for builtin in ratios.keys()
+        if not builtin.endswith("_den")
+    )
     builtin_dict: Dict[str, Union[BuiltinInstanceDef, bool]] = {"output": True}
     builtin_dict["pedersen"] = PedersenInstanceDef(
         ratio=ratios.get("pedersen"),
@@ -108,6 +113,7 @@ def build_builtins_dict_with_default_params(
     )
     builtin_dict["range_check"] = RangeCheckInstanceDef(
         ratio=ratios.get("range_check"),
+        ratio_den=1,
         n_parts=8,
     )
     builtin_dict["ecdsa"] = EcdsaInstanceDef(
@@ -134,6 +140,37 @@ def build_builtins_dict_with_default_params(
     builtin_dict["poseidon"] = PoseidonInstanceDef(
         ratio=ratios.get("poseidon"),
         partial_rounds_partition=[64, 22],
+    )
+
+    add_mod_den, mul_mod_den, range_check96_den = [
+        ratios.get(builtin + "_den", 1) for builtin in ["add_mod", "mul_mod", "range_check96"]
+    ]
+    assert (
+        isinstance(add_mod_den, int)
+        and isinstance(mul_mod_den, int)
+        and isinstance(range_check96_den, int)
+    ), "denominators may not be None"
+
+    builtin_dict["range_check96"] = RangeCheckInstanceDef(
+        ratio=ratios.get("range_check96"),
+        ratio_den=range_check96_den,
+        n_parts=6,
+    )
+
+    builtin_dict["add_mod"] = AddModInstanceDef(
+        word_bit_len=96,
+        n_words=4,
+        batch_size=1,
+        ratio=ratios.get("add_mod"),
+        ratio_den=add_mod_den,
+    )
+
+    builtin_dict["mul_mod"] = MulModInstanceDef(
+        word_bit_len=96,
+        n_words=4,
+        batch_size=1,
+        ratio=ratios.get("mul_mod"),
+        ratio_den=mul_mod_den,
     )
 
     return builtin_dict
@@ -202,6 +239,7 @@ small_instance = CairoLayout(
         ),
         range_check=RangeCheckInstanceDef(
             ratio=8,
+            ratio_den=1,
             n_parts=8,
         ),
         ecdsa=EcdsaInstanceDef(
@@ -229,6 +267,7 @@ dex_instance = CairoLayout(
         ),
         range_check=RangeCheckInstanceDef(
             ratio=8,
+            ratio_den=1,
             n_parts=8,
         ),
         ecdsa=EcdsaInstanceDef(
@@ -261,6 +300,7 @@ starknet_instance = CairoLayout(
         ),
         range_check=RangeCheckInstanceDef(
             ratio=16,
+            ratio_den=1,
             n_parts=8,
         ),
         ecdsa=EcdsaInstanceDef(
@@ -307,6 +347,7 @@ starknet_with_keccak_instance = CairoLayout(
         ),
         range_check=RangeCheckInstanceDef(
             ratio=16,
+            ratio_den=1,
             n_parts=8,
         ),
         ecdsa=EcdsaInstanceDef(
@@ -360,6 +401,7 @@ recursive_instance = CairoLayout(
         ),
         range_check=RangeCheckInstanceDef(
             ratio=8,
+            ratio_den=1,
             n_parts=8,
         ),
         bitwise=BitwiseInstanceDef(
@@ -391,6 +433,7 @@ recursive_with_poseidon_instance = CairoLayout(
         ),
         range_check=RangeCheckInstanceDef(
             ratio=16,
+            ratio_den=1,
             n_parts=8,
         ),
         bitwise=BitwiseInstanceDef(
@@ -428,6 +471,7 @@ recursive_large_output_instance = CairoLayout(
         ),
         range_check=RangeCheckInstanceDef(
             ratio=8,
+            ratio_den=1,
             n_parts=8,
         ),
         bitwise=BitwiseInstanceDef(
@@ -464,6 +508,7 @@ all_cairo_instance = CairoLayout(
         ),
         range_check=RangeCheckInstanceDef(
             ratio=8,
+            ratio_den=1,
             n_parts=8,
         ),
         ecdsa=EcdsaInstanceDef(
@@ -493,8 +538,11 @@ all_cairo_instance = CairoLayout(
         ),
         range_check96=RangeCheckInstanceDef(
             ratio=8,
+            ratio_den=1,
             n_parts=6,
         ),
+        add_mod=AddModInstanceDef(word_bit_len=96, n_words=4, batch_size=1, ratio=128, ratio_den=1),
+        mul_mod=MulModInstanceDef(word_bit_len=96, n_words=4, batch_size=1, ratio=256, ratio_den=1),
     ),
     n_trace_columns=12,
 )
@@ -520,6 +568,7 @@ all_solidity_instance = CairoLayout(
         ),
         range_check=RangeCheckInstanceDef(
             ratio=8,
+            ratio_den=1,
             n_parts=8,
         ),
         ecdsa=EcdsaInstanceDef(
@@ -542,6 +591,8 @@ all_solidity_instance = CairoLayout(
     n_trace_columns=27,
 )
 
+dynamic_instance = build_dynamic_layout()
+
 LAYOUTS: Dict[str, CairoLayout] = {
     "plain": plain_instance,
     "small": small_instance,
@@ -551,6 +602,6 @@ LAYOUTS: Dict[str, CairoLayout] = {
     "recursive_large_output": recursive_large_output_instance,
     "all_solidity": all_solidity_instance,
     "starknet_with_keccak": starknet_with_keccak_instance,
-    "dynamic": build_dynamic_layout(),
+    "dynamic": dynamic_instance,
     "recursive_with_poseidon": recursive_with_poseidon_instance,
 }

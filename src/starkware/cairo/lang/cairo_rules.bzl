@@ -1,15 +1,25 @@
 CairoInfo = provider(fields = ["transitive_sources"])
 
-def get_transitive_cairo_srcs(srcs, deps):
+def get_transitive_cairo_srcs(srcs, deps, hint_deps):
     """
     Returns the Cairo source files for a target and its transitive dependencies.
     """
-    return depset(srcs, transitive = [dep[CairoInfo].transitive_sources for dep in deps])
+    return depset(
+        srcs,
+        transitive = (
+            [dep[CairoInfo].transitive_sources for dep in deps] +
+            [dep[PyInfo].transitive_sources for dep in hint_deps]
+        ),
+    )
 
 # Rule for a library of Cairo files (similar to py_library).
 
 def _cairo_library_impl(ctx):
-    trans_srcs = get_transitive_cairo_srcs(srcs = ctx.files.srcs, deps = ctx.attr.deps)
+    trans_srcs = get_transitive_cairo_srcs(
+        srcs = ctx.files.srcs,
+        deps = ctx.attr.deps,
+        hint_deps = ctx.attr.hint_deps,
+    )
     return [
         CairoInfo(transitive_sources = trans_srcs),
         DefaultInfo(runfiles = ctx.runfiles(transitive_files = trans_srcs)),
@@ -20,13 +30,19 @@ cairo_library = rule(
     attrs = {
         "srcs": attr.label_list(allow_files = [".cairo"]),
         "deps": attr.label_list(providers = [CairoInfo]),
+        "hint_deps": attr.label_list(providers = [PyInfo]),
     },
 )
 
 def _cairo_binary_impl(ctx):
     cairo_compile_exe = ctx.executable.cairo_compile_exe
-    trans_srcs = get_transitive_cairo_srcs(srcs = ctx.files.srcs, deps = ctx.attr.deps)
+    trans_srcs = get_transitive_cairo_srcs(
+        srcs = ctx.files.srcs,
+        deps = ctx.attr.deps,
+        hint_deps = ctx.attr.hint_deps,
+    )
     srcs_list = trans_srcs.to_list()
+    py_srcs_list = [f for f in srcs_list if f.basename.endswith(".py")]
 
     out = ctx.outputs.compiled_program_name
     outs = [out]
@@ -50,7 +66,7 @@ def _cairo_binary_impl(ctx):
         outputs = outs,
         progress_message = "Compiling %s..." % ctx.file.main.path,
     )
-    return [DefaultInfo(files = depset(outs))]
+    return [DefaultInfo(runfiles = ctx.runfiles(transitive_files = depset(outs + py_srcs_list)))]
 
 # Rule for compiling a Cairo program (similar to py_binary).
 
@@ -59,6 +75,7 @@ cairo_binary = rule(
     attrs = {
         "srcs": attr.label_list(allow_files = True),
         "deps": attr.label_list(),
+        "hint_deps": attr.label_list(providers = [PyInfo]),
         "cairo_compile_exe": attr.label(
             default = Label("//src/starkware/cairo/lang/compiler:cairo_compile_exe"),
             allow_files = True,

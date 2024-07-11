@@ -29,6 +29,9 @@ struct GlobalValues {
     initial_ec_op_addr: felt,
     initial_keccak_addr: felt,
     initial_poseidon_addr: felt,
+    initial_range_check96_addr: felt,
+    add_mod__initial_mod_addr: felt,
+    mul_mod__initial_mod_addr: felt,
     range_check_min: felt,
     range_check_max: felt,
 
@@ -64,6 +67,8 @@ struct GlobalValues {
     diluted_check__permutation__interaction_elm: felt,
     diluted_check__interaction_z: felt,
     diluted_check__interaction_alpha: felt,
+    add_mod__interaction_elm: felt,
+    mul_mod__interaction_elm: felt,
 
     // Permutation products.
     memory__multi_column_perm__perm__public_memory_prod: felt,
@@ -85,4 +90,6 @@ struct InteractionElements {
     diluted_check__permutation__interaction_elm: felt,
     diluted_check__interaction_z: felt,
     diluted_check__interaction_alpha: felt,
+    add_mod__interaction_elm: felt,
+    mul_mod__interaction_elm: felt,
 }

@@ -19,7 +19,7 @@ from starkware.starknet.core.os.syscall_utils import (
     get_builtins_structs,
     get_selector_from_program,
 )
-from starkware.starknet.definitions.general_config import STARKNET_LAYOUT_INSTANCE
+from starkware.starknet.definitions.constants import BUILTIN_INSTANCE_SIZES
 
 DEPRECATED_CALL_CONTRACT_SYSCALLS = {
     "delegate_call",
@@ -52,6 +52,7 @@ SYSCALLS_NAMES = {
     "library_call",
     "deploy",
     "keccak",
+    "sha256_process_block",
     "emit_event",
     "get_block_hash",
     "get_execution_info",
@@ -206,6 +207,8 @@ class ResourceCounter:
         builtins_dict = builtins_struct.selectable._asdict()
         builtins_dict.pop("segment_arena")
         builtins_dict.update(builtins_struct.non_selectable._asdict())
+        # sha256 is a software builtin so we don't want to count it here.
+        builtins_dict.pop("sha256")
         return builtins_dict
 
     def sub_counter(self, enter_counter: "ResourceCounter") -> ExecutionResources:
@@ -217,9 +220,7 @@ class ResourceCounter:
             self.range_check_ptr - enter_counter.range_check_ptr
         )
         builtins_count_ptr = {
-            with_suffix(builtin_name): safe_div(
-                count, STARKNET_LAYOUT_INSTANCE.builtins[builtin_name].memory_cells_per_instance
-            )
+            with_suffix(builtin_name): safe_div(count, BUILTIN_INSTANCE_SIZES[builtin_name])
             for builtin_name, count in builtins_count_ptr.items()
             if count != 0
         }

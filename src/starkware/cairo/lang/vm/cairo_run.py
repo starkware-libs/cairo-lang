@@ -310,6 +310,7 @@ def cairo_run(args):
 
     runner.initialize_segments()
     end = runner.initialize_main_entrypoint()
+    runner.initialize_zero_segment()
 
     if args.run_from_cairo_pie is not None:
         assert cairo_pie_input is not None

@@ -17,6 +17,10 @@ from starkware.cairo.lang.builtins.bitwise.bitwise_builtin_runner import Bitwise
 from starkware.cairo.lang.builtins.ec.ec_op_builtin_runner import EcOpBuiltinRunner
 from starkware.cairo.lang.builtins.hash.hash_builtin_runner import HashBuiltinRunner
 from starkware.cairo.lang.builtins.keccak.keccak_builtin_runner import KeccakBuiltinRunner
+from starkware.cairo.lang.builtins.modulo.mod_builtin_runner import (
+    AddModBuiltinRunner,
+    MulModBuiltinRunner,
+)
 from starkware.cairo.lang.builtins.poseidon.poseidon_builtin_runner import PoseidonBuiltinRunner
 from starkware.cairo.lang.builtins.range_check.range_check_builtin_runner import (
     RangeCheckBuiltinRunner,
@@ -87,6 +91,7 @@ class CairoRunner:
         memory: MemoryDict = None,
         proof_mode: Optional[bool] = None,
         allow_missing_builtins: Optional[bool] = None,
+        enable_instruction_trace: bool = True,
         additional_builtin_factories: Optional[
             Dict[str, Callable[[str, bool], BuiltinRunner]]
         ] = None,
@@ -102,6 +107,12 @@ class CairoRunner:
         self.allow_missing_builtins = (
             False if allow_missing_builtins is None else allow_missing_builtins
         )
+        self.enable_instruction_trace = enable_instruction_trace
+
+        if self.proof_mode:
+            assert (
+                self.enable_instruction_trace
+            ), "Instruction tracing must be enabled in proof mode."
 
         if not allow_missing_builtins:
             non_existing_builtins = set(self.program.builtins) - set(self.layout.builtins.keys())
@@ -123,6 +134,7 @@ class CairoRunner:
                 name="range_check",
                 included=included,
                 ratio=self.layout.builtins["range_check"].ratio,
+                ratio_den=1,
                 inner_rc_bound=2**16,
                 n_parts=self.layout.builtins["range_check"].n_parts,
             ),
@@ -150,8 +162,15 @@ class CairoRunner:
                 name="range_check96",
                 included=included,
                 ratio=self.layout.builtins["range_check96"].ratio,
+                ratio_den=self.layout.builtins["range_check96"].ratio_den,
                 inner_rc_bound=2**16,
                 n_parts=self.layout.builtins["range_check96"].n_parts,
+            ),
+            add_mod=lambda name, included: AddModBuiltinRunner(
+                included=included, instance_def=self.layout.builtins["add_mod"]
+            ),
+            mul_mod=lambda name, included: MulModBuiltinRunner(
+                included=included, instance_def=self.layout.builtins["mul_mod"]
             ),
             **additional_builtin_factories,
         )
@@ -223,6 +242,15 @@ class CairoRunner:
         # Builtin segments.
         for builtin_runner in self.builtin_runners.values():
             builtin_runner.initialize_segments(self)
+
+    def initialize_zero_segment(self):
+        # Add a zero segment if needed. This segment goes in the cairo pie to the extra segments.
+        # Therefore, it should be added after the initialization of the ret_fp_segment and
+        # ret_pc_segment.
+        for builtin_runner in self.builtin_runners.values():
+            n_zeros = builtin_runner.get_needed_number_allocated_zeros()
+            if n_zeros > 0:
+                builtin_runner.set_address_allocated_zeros(self.segments.add_zero_segment(n_zeros))
 
     def initialize_main_entrypoint(self):
         """
@@ -306,6 +334,7 @@ class CairoRunner:
             static_locals=dict(segments=self.segments, **static_locals),
             builtin_runners=self.builtin_runners,
             program_base=self.program_base,
+            enable_instruction_trace=self.enable_instruction_trace,
         )
 
         for builtin_runner in self.builtin_runners.values():
@@ -483,6 +512,8 @@ class CairoRunner:
         for builtin_runner in self.builtin_runners.values():
             builtin_runner.finalize_segments(self)
 
+        self.segments.finalize_zero_segment()
+
         self._segments_finalized = True
 
     def finalize_segments_by_cairo_pie(self, cairo_pie: CairoPie):
@@ -538,6 +569,9 @@ class CairoRunner:
             for builtin_runner in self.builtin_runners.values()
             for addr in builtin_runner.get_memory_accesses(self)
         }
+        if self.segments.zero_segment is not None:
+            for i in range(self.segments.zero_segment_size):
+                builtin_accessed_addresses.add(self.segments.zero_segment + i)
         return self.segments.get_memory_holes(
             accessed_addresses=self.accessed_addresses | builtin_accessed_addresses
         )
@@ -658,9 +692,10 @@ class CairoRunner:
             for addr, value in self.vm_memory.items()
         }
         self.relocated_memory = MemoryDict(initializer)
-        self.relocated_trace = relocate_trace(
-            self.vm.trace, self.segment_offsets, self.program.prime
-        )
+        if self.enable_instruction_trace:
+            self.relocated_trace = relocate_trace(
+                self.vm.trace, self.segment_offsets, self.program.prime
+            )
         for builtin_runner in self.builtin_runners.values():
             builtin_runner.relocate(self.relocate_value)
 
@@ -738,7 +773,7 @@ class CairoRunner:
             fp = self.relocate_value(fp)
 
         info = f"""\
-Number of steps: {len(self.vm.trace)} {
+Number of steps: {self.vm.current_step} {
     '' if self.original_steps is None else f'(originally, {self.original_steps})'}
 Used memory cells: {len(self.vm_memory)}
 Register values after execution:
@@ -789,7 +824,7 @@ fp = {fp}
         return builtin_segments
 
     def get_execution_resources(self) -> ExecutionResources:
-        n_steps = len(self.vm.trace) if self.original_steps is None else self.original_steps
+        n_steps = self.vm.current_step if self.original_steps is None else self.original_steps
         n_memory_holes = self.get_memory_holes()
         builtin_instance_counter = {
             builtin_name: builtin_runner.get_used_instances(self)
@@ -901,6 +936,7 @@ def run_main_entrypoint(runner: CairoRunner, hint_locals: Dict[str, Any]):
     """
     runner.initialize_segments()
     end = runner.initialize_main_entrypoint()
+    runner.initialize_zero_segment()
     runner.initialize_vm(hint_locals=hint_locals)
     runner.run_until_pc(end)
     runner.end_run()

@@ -9,12 +9,15 @@ pytest_test(
     data = [
         "example_expected.json",
         "example_proof.json",
+        "//src/starkware/cairo/stark_verifier/air:cairo",
         "//src/starkware/cairo/stark_verifier/air:dynamic_layout_proof.json",
         "//src/starkware/cairo/stark_verifier/core:air_interface.cairo",
         "//src/starkware/cairo/stark_verifier/core:channel.cairo",
         "//src/starkware/cairo/stark_verifier/core:domains.cairo",
+        "//src/starkware/cairo/stark_verifier/core:stark",
         "//src/starkware/cairo/stark_verifier/core:table_commitment.cairo",
         "//src/starkware/cairo/stark_verifier/core:vector_commitment.cairo",
+        "//src/starkware/cairo/stark_verifier/core/fri",
     ],
     visibility = ["//visibility:public"],
     deps = [
@@ -60,7 +63,8 @@ exports_files(glob([
 cairo_library(
     name = "cairo",
     srcs = [
-        "config.cairo",
+        "config_instances.cairo",
+        "config_interface.cairo",
         "diluted.cairo",
         "layout.cairo",
         "oods.cairo",
@@ -89,7 +93,6 @@ py_library(
         "//src/starkware/cairo/common:cairo_common_lib",
         "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
         "//src/starkware/cairo/lang/vm:cairo_vm_lib",
-        "//src/starkware/cairo/stark_verifier/core:supported_proof_params",
         "//src/starkware/python:starkware_python_utils_lib",
     ],
 )

@@ -55,7 +55,7 @@ sol_library(
     visibility = ["//visibility:public"],
     deps = [
         ":starknet_messaging_sol",
-        "//src/starkware/solidity/libraries:common_library_sol",
+        "//src/starkware/solidity/libraries:addresses_library_sol",
         "//src/starkware/solidity/libraries:named_storage8_sol",
     ],
 )

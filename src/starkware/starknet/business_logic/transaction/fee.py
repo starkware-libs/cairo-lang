@@ -1,4 +1,3 @@
-import math
 from typing import Mapping
 
 from starkware.starknet.business_logic.execution.deprecated_objects import ExecutionResourcesManager
@@ -10,7 +9,7 @@ from starkware.starknet.business_logic.execution.objects import (
 )
 from starkware.starknet.business_logic.state.state_api import SyncState
 from starkware.starknet.business_logic.utils import extract_l1_gas_and_cairo_usage
-from starkware.starknet.definitions.constants import VERSIONED_CONSTANTS, GasCost
+from starkware.starknet.definitions.constants import VERSIONED_CONSTANTS, GasCost, ResourceCost
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public import abi as starknet_abi
@@ -60,9 +59,9 @@ def execute_fee_transfer(
 
 
 def calculate_l1_gas_by_cairo_usage(
-    cairo_resource_fee_weights: Mapping[str, float],
+    cairo_resource_fee_weights: Mapping[str, ResourceCost],
     cairo_resource_usage: ResourcesMapping,
-) -> float:
+) -> ResourceCost:
     """
     Calculates the L1 gas consumed when submitting the underlying Cairo program to SHARP.
     I.e., returns the heaviest Cairo resource weight (in terms of L1 gas), as the size of
@@ -94,4 +93,4 @@ def calculate_tx_fee(resources: ResourcesMapping, l1_gas_price: int) -> int:
         cairo_resource_usage=cairo_resource_usage,
     )
     total_l1_gas_usage = l1_gas_usage + l1_gas_by_cairo_usage
-    return math.ceil(total_l1_gas_usage) * l1_gas_price
+    return total_l1_gas_usage.ceil() * l1_gas_price

@@ -7,9 +7,7 @@ py_library(
         "metrics.py",
     ],
     visibility = ["//visibility:public"],
-    deps = [
-        requirement("prometheus_client"),
-    ],
+    deps = [requirement("prometheus_client")],
 )
 
 py_library(
@@ -58,9 +56,7 @@ py_library(
         "imm_storage.py",
     ],
     visibility = ["//visibility:public"],
-    deps = [
-        "starkware_abstract_storage_lib",
-    ],
+    deps = [":starkware_abstract_storage_lib"],
 )
 
 pytest_test(
@@ -97,7 +93,7 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "starkware_storage_lib",
+        ":starkware_abstract_storage_lib",
         "//src/starkware/python:starkware_python_utils_lib",
         "//src/starkware/starkware_utils:starkware_commitment_tree_facts_lib",
     ],

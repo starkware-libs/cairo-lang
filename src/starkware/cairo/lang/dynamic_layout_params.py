@@ -1,14 +1,19 @@
 import dataclasses
 from typing import Dict, Optional
 
-from starkware.cairo.lang.builtins.all_builtins import OUTPUT_BUILTIN, SUPPORTED_DYNAMIC_BUILTINS
+from starkware.cairo.lang.builtins.all_builtins import (
+    LOW_RATIO_BUILTINS,
+    OUTPUT_BUILTIN,
+    SUPPORTED_DYNAMIC_BUILTINS,
+)
+from starkware.cairo.lang.builtins.instance_def import (
+    BuiltinInstanceDef,
+    BuiltinInstanceDefWithLowRatio,
+)
 from starkware.cairo.lang.instances import COMPONENT_HEIGHT, CairoLayout, build_dynamic_layout
 from starkware.python.math_utils import safe_div
 
-MIN_BUILTIN_RATIO = 1
-MAX_CPU_COMPONENT_STEP = 2**6
-MAX_N_MEMORY_HOLES_PER_STEP = 2**10
-MIN_KECCAK_RATIO = 2**6
+MAX_CPU_COMPONENT_STEP = 2**8
 MIN_MEMORY_UNITS_PER_STEP = 4
 NUM_COLUMNS_FIRST_BOUND = 2**16
 NUM_COLUMNS_SECOND_BOUND = 2**16
@@ -39,6 +44,15 @@ class CairoLayoutParams:
     keccak_ratio: int
     uses_poseidon_builtin: int
     poseidon_ratio: int
+    uses_range_check96_builtin: int
+    range_check96_ratio: int
+    range_check96_ratio_den: int
+    uses_add_mod_builtin: int
+    add_mod_ratio: int
+    add_mod_ratio_den: int
+    uses_mul_mod_builtin: int
+    mul_mod_ratio: int
+    mul_mod_ratio_den: int
 
     @property
     def diluted_units_row_ratio(self) -> Optional[int]:
@@ -64,14 +78,18 @@ class CairoLayoutParams:
         builtins_params_dict: Dict[str, int] = {}
         for builtin_name in SUPPORTED_DYNAMIC_BUILTINS.except_for(OUTPUT_BUILTIN):
             assert builtin_name in cairo_layout.builtins
-            ratio = cairo_layout.builtins[builtin_name].ratio
-            assert ratio is not None
-            if cairo_layout.builtins[builtin_name].is_used():
+            builtin = cairo_layout.builtins[builtin_name]
+            assert isinstance(builtin, BuiltinInstanceDef)
+            assert builtin.ratio is not None
+            if builtin.is_used():
                 builtins_params_dict[f"uses_{builtin_name}_builtin"] = 1
-                builtins_params_dict[f"{builtin_name}_ratio"] = ratio
+                builtins_params_dict[f"{builtin_name}_ratio"] = builtin.ratio
             else:
                 builtins_params_dict[f"uses_{builtin_name}_builtin"] = 0
                 builtins_params_dict[f"{builtin_name}_ratio"] = 0
+            if builtin_name in LOW_RATIO_BUILTINS:
+                assert isinstance(builtin, BuiltinInstanceDefWithLowRatio)
+                builtins_params_dict[f"{builtin_name}_ratio_den"] = builtin.ratio_den
 
         return CairoLayoutParams(
             cpu_component_step=cairo_layout.cpu_component_step,
@@ -85,8 +103,16 @@ class CairoLayoutParams:
         assert builtin_name in SUPPORTED_DYNAMIC_BUILTINS.except_for(OUTPUT_BUILTIN)
         return getattr(self, f"{builtin_name}_ratio")
 
+    def get_builtin_ratio_den(self, builtin_name: str) -> int:
+        if builtin_name in LOW_RATIO_BUILTINS:
+            return getattr(self, f"{builtin_name}_ratio_den")
+        return 1
+
     def get_builtin_row_ratio(self, builtin_name: str) -> int:
-        return COMPONENT_HEIGHT * self.cpu_component_step * self.get_builtin_ratio(builtin_name)
+        return safe_div(
+            COMPONENT_HEIGHT * self.cpu_component_step * self.get_builtin_ratio(builtin_name),
+            self.get_builtin_ratio_den(builtin_name),
+        )
 
     def get_uses_builtin(self, builtin_name: str) -> int:
         assert builtin_name in SUPPORTED_DYNAMIC_BUILTINS.except_for(OUTPUT_BUILTIN)
@@ -96,6 +122,8 @@ class CairoLayoutParams:
         builtin_ratios: dict[str, int] = {}
         for builtin_name in SUPPORTED_DYNAMIC_BUILTINS.except_for(OUTPUT_BUILTIN):
             builtin_ratios[builtin_name] = self.get_builtin_ratio(builtin_name)
+            if builtin_name in LOW_RATIO_BUILTINS:
+                builtin_ratios[builtin_name + "_den"] = self.get_builtin_ratio_den(builtin_name)
 
         return build_dynamic_layout(
             log_diluted_units_per_step=self.log_diluted_units_per_step,

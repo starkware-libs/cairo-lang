@@ -15,6 +15,7 @@ cairo_library(
         "//src/starkware/cairo/common:keccak_state.cairo",
         "//src/starkware/cairo/common:poseidon_state.cairo",
         "//src/starkware/cairo/common:registers.cairo",
+        "//src/starkware/cairo/common:sha256_state.cairo",
     ],
 )
 

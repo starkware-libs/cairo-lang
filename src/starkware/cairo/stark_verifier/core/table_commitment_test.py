@@ -50,7 +50,7 @@ def test_table_commitment(program, structs):
                 height=5,
                 n_verifier_friendly_commitment_layers=2,
             ),
-            commitment_hash=0x65AB11B61229977B507F7B37C4E95769A0F9F8939042B2029D92CFF0D96FD07,
+            commitment_hash=0x68215EFF34574A9F8729D3271BC6827767294ACF9E5E19ADF29BC823ED1E549,
         ),
         config=structs.TableCommitmentConfig(
             n_columns=4,

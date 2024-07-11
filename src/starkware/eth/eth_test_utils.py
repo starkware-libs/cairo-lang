@@ -75,6 +75,21 @@ class EthTestUtils:
     def get_balance(self, address: str) -> int:
         return self.w3.eth.get_balance(address)
 
+    def unlock_and_fund(self, addresses, amount=10**18):
+        for address in addresses:
+            self.w3.provider.make_request(
+                method=web3_types.RPCEndpoint("evm_unlockUnknownAccount"), params=[address]
+            )
+            self.w3.provider.make_request(
+                method=web3_types.RPCEndpoint("evm_addAccount"), params=[address, ""]
+            )
+            self.w3.provider.make_request(
+                method=web3_types.RPCEndpoint("personal_unlockAccount"), params=[address, "", 0]
+            )
+            self.w3.provider.make_request(
+                method=web3_types.RPCEndpoint("evm_setAccountBalance"), params=[address, amount]
+            )
+
     def get_contract(
         self,
         contract_json,
@@ -231,6 +246,33 @@ class EthContract:
     def __getattr__(self, name: str) -> "EthContractFunction":
         return EthContractFunction(contract=self, name=name)
 
+    @classmethod
+    def create(cls, w3: Web3, address: str, abi: Abi, default_from=None) -> "EthContract":
+        w3_contract = w3.eth.contract(
+            address=Web3.to_checksum_address(address), abi=abi  # type: ignore
+        )
+
+        return cls(
+            w3=w3,
+            address=address,
+            w3_contract=w3_contract,  # type: ignore[arg-type]
+            abi=abi,
+            default_from=default_from or w3_contract,  # type: ignore[arg-type]
+        )
+
+    @classmethod
+    def from_legacy(cls, legacy_contract: Contract, default_from=None) -> "EthContract":
+        return cls(
+            w3=legacy_contract.web3,
+            address=legacy_contract.address,
+            w3_contract=legacy_contract,  # type: ignore[arg-type]
+            abi=legacy_contract.abi,  # type: ignore[arg-type]
+            default_from=default_from or legacy_contract,  # type: ignore[arg-type]
+        )
+
+    def legacy(self) -> Contract:
+        return self.w3_contract
+
     def replace_abi(self, abi: Abi) -> "EthContract":
         w3_contract = self.w3.eth.contract(
             address=Web3.to_checksum_address(self.address), abi=abi  # type: ignore
@@ -305,8 +347,9 @@ class EthReceipt:
         self.contract = contract
         self.w3_tx_receipt = w3_tx_receipt
 
-    def get_events(self, name: str) -> List[dict]:
-        return self.contract.get_events(tx=self, name=name)
+    def get_events(self, name: str, alt_abi: Optional[List[dict]] = None) -> List[dict]:
+        _contract = self.contract if alt_abi is None else self.contract.replace_abi(abi=alt_abi)
+        return _contract.get_events(tx=self, name=name)
 
     def get_cost(self) -> int:
         tx = self.contract.w3.eth.get_transaction(self.w3_tx_receipt.transactionHash)

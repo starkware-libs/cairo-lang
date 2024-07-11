@@ -11,7 +11,7 @@ HASH_PATH = get_source_dir_path(
     "src/starkware/starknet/core/os/program_hash.json",
     default_value=os.path.join(os.path.dirname(__file__), "program_hash.json"),
 )
-COMMAND = "generate_starknet_os_program_hash"
+COMMAND = "starknet_os_program_hash_test_fix"
 
 
 def test_starknet_program_hash():

@@ -12,6 +12,9 @@ cairo_library(
     srcs = [
         "bls_field.cairo",
     ],
+    hint_deps = [
+        ":bls_utils",
+    ],
     visibility = ["//visibility:public"],
     deps = [
         "//src/starkware/cairo/common:cairo_common_cairo_lib",

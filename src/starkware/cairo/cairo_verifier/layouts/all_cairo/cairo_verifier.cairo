@@ -25,7 +25,7 @@ const INITIAL_PC = 1;
 // See verify_stack() for more detail.
 func get_program_builtins() -> (n_builtins: felt, builtins: felt*) {
     let (builtins_address) = get_label_location(data);
-    let n_builtins = 9;
+    let n_builtins = 11;
     assert builtins_address[n_builtins] = 0;
     return (n_builtins=n_builtins, builtins=builtins_address);
 
@@ -39,6 +39,8 @@ func get_program_builtins() -> (n_builtins: felt, builtins: felt*) {
     dw 'keccak';
     dw 'poseidon';
     dw 'range_check96';
+    dw 'add_mod';
+    dw 'mul_mod';
     dw 0;
 }
 

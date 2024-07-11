@@ -91,7 +91,7 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "starkware_dataclasses_field_utils_lib",
+        ":starkware_dataclasses_utils_lib",
         requirement("marshmallow"),
         requirement("pyyaml"),
     ],

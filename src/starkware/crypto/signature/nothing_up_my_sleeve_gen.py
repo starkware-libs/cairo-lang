@@ -25,7 +25,7 @@ import json
 import math
 import os
 
-from math_utils import ec_double, is_quad_residue, pi_as_string, sqrt_mod
+from starkware.crypto.signature.math_utils import ec_double, is_quad_residue, pi_as_string, sqrt_mod
 
 # Field parameters.
 # Field prime chosen to be an arbitrary prime which is:

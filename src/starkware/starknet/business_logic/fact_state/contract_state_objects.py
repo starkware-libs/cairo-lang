@@ -34,6 +34,7 @@ class ContractState(ValidatedMarshmallowDataclass, LeafFact):
     nonce: int = field(metadata=fields.non_required_nonce_metadata)
 
     UNINITIALIZED_CLASS_HASH: ClassVar[bytes] = bytes(HASH_BYTES)
+    CONTRACT_STATE_HASH_VERSION: ClassVar[int] = 0
 
     @classmethod
     async def create(
@@ -75,15 +76,13 @@ class ContractState(ValidatedMarshmallowDataclass, LeafFact):
         if self.is_empty:
             return EmptyNodeFact.EMPTY_NODE_HASH
 
-        CONTRACT_STATE_HASH_VERSION = 0
-
         # Set hash_value = H(H(contract_hash, storage_root), RESERVED).
         hash_value = hash_func(self.contract_hash, self.storage_commitment_tree.root)
         hash_value = hash_func(hash_value, to_bytes(self.nonce))
 
         # Return H(hash_value, CONTRACT_STATE_HASH_VERSION). CONTRACT_STATE_HASH_VERSION must be in
         # the outermost hash to guarantee unique "decoding".
-        return hash_func(hash_value, to_bytes(CONTRACT_STATE_HASH_VERSION))
+        return hash_func(hash_value, to_bytes(ContractState.CONTRACT_STATE_HASH_VERSION))
 
     @property
     def initialized(self) -> bool:
@@ -137,6 +136,11 @@ class ContractState(ValidatedMarshmallowDataclass, LeafFact):
             contract_hash=class_hash_bytes,
             storage_commitment_tree=updated_storage_commitment_tree,
             nonce=nonce,
+        )
+
+    async def fetch_witnesses(self, ffc: FactFetchingContext, updates: Mapping[int, int]):
+        await self.storage_commitment_tree.fetch_witnesses(
+            ffc=ffc, sorted_leaf_indices=sorted(updates.keys()), fact_cls=StorageLeaf
         )
 
 

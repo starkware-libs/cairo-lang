@@ -40,6 +40,9 @@ class ValidatedMemoryDict:
     def __iter__(self):
         return iter(self.__memory)
 
+    def __contains__(self, addr: MaybeRelocatable) -> bool:
+        return addr in self.__memory
+
     def __len__(self):
         return len(self.__memory)
 

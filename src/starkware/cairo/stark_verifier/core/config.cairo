@@ -1,44 +1,21 @@
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.math import assert_in_range, assert_le, assert_nn, assert_nn_le
 from starkware.cairo.common.pow import pow
-from starkware.cairo.stark_verifier.core.air_interface import (
-    AirInstance,
-    TracesConfig,
-    traces_config_validate,
+from starkware.cairo.stark_verifier.core.air_interface import AirInstance, traces_config_validate
+from starkware.cairo.stark_verifier.core.config_instances import (
+    MAX_LOG_BLOWUP_FACTOR,
+    MAX_LOG_TRACE,
+    MAX_N_QUERIES,
+    StarkConfig,
 )
 from starkware.cairo.stark_verifier.core.domains import StarkDomains
-from starkware.cairo.stark_verifier.core.fri.config import FriConfig, fri_config_validate
-from starkware.cairo.stark_verifier.core.proof_of_work import (
-    ProofOfWorkConfig,
-    proof_of_work_config_validate,
-)
-from starkware.cairo.stark_verifier.core.table_commitment import TableCommitmentConfig
+from starkware.cairo.stark_verifier.core.fri.config import fri_config_validate
+from starkware.cairo.stark_verifier.core.proof_of_work import proof_of_work_config_validate
 from starkware.cairo.stark_verifier.core.utils import FIELD_GENERATOR
 from starkware.cairo.stark_verifier.core.vector_commitment import (
     VectorCommitmentConfig,
     validate_vector_commitment,
 )
-
-const MAX_LOG_TRACE = 64;
-const MAX_LOG_BLOWUP_FACTOR = 16;
-const MAX_N_QUERIES = 48;
-
-struct StarkConfig {
-    traces: TracesConfig*,
-    composition: TableCommitmentConfig*,
-    fri: FriConfig*,
-    proof_of_work: ProofOfWorkConfig*,
-
-    // Log2 of the trace domain size.
-    log_trace_domain_size: felt,
-    // Number of queries to the last component, FRI.
-    n_queries: felt,
-    // Log2 of the number of cosets composing the evaluation domain, where the coset size is the
-    // trace length.
-    log_n_cosets: felt,
-    // Number of layers that use a verifier friendly hash in each commitment.
-    n_verifier_friendly_commitment_layers: felt,
-}
 
 // Validates the StarkConfig object.
 func stark_config_validate{range_check_ptr}(

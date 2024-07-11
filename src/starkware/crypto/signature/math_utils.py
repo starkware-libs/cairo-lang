@@ -19,7 +19,8 @@ from typing import Tuple
 
 import mpmath
 import sympy
-from sympy.core.numbers import igcdex
+
+from starkware.python.math_utils import igcdex
 
 # A type that represents a point (x,y) on an elliptic curve.
 ECPoint = Tuple[int, int]

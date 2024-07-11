@@ -34,6 +34,8 @@ struct BuiltinData {
     keccak: felt,
     poseidon: felt,
     range_check96: felt,
+    add_mod: felt,
+    mul_mod: felt,
 }
 
 // Computes the hash of a program.
@@ -137,6 +139,8 @@ func execute_task{builtin_ptrs: BuiltinData*, self_range_check_ptr}(
         keccak=input_builtin_ptrs.keccak,
         poseidon=cast(poseidon_ptr, felt),
         range_check96=input_builtin_ptrs.range_check96,
+        add_mod=input_builtin_ptrs.add_mod,
+        mul_mod=input_builtin_ptrs.mul_mod,
     );
 
     // Call select_input_builtins to get the relevant input builtin pointers for the task.

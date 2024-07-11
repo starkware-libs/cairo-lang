@@ -11,7 +11,7 @@ from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDa
 
 logger = logging.getLogger(__name__)
 
-TConfig = TypeVar("TConfig", bound="Config")
+TConfig = TypeVar("TConfig", bound="ConfigWithNone")
 
 
 # General utilities.
@@ -50,16 +50,31 @@ def get_object_by_path(path: str) -> Any:
 # Base class for config schemas.
 
 
-class Config(ValidatedMarshmallowDataclass):
+class ConfigWithNone(ValidatedMarshmallowDataclass):
+    """
+    The difference between Config and ConfigWithNone classes is that ConfigWithNone class does not
+    remove None values when using dump.
+    For example:
+        @marshmallow_dataclass.dataclass(frozen=True)
+        class WithNone(ConfigWithNone):
+            a: Optional[int] = None
+            b: int = 2
+
+        @marshmallow_dataclass.dataclass(frozen=True)
+        class WithoutNone(Config):
+            a: Optional[int] = None
+            b: int = 2
+
+        WithNone().dumps() == '{"a": null, "b": 2}'
+
+        WithoutNone().dumps() == '{"b": 2}'
+    """
+
     @classmethod
     def load(cls: Type[TConfig], data: dict) -> TConfig:
         config_instance = super().load(data=data)
         log_fields(config=config_instance)
         return config_instance
-
-    @marshmallow.post_dump
-    def remove_none_values(self, data, many=False):
-        return {key: value for key, value in data.items() if value is not None}
 
     @classmethod
     def from_file(
@@ -71,7 +86,13 @@ class Config(ValidatedMarshmallowDataclass):
         return cls.load(data=raw_config)
 
 
-def log_fields(config: Config):
+class Config(ConfigWithNone):
+    @marshmallow.post_dump
+    def remove_none_values(self, data, many=False):
+        return {key: value for key, value in data.items() if value is not None}
+
+
+def log_fields(config: ConfigWithNone):
     for field in dataclasses.fields(config):
         logger.info(
             f"Initialized {field.name} configuration with value: {getattr(config, field.name)}"

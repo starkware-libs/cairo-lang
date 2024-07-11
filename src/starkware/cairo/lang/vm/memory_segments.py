@@ -28,6 +28,10 @@ class MemorySegmentManager:
         self.public_memory_offsets: Dict[int, List[Tuple[int, int]]] = {}
         # The number of temporary segments, see 'add_temp_segment' for more details.
         self.n_temp_segments = 0
+        # The cairo runner calls add_zero_segment and finalize_zero_segment if any of the builtins
+        # needs allocated zeros.
+        self.zero_segment: Optional[RelocatableValue] = None
+        self.zero_segment_size = 0
 
     def add(self, size: Optional[int] = None) -> RelocatableValue:
         """
@@ -40,6 +44,14 @@ class MemorySegmentManager:
             self.finalize(segment_index=segment_index, size=size)
 
         return RelocatableValue(segment_index=segment_index, offset=0)
+
+    def add_zero_segment(self, size: int) -> RelocatableValue:
+        if self.zero_segment is None:
+            self.zero_segment = self.add()
+        for i in range(self.zero_segment_size, size):
+            self.memory[self.zero_segment + i] = 0
+        self.zero_segment_size = max(self.zero_segment_size, size)
+        return self.zero_segment
 
     def add_temp_segment(self) -> RelocatableValue:
         """
@@ -71,6 +83,12 @@ class MemorySegmentManager:
             self._segment_sizes[segment_index] = size
 
         self.public_memory_offsets[segment_index] = list(public_memory)
+
+    def finalize_zero_segment(self):
+        if self.zero_segment is not None:
+            self.finalize(self.zero_segment.segment_index, self.zero_segment_size)
+            self.zero_segment = None
+            self.zero_segment_size = 0
 
     def compute_effective_sizes(self, allow_tmp_segments: bool = False):
         """

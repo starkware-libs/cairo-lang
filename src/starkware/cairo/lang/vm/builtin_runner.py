@@ -25,6 +25,20 @@ class BuiltinRunner(ABC):
         """
 
     @abstractmethod
+    def get_needed_number_allocated_zeros(self) -> int:
+        """
+        The number of allocated zeros needed.
+        Needed when the empty/zero instances of the builtin use pointers.
+        """
+
+    @abstractmethod
+    def set_address_allocated_zeros(self, addr: RelocatableValue):
+        """
+        The address of allocated zeros needed.
+        Needed when the empty/zero instances of the builtin use pointers.
+        """
+
+    @abstractmethod
     def final_stack(self, runner, pointer: MaybeRelocatable) -> MaybeRelocatable:
         """
         Reads values from the end of the stack ([pointer - 1], [pointer - 2], ...), and returns
@@ -202,6 +216,23 @@ class SimpleBuiltinRunner(BuiltinRunner):
         self.n_input_cells = n_input_cells
         self.additional_memory_units_per_instance = additional_memory_units_per_instance
 
+    def get_needed_number_allocated_zeros(self) -> int:
+        """
+        The number of allocated zeros needed.
+        Needed when the empty/zero instances of the builtin use pointers.
+        """
+        return 0
+
+    def set_address_allocated_zeros(self, addr: RelocatableValue):
+        """
+        The address of allocated zeros needed.
+        Needed when the empty/zero instances of the builtin use pointers.
+        """
+        raise NotImplementedError(
+            f"set_address_allocated_zeros should not be called when needed number of allocated"
+            + f"zeros is 0."
+        )
+
     def get_instance_def(self) -> Optional[BuiltinInstanceDef]:
         """
         Returns a BuiltinInstanceDef object that represents the builtin if such object exists.
@@ -317,3 +348,45 @@ class SimpleBuiltinRunner(BuiltinRunner):
     def get_memory_accesses(self, runner):
         segment_size = runner.segments.get_segment_size(self.base.segment_index)
         return {self.base + x for x in range(segment_size)}
+
+
+class SimpleBuiltinRunnerWithLowRatio(SimpleBuiltinRunner):
+    def __init__(
+        self,
+        name: str,
+        included: bool,
+        ratio: Optional[int],
+        cells_per_instance: int,
+        n_input_cells: int,
+        instances_per_component: int = 1,
+        additional_memory_units_per_instance: int = 0,
+        ratio_den: int = 1,
+    ):
+        super().__init__(
+            name=name,
+            included=included,
+            ratio=ratio,
+            cells_per_instance=cells_per_instance,
+            n_input_cells=n_input_cells,
+            instances_per_component=instances_per_component,
+            additional_memory_units_per_instance=additional_memory_units_per_instance,
+        )
+        self.ratio_den = ratio_den
+
+    def get_allocated_instances(self, runner):
+        if self.ratio is None:
+            # Dynamic layout has the exact number of instances it needs (up to a power of 2).
+            instances = self.get_used_instances(runner)
+            needed_components = div_ceil(instances, self.instances_per_component)
+            components = next_power_of_2(needed_components) if needed_components > 0 else 0
+            return self.instances_per_component * components
+        assert isinstance(self.ratio, int), "ratio is not an int"
+        if self.ratio == 0:
+            # The builtin is not used.
+            return 0
+        min_steps = div_ceil(self.ratio * self.instances_per_component, self.ratio_den)
+        if runner.vm.current_step < min_steps:
+            raise InsufficientAllocatedCells(
+                f"Number of steps must be at least {min_steps} for the {self.name} builtin."
+            )
+        return safe_div(runner.vm.current_step * self.ratio_den, self.ratio)

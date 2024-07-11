@@ -4,8 +4,21 @@ import logging
 import operator
 from dataclasses import field
 from enum import Enum, auto
-from typing import FrozenSet, Iterable, Iterator, List, Mapping, Optional, Set, Union, cast
+from typing import (
+    Any,
+    Dict,
+    FrozenSet,
+    Iterable,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Union,
+    cast,
+)
 
+import marshmallow
 import marshmallow.fields as mfields
 import marshmallow_dataclass
 
@@ -23,8 +36,7 @@ from starkware.starknet.business_logic.state.state import StorageEntry
 from starkware.starknet.definitions import constants, fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.execution_mode import ExecutionMode
-from starkware.starknet.definitions.transaction_type import TransactionType
-from starkware.starknet.public.abi import CONSTRUCTOR_ENTRY_POINT_SELECTOR
+from starkware.starknet.public import abi as starknet_abi
 from starkware.starknet.services.api.contract_class.contract_class import EntryPointType
 from starkware.starknet.services.api.gateway.deprecated_transaction import (
     DEFAULT_DECLARE_SENDER_ADDRESS,
@@ -163,8 +175,8 @@ class OrderedEvent(ValidatedDataclass):
         return self.event.data
 
 
-@dataclasses.dataclass(frozen=True)
-class Event(ValidatedDataclass):
+@marshmallow_dataclass.dataclass(frozen=True)
+class Event(ValidatedMarshmallowDataclass):
     """
     Represents a StarkNet event; contains all the fields that will be included in the
     block hash.
@@ -215,15 +227,15 @@ class OrderedL2ToL1Message(ValidatedDataclass):
         return self.message.payload
 
 
-@dataclasses.dataclass(frozen=True)
-class L2ToL1MessageInfo(ValidatedDataclass):
+@marshmallow_dataclass.dataclass(frozen=True)
+class L2ToL1MessageInfo(ValidatedMarshmallowDataclass):
     """
     Represents a StarkNet L2-to-L1 message.
     """
 
     from_address: int = field(metadata=fields.L2AddressField.metadata(field_name="from_address"))
     to_address: int = field(
-        metadata=everest_fields.EthAddressIntField.metadata(field_name="to_address")
+        metadata=everest_fields.EthAddressHexField.metadata(field_name="to_address")
     )
     payload: List[int] = field(metadata=fields.felt_as_hex_or_str_list_metadata)
 
@@ -564,7 +576,7 @@ class CallInfo(SerializableMarshmallowDataclass):
             class_hash=class_hash,
             call_type=CallType.Call,
             entry_point_type=EntryPointType.CONSTRUCTOR,
-            entry_point_selector=CONSTRUCTOR_ENTRY_POINT_SELECTOR,
+            entry_point_selector=starknet_abi.CONSTRUCTOR_ENTRY_POINT_SELECTOR,
         )
 
     def get_sorted_events(self) -> List[Event]:
@@ -660,13 +672,13 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
     # Actual resources the transaction is charged for, including L1 gas
     # and OS additional resources estimation.
     actual_resources: ResourcesMapping = field(metadata=fields.name_to_resources_metadata)
-    # Transaction type is used to determine the order of the calls.
-    tx_type: Optional[TransactionType]
-
     # The reason for the transaction revert, if applicable.
     revert_error: Optional[str] = field(metadata=fields.revert_error_metadata)
     # Contains the gas cost of data availability (from version 0.13.1).
     da_gas: Optional[GasVector]
+
+    # Contains the total gas consumed by the transaction. May be None on versions before 0.13.2.
+    total_gas: Optional[GasVector]
 
     def __post_init__(self):
         super().__post_init__()
@@ -674,6 +686,11 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
             assert (
                 self.execute_call_info is None
             ), "Reverted transactions only execute validation and fee transfer."
+
+    @marshmallow.pre_load
+    def remove_tx_type(self, data: Dict[str, Any], many: bool, **kwargs) -> Dict[str, Any]:
+        data.pop("tx_type", None)
+        return data
 
     @classmethod
     def create(
@@ -683,9 +700,9 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
         fee_transfer_info: Optional[CallInfo],
         actual_fee: int,
         actual_resources: ResourcesMapping,
-        tx_type: Optional[TransactionType],
         revert_error: Optional[str],
         da_gas: Optional[GasVector],
+        total_gas: Optional[GasVector],
     ) -> "TransactionExecutionInfo":
         return cls(
             validate_call_info=validate_info,
@@ -693,9 +710,9 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
             fee_transfer_call_info=fee_transfer_info,
             actual_fee=actual_fee,
             actual_resources=actual_resources,
-            tx_type=tx_type,
             revert_error=revert_error,
             da_gas=da_gas,
+            total_gas=total_gas,
         )
 
     @property
@@ -715,8 +732,16 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
         return self.revert_error is not None
 
     @property
+    def is_deploy_account(self) -> bool:
+        return (
+            self.validate_call_info is not None
+            and self.validate_call_info.entry_point_selector
+            == starknet_abi.VALIDATE_DEPLOY_ENTRY_POINT_SELECTOR
+        )
+
+    @property
     def non_optional_calls(self) -> Iterable[CallInfo]:
-        if self.tx_type is TransactionType.DEPLOY_ACCOUNT:
+        if self.is_deploy_account:
             # In deploy account tx, validation will take place after execution of the constructor.
             ordered_optional_calls = (
                 self.execute_call_info,
@@ -744,7 +769,6 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
     def from_call_infos(
         cls,
         execute_call_info: Optional[CallInfo],
-        tx_type: Optional[TransactionType],
         validate_info: Optional[CallInfo] = None,
         fee_transfer_info: Optional[CallInfo] = None,
         revert_error: Optional[str] = None,
@@ -755,9 +779,9 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
             fee_transfer_info=fee_transfer_info,
             actual_fee=0,
             actual_resources={},
-            tx_type=tx_type,
             revert_error=revert_error,
             da_gas=GasVector.empty(),
+            total_gas=GasVector.empty(),
         )
 
     @classmethod
@@ -768,9 +792,9 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
             fee_transfer_info=None,
             actual_fee=0,
             actual_resources={},
-            tx_type=None,
             revert_error=None,
             da_gas=GasVector.empty(),
+            total_gas=GasVector.empty(),
         )
 
     @classmethod
@@ -779,9 +803,9 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
         validate_info: Optional[CallInfo],
         call_info: Optional[CallInfo],
         actual_resources: ResourcesMapping,
-        tx_type: TransactionType,
         revert_error: Optional[str],
         da_gas: Optional[GasVector] = None,
+        total_gas: Optional[GasVector] = None,
     ) -> "TransactionExecutionInfo":
         """
         Returns TransactionExecutionInfo for the concurrent stage (without
@@ -793,9 +817,9 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
             fee_transfer_info=None,
             actual_fee=0,
             actual_resources=actual_resources,
-            tx_type=tx_type,
             revert_error=revert_error,
             da_gas=da_gas,
+            total_gas=total_gas,
         )
 
     @classmethod
@@ -815,9 +839,9 @@ class TransactionExecutionInfo(EverestTransactionExecutionInfo):
             fee_transfer_info=fee_transfer_info,
             actual_fee=actual_fee,
             actual_resources=concurrent_execution_info.actual_resources,
-            tx_type=concurrent_execution_info.tx_type,
             revert_error=concurrent_execution_info.revert_error,
             da_gas=concurrent_execution_info.da_gas,
+            total_gas=concurrent_execution_info.total_gas,
         )
 
     def gen_call_iterator(self) -> Iterator[CallInfo]:

@@ -20,10 +20,29 @@ cairo_library(
 cairo_library(
     name = "cairo",
     srcs = [
+        "air_instances.cairo",
         "air_interface.cairo",
         "channel.cairo",
+        "config_instances.cairo",
         "proof_of_work.cairo",
         "queries.cairo",
+        "table_commitment.cairo",
+        "utils.cairo",
+        "vector_commitment.cairo",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":cairo_commitment",
+        "//src/starkware/cairo/common:cairo_common_cairo_lib",
+        "//src/starkware/cairo/stark_verifier/core:serialize",
+        "//src/starkware/cairo/stark_verifier/core/fri:fri_config",
+    ],
+)
+
+cairo_library(
+    name = "cairo_commitment",
+    srcs = [
+        "channel.cairo",
         "table_commitment.cairo",
         "utils.cairo",
         "vector_commitment.cairo",
@@ -39,6 +58,7 @@ cairo_library(
     name = "stark",
     srcs = [
         "config.cairo",
+        "config_instances.cairo",
         "domains.cairo",
         "stark.cairo",
     ],
@@ -46,6 +66,7 @@ cairo_library(
     deps = [
         ":cairo",
         "//src/starkware/cairo/common:cairo_common_cairo_lib",
+        "//src/starkware/cairo/stark_verifier/air:cairo",
         "//src/starkware/cairo/stark_verifier/core/fri",
     ],
 )

@@ -87,6 +87,7 @@ py_library(
         "//src/starkware/starknet/core/os:starknet_deprecated_syscall_handler_lib",
         "//src/starkware/starknet/core/os:starknet_os_utils_lib",
         "//src/starkware/starknet/core/os:starknet_syscall_handler_lib",
+        "//src/starkware/starknet/core/os:syscall_utils_lib",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
         "//src/starkware/starknet/definitions:starknet_general_config_lib",
         "//src/starkware/starknet/public:starknet_abi_lib",

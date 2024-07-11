@@ -367,6 +367,9 @@ func update_builtin_ptrs{builtin_ptrs: BuiltinPointers*}(
             ec_op=builtin_ptrs.selectable.ec_op,
             poseidon=poseidon_ptr,
             segment_arena=builtin_ptrs.selectable.segment_arena,
+            range_check96=builtin_ptrs.selectable.range_check96,
+            add_mod=builtin_ptrs.selectable.add_mod,
+            mul_mod=builtin_ptrs.selectable.mul_mod,
         ),
         non_selectable=builtin_ptrs.non_selectable,
     );

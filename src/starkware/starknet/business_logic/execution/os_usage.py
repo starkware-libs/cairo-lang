@@ -22,12 +22,19 @@ class ResourcesParams(ValidatedMarshmallowDataclass):
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
+class ResourcesByVersion(ValidatedMarshmallowDataclass):
+    deprecated_resources: ResourcesParams
+    resources: ResourcesParams
+
+
+@marshmallow_dataclass.dataclass(frozen=True)
 class OsResources(ValidatedMarshmallowDataclass):
     # Mapping from every syscall to its execution resources in the OS (e.g., amount of Cairo steps).
     execute_syscalls: Mapping[str, ExecutionResources]
     # Mapping from every transaction to its extra execution resources in the OS,
     # i.e., resources that don't count during the execution itself.
-    execute_txs_inner: Mapping[TransactionType, ResourcesParams]
+    execute_txs_inner: Mapping[TransactionType, ResourcesByVersion]
+    compute_os_kzg_commitment_info: ExecutionResources
 
     def into_blockifier_json_object(self) -> Dict[str, Any]:
         """
@@ -37,7 +44,6 @@ class OsResources(ValidatedMarshmallowDataclass):
         """
 
         os_resources_json_object = self.dump()
-        del os_resources_json_object["execute_txs_inner"][TransactionType.DEPLOY.name]
 
         # Convert inner keys to CamelCase.
 
@@ -77,7 +83,12 @@ def get_tx_additional_os_resources(
         ),
         ExecutionResources.empty(),
     )
+    if tx_type is TransactionType.DEPLOY:
+        return os_additional_resources
 
     # Calculate the additional resources needed for the OS to run the given transaction;
     # i.e., the resources of the StarkNet OS function execute_transactions_inner().
-    return os_additional_resources + os_resources.execute_txs_inner[tx_type].constant
+    return (
+        os_additional_resources
+        + os_resources.execute_txs_inner[tx_type].deprecated_resources.constant
+    )

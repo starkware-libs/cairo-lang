@@ -97,7 +97,8 @@ def extract_z_and_alpha(annotations: List[str]) -> Tuple[int, int]:
         )
     ]
     # Make sure the number of interaction_elements is as expected - z, alpha for the memory and
-    # z' for the permutation range-check and possibly 3 additional elements for the diluted logic.
-    assert len(interaction_elements) in [3, 6]
+    # z' for the permutation range-check and possibly 3 additional elements for the diluted logic
+    # and possibly another two for add_mod, mul_mod.
+    assert len(interaction_elements) in [3, 6, 8]
     z, alpha = interaction_elements[:2]
     return z, alpha

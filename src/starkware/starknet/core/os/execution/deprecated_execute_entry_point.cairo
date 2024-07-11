@@ -1,7 +1,7 @@
 from starkware.cairo.builtin_selection.select_builtins import select_builtins
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.dict_access import DictAccess
-from starkware.cairo.common.find_element import find_element, search_sorted
+from starkware.cairo.common.find_element import find_element, search_sorted_optimistic
 from starkware.cairo.common.registers import get_ap
 from starkware.starknet.core.os.block_context import BlockContext
 from starkware.starknet.core.os.builtins import (
@@ -59,7 +59,7 @@ func get_entry_point_offset{range_check_ptr}(
 
     // The key must be at offset 0.
     static_assert DeprecatedContractEntryPoint.selector == 0;
-    let (entry_point_desc: DeprecatedContractEntryPoint*, success) = search_sorted(
+    let (entry_point_desc: DeprecatedContractEntryPoint*, success) = search_sorted_optimistic(
         array_ptr=cast(entry_points, felt*),
         elm_size=DeprecatedContractEntryPoint.SIZE,
         n_elms=n_entry_points,
@@ -162,7 +162,7 @@ func deprecated_execute_entry_point{
 
     %{
         execution_helper.enter_call(
-            execution_info_ptr=ids.execution_context.execution_info.address_)
+            cairo_execution_info=ids.execution_context.execution_info)
     %}
     %{ vm_enter_scope({'syscall_handler': deprecated_syscall_handler}) %}
     call abs contract_entry_point;

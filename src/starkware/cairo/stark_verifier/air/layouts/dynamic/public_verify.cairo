@@ -27,7 +27,10 @@ namespace segments {
     const EC_OP = 7;
     const KECCAK = 8;
     const POSEIDON = 9;
-    const N_SEGMENTS = 10;
+    const RANGE_CHECK96 = 10;
+    const ADD_MOD = 11;
+    const MUL_MOD = 12;
+    const N_SEGMENTS = 13;
 }
 
 const INITIAL_PC = 1;
@@ -36,7 +39,7 @@ const FINAL_PC = INITIAL_PC + 4;
 // Returns a zero-terminated list of builtins supported by this layout.
 func get_layout_builtins() -> (n_builtins: felt, builtins: felt*) {
     let (builtins_address) = get_label_location(data);
-    let n_builtins = 8;
+    let n_builtins = 11;
     assert builtins_address[n_builtins] = 0;
     return (n_builtins=n_builtins, builtins=builtins_address);
 
@@ -49,6 +52,9 @@ func get_layout_builtins() -> (n_builtins: felt, builtins: felt*) {
     dw 'ec_op';
     dw 'keccak';
     dw 'poseidon';
+    dw 'range_check96';
+    dw 'add_mod';
+    dw 'mul_mod';
     dw 0;
 }
 
@@ -203,16 +209,65 @@ func public_input_validate{range_check_ptr}(
     // and that stop_ptr - begin_addr is divisible by 6.
     assert_nn_le(n_poseidon_uses, n_poseidon_copies);
 
+    local n_range_check96_copies;
+    if (dynamic_params.uses_range_check96_builtin == 0) {
+        assert n_range_check96_copies = 0;
+    } else {
+        assert n_range_check96_copies = trace_length /
+            dynamic_params.range_check96_builtin_row_ratio;
+    }
+    let n_range_check96_uses = (
+        public_input.segments[segments.RANGE_CHECK96].stop_ptr -
+        public_input.segments[segments.RANGE_CHECK96].begin_addr
+    );
+    // Note that the following call implies that trace_length is divisible by
+    // dynamic_params.range_check96_builtin_row_ratio.
+    assert_nn_le(n_range_check96_uses, n_range_check96_copies);
+
+    local n_add_mod_copies;
+    if (dynamic_params.uses_add_mod_builtin == 0) {
+        assert n_add_mod_copies = 0;
+    } else {
+        assert n_add_mod_copies = trace_length / dynamic_params.add_mod__row_ratio;
+    }
+    let n_add_mod_uses = (
+        public_input.segments[segments.ADD_MOD].stop_ptr -
+        public_input.segments[segments.ADD_MOD].begin_addr
+    ) / 7;
+    // Note that the following call implies that trace_length is divisible by
+    // dynamic_params.add_mod__row_ratio
+    // and that stop_ptr - begin_addr is divisible by 7.
+    assert_nn_le(n_add_mod_uses, n_add_mod_copies);
+
+    local n_mul_mod_copies;
+    if (dynamic_params.uses_mul_mod_builtin == 0) {
+        assert n_mul_mod_copies = 0;
+    } else {
+        assert n_mul_mod_copies = trace_length / dynamic_params.mul_mod__row_ratio;
+    }
+    let n_mul_mod_uses = (
+        public_input.segments[segments.MUL_MOD].stop_ptr -
+        public_input.segments[segments.MUL_MOD].begin_addr
+    ) / 7;
+    // Note that the following call implies that trace_length is divisible by
+    // dynamic_params.mul_mod__row_ratio
+    // and that stop_ptr - begin_addr is divisible by 7.
+    assert_nn_le(n_mul_mod_uses, n_mul_mod_copies);
+
     let n_memory_units = trace_length / dynamic_params.memory_units_row_ratio;
     assert_nn_le(
         4 * n_steps + safe_div(n_memory_units, PUBLIC_MEMORY_FRACTION) + 3 * n_pedersen_copies + 1 *
         n_range_check_copies + 2 * n_ecdsa_copies + 5 * n_bitwise_copies + 7 * n_ec_op_copies + 16 *
-        n_keccak_copies + 6 * n_poseidon_copies,
+        n_keccak_copies + 6 * n_poseidon_copies + 1 * n_range_check96_copies + 7 *
+        n_add_mod_copies + 7 * n_mul_mod_copies,
         n_memory_units,
     );
 
     let n_rc_units = trace_length / dynamic_params.range_check_units_row_ratio;
-    assert_nn_le(3 * n_steps + 8 * n_range_check_copies, n_rc_units);
+    assert_nn_le(
+        3 * n_steps + 8 * n_range_check_copies + 6 * n_range_check96_copies + 66 * n_mul_mod_copies,
+        n_rc_units,
+    );
 
     let n_diluted_units = trace_length / dynamic_params.diluted_units_row_ratio;
     assert_nn_le(68 * n_bitwise_copies + 16384 * n_keccak_copies, n_diluted_units);

@@ -4760,6 +4760,42 @@ ret;
     )
 
 
+def test_return_new():
+    code = """
+struct InnerStruct {
+    fld0: felt,
+    fld1: felt,
+}
+
+struct OuterStruct {
+    a: felt,
+    b: InnerStruct,
+}
+
+func foo(p: OuterStruct*) -> OuterStruct* {
+    return new OuterStruct(
+        a=p.b.fld0,
+        b=p.b,
+    );
+}
+
+"""
+    program = preprocess_str(code=code, prime=PRIME)
+    assert program.format() == strip_comments_and_linebreaks(
+        """\
+// A dummy get_ap().
+ret;
+
+[ap] = [[fp + (-3)] + 1], ap++;
+[ap] = [[fp + (-3)] + 1], ap++;
+[ap] = [[fp + (-3)] + 2], ap++;
+call rel -4;
+[ap] = [ap + (-1)] + (-3), ap++;
+ret;
+"""
+    )
+
+
 def test_new_operator_failure():
     verify_exception(
         """

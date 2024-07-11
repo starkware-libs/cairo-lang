@@ -101,6 +101,8 @@ class BlockStatus(Enum):
     REVERTED = auto()
     # A block that was created on L2, in contrast to PENDING, which is not yet closed.
     ACCEPTED_ON_L2 = auto()
+    # A block was proven on L2.
+    PROVEN_ON_L2 = auto()
     # A block accepted on L1.
     ACCEPTED_ON_L1 = auto()
 
@@ -112,8 +114,15 @@ class FinalityStatus(Enum):
     RECEIVED = auto()
     # The transaction passed validation and entered a pending or a finalized block.
     ACCEPTED_ON_L2 = auto()
+    # The transaction was proven on L2.
+    PROVEN_ON_L2 = auto()
     # The transaction was accepted on-chain.
     ACCEPTED_ON_L1 = auto()
+
+    def to_deprecated(self) -> "FinalityStatus":
+        if self == FinalityStatus.PROVEN_ON_L2:
+            return FinalityStatus.ACCEPTED_ON_L2
+        return self
 
     def __ge__(self, other: object) -> bool:
         if not isinstance(other, FinalityStatus):
@@ -142,7 +151,11 @@ class FinalityStatus(Enum):
             # A pending block will eventually be finalized, so the transaction is considered
             # accepted on L2.
             return FinalityStatus.ACCEPTED_ON_L2
-        elif block_status in (BlockStatus.ACCEPTED_ON_L2, BlockStatus.ACCEPTED_ON_L1):
+        elif block_status in (
+            BlockStatus.ACCEPTED_ON_L2,
+            BlockStatus.PROVEN_ON_L2,
+            BlockStatus.ACCEPTED_ON_L1,
+        ):
             return FinalityStatus[block_status.name]
         elif block_status in (BlockStatus.REVERTED, BlockStatus.ABORTED):
             # The transaction passed Batcher validations, but the block containing it failed on
@@ -241,7 +254,7 @@ class TransactionStatus(Enum):
         statuses.
         """
         if execution_status in (None, ExecutionStatus.SUCCEEDED):
-            return cls[finality_status.name]
+            return cls[finality_status.to_deprecated().name]
 
         assert execution_status in (
             ExecutionStatus.REVERTED,
@@ -307,7 +320,7 @@ class TransactionInBlockInfo(ValidatedResponseObject):
                 ExecutionStatus.REVERTED,
                 ExecutionStatus.REJECTED,
             ), execution_status_mismatch_msg
-            assert self.status.name == as_non_optional(self.finality_status).name, (
+            assert self.status.name == as_non_optional(self.finality_status.to_deprecated()).name, (
                 f"DEPRECATED status {self.status} doesn't match finality status "
                 f"{self.finality_status}."
             )
@@ -373,10 +386,10 @@ class TransactionInBlockInfo(ValidatedResponseObject):
 
         # ACCEPTED_ON_L2 transactions may be in a non finalized block. In this case the block hash
         # is not known yet and will be None.
-        if self.finality_status is FinalityStatus.ACCEPTED_ON_L1:
+        if self.finality_status > FinalityStatus.ACCEPTED_ON_L2:
             assert (
                 self.block_hash is not None
-            ), "Transactions accepted on L1 must have a block hash."
+            ), "Transactions that passed the gps ambassador must have a block hash."
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -474,15 +487,22 @@ class ReceiptExecutionResources(ValidatedResponseObject):
     # Optional for backwards compatibility.
     data_availability: Optional[GasVector]
 
+    # The total gas consumed by the transaction. May be None on versions before 0.13.2.
+    total_gas_consumed: Optional[GasVector]
+
     @classmethod
     def create(
-        cls, execution_resources: ExecutionResources, da_gas: Optional[GasVector]
+        cls,
+        execution_resources: ExecutionResources,
+        da_gas: Optional[GasVector],
+        total_gas_consumed: Optional[GasVector],
     ) -> "ReceiptExecutionResources":
         return cls(
             n_steps=execution_resources.n_steps,
             builtin_instance_counter=execution_resources.builtin_instance_counter,
             n_memory_holes=0,
             data_availability=da_gas,
+            total_gas_consumed=total_gas_consumed,
         )
 
 
@@ -650,11 +670,18 @@ class StateDiff(ValidatedResponseObject):
         self, data: Dict[str, Any], many: bool, **kwargs
     ) -> Dict[str, Any]:
         """
-        Renames the variable "declared_contracts" to "old_declared_contracts".
+        Renames the variable "declared_contracts" to "old_declared_contracts",
+        and Fixes the state diff by removing empty storage diffs.
         """
         if "declared_contracts" in data:
             assert "old_declared_contracts" not in data
             data["old_declared_contracts"] = data.pop("declared_contracts")
+
+        data["storage_diffs"] = {
+            contract_address: storage_entries
+            for contract_address, storage_entries in data["storage_diffs"].items()
+            if len(storage_entries) > 0
+        }
 
         return data
 
@@ -677,6 +704,10 @@ class BlockStateUpdate(ValidatedResponseObject):
         assert (self.block_hash is None) == (
             self.new_root is None
         ), "new_root must appear in state update for any block other than pending block."
+
+        assert all(
+            len(storage_entries) > 0 for storage_entries in self.state_diff.storage_diffs.values()
+        ), "Empty storage diffs are not allowed."
 
 
 @dataclasses.dataclass(frozen=True)
@@ -860,6 +891,11 @@ class StarknetBlock(ValidatedResponseObject):
     )
     transaction_commitment: Optional[int] = field(metadata=fields.optional_commitment_metadata)
     event_commitment: Optional[int] = field(metadata=fields.optional_commitment_metadata)
+    receipt_commitment: Optional[int] = field(metadata=fields.optional_commitment_metadata)
+    state_diff_commitment: Optional[int] = field(metadata=fields.optional_commitment_metadata)
+    state_diff_length: Optional[int] = field(
+        metadata=fields.OptionalStateDiffLengthField.metadata()
+    )
     status: Optional[BlockStatus]
     l1_da_mode: L1DaMode = field(metadata=fields.l1_da_mode_enum_metadata)
     l1_gas_price: ResourcePrice
@@ -894,6 +930,9 @@ class StarknetBlock(ValidatedResponseObject):
         block_hash: Optional[int],
         transaction_commitment: Optional[int],
         event_commitment: Optional[int],
+        receipt_commitment: Optional[int],
+        state_diff_commitment: Optional[int],
+        state_diff_length: Optional[int],
         parent_block_hash: int,
         block_number: Optional[int],
         state_root: Optional[int],
@@ -910,6 +949,9 @@ class StarknetBlock(ValidatedResponseObject):
             block_hash=block_hash,
             transaction_commitment=transaction_commitment,
             event_commitment=event_commitment,
+            receipt_commitment=receipt_commitment,
+            state_diff_commitment=state_diff_commitment,
+            state_diff_length=state_diff_length,
             parent_block_hash=parent_block_hash,
             block_number=block_number,
             state_root=state_root,
@@ -984,9 +1026,8 @@ class BlockSignature(ValidatedResponseObject):
     Contains the signature of a block.
     """
 
-    block_number: int = field(metadata=fields.block_number_metadata)
+    block_hash: int = field(metadata=fields.block_hash_metadata)
     signature: ECSignature = field(metadata=fields.ec_signature_metadata)
-    signature_input: BlockSignatureInput
 
 
 @marshmallow_dataclass.dataclass(frozen=True)

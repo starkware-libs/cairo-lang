@@ -157,6 +157,9 @@ class ValidatedField(Field[T]):
 
     # Metadata.
 
+    def _replace(self, **changes) -> "ValidatedField[T]":
+        return dataclasses.replace(self, **changes)
+
     def metadata(
         self,
         required: bool = True,
@@ -170,7 +173,7 @@ class ValidatedField(Field[T]):
         """
         nested_metadata = {} if nested_metadata is None else nested_metadata
         if field_name is not None:
-            nested_metadata |= dict(validated_field=dataclasses.replace(self, name=field_name))
+            nested_metadata |= dict(validated_field=self._replace(name=field_name))
 
         return super().metadata(
             required=required,
@@ -195,6 +198,17 @@ class OptionalField(ValidatedField[Optional[T]]):
         super().__init__(name=field.name, error_code=field.error_code)
         self.field = field
         self.none_probability = max(0, min(1, none_probability))
+
+    def _replace(self, **changes) -> "OptionalField[T]":
+        replaced_field = changes.pop("field") if "field" in changes else self.field
+        replaced_none_probability = (
+            changes.pop("none_probability")
+            if "none_probability" in changes
+            else self.none_probability
+        )
+        replaced_field = replaced_field._replace(**changes)
+
+        return self.__class__(field=replaced_field, none_probability=replaced_none_probability)
 
     def error_message(self, value: Optional[T]) -> str:
         if value is None:

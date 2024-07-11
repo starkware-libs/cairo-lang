@@ -20,10 +20,12 @@ import cachetools
 
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.common.cairo_secp.secp_utils import SECP256K1, SECP256R1, Curve
+from starkware.cairo.common.cairo_sha256.sha256_utils import sha_256_update_state
 from starkware.cairo.common.keccak_utils.keccak_utils import keccak_f
 from starkware.cairo.common.structs import CairoStructProxy
 from starkware.cairo.lang.vm.memory_segments import MemorySegmentManager
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
+from starkware.cairo.lang.vm.vm_consts import VmConstsReference
 from starkware.python.math_utils import (
     EC_INFINITY,
     EcInfinity,
@@ -63,6 +65,7 @@ from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
 from starkware.starknet.core.os.contract_address.contract_address import (
     calculate_contract_address_from_hash,
 )
+from starkware.starknet.core.os.kzg_manager import CoefficientsToKzgCommitmentCallback, KzgManager
 from starkware.starknet.core.os.os_logger import OptionalSegmentManager, OsLogger
 from starkware.starknet.core.os.syscall_utils import (
     STARKNET_SYSCALLS_COMPILED_PATH,
@@ -93,10 +96,6 @@ SyscallFullResponse = Tuple[tuple, tuple]  # Response header + specific syscall 
 ExecuteSyscallCallback = Callable[
     ["SyscallHandlerBase", int, CairoStructProxy], SyscallFullResponse
 ]
-
-# Input: polynomial in coefficients representation.
-# Output: KZG commitment on the polynomial, split into two Uint192.
-CoefficientsToKzgCommitmentCallback = Callable[[List[int]], Tuple[int, int]]
 
 KECCAK_FULL_RATE_IN_U64S = 17
 
@@ -136,6 +135,9 @@ class SyscallHandlerBase(ABC):
         # A segment that holds all the ec points.
         self.ec_points_segment: Optional[RelocatableValue] = None
         self.ec_point_size = cast(int, self.structs.EcPoint.size)
+
+        self.sha256_segment: Optional[VmConstsReference] = None
+        self.sha256_block_count = 0
 
     @classmethod
     @cachetools.cached(cache={})
@@ -210,6 +212,11 @@ class SyscallHandlerBase(ABC):
                 name="keccak",
                 execute_callback=cls.keccak,
                 request_struct=structs.KeccakRequest,
+            ),
+            get_selector("sha256_process_block"): SyscallInfo(
+                name="sha256_process_block",
+                execute_callback=cls.sha256_process_block,
+                request_struct=structs.Sha256ProcessBlockRequest,
             ),
             get_selector("get_block_hash"): SyscallInfo(
                 name="get_block_hash",
@@ -575,6 +582,39 @@ class SyscallHandlerBase(ABC):
 
         response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
         response = self.structs.KeccakResponse(result_low=result[0], result_high=result[1])
+        return response_header, response
+
+    def sha256_process_block(
+        self, remaining_gas: int, request: CairoStructProxy
+    ) -> SyscallFullResponse:
+        assert isinstance(request.state_ptr, RelocatableValue)
+        assert isinstance(request.input_start, RelocatableValue)
+
+        state_array = self._get_felt_range(
+            start_addr=request.state_ptr, end_addr=request.state_ptr + 8
+        )
+
+        input_array = self._get_felt_range(
+            start_addr=request.input_start, end_addr=request.input_start + 16
+        )
+
+        assert type(self.sha256_segment) == VmConstsReference
+
+        state_array = sha_256_update_state(
+            state_array,
+            input_array,
+        )
+
+        self.segments.write_arg(
+            ptr=self.sha256_segment[self.sha256_block_count].out_state.address_, arg=state_array
+        )
+
+        response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
+        response = self.structs.Sha256ProcessBlockResponse(
+            state_ptr=self.sha256_segment[self.sha256_block_count].out_state.address_
+        )
+        self.sha256_block_count += 1
+
         return response_header, response
 
     def storage_read(self, remaining_gas: int, request: CairoStructProxy) -> SyscallFullResponse:
@@ -1168,14 +1208,8 @@ class OsExecutionHelper:
         """
         self.debug_mode = debug_mode
 
-        # Stores the state diff computed by the OS, in case that KZG commitment is used (since
-        # it won't be part of the OS output).
-        self._da_segment: Optional[List[int]] = None
+        self.kzg_manager = KzgManager(polynomial_coefficients_to_kzg_commitment_callback)
 
-        # Callback that computes the KZG commitment of a polynomial in coefficient representation.
-        self.polynomial_coefficients_to_kzg_commitment_callback = (
-            polynomial_coefficients_to_kzg_commitment_callback
-        )
         self.tx_execution_info_iterator: Iterator[TransactionExecutionInfo] = iter(
             tx_execution_infos
         )
@@ -1206,11 +1240,11 @@ class OsExecutionHelper:
         # Set during enter_tx.
         self.tx_info_ptr: Optional[RelocatableValue] = None
 
-        # A pointer to the Cairo ExecutionInfo struct of the current call.
-        # This pointer needs to match the ExecutionInfo pointer that is going to be used during the
+        # The Cairo ExecutionInfo struct of the current call.
+        # Should match the ExecutionInfo pointer that is going to be used during the
         # system call validation by the StarkNet OS.
         # Set during enter_call.
-        self.call_execution_info_ptr: Optional[RelocatableValue] = None
+        self._call_cairo_execution_info: Optional[VmConstsReference] = None
 
         # Current running event loop; used for running async tasks in a synchronous context.
         self.loop = loop
@@ -1258,17 +1292,9 @@ class OsExecutionHelper:
         )
 
     @property
-    def da_segment(self) -> List[int]:
-        assert self._da_segment is not None, "DA segment is not initialized."
-        return self._da_segment
-
-    def store_da_segment(self, da_segment: List[int]):
-        """
-        Stores the data-availabilty segment, to be used for computing the KZG commitment
-        and published on L1 using a blob transaction.
-        """
-        assert self._da_segment is None, "DA segment is already initialized."
-        self._da_segment = da_segment
+    def call_cairo_execution_info(self) -> VmConstsReference:
+        assert self._call_cairo_execution_info is not None, "ExecutionInfo is not set."
+        return self._call_cairo_execution_info
 
     def compute_storage_commitments(self) -> Mapping[int, CommitmentInfo]:
         coroutine = gather_in_chunks(
@@ -1322,9 +1348,9 @@ class OsExecutionHelper:
         assert_exhausted(iterator=self.result_iterator)
         assert_exhausted(iterator=self.execute_code_read_iterator)
 
-    def enter_call(self, execution_info_ptr: Optional[RelocatableValue]):
-        assert self.call_execution_info_ptr is None
-        self.call_execution_info_ptr = execution_info_ptr
+    def enter_call(self, cairo_execution_info: Optional[VmConstsReference]):
+        assert self._call_cairo_execution_info is None
+        self._call_cairo_execution_info = cairo_execution_info
 
         self.assert_interators_exhausted()
 
@@ -1340,7 +1366,7 @@ class OsExecutionHelper:
         self.execute_code_read_iterator = iter(self.call_info.storage_read_values)
 
     def exit_call(self):
-        self.call_execution_info_ptr = None
+        self._call_cairo_execution_info = None
 
         self.assert_interators_exhausted()
         assert self._call_info is not None
@@ -1351,7 +1377,7 @@ class OsExecutionHelper:
         Called when skipping the execution of a call.
         It replaces a call to enter_call and exit_call.
         """
-        self.enter_call(execution_info_ptr=None)
+        self.enter_call(cairo_execution_info=None)
         self.exit_call()
 
     def skip_tx(self):
@@ -1422,10 +1448,7 @@ class OsSyscallHandler(SyscallHandlerBase):
         )
 
     def _get_execution_info_ptr(self) -> RelocatableValue:
-        assert (
-            self.execution_helper.call_execution_info_ptr is not None
-        ), "ExecutionInfo pointer is not set."
-        return self.execution_helper.call_execution_info_ptr
+        return self.execution_helper.call_cairo_execution_info.address_
 
     def _storage_read(self, key: int) -> int:
         return next(self.execution_helper.execute_code_read_iterator)

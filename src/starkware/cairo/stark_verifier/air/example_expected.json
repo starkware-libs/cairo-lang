@@ -1,9 +1,9 @@
 {
     "public_input_test": {
-        "initial_hash_chain_seed": "0x02aad846ecc75d17563de31718138ea5e019166bb8a81b8494b061dc5ac3eca4"
+        "initial_hash_chain_seed": "0x03b5456803e21d8cb8a531ffd767e1ccc8dc775423e111c425881f46103da928"
     },
     "dynamic_layout_public_input_test": {
-        "initial_hash_chain_seed": "0x01490306a65f798b9ac1a4601e09cb14f5a3ea16998ccb6a8c64f1455c2796a8"
+        "initial_hash_chain_seed": "0x004d22ee097dd04b1228b765883e011e715c227d5a63aa16e32942bd303a5185"
     },
     "diluted_test": {
         "spacing": 4,

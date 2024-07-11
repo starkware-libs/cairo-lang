@@ -51,6 +51,7 @@ from starkware.cairo.lang.compiler.ast.code_elements import (
     LangDirective,
 )
 from starkware.cairo.lang.compiler.ast.expr import (
+    ArgList,
     ExprAssignment,
     ExprCast,
     ExprConst,
@@ -81,6 +82,7 @@ from starkware.cairo.lang.compiler.ast.instructions import (
     RetInstruction,
 )
 from starkware.cairo.lang.compiler.ast.module import CairoModule
+from starkware.cairo.lang.compiler.ast.notes import Notes
 from starkware.cairo.lang.compiler.ast.rvalue import RvalueCallInst, RvalueFuncCall
 from starkware.cairo.lang.compiler.ast.types import TypedIdentifier
 from starkware.cairo.lang.compiler.constants import SIZE_CONSTANT
@@ -2327,6 +2329,30 @@ Expected expression of type '{expected_type.format()}', got '{expr_type.format()
         Takes a simplified expression and its type and splits it into a list of typeless expressions
         that can be passed to process_compound_expressions.
         """
+
+        if isinstance(expr, ExprNewOperator) and isinstance(expr_type, TypePointer):
+            # If this is the first time we visit this expression (expr_type is a pointer rather than
+            # a felt), split the typed inner expression into a tuple of typeless expressions.
+
+            inner_exprs = self.simplified_expr_to_felt_expr_list(
+                expr=expr.expr, expr_type=expr_type.pointee
+            )
+            inner_location = expr.expr.location
+            tuple_expr = ExprTuple(
+                members=ArgList(
+                    args=[
+                        ExprAssignment(
+                            identifier=None, expr=inner_expr, location=inner_expr.location
+                        )
+                        for inner_expr in inner_exprs
+                    ],
+                    notes=[Notes() for _ in range(len(inner_exprs) + 1)],
+                    has_trailing_comma=True,
+                    location=inner_location,
+                ),
+                location=inner_location,
+            )
+            return [ExprNewOperator(expr=tuple_expr, is_typed=False, location=expr.location)]
 
         if isinstance(expr_type, (TypeFelt, TypePointer, TypeCodeoffset)):
             return [expr]

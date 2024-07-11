@@ -1,6 +1,6 @@
 import dataclasses
 from bisect import bisect_left, bisect_right
-from typing import Collection, Dict, List, Optional, Tuple
+from typing import Collection, Dict, List, Optional, Tuple, Type
 
 from starkware.python.utils import process_concurrently, safe_zip
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import TLeafFact
@@ -72,6 +72,7 @@ class TreeContext:
     # Updated nodes, grouped and ordered by dependency.
     nodes_by_dependency_layers: List[List[IndexedNode]]
     ffc: FactFetchingContext
+    leaf_db_keys: List[bytes]
 
     @classmethod
     def create(
@@ -83,6 +84,7 @@ class TreeContext:
             prefetched_nodes={},
             nodes_by_dependency_layers=[],
             ffc=ffc,
+            leaf_db_keys=[],
         )
 
     def get_node_height(self, index: int) -> int:
@@ -102,10 +104,14 @@ class SubTree:
     root_hash: bytes
     leaf_indices: List[int]
 
-    def set_leaf(self, context: TreeContext):
+    def set_leaf(self, context: TreeContext, leaf_fact_cls: Optional[Type[TLeafFact]]):
         """
         Assumes the subtree represents a leaf; creates a corresponding Node object and sets it.
         """
+        if leaf_fact_cls is not None:
+            db_key = leaf_fact_cls.db_key(suffix=self.root_hash)
+            context.leaf_db_keys.append(db_key)
+
         if len(self.leaf_indices) == 0:
             # Leaf sibiling.
             value = self.root_hash
@@ -216,7 +222,9 @@ async def update_structure(
     return context.nodes_by_dependency_layers
 
 
-async def fetch_nodes(subtrees: List[SubTree], context: TreeContext):
+async def fetch_nodes(
+    subtrees: List[SubTree], context: TreeContext, leaf_fact_cls: Optional[Type[TLeafFact]] = None
+):
     """
     Given a list of subtrees, traverses towards their leaves and fetches all non-empty and sibiling
     nodes. Assumes no subtrees of height 0 (leaves).
@@ -257,8 +265,8 @@ async def fetch_nodes(subtrees: List[SubTree], context: TreeContext):
             )
             if height - 1 == 0:
                 # Children are leaves.
-                left_subtree.set_leaf(context=context)
-                right_subtree.set_leaf(context=context)
+                left_subtree.set_leaf(context=context, leaf_fact_cls=leaf_fact_cls)
+                right_subtree.set_leaf(context=context, leaf_fact_cls=leaf_fact_cls)
                 continue
 
             next_subtrees += [left_subtree, right_subtree]
@@ -291,12 +299,12 @@ async def fetch_nodes(subtrees: List[SubTree], context: TreeContext):
             )
             if bottom_height == 0:
                 # Bottom is a leaf.
-                bottom_subtree.set_leaf(context=context)
+                bottom_subtree.set_leaf(context=context, leaf_fact_cls=leaf_fact_cls)
                 continue
 
             next_subtrees.append(bottom_subtree)
 
-    await fetch_nodes(subtrees=next_subtrees, context=context)
+    await fetch_nodes(subtrees=next_subtrees, context=context, leaf_fact_cls=leaf_fact_cls)
 
 
 def update_nonempty_node(

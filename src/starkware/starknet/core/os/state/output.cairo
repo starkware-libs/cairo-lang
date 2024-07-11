@@ -12,20 +12,30 @@ from starkware.starknet.core.os.state.commitment import StateEntry
 //     * 1 word with the following info:
 //       * A flag indicating whether the class hash was updated,
 //       * the number of entry updates,
+//       * the old nonce (if `full_output` is used),
 //       * and the new nonce:
 //          +-------+-----------+-----------+ LSB
 //          | flag  | new nonce | n_updates |
 //          | 1 bit | 64 bits   | 64 bits   |
 //          +-------+-----------+-----------+
-//   * The class hash for this contract (if it was updated) (0 or 1 word).
+//         OR (if `full_output` is used)
+//          +-------+-----------+-----------+-----------+ LSB
+//          | flag  | new nonce | old nonce | n_updates |
+//          | 1 bit | 64 bits   | 64 bits   | 64 bits   |
+//          +-------+-----------+-----------+-----------+
+//
+//   * The old class hash for this contract (1 word, if `full_output` is used).
+//   * The new class hash for this contract (1 word, if it was updated or `full_output` is used).
 //   * For each entry update:
 //       * key (1 word).
+//       * old value (1 word, only when `full_output` is used).
 //       * new value (1 word).
 //
 // The on-chain data for contract class changes has the following format:
 // * The number of classes that have been declared.
 // * For each contract class:
 //   * The class hash (1 word).
+//   * The old compiled class hash (1 word, only when `full_output` is used).
 //   * The compiled class hash (casm, 1 word).
 
 // A bound on the number of contract state entry updates in a contract.
@@ -42,7 +52,51 @@ struct StateUpdateEntry {
     value: felt,
 }
 
-func serialize_da_changes{state_updates: StateUpdateEntry*}(
+struct FullStateUpdateEntry {
+    // The entry's key.
+    key: felt,
+    // The previous value.
+    prev_value: felt,
+    // The new value.
+    new_value: felt,
+}
+
+// Outputs the entries that were changed in `update_ptr` into `state_updates_ptr`.
+// Returns the number of such entries.
+func serialize_da_changes{state_updates_ptr: felt*}(
+    update_ptr: DictAccess*, n_updates: felt, full_output: felt
+) -> felt {
+    if (full_output == 0) {
+        // Keep a pointer to the start of the array.
+        let state_updates_start = state_updates_ptr;
+        // Cast `state_updates_ptr` to `StateUpdateEntry*`.
+        let state_updates = cast(state_updates_ptr, StateUpdateEntry*);
+
+        serialize_da_changes_inner{state_updates=state_updates}(
+            update_ptr=update_ptr, n_updates=n_updates
+        );
+
+        // Cast back to `felt*`.
+        let state_updates_ptr = cast(state_updates, felt*);
+        return (state_updates_ptr - state_updates_start) / StateUpdateEntry.SIZE;
+    } else {
+        // Keep a pointer to the start of the array.
+        let state_updates_start = state_updates_ptr;
+        // Cast `state_updates_ptr` to `FullStateUpdateEntry*`.
+        let state_updates_full = cast(state_updates_ptr, FullStateUpdateEntry*);
+
+        serialize_da_changes_inner_full{state_updates=state_updates_full}(
+            update_ptr=update_ptr, n_updates=n_updates
+        );
+
+        // Cast back to `felt*`.
+        let state_updates_ptr = cast(state_updates_full, felt*);
+        return (state_updates_ptr - state_updates_start) / FullStateUpdateEntry.SIZE;
+    }
+}
+
+// Helper function for `serialize_da_changes` for the case `full_output == 0`.
+func serialize_da_changes_inner{state_updates: StateUpdateEntry*}(
     update_ptr: DictAccess*, n_updates: felt
 ) {
     if (n_updates == 0) {
@@ -51,10 +105,28 @@ func serialize_da_changes{state_updates: StateUpdateEntry*}(
     if (update_ptr.prev_value == update_ptr.new_value) {
         tempvar state_updates = state_updates;
     } else {
-        assert [state_updates] = StateUpdateEntry(key=update_ptr.key, value=update_ptr.new_value);
-        tempvar state_updates = state_updates + StateUpdateEntry.SIZE;
+        assert state_updates[0] = StateUpdateEntry(key=update_ptr.key, value=update_ptr.new_value);
+        tempvar state_updates = &state_updates[1];
     }
-    return serialize_da_changes(update_ptr=update_ptr + DictAccess.SIZE, n_updates=n_updates - 1);
+    return serialize_da_changes_inner(update_ptr=&update_ptr[1], n_updates=n_updates - 1);
+}
+
+// Helper function for `serialize_da_changes` for the case `full_output == 1`.
+func serialize_da_changes_inner_full{state_updates: FullStateUpdateEntry*}(
+    update_ptr: DictAccess*, n_updates: felt
+) {
+    if (n_updates == 0) {
+        return ();
+    }
+    if (update_ptr.prev_value == update_ptr.new_value) {
+        tempvar state_updates = state_updates;
+    } else {
+        assert state_updates[0] = FullStateUpdateEntry(
+            key=update_ptr.key, prev_value=update_ptr.prev_value, new_value=update_ptr.new_value
+        );
+        tempvar state_updates = &state_updates[1];
+    }
+    return serialize_da_changes_inner_full(update_ptr=&update_ptr[1], n_updates=n_updates - 1);
 }
 
 // Writes the changed values in the contract state into `state_updates_ptr`
@@ -63,7 +135,7 @@ func serialize_da_changes{state_updates: StateUpdateEntry*}(
 //
 // Assumption: The dictionary `contract_state_changes_start` is squashed.
 func output_contract_state{range_check_ptr, state_updates_ptr: felt*}(
-    contract_state_changes_start: DictAccess*, n_contract_state_changes: felt
+    contract_state_changes_start: DictAccess*, n_contract_state_changes: felt, full_output: felt
 ) {
     alloc_locals;
 
@@ -76,6 +148,7 @@ func output_contract_state{range_check_ptr, state_updates_ptr: felt*}(
         output_contract_state_inner(
             n_contract_state_changes=n_contract_state_changes,
             state_changes=contract_state_changes_start,
+            full_output=full_output,
         );
     }
     // Write number of state updates.
@@ -88,7 +161,7 @@ func output_contract_state{range_check_ptr, state_updates_ptr: felt*}(
 //
 // Increases `n_actual_state_changes` by the number of contracts with state changes.
 func output_contract_state_inner{range_check_ptr, state_updates_ptr: felt*, n_actual_state_changes}(
-    n_contract_state_changes: felt, state_changes: DictAccess*
+    n_contract_state_changes: felt, state_changes: DictAccess*, full_output: felt
 ) {
     if (n_contract_state_changes == 0) {
         return ();
@@ -97,6 +170,7 @@ func output_contract_state_inner{range_check_ptr, state_updates_ptr: felt*, n_ac
 
     local prev_state: StateEntry* = cast(state_changes.prev_value, StateEntry*);
     local new_state: StateEntry* = cast(state_changes.new_value, StateEntry*);
+    local prev_state_nonce = prev_state.nonce;
     local new_state_nonce = new_state.nonce;
 
     local storage_dict_start: DictAccess* = prev_state.storage_ptr;
@@ -111,30 +185,35 @@ func output_contract_state_inner{range_check_ptr, state_updates_ptr: felt*, n_ac
     // Class hash.
     local was_class_updated = is_not_zero(prev_state.class_hash - new_state.class_hash);
     const BASE_HEADER_SIZE = 2;
-    if (was_class_updated != 0) {
-        // Write the new class hash.
-        assert contract_header[BASE_HEADER_SIZE] = new_state.class_hash;
+    if (full_output != 0) {
+        // Write the previous and new class hash.
+        assert contract_header[BASE_HEADER_SIZE] = prev_state.class_hash;
+        assert contract_header[BASE_HEADER_SIZE + 1] = new_state.class_hash;
         // The offset of the storage diff from the header.
-        tempvar storage_diff_offset = BASE_HEADER_SIZE + 1;
+        tempvar storage_diff_offset = BASE_HEADER_SIZE + 2;
     } else {
-        tempvar storage_diff_offset = BASE_HEADER_SIZE;
+        if (was_class_updated != 0) {
+            // Write the new class hash.
+            assert contract_header[BASE_HEADER_SIZE] = new_state.class_hash;
+            // The offset of the storage diff from the header.
+            tempvar storage_diff_offset = BASE_HEADER_SIZE + 1;
+        } else {
+            tempvar storage_diff_offset = BASE_HEADER_SIZE;
+        }
     }
 
-    local storage_diff_start: StateUpdateEntry* = cast(
-        contract_header + storage_diff_offset, StateUpdateEntry*
-    );
-    let storage_diff = storage_diff_start;
-    serialize_da_changes{state_updates=storage_diff}(
-        update_ptr=storage_dict_start, n_updates=n_updates
+    let storage_diff: felt* = contract_header + storage_diff_offset;
+    let n_actual_updates = serialize_da_changes{state_updates_ptr=storage_diff}(
+        update_ptr=storage_dict_start, n_updates=n_updates, full_output=full_output
     );
 
-    // Number of actual updates.
-    local n_updates = (storage_diff - storage_diff_start) / StateUpdateEntry.SIZE;
-
-    if (n_updates == 0 and new_state_nonce == prev_state.nonce and was_class_updated == 0) {
+    if (full_output == 0 and n_actual_updates == 0 and new_state_nonce == prev_state_nonce and
+        was_class_updated == 0) {
         // There are no updates for this contract.
         return output_contract_state_inner(
-            n_contract_state_changes=n_contract_state_changes - 1, state_changes=&state_changes[1]
+            n_contract_state_changes=n_contract_state_changes - 1,
+            state_changes=&state_changes[1],
+            full_output=full_output,
         );
     }
 
@@ -144,25 +223,36 @@ func output_contract_state_inner{range_check_ptr, state_updates_ptr: felt*, n_ac
     // Write the second word of the header.
     // Write 'was class update' flag.
     let value = was_class_updated;
-    // Write the nonce.
+    // Write the new nonce.
     assert_nn_le(new_state_nonce, NONCE_BOUND - 1);
     let value = value * NONCE_BOUND + new_state_nonce;
+    // Write the old nonce (if `full_output` is used).
+    if (full_output == 0) {
+        tempvar value = value;
+        tempvar range_check_ptr = range_check_ptr;
+    } else {
+        assert_nn_le(prev_state_nonce, NONCE_BOUND - 1);
+        tempvar value = value * NONCE_BOUND + prev_state_nonce;
+        tempvar range_check_ptr = range_check_ptr;
+    }
     // Write the number of updates.
-    assert_nn_le(n_updates, N_UPDATES_BOUND - 1);
-    let value = value * N_UPDATES_BOUND + n_updates;
+    assert_nn_le(n_actual_updates, N_UPDATES_BOUND - 1);
+    let value = value * N_UPDATES_BOUND + n_actual_updates;
     assert contract_header[1] = value;
 
     let state_updates_ptr = cast(storage_diff, felt*);
     let n_actual_state_changes = n_actual_state_changes + 1;
 
     return output_contract_state_inner(
-        n_contract_state_changes=n_contract_state_changes - 1, state_changes=&state_changes[1]
+        n_contract_state_changes=n_contract_state_changes - 1,
+        state_changes=&state_changes[1],
+        full_output=full_output,
     );
 }
 
 // Serializes changes in the contract class tree into 'state_updates_ptr'.
 func output_contract_class_da_changes{state_updates_ptr: felt*}(
-    update_ptr: DictAccess*, n_updates: felt
+    update_ptr: DictAccess*, n_updates: felt, full_output: felt
 ) {
     alloc_locals;
 
@@ -171,16 +261,14 @@ func output_contract_class_da_changes{state_updates_ptr: felt*}(
     let state_updates_ptr = &state_updates_ptr[1];
 
     // Write the updates.
-    local state_updates: StateUpdateEntry* = cast(state_updates_ptr, StateUpdateEntry*);
-    let state_updates_start = state_updates;
-    with state_updates {
-        serialize_da_changes(update_ptr=update_ptr, n_updates=n_updates);
+    with state_updates_ptr {
+        let n_actual_updates = serialize_da_changes(
+            update_ptr=update_ptr, n_updates=n_updates, full_output=full_output
+        );
     }
-    let state_updates_ptr = cast(state_updates, felt*);
 
     // Write the number of updates.
-    let n_diffs = (state_updates - state_updates_start) / StateUpdateEntry.SIZE;
-    assert n_diffs_output_placeholder = n_diffs;
+    assert n_diffs_output_placeholder = n_actual_updates;
 
     return ();
 }

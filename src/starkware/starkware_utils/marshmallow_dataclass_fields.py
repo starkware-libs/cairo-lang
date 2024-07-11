@@ -311,6 +311,8 @@ nonrequired_optional_metadata: FieldMetadata = additional_metadata(
 )
 nonrequired_list_metadata: FieldMetadata = additional_metadata(load_default=list, required=False)
 
+bytes_as_hex_metadata = additional_metadata(marshmallow_field=BytesAsHex(required=True))
+
 bytes_as_hex_list_metadata = additional_metadata(
     marshmallow_field=mfields.List(BytesAsHex(required=True))
 )

@@ -1,4 +1,12 @@
+from enum import Enum
 from typing import List
+
+
+class SHA256BATCHResources(Enum):
+    STEPS = 11822
+    RANGE_CHECKS = 448
+    BITWISE = 7800
+
 
 IV = [
     0x6A09E667,
@@ -126,3 +134,14 @@ def sha2_compress_function(state: List[int], w: List[int]) -> List[int]:
         (state[6] + g) % 2**32,
         (state[7] + h) % 2**32,
     ]
+
+
+def sha_256_update_state(
+    state: list[int],
+    message: list[int],
+) -> List[int]:
+    """
+    Computes the SHA-256 block compression function.
+    """
+    w = compute_message_schedule(message)
+    return sha2_compress_function(state, w)

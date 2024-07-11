@@ -33,7 +33,7 @@ struct BlockContext {
     deprecated_compiled_class_facts: DeprecatedCompiledClassFact*,
 
     // Information about the block.
-    block_info: BlockInfo*,
+    block_info_for_execute: BlockInfo*,
     // A version of `block_info` that will be returned by the 'get_execution_info'
     // syscall during '__validate__'.
     // Some of the fields, which cannot be used in validate mode, are zeroed out.
@@ -72,7 +72,7 @@ func get_block_context{poseidon_ptr: PoseidonBuiltin*, pedersen_ptr: HashBuiltin
         compiled_class_facts=compiled_class_facts,
         n_deprecated_compiled_class_facts=n_deprecated_compiled_class_facts,
         deprecated_compiled_class_facts=deprecated_compiled_class_facts,
-        block_info=new BlockInfo(
+        block_info_for_execute=new BlockInfo(
             block_number=block_number,
             block_timestamp=block_timestamp,
             sequencer_address=nondet %{ syscall_handler.block_info.sequencer_address %},

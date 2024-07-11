@@ -219,9 +219,9 @@ func hash_blake_or_poseidon{
     }
 }
 
-// A 160 LSB truncated version of blake2s.
+// A 248 LSB truncated version of blake2s.
 // hash:
-//   blake2s(x, y) & ~((1<<96) - 1).
+//   blake2s(x, y) & ((1 << 248) - 1).
 func truncated_blake2s{range_check_ptr, blake2s_ptr: felt*, bitwise_ptr: BitwiseBuiltin*}(
     x: felt, y: felt
 ) -> (res: felt) {
@@ -235,7 +235,7 @@ func truncated_blake2s{range_check_ptr, blake2s_ptr: felt*, bitwise_ptr: Bitwise
     }
     let (hash: Uint256) = blake2s_bigend(data=data_start, n_bytes=64);
 
-    // Truncate hash - convert value to felt, by taking the least significant 160 bits.
-    let (high_h, high_l) = unsigned_div_rem(hash.high, 2 ** 32);
+    // Truncate hash - convert value to felt, by taking the least significant 248 bits.
+    let (high_h, high_l) = unsigned_div_rem(hash.high, 2 ** 120);
     return (res=hash.low + high_l * 2 ** 128);
 }

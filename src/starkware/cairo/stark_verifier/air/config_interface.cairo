@@ -1,15 +1,7 @@
 from starkware.cairo.common.math import assert_in_range
+from starkware.cairo.stark_verifier.air.config_instances import MAX_N_COLUMNS, TracesConfig
 from starkware.cairo.stark_verifier.air.layout import AirWithLayout
-from starkware.cairo.stark_verifier.core.table_commitment import TableCommitmentConfig
 from starkware.cairo.stark_verifier.core.vector_commitment import validate_vector_commitment
-
-const MAX_N_COLUMNS = 128;
-
-// Configuration for the Traces component.
-struct TracesConfig {
-    original: TableCommitmentConfig*,
-    interaction: TableCommitmentConfig*,
-}
 
 // Validates the configuration of the traces.
 // log_eval_domain_size - Log2 of the evaluation domain size.

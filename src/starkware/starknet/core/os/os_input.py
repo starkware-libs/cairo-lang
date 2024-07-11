@@ -44,7 +44,9 @@ class StarknetOsInput(ValidatedMarshmallowDataclass):
     transactions: Sequence[InternalTransaction] = field(
         metadata=dict(marshmallow_field=mfields.List(mfields.Nested(InternalTransactionSchema)))
     )
-    block_hash: int
+    prev_block_hash: int
+    new_block_hash: int
+    full_output: int
 
 
 @dataclasses.dataclass(frozen=True)

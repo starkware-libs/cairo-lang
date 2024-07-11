@@ -21,16 +21,14 @@ py_library(
 )
 
 py_library(
-    name = "state_diff_commitment",
+    name = "block_signature",
     srcs = [
-        "state_diff_commitment.py",
+        "block_signature.py",
     ],
     visibility = ["//visibility:public"],
     deps = [
         ":response_objects",
-        "//src/starkware/cairo/lang/vm:cairo_vm_crypto_lib",
         "//src/starkware/crypto:starkware_crypto_lib",
-        "//src/starkware/starknet/definitions:starknet_definitions_lib",
     ],
 )
 

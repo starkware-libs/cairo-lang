@@ -29,12 +29,19 @@ library CommitmentTreeUpdateOutput {
 
 library StarknetOutput {
     uint256 internal constant MERKLE_UPDATE_OFFSET = 0;
-    uint256 internal constant BLOCK_NUMBER_OFFSET = 2;
-    uint256 internal constant BLOCK_HASH_OFFSET = 3;
-    uint256 internal constant CONFIG_HASH_OFFSET = 4;
-    uint256 internal constant USE_KZG_DA_OFFSET = 5;
-    uint256 internal constant HEADER_SIZE = 6;
-    uint256 internal constant KZG_SEGMENT_SIZE = 5;
+    uint256 internal constant PREV_BLOCK_NUMBER_OFFSET = 2;
+    uint256 internal constant NEW_BLOCK_NUMBER_OFFSET = 3;
+    uint256 internal constant PREV_BLOCK_HASH_OFFSET = 4;
+    uint256 internal constant NEW_BLOCK_HASH_OFFSET = 5;
+    uint256 internal constant OS_PROGRAM_HASH_OFFSET = 6;
+    uint256 internal constant CONFIG_HASH_OFFSET = 7;
+    uint256 internal constant USE_KZG_DA_OFFSET = 8;
+    uint256 internal constant FULL_OUTPUT_OFFSET = 9;
+    uint256 internal constant HEADER_SIZE = 10;
+
+    uint256 internal constant KZG_Z_OFFSET = 0;
+    uint256 internal constant KZG_N_BLOBS_OFFSET = 1;
+    uint256 internal constant KZG_COMMITMENTS_OFFSET = 2;
 
     uint256 constant MESSAGE_TO_L1_FROM_ADDRESS_OFFSET = 0;
     uint256 constant MESSAGE_TO_L1_TO_ADDRESS_OFFSET = 1;
@@ -51,8 +58,27 @@ library StarknetOutput {
     /**
       Returns the offset of the messages segment in the output_data.
     */
-    function messageSegmentOffset(uint256 use_kzg_da) internal pure returns (uint256) {
-        return HEADER_SIZE + (use_kzg_da == 1 ? KZG_SEGMENT_SIZE : 0);
+    function messageSegmentOffset(uint256[] calldata programOutput)
+        internal
+        pure
+        returns (uint256)
+    {
+        if (programOutput[USE_KZG_DA_OFFSET] == 0) {
+            // No KZG info; messages are right after the header.
+            return HEADER_SIZE;
+        }
+
+        uint256 nBlobs = programOutput[HEADER_SIZE + KZG_N_BLOBS_OFFSET];
+        return
+            HEADER_SIZE +
+            // Point z.
+            1 +
+            // Number of blobs.
+            1 +
+            // KZG commitments.
+            (2 * nBlobs) +
+            // Point evaluations.
+            (2 * nBlobs);
     }
 
     /**

@@ -43,3 +43,25 @@ struct PoseidonBuiltin {
     input: PoseidonBuiltinState,
     output: PoseidonBuiltinState,
 }
+
+// Represents a 384-bit unsigned integer d0 + 2**96 * d1 + 2**192 * d2 + 2**288 * d3
+// where each di is in [0, 2**96).
+struct UInt384 {
+    d0: felt,
+    d1: felt,
+    d2: felt,
+    d3: felt,
+}
+
+// Specifies the Add and Mul Mod builtins memory structure.
+struct ModBuiltin {
+    // The modulus.
+    p: UInt384,
+    // A pointer to input values, the intermediate results and the output.
+    values_ptr: UInt384*,
+    // A pointer to offsets inside the values array, defining the circuit.
+    // The offsets array should contain 3 * n elements.
+    offsets_ptr: felt*,
+    // The number of operations to perform.
+    n: felt,
+}

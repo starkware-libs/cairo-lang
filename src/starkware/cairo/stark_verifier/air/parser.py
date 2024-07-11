@@ -8,7 +8,6 @@ from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.vm.air_public_input import PublicInput, extract_z_and_alpha
 from starkware.cairo.stark_verifier.air.utils import public_input_to_cairo
-from starkware.cairo.stark_verifier.core.supported_proof_params import are_parameters_supported
 from starkware.python.math_utils import safe_log2
 from starkware.python.utils import safe_zip
 
@@ -23,30 +22,32 @@ SUPPORTED_LAYOUTS = [
     "starknet_with_keccak",
     "recursive_with_poseidon",
 ]
-ADDITIONAL_IMPORTS = [
-    "starkware.cairo.stark_verifier.air.config.TracesConfig",
+ADDITONAL_IMPORTS_STARK_CONFIG = [
+    "starkware.cairo.stark_verifier.air.config_instances.TracesConfig",
     "starkware.cairo.stark_verifier.air.public_input.PublicInput",
     "starkware.cairo.stark_verifier.air.public_input.SegmentInfo",
     "starkware.cairo.stark_verifier.air.public_memory.ContinuousPageHeader",
-    "starkware.cairo.stark_verifier.air.traces.TracesDecommitment",
-    "starkware.cairo.stark_verifier.air.traces.TracesUnsentCommitment",
-    "starkware.cairo.stark_verifier.air.traces.TracesWitness",
-    "starkware.cairo.stark_verifier.core.config.StarkConfig",
-    "starkware.cairo.stark_verifier.core.fri.config.FriConfig",
-    "starkware.cairo.stark_verifier.core.fri.fri.FriLayerWitness",
-    "starkware.cairo.stark_verifier.core.fri.fri.FriUnsentCommitment",
-    "starkware.cairo.stark_verifier.core.fri.fri.FriWitness",
+    "starkware.cairo.stark_verifier.core.config_instances.StarkConfig",
     "starkware.cairo.stark_verifier.core.proof_of_work.ProofOfWorkConfig",
     "starkware.cairo.stark_verifier.core.proof_of_work.ProofOfWorkUnsentCommitment",
-    "starkware.cairo.stark_verifier.core.stark.StarkProof",
-    "starkware.cairo.stark_verifier.core.stark.StarkUnsentCommitment",
-    "starkware.cairo.stark_verifier.core.stark.StarkWitness",
     "starkware.cairo.stark_verifier.core.table_commitment.TableCommitmentConfig",
     "starkware.cairo.stark_verifier.core.table_commitment.TableCommitmentWitness",
     "starkware.cairo.stark_verifier.core.table_commitment.TableDecommitment",
     "starkware.cairo.stark_verifier.core.vector_commitment.VectorCommitmentConfig",
-    "starkware.cairo.stark_verifier.core.vector_commitment.VectorCommitmentWitness",
+    "starkware.cairo.stark_verifier.core.fri.config.FriConfig",
 ]
+ADDITIONAL_IMPORTS_PARSE_PROOF = [
+    "starkware.cairo.stark_verifier.air.traces.TracesDecommitment",
+    "starkware.cairo.stark_verifier.air.traces.TracesUnsentCommitment",
+    "starkware.cairo.stark_verifier.air.traces.TracesWitness",
+    "starkware.cairo.stark_verifier.core.fri.fri.FriLayerWitness",
+    "starkware.cairo.stark_verifier.core.fri.fri.FriUnsentCommitment",
+    "starkware.cairo.stark_verifier.core.fri.fri.FriWitness",
+    "starkware.cairo.stark_verifier.core.stark.StarkProof",
+    "starkware.cairo.stark_verifier.core.stark.StarkUnsentCommitment",
+    "starkware.cairo.stark_verifier.core.stark.StarkWitness",
+    "starkware.cairo.stark_verifier.core.vector_commitment.VectorCommitmentWitness",
+] + ADDITONAL_IMPORTS_STARK_CONFIG
 
 
 def extract_annotations(annotations: Sequence[str], prefix: str, kind: str) -> List[int]:
@@ -70,13 +71,25 @@ def extract_annotations(annotations: Sequence[str], prefix: str, kind: str) -> L
     return res
 
 
-def parse_proof(identifiers: IdentifierManager, proof_json: dict):
+def parse_proof(
+    identifiers: IdentifierManager,
+    proof_json: dict,
+    only_config: bool = False,
+    extra_params: Optional[dict] = None,
+):
     """
     Generates a Cairo StarkProof struct from a proof JSON.
+    If only_config is True, returns only a StarkConfig struct.
+    extra_params is a dictionary of additional parameters that
+    are not part of the proof JSON public input or available as
+    constants in the Cairo program.
     """
 
     structs = CairoStructFactory(
-        identifiers=identifiers, additional_imports=ADDITIONAL_IMPORTS
+        identifiers=identifiers,
+        additional_imports=(
+            ADDITONAL_IMPORTS_STARK_CONFIG if only_config else ADDITIONAL_IMPORTS_PARSE_PROOF
+        ),
     ).structs
 
     def annotations(prefix: str, kind: str):
@@ -124,33 +137,21 @@ def parse_proof(identifiers: IdentifierManager, proof_json: dict):
         "STARK/FRI/Decommitment/Layer 0/Virtual Oracle/Trace 2"
     )
 
-    assert are_parameters_supported(proof_json["proof_parameters"])
+    # assert are_parameters_supported(proof_json["proof_parameters"])
 
     fri_step_list = proof_json["proof_parameters"]["stark"]["fri"]["fri_step_list"]
     n_fri_layers = len(fri_step_list)
-    fri_witnesses = []
-    for i in range(1, n_fri_layers):
-        leaves = annotations(f"STARK/FRI/Decommitment/Layer {i}", "Field Element")
-        authentications = annotations(f"STARK/FRI/Decommitment/Layer {i}", "Hash")
-        fri_witnesses.append(
-            structs.FriLayerWitness(
-                n_leaves=len(leaves),
-                leaves=leaves,
-                table_witness=structs.TableCommitmentWitness(
-                    vector=structs.VectorCommitmentWitness(
-                        n_authentications=len(authentications),
-                        authentications=authentications,
-                    ),
-                ),
-            )
-        )
 
     # Extract details for config.
     module_name = f"starkware.cairo.stark_verifier.air.layouts.{public_input.layout}.autogenerated"
 
-    def get_dynamic_or_const_value(dynamic_params: Optional[dict], name: str):
+    def get_dynamic_or_const_value(
+        dynamic_params: Optional[dict], name: str, extra_params: Optional[dict]
+    ):
         if dynamic_params is not None and name.lower() in dynamic_params:
             return dynamic_params[name.lower()]
+        if extra_params is not None and name.lower() in extra_params:
+            return extra_params[name.lower()]
         res = identifiers.root.get(
             ScopedName.from_string(f"{module_name}.{name}")
         ).identifier_definition
@@ -160,7 +161,9 @@ def parse_proof(identifiers: IdentifierManager, proof_json: dict):
     # Retrieve the cpu_component_step. Assumes that it exists either in the dynamic params or as
     # a constant in the autogenerated file.
     CPU_COMPONENT_STEP = get_dynamic_or_const_value(
-        dynamic_params=public_input.dynamic_params, name="CPU_COMPONENT_STEP"
+        dynamic_params=public_input.dynamic_params,
+        name="CPU_COMPONENT_STEP",
+        extra_params=extra_params,
     )
     effective_component_height = COMPONENT_HEIGHT * CPU_COMPONENT_STEP
     log_trace_domain_size = safe_log2(effective_component_height * public_input.n_steps)
@@ -186,12 +189,18 @@ def parse_proof(identifiers: IdentifierManager, proof_json: dict):
     # Retrieve the number of columns. Assumes that it exists either in the dynamic params or as
     # a constant in the autogenerated file.
     NUM_COLUMNS_FIRST = get_dynamic_or_const_value(
-        dynamic_params=public_input.dynamic_params, name="NUM_COLUMNS_FIRST"
+        dynamic_params=public_input.dynamic_params,
+        name="NUM_COLUMNS_FIRST",
+        extra_params=extra_params,
     )
     NUM_COLUMNS_SECOND = get_dynamic_or_const_value(
-        dynamic_params=public_input.dynamic_params, name="NUM_COLUMNS_SECOND"
+        dynamic_params=public_input.dynamic_params,
+        name="NUM_COLUMNS_SECOND",
+        extra_params=extra_params,
     )
-    CONSTRAINT_DEGREE = get_dynamic_or_const_value(dynamic_params=None, name="CONSTRAINT_DEGREE")
+    CONSTRAINT_DEGREE = get_dynamic_or_const_value(
+        dynamic_params=None, name="CONSTRAINT_DEGREE", extra_params=extra_params
+    )
 
     # Build the Cairo structs.
     stark_config = structs.StarkConfig(
@@ -250,6 +259,25 @@ def parse_proof(identifiers: IdentifierManager, proof_json: dict):
         log_n_cosets=log_n_cosets,
         n_verifier_friendly_commitment_layers=n_verifier_friendly_commitment_layers,
     )
+    if only_config:
+        return stark_config
+
+    fri_witnesses = []
+    for i in range(1, n_fri_layers):
+        leaves = annotations(f"STARK/FRI/Decommitment/Layer {i}", "Field Element")
+        authentications = annotations(f"STARK/FRI/Decommitment/Layer {i}", "Hash")
+        fri_witnesses.append(
+            structs.FriLayerWitness(
+                n_leaves=len(leaves),
+                leaves=leaves,
+                table_witness=structs.TableCommitmentWitness(
+                    vector=structs.VectorCommitmentWitness(
+                        n_authentications=len(authentications),
+                        authentications=authentications,
+                    ),
+                ),
+            )
+        )
     stark_unsent_commitment = structs.StarkUnsentCommitment(
         traces=structs.TracesUnsentCommitment(
             original=original_commitment_hash,

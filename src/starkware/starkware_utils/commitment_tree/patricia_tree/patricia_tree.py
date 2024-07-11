@@ -1,3 +1,4 @@
+from collections import defaultdict
 from typing import Collection, Dict, List, Optional, Tuple, Type
 
 import marshmallow_dataclass
@@ -8,6 +9,11 @@ from starkware.starkware_utils.commitment_tree.binary_fact_tree import (
     TLeafFact,
 )
 from starkware.starkware_utils.commitment_tree.leaf_fact import LeafFact
+from starkware.starkware_utils.commitment_tree.patricia_tree.fast_patricia_update import (
+    SubTree,
+    TreeContext,
+    fetch_nodes,
+)
 from starkware.starkware_utils.commitment_tree.patricia_tree.fast_patricia_update import (
     update_tree as update_tree_efficiently,
 )
@@ -116,3 +122,28 @@ class PatriciaTree(BinaryFactTree):
             for hash_value in (self.root, other.root)
         ]
         return await self_node.get_diff_between_trees(other=other_node, ffc=ffc, fact_cls=fact_cls)
+
+    async def fetch_witnesses(
+        self, ffc: FactFetchingContext, sorted_leaf_indices: List[int], fact_cls: Type[TLeafFact]
+    ):
+        """
+        Fetches the necessary witnesses from storage to update the tree at the provided leaf
+        indices.
+        """
+        if self.root == EmptyNodeFact.EMPTY_NODE_HASH:
+            # Nothing to fetch.
+            return
+
+        leaf_layer_prefix = 1 << self.height
+        sorted_leaf_full_indices = [leaf_layer_prefix | index for index in sorted_leaf_indices]
+        tree_context = TreeContext.create(
+            height=self.height, leaves=defaultdict(lambda: b""), ffc=ffc
+        )
+
+        await fetch_nodes(
+            subtrees=[SubTree(index=1, root_hash=self.root, leaf_indices=sorted_leaf_full_indices)],
+            context=tree_context,
+            leaf_fact_cls=fact_cls,
+        )
+        # Populate the cache and ignore.
+        await ffc.storage.mget_or_fail(tree_context.leaf_db_keys)

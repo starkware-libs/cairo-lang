@@ -244,9 +244,9 @@ class DeprecatedTransactionExecutionInfo(EverestTransactionExecutionInfo):
             fee_transfer_info=fee_transfer_info,
             actual_fee=self.actual_fee,
             actual_resources=self.actual_resources,
-            tx_type=self.tx_type,
             revert_error=self.revert_error,
             da_gas=None,
+            total_gas=None,
         )
 
     @property

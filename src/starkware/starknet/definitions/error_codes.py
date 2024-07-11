@@ -91,8 +91,10 @@ class StarknetErrorCode(ErrorCode):
     PY_SERDE_ERROR = auto()
     PY_STARKNET_API_ERROR = auto()
     PY_STATE_ERROR = auto()
+    PY_STATEFUL_VALIDATOR_ERROR = auto()
     PY_STORAGE_ERROR = auto()
     PY_TRANSACTION_EXECUTION_ERROR = auto()
+    PY_TRANSACTION_EXECUTOR_ERROR = auto()
     PY_TRANSACTION_PRE_VALIDATION_ERROR = auto()
     VALIDATE_FAILURE = auto()
 

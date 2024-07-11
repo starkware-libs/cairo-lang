@@ -13,6 +13,7 @@ from starkware.cairo.stark_verifier.air.public_memory import (
     get_continuous_pages_product,
     get_page_product,
 )
+from starkware.cairo.stark_verifier.core.config_instances import StarkConfig
 from starkware.cairo.stark_verifier.core.serialize_utils import append_felt, append_felts
 
 struct PublicInput {
@@ -54,7 +55,7 @@ struct SegmentInfo {
 // Computes the hash of the public input, which is used as the initial seed for the Fiat-Shamir
 // heuristic.
 func public_input_hash{range_check_ptr, pedersen_ptr: HashBuiltin*, poseidon_ptr: PoseidonBuiltin*}(
-    air: AirWithLayout*, public_input: PublicInput*
+    air: AirWithLayout*, public_input: PublicInput*, config: StarkConfig*
 ) -> (res: felt) {
     alloc_locals;
 
@@ -70,6 +71,7 @@ func public_input_hash{range_check_ptr, pedersen_ptr: HashBuiltin*, poseidon_ptr
     let (data: felt*) = alloc();
     local data_start: felt* = data;
     with data {
+        append_felt(elem=config.n_verifier_friendly_commitment_layers);
         append_felt(elem=public_input.log_n_steps);
         append_felt(elem=public_input.range_check_min);
         append_felt(elem=public_input.range_check_max);

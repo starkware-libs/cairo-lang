@@ -1,6 +1,7 @@
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.cairo_builtins import BitwiseBuiltin, PoseidonBuiltin
-from starkware.cairo.stark_verifier.air.config import TracesConfig, traces_config_validate
+from starkware.cairo.stark_verifier.air.config_instances import TracesConfig
+from starkware.cairo.stark_verifier.air.config_interface import traces_config_validate
 from starkware.cairo.stark_verifier.air.layout import AirWithLayout
 from starkware.cairo.stark_verifier.air.public_input import PublicInput
 from starkware.cairo.stark_verifier.core.channel import (

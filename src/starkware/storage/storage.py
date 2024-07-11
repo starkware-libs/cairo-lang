@@ -171,15 +171,19 @@ class LargeStorage(Storage, ABC):
         self.prefix = f"files/{prefix}"
 
     @abstractmethod
-    async def set_file(self, file: str, key: bytes):
+    async def set_file(
+        self, file: str, key: bytes, bucket_name: Optional[str] = None
+    ) -> Optional[str]:
         """
         Upload file to large storage.
         """
 
     @abstractmethod
-    async def set_large_file(self, file: str, key: bytes):
+    async def set_large_file(
+        self, file: str, key: bytes, bucket_name: Optional[str] = None
+    ) -> Optional[str]:
         """
-        Upload file to large storage.
+        Upload large file to large storage.
         """
 
     def escape(self, key: bytes) -> str:

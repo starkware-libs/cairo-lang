@@ -45,3 +45,25 @@ class BuiltinInstanceDef:
     def is_used(self) -> bool:
         assert self.ratio is not None, "ratio must be non-dynamic - it must have an integer value."
         return self.ratio != 0
+
+    def get_ratio_den(self) -> int:
+        """
+        Returns 1, as this builtin does not support a fractional ratio.
+        """
+        return 1
+
+
+# Mypy has a problem with dataclasses that contain unimplemented abstract methods.
+# See https://github.com/python/mypy/issues/5374 for details on this problem.
+@dataclasses.dataclass  # type: ignore[misc]
+class BuiltinInstanceDefWithLowRatio(BuiltinInstanceDef):
+    # Some builtins can have ratios smaller than one, which we encode with ratio=1 and
+    # ratio_den = 1/ratio. In other words, the real ratio is ratio/ratio_den, and at least one of
+    # ratio or ratio_den should equal 1.
+    ratio_den: int
+
+    def get_ratio_den(self) -> int:
+        """
+        Returns the denominator of the builtin's ratio.
+        """
+        return self.ratio_den

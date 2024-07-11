@@ -4,6 +4,8 @@ from starkware.cairo.common.segments import relocate_segment
 from starkware.cairo.common.serialize import serialize_word
 from starkware.starknet.core.os.data_availability.commitment import (
     OsKzgCommitmentInfo,
+    Uint256,
+    Uint384,
     compute_os_kzg_commitment_info,
 )
 from starkware.starknet.core.os.state.commitment import CommitmentUpdate
@@ -24,13 +26,19 @@ struct OsOutput {
 // The header of the OS output.
 struct OsOutputHeader {
     state_update_output: CommitmentUpdate*,
-    block_number: felt,
+    prev_block_number: felt,
+    new_block_number: felt,
+    prev_block_hash: felt,
     // Currently, the block hash is not enforced by the OS.
-    block_hash: felt,
+    new_block_hash: felt,
+    // The hash of the OS program, if the aggregator was used. Zero if the OS was used directly.
+    os_program_hash: felt,
     starknet_os_config_hash: felt,
     // Indicates whether to use KZG commitment scheme instead of adding the data-availability to
     // the transaction data.
     use_kzg_da: felt,
+    // Indicates whether previous state values are included in the state update information.
+    full_output: felt,
 }
 
 // An L2 to L1 message header, the message payload is concatenated to the end of the header.
@@ -65,6 +73,7 @@ func serialize_os_output{range_check_ptr, poseidon_ptr: PoseidonBuiltin*, output
     alloc_locals;
 
     local use_kzg_da = os_output.header.use_kzg_da;
+    local full_output = os_output.header.full_output;
 
     // Compute the data availability segment.
     local state_updates_start: felt*;
@@ -82,12 +91,14 @@ func serialize_os_output{range_check_ptr, poseidon_ptr: PoseidonBuiltin*, output
         output_contract_state(
             contract_state_changes_start=squashed_os_state_update.contract_state_changes,
             n_contract_state_changes=squashed_os_state_update.n_contract_state_changes,
+            full_output=full_output,
         );
 
         // Output the contract class diff.
         output_contract_class_da_changes(
             update_ptr=squashed_os_state_update.contract_class_changes,
             n_updates=squashed_os_state_update.n_class_updates,
+            full_output=full_output,
         );
     }
 
@@ -139,10 +150,14 @@ func serialize_output_header{output_ptr: felt*}(os_output_header: OsOutputHeader
     // Serialize roots.
     serialize_word(os_output_header.state_update_output.initial_root);
     serialize_word(os_output_header.state_update_output.final_root);
-    serialize_word(os_output_header.block_number);
-    serialize_word(os_output_header.block_hash);
+    serialize_word(os_output_header.prev_block_number);
+    serialize_word(os_output_header.new_block_number);
+    serialize_word(os_output_header.prev_block_hash);
+    serialize_word(os_output_header.new_block_hash);
+    serialize_word(os_output_header.os_program_hash);
     serialize_word(os_output_header.starknet_os_config_hash);
     serialize_word(os_output_header.use_kzg_da);
+    serialize_word(os_output_header.full_output);
 
     return ();
 }
@@ -177,8 +192,21 @@ func serialize_messages{output_ptr: felt*}(
 func serialize_os_kzg_commitment_info{output_ptr: felt*}(
     os_kzg_commitment_info: OsKzgCommitmentInfo*
 ) {
-    assert [cast(output_ptr, OsKzgCommitmentInfo*)] = [os_kzg_commitment_info];
-    let output_ptr = output_ptr + OsKzgCommitmentInfo.SIZE;
+    alloc_locals;
+    local n_blobs = os_kzg_commitment_info.n_blobs;
+
+    static_assert OsKzgCommitmentInfo.SIZE == 4;
+
+    serialize_word(os_kzg_commitment_info.z);
+    serialize_word(n_blobs);
+
+    // Relocate 'kzg_commitments' to the correct place in the output segment.
+    relocate_segment(src_ptr=os_kzg_commitment_info.kzg_commitments, dest_ptr=output_ptr);
+    let output_ptr: felt* = &os_kzg_commitment_info.kzg_commitments[n_blobs];
+
+    // Relocate 'evals' to the correct place in the output segment.
+    relocate_segment(src_ptr=os_kzg_commitment_info.evals, dest_ptr=output_ptr);
+    let output_ptr: felt* = &os_kzg_commitment_info.evals[n_blobs];
 
     return ();
 }
@@ -194,34 +222,36 @@ func serialize_data_availability{output_ptr: felt*}(
 
     %{
         from starkware.python.math_utils import div_ceil
-        onchain_data_start = ids.da_start
-        onchain_data_size = ids.output_ptr - onchain_data_start
 
-        max_page_size = 3800
-        n_pages = div_ceil(onchain_data_size, max_page_size)
-        for i in range(n_pages):
-            start_offset = i * max_page_size
-            output_builtin.add_page(
-                page_id=1 + i,
-                page_start=onchain_data_start + start_offset,
-                page_size=min(onchain_data_size - start_offset, max_page_size),
-            )
-        # Set the tree structure to a root with two children:
-        # * A leaf which represents the main part
-        # * An inner node for the onchain data part (which contains n_pages children).
-        #
-        # This is encoded using the following sequence:
-        output_builtin.add_attribute('gps_fact_topology', [
-            # Push 1 + n_pages pages (all of the pages).
-            1 + n_pages,
-            # Create a parent node for the last n_pages.
-            n_pages,
-            # Don't push additional pages.
-            0,
-            # Take the first page (the main part) and the node that was created (onchain data)
-            # and use them to construct the root of the fact tree.
-            2,
-        ])
+        if __serialize_data_availability_create_pages__:
+            onchain_data_start = ids.da_start
+            onchain_data_size = ids.output_ptr - onchain_data_start
+
+            max_page_size = 3800
+            n_pages = div_ceil(onchain_data_size, max_page_size)
+            for i in range(n_pages):
+                start_offset = i * max_page_size
+                output_builtin.add_page(
+                    page_id=1 + i,
+                    page_start=onchain_data_start + start_offset,
+                    page_size=min(onchain_data_size - start_offset, max_page_size),
+                )
+            # Set the tree structure to a root with two children:
+            # * A leaf which represents the main part
+            # * An inner node for the onchain data part (which contains n_pages children).
+            #
+            # This is encoded using the following sequence:
+            output_builtin.add_attribute('gps_fact_topology', [
+                # Push 1 + n_pages pages (all of the pages).
+                1 + n_pages,
+                # Create a parent node for the last n_pages.
+                n_pages,
+                # Don't push additional pages.
+                0,
+                # Take the first page (the main part) and the node that was created (onchain data)
+                # and use them to construct the root of the fact tree.
+                2,
+            ])
     %}
 
     return ();

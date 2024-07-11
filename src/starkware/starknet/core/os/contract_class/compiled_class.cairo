@@ -316,11 +316,12 @@ func load_compiled_class_facts{poseidon_ptr: PoseidonBuiltin*, range_check_ptr}(
     %}
 
     let (builtin_costs: felt*) = alloc();
-    assert builtin_costs[0] = 0;
-    assert builtin_costs[1] = 0;
-    assert builtin_costs[2] = 0;
-    assert builtin_costs[3] = 0;
-    assert builtin_costs[4] = 0;
+    assert builtin_costs[0] = 0;  // Pedersen
+    assert builtin_costs[1] = 0;  // Bitwise
+    assert builtin_costs[2] = 0;  // EcOp
+    assert builtin_costs[3] = 0;  // Poseidon
+    assert builtin_costs[4] = 0;  // AddMod
+    assert builtin_costs[5] = 0;  // MulMod
 
     load_compiled_class_facts_inner(
         n_compiled_class_facts=n_compiled_class_facts,

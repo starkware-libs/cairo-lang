@@ -237,6 +237,9 @@ func execute_deploy_syscall{
             ec_op=selectable_builtins.ec_op,
             poseidon=selectable_builtins.poseidon,
             segment_arena=selectable_builtins.segment_arena,
+            range_check96=selectable_builtins.range_check96,
+            add_mod=selectable_builtins.add_mod,
+            mul_mod=selectable_builtins.mul_mod,
         ),
         non_selectable=builtin_ptrs.non_selectable,
     );
@@ -546,7 +549,7 @@ func execute_deprecated_syscalls{
 
     if (selector == GET_SEQUENCER_ADDRESS_SELECTOR) {
         assert [cast(syscall_ptr, GetSequencerAddress*)].response = GetSequencerAddressResponse(
-            sequencer_address=block_context.block_info.sequencer_address
+            sequencer_address=execution_context.execution_info.block_info.sequencer_address
         );
         %{ exit_syscall(selector=ids.GET_SEQUENCER_ADDRESS_SELECTOR) %}
         return execute_deprecated_syscalls(
@@ -572,7 +575,7 @@ func execute_deprecated_syscalls{
 
     if (selector == GET_BLOCK_TIMESTAMP_SELECTOR) {
         assert [cast(syscall_ptr, GetBlockTimestamp*)].response = GetBlockTimestampResponse(
-            block_timestamp=block_context.block_info.block_timestamp
+            block_timestamp=execution_context.execution_info.block_info.block_timestamp
         );
         %{ exit_syscall(selector=ids.GET_BLOCK_TIMESTAMP_SELECTOR) %}
         return execute_deprecated_syscalls(
@@ -585,7 +588,7 @@ func execute_deprecated_syscalls{
 
     if (selector == GET_BLOCK_NUMBER_SELECTOR) {
         assert [cast(syscall_ptr, GetBlockNumber*)].response = GetBlockNumberResponse(
-            block_number=block_context.block_info.block_number
+            block_number=execution_context.execution_info.block_info.block_number
         );
         %{ exit_syscall(selector=ids.GET_BLOCK_NUMBER_SELECTOR) %}
         return execute_deprecated_syscalls(

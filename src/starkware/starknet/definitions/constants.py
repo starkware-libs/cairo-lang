@@ -2,7 +2,7 @@ import dataclasses
 import json
 from enum import Enum
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Union
 
 from starkware.crypto.signature.signature import FIELD_PRIME
 from starkware.python.utils import from_bytes
@@ -53,6 +53,7 @@ MAX_MESSAGE_TO_L1_LENGTH = 100
 MAX_PRICE_PER_UNIT_BITS = 128
 MAX_PRICE_PER_UNIT_LOWER_BOUND = 0
 MAX_PRICE_PER_UNIT_UPPER_BOUND = 2**MAX_PRICE_PER_UNIT_BITS
+MAX_STATE_DIFF_LENGTH = 2**64
 NONCE_LOWER_BOUND = 0
 NONCE_UPPER_BOUND = 2**NONCE_BITS
 SIERRA_ARRAY_LEN_BOUND = 2**32
@@ -67,7 +68,6 @@ TRANSACTION_VERSION_UPPER_BOUND = FIELD_SIZE
 ADDRESS_LOWER_BOUND = 0
 ADDRESS_UPPER_BOUND = 2**ADDRESS_BITS
 UNINITIALIZED_CLASS_HASH = bytes(HASH_BYTES)
-
 
 # In order to identify transactions from unsupported versions.
 DEPRECATED_TRANSACTION_VERSION = 1
@@ -87,7 +87,7 @@ DEPRECATED_OLD_DECLARE_VERSIONS = (
 )
 
 # Sierra -> Casm compilation version.
-SIERRA_VERSION = [1, 5, 0]
+SIERRA_VERSION = [1, 6, 0]
 # Contract classes with sierra version older than MIN_SIERRA_VERSION are not supported.
 MIN_SIERRA_VERSION = [1, 1, 0]
 
@@ -104,7 +104,7 @@ GLOBAL_STATE_VERSION = from_bytes(b"STARKNET_STATE_V0")
 COMPILED_CLASS_VERSION = from_bytes(b"COMPILED_CLASS_V1")
 
 # State diff commitment.
-BLOCK_SIGNATURE_VERSION = 0
+BLOCK_SIGNATURE_VERSION = 1
 
 # OS-related constants.
 L1_TO_L2_MSG_HEADER_SIZE = 5
@@ -142,15 +142,65 @@ VALIDATE_BLOCK_NUMBER_ROUNDING = 100
 VALIDATE_TIMESTAMP_ROUNDING = 3600
 
 
+class ResourceCost:
+    def __init__(self, numer: int, denom: int):
+        assert numer >= 0 and denom > 0
+        self.numer = numer
+        self.denom = denom
+
+    def __mul__(self, other: Union[int, "ResourceCost"]) -> "ResourceCost":
+        if isinstance(other, int):
+            return ResourceCost(numer=self.numer * other, denom=self.denom)
+        return ResourceCost(numer=self.numer * other.numer, denom=self.denom * other.denom)
+
+    def __rmul__(self, other: Union[int, "ResourceCost"]) -> "ResourceCost":
+        return self * other
+
+    def __add__(self, other: Union[int, "ResourceCost"]) -> "ResourceCost":
+        if isinstance(other, int):
+            return self + ResourceCost(numer=other, denom=1)
+        return ResourceCost(
+            numer=self.numer * other.denom + self.denom * other.numer,
+            denom=self.denom * other.denom,
+        )
+
+    def __radd__(self, other: Union[int, "ResourceCost"]) -> "ResourceCost":
+        return self + other
+
+    def __lt__(self, other: "ResourceCost") -> bool:
+        return self.numer * other.denom < self.denom * other.numer
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ResourceCost):
+            return NotImplemented
+        return self.numer * other.denom == self.denom * other.numer
+
+    def __gt__(self, other: "ResourceCost") -> bool:
+        return not (self == other or self < other)
+
+    def floor(self) -> int:
+        return self.numer // self.denom
+
+    def ceil(self) -> int:
+        return -(-self.numer // self.denom)
+
+
 class OsOutputConstant(Enum):
     MERKLE_UPDATE_OFFSET = 0
-    BLOCK_NUMBER_OFFSET = 2
-    BLOCK_HASH_OFFSET = 3
-    CONFIG_HASH_OFFSET = 4
-    USE_KZG_DA_OFFSET = 5
-    HEADER_SIZE = 6
-    # Two Uint256 and one felt.
-    KZG_SEGMENT_SIZE = 5
+    PREV_BLOCK_NUMBER_OFFSET = 2
+    NEW_BLOCK_NUMBER_OFFSET = 3
+    PREV_BLOCK_HASH_OFFSET = 4
+    NEW_BLOCK_HASH_OFFSET = 5
+    OS_PROGRAM_HASH_OFFSET = 6
+    CONFIG_HASH_OFFSET = 7
+    USE_KZG_DA_OFFSET = 8
+    FULL_OUTPUT_OFFSET = 9
+    HEADER_SIZE = 10
+
+    # KZG segment relative offsets.
+    KZG_Z_OFFSET = 0
+    KZG_N_BLOBS_OFFSET = 1
+    KZG_COMMITMENTS_OFFSET = 2
 
 
 class GasCost(Enum):
@@ -160,6 +210,7 @@ class GasCost(Enum):
 
     STEP = 100
     RANGE_CHECK = 70
+    BITWISE_BUILTIN = 594
     MEMORY_HOLE = 10
     INITIAL = (10**8) * STEP
 
@@ -193,6 +244,9 @@ class GasCost(Enum):
 
     KECCAK = SYSCALL_BASE
     KECCAK_ROUND_COST = 180000
+    SHA256_PROCESS_BLOCK = (
+        1115 * BITWISE_BUILTIN + 65 * RANGE_CHECK + 1852 * STEP + 1 * SYSCALL_BASE
+    )
     LIBRARY_CALL = CALL_CONTRACT
     REPLACE_CLASS = SYSCALL_BASE + 50 * STEP
     STORAGE_READ = SYSCALL_BASE + 50 * STEP
@@ -222,9 +276,13 @@ class ThinVersionedConstants:
     max_calldata_length: int
     max_contract_bytecode_size: int
 
-    cairo_resource_fee_weights: Dict[str, float]
+    cairo_resource_fee_weights: Dict[str, ResourceCost]
 
-    l2_resource_gas_costs: Dict[str, int]
+    l2_resource_gas_costs: Dict[str, "ResourceCost"]
+
+    # Os kzg commitment info.
+    kzg_commitment_n_steps: int
+    kzg_commitment_builtin_instance_counter: Dict[str, int]
 
     @classmethod
     def create(cls):
@@ -238,9 +296,35 @@ class ThinVersionedConstants:
             max_contract_bytecode_size=versioned_constants_json["gateway"][
                 "max_contract_bytecode_size"
             ],
-            cairo_resource_fee_weights=versioned_constants_json["vm_resource_fee_cost"],
-            l2_resource_gas_costs=versioned_constants_json["l2_resource_gas_costs"],
+            cairo_resource_fee_weights={
+                key: ResourceCost(numer=val[0], denom=val[1])
+                for key, val in versioned_constants_json["vm_resource_fee_cost"].items()
+            },
+            l2_resource_gas_costs={
+                key: ResourceCost(numer=val[0], denom=val[1])
+                for key, val in versioned_constants_json["l2_resource_gas_costs"].items()
+            },
+            kzg_commitment_n_steps=versioned_constants_json["os_resources"][
+                "compute_os_kzg_commitment_info"
+            ]["n_steps"],
+            kzg_commitment_builtin_instance_counter=versioned_constants_json["os_resources"][
+                "compute_os_kzg_commitment_info"
+            ]["builtin_instance_counter"],
         )
 
 
 VERSIONED_CONSTANTS = ThinVersionedConstants.create()
+
+BUILTIN_INSTANCE_SIZES = {
+    "pedersen": 3,
+    "range_check": 1,
+    "ecdsa": 2,
+    "bitwise": 5,
+    "ec_op": 7,
+    "poseidon": 6,
+    "segment_arena": 3,
+    "range_check96": 1,
+    "add_mod": 7,
+    "mul_mod": 7,
+    "keccak": 16,
+}

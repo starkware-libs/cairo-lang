@@ -1,9 +1,9 @@
 load("//src/starkware/cairo/lang:cairo_rules.bzl", "cairo_binary", "cairo_library")
 
 cairo_library(
-    name = "bootloader_lib",
+    name = "run_bootloader_lib",
     srcs = [
-        "bootloader.cairo",
+        "run_bootloader.cairo",
         "//src/starkware/cairo/bootloaders/simple_bootloader:execute_task.cairo",
         "//src/starkware/cairo/bootloaders/simple_bootloader:run_simple_bootloader.cairo",
         "//src/starkware/cairo/builtin_selection:inner_select_builtins.cairo",
@@ -22,8 +22,17 @@ cairo_library(
         "//src/starkware/cairo/common:memcpy.cairo",
         "//src/starkware/cairo/common:poseidon_state.cairo",
         "//src/starkware/cairo/common:registers.cairo",
+        "//src/starkware/cairo/common:sha256_state.cairo",
         "//src/starkware/cairo/lang/compiler/lib:registers.cairo",
     ],
+)
+
+cairo_library(
+    name = "bootloader_lib",
+    srcs = [
+        "bootloader.cairo",
+    ],
+    deps = [":run_bootloader_lib"],
 )
 
 cairo_binary(

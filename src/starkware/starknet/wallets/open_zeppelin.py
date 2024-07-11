@@ -355,7 +355,7 @@ differently.
     ) -> DeprecatedInvokeFunction:
         account_address, private_key = self._get_account_address_and_private_key(dry_run=dry_run)
         return OpenZeppelinSigner.sign_deprecated_invoke_tx(
-            signer_address=account_address,
+            sender_address=account_address,
             private_key=private_key,
             call_function=CallFunction(
                 contract_address=contract_address, entry_point_selector=selector, calldata=calldata

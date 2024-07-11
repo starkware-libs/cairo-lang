@@ -41,6 +41,8 @@ py_library(
     visibility = ["//visibility:public"],
     deps = [
         get_from_cairo_lang("//src/starkware/cairo/lang:cairo_constants_lib"),
-        get_from_cairo_lang("//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib"),
+        get_from_cairo_lang(
+            "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",
+        ),
     ],
 )

@@ -27,6 +27,15 @@ class OutputBuiltinRunner(BuiltinRunner):
         self._base = runner.segments.add()
         self.stop_ptr: Optional[RelocatableValue] = None
 
+    def get_needed_number_allocated_zeros(self) -> int:
+        return 0
+
+    def set_address_allocated_zeros(self, addr: RelocatableValue):
+        raise NotImplementedError(
+            f"set_address_allocated_zeros should not be called when needed number of allocated"
+            + "zeros is 0."
+        )
+
     @property
     def base(self) -> RelocatableValue:
         assert self._base is not None, "Uninitialized self.base."
@@ -157,7 +166,7 @@ class OutputBuiltinRunner(BuiltinRunner):
 
         Usage example:
           old_state = output_builtin_runner.get_state()
-          output_builtin_runner.clear_state()
+          output_builtin_runner.new_state()
 
           # Call inner program.
 

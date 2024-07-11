@@ -19,6 +19,7 @@ const SECP256R1_GET_XY_SELECTOR = 'Secp256r1GetXy';
 const SECP256R1_MUL_SELECTOR = 'Secp256r1Mul';
 const SECP256R1_NEW_SELECTOR = 'Secp256r1New';
 const KECCAK_SELECTOR = 'Keccak';
+const SHA256_PROCESS_BLOCK_SELECTOR = 'Sha256ProcessBlock';
 const LIBRARY_CALL_SELECTOR = 'LibraryCall';
 const REPLACE_CLASS_SELECTOR = 'ReplaceClass';
 const SEND_MESSAGE_TO_L1_SELECTOR = 'SendMessageToL1';
@@ -167,6 +168,11 @@ struct KeccakRequest {
     input_end: felt*,
 }
 
+struct Sha256ProcessBlockRequest {
+    state_ptr: felt*,
+    input_start: felt*,
+}
+
 struct SecpAddRequest {
     p0: EcPoint*,
     p1: EcPoint*,
@@ -253,6 +259,10 @@ struct DeployResponse {
 struct KeccakResponse {
     result_low: felt,
     result_high: felt,
+}
+
+struct Sha256ProcessBlockResponse {
+    state_ptr: felt*,
 }
 
 struct SecpGetXyResponse {

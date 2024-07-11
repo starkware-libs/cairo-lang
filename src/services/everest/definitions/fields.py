@@ -13,7 +13,11 @@ from starkware.python.utils import initialize_random
 from starkware.starkware_utils.error_handling import StarkErrorCode
 from starkware.starkware_utils.field_validators import validate_non_negative
 from starkware.starkware_utils.marshmallow_dataclass_fields import StrictRequiredInteger
-from starkware.starkware_utils.validated_fields import RangeValidatedField, ValidatedField
+from starkware.starkware_utils.validated_fields import (
+    OptionalField,
+    RangeValidatedField,
+    ValidatedField,
+)
 
 # Fields data: validation data, dataclass metadata.
 tx_id_marshmallow_field = StrictRequiredInteger(validate=validate_non_negative("tx_id"))
@@ -74,6 +78,8 @@ EthAddressIntField = RangeValidatedField(
     formatter=None,
 )
 
+EthAddressHexField = dataclasses.replace(EthAddressIntField, formatter=hex)
+
 FeltField = RangeValidatedField(
     lower_bound=0,
     upper_bound=FIELD_PRIME,
@@ -81,6 +87,8 @@ FeltField = RangeValidatedField(
     error_code=StarkErrorCode.OUT_OF_RANGE_FIELD_ELEMENT,
     formatter=hex,
 )
+
+OptionalFeltField = OptionalField(field=FeltField, none_probability=0)
 
 felt_as_hex_list_metadata = dict(marshmallow_field=mfields.List(FeltField.get_marshmallow_field()))
 

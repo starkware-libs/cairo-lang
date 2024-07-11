@@ -383,13 +383,13 @@ class TypeSystemVisitor(IdentifierAwareVisitor):
         return result_expr, cairo_type
 
     def visit_ExprNewOperator(self, expr: ExprNewOperator) -> Tuple[ExprNewOperator, CairoType]:
+        if not expr.is_typed:
+            return expr, TypeFelt(location=expr.location)
+
         inner_expr, inner_expr_type = self.visit(expr.expr)
-        expr_type = (
-            TypePointer(pointee=inner_expr_type, location=expr.location)
-            if expr.is_typed
-            else TypeFelt(location=expr.location)
-        )
-        return ExprNewOperator(expr=inner_expr, is_typed=False, location=expr.location), expr_type
+        return ExprNewOperator(
+            expr=inner_expr, is_typed=False, location=expr.location
+        ), TypePointer(pointee=inner_expr_type, location=expr.location)
 
 
 def simplify_type_system(

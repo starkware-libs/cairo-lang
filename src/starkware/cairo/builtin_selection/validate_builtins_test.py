@@ -39,6 +39,7 @@ def test_validate_builtins(old_builtins, new_builtins, builtin_instance_sizes, e
         name="range_check",
         included=True,
         ratio=None,
+        ratio_den=1,
         inner_rc_bound=2**16,
         n_parts=small_instance.builtins["range_check"].n_parts,
     )

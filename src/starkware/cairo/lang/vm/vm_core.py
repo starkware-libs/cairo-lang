@@ -104,6 +104,7 @@ class VirtualMachine(VirtualMachineBase):
         static_locals: Optional[Dict[str, Any]] = None,
         builtin_runners: Optional[Dict[str, BuiltinRunner]] = None,
         program_base: Optional[MaybeRelocatable] = None,
+        enable_instruction_trace: bool = True,
     ):
         """
         See documentation in VirtualMachineBase.
@@ -131,7 +132,9 @@ class VirtualMachine(VirtualMachineBase):
             program_base + i for i in range(len(self.program.data))
         }
 
-        self.trace: List[TraceEntry[MaybeRelocatable]] = []
+        self._trace: Optional[List[TraceEntry[MaybeRelocatable]]] = (
+            [] if enable_instruction_trace else None
+        )
 
         # Current step.
         self.current_step = 0
@@ -139,6 +142,14 @@ class VirtualMachine(VirtualMachineBase):
         # This flag can be set to true by hints to avoid the execution of the current step in
         # step() (so that only the hint will be performed, but nothing else will happen).
         self.skip_instruction_execution = False
+
+        # Set this flag to False to avoid tracking register values each instruction.
+        self.enable_instruction_trace = enable_instruction_trace
+
+    @property
+    def trace(self) -> List[TraceEntry[MaybeRelocatable]]:
+        assert self._trace is not None, "Trace is disabled."
+        return self._trace
 
     def update_registers(self, instruction: Instruction, operands: Operands):
         # Update fp.
@@ -424,13 +435,14 @@ class VirtualMachine(VirtualMachineBase):
             raise self.as_vm_exception(exc) from None
 
         # Write to trace.
-        self.trace.append(
-            TraceEntry(
-                pc=self.run_context.pc,
-                ap=self.run_context.ap,
-                fp=self.run_context.fp,
+        if self.enable_instruction_trace:
+            self.trace.append(
+                TraceEntry(
+                    pc=self.run_context.pc,
+                    ap=self.run_context.ap,
+                    fp=self.run_context.fp,
+                )
             )
-        )
 
         self.accessed_addresses.update(operands_mem_addresses)
         self.accessed_addresses.add(self.run_context.pc)

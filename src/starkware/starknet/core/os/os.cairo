@@ -1,4 +1,4 @@
-%builtins output pedersen range_check ecdsa bitwise ec_op keccak poseidon
+%builtins output pedersen range_check ecdsa bitwise ec_op keccak poseidon range_check96 add_mod mul_mod
 
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.bool import FALSE
@@ -6,6 +6,7 @@ from starkware.cairo.common.cairo_builtins import (
     BitwiseBuiltin,
     HashBuiltin,
     KeccakBuiltin,
+    ModBuiltin,
     PoseidonBuiltin,
 )
 from starkware.cairo.common.dict import dict_new, dict_update
@@ -43,6 +44,9 @@ func main{
     ec_op_ptr,
     keccak_ptr: KeccakBuiltin*,
     poseidon_ptr: PoseidonBuiltin*,
+    range_check96_ptr: felt*,
+    add_mod_ptr: ModBuiltin*,
+    mul_mod_ptr: ModBuiltin*,
 }() {
     alloc_locals;
 
@@ -120,20 +124,38 @@ func main{
     }
     let pedersen_ptr = hash_ptr;
 
-    // Guess whether to use KZG commitment scheme.
-    local use_kzg_da = nondet %{ syscall_handler.block_info.use_kzg_da %};
+    // Guess whether to use KZG commitment scheme and whether to output the full state.
+    local use_kzg_da = nondet %{
+        syscall_handler.block_info.use_kzg_da and (
+            not os_input.full_output
+        )
+    %};
+    local full_output = nondet %{ os_input.full_output %};
+
+    // Verify that the guessed values are 0 or 1.
+    assert use_kzg_da * use_kzg_da = use_kzg_da;
+    assert full_output * full_output = full_output;
 
     // Serialize OS output.
+
+    %{
+        __serialize_data_availability_create_pages__ = True
+        kzg_manager = execution_helper.kzg_manager
+    %}
 
     // Currently, the block hash is not enforced by the OS.
     serialize_os_output(
         os_output=new OsOutput(
             header=new OsOutputHeader(
                 state_update_output=state_update_output,
-                block_number=block_context.block_info.block_number,
-                block_hash=nondet %{ os_input.block_hash %},
+                prev_block_number=block_context.block_info_for_execute.block_number - 1,
+                new_block_number=block_context.block_info_for_execute.block_number,
+                prev_block_hash=nondet %{ os_input.prev_block_hash %},
+                new_block_hash=nondet %{ os_input.new_block_hash %},
+                os_program_hash=0,
                 starknet_os_config_hash=starknet_os_config_hash,
                 use_kzg_da=use_kzg_da,
+                full_output=full_output,
             ),
             squashed_os_state_update=squashed_os_state_update,
             initial_carried_outputs=initial_carried_outputs,
@@ -182,7 +204,8 @@ func write_block_number_to_block_hash_mapping{range_check_ptr, contract_state_ch
     block_context: BlockContext*
 ) {
     alloc_locals;
-    tempvar old_block_number = block_context.block_info.block_number - STORED_BLOCK_HASH_BUFFER;
+    tempvar old_block_number = block_context.block_info_for_execute.block_number -
+        STORED_BLOCK_HASH_BUFFER;
     let is_old_block_number_non_negative = is_nn(old_block_number);
     if (is_old_block_number_non_negative == FALSE) {
         // Not enough blocks in the system - nothing to write.

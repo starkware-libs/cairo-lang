@@ -324,7 +324,7 @@ class SignerBase(ABC):
     @classmethod
     def sign_deprecated_invoke_tx(
         cls,
-        signer_address: int,
+        sender_address: int,
         private_key: Optional[int],
         call_function: CallFunction,
         chain_id: int,
@@ -338,7 +338,7 @@ class SignerBase(ABC):
         function.
         """
         return cls.sign_deprecated_multicall_tx(
-            signer_address=signer_address,
+            sender_address=sender_address,
             private_key=private_key,
             call_functions=[call_function],
             chain_id=chain_id,
@@ -350,7 +350,7 @@ class SignerBase(ABC):
     @classmethod
     def sign_deprecated_multicall_tx(
         cls,
-        signer_address: int,
+        sender_address: int,
         private_key: Optional[int],
         call_functions: List[CallFunction],
         chain_id: int,
@@ -366,7 +366,7 @@ class SignerBase(ABC):
         multicall_calldata = cls.format_multicall_calldata(calls=call_functions)
         hash_value = deprecated_calculate_invoke_transaction_hash(
             version=version,
-            sender_address=signer_address,
+            sender_address=sender_address,
             entry_point_selector=None,
             calldata=multicall_calldata,
             max_fee=max_fee,
@@ -375,7 +375,7 @@ class SignerBase(ABC):
         )
 
         return DeprecatedInvokeFunction(
-            sender_address=signer_address,
+            sender_address=sender_address,
             calldata=multicall_calldata,
             max_fee=max_fee,
             nonce=nonce,
@@ -434,7 +434,7 @@ class SignerBase(ABC):
             salt=salt,
             class_hash=class_hash,
             constructor_calldata=constructor_calldata,
-            deployer_address=account_address,
+            deployer_address=0 if deploy_from_zero else account_address,
         )
         deploy_from_zero_felt = 1 if deploy_from_zero else 0
         deploy_contract_calldata = [
@@ -475,7 +475,7 @@ class SignerBase(ABC):
             salt=salt,
         )
         deploy_tx = cls.sign_deprecated_invoke_tx(
-            signer_address=account_address,
+            sender_address=account_address,
             private_key=private_key,
             call_function=CallFunction(
                 contract_address=account_address,

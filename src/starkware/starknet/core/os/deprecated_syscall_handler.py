@@ -120,17 +120,9 @@ class DeprecatedSysCallHandlerBase(ABC):
         self._read_and_validate_syscall_request(
             syscall_name="get_block_number", syscall_ptr=syscall_ptr
         )
-
-        if self._is_validate_execution_mode():
-            # Round down block number for validate.
-            block_number_for_validate = (
-                self.block_info.block_number // constants.VALIDATE_BLOCK_NUMBER_ROUNDING
-            ) * constants.VALIDATE_BLOCK_NUMBER_ROUNDING
-            block_number = block_number_for_validate
-        else:
-            block_number = self.block_info.block_number
-
-        response = self.syscall_structs.GetBlockNumberResponse(block_number=block_number)
+        response = self.syscall_structs.GetBlockNumberResponse(
+            block_number=self._get_block_number()
+        )
         self._write_syscall_response(
             syscall_name="GetBlockNumber", response=response, syscall_ptr=syscall_ptr
         )
@@ -143,14 +135,8 @@ class DeprecatedSysCallHandlerBase(ABC):
             syscall_name="get_sequencer_address", syscall_ptr=syscall_ptr
         )
 
-        self._verify_execution_mode(syscall_name="get_sequencer_address")
-
         response = self.syscall_structs.GetSequencerAddressResponse(
-            sequencer_address=(
-                0
-                if self.block_info.sequencer_address is None
-                else self.block_info.sequencer_address
-            )
+            sequencer_address=self._get_sequencer_address()
         )
         self._write_syscall_response(
             syscall_name="GetSequencerAddress", response=response, syscall_ptr=syscall_ptr
@@ -177,17 +163,9 @@ class DeprecatedSysCallHandlerBase(ABC):
         self._read_and_validate_syscall_request(
             syscall_name="get_block_timestamp", syscall_ptr=syscall_ptr
         )
-
-        if self._is_validate_execution_mode():
-            # Round down block timestamp for validate.
-            block_timestamp_for_validate = (
-                self.block_info.block_timestamp // constants.VALIDATE_TIMESTAMP_ROUNDING
-            ) * constants.VALIDATE_TIMESTAMP_ROUNDING
-            block_timestamp = block_timestamp_for_validate
-        else:
-            block_timestamp = self.block_info.block_timestamp
-
-        response = self.syscall_structs.GetBlockTimestampResponse(block_timestamp=block_timestamp)
+        response = self.syscall_structs.GetBlockTimestampResponse(
+            block_timestamp=self._get_block_timestamp()
+        )
         self._write_syscall_response(
             syscall_name="GetBlockTimestamp", response=response, syscall_ptr=syscall_ptr
         )
@@ -257,6 +235,24 @@ class DeprecatedSysCallHandlerBase(ABC):
     # Private helpers.
 
     @abstractmethod
+    def _get_block_number(self) -> int:
+        """
+        Returns the block number.
+        """
+
+    @abstractmethod
+    def _get_block_timestamp(self) -> int:
+        """
+        Returns the block timestamp.
+        """
+
+    @abstractmethod
+    def _get_sequencer_address(self) -> int:
+        """
+        Returns the block sequencer address.
+        """
+
+    @abstractmethod
     def _get_tx_info_ptr(self):
         """
         Returns a pointer to the TxInfo struct.
@@ -323,24 +319,6 @@ class DeprecatedSysCallHandlerBase(ABC):
         self._write_syscall_response(
             syscall_name="CallContract", response=response, syscall_ptr=syscall_ptr
         )
-
-    def _verify_execution_mode(self, syscall_name: str):
-        stark_assert(
-            not self._is_validate_execution_mode(),
-            code=StarknetErrorCode.UNAUTHORIZED_ACTION_ON_VALIDATE,
-            message=(
-                f"Unauthorized syscall {syscall_name} "
-                f"in execution mode {ExecutionMode.VALIDATE.name}."
-            ),
-        )
-
-    def _is_validate_execution_mode(self) -> bool:
-        """
-        Returns False if there is no execution mode, for example when self is
-        DeprecatedOsSysCallHandler.
-        Returns True if the current execution mode is ExecutionMode.VALIDATE.
-        """
-        return False
 
     @abstractmethod
     def _get_caller_address(self, syscall_ptr: RelocatableValue) -> int:
@@ -690,6 +668,29 @@ class DeprecatedBlSyscallHandler(DeprecatedSysCallHandlerBase):
         # Update messages count.
         self.tx_execution_context.n_sent_messages += 1
 
+    def _get_block_number(self) -> int:
+        if self._is_validate_execution_mode():
+            # Round down block number for validate.
+            return (
+                self.block_info.block_number // constants.VALIDATE_BLOCK_NUMBER_ROUNDING
+            ) * constants.VALIDATE_BLOCK_NUMBER_ROUNDING
+
+        return self.block_info.block_number
+
+    def _get_block_timestamp(self) -> int:
+        if self._is_validate_execution_mode():
+            # Round down block timestamp for validate.
+            return (
+                self.block_info.block_timestamp // constants.VALIDATE_TIMESTAMP_ROUNDING
+            ) * constants.VALIDATE_TIMESTAMP_ROUNDING
+
+        return self.block_info.block_timestamp
+
+    def _get_sequencer_address(self) -> int:
+        self._verify_execution_mode(syscall_name="get_sequencer_address")
+
+        return 0 if self.block_info.sequencer_address is None else self.block_info.sequencer_address
+
     def _get_caller_address(self, syscall_ptr: RelocatableValue) -> int:
         self._read_and_validate_syscall_request(
             syscall_name="get_caller_address", syscall_ptr=syscall_ptr
@@ -717,11 +718,6 @@ class DeprecatedBlSyscallHandler(DeprecatedSysCallHandlerBase):
         return self.starknet_storage.read(address=address)
 
     def _storage_write(self, address: int, value: int):
-        # Read the value before the write operation in order to log it in the read_values list.
-        # This value is needed to create the DictAccess while executing the corresponding
-        # storage_write system call.
-        self.starknet_storage.read(address=address)
-
         self.starknet_storage.write(address=address, value=value)
 
     def validate_read_only_segments(self, runner: CairoFunctionRunner):
@@ -760,19 +756,23 @@ class DeprecatedBlSyscallHandler(DeprecatedSysCallHandlerBase):
         """
         return self.tx_execution_context.execution_mode is ExecutionMode.VALIDATE
 
+    def _verify_execution_mode(self, syscall_name: str):
+        stark_assert(
+            not self._is_validate_execution_mode(),
+            code=StarknetErrorCode.UNAUTHORIZED_ACTION_ON_VALIDATE,
+            message=(
+                f"Unauthorized syscall {syscall_name} "
+                f"in execution mode {ExecutionMode.VALIDATE.name}."
+            ),
+        )
+
 
 class DeprecatedOsSysCallHandler(DeprecatedSysCallHandlerBase):
     """
     The SysCallHandler implementation that is used by the gps ambassador.
     """
 
-    def __init__(
-        self,
-        execution_helper: OsExecutionHelper,
-        block_info: BlockInfo,
-        # Note that a non-optional segments must be set before using the SysCallHandler.
-        segments: Optional[MemorySegmentManager] = None,
-    ):
+    def __init__(self, execution_helper: OsExecutionHelper, block_info: BlockInfo):
         super().__init__(block_info=block_info, segments=execution_helper.os_logger.segments)
         self.execution_helper = execution_helper
         self.syscall_counter: Dict[str, int] = {}
@@ -806,6 +806,15 @@ class DeprecatedOsSysCallHandler(DeprecatedSysCallHandlerBase):
         next(self.execution_helper.result_iterator)
         return next(self.execution_helper.deployed_contracts_iterator)
 
+    def _get_block_number(self) -> int:
+        return self.execution_helper.call_cairo_execution_info.block_info.block_number
+
+    def _get_block_timestamp(self) -> int:
+        return self.execution_helper.call_cairo_execution_info.block_info.block_timestamp
+
+    def _get_sequencer_address(self) -> int:
+        return self.execution_helper.call_cairo_execution_info.block_info.sequencer_address
+
     def _get_caller_address(self, syscall_ptr: RelocatableValue) -> int:
         return self.execution_helper.call_info.caller_address
 
@@ -823,6 +832,4 @@ class DeprecatedOsSysCallHandler(DeprecatedSysCallHandlerBase):
         return next(self.execution_helper.execute_code_read_iterator)
 
     def _storage_write(self, address: int, value: int):
-        # Advance execute_code_read_iterators since the previous storage value is written
-        # in each write operation. See DeprecatedBlSyscallHandler._storage_write().
-        next(self.execution_helper.execute_code_read_iterator)
+        return

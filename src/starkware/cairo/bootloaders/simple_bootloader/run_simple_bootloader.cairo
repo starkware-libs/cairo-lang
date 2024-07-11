@@ -20,6 +20,8 @@ func run_simple_bootloader{
     keccak_ptr,
     poseidon_ptr: PoseidonBuiltin*,
     range_check96_ptr,
+    add_mod_ptr,
+    mul_mod_ptr,
 }() {
     alloc_locals;
     local task_range_check_ptr;
@@ -51,6 +53,8 @@ func run_simple_bootloader{
         keccak=keccak_ptr,
         poseidon=cast(poseidon_ptr, felt),
         range_check96=range_check96_ptr,
+        add_mod=add_mod_ptr,
+        mul_mod=mul_mod_ptr,
     );
 
     // A struct containing the encoding of each builtin.
@@ -64,6 +68,8 @@ func run_simple_bootloader{
         keccak='keccak',
         poseidon='poseidon',
         range_check96='range_check96',
+        add_mod='add_mod',
+        mul_mod='mul_mod',
     );
 
     local builtin_instance_sizes: BuiltinData = BuiltinData(
@@ -76,6 +82,8 @@ func run_simple_bootloader{
         keccak=16,
         poseidon=6,
         range_check96=1,
+        add_mod=7,
+        mul_mod=7,
     );
 
     // Call execute_tasks.
@@ -106,6 +114,8 @@ func run_simple_bootloader{
     let keccak_ptr = builtin_ptrs.keccak;
     let poseidon_ptr = cast(builtin_ptrs.poseidon, PoseidonBuiltin*);
     let range_check96_ptr = builtin_ptrs.range_check96;
+    let add_mod_ptr = builtin_ptrs.add_mod;
+    let mul_mod_ptr = builtin_ptrs.mul_mod;
 
     // 'execute_tasks' runs untrusted code and uses the range_check builtin to verify that
     // the builtin pointers were advanced correctly by said code.

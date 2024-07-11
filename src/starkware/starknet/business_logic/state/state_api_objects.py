@@ -17,6 +17,7 @@ from starkware.starknet.definitions.general_config import (
     DEFAULT_USE_KZG_DA,
 )
 from starkware.starkware_utils.error_handling import stark_assert_eq, stark_assert_le
+from starkware.starkware_utils.serializable_dataclass import SerializableMarshmallowDataclass
 from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
 
 
@@ -57,7 +58,7 @@ def rename_old_gas_price_fields(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
-class ResourcePrice:
+class ResourcePrice(SerializableMarshmallowDataclass):
     price_in_wei: int = field(metadata=fields.gas_price_metadata)
     price_in_fri: int = field(metadata=fields.gas_price_metadata)
 
@@ -91,7 +92,7 @@ class BlockInfo(ValidatedMarshmallowDataclass):
     # The sequencer address of this block.
     sequencer_address: Optional[int] = field(metadata=fields.optional_sequencer_address_metadata)
 
-    # The version of Starknet system (e.g., "0.13.1").
+    # The version of Starknet system (e.g., "0.13.2").
     starknet_version: Optional[str] = field(metadata=fields.starknet_version_metadata)
 
     # Indicates whether to use KZG commitment scheme for the block's Data Avilability.

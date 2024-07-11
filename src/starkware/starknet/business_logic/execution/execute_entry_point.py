@@ -616,7 +616,7 @@ def clean_leaks(
         del runner.vm.validated_memory
         del runner.vm.accessed_addresses
         del runner.vm.hint_pc_and_index
-        del runner.vm.trace
+        del runner.vm._trace
         del runner.vm.builtin_runners
         del runner.vm.run_context.memory
         del runner.vm.run_context

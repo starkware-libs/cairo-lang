@@ -8,6 +8,11 @@ cairo_library(
         "compiled_class.cairo",
         "deprecated_compiled_class.cairo",
     ],
+    hint_deps = [
+        ":compiled_class_hash_objects",
+        ":starknet_os_abi_lib",
+        "//src/starkware/python:starkware_python_utils_lib",
+    ],
     deps = [
         "//src/starkware/cairo/common:cairo_common_cairo_lib",
     ],

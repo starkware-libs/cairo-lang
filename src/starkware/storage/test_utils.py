@@ -1,9 +1,16 @@
 import asyncio
 import hashlib
 from contextlib import contextmanager
-from typing import Dict, Optional, Sequence, Tuple
+from typing import Mapping, Optional, Sequence, Tuple
 
-from starkware.storage.storage import HASH_BYTES, LockError, LockManager, LockObject, Storage
+from starkware.storage.storage import (
+    HASH_BYTES,
+    LargeStorage,
+    LockError,
+    LockManager,
+    LockObject,
+    Storage,
+)
 
 
 def hash_func(left: bytes, right: bytes) -> bytes:
@@ -76,7 +83,7 @@ class MockStorage(Storage):
         assert isinstance(key, bytes)
         return self.db.get(key, None)
 
-    async def mset(self, updates: Dict[bytes, bytes]):
+    async def mset(self, updates: Mapping[bytes, bytes]):
         self.db.update(updates)
 
     async def mget(self, keys: Sequence[bytes]) -> Tuple[Optional[bytes], ...]:
@@ -116,6 +123,30 @@ class DelayedStorage(Storage):
     async def del_value(self, key: bytes):
         await asyncio.sleep(self.write_delay)
         await self.storage.del_value(key)
+
+
+class MockLargeStorage(MockStorage, LargeStorage):
+    def __init__(self, bucket_name: str, prefix: str):
+        LargeStorage.__init__(self, bucket_name, prefix)
+        MockStorage.__init__(self)
+
+    async def set_file(
+        self, file: str, key: bytes, bucket_name: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        Mock implementation of uploading a file to large storage.
+        Reads the file content and stores it in the mock database.
+        """
+        with open(file, "rb") as f:
+            file_content = f.read()
+
+        self.db[key] = file_content
+        return "true"
+
+    async def set_large_file(
+        self, file: str, key: bytes, bucket_name: Optional[str] = None
+    ) -> Optional[str]:
+        return await self.set_file(file, key, bucket_name)
 
 
 def check_time(t0, min_t, max_t):

@@ -37,6 +37,9 @@ SUPPORTED_BUILTINS = [
     "ec_op",
     "poseidon",
     "segment_arena",
+    "range_check96",
+    "add_mod",
+    "mul_mod",
 ]
 
 # Utilites.

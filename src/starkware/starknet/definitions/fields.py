@@ -10,6 +10,7 @@ import marshmallow_dataclass
 
 from services.everest.definitions import fields as everest_fields
 from starkware.cairo.lang.tracer.tracer_data import field_element_repr
+from starkware.crypto.signature.signature import EC_ORDER
 from starkware.python.utils import from_bytes
 from starkware.starknet.definitions import constants
 from starkware.starknet.definitions.data_availability_mode import DataAvailabilityMode
@@ -17,6 +18,7 @@ from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.execution_mode import ExecutionMode
 from starkware.starknet.definitions.l1_da_mode import L1DaMode
 from starkware.starknet.definitions.transaction_type import TransactionType
+from starkware.starkware_utils.error_handling import StarkErrorCode
 from starkware.starkware_utils.field_validators import (
     validate_equal,
     validate_max_length,
@@ -480,13 +482,13 @@ def validate_resource_bounds(resource_bounds: ResourceBoundsMapping) -> bool:
     return True
 
 
-resource_bounds_mapping_metadata = dict(
-    marshmallow_field=mfields.Dict(
-        keys=EnumField(enum_cls=Resource),
-        values=mfields.Nested(ResourceBounds.Schema),
-        validate=validate_resource_bounds,
-    )
+resource_bounds_marshmallow_field = mfields.Dict(
+    keys=EnumField(enum_cls=Resource),
+    values=mfields.Nested(ResourceBounds.Schema),
+    validate=validate_resource_bounds,
 )
+
+resource_bounds_mapping_metadata = dict(marshmallow_field=resource_bounds_marshmallow_field)
 
 account_deployment_data_metadata = felt_as_hex_bounded_list_metadata_empty_list
 
@@ -704,6 +706,14 @@ state_diff_declared_classes_metadata = dict(
     )
 )
 
+StateDiffLengthField = RangeValidatedField(
+    lower_bound=0,
+    upper_bound=constants.MAX_STATE_DIFF_LENGTH,
+    name="State diff length",
+    error_code=StarknetErrorCode.OUT_OF_RANGE_BLOCK_HASH,
+    formatter=None,
+)
+OptionalStateDiffLengthField = OptionalField(field=StateDiffLengthField, none_probability=0)
 
 # State diff commitment.
 
@@ -722,3 +732,11 @@ ec_signature_metadata = dict(
 )
 
 public_key_metadata = everest_fields.FeltField.metadata(field_name="public key", required=True)
+
+PrivateKeyField = RangeValidatedField(
+    lower_bound=1,
+    upper_bound=EC_ORDER,
+    name="Private key",
+    error_code=StarkErrorCode.OUT_OF_RANGE_PRIVATE_KEY,
+    formatter=hex,
+)

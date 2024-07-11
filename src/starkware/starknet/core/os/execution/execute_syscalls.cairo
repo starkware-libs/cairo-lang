@@ -43,6 +43,7 @@ from starkware.cairo.common.secp256r1.ec import (
     try_get_point_from_x as secp256r1_try_get_point_from_x,
 )
 from starkware.cairo.common.segments import relocate_segment
+from starkware.cairo.common.sha256_state import Sha256Input, Sha256ProcessBlock, Sha256State
 from starkware.cairo.common.uint256 import Uint256, assert_uint256_lt, uint256_lt
 from starkware.starknet.common.new_syscalls import (
     CALL_CONTRACT_SELECTOR,
@@ -64,6 +65,7 @@ from starkware.starknet.common.new_syscalls import (
     SECP256R1_MUL_SELECTOR,
     SECP256R1_NEW_SELECTOR,
     SEND_MESSAGE_TO_L1_SELECTOR,
+    SHA256_PROCESS_BLOCK_SELECTOR,
     STORAGE_READ_SELECTOR,
     STORAGE_WRITE_SELECTOR,
     CallContractRequest,
@@ -99,6 +101,8 @@ from starkware.starknet.common.new_syscalls import (
     SecpGetXyRequest,
     SecpGetXyResponse,
     SendMessageToL1Request,
+    Sha256ProcessBlockRequest,
+    Sha256ProcessBlockResponse,
     StorageReadRequest,
     StorageReadResponse,
     StorageWriteRequest,
@@ -138,6 +142,7 @@ from starkware.starknet.core.os.constants import (
     SECP256R1_MUL_GAS_COST,
     SECP256R1_NEW_GAS_COST,
     SEND_MESSAGE_TO_L1_GAS_COST,
+    SHA256_PROCESS_BLOCK_GAS_COST,
     STORAGE_READ_GAS_COST,
     STORAGE_WRITE_GAS_COST,
     STORED_BLOCK_HASH_BUFFER,
@@ -294,6 +299,16 @@ func execute_syscalls{
     if (selector == KECCAK_SELECTOR) {
         execute_keccak();
         %{ exit_syscall(selector=ids.KECCAK_SELECTOR) %}
+        return execute_syscalls(
+            block_context=block_context,
+            execution_context=execution_context,
+            syscall_ptr_end=syscall_ptr_end,
+        );
+    }
+
+    if (selector == SHA256_PROCESS_BLOCK_SELECTOR) {
+        execute_sha256_process_block();
+        %{ exit_syscall(selector=ids.SHA256_PROCESS_BLOCK_SELECTOR) %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -609,6 +624,9 @@ func execute_deploy{
             ec_op=selectable_builtins.ec_op,
             poseidon=selectable_builtins.poseidon,
             segment_arena=selectable_builtins.segment_arena,
+            range_check96=selectable_builtins.range_check96,
+            add_mod=selectable_builtins.add_mod,
+            mul_mod=selectable_builtins.mul_mod,
         ),
         non_selectable=builtin_ptrs.non_selectable,
     );
@@ -791,7 +809,7 @@ func execute_get_block_hash{
 
     // Handle out of range block number.
     let request_block_number = request.block_number;
-    let current_block_number = block_context.block_info.block_number;
+    let current_block_number = block_context.block_info_for_execute.block_number;
 
     // A block number is a u64. STORED_BLOCK_HASH_BUFFER is 10.
     // The following computations will not overflow.
@@ -943,6 +961,7 @@ func execute_keccak{
     }
 
     let selectable_builtins = &builtin_ptrs.selectable;
+    let non_selectable_builtins = &builtin_ptrs.non_selectable;
     let bitwise_ptr = selectable_builtins.bitwise;
     let keccak_ptr = builtin_ptrs.non_selectable.keccak;
     with bitwise_ptr, keccak_ptr {
@@ -963,8 +982,63 @@ func execute_keccak{
             ec_op=selectable_builtins.ec_op,
             poseidon=selectable_builtins.poseidon,
             segment_arena=selectable_builtins.segment_arena,
+            range_check96=selectable_builtins.range_check96,
+            add_mod=selectable_builtins.add_mod,
+            mul_mod=selectable_builtins.mul_mod,
         ),
-        non_selectable=NonSelectableBuiltins(keccak=keccak_ptr),
+        non_selectable=NonSelectableBuiltins(
+            keccak=keccak_ptr, sha256=non_selectable_builtins.sha256
+        ),
+    );
+    return ();
+}
+
+// Executes the sha256_process_block system call.
+func execute_sha256_process_block{
+    range_check_ptr, builtin_ptrs: BuiltinPointers*, syscall_ptr: felt*, outputs: OsCarriedOutputs*
+}() {
+    alloc_locals;
+
+    let request = cast(syscall_ptr + RequestHeader.SIZE, Sha256ProcessBlockRequest*);
+
+    // Reduce gas.
+    let (success, remaining_gas) = reduce_syscall_base_gas(
+        specific_base_gas_cost=SHA256_PROCESS_BLOCK_GAS_COST,
+        request_struct_size=Sha256ProcessBlockRequest.SIZE,
+    );
+
+    if (success == 0) {
+        // Not enough gas to execute the syscall.
+        return ();
+    }
+
+    // Gas reduction has succeeded and the request is valid; write the response header.
+    let response_header = cast(syscall_ptr, ResponseHeader*);
+    // Advance syscall pointer to the response body.
+    let syscall_ptr = syscall_ptr + ResponseHeader.SIZE;
+    assert [response_header] = ResponseHeader(gas=remaining_gas, failure_flag=0);
+
+    local sha256_ptr: Sha256ProcessBlock* = builtin_ptrs.non_selectable.sha256;
+
+    let input = cast(sha256_ptr, Sha256Input*);
+    assert [input] = [cast(request.input_start, Sha256Input*)];
+
+    let state = cast(sha256_ptr + Sha256Input.SIZE, Sha256State*);
+    assert [state] = [cast(request.state_ptr, Sha256State*)];
+
+    let res = sha256_ptr + Sha256Input.SIZE + Sha256State.SIZE;
+    let sha256_ptr = sha256_ptr + Sha256ProcessBlock.SIZE;
+
+    assert [cast(syscall_ptr, Sha256ProcessBlockResponse*)] = Sha256ProcessBlockResponse(
+        state_ptr=res
+    );
+    let syscall_ptr = syscall_ptr + Sha256ProcessBlockResponse.SIZE;
+
+    tempvar builtin_ptrs = new BuiltinPointers(
+        selectable=builtin_ptrs.selectable,
+        non_selectable=NonSelectableBuiltins(
+            keccak=builtin_ptrs.non_selectable.keccak, sha256=sha256_ptr
+        ),
     );
     return ();
 }

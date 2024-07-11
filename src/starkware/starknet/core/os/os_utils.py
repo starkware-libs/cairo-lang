@@ -1,8 +1,10 @@
+import dataclasses
 from typing import List, Tuple
 
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
+from starkware.python.utils import blockify
 from starkware.starknet.core.os import segment_utils
 from starkware.starknet.core.os.deprecated_syscall_handler import DeprecatedBlSyscallHandler
 from starkware.starknet.core.os.syscall_handler import BusinessLogicSyscallHandler
@@ -21,6 +23,48 @@ PointEvaluation = Tuple[int, int]
 
 # 48bytes (as Uint384), split into low and high parts, each of 192 bits.
 KzgCommitment = Tuple[int, int]
+
+
+@dataclasses.dataclass(frozen=True)
+class OsKzgCommitmentInfo:
+    """
+    Corresponds to the Cairo struct.
+    """
+
+    z: Point
+    n_blobs: int
+    kzg_commitments: List[KzgCommitment]
+    evals: List[PointEvaluation]
+
+    @property
+    def flat_size(self) -> int:
+        # z, n_blobs, *kzg_commitments, *evals.
+        return 1 + 1 + 2 * 2 * self.n_blobs
+
+    @classmethod
+    def from_flat(cls, array: List[int]) -> "OsKzgCommitmentInfo":
+        n_blobs = array[OsOutputConstant.KZG_N_BLOBS_OFFSET.value]
+
+        commitments_offset = OsOutputConstant.KZG_COMMITMENTS_OFFSET.value
+        evals_offset = commitments_offset + n_blobs * 2
+
+        return cls(
+            z=array[OsOutputConstant.KZG_Z_OFFSET.value],
+            n_blobs=n_blobs,
+            kzg_commitments=[
+                (low, high)
+                for low, high in blockify(array[commitments_offset:evals_offset], chunk_size=2)
+            ],
+            evals=[
+                (low, high)
+                for low, high in blockify(
+                    array[evals_offset : evals_offset + n_blobs * 2], chunk_size=2
+                )
+            ],
+        )
+
+    def __post_init__(self):
+        assert len(self.kzg_commitments) == len(self.evals) == self.n_blobs, "Inconsistent lengths."
 
 
 def update_builtin_pointers(
@@ -159,7 +203,7 @@ def validate_and_process_os_context_for_version0_class(
     syscall_handler.post_run(runner=runner, syscall_stop_ptr=syscall_stop_ptr)
 
 
-def extract_kzg_segment(program_output: List[int]) -> Tuple[KzgCommitment, Point, PointEvaluation]:
+def extract_kzg_segment(program_output: List[int]) -> OsKzgCommitmentInfo:
     """
     Returns the KZG-related fields out of the given Starknet OS program output.
     """
@@ -167,9 +211,4 @@ def extract_kzg_segment(program_output: List[int]) -> Tuple[KzgCommitment, Point
         program_output[OsOutputConstant.USE_KZG_DA_OFFSET.value] == 1
     ), "A blob was attached but the KZG flag is off."
 
-    kzg_segment = program_output[
-        OsOutputConstant.HEADER_SIZE.value : OsOutputConstant.HEADER_SIZE.value
-        + OsOutputConstant.KZG_SEGMENT_SIZE.value
-    ]
-
-    return (kzg_segment[0], kzg_segment[1]), kzg_segment[2], (kzg_segment[3], kzg_segment[4])
+    return OsKzgCommitmentInfo.from_flat(array=program_output[OsOutputConstant.HEADER_SIZE.value :])

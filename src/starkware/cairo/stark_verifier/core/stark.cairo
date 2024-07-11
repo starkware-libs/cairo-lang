@@ -2,12 +2,12 @@ from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.cairo_blake2s.blake2s import finalize_blake2s
 from starkware.cairo.common.cairo_builtins import BitwiseBuiltin, PoseidonBuiltin
 from starkware.cairo.common.hash import HashBuiltin
+from starkware.cairo.stark_verifier.air.config_instances import TracesConfig
 from starkware.cairo.stark_verifier.core.air_interface import (
     AirInstance,
     OodsEvaluationInfo,
     PublicInput,
     TracesCommitment,
-    TracesConfig,
     TracesDecommitment,
     TracesUnsentCommitment,
     TracesWitness,
@@ -27,11 +27,11 @@ from starkware.cairo.stark_verifier.core.channel import (
     read_felt_vector_from_prover,
 )
 from starkware.cairo.stark_verifier.core.config import (
-    StarkConfig,
     StarkDomains,
     stark_config_validate,
     stark_domains_create,
 )
+from starkware.cairo.stark_verifier.core.config_instances import StarkConfig
 from starkware.cairo.stark_verifier.core.fri.fri import (
     FriCommitment,
     FriConfig,
@@ -163,7 +163,7 @@ func verify_stark_proof{
     local blake2s_ptr_start: felt* = blake2s_ptr;
 
     // Compute the initial hash seed for the Fiat-Shamir channel.
-    let (digest) = public_input_hash(air=air, public_input=proof.public_input);
+    let (digest) = public_input_hash(air=air, public_input=proof.public_input, config=config);
 
     // Construct the channel.
     let (channel: Channel) = channel_new(digest=digest);

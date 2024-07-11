@@ -1,8 +1,8 @@
 {
     "name": "cairo",
-    "displayName": "Cairo",
+    "displayName": "CairoZero",
     "description": "Support Cairo syntax",
-    "version": "0.13.1",
+    "version": "0.13.2",
     "engines": {
         "vscode": "^1.30.0"
     },
@@ -12,6 +12,7 @@
     "categories": [
         "Programming Languages"
     ],
+    "icon": "icon.png",
     "activationEvents": [
         "onLanguage:cairo"
     ],
@@ -27,6 +28,10 @@
                 "extensions": [
                     ".cairo"
                 ],
+                "icon": {
+                    "light": "icon.png",
+                    "dark": "icon.png"
+                },
                 "configuration": "./language-configuration.json"
             }
         ],
@@ -75,8 +80,9 @@
         "postinstall": "node ./node_modules/vscode/bin/install"
     },
     "devDependencies": {
+        "@types/node": "^8.10.25",
+        "esbuild": "^0.21.5",
         "typescript": "^3.1.4",
-        "vscode": "^1.1.25",
-        "@types/node": "^8.10.25"
+        "vscode": "^1.1.25"
     }
 }

@@ -1,27 +1,51 @@
 import json
+from typing import Any, Callable, Optional
 
 from starkware.cairo.bootloaders.hash_program import compute_program_hash_chain
 from starkware.cairo.lang.compiler.program import Program
 
 
-def run_generate_hash_test(fix: bool, program_path: str, hash_path: str, command: str):
+def run_generate_hash_test(
+    fix: bool,
+    program_path: str,
+    hash_path: str,
+    command: str,
+    post_process: Optional[Callable[[Any], Any]] = None,
+):
+    """
+    Compares the JSON content of 'hash_path' with the program hash of the given program.
+    If post_process is given, it may add additional fields to the expected JSON.
+    """
     compiled_program = Program.Schema().load(json.load(open(program_path)))
     program_hash = hex(compute_program_hash_chain(program=compiled_program, use_poseidon=False))
     program_hash_key = "program_hash"
 
+    expected_json = {program_hash_key: program_hash}
+    if post_process is not None:
+        expected_json = post_process(expected_json)
+
     if fix:
         with open(hash_path, "w") as fp:
-            fp.write(json.dumps({program_hash_key: program_hash}, indent=4) + "\n")
+            fp.write(json.dumps(expected_json, indent=4) + "\n")
         return
 
-    expected_hash = json.load(open(hash_path))[program_hash_key]
-    assert expected_hash == program_hash, (
-        f"Wrong program hash in program_hash.json. Found: {program_hash}. "
-        f"Expected: {expected_hash}. Please run {command}."
+    with open(hash_path) as fp:
+        actual_json = json.load(fp)
+    assert expected_json == actual_json, (
+        "Wrong value in program_hash.json. Found:\n"
+        f"{json.dumps(actual_json, indent=4)}\n"
+        "Expected:\n"
+        f"{json.dumps(expected_json, indent=4)}\n"
+        f"Please run {command}."
     )
 
 
-def program_hash_test_main(program_path: str, hash_path: str, command: str):
+def program_hash_test_main(
+    program_path: str,
+    hash_path: str,
+    command: str,
+    post_process: Optional[Callable[[Any], Any]] = None,
+):
     import argparse
 
     parser = argparse.ArgumentParser(description="Create or test the program hash.")
@@ -29,5 +53,9 @@ def program_hash_test_main(program_path: str, hash_path: str, command: str):
 
     args = parser.parse_args()
     run_generate_hash_test(
-        fix=args.fix, program_path=program_path, hash_path=hash_path, command=command
+        fix=args.fix,
+        program_path=program_path,
+        hash_path=hash_path,
+        command=command,
+        post_process=post_process,
     )

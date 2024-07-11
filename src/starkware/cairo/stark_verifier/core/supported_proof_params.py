@@ -6,7 +6,7 @@ def are_parameters_supported(proof_parameters: dict):
     if proof_parameters["channel_hash"] != "poseidon3":
         return False
 
-    if proof_parameters["commitment_hash"] != "blake256_masked160_lsb":
+    if proof_parameters["commitment_hash"] != "blake256_masked248_lsb":
         return False
 
     if proof_parameters["field"] != "PrimeField0":

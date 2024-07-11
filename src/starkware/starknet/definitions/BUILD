@@ -10,6 +10,7 @@ exports_files([
 py_library(
     name = "starknet_definitions_lib",
     srcs = [
+        "blockifier_types.py",
         "constants.py",
         "data_availability_mode.py",
         "error_codes.py",
@@ -17,7 +18,6 @@ py_library(
         "fields.py",
         "l1_da_mode.py",
         "transaction_type.py",
-        "types.py",
     ],
     data = ["versioned_constants.json"],
     visibility = ["//visibility:public"],
@@ -53,6 +53,7 @@ py_library(
         "//src/starkware/python:starkware_python_utils_lib",
         "//src/starkware/starkware_utils:starkware_config_utils_lib",
         "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
+        requirement("marshmallow"),
         requirement("marshmallow_dataclass"),
     ],
 )
