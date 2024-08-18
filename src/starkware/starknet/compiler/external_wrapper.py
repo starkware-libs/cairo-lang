@@ -45,7 +45,7 @@ from starkware.starknet.compiler.data_encoder import (
 )
 from starkware.starknet.definitions import constants
 from starkware.starknet.public.abi import DEFAULT_ENTRY_POINT_NAME, DEFAULT_L1_ENTRY_POINT_NAME
-from starkware.starknet.services.api.contract_class.contract_class import SUPPORTED_BUILTINS
+from starkware.starknet.services.api.contract_class.contract_class import CAIRO0_SUPPORTED_BUILTINS
 
 RAW_INPUT_DECORATOR = "raw_input"
 RAW_OUTPUT_DECORATOR = "raw_output"
@@ -67,7 +67,7 @@ SUPPORTED_DECORATORS = ENTRY_POINT_DECORATORS | {RAW_INPUT_DECORATOR, RAW_OUTPUT
 WRAPPER_SCOPE = ScopedName.from_string("__wrappers__")
 
 BUILTIN_PTR_TO_BUILTIN = {
-    f"{builtin_name}_ptr": builtin_name for builtin_name in SUPPORTED_BUILTINS
+    f"{builtin_name}_ptr": builtin_name for builtin_name in CAIRO0_SUPPORTED_BUILTINS
 }
 
 
@@ -330,9 +330,12 @@ class PreExternalWrapperVisitor(Visitor):
 
     def get_collected_builtins(self):
         """
-        Returns the builtins collected from the external functions, ordered by SUPPORTED_BUILTINS.
+        Returns the builtins collected from the external functions, ordered by
+        CAIRO0_SUPPORTED_BUILTINS.
         """
-        return [builtin for builtin in SUPPORTED_BUILTINS if builtin in self.collected_builtins]
+        return [
+            builtin for builtin in CAIRO0_SUPPORTED_BUILTINS if builtin in self.collected_builtins
+        ]
 
 
 class PreExternalWrapperStage(Stage):

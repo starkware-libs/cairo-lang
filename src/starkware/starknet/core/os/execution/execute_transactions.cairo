@@ -191,8 +191,20 @@ func execute_transactions{
     let mul_mod_ptr = selectable_builtins.mul_mod;
     let keccak_ptr = builtin_ptrs.non_selectable.keccak;
 
-    // finalize the sha256 segment.
-    finalize_sha256(sha256_ptr_start, builtin_ptrs.non_selectable.sha256);
+    // Fill holes in the rc96 segment.
+    %{
+        rc96_ptr = ids.range_check96_ptr
+        segment_size = rc96_ptr.offset
+        base = rc96_ptr - segment_size
+
+        for i in range(segment_size):
+            memory.setdefault(base + i, 0)
+    %}
+
+    // Finalize the sha256 segment.
+    finalize_sha256(
+        sha256_ptr_start=sha256_ptr_start, sha256_ptr_end=builtin_ptrs.non_selectable.sha256
+    );
 
     return (reserved_range_checks_end=reserved_range_checks_end);
 }
@@ -420,6 +432,10 @@ func execute_invoke_function_transaction{
             nondet %{ 0 if tx.version < 3 else tx.fee_data_availability_mode %}
         ),
     );
+    if (common_tx_fields.version != 0) {
+        assert tx_execution_info.selector = EXECUTE_ENTRY_POINT_SELECTOR;
+    }
+
     local account_deployment_data_size = (
         nondet %{ 0 if tx.version < 3 else len(tx.account_deployment_data) %}
     );

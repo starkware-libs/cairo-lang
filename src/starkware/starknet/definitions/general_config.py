@@ -173,14 +173,6 @@ class StarknetGeneralConfig(EverestGeneralConfig):
         default=DEFAULT_ENFORCE_L1_FEE,
     )
 
-    use_kzg_da: bool = field(
-        metadata=additional_metadata(
-            marshmallow_field=RequiredBoolean(),
-            description="Enabler for using KZG commitment scheme in created blocks.",
-        ),
-        default=DEFAULT_USE_KZG_DA,
-    )
-
     @property
     def chain_id(self) -> StarknetChainId:
         return StarknetChainId(self.starknet_os_config.chain_id)

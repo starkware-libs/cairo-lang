@@ -1,5 +1,7 @@
+import pytest
+
 from starkware.starknet.compiler.test_utils import preprocess_str, verify_exception
-from starkware.starknet.services.api.contract_class.contract_class import SUPPORTED_BUILTINS
+from starkware.starknet.services.api.contract_class.contract_class import CAIRO0_SUPPORTED_BUILTINS
 
 
 def test_builtin_directive_after_external():
@@ -20,15 +22,19 @@ file:?:?: Directives must appear at the top of the file.
     )
 
 
-def test_storage_in_builtin_directive():
+@pytest.mark.parametrize(
+    "builtin",
+    ["segment_arena", "range_check96", "add_mod", "mul_mod"],
+)
+def test_unsupported_builtins_in_builtin_directive(builtin: str):
     verify_exception(
-        """
-%builtins storage
+        f"""
+%builtins {builtin}
 """,
         f"""
-file:?:?: ['storage'] is not a subsequence of {SUPPORTED_BUILTINS}.
-%builtins storage
-^***************^
+file:?:?: ['{builtin}'] is not a subsequence of {CAIRO0_SUPPORTED_BUILTINS}.
+%builtins {builtin}
+^********{len(builtin) * "*"}^
 """,
     )
 
@@ -39,7 +45,7 @@ def test_output_in_builtin_directive():
 %builtins output range_check
 """,
         f"""
-file:?:?: ['output', 'range_check'] is not a subsequence of {SUPPORTED_BUILTINS}.
+file:?:?: ['output', 'range_check'] is not a subsequence of {CAIRO0_SUPPORTED_BUILTINS}.
 %builtins output range_check
 ^**************************^
 """,

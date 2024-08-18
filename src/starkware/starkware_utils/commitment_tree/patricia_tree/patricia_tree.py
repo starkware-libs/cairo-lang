@@ -3,6 +3,7 @@ from typing import Collection, Dict, List, Optional, Tuple, Type
 
 import marshmallow_dataclass
 
+from starkware.python.utils_stub_module import safe_zip
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import (
     BinaryFactDict,
     BinaryFactTree,
@@ -124,15 +125,25 @@ class PatriciaTree(BinaryFactTree):
         return await self_node.get_diff_between_trees(other=other_node, ffc=ffc, fact_cls=fact_cls)
 
     async def fetch_witnesses(
-        self, ffc: FactFetchingContext, sorted_leaf_indices: List[int], fact_cls: Type[TLeafFact]
-    ):
+        self,
+        ffc: FactFetchingContext,
+        sorted_leaf_indices: List[int],
+        fact_cls: Optional[Type[TLeafFact]],
+        empty_leaf: TLeafFact,
+    ) -> Dict[int, TLeafFact]:
         """
         Fetches the necessary witnesses from storage to update the tree at the provided leaf
-        indices.
+        indices. This function is meant to be called with an underlying CachedStorage, filling the
+        cache with the witnesses. If fact_cls is given, the witnesses include the leaves
+        (modified and siblings) and this function returns the previous leaves at the given indices.
+        Otherwise, empty leaves are returned.
         """
+        assert empty_leaf.is_empty
+        leaves = {index: empty_leaf for index in sorted_leaf_indices}
+
         if self.root == EmptyNodeFact.EMPTY_NODE_HASH:
-            # Nothing to fetch.
-            return
+            # Nothing to fetch and all leaves are empty.
+            return leaves
 
         leaf_layer_prefix = 1 << self.height
         sorted_leaf_full_indices = [leaf_layer_prefix | index for index in sorted_leaf_indices]
@@ -145,5 +156,19 @@ class PatriciaTree(BinaryFactTree):
             context=tree_context,
             leaf_fact_cls=fact_cls,
         )
-        # Populate the cache and ignore.
-        await ffc.storage.mget_or_fail(tree_context.leaf_db_keys)
+        # Get the facts of the modified leaves.
+        modified_leaves_facts = await ffc.storage.mget_or_fail(
+            list(tree_context.modified_leaves_to_db_keys.values())
+        )
+
+        # Override non-empty leaves.
+        if fact_cls is not None:
+            leaves.update(
+                {
+                    leaf_index ^ leaf_layer_prefix: fact_cls.deserialize(leaf_fact)
+                    for leaf_index, leaf_fact in safe_zip(
+                        tree_context.modified_leaves_to_db_keys.keys(), modified_leaves_facts
+                    )
+                }
+            )
+        return leaves

@@ -185,7 +185,6 @@ func compute_invoke_transaction_hash{
             tempvar additional_data_size = 0;
             tempvar additional_data = cast(0, felt*);
         } else {
-            assert execution_context.execution_info.selector = EXECUTE_ENTRY_POINT_SELECTOR;
             tempvar entry_point_selector_field = 0;
             tempvar additional_data_size = 1;
             tempvar additional_data = &common_fields.nonce;

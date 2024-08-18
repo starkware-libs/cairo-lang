@@ -33,7 +33,7 @@ from starkware.starknet.public.abi_structs import (
     struct_definition_to_abi_entry,
 )
 from starkware.starknet.security.secure_hints import HintsWhitelist, InsecureHintError
-from starkware.starknet.services.api.contract_class.contract_class import SUPPORTED_BUILTINS
+from starkware.starknet.services.api.contract_class.contract_class import CAIRO0_SUPPORTED_BUILTINS
 from starkware.starkware_utils.subsequence import is_subsequence
 
 
@@ -65,9 +65,9 @@ class StarknetPreprocessor(Preprocessor):
         super().visit_BuiltinsDirective(directive)
         assert self.builtins is not None
 
-        if not is_subsequence(self.builtins, SUPPORTED_BUILTINS):
+        if not is_subsequence(self.builtins, CAIRO0_SUPPORTED_BUILTINS):
             raise PreprocessorError(
-                f"{self.builtins} is not a subsequence of {SUPPORTED_BUILTINS}.",
+                f"{self.builtins} is not a subsequence of {CAIRO0_SUPPORTED_BUILTINS}.",
                 location=directive.location,
             )
 

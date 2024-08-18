@@ -129,13 +129,6 @@ class ModBuiltinRunner(SimpleBuiltinRunnerWithLowRatio):
     def finalize_segments(self, runner):
         super().finalize_segments(runner)
 
-    def get_additional_data(self):
-        assert self.zero_value is not None, "Uninitialized self.zero_value."
-        return [list(RelocatableValue.to_tuple(self.zero_value))]
-
-    def extend_additional_data(self, data, relocate_callback, data_is_trusted=True):
-        self.zero_value = relocate_callback(RelocatableValue.from_tuple(data[0]))
-
     # The structure of the values in the returned dictionary is of the form:
     # {keys = INPUT_NAMES, "batch": {index_in_batch: {keys = MEMORY_VAR_NAMES}}}.
     def air_private_input(self, runner) -> Dict[str, Any]:

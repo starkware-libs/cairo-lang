@@ -3,7 +3,7 @@ import functools
 import re
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Callable, Dict, Optional, Type
+from typing import Any, Callable, Dict, Optional, Tuple, Type
 
 import marshmallow
 import marshmallow.exceptions
@@ -13,7 +13,7 @@ from frozendict import frozendict
 from marshmallow.base import FieldABC
 from mypy_extensions import KwArg, VarArg
 
-from starkware.python.utils import from_bytes
+from starkware.python.utils import from_bytes, to_bytes
 from starkware.starkware_utils.custom_raising_dict import CustomRaisingDict, CustomRaisingFrozenDict
 
 FieldMetadata = Dict[str, Any]
@@ -185,6 +185,68 @@ class BytesAsHex(mfields.Field):
             raise self.make_error("invalid", input=value)
 
         return bytes.fromhex(value)
+
+
+class BytesAsIntTuple(mfields.Field):
+    """
+    A field that behaves like bytes, but serializes to a tuple of ints.
+    """
+
+    default_error_messages = {"invalid": 'Expected a tuple of ints, got: "{input}".'}
+
+    def _serialize(self, value, attr, obj, **kwargs) -> Optional[Tuple[int, ...]]:
+        if value is None:
+            return None
+        assert isinstance(value, bytes)
+        return tuple(value)
+
+    def _deserialize(self, value, attr, data, **kwargs) -> bytes:
+        if not isinstance(value, tuple):
+            raise self.make_error("invalid", input=value)
+
+        return bytes(value)
+
+
+class IntAsBytesIntTuple(mfields.Field):
+    """
+    A field that behaves like an int, but serializes using BytesAsIntTuple over the byte
+    representation of self.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.bytes_as_int_tuple = BytesAsIntTuple(**kwargs)
+
+    def _serialize(self, value, attr, obj, **kwargs) -> Optional[Tuple[int, ...]]:
+        return self.bytes_as_int_tuple._serialize(
+            to_bytes(value, byte_order="big"), attr, obj, **kwargs
+        )
+
+    def _deserialize(self, value, attr, data, **kwargs) -> int:
+        return int.from_bytes(
+            self.bytes_as_int_tuple._deserialize(value, attr, data, **kwargs), byteorder="big"
+        )
+
+
+class DictAsList(mfields.Dict):
+    """
+    A field that behaves like a dict, but serializes to a list of 2 element tuples.
+    """
+
+    default_error_messages = {"invalid": 'Expected a list of length 2 tuples, got: "{input}".'}
+
+    def _serialize(self, value, attr, obj, **kwargs):
+        serialized = super()._serialize(value, attr, obj, **kwargs)
+        if serialized is None:
+            return None
+
+        return [(k, v) for k, v in serialized.items()]
+
+    def _deserialize(self, value, attr, data, **kwargs):
+        if not isinstance(value, list) or any(len(elem) != 2 for elem in value):
+            raise self.make_error("invalid", input=value)
+
+        return super()._deserialize({elem[0]: elem[1] for elem in value}, attr, data, **kwargs)
 
 
 class BytesAsBase64Str(mfields.Field):

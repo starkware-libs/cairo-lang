@@ -13,5 +13,4 @@ starknet_os_config:
   chain_id: 1536727068981429685321
   deprecated_fee_token_address: '0x4201b1ca8320dd248a9c18aeae742db64b0ea0f6f1f5a4c72ddb6b725e16316'
   fee_token_address: '0x3c0178a04b4d297c884e366bb0a2ec0f682188ba604d71955134a203d4f2adc'
-use_kzg_da: true
 validate_max_n_steps: 1000000

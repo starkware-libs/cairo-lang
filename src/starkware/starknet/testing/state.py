@@ -98,10 +98,7 @@ class StarknetState:
             contract_class_storage=ffc.storage,
         )
         state = CachedState(
-            block_info=BlockInfo.empty(
-                sequencer_address=general_config.sequencer_address,
-                use_kzg_da=general_config.use_kzg_da,
-            ),
+            block_info=BlockInfo.empty(sequencer_address=general_config.sequencer_address),
             state_reader=state_reader,
             compiled_class_cache={},
         )

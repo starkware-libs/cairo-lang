@@ -224,10 +224,7 @@ class SharedState(SharedStateBase):
         return cls(
             contract_states=empty_contract_states,
             contract_classes=empty_contract_classes,
-            block_info=BlockInfo.empty(
-                sequencer_address=general_config.sequencer_address,
-                use_kzg_da=general_config.use_kzg_da,
-            ),
+            block_info=BlockInfo.empty(sequencer_address=general_config.sequencer_address),
         )
 
     async def get_contract_class_tree(
@@ -388,7 +385,12 @@ class SharedState(SharedStateBase):
             block_info=block_info,
         )
 
-    async def fetch_witnesses(self, cached_ffc: FactFetchingContext, state_diff: "StateDiff"):
+    async def fetch_all_witnesses(
+        self,
+        cached_ffc: FactFetchingContext,
+        state_diff: "StateDiff",
+        get_leaves: bool,
+    ):
         """
         Fetches the necessary witnesses from storage to update the state with the provided diff.
         """
@@ -400,33 +402,41 @@ class SharedState(SharedStateBase):
         accessed_addresses = (
             address_to_class_hash.keys() | address_to_nonce.keys() | storage_updates.keys()
         )
-        current_contract_states = await self.contract_states.get_leaves(
-            ffc=cached_ffc, indices=accessed_addresses, fact_cls=ContractState
+
+        # Fetch global tree's witnesses.
+        contract_states = await self.contract_states.fetch_witnesses(
+            ffc=cached_ffc,
+            sorted_leaf_indices=sorted(accessed_addresses),
+            fact_cls=ContractState,
+            empty_leaf=await ContractState.empty(
+                storage_commitment_tree_height=constants.CONTRACT_STATES_COMMITMENT_TREE_HEIGHT,
+                ffc=cached_ffc,
+            ),
+        )
+
+        # Fetch classes tree's witnesses.
+        classes_tree_awaitable = (
+            [
+                self.contract_classes.fetch_witnesses(
+                    ffc=cached_ffc,
+                    sorted_leaf_indices=sorted(class_hash_to_compiled_class_hash.keys()),
+                    fact_cls=ContractClassLeaf if get_leaves else None,
+                    empty_leaf=ContractClassLeaf.empty(),
+                )
+            ]
+            if self.contract_classes is not None
+            else []
         )
 
         await gather_in_chunks(
             awaitables=[
-                current_contract_states[address].fetch_witnesses(ffc=cached_ffc, updates=updates)
+                contract_states[address].fetch_storage_witnesses(
+                    ffc=cached_ffc, updates=updates, get_leaves=get_leaves
+                )
                 for address, updates in storage_updates.items()
             ]
+            + classes_tree_awaitable
         )
-
-        # Fetch global tree's witnesses.
-        await self.contract_states.fetch_witnesses(
-            ffc=cached_ffc, sorted_leaf_indices=sorted(accessed_addresses), fact_cls=ContractState
-        )
-
-        # Fetch classes tree's witnesses.
-        if self.contract_classes is not None:
-            await self.contract_classes.fetch_witnesses(
-                ffc=cached_ffc,
-                sorted_leaf_indices=sorted(class_hash_to_compiled_class_hash.keys()),
-                fact_cls=ContractClassLeaf,
-            )
-        else:
-            assert (
-                len(class_hash_to_compiled_class_hash) == 0
-            ), "contract_classes must be concrete before fetch."
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -445,6 +455,7 @@ class StateDiff(EverestStateDiff, DBObject):
     declared_classes: Mapping[int, int] = field(
         metadata=fields.state_diff_declared_classes_metadata
     )
+    # The block after this StateDiff is applied.
     block_info: BlockInfo
 
     @marshmallow.pre_load

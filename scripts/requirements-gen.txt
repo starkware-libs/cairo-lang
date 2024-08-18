@@ -7,7 +7,7 @@ fastecdsa
 frozendict
 gprof2dot
 lark
-marshmallow-dataclass>=7.1.0
+marshmallow-dataclass==8.6.1
 marshmallow-enum
 marshmallow-oneofschema
 marshmallow>=3.2.1

@@ -138,9 +138,14 @@ class ContractState(ValidatedMarshmallowDataclass, LeafFact):
             nonce=nonce,
         )
 
-    async def fetch_witnesses(self, ffc: FactFetchingContext, updates: Mapping[int, int]):
+    async def fetch_storage_witnesses(
+        self, ffc: FactFetchingContext, updates: Mapping[int, int], get_leaves: bool
+    ):
         await self.storage_commitment_tree.fetch_witnesses(
-            ffc=ffc, sorted_leaf_indices=sorted(updates.keys()), fact_cls=StorageLeaf
+            ffc=ffc,
+            sorted_leaf_indices=sorted(updates.keys()),
+            fact_cls=StorageLeaf if get_leaves else None,
+            empty_leaf=StorageLeaf.empty(),
         )
 
 

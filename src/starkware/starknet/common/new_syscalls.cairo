@@ -1,4 +1,5 @@
 from starkware.cairo.common.cairo_secp.ec import EcPoint
+from starkware.cairo.common.sha256_state import Sha256Input, Sha256State
 from starkware.cairo.common.uint256 import Uint256
 
 // Syscall selectors.
@@ -169,8 +170,8 @@ struct KeccakRequest {
 }
 
 struct Sha256ProcessBlockRequest {
-    state_ptr: felt*,
-    input_start: felt*,
+    state_ptr: Sha256State*,
+    input_start: Sha256Input*,
 }
 
 struct SecpAddRequest {
@@ -262,7 +263,7 @@ struct KeccakResponse {
 }
 
 struct Sha256ProcessBlockResponse {
-    state_ptr: felt*,
+    state_ptr: Sha256State*,
 }
 
 struct SecpGetXyResponse {

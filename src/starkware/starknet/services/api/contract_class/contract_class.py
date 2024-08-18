@@ -28,8 +28,8 @@ from starkware.starkware_utils.validated_dataclass import (
     ValidatedMarshmallowDataclass,
 )
 
-# An ordered list of the supported builtins.
-SUPPORTED_BUILTINS = [
+# An ordered list of the supported builtins in Cairo 1.
+CAIRO1_SUPPORTED_BUILTINS = [
     "pedersen",
     "range_check",
     "ecdsa",
@@ -42,17 +42,28 @@ SUPPORTED_BUILTINS = [
     "mul_mod",
 ]
 
+# An ordered list of the supported builtins in Cairo 0.
+CAIRO0_SUPPORTED_BUILTINS = [
+    "pedersen",
+    "range_check",
+    "ecdsa",
+    "bitwise",
+    "ec_op",
+    "poseidon",
+]
+
 # Utilites.
 
 
-def validate_builtins(builtins: Optional[List[str]]):
+def validate_builtins(builtins: Optional[List[str]], is_cairo1: bool):
     if builtins is None:
         return
 
+    supported_builtins = CAIRO1_SUPPORTED_BUILTINS if is_cairo1 else CAIRO0_SUPPORTED_BUILTINS
     stark_assert(
-        is_subsequence(builtins, SUPPORTED_BUILTINS),
+        is_subsequence(builtins, supported_builtins),
         code=StarknetErrorCode.INVALID_CONTRACT_CLASS,
-        message=f"{builtins} is not a subsequence of {SUPPORTED_BUILTINS}.",
+        message=f"{builtins} is not a subsequence of {supported_builtins}.",
     )
 
 
@@ -137,6 +148,13 @@ class CompiledClassBase(ValidatedMarshmallowDataclass):
         Returns the "bytecode" attribute of the compiled class.
         """
 
+    @property
+    @abstractmethod
+    def is_cairo1(self) -> bool:
+        """
+        Retruns whether the class was compiled from Cairo 1.
+        """
+
     def __post_init__(self):
         super().__post_init__()
 
@@ -164,10 +182,10 @@ class CompiledClassBase(ValidatedMarshmallowDataclass):
         )
 
     def validate(self):
-        validate_builtins(builtins=self.get_builtins())
+        validate_builtins(builtins=self.get_builtins(), is_cairo1=self.is_cairo1)
         for entry_points in self.entry_points_by_type.values():
             for entry_point in entry_points:
-                validate_builtins(builtins=entry_point.builtins)
+                validate_builtins(builtins=entry_point.builtins, is_cairo1=self.is_cairo1)
 
         stark_assert(
             self.get_prime() == DEFAULT_PRIME,
@@ -212,6 +230,10 @@ class CompiledClass(CompiledClassBase):
     compiler_version: str = field(
         metadata=dict(marshmallow_field=mfields.String(required=False, load_default=None))
     )
+
+    @property
+    def is_cairo1(self) -> bool:
+        return True
 
     def get_builtins(self) -> List[str]:
         return []
@@ -326,6 +348,10 @@ class DeprecatedCompiledClass(CompiledClassBase):
 
     program: Program
     abi: Optional[AbiType] = None
+
+    @property
+    def is_cairo1(self) -> bool:
+        return False
 
     def get_builtins(self) -> List[str]:
         return self.program.builtins

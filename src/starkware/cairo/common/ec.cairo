@@ -137,6 +137,7 @@ func ec_op{ec_op_ptr: EcOpBuiltin*}(p: EcPoint, m: felt, q: EcPoint) -> (r: EcPo
         seed = b"".join(map(to_bytes, [ids.p.x, ids.p.y, ids.m, ids.q.x, ids.q.y]))
         ids.s.x, ids.s.y = random_ec_point(FIELD_PRIME, ALPHA, BETA, seed)
     %}
+    assert_on_curve(s);
     let p_plus_s: EcPoint = ec_add(p, s);
 
     assert ec_op_ptr.p = p_plus_s;
@@ -217,6 +218,7 @@ func chained_ec_op{ec_op_ptr: EcOpBuiltin*}(p: EcPoint, m: felt*, q: EcPoint*, l
         )
         ids.s.x, ids.s.y = random_ec_point(FIELD_PRIME, ALPHA, BETA, seed)
     %}
+    assert_on_curve(s);
     let p_plus_s: EcPoint = ec_add(p, s);
     let r_plus_s: EcPoint = _chained_ec_op_inner(p=p_plus_s, m=m, q=q, len=len);
     let r: EcPoint = ec_add(r_plus_s, EcPoint(x=s.x, y=-s.y));

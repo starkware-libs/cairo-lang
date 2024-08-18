@@ -480,7 +480,7 @@ func finalize_sha256{range_check_ptr, bitwise_ptr: BitwiseBuiltin*}(
             sha2_compress_function,
         )
 
-        number_of_missing_blocks = -ids.n % ids.BATCH_SIZE
+        number_of_missing_blocks = (-ids.n) % ids.BATCH_SIZE
         assert 0 <= number_of_missing_blocks < 20
         _sha256_input_chunk_size_felts = ids.SHA256_INPUT_CHUNK_SIZE_FELTS
         assert 0 <= _sha256_input_chunk_size_felts < 100
@@ -488,7 +488,7 @@ func finalize_sha256{range_check_ptr, bitwise_ptr: BitwiseBuiltin*}(
         message = [0] * _sha256_input_chunk_size_felts
         w = compute_message_schedule(message)
         output = sha2_compress_function(IV, w)
-        padding = (message + IV + output) * (number_of_missing_blocks)
+        padding = (message + IV + output) * number_of_missing_blocks
         segments.write_arg(ids.sha256_ptr_end, padding)
     %}
 

@@ -1,6 +1,6 @@
 {
     "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-    "name": "Cairo",
+    "name": "CairoZero",
     "patterns": [
         {
             "name": "meta.control.if",
@@ -13,11 +13,11 @@
                     "name": "entity.name.condition"
                 }
             },
-            "contentName": "source.cairo",
+            "contentName": "source.cairo0",
             "end": "\\}",
             "patterns": [
                 {
-                    "include": "source.cairo"
+                    "include": "source.cairo0"
                 }
             ],
             "endCaptures": {
@@ -37,11 +37,11 @@
                     "name": "entity.name.identifiers"
                 }
             },
-            "contentName": "source.cairo",
+            "contentName": "source.cairo0",
             "end": "\\}",
             "patterns": [
                 {
-                    "include": "source.cairo"
+                    "include": "source.cairo0"
                 }
             ],
             "endCaptures": {
@@ -61,11 +61,11 @@
                     "name": "entity.name.function"
                 }
             },
-            "contentName": "source.cairo",
+            "contentName": "source.cairo0",
             "end": "\\}",
             "patterns": [
                 {
-                    "include": "source.cairo"
+                    "include": "source.cairo0"
                 }
             ],
             "endCaptures": {
@@ -113,11 +113,11 @@
                     "name": "entity.name.function"
                 }
             },
-            "contentName": "source.cairo",
+            "contentName": "source.cairo0",
             "end": "\\}",
             "patterns": [
                 {
-                    "include": "source.cairo"
+                    "include": "source.cairo0"
                 }
             ],
             "endCaptures": {
@@ -137,11 +137,11 @@
                     "name": "entity.name.function"
                 }
             },
-            "contentName": "source.cairo",
+            "contentName": "source.cairo0",
             "end": "\\}",
             "patterns": [
                 {
-                    "include": "source.cairo"
+                    "include": "source.cairo0"
                 }
             ],
             "endCaptures": {
@@ -191,5 +191,5 @@
             ]
         }
     ],
-    "scopeName": "source.cairo"
+    "scopeName": "source.cairo0"
 }

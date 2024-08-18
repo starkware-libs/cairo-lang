@@ -963,7 +963,7 @@ func execute_keccak{
     let selectable_builtins = &builtin_ptrs.selectable;
     let non_selectable_builtins = &builtin_ptrs.non_selectable;
     let bitwise_ptr = selectable_builtins.bitwise;
-    let keccak_ptr = builtin_ptrs.non_selectable.keccak;
+    let keccak_ptr = non_selectable_builtins.keccak;
     with bitwise_ptr, keccak_ptr {
         let (res) = keccak_padded_input(inputs=input_start, n_blocks=q);
     }
@@ -1020,14 +1020,14 @@ func execute_sha256_process_block{
 
     local sha256_ptr: Sha256ProcessBlock* = builtin_ptrs.non_selectable.sha256;
 
-    let input = cast(sha256_ptr, Sha256Input*);
-    assert [input] = [cast(request.input_start, Sha256Input*)];
+    let input: Sha256Input* = &sha256_ptr.input;
+    assert [input] = [request.input_start];
 
-    let state = cast(sha256_ptr + Sha256Input.SIZE, Sha256State*);
-    assert [state] = [cast(request.state_ptr, Sha256State*)];
+    let state: Sha256State* = &sha256_ptr.in_state;
+    assert [state] = [request.state_ptr];
 
-    let res = sha256_ptr + Sha256Input.SIZE + Sha256State.SIZE;
-    let sha256_ptr = sha256_ptr + Sha256ProcessBlock.SIZE;
+    let res: Sha256State* = &sha256_ptr.out_state;
+    let sha256_ptr = &sha256_ptr[1];
 
     assert [cast(syscall_ptr, Sha256ProcessBlockResponse*)] = Sha256ProcessBlockResponse(
         state_ptr=res

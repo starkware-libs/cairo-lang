@@ -105,7 +105,7 @@ class BlockInfo(ValidatedMarshmallowDataclass):
         return rename_old_gas_price_fields(data=data)
 
     @classmethod
-    def empty(cls, sequencer_address: Optional[int], use_kzg_da: bool) -> "BlockInfo":
+    def empty(cls, sequencer_address: Optional[int]) -> "BlockInfo":
         """
         Returns an empty BlockInfo object; i.e., the one before the first in the chain.
         """
@@ -117,7 +117,7 @@ class BlockInfo(ValidatedMarshmallowDataclass):
             l1_data_gas_price=ResourcePrice(price_in_wei=1, price_in_fri=1),
             sequencer_address=sequencer_address,
             starknet_version=STARKNET_VERSION,
-            use_kzg_da=use_kzg_da,
+            use_kzg_da=True,  # Value is ignored for an empty block.
         )
 
     @classmethod

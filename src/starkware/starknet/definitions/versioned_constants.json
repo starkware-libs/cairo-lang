@@ -548,6 +548,7 @@
             }
         }
     },
+    "segment_arena_cells": false,
     "tx_event_limits": {
         "max_data_length": 300,
         "max_keys_length": 50,

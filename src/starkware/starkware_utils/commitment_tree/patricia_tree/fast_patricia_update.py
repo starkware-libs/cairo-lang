@@ -72,7 +72,8 @@ class TreeContext:
     # Updated nodes, grouped and ordered by dependency.
     nodes_by_dependency_layers: List[List[IndexedNode]]
     ffc: FactFetchingContext
-    leaf_db_keys: List[bytes]
+    # Maps a modified leaf (full) index to its DB key.
+    modified_leaves_to_db_keys: Dict[int, bytes]
 
     @classmethod
     def create(
@@ -84,7 +85,7 @@ class TreeContext:
             prefetched_nodes={},
             nodes_by_dependency_layers=[],
             ffc=ffc,
-            leaf_db_keys=[],
+            modified_leaves_to_db_keys={},
         )
 
     def get_node_height(self, index: int) -> int:
@@ -107,18 +108,20 @@ class SubTree:
     def set_leaf(self, context: TreeContext, leaf_fact_cls: Optional[Type[TLeafFact]]):
         """
         Assumes the subtree represents a leaf; creates a corresponding Node object and sets it.
+        If `leaf_fact_cls` is not None, the DB key of the leaf is added to the tree context.
         """
-        if leaf_fact_cls is not None:
-            db_key = leaf_fact_cls.db_key(suffix=self.root_hash)
-            context.leaf_db_keys.append(db_key)
-
         if len(self.leaf_indices) == 0:
             # Leaf sibiling.
             value = self.root_hash
         else:
+            # Modified leaf.
             (leaf_index,) = self.leaf_indices
             assert self.index == leaf_index
             value = context.leaves[leaf_index]
+            if leaf_fact_cls is not None:
+                context.modified_leaves_to_db_keys[leaf_index] = leaf_fact_cls.db_key(
+                    suffix=self.root_hash
+                )
 
         context.prefetched_nodes[self.index] = (
             EMPTY_NODE if value == EmptyNodeFact.EMPTY_NODE_HASH else Node.from_value(value=value)

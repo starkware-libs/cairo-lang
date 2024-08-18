@@ -97,7 +97,7 @@ def test_wrapper_with_return_values(builtins_directive: bool):
     """
     Tests that the external wrapper works with return values.
     In addition, also tests that the builtins are collected correctly and reordered according to
-    SUPPORTED_BUILTINS.
+    CAIRO0_SUPPORTED_BUILTINS.
     """
     program = preprocess_str(
         f"""
