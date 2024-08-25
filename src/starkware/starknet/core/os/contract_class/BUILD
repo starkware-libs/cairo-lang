@@ -6,6 +6,7 @@ cairo_library(
     name = "starknet_os_abi_cairo_lib",
     srcs = [
         "compiled_class.cairo",
+        "contract_class.cairo",
         "deprecated_compiled_class.cairo",
     ],
     hint_deps = [
@@ -22,6 +23,7 @@ package(default_visibility = ["//visibility:public"])
 
 exports_files([
     "compiled_class.cairo",
+    "contract_class.cairo",
     "deprecated_compiled_class.cairo",
 ])
 

@@ -44,6 +44,8 @@ class StarknetOsInput(ValidatedMarshmallowDataclass):
     transactions: Sequence[InternalTransaction] = field(
         metadata=dict(marshmallow_field=mfields.List(mfields.Nested(InternalTransactionSchema)))
     )
+    # A mapping from Cairo 1 declared class hashes to the hashes of the contract class components.
+    declared_class_hash_to_component_hashes: Dict[int, List[int]]
     prev_block_hash: int
     new_block_hash: int
     full_output: int

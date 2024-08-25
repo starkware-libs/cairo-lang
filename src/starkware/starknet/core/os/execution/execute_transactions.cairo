@@ -1,4 +1,5 @@
 from starkware.cairo.common.alloc import alloc
+from starkware.cairo.common.builtin_poseidon.poseidon import poseidon_hash_many
 from starkware.cairo.common.cairo_builtins import (
     BitwiseBuiltin,
     HashBuiltin,
@@ -50,6 +51,10 @@ from starkware.starknet.core.os.constants import (
     VALIDATED,
 )
 from starkware.starknet.core.os.contract_address.contract_address import get_contract_address
+from starkware.starknet.core.os.contract_class.contract_class import (
+    ContractClassComponentHashes,
+    finalize_class_hash,
+)
 from starkware.starknet.core.os.contract_class.deprecated_compiled_class import (
     DeprecatedCompiledClassFact,
 )
@@ -159,6 +164,7 @@ func execute_transactions{
         vm_enter_scope({
             '__deprecated_class_hashes': __deprecated_class_hashes,
             'transactions': iter(os_input.transactions),
+            'component_hashes': os_input.declared_class_hash_to_component_hashes,
             'execution_helper': execution_helper,
             'deprecated_syscall_handler': deprecated_syscall_handler,
             'syscall_handler': syscall_handler,
@@ -1056,18 +1062,6 @@ func execute_declare_transaction{
         return ();
     }
 
-    // Update contract_class_changes if needed.
-    if (tx_version != 1) {
-        // Version is >= 2; declare the class hash.
-        // Note that prev_value=0 enforces that a class may be declared only once.
-        dict_update{dict_ptr=contract_class_changes}(
-            key=[class_hash_ptr], prev_value=0, new_value=compiled_class_hash
-        );
-    } else {
-        tempvar contract_class_changes = contract_class_changes;
-    }
-    tempvar contract_class_changes = contract_class_changes;
-
     let (state_entry: StateEntry*) = dict_read{dict_ptr=contract_state_changes}(key=sender_address);
     // The calldata for declare tx is the class hash.
     local validate_declare_execution_context: ExecutionContext* = new ExecutionContext(
@@ -1129,6 +1123,39 @@ func execute_declare_transaction{
             account_deployment_data_size=account_deployment_data_size,
             account_deployment_data=account_deployment_data,
         );
+
+        if (tx_version != 1) {
+            // Declare of version >= 2 (Sierra contract class).
+
+            // Ensure the given class hash is a result of a Sierra class hash calculation.
+            local contract_class_component_hashes: ContractClassComponentHashes*;
+            %{
+                class_component_hashes = component_hashes[tx.class_hash]
+                assert (
+                    len(class_component_hashes) == ids.ContractClassComponentHashes.SIZE
+                ), "Wrong number of class component hashes."
+                ids.contract_class_component_hashes = segments.gen_arg(class_component_hashes)
+            %}
+
+            let expected_class_hash = finalize_class_hash(
+                contract_class_component_hashes=contract_class_component_hashes
+            );
+            with_attr error_message("Invalid class hash pre-image.") {
+                assert [class_hash_ptr] = expected_class_hash;
+            }
+
+            // Declare the class hash.
+            dict_update{dict_ptr=contract_class_changes}(
+                key=[class_hash_ptr], prev_value=0, new_value=compiled_class_hash
+            );
+            tempvar range_check_ptr = range_check_ptr;
+            tempvar poseidon_ptr = poseidon_ptr;
+        } else {
+            tempvar contract_class_changes = contract_class_changes;
+            tempvar range_check_ptr = range_check_ptr;
+            tempvar poseidon_ptr = poseidon_ptr;
+        }
+        let contract_class_changes = contract_class_changes;
     }
     update_builtin_ptrs(pedersen_ptr=pedersen_ptr, poseidon_ptr=poseidon_ptr);
 

@@ -1,11 +1,5 @@
+from starkware.cairo.common.builtin_poseidon.poseidon import poseidon_hash_many
 from starkware.cairo.common.cairo_builtins import PoseidonBuiltin
-from starkware.cairo.common.hash_state_poseidon import (
-    HashState,
-    hash_finalize,
-    hash_init,
-    hash_update_single,
-    hash_update_with_nested_hash,
-)
 from starkware.starknet.common.storage import normalize_address
 
 const CONTRACT_CLASS_VERSION = 'CONTRACT_CLASS_V0.1.0';
@@ -40,44 +34,72 @@ struct ContractClass {
     sierra_program_ptr: felt*,
 }
 
+// Holds the hashes of the contract class components, to be used for calculating the final hash.
+// Note: the order of the struct members must not be changed since it determines the hash order.
+struct ContractClassComponentHashes {
+    contract_class_version: felt,
+    external_functions_hash: felt,
+    l1_handlers_hash: felt,
+    constructors_hash: felt,
+    abi_hash: felt,
+    sierra_program_hash: felt,
+}
+
 func class_hash{poseidon_ptr: PoseidonBuiltin*, range_check_ptr: felt}(
     contract_class: ContractClass*
-) -> (hash: felt) {
+) -> felt {
+    let contract_class_component_hashes = hash_class_components(contract_class=contract_class);
+    return finalize_class_hash(contract_class_component_hashes=contract_class_component_hashes);
+}
+
+func hash_class_components{poseidon_ptr: PoseidonBuiltin*}(
+    contract_class: ContractClass*
+) -> ContractClassComponentHashes* {
+    alloc_locals;
     assert contract_class.contract_class_version = CONTRACT_CLASS_VERSION;
 
-    let hash_state: HashState = hash_init();
-    with hash_state {
-        hash_update_single(item=contract_class.contract_class_version);
+    // Hash external entry points.
+    let (local external_functions_hash) = poseidon_hash_many(
+        n=contract_class.n_external_functions * ContractEntryPoint.SIZE,
+        elements=contract_class.external_functions,
+    );
 
-        // Hash external entry points.
-        hash_update_with_nested_hash(
-            data_ptr=contract_class.external_functions,
-            data_length=contract_class.n_external_functions * ContractEntryPoint.SIZE,
-        );
+    // Hash L1 handler entry points.
+    let (local l1_handlers_hash) = poseidon_hash_many(
+        n=contract_class.n_l1_handlers * ContractEntryPoint.SIZE,
+        elements=contract_class.l1_handlers,
+    );
 
-        // Hash L1 handler entry points.
-        hash_update_with_nested_hash(
-            data_ptr=contract_class.l1_handlers,
-            data_length=contract_class.n_l1_handlers * ContractEntryPoint.SIZE,
-        );
+    // Hash constructor entry points.
+    let (local constructors_hash) = poseidon_hash_many(
+        n=contract_class.n_constructors * ContractEntryPoint.SIZE,
+        elements=contract_class.constructors,
+    );
 
-        // Hash constructor entry points.
-        hash_update_with_nested_hash(
-            data_ptr=contract_class.constructors,
-            data_length=contract_class.n_constructors * ContractEntryPoint.SIZE,
-        );
+    // Hash Sierra program.
+    let (local sierra_program_hash) = poseidon_hash_many(
+        n=contract_class.sierra_program_length, elements=contract_class.sierra_program_ptr
+    );
 
-        // Hash abi_hash.
-        hash_update_single(item=contract_class.abi_hash);
+    tempvar contract_class_component_hashes = new ContractClassComponentHashes(
+        contract_class_version=contract_class.contract_class_version,
+        external_functions_hash=external_functions_hash,
+        l1_handlers_hash=l1_handlers_hash,
+        constructors_hash=constructors_hash,
+        abi_hash=contract_class.abi_hash,
+        sierra_program_hash=sierra_program_hash,
+    );
+    return contract_class_component_hashes;
+}
 
-        // Hash Sierra program.
-        hash_update_with_nested_hash(
-            data_ptr=contract_class.sierra_program_ptr,
-            data_length=contract_class.sierra_program_length,
-        );
-    }
+func finalize_class_hash{poseidon_ptr: PoseidonBuiltin*, range_check_ptr: felt}(
+    contract_class_component_hashes: ContractClassComponentHashes*
+) -> felt {
+    assert contract_class_component_hashes.contract_class_version = CONTRACT_CLASS_VERSION;
 
-    let hash: felt = hash_finalize(hash_state=hash_state);
+    let (hash) = poseidon_hash_many(
+        n=ContractClassComponentHashes.SIZE, elements=cast(contract_class_component_hashes, felt*)
+    );
     let (normalized_hash) = normalize_address(addr=hash);
-    return (hash=normalized_hash);
+    return normalized_hash;
 }
