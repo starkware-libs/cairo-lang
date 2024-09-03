@@ -556,7 +556,7 @@ class AddModBuiltinRunner(ModBuiltinRunner):
             known <= res + p
         ), f"add_mod builtin: addend greater than sum + p: {known} > {res} + {p}."
         value = res - known if known <= res else res + p - known
-        return (FillValueResult.Success, value)
+        return (FillValueResult.Success, value % p)
 
 
 class MulModBuiltinRunner(ModBuiltinRunner):
