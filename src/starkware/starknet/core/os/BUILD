@@ -29,13 +29,13 @@ cairo_library(
     srcs = [
         "block_context.cairo",
         "output.cairo",
-        "//src/starkware/starknet/core/os/data_availability:commitment.cairo",
     ],
     hint_deps = [
         "//src/starkware/python:starkware_python_utils_lib",
     ],
     deps = [
-        "//src/starkware/starknet/core/os/data_availability:bls_field",
+        "//src/starkware/starknet/core/os/data_availability:cairo_compression",
+        "//src/starkware/starknet/core/os/data_availability:commitment",
         "//src/starkware/starknet/core/os/state:starknet_os_state_lib",
     ],
 )

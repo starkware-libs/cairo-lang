@@ -282,7 +282,8 @@ class DeprecatedInternalAccountTransaction(DeprecatedInternalTransaction):
             resources_manager=resources_manager,
             general_config=general_config,
             tx_execution_context=self.get_execution_context(
-                n_steps=general_config.validate_max_n_steps, execution_mode=ExecutionMode.VALIDATE
+                n_steps=general_config.get_validate_max_n_steps(),
+                execution_mode=ExecutionMode.VALIDATE,
             ),
         )
 
@@ -336,7 +337,8 @@ class DeprecatedInternalAccountTransaction(DeprecatedInternalTransaction):
             general_config=general_config,
             state=state,
             tx_execution_context=self.get_execution_context(
-                n_steps=general_config.invoke_tx_max_n_steps, execution_mode=ExecutionMode.EXECUTE
+                n_steps=constants.VERSIONED_CONSTANTS.invoke_tx_max_n_steps,
+                execution_mode=ExecutionMode.EXECUTE,
             ),
             actual_fee=actual_fee,
         )
@@ -885,7 +887,8 @@ class DeprecatedInternalDeployAccount(DeprecatedInternalAccountTransaction):
             resources_manager=resources_manager,
             general_config=general_config,
             tx_execution_context=self.get_execution_context(
-                n_steps=general_config.validate_max_n_steps, execution_mode=ExecutionMode.VALIDATE
+                n_steps=general_config.get_validate_max_n_steps(),
+                execution_mode=ExecutionMode.VALIDATE,
             ),
         )
 
@@ -1098,7 +1101,7 @@ class InternalDeploy(DeprecatedInternalTransaction):
             signature=[],
             max_fee=0,
             nonce=0,
-            n_steps=general_config.invoke_tx_max_n_steps,
+            n_steps=constants.VERSIONED_CONSTANTS.invoke_tx_max_n_steps,
             version=self.version,
             execution_mode=ExecutionMode.EXECUTE,
         )
@@ -1384,7 +1387,7 @@ class DeprecatedInternalInvokeFunction(DeprecatedInternalAccountTransaction):
             resources_manager=resources_manager,
             general_config=general_config,
             tx_execution_context=self.get_execution_context(
-                n_steps=general_config.invoke_tx_max_n_steps,
+                n_steps=constants.VERSIONED_CONSTANTS.invoke_tx_max_n_steps,
                 execution_mode=ExecutionMode.EXECUTE,
             ),
         )
@@ -1510,7 +1513,7 @@ class InternalL1Handler(DeprecatedInternalTransaction):
             resources_manager=resources_manager,
             general_config=general_config,
             tx_execution_context=self.get_execution_context(
-                n_steps=general_config.invoke_tx_max_n_steps
+                n_steps=constants.VERSIONED_CONSTANTS.invoke_tx_max_n_steps,
             ),
         )
 

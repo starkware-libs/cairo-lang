@@ -110,6 +110,8 @@ BLOCK_SIGNATURE_VERSION = 1
 L1_TO_L2_MSG_HEADER_SIZE = 5
 L2_TO_L1_MSG_HEADER_SIZE = 3
 CLASS_UPDATE_SIZE = 1
+# Header, unique values (at least one felt), pointers (at least one felt).
+COMPRESSED_DA_SEGMENT_MIN_LENGTH = 3
 
 # OS reserved contract addresses.
 ORIGIN_ADDRESS = 0

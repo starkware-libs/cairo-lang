@@ -8,6 +8,7 @@ from starkware.starknet.core.os.data_availability.commitment import (
     Uint384,
     compute_os_kzg_commitment_info,
 )
+from starkware.starknet.core.os.data_availability.compression import compress
 from starkware.starknet.core.os.state.commitment import CommitmentUpdate
 from starkware.starknet.core.os.state.output import (
     output_contract_class_da_changes,
@@ -74,12 +75,15 @@ func serialize_os_output{range_check_ptr, poseidon_ptr: PoseidonBuiltin*, output
 
     local use_kzg_da = os_output.header.use_kzg_da;
     local full_output = os_output.header.full_output;
+    let compress_state_updates = 1 - full_output;
 
     // Compute the data availability segment.
     local state_updates_start: felt*;
     let state_updates_ptr = state_updates_start;
     %{
-        if ids.use_kzg_da:
+        # `use_kzg_da` is used in a hint in `process_data_availability`.
+        use_kzg_da = ids.use_kzg_da
+        if use_kzg_da or ids.compress_state_updates:
             ids.state_updates_start = segments.add()
         else:
             # Assign a temporary segment, to be relocated into the output segment.
@@ -104,9 +108,15 @@ func serialize_os_output{range_check_ptr, poseidon_ptr: PoseidonBuiltin*, output
 
     serialize_output_header(os_output_header=os_output.header);
 
+    let (local da_start, local da_end) = process_data_availability(
+        state_updates_start=state_updates_start,
+        state_updates_end=state_updates_ptr,
+        compress_state_updates=compress_state_updates,
+    );
+
     if (use_kzg_da != 0) {
         let os_kzg_commitment_info = compute_os_kzg_commitment_info(
-            state_updates_start=state_updates_start, state_updates_end=state_updates_ptr
+            state_updates_start=da_start, state_updates_end=da_end
         );
         serialize_os_kzg_commitment_info(os_kzg_commitment_info=os_kzg_commitment_info);
         tempvar poseidon_ptr = poseidon_ptr;
@@ -126,9 +136,7 @@ func serialize_os_output{range_check_ptr, poseidon_ptr: PoseidonBuiltin*, output
     );
 
     if (use_kzg_da == 0) {
-        serialize_data_availability(
-            state_updates_start=state_updates_start, state_updates_end=state_updates_ptr
-        );
+        serialize_data_availability(da_start=da_start, da_end=da_end);
     }
 
     return ();
@@ -211,14 +219,36 @@ func serialize_os_kzg_commitment_info{output_ptr: felt*}(
     return ();
 }
 
-func serialize_data_availability{output_ptr: felt*}(
-    state_updates_start: felt*, state_updates_end: felt*
-) {
-    let da_start = output_ptr;
+// Returns the final data-availability to output.
+func process_data_availability{range_check_ptr}(
+    state_updates_start: felt*, state_updates_end: felt*, compress_state_updates: felt
+) -> (da_start: felt*, da_end: felt*) {
+    if (compress_state_updates == 0) {
+        return (da_start=state_updates_start, da_end=state_updates_end);
+    }
 
-    // Relocate 'state_updates_segment' to the correct place in the output segment.
-    relocate_segment(src_ptr=state_updates_start, dest_ptr=output_ptr);
-    let output_ptr = state_updates_end;
+    alloc_locals;
+
+    // Output a compression of the state updates.
+    local compressed_start: felt*;
+    %{
+        if use_kzg_da:
+            ids.compressed_start = segments.add()
+        else:
+            # Assign a temporary segment, to be relocated into the output segment.
+            ids.compressed_start = segments.add_temp_segment()
+    %}
+    let compressed_dst = compressed_start;
+    with compressed_dst {
+        compress(data_start=state_updates_start, data_end=state_updates_end);
+    }
+    return (da_start=compressed_start, da_end=compressed_dst);
+}
+
+func serialize_data_availability{output_ptr: felt*}(da_start: felt*, da_end: felt*) {
+    // Relocate data availability segment to the correct place in the output segment.
+    relocate_segment(src_ptr=da_start, dest_ptr=output_ptr);
+    let output_ptr = da_end;
 
     %{
         from starkware.python.math_utils import div_ceil

@@ -11,18 +11,24 @@ from starkware.starknet.core.os.state.commitment import StateEntry
 //     * The contract address (1 word).
 //     * 1 word with the following info:
 //       * A flag indicating whether the class hash was updated,
-//       * the number of entry updates,
+//       * A flag indicating whether the number of updates is small (< 256),
+//       * the number of entry updates (packed according to the previous flag),
+//       * the new nonce (if `full_output` is used or if it was updated),
 //       * the old nonce (if `full_output` is used),
-//       * and the new nonce:
-//          +-------+-----------+-----------+ LSB
-//          | flag  | new nonce | n_updates |
-//          | 1 bit | 64 bits   | 64 bits   |
-//          +-------+-----------+-----------+
+//          +-------------+----------------+------------+ LSB
+//          | n_updates   | n_updates_flag | class_flag |
+//          | 8 or 64 bit | 1 bit          | 1 bit      |
+//          +-------------+----------------+------------+
+//         OR (if the nonce was updated)
+//          +-----------+-------------+----------------+------------+ LSB
+//          | new_nonce | n_updates   | n_updates_flag | class_flag |
+//          | 64 bits   | 8 or 64 bit | 1 bit          | 1 bit      |
+//          +-----------+-------------+----------------+------------+
 //         OR (if `full_output` is used)
-//          +-------+-----------+-----------+-----------+ LSB
-//          | flag  | new nonce | old nonce | n_updates |
-//          | 1 bit | 64 bits   | 64 bits   | 64 bits   |
-//          +-------+-----------+-----------+-----------+
+//          +-----------+-----------+-------------+----------------+------------+ LSB
+//          | old_nonce | new_nonce | n_updates   | n_updates_flag | class_flag |
+//          | 64 bits   | 64 bits   | 8 or 64 bit | 1 bit          | 1 bit      |
+//          +-----------+-----------+-------------+----------------+------------+
 //
 //   * The old class hash for this contract (1 word, if `full_output` is used).
 //   * The new class hash for this contract (1 word, if it was updated or `full_output` is used).
@@ -40,6 +46,8 @@ from starkware.starknet.core.os.state.commitment import StateEntry
 
 // A bound on the number of contract state entry updates in a contract.
 const N_UPDATES_BOUND = 2 ** 64;
+// Number of updates that is lower than this bound will be packed more efficiently in the header.
+const N_UPDATES_SMALL_PACKING_BOUND = 2 ** 8;
 // A bound on the nonce of a contract.
 const NONCE_BOUND = 2 ** 64;
 
@@ -139,28 +147,28 @@ func output_contract_state{range_check_ptr, state_updates_ptr: felt*}(
 ) {
     alloc_locals;
 
-    // Make room for number of state updates.
-    let output_n_updates = [state_updates_ptr];
+    // Make room for number of modified contracts.
+    let output_n_modified_contracts = [state_updates_ptr];
     let state_updates_ptr = state_updates_ptr + 1;
-    let n_actual_state_changes = 0;
+    let n_modified_contracts = 0;
 
-    with n_actual_state_changes {
+    with n_modified_contracts {
         output_contract_state_inner(
             n_contract_state_changes=n_contract_state_changes,
             state_changes=contract_state_changes_start,
             full_output=full_output,
         );
     }
-    // Write number of state updates.
-    assert output_n_updates = n_actual_state_changes;
+    // Write number of modified contracts.
+    assert output_n_modified_contracts = n_modified_contracts;
 
     return ();
 }
 
 // Helper function for `output_contract_state()`.
 //
-// Increases `n_actual_state_changes` by the number of contracts with state changes.
-func output_contract_state_inner{range_check_ptr, state_updates_ptr: felt*, n_actual_state_changes}(
+// Increases `n_modified_contracts` by the number of contracts with state changes.
+func output_contract_state_inner{range_check_ptr, state_updates_ptr: felt*, n_modified_contracts}(
     n_contract_state_changes: felt, state_changes: DictAccess*, full_output: felt
 ) {
     if (n_contract_state_changes == 0) {
@@ -221,27 +229,45 @@ func output_contract_state_inner{range_check_ptr, state_updates_ptr: felt*, n_ac
     assert contract_header[0] = state_changes.key;
 
     // Write the second word of the header.
-    // Write 'was class update' flag.
-    let value = was_class_updated;
-    // Write the new nonce.
+    // Handle the nonce.
     assert_nn_le(new_state_nonce, NONCE_BOUND - 1);
-    let value = value * NONCE_BOUND + new_state_nonce;
-    // Write the old nonce (if `full_output` is used).
     if (full_output == 0) {
-        tempvar value = value;
+        if (prev_state_nonce != new_state_nonce) {
+            tempvar value = new_state_nonce;
+        } else {
+            tempvar value = 0;
+        }
         tempvar range_check_ptr = range_check_ptr;
     } else {
+        // Full output - write the new and old nonces.
         assert_nn_le(prev_state_nonce, NONCE_BOUND - 1);
-        tempvar value = value * NONCE_BOUND + prev_state_nonce;
+        tempvar value = prev_state_nonce * NONCE_BOUND + new_state_nonce;
         tempvar range_check_ptr = range_check_ptr;
     }
+
     // Write the number of updates.
-    assert_nn_le(n_actual_updates, N_UPDATES_BOUND - 1);
-    let value = value * N_UPDATES_BOUND + n_actual_updates;
+    local is_n_updates_small;
+    %{ ids.is_n_updates_small = ids.n_actual_updates < ids.N_UPDATES_SMALL_PACKING_BOUND %}
+    // Verify that the guessed value is 0 or 1.
+    assert is_n_updates_small * is_n_updates_small = is_n_updates_small;
+    if (is_n_updates_small != 0) {
+        tempvar n_updates_bound = N_UPDATES_SMALL_PACKING_BOUND;
+    } else {
+        tempvar n_updates_bound = N_UPDATES_BOUND;
+    }
+    assert_nn_le(n_actual_updates, n_updates_bound - 1);
+    let value = value * n_updates_bound + n_actual_updates;
+
+    // Write 'is_n_updates_small' flag.
+    let value = value * 2 + is_n_updates_small;
+
+    // Write 'was class updated' flag.
+    let value = value * 2 + was_class_updated;
+
     assert contract_header[1] = value;
 
     let state_updates_ptr = cast(storage_diff, felt*);
-    let n_actual_state_changes = n_actual_state_changes + 1;
+    let n_modified_contracts = n_modified_contracts + 1;
 
     return output_contract_state_inner(
         n_contract_state_changes=n_contract_state_changes - 1,

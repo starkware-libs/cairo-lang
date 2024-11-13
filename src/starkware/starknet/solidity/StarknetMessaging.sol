@@ -83,24 +83,39 @@ contract StarknetMessaging is IStarknetMessaging {
     }
 
     /**
-      Returns the hash of an L1 -> L2 message from msg.sender.
+      Returns the hash of an L1 -> L2 message.
     */
-    function getL1ToL2MsgHash(
+    function l1ToL2MsgHash(
+        address fromAddress,
         uint256 toAddress,
         uint256 selector,
         uint256[] calldata payload,
         uint256 nonce
-    ) internal view returns (bytes32) {
+    ) public pure returns (bytes32) {
         return
             keccak256(
                 abi.encodePacked(
-                    uint256(uint160(msg.sender)),
+                    uint256(uint160(fromAddress)),
                     toAddress,
                     nonce,
                     selector,
                     payload.length,
                     payload
                 )
+            );
+    }
+
+    /**
+      Returns the hash of an L2 -> L1 message.
+    */
+    function l2ToL1MsgHash(
+        uint256 fromAddress,
+        address toAddress,
+        uint256[] calldata payload
+    ) public pure returns (bytes32) {
+        return
+            keccak256(
+                abi.encodePacked(fromAddress, uint256(uint160(toAddress)), payload.length, payload)
             );
     }
 
@@ -117,7 +132,7 @@ contract StarknetMessaging is IStarknetMessaging {
         uint256 nonce = l1ToL2MessageNonce();
         NamedStorage.setUintValue(L1L2_MESSAGE_NONCE_TAG, nonce + 1);
         emit LogMessageToL2(msg.sender, toAddress, selector, payload, nonce, msg.value);
-        bytes32 msgHash = getL1ToL2MsgHash(toAddress, selector, payload, nonce);
+        bytes32 msgHash = l1ToL2MsgHash(msg.sender, toAddress, selector, payload, nonce);
         // Note that the inclusion of the unique nonce in the message hash implies that
         // l1ToL2Messages()[msgHash] was not accessed before.
         l1ToL2Messages()[msgHash] = msg.value + 1;
@@ -134,10 +149,7 @@ contract StarknetMessaging is IStarknetMessaging {
         override
         returns (bytes32)
     {
-        bytes32 msgHash = keccak256(
-            abi.encodePacked(fromAddress, uint256(uint160(msg.sender)), payload.length, payload)
-        );
-
+        bytes32 msgHash = l2ToL1MsgHash(fromAddress, msg.sender, payload);
         require(l2ToL1Messages()[msgHash] > 0, "INVALID_MESSAGE_TO_CONSUME");
         emit ConsumedMessageToL1(fromAddress, msg.sender, payload);
         l2ToL1Messages()[msgHash] -= 1;
@@ -151,7 +163,7 @@ contract StarknetMessaging is IStarknetMessaging {
         uint256 nonce
     ) external override returns (bytes32) {
         emit MessageToL2CancellationStarted(msg.sender, toAddress, selector, payload, nonce);
-        bytes32 msgHash = getL1ToL2MsgHash(toAddress, selector, payload, nonce);
+        bytes32 msgHash = l1ToL2MsgHash(msg.sender, toAddress, selector, payload, nonce);
         uint256 msgFeePlusOne = l1ToL2Messages()[msgHash];
         require(msgFeePlusOne > 0, "NO_MESSAGE_TO_CANCEL");
         l1ToL2MessageCancellations()[msgHash] = block.timestamp;
@@ -168,7 +180,7 @@ contract StarknetMessaging is IStarknetMessaging {
         // Note that the message hash depends on msg.sender, which prevents one contract from
         // cancelling another contract's message.
         // Trying to do so will result in NO_MESSAGE_TO_CANCEL.
-        bytes32 msgHash = getL1ToL2MsgHash(toAddress, selector, payload, nonce);
+        bytes32 msgHash = l1ToL2MsgHash(msg.sender, toAddress, selector, payload, nonce);
         uint256 msgFeePlusOne = l1ToL2Messages()[msgHash];
         require(msgFeePlusOne != 0, "NO_MESSAGE_TO_CANCEL");
 

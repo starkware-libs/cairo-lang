@@ -35,6 +35,7 @@ from starkware.starknet.business_logic.fact_state.utils import (
 from starkware.starknet.business_logic.state.state import CachedState
 from starkware.starknet.business_logic.state.state_api import StateReader
 from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
+from starkware.starknet.core.aggregator.output_parser import ContractChanges, OsStateDiff
 from starkware.starknet.definitions import constants, fields
 from starkware.starknet.definitions.data_availability_mode import DataAvailabilityMode
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
@@ -479,14 +480,6 @@ class StateDiff(EverestStateDiff, DBObject):
 
         return data
 
-    async def write(self, storage: Storage) -> bytes:
-        """
-        Writes an entry containing the state diff to the storage under its hash, as a fact object.
-        """
-        hash_value = self.calculate_hash()
-        await self.set(storage=storage, suffix=hash_value)
-        return hash_value
-
     @classmethod
     def empty(cls, block_info: BlockInfo):
         """
@@ -497,6 +490,32 @@ class StateDiff(EverestStateDiff, DBObject):
             nonces={},
             storage_updates={},
             declared_classes={},
+            block_info=block_info,
+        )
+
+    async def write(self, storage: Storage, batch_id: int) -> bytes:
+        """
+        Writes the state diff to the storage under the given batch_id.
+        Returns the key suffix (serialized batch_id).
+        """
+        suffix = str(batch_id).encode("ascii")
+        await self.set(storage=storage, suffix=suffix)
+        return suffix
+
+    @classmethod
+    def create_l1_da_mode(
+        cls,
+        address_to_class_hash: Mapping[int, int],
+        nonces: Mapping[int, int],
+        storage_updates: Mapping[int, Mapping[int, int]],
+        declared_classes: Mapping[int, int],
+        block_info: BlockInfo,
+    ) -> "StateDiff":
+        return cls(
+            address_to_class_hash=address_to_class_hash,
+            nonces={DataAvailabilityMode.L1: nonces},
+            storage_updates={DataAvailabilityMode.L1: storage_updates},
+            declared_classes=declared_classes,
             block_info=block_info,
         )
 
@@ -581,6 +600,91 @@ class StateDiff(EverestStateDiff, DBObject):
             storage_updates=self.storage_updates.get(DataAvailabilityMode.L1, {}),
             block_info=self.block_info,
         )
+
+    def get_os_encoded_length(self) -> int:
+        """
+        Returns the length of the OS encoded representation of the state diff.
+        See src/starkware/starknet/core/os/state/output.cairo.
+        """
+        return len(self.to_os_state_diff().encode())
+
+    def get_marginal_os_encoded_length(self, previous_state_diff: Optional["StateDiff"]) -> int:
+        """
+        Returns the marginal addition of self to the given state diff's length.
+
+        E.g., the following are equivalent:
+          * (a + b).get_os_encoded_length()
+          * a.get_os_encoded_length() + b.get_marginal_os_encoded_length(a)
+        """
+        if previous_state_diff is None:
+            return self.get_os_encoded_length()
+
+        pre_squash_size = previous_state_diff.get_os_encoded_length()
+        post_squash_size = previous_state_diff.squash(other=self).get_os_encoded_length()
+        return post_squash_size - pre_squash_size
+
+    def to_os_state_diff(self) -> OsStateDiff:
+        self.assert_l1_da_mode()
+        nonces = self.nonces.get(DataAvailabilityMode.L1, {})
+        storage_updates = self.storage_updates.get(DataAvailabilityMode.L1, {})
+        modified_contracts = sorted(
+            self.address_to_class_hash.keys() | nonces.keys() | storage_updates.keys()
+        )
+        return OsStateDiff(
+            contracts=[
+                ContractChanges(
+                    addr=addr,
+                    new_nonce=nonces.get(addr, None),
+                    new_class_hash=self.address_to_class_hash.get(addr, None),
+                    storage_changes={
+                        key: (None, value) for key, value in storage_updates.get(addr, {}).items()
+                    },
+                    # Only relevant for `full_output` mode.
+                    prev_nonce=None,
+                    prev_class_hash=None,
+                )
+                for addr in modified_contracts
+            ],
+            classes={
+                class_hash: (None, compiled_class_hash)
+                for class_hash, compiled_class_hash in self.declared_classes.items()
+            },
+        )
+
+    @classmethod
+    def from_os_state_diff(cls, os_state_diff: OsStateDiff, block_info: BlockInfo) -> "StateDiff":
+        contracts = os_state_diff.contracts
+        return cls.create_l1_da_mode(
+            address_to_class_hash={
+                contract.addr: contract.new_class_hash
+                for contract in contracts
+                if contract.new_class_hash is not None
+            },
+            nonces={
+                contract.addr: contract.new_nonce
+                for contract in contracts
+                if contract.new_nonce is not None
+            },
+            storage_updates={
+                contract.addr: {
+                    key: value for key, (_prev, value) in contract.storage_changes.items()
+                }
+                for contract in contracts
+                if len(contract.storage_changes) > 0
+            },
+            declared_classes={
+                class_hash: compiled_class_hash
+                for class_hash, (_prev, compiled_class_hash) in os_state_diff.classes.items()
+            },
+            block_info=block_info,
+        )
+
+    def assert_l1_da_mode(self):
+        supported_da_modes = {DataAvailabilityMode.L1}
+        unsupported_da_modes = (
+            set(self.nonces.keys() | self.storage_updates.keys()) - supported_da_modes
+        )
+        assert len(unsupported_da_modes) == 0, f"Unsupported DA modes: {unsupported_da_modes}."
 
 
 @marshmallow_dataclass.dataclass(frozen=True)

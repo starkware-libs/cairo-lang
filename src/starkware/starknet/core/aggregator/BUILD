@@ -14,7 +14,7 @@ py_library(
         "//src/starkware/cairo/lang/vm:cairo_relocatable_lib",
         "//src/starkware/cairo/lang/vm:cairo_vm_lib",
         "//src/starkware/python:starkware_python_utils_lib",
-        "//src/starkware/starknet/core/os:kzg_manager_lib",
+        "//src/starkware/starknet/core/os/data_availability:compression",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
     ],
 )
@@ -29,6 +29,9 @@ cairo_binary(
         "--debug_info_with_source",
     ],
     compiled_program_name = "aggregator.json",
+    hint_deps = [
+        "//src/starkware/starknet/core/os:kzg_manager_lib",
+    ],
     main = "main.cairo",
     deps = [
         "//src/starkware/starknet/core/os:output",
@@ -43,7 +46,7 @@ pytest_test(
         "aggregator_test.py",
     ],
     data = [
-        ":aggregator.json",
+        ":aggregator",
         "//src/starkware/starknet/core/os/data_availability:bls_field",
     ],
     deps = [
@@ -56,6 +59,7 @@ pytest_test(
         "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
         "//src/starkware/cairo/lang/vm:cairo_vm_lib",
         "//src/starkware/python:starkware_python_test_utils_lib",
+        "//src/starkware/starknet/core/os/data_availability:compression",
     ],
 )
 

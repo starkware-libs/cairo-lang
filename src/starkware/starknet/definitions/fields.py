@@ -30,6 +30,7 @@ from starkware.starkware_utils.marshmallow_dataclass_fields import (
     BytesAsHex,
     EnumField,
     FrozenDictField,
+    StrictOptionalInteger,
     StrictRequiredInteger,
     VariadicLengthTupleField,
 )
@@ -530,7 +531,7 @@ backward_compatible_optional_state_root_metadata = dict(
 )
 
 
-optional_state_diff_hash_metadata = dict(
+optional_state_diff_key_metadata = dict(
     marshmallow_field=BytesAsHex(required=False, load_default=None)
 )
 
@@ -571,12 +572,10 @@ transaction_hash_metadata = TransactionHashField.metadata()
 
 # General config.
 
-invoke_tx_n_steps_metadata = dict(
-    marshmallow_field=StrictRequiredInteger(validate=validate_non_negative("invoke_tx_n_steps"))
-)
-
-validate_n_steps_metadata = dict(
-    marshmallow_field=StrictRequiredInteger(validate=validate_non_negative("validate_n_steps"))
+validate_max_n_steps_override_metadata = dict(
+    marshmallow_field=StrictOptionalInteger(
+        validate=validate_non_negative("validate_max_n_steps_override", allow_none=True)
+    )
 )
 
 gas_price = dict(

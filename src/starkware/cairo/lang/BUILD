@@ -10,6 +10,7 @@ py_library(
     ],
     data = [
         "@" + CAIRO_COMPILER_ARCHIVE,
+        "//src/starkware/starknet/core/os:starknet_os_program_cairo_lib",
     ],
     visibility = ["//visibility:public"],
     deps = [

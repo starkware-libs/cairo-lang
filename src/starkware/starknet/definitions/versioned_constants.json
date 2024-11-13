@@ -11,7 +11,7 @@
             1
         ],
         "gas_per_code_byte": [
-            875,
+            32,
             1000
         ],
         "gas_per_data_felt": [

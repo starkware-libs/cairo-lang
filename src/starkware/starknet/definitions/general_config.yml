@@ -7,10 +7,9 @@ gas_price_bounds:
   min_fri_l1_gas_price: 30000000000
   min_wei_l1_data_gas_price: 100000
   min_wei_l1_gas_price: 10000000000
-invoke_tx_max_n_steps: 1000000
-sequencer_address: '0x795488c127693ffb36733cc054f9e2be39241a794a4877dc8fc1dbe52750488'
+sequencer_address: '0x31c641e041f8d25997985b0efe68d0c5ce89d418ca9a127ae043aebed6851c5'
 starknet_os_config:
   chain_id: 1536727068981429685321
-  deprecated_fee_token_address: '0x4201b1ca8320dd248a9c18aeae742db64b0ea0f6f1f5a4c72ddb6b725e16316'
-  fee_token_address: '0x3c0178a04b4d297c884e366bb0a2ec0f682188ba604d71955134a203d4f2adc'
-validate_max_n_steps: 1000000
+  deprecated_fee_token_address: '0x5195ba458d98a8d5a390afa87e199566e473d1124c07a3c57bf19813255ac41'
+  fee_token_address: '0x7ce4aa542d72a82662cda96b147da9b041ecf8c61f67ef657f3bbb852fc698f'
+validate_max_n_steps_override: 1000000

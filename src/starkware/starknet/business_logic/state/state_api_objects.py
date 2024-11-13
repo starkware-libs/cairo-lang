@@ -92,7 +92,7 @@ class BlockInfo(ValidatedMarshmallowDataclass):
     # The sequencer address of this block.
     sequencer_address: Optional[int] = field(metadata=fields.optional_sequencer_address_metadata)
 
-    # The version of Starknet system (e.g., "0.13.2").
+    # The version of Starknet system (e.g., "0.13.3").
     starknet_version: Optional[str] = field(metadata=fields.starknet_version_metadata)
 
     # Indicates whether to use KZG commitment scheme for the block's Data Avilability.
@@ -105,12 +105,12 @@ class BlockInfo(ValidatedMarshmallowDataclass):
         return rename_old_gas_price_fields(data=data)
 
     @classmethod
-    def empty(cls, sequencer_address: Optional[int]) -> "BlockInfo":
+    def empty(cls, sequencer_address: Optional[int], block_number: int = -1) -> "BlockInfo":
         """
         Returns an empty BlockInfo object; i.e., the one before the first in the chain.
         """
         return cls(
-            block_number=-1,
+            block_number=block_number,
             block_timestamp=0,
             # As gas prices must be non-zero, just use 1 for all prices.
             l1_gas_price=ResourcePrice(price_in_wei=1, price_in_fri=1),

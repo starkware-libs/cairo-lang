@@ -56,10 +56,12 @@ class OsOutputToCairo:
             ptr=messages_to_l2_start, arg=os_output.messages_to_l2
         )
 
+        state_diff = os_output.state_diff
+        assert state_diff is not None, "Missing state diff information."
+
         # Handle contract state changes.
         storage_dict: List[MaybeRelocatable] = []
-        assert os_output.contracts is not None, "Missing contract changes information."
-        for contract in os_output.contracts:
+        for contract in state_diff.contracts:
             if contract.addr in self._inner_storage:
                 state_entry = self._inner_storage[contract.addr]
             else:
@@ -86,6 +88,7 @@ class OsOutputToCairo:
                 storage_changes.append(new_value)
 
             assert contract.new_class_hash is not None, "Missing new class hash."
+            assert contract.new_nonce is not None, "Missing new nonce."
             state_entry.add_state_entry(
                 segments=segments,
                 class_hash=contract.new_class_hash,
@@ -103,8 +106,7 @@ class OsOutputToCairo:
         # Handle compiled class changes.
         class_dict = []
 
-        assert os_output.classes is not None, "Missing class changes information."
-        for class_hash, (prev_compiled_hash, new_compiled_hash) in os_output.classes.items():
+        for class_hash, (prev_compiled_hash, new_compiled_hash) in state_diff.classes.items():
             assert prev_compiled_hash is not None, "Missing previous compiled class hash."
             class_dict.append(class_hash)
             class_dict.append(prev_compiled_hash)

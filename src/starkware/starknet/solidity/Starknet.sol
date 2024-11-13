@@ -157,7 +157,7 @@ contract Starknet is
         return 0;
     }
 
-    function validateInitData(bytes calldata data) internal view override {
+    function validateInitData(bytes calldata data) internal pure override {
         require(data.length == 7 * 32, "ILLEGAL_INIT_DATA_SIZE");
         uint256 programHash_ = abi.decode(data[:32], (uint256));
         require(programHash_ != 0, "BAD_INITIALIZATION");
@@ -189,6 +189,7 @@ contract Starknet is
     */
     function verifyKzgProofs(uint256[] calldata programOutputSlice, bytes[] calldata kzgProofs)
         internal
+        view
     {
         require(programOutputSlice.length >= 2, "KZG_SEGMENT_TOO_SHORT");
         bytes32 z = bytes32(programOutputSlice[StarknetOutput.KZG_Z_OFFSET]);

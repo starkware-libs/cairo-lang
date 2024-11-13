@@ -24,7 +24,10 @@ library StarknetState {
       and validate that we have the expected block number at the end.
       This function must be called at the beginning of the updateState transaction.
     */
-    function checkPrevBlockNumber(State storage state, uint256[] calldata starknetOutput) internal {
+    function checkPrevBlockNumber(State storage state, uint256[] calldata starknetOutput)
+        internal
+        view
+    {
         uint256 expectedPrevBlockNumber;
         if (state.blockNumber == -1) {
             expectedPrevBlockNumber = 0x800000000000011000000000000000000000000000000000000000000000000;
@@ -41,7 +44,10 @@ library StarknetState {
       Validates that the current block number is the new block number.
       This is used to protect against re-entrancy attacks.
     */
-    function checkNewBlockNumber(State storage state, uint256[] calldata starknetOutput) internal {
+    function checkNewBlockNumber(State storage state, uint256[] calldata starknetOutput)
+        internal
+        view
+    {
         require(
             uint256(state.blockNumber) == starknetOutput[StarknetOutput.NEW_BLOCK_NUMBER_OFFSET],
             "REENTRANCY_FAILURE"

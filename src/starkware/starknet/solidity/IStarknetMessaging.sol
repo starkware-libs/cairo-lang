@@ -16,6 +16,26 @@ interface IStarknetMessaging is IStarknetMessagingEvents {
     function l1ToL2Messages(bytes32 msgHash) external view returns (uint256);
 
     /**
+      Returns the hash of an L1 -> L2 message.
+    */
+    function l1ToL2MsgHash(
+        address fromAddress,
+        uint256 toAddress,
+        uint256 selector,
+        uint256[] calldata payload,
+        uint256 nonce
+    ) external pure returns (bytes32);
+
+    /**
+      Returns the hash of an L2 -> L1 message.
+    */
+    function l2ToL1MsgHash(
+        uint256 fromAddress,
+        address toAddress,
+        uint256[] calldata payload
+    ) external pure returns (bytes32);
+
+    /**
       Sends a message to an L2 contract.
       This function is payable, the payed amount is the message fee.
 

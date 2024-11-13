@@ -40,7 +40,7 @@ from starkware.starknet.core.os import os_utils, syscall_utils
 from starkware.starknet.core.os.deprecated_syscall_handler import DeprecatedBlSyscallHandler
 from starkware.starknet.core.os.syscall_handler import BusinessLogicSyscallHandler
 from starkware.starknet.definitions import fields
-from starkware.starknet.definitions.constants import GasCost
+from starkware.starknet.definitions.constants import VERSIONED_CONSTANTS, GasCost
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.execution_mode import ExecutionMode
 from starkware.starknet.definitions.general_config import (
@@ -133,7 +133,7 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
             state=state,
             resources_manager=ExecutionResourcesManager.empty(),
             tx_execution_context=TransactionExecutionContext.create_for_testing(
-                n_steps=general_config.invoke_tx_max_n_steps
+                n_steps=VERSIONED_CONSTANTS.invoke_tx_max_n_steps,
             ),
             general_config=general_config,
             support_reverted=support_reverted,
@@ -146,10 +146,13 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
         resources_manager: Optional[ExecutionResourcesManager] = None,
         tx_execution_context: Optional[TransactionExecutionContext] = None,
         execution_mode: ExecutionMode = ExecutionMode.EXECUTE,
+        invoke_tx_max_n_steps: Optional[int] = None,
     ) -> CallInfo:
+        if invoke_tx_max_n_steps is None:
+            invoke_tx_max_n_steps = VERSIONED_CONSTANTS.invoke_tx_max_n_steps
         if tx_execution_context is None:
             tx_execution_context = TransactionExecutionContext.create_for_testing(
-                n_steps=general_config.invoke_tx_max_n_steps, execution_mode=execution_mode
+                n_steps=invoke_tx_max_n_steps, execution_mode=execution_mode
             )
 
         if resources_manager is None:

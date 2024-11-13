@@ -9,7 +9,7 @@ contract StarknetGovernance is Governance {
     /*
       Returns the GovernanceInfoStruct associated with the governance tag.
     */
-    function getGovernanceInfo() internal view override returns (GovernanceInfoStruct storage gub) {
+    function getGovernanceInfo() internal pure override returns (GovernanceInfoStruct storage gub) {
         bytes32 location = keccak256(abi.encodePacked(STARKNET_GOVERNANCE_INFO_TAG));
         assembly {
             gub.slot := location

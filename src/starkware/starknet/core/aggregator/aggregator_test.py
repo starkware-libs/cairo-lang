@@ -1,6 +1,7 @@
+import itertools
 import os
 from enum import Enum, auto
-from typing import List, Optional, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 import pytest
 
@@ -16,12 +17,15 @@ from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.vm.vm_exceptions import VmException
 from starkware.python.test_utils import maybe_raises
 from starkware.starknet.core.aggregator.output_parser import (
+    N_UPDATES_SMALL_PACKING_BOUND,
     ContractChanges,
     OsOutput,
+    OsStateDiff,
     TaskOutput,
     parse_bootloader_output,
 )
 from starkware.starknet.core.aggregator.utils import OsOutputToCairo
+from starkware.starknet.core.os.data_availability.compression import compress
 
 # Dummy values for the test.
 OS_PROGRAM_HASH = 0x7E0B89C77D0003C05511B9F0E1416F1328C2132E41E056B2EF3BC950135360F
@@ -102,16 +106,8 @@ def aggregator_program() -> Program:
     return Program.loads(data=open(AGGREGATOR_COMPILED_PATH).read())
 
 
-def contract_header_packed_word(
-    n_updates: int, prev_nonce: int, new_nonce: int, class_updated: int, full_output: bool
-) -> int:
-    """
-    Returns the second word of the contract header.
-    """
-    if full_output:
-        return n_updates + prev_nonce * 2**64 + new_nonce * 2**128 + class_updated * 2**192
-    else:
-        return n_updates + new_nonce * 2**64 + class_updated * 2**128
+def remove_none_values(array: Sequence[Optional[int]]) -> List[int]:
+    return [x for x in array if x is not None]
 
 
 class FailureModifier(Enum):
@@ -126,7 +122,7 @@ class FailureModifier(Enum):
 
 
 def block0_output(full_output: bool):
-    res = [
+    partial_res_with_nones = [
         # initial_root.
         ROOT0,
         # final_root.
@@ -152,11 +148,14 @@ def block0_output(full_output: bool):
         # Messages to L2.
         len(MSG_TO_L2_0),
         *MSG_TO_L2_0,
+    ]
+    partial_res = remove_none_values(partial_res_with_nones)
+    da_with_nones = [
         # Number of contracts.
         2,
         # Contract addr.
         CONTRACT_ADDR0,
-        contract_header_packed_word(
+        ContractChanges.encode_header(
             n_updates=3, prev_nonce=0, new_nonce=1, class_updated=1, full_output=full_output
         ),
         # Class hash.
@@ -175,7 +174,7 @@ def block0_output(full_output: bool):
         # Contract whose block0 changes are fully reverted by block1.
         # Contract addr.
         CONTRACT_ADDR1,
-        contract_header_packed_word(
+        ContractChanges.encode_header(
             n_updates=1, prev_nonce=10, new_nonce=10, class_updated=1, full_output=full_output
         ),
         # Class hash.
@@ -195,12 +194,15 @@ def block0_output(full_output: bool):
         COMPILED_CLASS_HASH1_0 if full_output else None,
         COMPILED_CLASS_HASH1_1,
     ]
-    return [x for x in res if x is not None]
+    da = remove_none_values(da_with_nones)
+    if not full_output:
+        da = compress(data=da)
+    return partial_res + da
 
 
 def block1_output(full_output: bool, modifier: FailureModifier = FailureModifier.NONE):
     maybe_wrong = lambda x, modifier0: x + (10 if modifier == modifier0 else 0)
-    res = [
+    partial_res_with_nones = [
         # initial_root.
         maybe_wrong(ROOT1, FailureModifier.ROOT),
         # final_root.
@@ -226,11 +228,14 @@ def block1_output(full_output: bool, modifier: FailureModifier = FailureModifier
         # Messages to L2.
         len(MSG_TO_L2_1),
         *MSG_TO_L2_1,
+    ]
+    partial_res = remove_none_values(partial_res_with_nones)
+    da_with_nones = [
         # Number of contracts.
         3,
         # Contract addr.
         CONTRACT_ADDR0,
-        contract_header_packed_word(
+        ContractChanges.encode_header(
             n_updates=2, prev_nonce=1, new_nonce=2, class_updated=0, full_output=full_output
         ),
         # Class hash.
@@ -246,7 +251,7 @@ def block1_output(full_output: bool, modifier: FailureModifier = FailureModifier
         # Contract whose block0 changes are fully reverted by block1.
         # Contract addr.
         CONTRACT_ADDR1,
-        contract_header_packed_word(
+        ContractChanges.encode_header(
             n_updates=1, prev_nonce=10, new_nonce=10, class_updated=1, full_output=full_output
         ),
         # Class hash.
@@ -259,8 +264,12 @@ def block1_output(full_output: bool, modifier: FailureModifier = FailureModifier
         # Contract that only appears in this block (block1).
         # Contract addr.
         CONTRACT_ADDR2,
-        contract_header_packed_word(
-            n_updates=1, prev_nonce=7, new_nonce=8, class_updated=0, full_output=full_output
+        ContractChanges.encode_header(
+            n_updates=1 + N_UPDATES_SMALL_PACKING_BOUND,
+            prev_nonce=7,
+            new_nonce=8,
+            class_updated=0,
+            full_output=full_output,
         ),
         # Class hash.
         CLASS_HASH2_0 if full_output else None,
@@ -269,6 +278,15 @@ def block1_output(full_output: bool, modifier: FailureModifier = FailureModifier
         STORAGE_KEY4,
         STORAGE_VALUE4_0 if full_output else None,
         STORAGE_VALUE4_2,
+        # Write 256 values to test contract header packing with a large number of updates.
+        *itertools.chain.from_iterable(
+            (
+                STORAGE_KEY4 + 1 + i,
+                0 if full_output else None,
+                1,
+            )
+            for i in range(N_UPDATES_SMALL_PACKING_BOUND)
+        ),
         # Number of classes.
         1,
         CLASS_HASH0_0,
@@ -279,7 +297,10 @@ def block1_output(full_output: bool, modifier: FailureModifier = FailureModifier
         ),
         COMPILED_CLASS_HASH0_2,
     ]
-    return [x for x in res if x is not None]
+    da = remove_none_values(da_with_nones)
+    if not full_output:
+        da = compress(data=da)
+    return partial_res + da
 
 
 def combined_output(full_output: bool, use_kzg_da: bool = False):
@@ -315,16 +336,16 @@ def combined_output(full_output: bool, use_kzg_da: bool = False):
         *MSG_TO_L2_1,
         *([] if use_kzg_da else da),
     ]
-    return [x for x in res if x is not None]
+    return remove_none_values(res)
 
 
 def combined_output_da(full_output: bool):
-    res = [
+    res_with_nones = [
         # Number of contracts.
         3 if full_output else 2,
         # Contract addr.
         CONTRACT_ADDR0,
-        contract_header_packed_word(
+        ContractChanges.encode_header(
             n_updates=4, prev_nonce=0, new_nonce=2, class_updated=1, full_output=full_output
         ),
         # Class hash.
@@ -346,7 +367,7 @@ def combined_output_da(full_output: bool):
         # Contract addr.
         CONTRACT_ADDR1 if full_output else None,
         (
-            contract_header_packed_word(
+            ContractChanges.encode_header(
                 n_updates=0, prev_nonce=10, new_nonce=10, class_updated=0, full_output=full_output
             )
             if full_output
@@ -357,8 +378,12 @@ def combined_output_da(full_output: bool):
         CLASS_HASH1_0 if full_output else None,
         # Contract addr.
         CONTRACT_ADDR2,
-        contract_header_packed_word(
-            n_updates=1, prev_nonce=7, new_nonce=8, class_updated=0, full_output=full_output
+        ContractChanges.encode_header(
+            n_updates=1 + N_UPDATES_SMALL_PACKING_BOUND,
+            prev_nonce=7,
+            new_nonce=8,
+            class_updated=0,
+            full_output=full_output,
         ),
         # Class hash.
         CLASS_HASH2_0 if full_output else None,
@@ -367,6 +392,14 @@ def combined_output_da(full_output: bool):
         STORAGE_KEY4,
         STORAGE_VALUE4_0 if full_output else None,
         STORAGE_VALUE4_2,
+        *itertools.chain.from_iterable(
+            (
+                STORAGE_KEY4 + 1 + i,
+                0 if full_output else None,
+                1,
+            )
+            for i in range(N_UPDATES_SMALL_PACKING_BOUND)
+        ),
         # Number of classes.
         2,
         # Class updates.
@@ -377,7 +410,10 @@ def combined_output_da(full_output: bool):
         COMPILED_CLASS_HASH1_0 if full_output else None,
         COMPILED_CLASS_HASH1_1,
     ]
-    return [x for x in res if x is not None]
+    res = remove_none_values(res_with_nones)
+    if not full_output:
+        return compress(data=res)
+    return res
 
 
 def combined_kzg_info(da: List[int]) -> List[int]:
@@ -423,52 +459,54 @@ def test_output_parser(full_output: bool):
                 full_output=1 if full_output else 0,
                 messages_to_l1=MSG_TO_L1_0,
                 messages_to_l2=MSG_TO_L2_0,
-                contracts=[
-                    ContractChanges(
-                        addr=CONTRACT_ADDR0,
-                        prev_nonce=0 if full_output else None,
-                        new_nonce=1,
-                        prev_class_hash=CLASS_HASH0_0 if full_output else None,
-                        new_class_hash=CLASS_HASH0_1,
-                        storage_changes={
-                            STORAGE_KEY0: (
-                                STORAGE_VALUE0_0 if full_output else None,
-                                STORAGE_VALUE0_1,
-                            ),
-                            STORAGE_KEY1: (
-                                STORAGE_VALUE1_0 if full_output else None,
-                                STORAGE_VALUE1_1,
-                            ),
-                            STORAGE_KEY2: (
-                                STORAGE_VALUE2_0 if full_output else None,
-                                STORAGE_VALUE2_1,
-                            ),
-                        },
-                    ),
-                    ContractChanges(
-                        addr=CONTRACT_ADDR1,
-                        prev_nonce=10 if full_output else None,
-                        new_nonce=10,
-                        prev_class_hash=CLASS_HASH1_0 if full_output else None,
-                        new_class_hash=CLASS_HASH1_1,
-                        storage_changes={
-                            STORAGE_KEY0: (
-                                STORAGE_VALUE0_0 if full_output else None,
-                                STORAGE_VALUE0_1,
-                            ),
-                        },
-                    ),
-                ],
-                classes={
-                    CLASS_HASH0_0: (
-                        COMPILED_CLASS_HASH0_0 if full_output else None,
-                        COMPILED_CLASS_HASH0_1,
-                    ),
-                    CLASS_HASH1_0: (
-                        COMPILED_CLASS_HASH1_0 if full_output else None,
-                        COMPILED_CLASS_HASH1_1,
-                    ),
-                },
+                state_diff=OsStateDiff(
+                    contracts=[
+                        ContractChanges(
+                            addr=CONTRACT_ADDR0,
+                            prev_nonce=0 if full_output else None,
+                            new_nonce=1,
+                            prev_class_hash=CLASS_HASH0_0 if full_output else None,
+                            new_class_hash=CLASS_HASH0_1,
+                            storage_changes={
+                                STORAGE_KEY0: (
+                                    STORAGE_VALUE0_0 if full_output else None,
+                                    STORAGE_VALUE0_1,
+                                ),
+                                STORAGE_KEY1: (
+                                    STORAGE_VALUE1_0 if full_output else None,
+                                    STORAGE_VALUE1_1,
+                                ),
+                                STORAGE_KEY2: (
+                                    STORAGE_VALUE2_0 if full_output else None,
+                                    STORAGE_VALUE2_1,
+                                ),
+                            },
+                        ),
+                        ContractChanges(
+                            addr=CONTRACT_ADDR1,
+                            prev_nonce=10 if full_output else None,
+                            new_nonce=10 if full_output else None,
+                            prev_class_hash=CLASS_HASH1_0 if full_output else None,
+                            new_class_hash=CLASS_HASH1_1,
+                            storage_changes={
+                                STORAGE_KEY0: (
+                                    STORAGE_VALUE0_0 if full_output else None,
+                                    STORAGE_VALUE0_1,
+                                ),
+                            },
+                        ),
+                    ],
+                    classes={
+                        CLASS_HASH0_0: (
+                            COMPILED_CLASS_HASH0_0 if full_output else None,
+                            COMPILED_CLASS_HASH0_1,
+                        ),
+                        CLASS_HASH1_0: (
+                            COMPILED_CLASS_HASH1_0 if full_output else None,
+                            COMPILED_CLASS_HASH1_1,
+                        ),
+                    },
+                ),
             ),
         ),
         TaskOutput(
@@ -486,57 +524,63 @@ def test_output_parser(full_output: bool):
                 full_output=1 if full_output else 0,
                 messages_to_l1=MSG_TO_L1_1,
                 messages_to_l2=MSG_TO_L2_1,
-                contracts=[
-                    ContractChanges(
-                        addr=CONTRACT_ADDR0,
-                        prev_nonce=1 if full_output else None,
-                        new_nonce=2,
-                        prev_class_hash=CLASS_HASH0_1 if full_output else None,
-                        new_class_hash=CLASS_HASH0_1 if full_output else None,
-                        storage_changes={
-                            STORAGE_KEY0: (
-                                STORAGE_VALUE0_1 if full_output else None,
-                                STORAGE_VALUE0_2,
-                            ),
-                            STORAGE_KEY3: (
-                                STORAGE_VALUE3_0 if full_output else None,
-                                STORAGE_VALUE3_2,
-                            ),
-                        },
-                    ),
-                    ContractChanges(
-                        addr=CONTRACT_ADDR1,
-                        prev_nonce=10 if full_output else None,
-                        new_nonce=10,
-                        prev_class_hash=CLASS_HASH1_1 if full_output else None,
-                        new_class_hash=CLASS_HASH1_0,
-                        storage_changes={
-                            STORAGE_KEY0: (
-                                STORAGE_VALUE0_1 if full_output else None,
-                                STORAGE_VALUE0_0,
-                            ),
-                        },
-                    ),
-                    ContractChanges(
-                        addr=CONTRACT_ADDR2,
-                        prev_nonce=7 if full_output else None,
-                        new_nonce=8,
-                        prev_class_hash=CLASS_HASH2_0 if full_output else None,
-                        new_class_hash=CLASS_HASH2_0 if full_output else None,
-                        storage_changes={
-                            STORAGE_KEY4: (
-                                STORAGE_VALUE4_0 if full_output else None,
-                                STORAGE_VALUE4_2,
-                            ),
-                        },
-                    ),
-                ],
-                classes={
-                    CLASS_HASH0_0: (
-                        COMPILED_CLASS_HASH0_1 if full_output else None,
-                        COMPILED_CLASS_HASH0_2,
-                    ),
-                },
+                state_diff=OsStateDiff(
+                    contracts=[
+                        ContractChanges(
+                            addr=CONTRACT_ADDR0,
+                            prev_nonce=1 if full_output else None,
+                            new_nonce=2,
+                            prev_class_hash=CLASS_HASH0_1 if full_output else None,
+                            new_class_hash=CLASS_HASH0_1 if full_output else None,
+                            storage_changes={
+                                STORAGE_KEY0: (
+                                    STORAGE_VALUE0_1 if full_output else None,
+                                    STORAGE_VALUE0_2,
+                                ),
+                                STORAGE_KEY3: (
+                                    STORAGE_VALUE3_0 if full_output else None,
+                                    STORAGE_VALUE3_2,
+                                ),
+                            },
+                        ),
+                        ContractChanges(
+                            addr=CONTRACT_ADDR1,
+                            prev_nonce=10 if full_output else None,
+                            new_nonce=10 if full_output else None,
+                            prev_class_hash=CLASS_HASH1_1 if full_output else None,
+                            new_class_hash=CLASS_HASH1_0,
+                            storage_changes={
+                                STORAGE_KEY0: (
+                                    STORAGE_VALUE0_1 if full_output else None,
+                                    STORAGE_VALUE0_0,
+                                ),
+                            },
+                        ),
+                        ContractChanges(
+                            addr=CONTRACT_ADDR2,
+                            prev_nonce=7 if full_output else None,
+                            new_nonce=8,
+                            prev_class_hash=CLASS_HASH2_0 if full_output else None,
+                            new_class_hash=CLASS_HASH2_0 if full_output else None,
+                            storage_changes={
+                                STORAGE_KEY4: (
+                                    STORAGE_VALUE4_0 if full_output else None,
+                                    STORAGE_VALUE4_2,
+                                ),
+                                **{
+                                    STORAGE_KEY4 + 1 + i: (0 if full_output else None, 1)
+                                    for i in range(N_UPDATES_SMALL_PACKING_BOUND)
+                                },
+                            },
+                        ),
+                    ],
+                    classes={
+                        CLASS_HASH0_0: (
+                            COMPILED_CLASS_HASH0_1 if full_output else None,
+                            COMPILED_CLASS_HASH0_2,
+                        ),
+                    },
+                ),
             ),
         ),
     ]

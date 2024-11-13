@@ -15,6 +15,7 @@ py_library(
         "//src/starkware/cairo/lang/vm:cairo_vm_crypto_lib",
         "//src/starkware/python:starkware_python_utils_lib",
         "//src/starkware/starknet/business_logic/state:starknet_business_logic_state_lib",
+        "//src/starkware/starknet/core/aggregator:cairo_aggregator_lib",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
         "//src/starkware/starknet/definitions:starknet_general_config_lib",
         "//src/starkware/starkware_utils:starkware_config_utils_lib",

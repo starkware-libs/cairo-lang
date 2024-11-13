@@ -61,3 +61,29 @@ cairo_library(
         "//src/starkware/cairo/common:cairo_common_cairo_lib",
     ],
 )
+
+py_library(
+    name = "compression",
+    srcs = [
+        "compression.py",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//src/starkware/cairo/lang:cairo_constants_lib",
+        "//src/starkware/python:starkware_python_utils_lib",
+    ],
+)
+
+cairo_library(
+    name = "cairo_compression",
+    srcs = [
+        "compression.cairo",
+    ],
+    hint_deps = [
+        ":compression",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//src/starkware/cairo/common:cairo_common_cairo_lib",
+    ],
+)

@@ -1,7 +1,10 @@
 from enum import Enum
-from typing import Set
+from typing import Dict, Set
 
 from starkware.python.utils import from_bytes
+from starkware.starknet.definitions.overridable_versioned_constants import (
+    OverridableVersionedConstants,
+)
 
 FEE_TOKEN_ADDRESS = 0x04718F5A0FC34CC1AF16A1CDEE98FFB20C31F5CD61D6AB07201858F4287C938D
 DEPRECATED_FEE_TOKEN_ADDRESS = 0x49D36570D4E46F48E99674BD3FCC84644DDD6B96F7C741B1562B82F9E004DC7
@@ -25,3 +28,5 @@ CHAIN_ID_TO_FEE_TOKEN_ADDRESS = {chain_enum: FEE_TOKEN_ADDRESS for chain_enum in
 CHAIN_ID_TO_DEPRECATED_FEE_TOKEN_ADDRESS = {
     chain_enum: DEPRECATED_FEE_TOKEN_ADDRESS for chain_enum in StarknetChainId
 }
+
+CHAIN_ID_TO_PRIVATE_VERSIONED_CONSTANTS: Dict[StarknetChainId, OverridableVersionedConstants] = {}
