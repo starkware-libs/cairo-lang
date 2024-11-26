@@ -10,8 +10,9 @@ class ScopedName:
     path: Tuple[str, ...] = ()
 
     def __post_init__(self):
-        assert "" not in self.path, "Empty namespace is not supported."
-        assert all([self.SEPARATOR not in part for part in self.path])
+        for part in self.path:
+            if part == "" or self.SEPARATOR in part:
+                raise AssertionError
 
     @classmethod
     def from_string(cls, scope: str) -> "ScopedName":
