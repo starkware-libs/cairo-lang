@@ -39,7 +39,7 @@ class RunContext(RunContextBase):
     fp: MaybeRelocatable
     prime: int
 
-    def get_instruction_encoding(self) -> Tuple[int, Optional[int]]:
+    def get_instruction_encoding(self) -> Tuple[int, Optional[MaybeRelocatable]]:
         """
         Returns the encoded instruction (the value at pc) and the immediate value (the value at
         pc + 1, if it exists in the memory).
@@ -52,8 +52,6 @@ class RunContext(RunContextBase):
 
         imm_addr = (self.pc + 1) % self.prime
         optional_imm = self.memory.get(imm_addr)
-        if not isinstance(optional_imm, int):
-            optional_imm = None
         return instruction_encoding, optional_imm
 
     def compute_dst_addr(self, instruction: Instruction):
@@ -276,7 +274,9 @@ class VirtualMachine(VirtualMachineBase):
         else:
             raise NotImplementedError("Invalid res value")
 
-    def compute_operands(self, instruction: Instruction) -> Tuple[Operands, List[int]]:
+    def compute_operands(
+        self, instruction: Instruction
+    ) -> Tuple[Operands, List[MaybeRelocatable]]:
         """
         Computes the values of the operands. Deduces dst if needed.
         Returns:
