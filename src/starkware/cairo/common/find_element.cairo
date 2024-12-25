@@ -10,7 +10,7 @@ const FIND_ELEMENT_RANGE_CHECK_USAGE = 2;
 
 // Finds an element in the array whose first field is key and returns a pointer
 // to this element.
-// Since cairo is nondeterministic this is an O(1) operation.
+// Since Cairo is nondeterministic this is an O(1) operation.
 // Note however that if the array has multiple elements with said key the function may return any
 // of those elements.
 //
