@@ -144,9 +144,9 @@ func is_on_curve{range_check_ptr}(x: BigInt3, y: BigInt3) -> (res: felt) {
         d0=x_cube.d0 + BETA - y_square.d0, d1=x_cube.d1 - y_square.d1, d2=x_cube.d2 - y_square.d2
     );
 
-    let (reduced_diff) = reduce(diff);
-
-    return is_zero(reduced_diff);
+    reduce(diff);
+    call is_zero;
+    ret;
 }
 
 // Returns a point on the secp256k1 curve with the given x coordinate. Chooses the y that has the
