@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 pragma solidity ^0.8.0;
 
-import "./Output.sol";
+import "starkware/starknet/solidity/Output.sol";
 
 library StarknetState {
     struct State {

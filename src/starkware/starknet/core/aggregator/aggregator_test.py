@@ -1,4 +1,3 @@
-import itertools
 import os
 from enum import Enum, auto
 from typing import List, Optional, Sequence, Tuple
@@ -153,37 +152,32 @@ def block0_output(full_output: bool):
     da_with_nones = [
         # Number of contracts.
         2,
-        # Contract addr.
-        CONTRACT_ADDR0,
-        ContractChanges.encode_header(
-            n_updates=3, prev_nonce=0, new_nonce=1, class_updated=1, full_output=full_output
-        ),
-        # Class hash.
-        CLASS_HASH0_0 if full_output else None,
-        CLASS_HASH0_1,
-        # Storage updates.
-        STORAGE_KEY0,
-        STORAGE_VALUE0_0 if full_output else None,
-        STORAGE_VALUE0_1,
-        STORAGE_KEY1,
-        STORAGE_VALUE1_0 if full_output else None,
-        STORAGE_VALUE1_1,
-        STORAGE_KEY2,
-        STORAGE_VALUE2_0 if full_output else None,
-        STORAGE_VALUE2_1,
+        # Contract updates.
+        *ContractChanges(
+            addr=CONTRACT_ADDR0,
+            prev_nonce=0,
+            new_nonce=1,
+            prev_class_hash=CLASS_HASH0_0,
+            new_class_hash=CLASS_HASH0_1,
+            storage_changes=[
+                (STORAGE_KEY0, (STORAGE_VALUE0_0, STORAGE_VALUE0_1)),
+                # These keys are not sorted on purpose (STORAGE_KEY2 > STORAGE_KEY1) - to test
+                # that the aggregator loads them in the given order.
+                (STORAGE_KEY2, (STORAGE_VALUE2_0, STORAGE_VALUE2_1)),
+                (STORAGE_KEY1, (STORAGE_VALUE1_0, STORAGE_VALUE1_1)),
+            ],
+        ).encode(full_output=full_output),
         # Contract whose block0 changes are fully reverted by block1.
-        # Contract addr.
-        CONTRACT_ADDR1,
-        ContractChanges.encode_header(
-            n_updates=1, prev_nonce=10, new_nonce=10, class_updated=1, full_output=full_output
-        ),
-        # Class hash.
-        CLASS_HASH1_0 if full_output else None,
-        CLASS_HASH1_1,
-        # Storage updates.
-        STORAGE_KEY0,
-        STORAGE_VALUE0_0 if full_output else None,
-        STORAGE_VALUE0_1,
+        *ContractChanges(
+            addr=CONTRACT_ADDR1,
+            prev_nonce=10,
+            new_nonce=10,
+            prev_class_hash=CLASS_HASH1_0,
+            new_class_hash=CLASS_HASH1_1,
+            storage_changes=[
+                (STORAGE_KEY0, (STORAGE_VALUE0_0, STORAGE_VALUE0_1)),
+            ],
+        ).encode(full_output=full_output),
         # Number of classes.
         2,
         # Class updates.
@@ -233,62 +227,51 @@ def block1_output(full_output: bool, modifier: FailureModifier = FailureModifier
     da_with_nones = [
         # Number of contracts.
         3,
-        # Contract addr.
-        CONTRACT_ADDR0,
-        ContractChanges.encode_header(
-            n_updates=2, prev_nonce=1, new_nonce=2, class_updated=0, full_output=full_output
-        ),
-        # Class hash.
-        CLASS_HASH0_1 if full_output else None,
-        CLASS_HASH0_1 if full_output else None,
-        # Storage updates.
-        STORAGE_KEY0,
-        maybe_wrong(STORAGE_VALUE0_1, FailureModifier.STORAGE_VALUE) if full_output else None,
-        STORAGE_VALUE0_2,
-        STORAGE_KEY3,
-        STORAGE_VALUE3_0 if full_output else None,
-        STORAGE_VALUE3_2,
+        # Contract updates.
+        *ContractChanges(
+            addr=CONTRACT_ADDR0,
+            prev_nonce=1,
+            new_nonce=2,
+            prev_class_hash=CLASS_HASH0_1,
+            new_class_hash=CLASS_HASH0_1,
+            storage_changes=[
+                (
+                    STORAGE_KEY0,
+                    (
+                        maybe_wrong(STORAGE_VALUE0_1, FailureModifier.STORAGE_VALUE),
+                        STORAGE_VALUE0_2,
+                    ),
+                ),
+                (STORAGE_KEY3, (STORAGE_VALUE3_0, STORAGE_VALUE3_2)),
+            ],
+        ).encode(full_output=full_output),
         # Contract whose block0 changes are fully reverted by block1.
-        # Contract addr.
-        CONTRACT_ADDR1,
-        ContractChanges.encode_header(
-            n_updates=1, prev_nonce=10, new_nonce=10, class_updated=1, full_output=full_output
-        ),
-        # Class hash.
-        CLASS_HASH1_1 if full_output else None,
-        CLASS_HASH1_0,
-        # Storage updates.
-        STORAGE_KEY0,
-        STORAGE_VALUE0_1 if full_output else None,
-        STORAGE_VALUE0_0,
+        *ContractChanges(
+            addr=CONTRACT_ADDR1,
+            prev_nonce=10,
+            new_nonce=10,
+            prev_class_hash=CLASS_HASH1_1,
+            new_class_hash=CLASS_HASH1_0,
+            storage_changes=[
+                (STORAGE_KEY0, (STORAGE_VALUE0_1, STORAGE_VALUE0_0)),
+            ],
+        ).encode(full_output=full_output),
         # Contract that only appears in this block (block1).
-        # Contract addr.
-        CONTRACT_ADDR2,
-        ContractChanges.encode_header(
-            n_updates=1 + N_UPDATES_SMALL_PACKING_BOUND,
+        *ContractChanges(
+            addr=CONTRACT_ADDR2,
             prev_nonce=7,
             new_nonce=8,
-            class_updated=0,
-            full_output=full_output,
-        ),
-        # Class hash.
-        CLASS_HASH2_0 if full_output else None,
-        CLASS_HASH2_0 if full_output else None,
-        # Storage updates.
-        STORAGE_KEY4,
-        STORAGE_VALUE4_0 if full_output else None,
-        STORAGE_VALUE4_2,
-        # Write 256 values to test contract header packing with a large number of updates.
-        *itertools.chain.from_iterable(
-            (
-                STORAGE_KEY4 + 1 + i,
-                0 if full_output else None,
-                1,
-            )
-            for i in range(N_UPDATES_SMALL_PACKING_BOUND)
-        ),
+            prev_class_hash=CLASS_HASH2_0,
+            new_class_hash=CLASS_HASH2_0,
+            storage_changes=[
+                (STORAGE_KEY4, (STORAGE_VALUE4_0, STORAGE_VALUE4_2)),
+                # Write 256 values to test contract header packing with a large number of updates.
+                *[(STORAGE_KEY4 + 1 + i, (0, 1)) for i in range(N_UPDATES_SMALL_PACKING_BOUND)],
+            ],
+        ).encode(full_output=full_output),
         # Number of classes.
         1,
+        # Class updates.
         CLASS_HASH0_0,
         (
             maybe_wrong(COMPILED_CLASS_HASH0_1, FailureModifier.COMPILED_CLASS_HASH)
@@ -342,64 +325,34 @@ def combined_output(full_output: bool, use_kzg_da: bool = False):
 def combined_output_da(full_output: bool):
     res_with_nones = [
         # Number of contracts.
-        3 if full_output else 2,
-        # Contract addr.
-        CONTRACT_ADDR0,
-        ContractChanges.encode_header(
-            n_updates=4, prev_nonce=0, new_nonce=2, class_updated=1, full_output=full_output
-        ),
-        # Class hash.
-        CLASS_HASH0_0 if full_output else None,
-        CLASS_HASH0_1,
-        # Storage updates.
-        STORAGE_KEY0,
-        STORAGE_VALUE0_0 if full_output else None,
-        STORAGE_VALUE0_2,
-        STORAGE_KEY3,
-        STORAGE_VALUE3_0 if full_output else None,
-        STORAGE_VALUE3_2,
-        STORAGE_KEY1,
-        STORAGE_VALUE1_0 if full_output else None,
-        STORAGE_VALUE1_1,
-        STORAGE_KEY2,
-        STORAGE_VALUE2_0 if full_output else None,
-        STORAGE_VALUE2_1,
-        # Contract addr.
-        CONTRACT_ADDR1 if full_output else None,
-        (
-            ContractChanges.encode_header(
-                n_updates=0, prev_nonce=10, new_nonce=10, class_updated=0, full_output=full_output
-            )
-            if full_output
-            else None
-        ),
-        # Class hash.
-        CLASS_HASH1_0 if full_output else None,
-        CLASS_HASH1_0 if full_output else None,
-        # Contract addr.
-        CONTRACT_ADDR2,
-        ContractChanges.encode_header(
-            n_updates=1 + N_UPDATES_SMALL_PACKING_BOUND,
+        2,
+        # Contract updates.
+        *ContractChanges(
+            addr=CONTRACT_ADDR0,
+            prev_nonce=0,
+            new_nonce=2,
+            prev_class_hash=CLASS_HASH0_0,
+            new_class_hash=CLASS_HASH0_1,
+            storage_changes=[
+                (STORAGE_KEY0, (STORAGE_VALUE0_0, STORAGE_VALUE0_2)),
+                (STORAGE_KEY3, (STORAGE_VALUE3_0, STORAGE_VALUE3_2)),
+                # These keys should be sorted in the squahsed output.
+                (STORAGE_KEY1, (STORAGE_VALUE1_0, STORAGE_VALUE1_1)),
+                (STORAGE_KEY2, (STORAGE_VALUE2_0, STORAGE_VALUE2_1)),
+            ],
+        ).encode(full_output=full_output),
+        # Note: CONTRACT_ADDR1 does not appear here since it has no diff after the squash.
+        *ContractChanges(
+            addr=CONTRACT_ADDR2,
             prev_nonce=7,
             new_nonce=8,
-            class_updated=0,
-            full_output=full_output,
-        ),
-        # Class hash.
-        CLASS_HASH2_0 if full_output else None,
-        CLASS_HASH2_0 if full_output else None,
-        # Storage updates.
-        STORAGE_KEY4,
-        STORAGE_VALUE4_0 if full_output else None,
-        STORAGE_VALUE4_2,
-        *itertools.chain.from_iterable(
-            (
-                STORAGE_KEY4 + 1 + i,
-                0 if full_output else None,
-                1,
-            )
-            for i in range(N_UPDATES_SMALL_PACKING_BOUND)
-        ),
+            prev_class_hash=CLASS_HASH2_0,
+            new_class_hash=CLASS_HASH2_0,
+            storage_changes=[
+                (STORAGE_KEY4, (STORAGE_VALUE4_0, STORAGE_VALUE4_2)),
+                *[(STORAGE_KEY4 + 1 + i, (0, 1)) for i in range(N_UPDATES_SMALL_PACKING_BOUND)],
+            ],
+        ).encode(full_output=full_output),
         # Number of classes.
         2,
         # Class updates.
@@ -467,20 +420,31 @@ def test_output_parser(full_output: bool):
                             new_nonce=1,
                             prev_class_hash=CLASS_HASH0_0 if full_output else None,
                             new_class_hash=CLASS_HASH0_1,
-                            storage_changes={
-                                STORAGE_KEY0: (
-                                    STORAGE_VALUE0_0 if full_output else None,
-                                    STORAGE_VALUE0_1,
+                            storage_changes=[
+                                (
+                                    STORAGE_KEY0,
+                                    (
+                                        STORAGE_VALUE0_0 if full_output else None,
+                                        STORAGE_VALUE0_1,
+                                    ),
                                 ),
-                                STORAGE_KEY1: (
-                                    STORAGE_VALUE1_0 if full_output else None,
-                                    STORAGE_VALUE1_1,
+                                # These keys are not sorted on purpose (STORAGE_KEY2 > STORAGE_KEY1)
+                                # - to test that the aggregator loads them in the given order.
+                                (
+                                    STORAGE_KEY2,
+                                    (
+                                        STORAGE_VALUE2_0 if full_output else None,
+                                        STORAGE_VALUE2_1,
+                                    ),
                                 ),
-                                STORAGE_KEY2: (
-                                    STORAGE_VALUE2_0 if full_output else None,
-                                    STORAGE_VALUE2_1,
+                                (
+                                    STORAGE_KEY1,
+                                    (
+                                        STORAGE_VALUE1_0 if full_output else None,
+                                        STORAGE_VALUE1_1,
+                                    ),
                                 ),
-                            },
+                            ],
                         ),
                         ContractChanges(
                             addr=CONTRACT_ADDR1,
@@ -488,24 +452,33 @@ def test_output_parser(full_output: bool):
                             new_nonce=10 if full_output else None,
                             prev_class_hash=CLASS_HASH1_0 if full_output else None,
                             new_class_hash=CLASS_HASH1_1,
-                            storage_changes={
-                                STORAGE_KEY0: (
-                                    STORAGE_VALUE0_0 if full_output else None,
-                                    STORAGE_VALUE0_1,
+                            storage_changes=[
+                                (
+                                    STORAGE_KEY0,
+                                    (
+                                        STORAGE_VALUE0_0 if full_output else None,
+                                        STORAGE_VALUE0_1,
+                                    ),
                                 ),
-                            },
+                            ],
                         ),
                     ],
-                    classes={
-                        CLASS_HASH0_0: (
-                            COMPILED_CLASS_HASH0_0 if full_output else None,
-                            COMPILED_CLASS_HASH0_1,
+                    classes=[
+                        (
+                            CLASS_HASH0_0,
+                            (
+                                COMPILED_CLASS_HASH0_0 if full_output else None,
+                                COMPILED_CLASS_HASH0_1,
+                            ),
                         ),
-                        CLASS_HASH1_0: (
-                            COMPILED_CLASS_HASH1_0 if full_output else None,
-                            COMPILED_CLASS_HASH1_1,
+                        (
+                            CLASS_HASH1_0,
+                            (
+                                COMPILED_CLASS_HASH1_0 if full_output else None,
+                                COMPILED_CLASS_HASH1_1,
+                            ),
                         ),
-                    },
+                    ],
                 ),
             ),
         ),
@@ -532,16 +505,22 @@ def test_output_parser(full_output: bool):
                             new_nonce=2,
                             prev_class_hash=CLASS_HASH0_1 if full_output else None,
                             new_class_hash=CLASS_HASH0_1 if full_output else None,
-                            storage_changes={
-                                STORAGE_KEY0: (
-                                    STORAGE_VALUE0_1 if full_output else None,
-                                    STORAGE_VALUE0_2,
+                            storage_changes=[
+                                (
+                                    STORAGE_KEY0,
+                                    (
+                                        STORAGE_VALUE0_1 if full_output else None,
+                                        STORAGE_VALUE0_2,
+                                    ),
                                 ),
-                                STORAGE_KEY3: (
-                                    STORAGE_VALUE3_0 if full_output else None,
-                                    STORAGE_VALUE3_2,
+                                (
+                                    STORAGE_KEY3,
+                                    (
+                                        STORAGE_VALUE3_0 if full_output else None,
+                                        STORAGE_VALUE3_2,
+                                    ),
                                 ),
-                            },
+                            ],
                         ),
                         ContractChanges(
                             addr=CONTRACT_ADDR1,
@@ -549,12 +528,15 @@ def test_output_parser(full_output: bool):
                             new_nonce=10 if full_output else None,
                             prev_class_hash=CLASS_HASH1_1 if full_output else None,
                             new_class_hash=CLASS_HASH1_0,
-                            storage_changes={
-                                STORAGE_KEY0: (
-                                    STORAGE_VALUE0_1 if full_output else None,
-                                    STORAGE_VALUE0_0,
+                            storage_changes=[
+                                (
+                                    STORAGE_KEY0,
+                                    (
+                                        STORAGE_VALUE0_1 if full_output else None,
+                                        STORAGE_VALUE0_0,
+                                    ),
                                 ),
-                            },
+                            ],
                         ),
                         ContractChanges(
                             addr=CONTRACT_ADDR2,
@@ -562,24 +544,30 @@ def test_output_parser(full_output: bool):
                             new_nonce=8,
                             prev_class_hash=CLASS_HASH2_0 if full_output else None,
                             new_class_hash=CLASS_HASH2_0 if full_output else None,
-                            storage_changes={
-                                STORAGE_KEY4: (
-                                    STORAGE_VALUE4_0 if full_output else None,
-                                    STORAGE_VALUE4_2,
+                            storage_changes=[
+                                (
+                                    STORAGE_KEY4,
+                                    (
+                                        STORAGE_VALUE4_0 if full_output else None,
+                                        STORAGE_VALUE4_2,
+                                    ),
                                 ),
-                                **{
-                                    STORAGE_KEY4 + 1 + i: (0 if full_output else None, 1)
+                                *[
+                                    (STORAGE_KEY4 + 1 + i, (0 if full_output else None, 1))
                                     for i in range(N_UPDATES_SMALL_PACKING_BOUND)
-                                },
-                            },
+                                ],
+                            ],
                         ),
                     ],
-                    classes={
-                        CLASS_HASH0_0: (
-                            COMPILED_CLASS_HASH0_1 if full_output else None,
-                            COMPILED_CLASS_HASH0_2,
+                    classes=[
+                        (
+                            CLASS_HASH0_0,
+                            (
+                                COMPILED_CLASS_HASH0_1 if full_output else None,
+                                COMPILED_CLASS_HASH0_2,
+                            ),
                         ),
-                    },
+                    ],
                 ),
             ),
         ),
@@ -606,6 +594,7 @@ def test_parse_and_output(aggregator_program, block_idx: int, full_output_result
         poseidon_ptr=runner.poseidon_builtin.base,
         output_ptr=runner.output_builtin.base,
         os_output=os_output_segment,
+        replace_keys_with_aliases=0,
         hint_locals=dict(__serialize_data_availability_create_pages__=False),
     )
 

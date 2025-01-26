@@ -182,6 +182,7 @@ def decompress(compressed: Iterator[int]) -> List[int]:
     """
     Decompresses the given compressed data.
     """
+    assert isinstance(compressed, Iterator), f"Expected iterator, got: {type(compressed).__name__}."
 
     def unpack_chunk(n_elms: int, elm_bound: int) -> List[int]:
         n_packed_felts = div_ceil(n_elms, get_n_elms_per_felt(elm_bound))

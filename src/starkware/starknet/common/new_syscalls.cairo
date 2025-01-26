@@ -26,6 +26,7 @@ const REPLACE_CLASS_SELECTOR = 'ReplaceClass';
 const SEND_MESSAGE_TO_L1_SELECTOR = 'SendMessageToL1';
 const STORAGE_READ_SELECTOR = 'StorageRead';
 const STORAGE_WRITE_SELECTOR = 'StorageWrite';
+const GET_CLASS_HASH_AT_SELECTOR = 'GetClassHashAt';
 
 // Syscall structs.
 
@@ -307,4 +308,12 @@ struct GetExecutionInfoResponse {
 
 struct GetBlockHashResponse {
     block_hash: felt,
+}
+
+struct GetClassHashAtRequest {
+    contract_address: felt,
+}
+
+struct GetClassHashAtResponse {
+    class_hash: felt,
 }

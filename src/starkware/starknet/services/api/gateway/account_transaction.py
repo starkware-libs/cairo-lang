@@ -59,10 +59,10 @@ class AccountTransaction(Transaction):
     def zero_max_fee(self) -> bool:
         """
         Returns whether the indicated max fee user committed on is zero.
-        Currently takes only L1 gas into account, since L2 is not yet in use.
         """
-        l1_bounds = self.resource_bounds[fields.Resource.L1_GAS]
-        return l1_bounds.max_amount * l1_bounds.max_price_per_unit == 0
+        return 0 == sum(
+            [bound.max_amount * bound.max_price_per_unit for bound in self.resource_bounds.values()]
+        )
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -138,9 +138,9 @@ class Declare(AccountTransaction):
             contract_class=contract_class,
             compiled_class_hash=compiled_class_hash,
             sender_address=sender_address,
-            account_deployment_data=[]
-            if account_deployment_data is None
-            else account_deployment_data,
+            account_deployment_data=(
+                [] if account_deployment_data is None else account_deployment_data
+            ),
         )
 
 
@@ -267,7 +267,7 @@ class InvokeFunction(AccountTransaction):
             paymaster_data=[] if paymaster_data is None else paymaster_data,
             sender_address=sender_address,
             calldata=calldata,
-            account_deployment_data=[]
-            if account_deployment_data is None
-            else account_deployment_data,
+            account_deployment_data=(
+                [] if account_deployment_data is None else account_deployment_data
+            ),
         )

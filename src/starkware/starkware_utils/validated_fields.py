@@ -354,6 +354,22 @@ class MultiRangeValidatedField(BaseRangeValidatedField):
 
 
 @dataclasses.dataclass(frozen=True)
+class BytesField(Field[bytes]):
+    """
+    Represents a field with value of type bytes.
+    """
+
+    # Randomization.
+    def get_random_value(self, random_object: Optional[random.Random] = None) -> bytes:
+        rand = initialize_random(random_object=random_object)
+        return get_random_bytes(random_object, n=rand.randint(1, 100))
+
+    # Serialization.
+    def get_marshmallow_type(self) -> Type[mfields.Field]:
+        return BytesAsHex
+
+
+@dataclasses.dataclass(frozen=True)
 class BytesLengthField(ValidatedField[bytes]):
     """
     Represents a field with value of type bytes, of a given length.

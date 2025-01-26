@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0.
-pragma solidity >=0.6.12;
+pragma solidity >=0.6.0 <0.9.0;
 
-import "../interfaces/MGovernance.sol";
+import "starkware/solidity/interfaces/MGovernance.sol";
 
 /*
   Implements Generic Governance, applicable for both proxy and main contract, and possibly others.
@@ -36,7 +36,7 @@ abstract contract Governance is MGovernance {
       2. Modify the require part in this function, so that it will exit quietly
          when trying to re-initialize (uncomment the lines below).
     */
-    function initGovernance() internal {
+    function initGovernance() internal virtual override {
         GovernanceInfoStruct storage gub = getGovernanceInfo();
         require(!gub.initialized, "ALREADY_INITIALIZED");
         gub.initialized = true; // to ensure acceptNewGovernor() won't fail.

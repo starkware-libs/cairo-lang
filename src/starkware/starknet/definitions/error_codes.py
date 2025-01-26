@@ -32,6 +32,7 @@ class StarknetErrorCode(ErrorCode):
     INVALID_CONTRACT_CLASS = auto()
     INVALID_CONTRACT_CLASS_VERSION = auto()
     INVALID_PROGRAM = auto()
+    INVALID_RESOURCE_BOUNDS = auto()
     INVALID_RETURN_DATA = auto()
     INVALID_STATUS_MODE = auto()
     INVALID_TRANSACTION_HASH = auto()
@@ -237,6 +238,8 @@ class CairoErrorCode(Enum):
     INVALID_INPUT_LEN = "Invalid input length"
     INVALID_ARGUMENT = "Invalid argument"
     BLOCK_NUMBER_OUT_OF_RANGE = "Block number out of range"
+    ENTRY_POINT_FAILED = "ENTRYPOINT_FAILED"
+    ENTRY_POINT_NOT_FOUND = "ENTRYPOINT_NOT_FOUND"
 
     def to_felt(self) -> int:
         return from_bytes(self.value.encode("ascii"))

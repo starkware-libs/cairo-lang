@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0.
-pragma solidity ^0.6.12;
+pragma solidity >=0.6.0 <0.9.0;
 
-import "./IFactRegistry.sol";
+import "starkware/solidity/interfaces/IFactRegistry.sol";
 
 /*
   Extends the IFactRegistry interface with a query method that indicates

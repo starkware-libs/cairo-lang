@@ -1,5 +1,6 @@
 import math
 import random
+from functools import lru_cache
 from hashlib import sha256
 from typing import List, Optional, Tuple, Union
 
@@ -339,6 +340,36 @@ def fft(coeffs: List[int], generator: int, prime: int, bit_reversed: bool = Fals
     if bit_reversed:
         width = coeffs_len.bit_length() - 1
         perm = [int("{:0{width}b}".format(i, width=width)[::-1], 2) for i in range(coeffs_len)]
-        return [values[i] for i in perm]
+        values = [values[i] for i in perm]
 
     return values
+
+
+def ifft(
+    coeffs: List[int], generator: int, prime: int, coeffs_bit_reversed: bool = False
+) -> List[int]:
+    """
+    Computes the inverse FFT of `coeffs`, assuming the size of the coefficient array is a power of
+    two and equals to the generator's multiplicative order.
+    """
+    # Use the modular multiplicative inverse of the generator.
+    inv_generator = pow_cached(generator, prime - 2, prime)
+
+    coeffs_len = len(coeffs)
+
+    if coeffs_bit_reversed:
+        # Permutate back the coefficients.
+        width = coeffs_len.bit_length() - 1
+        perm = [int("{:0{width}b}".format(i, width=width)[::-1], 2) for i in range(coeffs_len)]
+        coeffs = [coeffs[i] for i in perm]
+
+    values = fft(coeffs=coeffs, generator=inv_generator, prime=prime, bit_reversed=False)
+
+    # Normalize the result by dividing each coefficient by the length of the array.
+    coeffs_len_inv = pow_cached(coeffs_len, prime - 2, prime)
+    return [(value * coeffs_len_inv) % prime for value in values]
+
+
+@lru_cache()
+def pow_cached(base: int, exp: int, mod: int) -> int:
+    return pow(base=base, exp=exp, mod=mod)

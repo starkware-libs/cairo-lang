@@ -13,12 +13,10 @@ contract MockStarknetMessaging is StarknetMessaging {
     */
     function mockSendMessageFromL2(
         uint256 fromAddress,
-        uint256 toAddress,
+        address toAddress,
         uint256[] calldata payload
     ) external {
-        bytes32 msgHash = keccak256(
-            abi.encodePacked(fromAddress, toAddress, payload.length, payload)
-        );
+        bytes32 msgHash = l2ToL1MsgHash(fromAddress, toAddress, payload);
         l2ToL1Messages()[msgHash] += 1;
     }
 

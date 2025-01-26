@@ -16611,9 +16611,8 @@ func eval_composition_polynomial{range_check_ptr}(
     }
     if (uses_add_mod_builtin != 0) {
         // Constraint: add_mod/init_p0_address.
-        tempvar value = (
-            mem_pool__addr_column_row_expr569 - global_values.add_mod__initial_mod_addr
-        ) / domain13;
+        tempvar value = (mem_pool__addr_column_row_expr569 - global_values.initial_add_mod_addr) /
+            domain13;
         tempvar total_sum = total_sum + constraint_coefficients[350] * value;
 
         // Constraint: add_mod/step_p1_addr.
@@ -16906,9 +16905,8 @@ func eval_composition_polynomial{range_check_ptr}(
     }
     if (uses_mul_mod_builtin != 0) {
         // Constraint: mul_mod/init_p0_address.
-        tempvar value = (
-            mem_pool__addr_column_row_expr628 - global_values.mul_mod__initial_mod_addr
-        ) / domain156;
+        tempvar value = (mem_pool__addr_column_row_expr628 - global_values.initial_mul_mod_addr) /
+            domain156;
         tempvar total_sum = total_sum + constraint_coefficients[388] * value;
 
         // Constraint: mul_mod/step_p1_addr.

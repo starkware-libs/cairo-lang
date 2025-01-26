@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0.
-pragma solidity >=0.6.12;
+pragma solidity >=0.6.0 <0.9.0;
 
-import "./MGovernance.sol";
+import "starkware/solidity/interfaces/MGovernance.sol";
 
 abstract contract MOperator {
     event LogOperatorAdded(address operator);

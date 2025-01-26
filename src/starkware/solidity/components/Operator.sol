@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0.
-pragma solidity >=0.6.12;
+pragma solidity >=0.6.0 <0.9.0;
 
-import "../interfaces/MOperator.sol";
-import "../interfaces/MGovernance.sol";
+import "starkware/solidity/interfaces/MOperator.sol";
+import "starkware/solidity/interfaces/MGovernance.sol";
 
 /**
   The Operator of the contract is the entity entitled to submit state update requests

@@ -1,7 +1,8 @@
 import dataclasses
 import itertools
-from typing import Dict, Iterator, List, Optional, Tuple
+from typing import Iterator, List, Optional, Tuple
 
+from starkware.python.utils import as_non_optional
 from starkware.starknet.core.os.data_availability.compression import compress, decompress
 from starkware.starknet.definitions.constants import OsOutputConstant
 
@@ -9,6 +10,9 @@ N_UPDATES_BOUND = 2**64
 N_UPDATES_SMALL_PACKING_BOUND = 2**8
 NONCE_BOUND = 2**64
 FLAG_BOUND = 2**1
+
+# Key, (prev_value, value).
+DictEntry = Tuple[int, Tuple[Optional[int], int]]
 
 
 @dataclasses.dataclass
@@ -28,60 +32,61 @@ class ContractChanges:
     # The new class hash (if changed or full output).
     new_class_hash: Optional[int]
     # A map from storage key to its prev value (optional) and new value.
-    storage_changes: Dict[int, Tuple[Optional[int], int]]
+    storage_changes: List[DictEntry]
 
     def encode(self, full_output: bool = False) -> List[int]:
         """
         Returns the OS encoding of the contract diff.
         """
+        if full_output:
+            full_header = [
+                self.addr,
+                as_non_optional(self.prev_nonce),
+                as_non_optional(self.new_nonce),
+                as_non_optional(self.prev_class_hash),
+                as_non_optional(self.new_class_hash),
+                len(self.storage_changes),
+            ]
+            return full_header + encode_key_value_pairs(
+                self.storage_changes, full_output=full_output
+            )
+
+        # Encode packed output.
         was_class_updated = self.prev_class_hash != self.new_class_hash
-        header_packed_word = self.encode_header(
+        header_packed_word = self.encode_packed_header(
             n_updates=len(self.storage_changes),
             prev_nonce=self.prev_nonce,
             new_nonce=self.new_nonce,
             class_updated=was_class_updated,
-            full_output=full_output,
         )
         res = [self.addr, header_packed_word]
 
-        if full_output:
-            assert self.prev_class_hash is not None, "Prev class_hash is missing with full_output."
-            assert self.new_class_hash is not None, "New class_hash is missing with full_output."
-            res += [self.prev_class_hash, self.new_class_hash]
-        else:
-            if was_class_updated:
-                assert self.new_class_hash is not None
-                res.append(self.new_class_hash)
+        if was_class_updated:
+            assert self.new_class_hash is not None
+            res.append(self.new_class_hash)
 
-        res += encode_key_value_pairs(self.storage_changes)
+        res += encode_key_value_pairs(self.storage_changes, full_output=full_output)
         return res
 
     @staticmethod
-    def encode_header(
+    def encode_packed_header(
         n_updates: int,
         prev_nonce: Optional[int],
         new_nonce: Optional[int],
         class_updated: int,
-        full_output: bool,
     ) -> int:
         """
-        Returns the encoded contract header word.
+        Returns the encoded contract header word, where `full_output` is off.
         """
-        if full_output:
-            assert prev_nonce is not None, "Prev nonce is missing with full_output."
-            assert new_nonce is not None, "New nonce is missing with full_output."
-            packed_nonces = prev_nonce * NONCE_BOUND + new_nonce
+        if new_nonce is None or prev_nonce == new_nonce:
+            # The nonce was not changed.
+            header_packed_word = 0
         else:
-            if new_nonce is None or prev_nonce == new_nonce:
-                # The nonce was not changed.
-                packed_nonces = 0
-            else:
-                packed_nonces = new_nonce
+            header_packed_word = new_nonce
 
         is_n_updates_small = n_updates < N_UPDATES_SMALL_PACKING_BOUND
         n_updates_bound = N_UPDATES_SMALL_PACKING_BOUND if is_n_updates_small else N_UPDATES_BOUND
 
-        header_packed_word = packed_nonces
         header_packed_word = header_packed_word * n_updates_bound + n_updates
         header_packed_word = header_packed_word * FLAG_BOUND + int(is_n_updates_small)
         header_packed_word = header_packed_word * FLAG_BOUND + int(class_updated)
@@ -98,7 +103,7 @@ class OsStateDiff:
     contracts: List[ContractChanges]
     # Classes that were declared. A map from class hash to previous (optional) and new
     # compiled class hash.
-    classes: Dict[int, Tuple[Optional[int], int]]
+    classes: List[DictEntry]
 
     def encode(self, full_output: bool = False) -> List[int]:
         """
@@ -108,7 +113,7 @@ class OsStateDiff:
             len(self.contracts),
             *list(itertools.chain(*(contract.encode() for contract in self.contracts))),
             len(self.classes),
-            *encode_key_value_pairs(self.classes),
+            *encode_key_value_pairs(self.classes, full_output=full_output),
         ]
         if not full_output:
             return compress(data=state_diff)
@@ -116,14 +121,15 @@ class OsStateDiff:
         return state_diff
 
 
-def encode_key_value_pairs(d: Dict[int, Tuple[Optional[int], int]]) -> List[int]:
+def encode_key_value_pairs(items: List[DictEntry], full_output: bool) -> List[int]:
     """
-    Encodes a dictionary of the following format: {key: (optional_prev_value, new_value)}.
+    Encodes a list of tuples of the following format: (key, (optional_prev_value, new_value)).
     """
     res = []
-    for key, (prev_value, new_value) in sorted(d.items()):
+    for key, (prev_value, new_value) in items:
         res.append(key)
-        if prev_value is not None:
+        if full_output:
+            assert prev_value is not None, "prev_value is missing with full_output."
             res.append(prev_value)
         res.append(new_value)
 
@@ -268,12 +274,12 @@ def parse_os_state_diff(output_iter: Iterator[int], full_output: bool) -> OsStat
 
     # Class changes.
     n_classes = next(output_iter)
-    classes = {}
+    classes = []
     for _ in range(n_classes):
         class_hash = next(output_iter)
         prev_compiled_class_hash = next(output_iter) if full_output else None
         new_compiled_class_hash = next(output_iter)
-        classes[class_hash] = (prev_compiled_class_hash, new_compiled_class_hash)
+        classes.append((class_hash, (prev_compiled_class_hash, new_compiled_class_hash)))
 
     return OsStateDiff(contracts=contracts, classes=classes)
 
@@ -282,7 +288,20 @@ def parse_contract_changes(output_iter: Iterator[int], full_output: bool) -> Con
     """
     Parses contract changes.
     """
+    if full_output:
+        return ContractChanges(
+            addr=next(output_iter),
+            prev_nonce=next(output_iter),
+            new_nonce=next(output_iter),
+            prev_class_hash=next(output_iter),
+            new_class_hash=next(output_iter),
+            storage_changes=parse_storage_changes(
+                n_changes=next(output_iter), output_iter=output_iter, full_output=full_output
+            ),
+        )
+
     addr = next(output_iter)
+    # Parse packed info.
     nonce_n_changes_two_flags = next(output_iter)
 
     # Parse flags.
@@ -293,36 +312,29 @@ def parse_contract_changes(output_iter: Iterator[int], full_output: bool) -> Con
     n_updates_bound = N_UPDATES_SMALL_PACKING_BOUND if is_n_updates_small else N_UPDATES_BOUND
     nonce, n_changes = divmod(nonce_n_changes, n_updates_bound)
 
-    # Parse nonces.
-    prev_nonce: Optional[int]
-    new_nonce: Optional[int]
-    if full_output:
-        prev_nonce, new_nonce = divmod(nonce, NONCE_BOUND)
-    else:
-        prev_nonce = None
-        new_nonce = None if nonce == 0 else nonce
+    # Parse nonce.
+    new_nonce = None if nonce == 0 else nonce
 
-    if full_output:
-        prev_class_hash = next(output_iter)
-        new_class_hash = next(output_iter)
-    elif class_updated != 0:
-        prev_class_hash = None
-        new_class_hash = next(output_iter)
-    else:
-        prev_class_hash, new_class_hash = None, None
+    new_class_hash = next(output_iter) if class_updated != 0 else None
+    return ContractChanges(
+        addr=addr,
+        prev_nonce=None,
+        new_nonce=new_nonce,
+        prev_class_hash=None,
+        new_class_hash=new_class_hash,
+        storage_changes=parse_storage_changes(
+            n_changes=n_changes, output_iter=output_iter, full_output=full_output
+        ),
+    )
 
-    storage_changes = {}
+
+def parse_storage_changes(
+    n_changes: int, output_iter: Iterator[int], full_output: bool
+) -> List[DictEntry]:
+    storage_changes = []
     for _ in range(n_changes):
         key = next(output_iter)
         prev_value = next(output_iter) if full_output else None
         new_value = next(output_iter)
-        storage_changes[key] = (prev_value, new_value)
-
-    return ContractChanges(
-        addr=addr,
-        prev_nonce=prev_nonce,
-        new_nonce=new_nonce,
-        prev_class_hash=prev_class_hash,
-        new_class_hash=new_class_hash,
-        storage_changes=storage_changes,
-    )
+        storage_changes.append((key, (prev_value, new_value)))
+    return storage_changes

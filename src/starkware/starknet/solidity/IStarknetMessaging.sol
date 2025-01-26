@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0.
-pragma solidity >=0.6.12;
+pragma solidity >=0.6.0 <0.9.0;
 
-import "./IStarknetMessagingEvents.sol";
+import "starkware/starknet/solidity/IStarknetMessagingEvents.sol";
 
 interface IStarknetMessaging is IStarknetMessagingEvents {
     /**
@@ -14,6 +14,11 @@ interface IStarknetMessaging is IStarknetMessagingEvents {
       otherwise, returns 0.
     */
     function l1ToL2Messages(bytes32 msgHash) external view returns (uint256);
+
+    /**
+      Returns number of consumable messages with hash of `msgHash`.
+    */
+    function l2ToL1Messages(bytes32 msgHash) external view returns (uint256);
 
     /**
       Returns the hash of an L1 -> L2 message.

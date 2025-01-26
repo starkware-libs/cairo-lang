@@ -2,12 +2,20 @@ from starkware.cairo.bootloaders.simple_bootloader.execute_task import BuiltinDa
 from starkware.cairo.common.cairo_builtins import HashBuiltin, PoseidonBuiltin
 from starkware.cairo.common.registers import get_fp_and_pc
 
-// Loads the programs and executes them.
+// Loads the given tasks and executes them.
+// Outputs the program hashes of the tasks, and their outputs.
 //
 // Hint Arguments:
 // simple_bootloader_input - contains the tasks to execute.
 //
-// Returns:
+// Returns (written to output_ptr):
+// - The number of tasks executed.
+// - For each task:
+//   - Size.
+//   - Program hash.
+//   - The output of the program (of length=Size-2).
+//
+// Furthermore, returns:
 // Updated builtin pointers after executing all programs.
 // fact_topologies - that corresponds to the tasks (hint variable).
 func run_simple_bootloader{

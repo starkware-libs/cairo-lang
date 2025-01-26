@@ -2,7 +2,7 @@ import dataclasses
 import inspect
 from abc import abstractmethod
 from dataclasses import field
-from typing import ClassVar, Dict, Iterable, Type
+from typing import ClassVar, Dict, Iterable, Type, TypeVar
 
 from services.everest.api.gateway.transaction import EverestTransaction
 from services.everest.business_logic.internal_transaction import (
@@ -133,3 +133,6 @@ class InternalTransaction(EverestInternalTransaction):
         Returns an internal transaction generated based on an external one, where the input
         arguments are downcasted to application-specific types.
         """
+
+
+TInternalTransaction = TypeVar("TInternalTransaction", bound=InternalTransaction)

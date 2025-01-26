@@ -3,6 +3,7 @@ from typing import Dict, Optional
 from starkware.python.utils import from_bytes, to_bytes
 from starkware.starknet.business_logic.fact_state.contract_class_objects import (
     CompiledClassFact,
+    ContractClassFact,
     ContractClassLeaf,
     DeprecatedCompiledClassFact,
     get_ffc_for_contract_class_facts,
@@ -17,6 +18,7 @@ from starkware.starknet.definitions.data_availability_mode import DataAvailabili
 from starkware.starknet.services.api.contract_class.contract_class import (
     CompiledClass,
     CompiledClassBase,
+    ContractClass,
     DeprecatedCompiledClass,
 )
 from starkware.starknet.storage.starknet_storage import StorageLeaf
@@ -103,6 +105,17 @@ class PatriciaStateReader(StateReader):
         storage_leaf = await self._fetch_storage_leaf(contract_state=contract_state, key=key)
 
         return storage_leaf.value
+
+    async def get_sierra_class(self, class_hash: int) -> ContractClass:
+        contract_class_fact = await ContractClassFact.get(
+            storage=self.contract_class_storage, suffix=to_bytes(class_hash)
+        )
+        assert contract_class_fact is not None, (
+            f"Contract class with hash {fields.CompiledClassHashField.format(class_hash)} is not "
+            "declared."
+        )
+
+        return contract_class_fact.contract_class
 
     # Internal utilities.
 

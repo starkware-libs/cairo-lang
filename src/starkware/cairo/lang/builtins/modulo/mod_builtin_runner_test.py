@@ -111,7 +111,8 @@ def test_mod_builtin_runner(batch_size, layout, run_mod_p_circuit):
 from starkware.cairo.common.cairo_builtins import ModBuiltin, UInt384
 from starkware.cairo.common.registers import get_label_location
 from starkware.cairo.common.alloc import alloc
-from starkware.cairo.common.modulo import {run_mod_p_circuit}
+from starkware.cairo.common.modulo import run_mod_p_circuit
+from starkware.cairo.lang.builtins.modulo.modulo_test import run_mod_p_circuit_with_large_batch_size
 
 func main{{range_check_ptr, add_mod_ptr: ModBuiltin*, mul_mod_ptr: ModBuiltin*}}() {{
     alloc_locals;

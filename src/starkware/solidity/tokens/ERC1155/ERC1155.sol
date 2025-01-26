@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT.
 pragma solidity ^0.6.12;
 
-import "./IERC1155.sol";
-import "./IERC1155Receiver.sol";
-import "../ERC165.sol";
-import "../../libraries/Addresses.sol";
+import "starkware/solidity/tokens/ERC1155/IERC1155.sol";
+import "starkware/solidity/tokens/ERC1155/IERC1155Receiver.sol";
+import "starkware/solidity/tokens/ERC165.sol";
+import "starkware/solidity/libraries/Addresses.sol";
 
 /**
   Implementation of the basic standard multi-token.

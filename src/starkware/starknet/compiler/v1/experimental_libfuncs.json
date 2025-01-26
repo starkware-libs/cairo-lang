@@ -78,6 +78,7 @@
         "felt252_sub",
         "finalize_locals",
         "function_call",
+        "get_available_gas",
         "get_block_hash_syscall",
         "get_builtin_costs",
         "get_circuit_descriptor",

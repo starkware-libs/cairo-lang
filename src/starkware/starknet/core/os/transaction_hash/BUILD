@@ -82,6 +82,7 @@ py_library(
     visibility = ["//visibility:public"],
     deps = [
         ":starknet_deprecated_transaction_hash_lib",
+        ":transaction_hash",
         "//src/starkware/cairo/common:cairo_common_lib",
         "//src/starkware/cairo/common:cairo_function_runner_lib",
         "//src/starkware/cairo/lang/compiler:cairo_compile_lib",

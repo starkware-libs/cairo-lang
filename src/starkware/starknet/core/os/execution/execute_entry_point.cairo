@@ -1,11 +1,12 @@
 from starkware.cairo.builtin_selection.select_input_builtins import select_input_builtins
 from starkware.cairo.builtin_selection.validate_builtins import validate_builtins
 from starkware.cairo.common.alloc import alloc
+from starkware.cairo.common.bool import FALSE
 from starkware.cairo.common.cairo_builtins import KeccakBuiltin
 from starkware.cairo.common.dict import dict_read
 from starkware.cairo.common.dict_access import DictAccess
 from starkware.cairo.common.find_element import find_element, search_sorted_optimistic
-from starkware.cairo.common.math import assert_not_zero
+from starkware.cairo.common.math import assert_lt, assert_nn, assert_not_zero
 from starkware.cairo.common.registers import get_ap
 from starkware.starknet.builtins.segment_arena.segment_arena import (
     SegmentArenaBuiltin,
@@ -24,10 +25,12 @@ from starkware.starknet.core.os.builtins import (
 )
 from starkware.starknet.core.os.constants import (
     DEFAULT_ENTRY_POINT_SELECTOR,
-    ENTRY_POINT_GAS_COST,
+    ENTRY_POINT_INITIAL_BUDGET,
     ENTRY_POINT_TYPE_CONSTRUCTOR,
     ENTRY_POINT_TYPE_EXTERNAL,
     ENTRY_POINT_TYPE_L1_HANDLER,
+    ERROR_ENTRY_POINT_NOT_FOUND,
+    ERROR_OUT_OF_GAS,
     NOP_ENTRY_POINT_OFFSET,
 )
 from starkware.starknet.core.os.contract_class.compiled_class import (
@@ -35,7 +38,13 @@ from starkware.starknet.core.os.contract_class.compiled_class import (
     CompiledClassEntryPoint,
     CompiledClassFact,
 )
+from starkware.starknet.core.os.execution.revert import (
+    RevertLogEntry,
+    handle_revert,
+    init_revert_log,
+)
 from starkware.starknet.core.os.output import OsCarriedOutputs
+from starkware.starknet.core.os.state.commitment import StateEntry
 
 // Represents the execution context during the execution of contract code.
 struct ExecutionContext {
@@ -76,6 +85,7 @@ func call_execute_syscalls{
     builtin_ptrs: BuiltinPointers*,
     contract_state_changes: DictAccess*,
     contract_class_changes: DictAccess*,
+    revert_log: RevertLogEntry*,
     outputs: OsCarriedOutputs*,
 }(block_context: BlockContext*, execution_context: ExecutionContext*, syscall_ptr_end: felt*) {
     jmp abs block_context.execute_syscalls_ptr;
@@ -84,7 +94,7 @@ func call_execute_syscalls{
 // Returns the CompiledClassEntryPoint, based on 'compiled_class' and 'execution_context'.
 func get_entry_point{range_check_ptr}(
     compiled_class: CompiledClass*, execution_context: ExecutionContext*
-) -> (entry_point: CompiledClassEntryPoint*) {
+) -> (success: felt, entry_point: CompiledClassEntryPoint*) {
     alloc_locals;
     // Get the entry points corresponding to the transaction's type.
     local entry_points: CompiledClassEntryPoint*;
@@ -104,7 +114,7 @@ func get_entry_point{range_check_ptr}(
             n_entry_points = compiled_class.n_constructors;
 
             if (n_entry_points == 0) {
-                return (entry_point=cast(0, CompiledClassEntryPoint*));
+                return (success=1, entry_point=cast(0, CompiledClassEntryPoint*));
             }
         }
     }
@@ -118,14 +128,10 @@ func get_entry_point{range_check_ptr}(
         key=execution_context.execution_info.selector,
     );
     if (success != 0) {
-        return (entry_point=entry_point_desc);
+        return (success=1, entry_point=entry_point_desc);
     }
 
-    // If the selector was not found, verify that the first entry point is the default entry point,
-    // and call it.
-    assert_not_zero(n_entry_points);
-    assert entry_points[0].selector = DEFAULT_ENTRY_POINT_SELECTOR;
-    return (entry_point=&entry_points[0]);
+    return (success=0, entry_point=cast(0, CompiledClassEntryPoint*));
 }
 
 // Executes an entry point in a contract.
@@ -141,9 +147,10 @@ func execute_entry_point{
     builtin_ptrs: BuiltinPointers*,
     contract_state_changes: DictAccess*,
     contract_class_changes: DictAccess*,
+    revert_log: RevertLogEntry*,
     outputs: OsCarriedOutputs*,
 }(block_context: BlockContext*, execution_context: ExecutionContext*) -> (
-    retdata_size: felt, retdata: felt*
+    is_reverted: felt, retdata_size: felt, retdata: felt*
 ) {
     alloc_locals;
     let (compiled_class_hash: felt) = dict_read{dict_ptr=contract_class_changes}(
@@ -159,15 +166,22 @@ func execute_entry_point{
         key=compiled_class_hash,
     );
     local compiled_class: CompiledClass* = compiled_class_fact.compiled_class;
-    let (compiled_class_entry_point: CompiledClassEntryPoint*) = get_entry_point(
+    let (success, compiled_class_entry_point: CompiledClassEntryPoint*) = get_entry_point(
         compiled_class=compiled_class, execution_context=execution_context
     );
 
+    if (success == 0) {
+        %{ execution_helper.exit_call() %}
+        tempvar retdata = cast(nondet %{ segments.add() %}, felt*);
+        assert retdata[0] = ERROR_ENTRY_POINT_NOT_FOUND;
+        return (is_reverted=1, retdata_size=1, retdata=retdata);
+    }
+
     if (compiled_class_entry_point == cast(0, CompiledClassEntryPoint*)) {
+        %{ execution_helper.exit_call() %}
         // Assert that there is no call data in the case of NOP entry point.
         assert execution_context.calldata_size = 0;
-        %{ execution_helper.skip_call() %}
-        return (retdata_size=0, retdata=cast(0, felt*));
+        return (is_reverted=0, retdata_size=0, retdata=cast(0, felt*));
     }
 
     let entry_point_offset = compiled_class_entry_point.offset;
@@ -184,6 +198,18 @@ func execute_entry_point{
         syscall_handler.set_syscall_ptr(syscall_ptr=ids.syscall_ptr)
     %}
     assert [os_context] = cast(syscall_ptr, felt);
+
+    if (nondet %{ ids.remaining_gas < ids.ENTRY_POINT_INITIAL_BUDGET %} != FALSE) {
+        assert_lt(remaining_gas, ENTRY_POINT_INITIAL_BUDGET);
+        %{ execution_helper.exit_call() %}
+        let (retdata: felt*) = alloc();
+        assert retdata[0] = ERROR_OUT_OF_GAS;
+        return (is_reverted=1, retdata_size=1, retdata=retdata);
+    }
+
+    let remaining_gas = remaining_gas - ENTRY_POINT_INITIAL_BUDGET;
+    // Remaining gas should be at least ENTRY_POINT_INITIAL_BUDGET.
+    assert_nn(remaining_gas);
 
     let builtin_ptrs: BuiltinPointers* = prepare_builtin_ptrs_for_execute(builtin_ptrs);
 
@@ -212,10 +238,6 @@ func execute_entry_point{
     );
     static_assert ap == current_ap + EntryPointCallArguments.SIZE;
 
-    %{
-        execution_helper.enter_call(
-            cairo_execution_info=ids.execution_context.execution_info)
-    %}
     %{ vm_enter_scope({'syscall_handler': syscall_handler}) %}
     call abs contract_entry_point;
     %{ vm_exit_scope() %}
@@ -230,28 +252,20 @@ func execute_entry_point{
         return_values_ptr, EntryPointReturnValues*
     );
 
-    // Check that the execution was successful.
     %{
-        return_values = ids.entry_point_return_values
-        if return_values.failure_flag != 0:
-            # Fetch the error, up to 100 elements.
-            retdata_size = return_values.retdata_end - return_values.retdata_start
-            error = memory.get_range(return_values.retdata_start, max(0, min(100, retdata_size)))
-
-            print("Invalid return value in execute_entry_point:")
-            print(f"  Class hash: {hex(ids.execution_context.class_hash)}")
-            print(f"  Selector: {hex(ids.execution_context.execution_info.selector)}")
-            print(f"  Size: {retdata_size}")
-            print(f"  Error (at most 100 elements): {error}")
-
         if execution_helper.debug_mode:
             # Validate the predicted gas cost.
             actual = ids.remaining_gas - ids.entry_point_return_values.gas_builtin
             predicted = execution_helper.call_info.gas_consumed
-            assert actual == predicted, (
-                "Predicted gas costs are inconsistent with the actual execution; "
-                f"{predicted=}, {actual=}."
-            )
+            if execution_helper.call_info.tracked_resource.is_sierra_gas():
+                predicted = predicted - ids.ENTRY_POINT_INITIAL_BUDGET
+                assert actual == predicted, (
+                    "Predicted gas costs are inconsistent with the actual execution; "
+                    f"{predicted=}, {actual=}."
+                )
+            else:
+                assert predicted == 0, "Predicted gas cost must be zero in CairoSteps mode."
+
 
         # Exit call.
         syscall_handler.validate_and_discard_syscall_ptr(
@@ -259,7 +273,7 @@ func execute_entry_point{
         )
         execution_helper.exit_call()
     %}
-    assert entry_point_return_values.failure_flag = 0;
+    local is_reverted = entry_point_return_values.failure_flag;
 
     let remaining_gas = entry_point_return_values.gas_builtin;
     let retdata_start = entry_point_return_values.retdata_start;
@@ -281,6 +295,23 @@ func execute_entry_point{
     assert prev_segment_arena.infos = current_segment_arena.infos;
     validate_segment_arena(segment_arena=current_segment_arena);
 
+    local orig_revert_log: RevertLogEntry* = revert_log;
+    local orig_outputs: OsCarriedOutputs* = outputs;
+
+    // If necessary, create a new revert_log and dummy outputs before calling
+    // `call_execute_syscalls`.
+    if (is_reverted != 0) {
+        // Create a new revert log for the reverted entry point. This will be used to revert the
+        // entry point changes after calling `call_execute_syscalls`.
+        let revert_log = init_revert_log();
+        // Create a dummy OsCarriedOutputs so that messages to L1 will be discarded.
+        // The dummy is initialized with
+        // OsCarriedOutputs(messages_to_l1="empty segment", messages_to_l2=0).
+        tempvar outputs = cast(nondet %{ segments.gen_arg([[], 0]) %}, OsCarriedOutputs*);
+    } else {
+        tempvar revert_log = orig_revert_log;
+        tempvar outputs = orig_outputs;
+    }
     let builtin_ptrs = return_builtin_ptrs;
     with syscall_ptr {
         call_execute_syscalls(
@@ -290,7 +321,22 @@ func execute_entry_point{
         );
     }
 
-    return (retdata_size=retdata_end - retdata_start, retdata=retdata_start);
+    if (is_reverted != 0) {
+        handle_revert(
+            contract_address=execution_context.execution_info.contract_address,
+            revert_log_end=revert_log,
+        );
+        // Restore the original revert log and outputs.
+        let revert_log = orig_revert_log;
+        let outputs = orig_outputs;
+        return (
+            is_reverted=is_reverted, retdata_size=retdata_end - retdata_start, retdata=retdata_start
+        );
+    }
+
+    return (
+        is_reverted=is_reverted, retdata_size=retdata_end - retdata_start, retdata=retdata_start
+    );
 }
 
 // Prepares the builtin pointer for the execution of an entry point.

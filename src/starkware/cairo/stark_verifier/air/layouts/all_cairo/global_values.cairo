@@ -30,8 +30,8 @@ struct GlobalValues {
     initial_keccak_addr: felt,
     initial_poseidon_addr: felt,
     initial_range_check96_addr: felt,
-    add_mod__initial_mod_addr: felt,
-    mul_mod__initial_mod_addr: felt,
+    initial_add_mod_addr: felt,
+    initial_mul_mod_addr: felt,
     range_check_min: felt,
     range_check_max: felt,
 

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0.
-pragma solidity >=0.6.12;
+pragma solidity >=0.6.0 <0.9.0;
 
-import "../components/Governance.sol";
-import "../libraries/Addresses.sol";
-import "./BlockDirectCall.sol";
-import "./ContractInitializer.sol";
+import "starkware/solidity/interfaces/MGovernance.sol";
+import "starkware/solidity/libraries/Addresses.sol";
+import "starkware/solidity/interfaces/BlockDirectCall.sol";
+import "starkware/solidity/interfaces/ContractInitializer.sol";
 
 /**
   This contract contains the code commonly needed for a contract to be deployed behind
@@ -14,7 +14,7 @@ import "./ContractInitializer.sol";
   Instantiation of the Governance and of the ContractInitializer, that are the app specific
   part of initialization, has to be done by the using contract.
 */
-abstract contract ProxySupport is Governance, BlockDirectCall, ContractInitializer {
+abstract contract ProxySupport is MGovernance, BlockDirectCall, ContractInitializer {
     using Addresses for address;
 
     // The two function below (isFrozen & initialize) needed to bind to the Proxy.
@@ -74,5 +74,16 @@ abstract contract ProxySupport is Governance, BlockDirectCall, ContractInitializ
         );
         require(success, string(returndata));
         require(returndata.length == 0, string(returndata));
+    }
+
+    function safeAddImplementation(address newImplementation, bytes calldata data) external {
+        bytes memory msgdata = abi.encodeWithSignature(
+            "addImplementation(address,bytes,bool)",
+            newImplementation,
+            data,
+            false
+        );
+        (bool success, bytes memory returndata) = address(this).delegatecall(msgdata);
+        require(success, string(returndata));
     }
 }

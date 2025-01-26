@@ -55,6 +55,7 @@ SYSCALLS_NAMES = {
     "sha256_process_block",
     "emit_event",
     "get_block_hash",
+    "get_class_hash_at",
     "get_execution_info",
     "replace_class",
     "send_message_to_l1",

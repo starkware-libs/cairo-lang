@@ -1,5 +1,6 @@
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.starknet.core.os.contract_class.class_hash_utils import (
+    CONTRACT_CLASS_MODULE,
     get_contract_class_struct,
     load_contract_class_cairo_program,
 )
@@ -30,7 +31,7 @@ def _compute_class_hash_inner(contract_class: ContractClass) -> int:
     runner = CairoFunctionRunner(program=program)
 
     runner.run(
-        "starkware.starknet.core.os.contract_class.contract_class.class_hash",
+        f"{CONTRACT_CLASS_MODULE}.class_hash",
         poseidon_ptr=runner.poseidon_builtin.base,
         range_check_ptr=runner.range_check_builtin.base,
         contract_class=contract_class_struct,

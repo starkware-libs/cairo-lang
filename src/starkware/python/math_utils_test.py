@@ -13,6 +13,7 @@ from starkware.python.math_utils import (
     ec_mult,
     fft,
     horner_eval,
+    ifft,
     is_power_of_2,
     is_quad_residue,
     isqrt,
@@ -24,6 +25,7 @@ from starkware.python.math_utils import (
     safe_random_ec_point,
     sqrt,
 )
+from starkware.python.random_test_utils import random_test
 
 
 def test_ec_add():
@@ -176,8 +178,9 @@ def test_safe_random_ec_point():
     assert pow(y, 2, PRIME) == (pow(x, 3, PRIME) + x * ALPHA + BETA) % PRIME
 
 
+@random_test()
 @pytest.mark.parametrize("bit_reversed", [True, False])
-def test_fft(bit_reversed: bool):
+def test_fft(bit_reversed: bool, seed: int):
     PRIME = 52435875175126190479447740508185965837690552500527637822603658699938581184513
     GENERATOR = 39033254847818212395286706435128746857159659164139250548781411570340225835782
     WIDTH = 12
@@ -218,3 +221,12 @@ def test_fft(bit_reversed: bool):
         == [0] * ORDER
     )
     assert fft(coeffs=[121212], generator=1, prime=PRIME, bit_reversed=bit_reversed) == [121212]
+
+    # Test inverse FFT.
+    inverse_eval = ifft(
+        coeffs=actual_eval,
+        generator=GENERATOR,
+        prime=PRIME,
+        coeffs_bit_reversed=bit_reversed,
+    )
+    assert inverse_eval == coeffs

@@ -11,6 +11,14 @@ from starkware.cairo.common.hash_state_poseidon import (
 from starkware.cairo.common.math import assert_lt_felt
 from starkware.cairo.common.poseidon_state import PoseidonBuiltinState
 from starkware.cairo.common.registers import get_fp_and_pc
+from starkware.starknet.core.os.constants import (
+    ADD_MOD_GAS_COST,
+    BITWISE_BUILTIN_GAS_COST,
+    ECOP_GAS_COST,
+    MUL_MOD_GAS_COST,
+    PEDERSEN_GAS_COST,
+    POSEIDON_GAS_COST,
+)
 
 const COMPILED_CLASS_VERSION = 'COMPILED_CLASS_V1';
 
@@ -231,6 +239,7 @@ func bytecode_hash_internal_node{
             // to this segment (-1 is an invalid opcode).
             // The hash in this case is guessed and the actual bytecode is unconstrained (except for
             // the first felt).
+            %{ del memory.data[ids.data_ptr] %}
             assert data_ptr[0] = -1;
 
             assert [range_check_ptr] = segment_length;
@@ -298,46 +307,126 @@ struct CompiledClassFact {
     compiled_class: CompiledClass*,
 }
 
-// Loads the contract classes from the 'os_input' hint variable.
-// Returns CompiledClassFact list that maps a hash to a CompiledClass.
-func load_compiled_class_facts{poseidon_ptr: PoseidonBuiltin*, range_check_ptr}() -> (
-    n_compiled_class_facts: felt, compiled_class_facts: CompiledClassFact*
+// Guesses the contract classes from the 'os_input' hint variable without validating their hashes.
+// Returns CompiledClassFact list that maps a hash to a CompiledClass, and the builtin costs list
+// which is appended to every contract.
+//
+// Note: `validate_compiled_class_facts` must be called eventually to complete the validation.
+func guess_compiled_class_facts{poseidon_ptr: PoseidonBuiltin*, range_check_ptr}() -> (
+    n_compiled_class_facts: felt, compiled_class_facts: CompiledClassFact*, builtin_costs: felt*
 ) {
     alloc_locals;
+
+    local builtin_costs: felt* = new (
+        PEDERSEN_GAS_COST,
+        BITWISE_BUILTIN_GAS_COST,
+        ECOP_GAS_COST,
+        POSEIDON_GAS_COST,
+        ADD_MOD_GAS_COST,
+        MUL_MOD_GAS_COST,
+    );
     local n_compiled_class_facts;
     local compiled_class_facts: CompiledClassFact*;
     %{
-        ids.compiled_class_facts = segments.add()
+        from starkware.starknet.core.os.contract_class.compiled_class_hash import (
+            create_bytecode_segment_structure,
+            get_compiled_class_struct,
+        )
+
         ids.n_compiled_class_facts = len(os_input.compiled_classes)
-        vm_enter_scope({
-            'compiled_class_facts': iter(os_input.compiled_classes.items()),
-            'compiled_class_visited_pcs': os_input.compiled_class_visited_pcs,
-        })
+        ids.compiled_class_facts = (compiled_class_facts_end := segments.add())
+        for i, (compiled_class_hash, compiled_class) in enumerate(
+            os_input.compiled_classes.items()
+        ):
+            # Load the compiled class.
+            cairo_contract = get_compiled_class_struct(
+                identifiers=ids._context.identifiers,
+                compiled_class=compiled_class,
+                # Load the entire bytecode - the unaccessed segments will be overriden and skipped
+                # after the execution, in `validate_compiled_class_facts_post_execution`.
+                bytecode=compiled_class.bytecode,
+            )
+            segments.load_data(
+                ptr=ids.compiled_class_facts[i].address_,
+                data=(compiled_class_hash, segments.gen_arg(cairo_contract))
+            )
+
+            bytecode_ptr = ids.compiled_class_facts[i].compiled_class.bytecode_ptr
+            # Compiled classes are expected to end with a `ret` opcode followed by a pointer to
+            # the builtin costs.
+            segments.load_data(
+                ptr=bytecode_ptr + cairo_contract.bytecode_length,
+                data=[0x208b7fff7fff7ffe, ids.builtin_costs]
+            )
+
+            # Load hints and debug info.
+            vm_load_program(
+                compiled_class.get_runnable_program(entrypoint_builtins=[]), bytecode_ptr)
     %}
 
-    let (builtin_costs: felt*) = alloc();
-    assert builtin_costs[0] = 0;  // Pedersen
-    assert builtin_costs[1] = 0;  // Bitwise
-    assert builtin_costs[2] = 0;  // EcOp
-    assert builtin_costs[3] = 0;  // Poseidon
-    assert builtin_costs[4] = 0;  // AddMod
-    assert builtin_costs[5] = 0;  // MulMod
-
-    load_compiled_class_facts_inner(
+    return (
         n_compiled_class_facts=n_compiled_class_facts,
         compiled_class_facts=compiled_class_facts,
         builtin_costs=builtin_costs,
     );
-    %{ vm_exit_scope() %}
+}
 
-    return (
-        n_compiled_class_facts=n_compiled_class_facts, compiled_class_facts=compiled_class_facts
+// Validates the compiled class facts structure and hash after the execution.
+// Uses the execution info to optimize hash computation.
+func validate_compiled_class_facts_post_execution{poseidon_ptr: PoseidonBuiltin*, range_check_ptr}(
+    n_compiled_class_facts, compiled_class_facts: CompiledClassFact*, builtin_costs: felt*
+) {
+    %{
+        from starkware.cairo.lang.vm.relocatable import RelocatableValue
+
+        bytecode_segment_to_length = {}
+        compiled_hash_to_bytecode_segment = {}
+        for i in range(ids.n_compiled_class_facts):
+            fact = ids.compiled_class_facts[i]
+            bytecode_segment = fact.compiled_class.bytecode_ptr.segment_index
+            bytecode_segment_to_length[bytecode_segment] = fact.compiled_class.bytecode_length
+            compiled_hash_to_bytecode_segment[fact.hash] = bytecode_segment
+
+        bytecode_segment_to_visited_pcs = {
+            bytecode_segment: [] for bytecode_segment in bytecode_segment_to_length
+        }
+        for addr in iter_accessed_addresses():
+            if (
+                isinstance(addr, RelocatableValue)
+                and addr.segment_index in bytecode_segment_to_visited_pcs
+            ):
+                bytecode_segment_to_visited_pcs[addr.segment_index].append(addr.offset)
+
+        # Sort and remove the program extra data, which is not part of the hash.
+        for bytecode_segment, visited_pcs in bytecode_segment_to_visited_pcs.items():
+            visited_pcs.sort()
+            while (
+                len(visited_pcs) > 0
+                and visited_pcs[-1] >= bytecode_segment_to_length[bytecode_segment]
+            ):
+                visited_pcs.pop()
+
+        # Build the bytecode segment structures based on the execution info.
+        bytecode_segment_structures = {
+            compiled_hash: create_bytecode_segment_structure(
+                bytecode=compiled_class.bytecode,
+                bytecode_segment_lengths=compiled_class.bytecode_segment_lengths,
+                visited_pcs=bytecode_segment_to_visited_pcs[
+                    compiled_hash_to_bytecode_segment[compiled_hash]
+                ],
+            ) for compiled_hash, compiled_class in os_input.compiled_classes.items()
+        }
+    %}
+    return validate_compiled_class_facts(
+        n_compiled_class_facts=n_compiled_class_facts,
+        compiled_class_facts=compiled_class_facts,
+        builtin_costs=builtin_costs,
     );
 }
 
-// Loads 'n_compiled_class_facts' from the hint 'compiled_class_facts' and appends the
-// corresponding CompiledClassFact to compiled_class_facts.
-func load_compiled_class_facts_inner{poseidon_ptr: PoseidonBuiltin*, range_check_ptr}(
+// Validates the compiled class facts structure and hash, using the hint variable
+// `bytecode_segment_structures` - a mapping from compilied class hash to the structure.
+func validate_compiled_class_facts{poseidon_ptr: PoseidonBuiltin*, range_check_ptr}(
     n_compiled_class_facts, compiled_class_facts: CompiledClassFact*, builtin_costs: felt*
 ) {
     if (n_compiled_class_facts == 0) {
@@ -348,29 +437,6 @@ func load_compiled_class_facts_inner{poseidon_ptr: PoseidonBuiltin*, range_check
     let compiled_class_fact = compiled_class_facts[0];
     let compiled_class = compiled_class_fact.compiled_class;
 
-    // Fetch contract data form hints.
-    %{
-        from starkware.starknet.core.os.contract_class.compiled_class_hash import (
-            create_bytecode_segment_structure,
-            get_compiled_class_struct,
-        )
-
-        compiled_class_hash, compiled_class = next(compiled_class_facts)
-
-        bytecode_segment_structure = create_bytecode_segment_structure(
-            bytecode=compiled_class.bytecode,
-            bytecode_segment_lengths=compiled_class.bytecode_segment_lengths,
-            visited_pcs=compiled_class_visited_pcs[compiled_class_hash],
-        )
-
-        cairo_contract = get_compiled_class_struct(
-            identifiers=ids._context.identifiers,
-            compiled_class=compiled_class,
-            bytecode=bytecode_segment_structure.bytecode_with_skipped_segments()
-        )
-        ids.compiled_class = segments.gen_arg(cairo_contract)
-    %}
-
     validate_entry_points(
         n_entry_points=compiled_class.n_external_functions,
         entry_points=compiled_class.external_functions,
@@ -379,16 +445,6 @@ func load_compiled_class_facts_inner{poseidon_ptr: PoseidonBuiltin*, range_check
     validate_entry_points(
         n_entry_points=compiled_class.n_l1_handlers, entry_points=compiled_class.l1_handlers
     );
-
-    %{
-        vm_enter_scope({
-            "bytecode_segment_structure": bytecode_segment_structure
-        })
-    %}
-    let (hash) = compiled_class_hash(compiled_class);
-    %{ vm_exit_scope() %}
-    compiled_class_fact.hash = hash;
-
     // Compiled classes are expected to end with a `ret` opcode followed by a pointer to the
     // builtin costs.
     assert compiled_class.bytecode_ptr[compiled_class.bytecode_length] = 0x208b7fff7fff7ffe;
@@ -396,22 +452,28 @@ func load_compiled_class_facts_inner{poseidon_ptr: PoseidonBuiltin*, range_check
         builtin_costs, felt
     );
 
+    // Calculate the compiled class hash.
     %{
-        computed_hash = ids.compiled_class_fact.hash
-        expected_hash = compiled_class_hash
+        vm_enter_scope({
+            "bytecode_segment_structure": bytecode_segment_structures[ids.compiled_class_fact.hash]
+        })
+    %}
+    let (hash) = compiled_class_hash(compiled_class);
+    %{
+        vm_exit_scope()
+
+        computed_hash = ids.hash
+        expected_hash = ids.compiled_class_fact.hash
         assert computed_hash == expected_hash, (
             "Computed compiled_class_hash is inconsistent with the hash in the os_input. "
             f"Computed hash = {computed_hash}, Expected hash = {expected_hash}.")
-
-        vm_load_program(
-            compiled_class.get_runnable_program(entrypoint_builtins=[]),
-            ids.compiled_class.bytecode_ptr
-        )
     %}
 
-    return load_compiled_class_facts_inner(
+    assert compiled_class_fact.hash = hash;
+
+    return validate_compiled_class_facts(
         n_compiled_class_facts=n_compiled_class_facts - 1,
-        compiled_class_facts=compiled_class_facts + CompiledClassFact.SIZE,
+        compiled_class_facts=&compiled_class_facts[1],
         builtin_costs=builtin_costs,
     );
 }

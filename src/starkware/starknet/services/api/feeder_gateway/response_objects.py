@@ -422,9 +422,11 @@ class TransactionInfo(TransactionInBlockInfo):
             revert_error=revert_error,
             execution_status=execution_status,
             finality_status=finality_status,
-            transaction=None
-            if transaction is None
-            else transaction_specific_info_from_internal(internal_tx=transaction),
+            transaction=(
+                None
+                if transaction is None
+                else transaction_specific_info_from_internal(internal_tx=transaction)
+            ),
             status=TransactionStatus.from_new_status(
                 finality_status=finality_status, execution_status=execution_status
             ),
@@ -773,6 +775,12 @@ class FunctionInvocation(BaseResponseObject, SerializableMarshmallowDataclass):
 
     # Execution info.
     result: List[int] = field(metadata=fields.retdata_as_hex_metadata)
+    failed: bool = field(
+        metadata=dict(marshmallow_field=mfields.Boolean(required=False, load_default=False))
+    )
+    gas_consumed: Optional[int] = field(
+        metadata=dict(marshmallow_field=mfields.Integer(required=False, load_default=None))
+    )
     execution_resources: ExecutionResources
     internal_calls: List["FunctionInvocation"] = field(
         metadata=additional_metadata(
@@ -806,6 +814,8 @@ class FunctionInvocation(BaseResponseObject, SerializableMarshmallowDataclass):
             entry_point_type=call_info.entry_point_type,
             calldata=call_info.calldata,
             result=call_info.retdata,
+            failed=call_info.execution.failed,
+            gas_consumed=call_info.gas_consumed,
             execution_resources=call_info.execution_resources,
             internal_calls=[
                 cls.from_internal(call_info=internal_call)
@@ -900,6 +910,7 @@ class StarknetBlock(ValidatedResponseObject):
     l1_da_mode: L1DaMode = field(metadata=fields.l1_da_mode_enum_metadata)
     l1_gas_price: ResourcePrice
     l1_data_gas_price: ResourcePrice
+    l2_gas_price: ResourcePrice
     transactions: Tuple[TransactionSpecificInfo, ...] = field(
         metadata=additional_metadata(
             marshmallow_field=VariadicLengthTupleField(
@@ -968,6 +979,9 @@ class StarknetBlock(ValidatedResponseObject):
             l1_data_gas_price=ResourcePrice(
                 price_in_wei=gas_prices.l1_data_gas_price_wei,
                 price_in_fri=gas_prices.l1_data_gas_price_fri,
+            ),
+            l2_gas_price=ResourcePrice(
+                price_in_wei=gas_prices.l2_gas_price_wei, price_in_fri=gas_prices.l2_gas_price_fri
             ),
             transaction_receipts=transaction_receipts,
             starknet_version=starknet_version,

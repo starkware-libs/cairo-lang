@@ -4,10 +4,9 @@ from starkware.cairo.bootloaders.bootloader.run_bootloader import run_bootloader
 from starkware.cairo.common.cairo_builtins import HashBuiltin, PoseidonBuiltin
 from starkware.cairo.common.registers import get_fp_and_pc
 
-// Runs the simple bootloader on tasks and unpacks them to the output.
-//
+// For documentation of the unpacker bootloader, see the docstring of `run_bootloader`.
 // Hint arguments:
-// program_input - Contains the inputs for the bootloader.
+// program_input - Contains the tasks to execute. Formatted as a BootloaderInput object.
 func main{
     output_ptr: felt*,
     pedersen_ptr: HashBuiltin*,

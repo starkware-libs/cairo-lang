@@ -1,4 +1,4 @@
-from typing import List, Sequence
+from typing import List, Sequence, Tuple
 
 from starkware.cairo.lang.vm.crypto import poseidon_hash_many
 from starkware.starknet.core.os.contract_class.class_hash import compute_class_hash
@@ -66,7 +66,7 @@ def _hash_fee_related_fields(tip: int, resource_bounds: ResourceBoundsMapping) -
     data_to_hash = [tip]
     resource_value_offset = constants.MAX_AMOUNT_BITS + constants.MAX_PRICE_PER_UNIT_BITS
 
-    for resource in (Resource.L1_GAS, Resource.L2_GAS):
+    for resource in resource_bounds_mapping_to_sorted_tuple(resource_bounds):
         bounds = resource_bounds[resource]
         data_to_hash += [
             (resource.value << resource_value_offset)
@@ -182,7 +182,7 @@ def create_resource_bounds_list(resource_bounds: ResourceBoundsMapping) -> List[
     Converts the resource bounds mapping to a list of integers (the format used in the OS).
     """
     resource_bounds_list = []
-    for resource in (Resource.L1_GAS, Resource.L2_GAS):
+    for resource in resource_bounds_mapping_to_sorted_tuple(resource_bounds):
         bounds = resource_bounds[resource]
         resource_bounds_list += [
             resource.value,
@@ -191,3 +191,17 @@ def create_resource_bounds_list(resource_bounds: ResourceBoundsMapping) -> List[
         ]
 
     return resource_bounds_list
+
+
+def resource_bounds_mapping_to_sorted_tuple(
+    resource_bounds: ResourceBoundsMapping,
+) -> Tuple[Resource, ...]:
+    """
+    Converts the resource bounds mapping to a tuple of resources,
+    in the desired order for the hash computation.
+    """
+    return (
+        (Resource.L1_GAS, Resource.L2_GAS, Resource.L1_DATA_GAS)
+        if Resource.L1_DATA_GAS in resource_bounds
+        else (Resource.L1_GAS, Resource.L2_GAS)
+    )

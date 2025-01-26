@@ -33,12 +33,15 @@ from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.public.abi import get_storage_var_address
 from starkware.starknet.services.api.contract_class.contract_class import (
     CompiledClassBase,
+    ContractClass,
     RawCompiledClass,
+    VersionedRawCompiledClass,
 )
 from starkware.starkware_utils.error_handling import stark_assert
 
 CompiledClassCache = MutableMapping[int, CompiledClassBase]
 RawCompiledClassCache = MutableMapping[int, RawCompiledClass]
+RawVersionedCompiledClassCache = MutableMapping[int, VersionedRawCompiledClass]
 GetCompiledClassCallback = Callable[[int], Awaitable[CompiledClassBase]]
 StorageEntry = Tuple[int, int]  # (contract_address, key).
 
@@ -68,6 +71,14 @@ class StateSyncifier(SyncState):
             coroutine=self.async_state.get_compiled_class(compiled_class_hash=compiled_class_hash),
             loop=self.loop,
         )
+
+    def get_sierra_class(self, class_hash: int) -> ContractClass:
+        optional_sierra = execute_coroutine_threadsafe(
+            coroutine=self.async_state.get_sierra_class(class_hash=class_hash),
+            loop=self.loop,
+        )
+        assert optional_sierra is not None, "get_class should not return None."
+        return optional_sierra
 
     def get_compiled_class_hash(self, class_hash: int) -> int:
         return execute_coroutine_threadsafe(
@@ -238,12 +249,16 @@ class CachedState(State):
         state_reader: StateReader,
         compiled_class_cache: Optional[CompiledClassCache] = None,
         raw_compiled_class_cache: Optional[RawCompiledClassCache] = None,
+        versioned_raw_compiled_class: Optional[RawVersionedCompiledClassCache] = None,
     ):
         self.block_info = block_info
         self.state_reader = state_reader
         self.cache = StateCache()
         self._compiled_classes: Optional[CompiledClassCache] = compiled_class_cache
         self._raw_compiled_classes: Optional[RawCompiledClassCache] = raw_compiled_class_cache
+        self._versioned_raw_compiled_classes: Optional[
+            RawVersionedCompiledClassCache
+        ] = versioned_raw_compiled_class
 
     @property
     def compiled_classes(self) -> CompiledClassCache:
@@ -256,6 +271,12 @@ class CachedState(State):
             self._raw_compiled_classes = {}
         return self._raw_compiled_classes
 
+    @property
+    def versioned_raw_compiled_classes(self) -> RawVersionedCompiledClassCache:
+        if self._versioned_raw_compiled_classes is None:
+            self._versioned_raw_compiled_classes = {}
+        return self._versioned_raw_compiled_classes
+
     def set_compiled_class_cache(self, compiled_classes: CompiledClassCache):
         assert self._compiled_classes is None, "compiled_classes mapping is already initialized."
         self._compiled_classes = compiled_classes
@@ -266,6 +287,14 @@ class CachedState(State):
         ), "raw_compiled_classes mapping is already initialized."
         self._raw_compiled_classes = raw_compiled_classes
 
+    def set_versioned_raw_compiled_class_cache(
+        self, versioned_raw_compiled_classes: RawVersionedCompiledClassCache
+    ):
+        assert (
+            self._versioned_raw_compiled_classes is None
+        ), "versioned_raw_compiled_classes mapping is already initialized."
+        self._versioned_raw_compiled_classes = versioned_raw_compiled_classes
+
     def update_block_info(self, block_info: BlockInfo):
         self.block_info = block_info
 
@@ -274,7 +303,6 @@ class CachedState(State):
             self.compiled_classes[compiled_class_hash] = await self.state_reader.get_compiled_class(
                 compiled_class_hash=compiled_class_hash
             )
-
         return self.compiled_classes[compiled_class_hash]
 
     async def get_raw_compiled_class(self, class_hash: int) -> RawCompiledClass:
@@ -282,8 +310,23 @@ class CachedState(State):
             self.raw_compiled_classes[class_hash] = await self.state_reader.get_raw_compiled_class(
                 class_hash=class_hash
             )
-
         return self.raw_compiled_classes[class_hash]
+
+    async def get_sierra_class(self, class_hash: int) -> ContractClass:
+        return await self.state_reader.get_sierra_class(class_hash)
+
+    async def get_versioned_raw_compiled_class(self, class_hash: int) -> VersionedRawCompiledClass:
+        if class_hash not in self.versioned_raw_compiled_classes:
+            raw_compiled_class = await self.get_raw_compiled_class(class_hash=class_hash)
+            if raw_compiled_class.version == 0:
+                sierra_version = constants.DUMMY_SIERRA_VERSION_FOR_CAIRO0_CLASS_INFO
+            else:
+                sierra = await self.get_sierra_class(class_hash=class_hash)
+                sierra_version = sierra.get_sierra_version()
+
+            self.versioned_raw_compiled_classes[class_hash] = (raw_compiled_class, sierra_version)
+
+        return self.versioned_raw_compiled_classes[class_hash]
 
     async def get_compiled_class_hash(self, class_hash: int) -> int:
         if class_hash not in self.cache.class_hash_to_compiled_class_hash:
@@ -447,7 +490,6 @@ class CachedSyncState(SyncState):
             self.raw_compiled_classes[class_hash] = self.state_reader.get_raw_compiled_class(
                 class_hash=class_hash
             )
-
         return self.raw_compiled_classes[class_hash]
 
     def get_compiled_class_hash(self, class_hash: int) -> int:
@@ -518,6 +560,9 @@ class CachedSyncState(SyncState):
     ):
         data_availability_mode.assert_l1()
         self.cache._storage_writes[(contract_address, key)] = value
+
+    def get_sierra_class(self, class_hash: int) -> ContractClass:
+        return self.state_reader.get_sierra_class(class_hash=class_hash)
 
     def _copy(self) -> "CachedSyncState":
         # Note that the reader's cache may be updated by this copy's read requests.
@@ -727,6 +772,9 @@ class UpdatesTrackerState(SyncState):
 
     def get_compiled_class(self, compiled_class_hash: int) -> CompiledClassBase:
         return self.state.get_compiled_class(compiled_class_hash=compiled_class_hash)
+
+    def get_sierra_class(self, class_hash: int) -> ContractClass:
+        return self.state.get_sierra_class(class_hash=class_hash)
 
     def count_actual_updates_for_fee_charge(
         self,

@@ -32,8 +32,7 @@ py_library(
         "expression_string.py",
     ],
     visibility = ["//visibility:public"],
-    deps = [
-    ],
+    deps = [],
 )
 
 py_library(
@@ -42,8 +41,7 @@ py_library(
         "//src/starkware/python/json_rpc:client.py",
     ],
     visibility = ["//visibility:public"],
-    deps = [
-    ],
+    deps = [],
 )
 
 py_library(
@@ -52,8 +50,7 @@ py_library(
         "merkle_tree.py",
     ],
     visibility = ["//visibility:public"],
-    deps = [
-    ],
+    deps = [],
 )
 
 py_library(

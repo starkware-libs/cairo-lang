@@ -176,6 +176,8 @@ class DeprecatedCallInfo(SerializableMarshmallowDataclass):
             l2_to_l1_messages=[message.to_non_deprecated() for message in self.l2_to_l1_messages],
             storage_read_values=self.storage_read_values,
             accessed_storage_keys=self.accessed_storage_keys,
+            read_class_hash_values=[],
+            accessed_contract_addresses=set(),
             internal_calls=[
                 internal_call.to_non_deprecated() for internal_call in self.internal_calls
             ],

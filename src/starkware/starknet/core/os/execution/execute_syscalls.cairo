@@ -50,6 +50,7 @@ from starkware.starknet.common.new_syscalls import (
     DEPLOY_SELECTOR,
     EMIT_EVENT_SELECTOR,
     GET_BLOCK_HASH_SELECTOR,
+    GET_CLASS_HASH_AT_SELECTOR,
     GET_EXECUTION_INFO_SELECTOR,
     KECCAK_SELECTOR,
     LIBRARY_CALL_SELECTOR,
@@ -77,6 +78,8 @@ from starkware.starknet.common.new_syscalls import (
     FailureReason,
     GetBlockHashRequest,
     GetBlockHashResponse,
+    GetClassHashAtRequest,
+    GetClassHashAtResponse,
     GetExecutionInfoResponse,
     KeccakRequest,
     KeccakResponse,
@@ -122,10 +125,12 @@ from starkware.starknet.core.os.constants import (
     ENTRY_POINT_TYPE_CONSTRUCTOR,
     ENTRY_POINT_TYPE_EXTERNAL,
     ERROR_BLOCK_NUMBER_OUT_OF_RANGE,
+    ERROR_ENTRY_POINT_FAILED,
     ERROR_INVALID_ARGUMENT,
     ERROR_INVALID_INPUT_LEN,
     ERROR_OUT_OF_GAS,
     GET_BLOCK_HASH_GAS_COST,
+    GET_CLASS_HASH_AT_GAS_COST,
     GET_EXECUTION_INFO_GAS_COST,
     KECCAK_GAS_COST,
     KECCAK_ROUND_COST_GAS_COST,
@@ -154,6 +159,11 @@ from starkware.starknet.core.os.execution.deprecated_execute_entry_point import 
 )
 from starkware.starknet.core.os.execution.deprecated_execute_syscalls import deploy_contract
 from starkware.starknet.core.os.execution.execute_entry_point import ExecutionContext
+from starkware.starknet.core.os.execution.revert import (
+    CHANGE_CLASS_ENTRY,
+    CHANGE_CONTRACT_ENTRY,
+    RevertLogEntry,
+)
 from starkware.starknet.core.os.output import (
     MessageToL1Header,
     OsCarriedOutputs,
@@ -174,6 +184,7 @@ func execute_syscalls{
     builtin_ptrs: BuiltinPointers*,
     contract_state_changes: DictAccess*,
     contract_class_changes: DictAccess*,
+    revert_log: RevertLogEntry*,
     outputs: OsCarriedOutputs*,
 }(block_context: BlockContext*, execution_context: ExecutionContext*, syscall_ptr_end: felt*) {
     if (syscall_ptr == syscall_ptr_end) {
@@ -279,6 +290,16 @@ func execute_syscalls{
     if (selector == GET_BLOCK_HASH_SELECTOR) {
         execute_get_block_hash(block_context=block_context);
         %{ exit_syscall(selector=ids.GET_BLOCK_HASH_SELECTOR) %}
+        return execute_syscalls(
+            block_context=block_context,
+            execution_context=execution_context,
+            syscall_ptr_end=syscall_ptr_end,
+        );
+    }
+
+    if (selector == GET_CLASS_HASH_AT_SELECTOR) {
+        execute_get_class_hash_at();
+        %{ exit_syscall(selector=ids.GET_CLASS_HASH_AT_SELECTOR) %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -440,6 +461,7 @@ func execute_call_contract{
     builtin_ptrs: BuiltinPointers*,
     contract_state_changes: DictAccess*,
     contract_class_changes: DictAccess*,
+    revert_log: RevertLogEntry*,
     outputs: OsCarriedOutputs*,
 }(block_context: BlockContext*, caller_execution_context: ExecutionContext*) {
     let request = cast(syscall_ptr + RequestHeader.SIZE, CallContractRequest*);
@@ -459,6 +481,7 @@ func execute_call_contract{
     // Prepare execution context.
     tempvar calldata_start = request.calldata_start;
     tempvar caller_execution_info = caller_execution_context.execution_info;
+    tempvar caller_address = caller_execution_info.contract_address;
     tempvar execution_context: ExecutionContext* = new ExecutionContext(
         entry_point_type=ENTRY_POINT_TYPE_EXTERNAL,
         class_hash=state_entry.class_hash,
@@ -467,18 +490,30 @@ func execute_call_contract{
         execution_info=new ExecutionInfo(
             block_info=caller_execution_info.block_info,
             tx_info=caller_execution_info.tx_info,
-            caller_address=caller_execution_info.contract_address,
+            caller_address=caller_address,
             contract_address=contract_address,
             selector=request.selector,
         ),
         deprecated_tx_info=caller_execution_context.deprecated_tx_info,
     );
 
-    return contract_call_helper(
+    // Since we process the revert log backwards, entries before this point belong to the caller.
+    assert [revert_log] = RevertLogEntry(selector=CHANGE_CONTRACT_ENTRY, value=caller_address);
+    let revert_log = &revert_log[1];
+
+    contract_call_helper(
         remaining_gas=remaining_gas,
         block_context=block_context,
         execution_context=execution_context,
     );
+
+    // Entries before this point belong to the callee.
+    assert [revert_log] = RevertLogEntry(
+        selector=CHANGE_CONTRACT_ENTRY, value=request.contract_address
+    );
+    let revert_log = &revert_log[1];
+
+    return ();
 }
 
 // Implements the library_call syscall.
@@ -488,6 +523,7 @@ func execute_library_call{
     builtin_ptrs: BuiltinPointers*,
     contract_state_changes: DictAccess*,
     contract_class_changes: DictAccess*,
+    revert_log: RevertLogEntry*,
     outputs: OsCarriedOutputs*,
 }(block_context: BlockContext*, caller_execution_context: ExecutionContext*) {
     let request = cast(syscall_ptr + RequestHeader.SIZE, LibraryCallRequest*);
@@ -532,12 +568,22 @@ func contract_call_helper{
     builtin_ptrs: BuiltinPointers*,
     contract_state_changes: DictAccess*,
     contract_class_changes: DictAccess*,
+    revert_log: RevertLogEntry*,
     outputs: OsCarriedOutputs*,
 }(remaining_gas: felt, block_context: BlockContext*, execution_context: ExecutionContext*) {
     with remaining_gas {
-        let (retdata_size, retdata, _is_deprecated) = select_execute_entry_point_func(
+        let (is_reverted, retdata_size, retdata, _is_deprecated) = select_execute_entry_point_func(
             block_context=block_context, execution_context=execution_context
         );
+    }
+
+    if (is_reverted != 0) {
+        // Append `ERROR_ENTRY_POINT_FAILED` to the retdata.
+        assert retdata[retdata_size] = ERROR_ENTRY_POINT_FAILED;
+        tempvar retdata_size = retdata_size + 1;
+    } else {
+        ap += 2;  // Align the stack to avoid revoked references.
+        tempvar retdata_size = retdata_size;
     }
 
     let response_header = cast(syscall_ptr, ResponseHeader*);
@@ -546,7 +592,7 @@ func contract_call_helper{
 
     // Write the response header.
     with_attr error_message("Predicted gas costs are inconsistent with the actual execution.") {
-        assert [response_header] = ResponseHeader(gas=remaining_gas, failure_flag=0);
+        assert [response_header] = ResponseHeader(gas=remaining_gas, failure_flag=is_reverted);
     }
 
     let response = cast(syscall_ptr, CallContractResponse*);
@@ -580,6 +626,7 @@ func execute_deploy{
     builtin_ptrs: BuiltinPointers*,
     contract_state_changes: DictAccess*,
     contract_class_changes: DictAccess*,
+    revert_log: RevertLogEntry*,
     outputs: OsCarriedOutputs*,
 }(block_context: BlockContext*, caller_execution_context: ExecutionContext*) {
     alloc_locals;
@@ -684,6 +731,39 @@ func execute_deploy{
     return ();
 }
 
+// Reads the class hash of the given contract address.
+func execute_get_class_hash_at{
+    range_check_ptr, syscall_ptr: felt*, contract_state_changes: DictAccess*
+}() {
+    alloc_locals;
+    let request = cast(syscall_ptr + RequestHeader.SIZE, GetClassHashAtRequest*);
+
+    // Reduce gas.
+    let success = reduce_syscall_gas_and_write_response_header(
+        total_gas_cost=GET_CLASS_HASH_AT_GAS_COST, request_struct_size=GetClassHashAtRequest.SIZE
+    );
+
+    if (success == FALSE) {
+        // Not enough gas to execute the syscall.
+        return ();
+    }
+
+    let response = cast(syscall_ptr, GetClassHashAtResponse*);
+    // Advance syscall pointer to the response body.
+    let syscall_ptr = syscall_ptr + GetClassHashAtResponse.SIZE;
+
+    // Read the state entry of the requested address.
+    let (raw_state_entry) = dict_read{dict_ptr=contract_state_changes}(
+        key=request.contract_address
+    );
+    let state_entry = cast(raw_state_entry, StateEntry*);
+
+    // Write the response.
+    assert [response] = GetClassHashAtResponse(class_hash=state_entry.class_hash);
+
+    return ();
+}
+
 // Reads a value from the current contract's storage.
 func execute_storage_read{range_check_ptr, syscall_ptr: felt*, contract_state_changes: DictAccess*}(
     contract_address: felt
@@ -741,7 +821,10 @@ func execute_storage_read{range_check_ptr, syscall_ptr: felt*, contract_state_ch
 
 // Writes a value to the current contract's storage.
 func execute_storage_write{
-    range_check_ptr, syscall_ptr: felt*, contract_state_changes: DictAccess*
+    range_check_ptr,
+    syscall_ptr: felt*,
+    contract_state_changes: DictAccess*,
+    revert_log: RevertLogEntry*,
 }(contract_address: felt) {
     alloc_locals;
     let request = cast(syscall_ptr + RequestHeader.SIZE, StorageWriteRequest*);
@@ -772,10 +855,14 @@ func execute_storage_write{
     static_assert StorageWriteRequest.SIZE == 3;
     assert request.reserved = 0;
     tempvar storage_ptr = state_entry.storage_ptr;
+    tempvar storage_key = request.key;
     assert [storage_ptr] = DictAccess(
-        key=request.key, prev_value=prev_value, new_value=request.value
+        key=storage_key, prev_value=prev_value, new_value=request.value
     );
     let storage_ptr = storage_ptr + DictAccess.SIZE;
+
+    assert [revert_log] = RevertLogEntry(selector=storage_key, value=prev_value);
+    let revert_log = &revert_log[1];
 
     // Update the state.
     assert [new_state_entry] = StateEntry(
@@ -891,7 +978,10 @@ func execute_get_execution_info{range_check_ptr, syscall_ptr: felt*}(
 
 // Replaces the class.
 func execute_replace_class{
-    range_check_ptr, syscall_ptr: felt*, contract_state_changes: DictAccess*
+    range_check_ptr,
+    syscall_ptr: felt*,
+    contract_state_changes: DictAccess*,
+    revert_log: RevertLogEntry*,
 }(contract_address: felt) {
     alloc_locals;
     let request = cast(syscall_ptr + RequestHeader.SIZE, ReplaceClassRequest*);
@@ -923,6 +1013,9 @@ func execute_replace_class{
         prev_value=cast(state_entry, felt),
         new_value=cast(new_state_entry, felt),
     );
+
+    assert [revert_log] = RevertLogEntry(selector=CHANGE_CLASS_ENTRY, value=state_entry.class_hash);
+    let revert_log = &revert_log[1];
 
     return ();
 }
@@ -1002,21 +1095,14 @@ func execute_sha256_process_block{
     let request = cast(syscall_ptr + RequestHeader.SIZE, Sha256ProcessBlockRequest*);
 
     // Reduce gas.
-    let (success, remaining_gas) = reduce_syscall_base_gas(
-        specific_base_gas_cost=SHA256_PROCESS_BLOCK_GAS_COST,
+    let success = reduce_syscall_gas_and_write_response_header(
+        total_gas_cost=SHA256_PROCESS_BLOCK_GAS_COST,
         request_struct_size=Sha256ProcessBlockRequest.SIZE,
     );
-
     if (success == 0) {
         // Not enough gas to execute the syscall.
         return ();
     }
-
-    // Gas reduction has succeeded and the request is valid; write the response header.
-    let response_header = cast(syscall_ptr, ResponseHeader*);
-    // Advance syscall pointer to the response body.
-    let syscall_ptr = syscall_ptr + ResponseHeader.SIZE;
-    assert [response_header] = ResponseHeader(gas=remaining_gas, failure_flag=0);
 
     local sha256_ptr: Sha256ProcessBlock* = builtin_ptrs.non_selectable.sha256;
 

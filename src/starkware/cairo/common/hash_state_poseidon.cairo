@@ -22,7 +22,7 @@ func hash_init() -> HashState {
 
 // Adds a single item to the HashState.
 func hash_update_single{hash_state: HashState}(item: felt) {
-    tempvar current_end = hash_state.end;
+    let current_end = hash_state.end;
     assert [current_end] = item;
     let hash_state = HashState(start=hash_state.start, end=current_end + 1);
     return ();
@@ -30,8 +30,7 @@ func hash_update_single{hash_state: HashState}(item: felt) {
 
 // Adds each element in the array to the HashState.
 func hash_update{hash_state: HashState}(data_ptr: felt*, data_length: felt) {
-    alloc_locals;
-    tempvar current_end = hash_state.end;
+    let current_end = hash_state.end;
     memcpy(dst=current_end, src=data_ptr, len=data_length);
     let hash_state = HashState(start=hash_state.start, end=current_end + data_length);
     return ();

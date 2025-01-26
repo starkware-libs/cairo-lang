@@ -39,7 +39,7 @@ def execute_fee_transfer(
         caller_address=tx_execution_context.account_contract_address,
         contract_address=fee_token_address,
         entry_point_selector=starknet_abi.TRANSFER_ENTRY_POINT_SELECTOR,
-        initial_gas=GasCost.INITIAL.value,
+        initial_gas=GasCost.DEFAULT_INITIAL.value,
         entry_point_type=EntryPointType.EXTERNAL,
         calldata=[general_config.sequencer_address, actual_fee, 0],  # Recipient, amount (128-bit).
     )

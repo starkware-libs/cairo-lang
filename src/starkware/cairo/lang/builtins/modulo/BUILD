@@ -12,6 +12,9 @@ pytest_test(
     srcs = [
         "mod_builtin_runner_test.py",
     ],
+    data = [
+        "modulo_test.cairo",
+    ],
     visibility = ["//visibility:public"],
     deps = [
         "//src/starkware/cairo/lang:cairo_instances_lib",

@@ -59,18 +59,25 @@ from starkware.starknet.core.os.builtins import (
     SelectableBuiltins,
 )
 from starkware.starknet.core.os.constants import (
+    ALIAS_CONTRACT_ADDRESS,
     BLOCK_HASH_CONTRACT_ADDRESS,
     CONSTRUCTOR_ENTRY_POINT_SELECTOR,
+    DEFAULT_INITIAL_GAS_COST,
     ENTRY_POINT_TYPE_CONSTRUCTOR,
     ENTRY_POINT_TYPE_EXTERNAL,
     ENTRY_POINT_TYPE_L1_HANDLER,
-    INITIAL_GAS_COST,
+    RESERVED_CONTRACT_ADDRESS,
 )
 from starkware.starknet.core.os.contract_address.contract_address import get_contract_address
 from starkware.starknet.core.os.execution.deprecated_execute_entry_point import (
     select_execute_entry_point_func,
 )
 from starkware.starknet.core.os.execution.execute_entry_point import ExecutionContext
+from starkware.starknet.core.os.execution.revert import (
+    CHANGE_CLASS_ENTRY,
+    CHANGE_CONTRACT_ENTRY,
+    RevertLogEntry,
+)
 from starkware.starknet.core.os.output import (
     MessageToL1Header,
     OsCarriedOutputs,
@@ -84,6 +91,7 @@ func contract_call_helper{
     builtin_ptrs: BuiltinPointers*,
     contract_state_changes: DictAccess*,
     contract_class_changes: DictAccess*,
+    revert_log: RevertLogEntry*,
     outputs: OsCarriedOutputs*,
 }(
     block_context: BlockContext*,
@@ -93,9 +101,9 @@ func contract_call_helper{
     // Set enough gas for this call to succeed.
     // This is needed since the caller contract is of version 0 and has no notion of gas, and
     // the callee may be of version 1.0.
-    let remaining_gas = INITIAL_GAS_COST;
+    let remaining_gas = DEFAULT_INITIAL_GAS_COST;
     with remaining_gas {
-        let (retdata_size, retdata, _is_deprecated) = select_execute_entry_point_func(
+        let (is_reverted, retdata_size, retdata, _is_deprecated) = select_execute_entry_point_func(
             block_context=block_context, execution_context=execution_context
         );
     }
@@ -110,6 +118,9 @@ func contract_call_helper{
     %}
     relocate_segment(src_ptr=call_response.retdata, dest_ptr=retdata);
 
+    // The deprecated call syscalls do not support reverts.
+    assert is_reverted = 0;
+
     assert [call_response] = CallContractResponse(retdata_size=retdata_size, retdata=retdata);
     return ();
 }
@@ -120,6 +131,7 @@ func execute_contract_call_syscall{
     builtin_ptrs: BuiltinPointers*,
     contract_state_changes: DictAccess*,
     contract_class_changes: DictAccess*,
+    revert_log: RevertLogEntry*,
     outputs: OsCarriedOutputs*,
 }(
     block_context: BlockContext*,
@@ -166,6 +178,7 @@ func execute_library_call_syscall{
     builtin_ptrs: BuiltinPointers*,
     contract_state_changes: DictAccess*,
     contract_class_changes: DictAccess*,
+    revert_log: RevertLogEntry*,
     outputs: OsCarriedOutputs*,
 }(
     block_context: BlockContext*,
@@ -205,6 +218,7 @@ func execute_deploy_syscall{
     builtin_ptrs: BuiltinPointers*,
     contract_state_changes: DictAccess*,
     contract_class_changes: DictAccess*,
+    revert_log: RevertLogEntry*,
     outputs: OsCarriedOutputs*,
 }(block_context: BlockContext*, caller_execution_context: ExecutionContext*, syscall_ptr: Deploy*) {
     alloc_locals;
@@ -267,7 +281,7 @@ func execute_deploy_syscall{
     );
 
     // Set enough gas for this call to succeed; see the comment in 'contract_call_helper'.
-    let remaining_gas = INITIAL_GAS_COST;
+    let remaining_gas = DEFAULT_INITIAL_GAS_COST;
     with remaining_gas {
         deploy_contract(
             block_context=block_context, constructor_execution_context=constructor_execution_context
@@ -277,7 +291,7 @@ func execute_deploy_syscall{
     return ();
 }
 
-func execute_replace_class{contract_state_changes: DictAccess*}(
+func execute_replace_class{contract_state_changes: DictAccess*, revert_log: RevertLogEntry*}(
     contract_address, syscall_ptr: ReplaceClass*
 ) {
     alloc_locals;
@@ -299,6 +313,8 @@ func execute_replace_class{contract_state_changes: DictAccess*}(
         prev_value=cast(state_entry, felt),
         new_value=cast(new_state_entry, felt),
     );
+    assert [revert_log] = RevertLogEntry(selector=CHANGE_CLASS_ENTRY, value=state_entry.class_hash);
+    let revert_log = &revert_log[1];
 
     return ();
 }
@@ -350,7 +366,7 @@ func execute_storage_read{contract_state_changes: DictAccess*}(
 }
 
 // Write a value to the current contract's storage.
-func execute_storage_write{contract_state_changes: DictAccess*}(
+func execute_storage_write{contract_state_changes: DictAccess*, revert_log: RevertLogEntry*}(
     contract_address, syscall_ptr: StorageWrite*
 ) {
     alloc_locals;
@@ -370,10 +386,13 @@ func execute_storage_write{contract_state_changes: DictAccess*}(
 
     // Update the contract's storage.
     tempvar storage_ptr = state_entry.storage_ptr;
+    tempvar storage_address = syscall_ptr.address;
     assert [storage_ptr] = DictAccess(
-        key=syscall_ptr.address, prev_value=prev_value, new_value=syscall_ptr.value
+        key=storage_address, prev_value=prev_value, new_value=syscall_ptr.value
     );
     let storage_ptr = storage_ptr + DictAccess.SIZE;
+    assert [revert_log] = RevertLogEntry(selector=storage_address, value=prev_value);
+    let revert_log = &revert_log[1];
 
     // Update contract_state_changes.
     assert [new_state_entry] = StateEntry(
@@ -402,6 +421,7 @@ func execute_deprecated_syscalls{
     builtin_ptrs: BuiltinPointers*,
     contract_state_changes: DictAccess*,
     contract_class_changes: DictAccess*,
+    revert_log: RevertLogEntry*,
     outputs: OsCarriedOutputs*,
 }(
     block_context: BlockContext*,
@@ -472,14 +492,23 @@ func execute_deprecated_syscalls{
 
     if (selector == CALL_CONTRACT_SELECTOR) {
         let call_contract_syscall = cast(syscall_ptr, CallContract*);
+        tempvar caller_address = execution_context.execution_info.contract_address;
+        let callee_address = call_contract_syscall.request.contract_address;
+        // Since we process the revert log backwards,
+        // entries before this point belong to the caller.
+        assert [revert_log] = RevertLogEntry(selector=CHANGE_CONTRACT_ENTRY, value=caller_address);
+        let revert_log = &revert_log[1];
         execute_contract_call_syscall(
             block_context=block_context,
-            contract_address=call_contract_syscall.request.contract_address,
-            caller_address=execution_context.execution_info.contract_address,
+            contract_address=callee_address,
+            caller_address=caller_address,
             entry_point_type=ENTRY_POINT_TYPE_EXTERNAL,
             caller_execution_context=execution_context,
             syscall_ptr=call_contract_syscall,
         );
+        // Entries before this point belong to the callee.
+        assert [revert_log] = RevertLogEntry(selector=CHANGE_CONTRACT_ENTRY, value=callee_address);
+        let revert_log = &revert_log[1];
         %{ exit_syscall(selector=ids.CALL_CONTRACT_SELECTOR) %}
         return execute_deprecated_syscalls(
             block_context=block_context,
@@ -723,6 +752,7 @@ func deploy_contract{
     builtin_ptrs: BuiltinPointers*,
     contract_state_changes: DictAccess*,
     contract_class_changes: DictAccess*,
+    revert_log: RevertLogEntry*,
     outputs: OsCarriedOutputs*,
 }(block_context: BlockContext*, constructor_execution_context: ExecutionContext*) -> (
     retdata_size: felt, retdata: felt*
@@ -733,7 +763,9 @@ func deploy_contract{
 
     // Assert that we don't deploy to one of the reserved addresses.
     assert_not_zero(
-        (contract_address - ORIGIN_ADDRESS) * (contract_address - BLOCK_HASH_CONTRACT_ADDRESS)
+        (contract_address - ORIGIN_ADDRESS) * (contract_address - BLOCK_HASH_CONTRACT_ADDRESS) * (
+            contract_address - ALIAS_CONTRACT_ADDRESS
+        ) * (contract_address - RESERVED_CONTRACT_ADDRESS),
     );
 
     local state_entry: StateEntry*;
@@ -757,9 +789,28 @@ func deploy_contract{
         new_value=cast(new_state_entry, felt),
     );
 
+    // Entries before this point belong to the caller.
+    assert [revert_log] = RevertLogEntry(
+        selector=CHANGE_CONTRACT_ENTRY,
+        value=constructor_execution_context.execution_info.caller_address,
+    );
+    let revert_log = &revert_log[1];
+
+    assert [revert_log] = RevertLogEntry(
+        selector=CHANGE_CLASS_ENTRY, value=UNINITIALIZED_CLASS_HASH
+    );
+    let revert_log = &revert_log[1];
+
     // Invoke the contract constructor.
-    let (retdata_size, retdata, _is_deprecated) = select_execute_entry_point_func(
+    let (is_reverted, retdata_size, retdata, _is_deprecated) = select_execute_entry_point_func(
         block_context=block_context, execution_context=constructor_execution_context
     );
+
+    // Entries before this point belong to the deployed contract.
+    assert [revert_log] = RevertLogEntry(selector=CHANGE_CONTRACT_ENTRY, value=contract_address);
+    let revert_log = &revert_log[1];
+
+    // The deprecated deploy syscalls do not support reverts.
+    assert is_reverted = 0;
     return (retdata_size=retdata_size, retdata=retdata);
 }

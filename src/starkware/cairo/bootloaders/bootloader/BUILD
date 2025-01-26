@@ -3,6 +3,7 @@ load("//src/starkware/cairo/lang:cairo_rules.bzl", "cairo_binary", "cairo_librar
 cairo_library(
     name = "run_bootloader_lib",
     srcs = [
+        "constants.cairo",
         "run_bootloader.cairo",
         "//src/starkware/cairo/bootloaders/simple_bootloader:execute_task.cairo",
         "//src/starkware/cairo/bootloaders/simple_bootloader:run_simple_bootloader.cairo",

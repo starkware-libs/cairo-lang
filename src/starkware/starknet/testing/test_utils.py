@@ -1,5 +1,7 @@
 from typing import Dict, List, Optional, Tuple
 
+from web3 import Web3
+
 from starkware.starknet.business_logic.transaction.deprecated_objects import (
     DeprecatedInternalInvokeFunction,
 )
@@ -7,6 +9,15 @@ from starkware.starknet.core.os.contract_address.contract_address import (
     calculate_contract_address_from_hash,
 )
 from starkware.starknet.public.abi import get_selector_from_name
+
+
+def int_to_checksum_address(address: int) -> str:
+    hex_address = "0x" + hex(address)[2:].zfill(40)
+    if hasattr(Web3, "toChecksumAddress"):
+        return Web3.toChecksumAddress(hex_address)
+    else:
+        assert hasattr(Web3, "to_checksum_address")
+        return Web3.to_checksum_address(hex_address)  # type: ignore
 
 
 class NonceManager:

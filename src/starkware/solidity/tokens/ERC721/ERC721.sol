@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0.
 pragma solidity ^0.6.12;
 
-import "./IERC721.sol";
-import "./IERC721Receiver.sol";
-import "../ERC165.sol";
-import "../../libraries/Addresses.sol";
+import "starkware/solidity/tokens/ERC721/IERC721.sol";
+import "starkware/solidity/tokens/ERC721/IERC721Receiver.sol";
+import "starkware/solidity/tokens/ERC165.sol";
+import "starkware/solidity/libraries/Addresses.sol";
 
 /**
   ERC721 Non-Fungible Token Standard basic implementation

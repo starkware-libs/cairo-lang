@@ -1,6 +1,6 @@
 {
     "public_input_test": {
-        "initial_hash_chain_seed": "0x03b5456803e21d8cb8a531ffd767e1ccc8dc775423e111c425881f46103da928"
+        "initial_hash_chain_seed": "0x06bbd7e39670910fa28cf0092ae809eb59157b5a2a417a6d5167d6809d4fd791"
     },
     "dynamic_layout_public_input_test": {
         "initial_hash_chain_seed": "0x004d22ee097dd04b1228b765883e011e715c227d5a63aa16e32942bd303a5185"

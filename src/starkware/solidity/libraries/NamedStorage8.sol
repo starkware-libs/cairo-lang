@@ -7,12 +7,42 @@ pragma solidity ^0.8.0;
   New types of storage variables should be added here upon need.
 */
 library NamedStorage {
+    function bytes32ToBoolMapping(string memory tag_)
+        internal
+        pure
+        returns (mapping(bytes32 => bool) storage randomVariable)
+    {
+        bytes32 location = keccak256(abi.encodePacked(tag_));
+        assembly {
+            randomVariable.slot := location
+        }
+    }
+
     function bytes32ToUint256Mapping(string memory tag_)
         internal
         pure
         returns (mapping(bytes32 => uint256) storage randomVariable)
     {
         bytes32 location = keccak256(abi.encodePacked(tag_));
+        assembly {
+            randomVariable.slot := location
+        }
+    }
+
+    function addressToUint256Mapping(string memory tag_)
+        internal
+        pure
+        returns (mapping(address => uint256) storage)
+    {
+        bytes32 location = keccak256(abi.encodePacked(tag_));
+        return _addressToUint256Mapping(location);
+    }
+
+    function _addressToUint256Mapping(bytes32 location)
+        internal
+        pure
+        returns (mapping(address => uint256) storage randomVariable)
+    {
         assembly {
             randomVariable.slot := location
         }
@@ -51,12 +81,31 @@ library NamedStorage {
         }
     }
 
+    function addressToAddressListMapping(string memory tag_)
+        internal
+        pure
+        returns (mapping(address => address[]) storage randomVariable)
+    {
+        bytes32 location = keccak256(abi.encodePacked(tag_));
+        assembly {
+            randomVariable.slot := location
+        }
+    }
+
     function addressToBoolMapping(string memory tag_)
+        internal
+        pure
+        returns (mapping(address => bool) storage)
+    {
+        bytes32 location = keccak256(abi.encodePacked(tag_));
+        return _addressToBoolMapping(location);
+    }
+
+    function _addressToBoolMapping(bytes32 location)
         internal
         pure
         returns (mapping(address => bool) storage randomVariable)
     {
-        bytes32 location = keccak256(abi.encodePacked(tag_));
         assembly {
             randomVariable.slot := location
         }

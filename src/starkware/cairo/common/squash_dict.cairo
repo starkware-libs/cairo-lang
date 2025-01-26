@@ -2,8 +2,8 @@ from starkware.cairo.common.dict_access import DictAccess
 from starkware.cairo.common.math import assert_lt_felt
 
 // Verifies that dict_accesses lists valid chronological accesses (and updates)
-// to a mutable dictionary and outputs a squashed dict with one DictAccess instance per key
-// (value before and value after) which summarizes all the changes to that key.
+// to a mutable dictionary and outputs a squashed dict, sorted by key, with one DictAccess instance
+// per key (value before and value after) which summarizes all the changes to that key.
 //
 // Example:
 //   Input: {(key1, 0, 2), (key1, 2, 7), (key2, 4, 1), (key1, 7, 5), (key2, 1, 2)}

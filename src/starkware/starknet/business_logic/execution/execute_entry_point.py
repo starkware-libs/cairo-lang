@@ -41,7 +41,7 @@ from starkware.starknet.core.os.deprecated_syscall_handler import DeprecatedBlSy
 from starkware.starknet.core.os.syscall_handler import BusinessLogicSyscallHandler
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.constants import VERSIONED_CONSTANTS, GasCost
-from starkware.starknet.definitions.error_codes import StarknetErrorCode
+from starkware.starknet.definitions.error_codes import CairoErrorCode, StarknetErrorCode
 from starkware.starknet.definitions.execution_mode import ExecutionMode
 from starkware.starknet.definitions.general_config import (
     STARKNET_LAYOUT_INSTANCE,
@@ -106,7 +106,7 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
         entry_point_selector: int,
         entry_point_type: Optional[EntryPointType] = None,
         caller_address: int = 0,
-        initial_gas: int = GasCost.INITIAL.value,
+        initial_gas: int = GasCost.DEFAULT_INITIAL.value,
         call_type: Optional[CallType] = None,
         class_hash: Optional[int] = None,
     ) -> "ExecuteEntryPoint":
@@ -266,7 +266,34 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
             )
 
         # Prepare implicit arguments.
-        implicit_args = os_utils.prepare_os_implicit_args(runner=runner, gas=self.initial_gas)
+        initial_gas_call = self.initial_gas - GasCost.ENTRY_POINT_INITIAL_BUDGET.value
+        if initial_gas_call < 0:
+            return CallInfo.create(
+                # Execution params.
+                caller_address=self.caller_address,
+                call_type=self.call_type,
+                contract_address=self.contract_address,
+                code_address=self.code_address,
+                class_hash=class_hash,
+                entry_point_selector=self.entry_point_selector,
+                entry_point_type=self.entry_point_type,
+                calldata=self.calldata,
+                # Execution results.
+                gas_consumed=0,
+                failure_flag=1,
+                retdata=[CairoErrorCode.OUT_OF_GAS.to_felt()],
+                execution_resources=ExecutionResources.empty(),
+                events=[],
+                l2_to_l1_messages=[],
+                # Necessary info. for the OS run.
+                storage_read_values=[],
+                accessed_storage_keys=set(),
+                # Internal calls.
+                internal_calls=[],
+                accessed_contract_addresses=set(),
+                read_class_hash_values=[],
+            )
+        implicit_args = os_utils.prepare_os_implicit_args(runner=runner, gas=initial_gas_call)
 
         # Prepare syscall handler.
         initial_syscall_ptr = cast(RelocatableValue, implicit_args[-1])
@@ -480,6 +507,8 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
             accessed_storage_keys=storage.accessed_keys if storage is not None else set(),
             # Internal calls.
             internal_calls=internal_calls,
+            accessed_contract_addresses=set(),
+            read_class_hash_values=[],
         )
 
     def _get_non_optional_class_hash(

@@ -31,6 +31,7 @@ CAIRO_VERIFIER_PROGRAM_ARTIFACTS_ALL_LAYOUTS = [
 package(default_visibility = ["//visibility:public"])
 
 exports_files([
+    "example_fact_topologies.json",
     "example_proof.json",
     "objects.cairo",
 ])

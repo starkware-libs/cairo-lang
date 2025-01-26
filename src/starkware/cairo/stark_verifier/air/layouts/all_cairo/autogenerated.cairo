@@ -10582,7 +10582,7 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[349] * value;
 
     // Constraint: add_mod/init_p0_address.
-    tempvar value = (column4_row1802 - global_values.add_mod__initial_mod_addr) / domain143;
+    tempvar value = (column4_row1802 - global_values.initial_add_mod_addr) / domain143;
     tempvar total_sum = total_sum + constraint_coefficients[350] * value;
 
     // Constraint: add_mod/step_p1_addr.
@@ -10777,7 +10777,7 @@ func eval_composition_polynomial{range_check_ptr}(
     tempvar total_sum = total_sum + constraint_coefficients[387] * value;
 
     // Constraint: mul_mod/init_p0_address.
-    tempvar value = (column4_row2570 - global_values.mul_mod__initial_mod_addr) / domain143;
+    tempvar value = (column4_row2570 - global_values.initial_mul_mod_addr) / domain143;
     tempvar total_sum = total_sum + constraint_coefficients[388] * value;
 
     // Constraint: mul_mod/step_p1_addr.

@@ -1,10 +1,16 @@
 load("vars.bzl", "ADDITIONAL_IMPORTS")
 
-exports_files([
-    ".clang-format",
-    "package.json",
-    "yarn_ganache.lock",
-] + glob(["*.py"]))
+exports_files(
+    [
+        ".clang-format",
+        "package.json",
+        "yarn_ganache.lock",
+    ] + glob(
+        [
+            "*.py",
+        ],
+    ),
+)
 
 # The 'starkware' library adds 'src' to PYTHONPATH.
 # The library on its own does not add any dependencies.

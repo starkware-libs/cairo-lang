@@ -1,6 +1,7 @@
 %builtins output range_check poseidon
 
 from starkware.cairo.common.alloc import alloc
+from starkware.cairo.common.bool import FALSE
 from starkware.cairo.common.cairo_builtins import PoseidonBuiltin
 from starkware.starknet.core.aggregator.combine_blocks import combine_blocks
 from starkware.starknet.core.os.output import OsOutput, serialize_os_output
@@ -58,7 +59,7 @@ func main{output_ptr: felt*, range_check_ptr, poseidon_ptr: PoseidonBuiltin*}() 
             )
         kzg_manager = KzgManager(polynomial_coefficients_to_kzg_commitment_callback)
     %}
-    serialize_os_output(os_output=combined_output);
+    serialize_os_output(os_output=combined_output, replace_keys_with_aliases=FALSE);
 
     %{
         import json
@@ -104,7 +105,7 @@ func output_blocks{output_ptr: felt*, range_check_ptr, poseidon_ptr: PoseidonBui
         # we need to disable page creation.
         __serialize_data_availability_create_pages__ = False
     %}
-    serialize_os_output(os_output=&os_outputs[0]);
+    serialize_os_output(os_output=&os_outputs[0], replace_keys_with_aliases=FALSE);
 
     // Compute the size of the output, including the program hash and the output size fields.
     assert output_size_placeholder = output_ptr - output_start;

@@ -26,6 +26,16 @@ sol_library(
 )
 
 sol_library(
+    name = "governance_stub_sol",
+    srcs = [
+        "GovernanceStub.sol",
+    ],
+    deps = [
+        "//src/starkware/solidity/interfaces:governance_interface_sol",
+    ],
+)
+
+sol_library(
     name = "governance_sol",
     srcs = [
         "Governance.sol",
@@ -65,13 +75,21 @@ sol_library(
 sol_library(
     name = "governance_contract_sol",
     srcs = [
-        "GenericGovernance.sol",
         "Governance.sol",
         "GovernanceStorage.sol",
         "Operator.sol",
     ],
     deps = [
         "//src/starkware/solidity/interfaces:governance_interface_sol",
+    ],
+)
+
+sol_library(
+    name = "generic_governance_sol",
+    srcs = [
+        "GenericGovernance.sol",
+    ],
+    deps = [
     ],
 )
 

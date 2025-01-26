@@ -4,14 +4,17 @@ from services.everest.business_logic.state_api import StateProxy
 from starkware.python.utils import to_bytes
 from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
 from starkware.starknet.definitions import constants, fields
+from starkware.starknet.definitions.constants import DUMMY_SIERRA_VERSION_FOR_CAIRO0_CLASS_INFO
 from starkware.starknet.definitions.data_availability_mode import DataAvailabilityMode
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.public.abi import get_uint256_storage_var_keys
 from starkware.starknet.services.api.contract_class.contract_class import (
     CompiledClass,
     CompiledClassBase,
+    ContractClass,
     DeprecatedCompiledClass,
     RawCompiledClass,
+    VersionedRawCompiledClass,
 )
 from starkware.starkware_utils.error_handling import StarkException, stark_assert
 
@@ -20,6 +23,12 @@ class StateReader(ABC):
     """
     A read-only API for accessing Starknet global state.
     """
+
+    @abstractmethod
+    async def get_sierra_class(self, class_hash: int) -> ContractClass:
+        """
+        Returns the sierra contract class of the given compiled class hash.
+        """
 
     @abstractmethod
     async def get_compiled_class(self, compiled_class_hash: int) -> CompiledClassBase:
@@ -84,10 +93,7 @@ class StateReader(ABC):
         The balance is of type Uint256.
         """
         data_availability_mode.assert_l1()
-        low_key, high_key = get_uint256_storage_var_keys(
-            "ERC20_balances",
-            contract_address,
-        )
+        low_key, high_key = get_uint256_storage_var_keys("ERC20_balances", contract_address)
         low = await self.get_storage_at(
             data_availability_mode=data_availability_mode,
             contract_address=fee_token_address,
@@ -199,6 +205,10 @@ class SyncStateReader(ABC):
     def get_compiled_class(self, compiled_class_hash: int) -> CompiledClassBase:
         pass
 
+    @abstractmethod
+    def get_sierra_class(self, class_hash: int) -> ContractClass:
+        pass
+
     def get_raw_compiled_class(self, class_hash: int) -> RawCompiledClass:
         compiled_class = self.get_compiled_class_by_class_hash(class_hash=class_hash)
         if isinstance(compiled_class, CompiledClass):
@@ -211,6 +221,25 @@ class SyncStateReader(ABC):
         return RawCompiledClass(
             raw_compiled_class=DeprecatedCompiledClass.Schema().dumps(compiled_class), version=0
         )
+
+    def get_versioned_raw_compiled_class(self, class_hash: int) -> VersionedRawCompiledClass:
+        compiled_class = self.get_compiled_class_by_class_hash(class_hash=class_hash)
+        if isinstance(compiled_class, CompiledClass):
+            sierra = self.get_sierra_class(class_hash=class_hash)
+            return (
+                RawCompiledClass(
+                    raw_compiled_class=CompiledClass.Schema().dumps(compiled_class), version=1
+                ),
+                sierra.get_sierra_version(),
+            )
+        else:
+            return (
+                RawCompiledClass(
+                    raw_compiled_class=DeprecatedCompiledClass.Schema().dumps(compiled_class),
+                    version=0,
+                ),
+                DUMMY_SIERRA_VERSION_FOR_CAIRO0_CLASS_INFO,
+            )
 
     @abstractmethod
     def get_compiled_class_hash(self, class_hash: int) -> int:

@@ -35,7 +35,9 @@ def get_program_output(cairo_pie: CairoPie) -> List[int]:
 
 
 def get_cairo_pie_fact_info(
-    cairo_pie: CairoPie, program_hash: Optional[int] = None, aggregator: bool = False
+    cairo_pie: CairoPie,
+    program_hash: Optional[int] = None,
+    aggregator: bool = False,
 ) -> FactInfo:
     """
     Generates the fact of the Cairo program of cairo_pie. Returns the cairo-pie fact info.

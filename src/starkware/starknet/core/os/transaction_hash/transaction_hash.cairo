@@ -25,6 +25,8 @@ from starkware.starknet.core.os.builtins import BuiltinPointers, SelectableBuilt
 from starkware.starknet.core.os.constants import (
     CONSTRUCTOR_ENTRY_POINT_SELECTOR,
     EXECUTE_ENTRY_POINT_SELECTOR,
+    L1_DATA_GAS,
+    L1_DATA_GAS_INDEX,
     L1_GAS,
     L1_GAS_INDEX,
     L1_HANDLER_VERSION,
@@ -99,11 +101,22 @@ func deprecated_get_transaction_hash{hash_ptr: HashBuiltin*}(
     return (tx_hash=tx_hash);
 }
 
+func add_resource_bounds_to_hash_list{range_check_ptr}(
+    resource_bounds: ResourceBounds, data_to_hash: felt*
+) {
+    // Pack the resource bounds into a felt.
+    assert_nn_le(resource_bounds.max_amount, 2 ** 64 - 1);
+    assert_nn(resource_bounds.max_price_per_unit);
+    // Add the packed resource bounds to the hash list.
+    assert data_to_hash[0] = (resource_bounds.resource * 2 ** 64 + resource_bounds.max_amount) *
+        2 ** 128 + resource_bounds.max_price_per_unit;
+    return ();
+}
+
 func hash_fee_fields{range_check_ptr, poseidon_ptr: PoseidonBuiltin*}(
     tip: felt, resource_bounds: ResourceBounds*, n_resource_bounds: felt
 ) -> felt {
     alloc_locals;
-
     local data_to_hash: felt*;
     %{ ids.data_to_hash = segments.add() %}
     assert data_to_hash[0] = tip;
@@ -111,20 +124,32 @@ func hash_fee_fields{range_check_ptr, poseidon_ptr: PoseidonBuiltin*}(
 
     static_assert L1_GAS_INDEX == 0;
     static_assert L2_GAS_INDEX == 1;
-    assert n_resource_bounds = 2;
+    static_assert L1_DATA_GAS_INDEX == 2;
+
+    // L1 gas.
     let l1_gas_bounds = resource_bounds[L1_GAS_INDEX];
     assert l1_gas_bounds.resource = L1_GAS;
-    assert_nn_le(l1_gas_bounds.max_amount, 2 ** 64 - 1);
-    assert_nn(l1_gas_bounds.max_price_per_unit);
-    assert data_to_hash[1] = (l1_gas_bounds.resource * 2 ** 64 + l1_gas_bounds.max_amount) * 2 **
-        128 + l1_gas_bounds.max_price_per_unit;
+    add_resource_bounds_to_hash_list(l1_gas_bounds, data_to_hash + 1);
 
+    // L2 gas.
     let l2_gas_bounds = resource_bounds[L2_GAS_INDEX];
     assert l2_gas_bounds.resource = L2_GAS;
-    assert l2_gas_bounds.max_amount = 0;
-    assert l2_gas_bounds.max_price_per_unit = 0;
-    assert data_to_hash[2] = (l2_gas_bounds.resource * 2 ** 64 + l2_gas_bounds.max_amount) * 2 **
-        128 + l2_gas_bounds.max_price_per_unit;
+    add_resource_bounds_to_hash_list(l2_gas_bounds, data_to_hash + 2);
+    if (n_resource_bounds == 2) {
+        // L2 gas must be trivial in old V3 transactions.
+        assert l2_gas_bounds.max_amount = 0;
+        assert l2_gas_bounds.max_price_per_unit = 0;
+        tempvar range_check_ptr = range_check_ptr;
+    } else {
+        assert n_resource_bounds = 3;
+
+        // L1 data gas.
+        let l1_data_gas_bounds = resource_bounds[L1_DATA_GAS_INDEX];
+        assert l1_data_gas_bounds.resource = L1_DATA_GAS;
+        add_resource_bounds_to_hash_list(l1_data_gas_bounds, data_to_hash + 3);
+        tempvar range_check_ptr = range_check_ptr;
+    }
+    local range_check_ptr = range_check_ptr;
 
     let (hash) = poseidon_hash_many(n=n_resource_bounds + 1, elements=data_to_hash);
 

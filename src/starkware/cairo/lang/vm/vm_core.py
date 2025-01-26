@@ -473,6 +473,7 @@ class VirtualMachine(VirtualMachineBase):
             exec_locals.update(self.static_locals)
             exec_locals["builtin_runners"] = self.builtin_runners
             exec_locals.update(self.builtin_runners)
+            exec_locals["iter_accessed_addresses"] = lambda: iter(self.accessed_addresses)
 
             self.exec_hint(hint.compiled, exec_locals, hint_index=hint_index)
 
@@ -490,6 +491,7 @@ class VirtualMachine(VirtualMachineBase):
             del exec_locals["vm_load_program"]
             del exec_locals["ids"]
             del exec_locals["memory"]
+            del exec_locals["iter_accessed_addresses"]
 
             if self.skip_instruction_execution:
                 return

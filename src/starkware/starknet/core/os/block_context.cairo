@@ -7,10 +7,7 @@ from starkware.starknet.core.os.constants import (
     VALIDATE_BLOCK_NUMBER_ROUNDING,
     VALIDATE_TIMESTAMP_ROUNDING,
 )
-from starkware.starknet.core.os.contract_class.compiled_class import (
-    CompiledClassFact,
-    load_compiled_class_facts,
-)
+from starkware.starknet.core.os.contract_class.compiled_class import CompiledClassFact
 from starkware.starknet.core.os.contract_class.deprecated_compiled_class import (
     DeprecatedCompiledClassFact,
     deprecated_load_compiled_class_facts,
@@ -50,10 +47,12 @@ struct BlockContext {
 //
 // 'syscall_handler' and 'os_input' should be passed as hint variables.
 func get_block_context{poseidon_ptr: PoseidonBuiltin*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    execute_syscalls_ptr: felt*, execute_deprecated_syscalls_ptr: felt*
+    execute_syscalls_ptr: felt*,
+    execute_deprecated_syscalls_ptr: felt*,
+    n_compiled_class_facts: felt,
+    compiled_class_facts: CompiledClassFact*,
 ) -> (block_context: BlockContext*) {
     alloc_locals;
-    let (n_compiled_class_facts, compiled_class_facts) = load_compiled_class_facts();
     let (
         n_deprecated_compiled_class_facts, deprecated_compiled_class_facts
     ) = deprecated_load_compiled_class_facts();

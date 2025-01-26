@@ -3,7 +3,7 @@ from starkware.cairo.common.math import assert_nn_le
 from starkware.cairo.common.math_cmp import is_not_zero
 from starkware.starknet.core.os.state.commitment import StateEntry
 
-// The on-chain data for contract state changes has the following format:
+// The packed on-chain data for contract state changes has the following format:
 //
 // * The number of affected contracts.
 // * For each contract:
@@ -13,8 +13,7 @@ from starkware.starknet.core.os.state.commitment import StateEntry
 //       * A flag indicating whether the class hash was updated,
 //       * A flag indicating whether the number of updates is small (< 256),
 //       * the number of entry updates (packed according to the previous flag),
-//       * the new nonce (if `full_output` is used or if it was updated),
-//       * the old nonce (if `full_output` is used),
+//       * the new nonce (if it was updated),
 //          +-------------+----------------+------------+ LSB
 //          | n_updates   | n_updates_flag | class_flag |
 //          | 8 or 64 bit | 1 bit          | 1 bit      |
@@ -24,17 +23,10 @@ from starkware.starknet.core.os.state.commitment import StateEntry
 //          | new_nonce | n_updates   | n_updates_flag | class_flag |
 //          | 64 bits   | 8 or 64 bit | 1 bit          | 1 bit      |
 //          +-----------+-------------+----------------+------------+
-//         OR (if `full_output` is used)
-//          +-----------+-----------+-------------+----------------+------------+ LSB
-//          | old_nonce | new_nonce | n_updates   | n_updates_flag | class_flag |
-//          | 64 bits   | 64 bits   | 8 or 64 bit | 1 bit          | 1 bit      |
-//          +-----------+-----------+-------------+----------------+------------+
 //
-//   * The old class hash for this contract (1 word, if `full_output` is used).
-//   * The new class hash for this contract (1 word, if it was updated or `full_output` is used).
+//   * The new class hash for this contract (1 word, if it was updated).
 //   * For each entry update:
 //       * key (1 word).
-//       * old value (1 word, only when `full_output` is used).
 //       * new value (1 word).
 //
 // The on-chain data for contract class changes has the following format:
@@ -67,6 +59,15 @@ struct FullStateUpdateEntry {
     prev_value: felt,
     // The new value.
     new_value: felt,
+}
+
+struct FullContractHeader {
+    address: felt,
+    prev_nonce: felt,
+    new_nonce: felt,
+    prev_class_hash: felt,
+    new_class_hash: felt,
+    n_storage_diffs: felt,
 }
 
 // Outputs the entries that were changed in `update_ptr` into `state_updates_ptr`.
@@ -137,117 +138,51 @@ func serialize_da_changes_inner_full{state_updates: FullStateUpdateEntry*}(
     return serialize_da_changes_inner_full(update_ptr=&update_ptr[1], n_updates=n_updates - 1);
 }
 
-// Writes the changed values in the contract state into `state_updates_ptr`
-// to make this data available on-chain.
-// See documentation in the beginning of the file for more information.
+// Gets the output of `serialize_full_contract_state_diff` and applies the following modifications:
+//   * Packs the header (See documentation in the beginning of the file for more information).
+//   * Maps FullStateUpdateEntries into StateUpdateEntries - i.e., drops the previous values.
+// The result is written to `res`.
 //
-// Assumption: The dictionary `contract_state_changes_start` is squashed.
-func output_contract_state{range_check_ptr, state_updates_ptr: felt*}(
-    contract_state_changes_start: DictAccess*, n_contract_state_changes: felt, full_output: felt
-) {
+// Assumption: `contract_state_diff` came from `serialize_full_contract_state_diff`, and
+// therefore does not contain trivial updates.
+func pack_contract_state_diff{range_check_ptr, res: felt*}(contract_state_diff: felt*) {
     alloc_locals;
-
-    // Make room for number of modified contracts.
-    let output_n_modified_contracts = [state_updates_ptr];
-    let state_updates_ptr = state_updates_ptr + 1;
-    let n_modified_contracts = 0;
-
-    with n_modified_contracts {
-        output_contract_state_inner(
-            n_contract_state_changes=n_contract_state_changes,
-            state_changes=contract_state_changes_start,
-            full_output=full_output,
-        );
-    }
-    // Write number of modified contracts.
-    assert output_n_modified_contracts = n_modified_contracts;
-
-    return ();
+    local n_contracts = contract_state_diff[0];
+    res[0] = n_contracts;
+    let res = &res[1];
+    return pack_contract_state_diff_inner(
+        n_contracts=n_contracts, contract_state_diff=&contract_state_diff[1]
+    );
 }
 
-// Helper function for `output_contract_state()`.
-//
-// Increases `n_modified_contracts` by the number of contracts with state changes.
-func output_contract_state_inner{range_check_ptr, state_updates_ptr: felt*, n_modified_contracts}(
-    n_contract_state_changes: felt, state_changes: DictAccess*, full_output: felt
+// Helper function for `pack_contract_state_diff()`.
+func pack_contract_state_diff_inner{range_check_ptr, res: felt*}(
+    n_contracts: felt, contract_state_diff: felt*
 ) {
-    if (n_contract_state_changes == 0) {
+    if (n_contracts == 0) {
         return ();
     }
     alloc_locals;
+    let contract_header: FullContractHeader* = cast(contract_state_diff, FullContractHeader*);
 
-    local prev_state: StateEntry* = cast(state_changes.prev_value, StateEntry*);
-    local new_state: StateEntry* = cast(state_changes.new_value, StateEntry*);
-    local prev_state_nonce = prev_state.nonce;
-    local new_state_nonce = new_state.nonce;
+    // Write the contract address.
+    assert res[0] = contract_header.address;
 
-    local storage_dict_start: DictAccess* = prev_state.storage_ptr;
-    let storage_dict_end: DictAccess* = new_state.storage_ptr;
-    local n_updates = (storage_dict_end - storage_dict_start) / DictAccess.SIZE;
-
-    // Write contract state updates to output (state_updates_ptr).
-
-    // Prepare updates.
-    let contract_header = state_updates_ptr;
-
-    // Class hash.
-    local was_class_updated = is_not_zero(prev_state.class_hash - new_state.class_hash);
-    const BASE_HEADER_SIZE = 2;
-    if (full_output != 0) {
-        // Write the previous and new class hash.
-        assert contract_header[BASE_HEADER_SIZE] = prev_state.class_hash;
-        assert contract_header[BASE_HEADER_SIZE + 1] = new_state.class_hash;
-        // The offset of the storage diff from the header.
-        tempvar storage_diff_offset = BASE_HEADER_SIZE + 2;
-    } else {
-        if (was_class_updated != 0) {
-            // Write the new class hash.
-            assert contract_header[BASE_HEADER_SIZE] = new_state.class_hash;
-            // The offset of the storage diff from the header.
-            tempvar storage_diff_offset = BASE_HEADER_SIZE + 1;
-        } else {
-            tempvar storage_diff_offset = BASE_HEADER_SIZE;
-        }
-    }
-
-    let storage_diff: felt* = contract_header + storage_diff_offset;
-    let n_actual_updates = serialize_da_changes{state_updates_ptr=storage_diff}(
-        update_ptr=storage_dict_start, n_updates=n_updates, full_output=full_output
-    );
-
-    if (full_output == 0 and n_actual_updates == 0 and new_state_nonce == prev_state_nonce and
-        was_class_updated == 0) {
-        // There are no updates for this contract.
-        return output_contract_state_inner(
-            n_contract_state_changes=n_contract_state_changes - 1,
-            state_changes=&state_changes[1],
-            full_output=full_output,
-        );
-    }
-
-    // Complete the header; Write contract address.
-    assert contract_header[0] = state_changes.key;
-
-    // Write the second word of the header.
+    // Write the packed info of the contract in the next word.
     // Handle the nonce.
-    assert_nn_le(new_state_nonce, NONCE_BOUND - 1);
-    if (full_output == 0) {
-        if (prev_state_nonce != new_state_nonce) {
-            tempvar value = new_state_nonce;
-        } else {
-            tempvar value = 0;
-        }
-        tempvar range_check_ptr = range_check_ptr;
+    local new_nonce = contract_header.new_nonce;
+    if (contract_header.prev_nonce != new_nonce) {
+        assert_nn_le(new_nonce, NONCE_BOUND - 1);
+        tempvar packed_info = new_nonce;
     } else {
-        // Full output - write the new and old nonces.
-        assert_nn_le(prev_state_nonce, NONCE_BOUND - 1);
-        tempvar value = prev_state_nonce * NONCE_BOUND + new_state_nonce;
         tempvar range_check_ptr = range_check_ptr;
+        tempvar packed_info = 0;
     }
 
-    // Write the number of updates.
+    // Add the number of updates.
+    local n_updates = contract_header.n_storage_diffs;
     local is_n_updates_small;
-    %{ ids.is_n_updates_small = ids.n_actual_updates < ids.N_UPDATES_SMALL_PACKING_BOUND %}
+    %{ ids.is_n_updates_small = ids.n_updates < ids.N_UPDATES_SMALL_PACKING_BOUND %}
     // Verify that the guessed value is 0 or 1.
     assert is_n_updates_small * is_n_updates_small = is_n_updates_small;
     if (is_n_updates_small != 0) {
@@ -255,25 +190,55 @@ func output_contract_state_inner{range_check_ptr, state_updates_ptr: felt*, n_mo
     } else {
         tempvar n_updates_bound = N_UPDATES_BOUND;
     }
-    assert_nn_le(n_actual_updates, n_updates_bound - 1);
-    let value = value * n_updates_bound + n_actual_updates;
+    assert_nn_le(n_updates, n_updates_bound - 1);
+    let packed_info = packed_info * n_updates_bound + n_updates;
 
-    // Write 'is_n_updates_small' flag.
-    let value = value * 2 + is_n_updates_small;
+    // Add 'is_n_updates_small' flag.
+    let packed_info = packed_info * 2 + is_n_updates_small;
 
-    // Write 'was class updated' flag.
-    let value = value * 2 + was_class_updated;
+    // Add 'was class updated' flag.
+    local new_class_hash = contract_header.new_class_hash;
+    let was_class_updated = is_not_zero(contract_header.prev_class_hash - new_class_hash);
+    let packed_info = packed_info * 2 + was_class_updated;
 
-    assert contract_header[1] = value;
+    assert res[1] = packed_info;
 
-    let state_updates_ptr = cast(storage_diff, felt*);
-    let n_modified_contracts = n_modified_contracts + 1;
+    // Handle the class hash.
+    if (was_class_updated != 0) {
+        // Write the new class hash.
+        assert res[2] = new_class_hash;
+        tempvar res = &res[3];
+    } else {
+        tempvar res = &res[2];
+    }
 
-    return output_contract_state_inner(
-        n_contract_state_changes=n_contract_state_changes - 1,
-        state_changes=&state_changes[1],
-        full_output=full_output,
+    // Write the storage diff.
+    let storage_diff = cast(&contract_state_diff[FullContractHeader.SIZE], FullStateUpdateEntry*);
+    let state_updates = cast(res, StateUpdateEntry*);
+    map_full_entries_to_entries{full_entries=storage_diff, entries=state_updates}(
+        n_entries=n_updates
     );
+
+    // Cast back.
+    let res = cast(state_updates, felt*);
+    let contract_state_diff = cast(storage_diff, felt*);
+    return pack_contract_state_diff_inner(
+        n_contracts=n_contracts - 1, contract_state_diff=contract_state_diff
+    );
+}
+
+// Maps `full_entries` (FullStateUpdateEntry*) into `entries` (StateUpdateEntry*).
+func map_full_entries_to_entries{full_entries: FullStateUpdateEntry*, entries: StateUpdateEntry*}(
+    n_entries: felt
+) {
+    if (n_entries == 0) {
+        return ();
+    }
+    let full_entry = full_entries[0];
+    assert entries[0] = StateUpdateEntry(key=full_entry.key, value=full_entry.new_value);
+    let full_entries = &full_entries[1];
+    let entries = &entries[1];
+    return map_full_entries_to_entries(n_entries=n_entries - 1);
 }
 
 // Serializes changes in the contract class tree into 'state_updates_ptr'.
@@ -297,4 +262,85 @@ func output_contract_class_da_changes{state_updates_ptr: felt*}(
     assert n_diffs_output_placeholder = n_actual_updates;
 
     return ();
+}
+
+// Writes the contract state diff into `res`, in the following format:
+//   * Number of modified contracts,
+//   * For each modified contract, write the FullContractHeader followed by the
+//     full contract storage diff (FullStateUpdateEntries).
+//
+// The terminology is "diff" instead of "updates" since this function drops trivial storage and
+// contract updates (e.g., storage reads are removed).
+//
+// Assumption: The dictionary `contract_state_changes` is squashed - but not necessarily sorted:
+// this can happen when it has aliases instead of keys (the original dict was sorted by keys).
+func serialize_full_contract_state_diff{range_check_ptr, res: felt*}(
+    n_contracts: felt, contract_state_changes: DictAccess*
+) {
+    alloc_locals;
+
+    // Make room for number of modified contracts.
+    let output_n_modified_contracts = res[0];
+    let res = &res[1];
+    // The number of contracts with a non-trivial diff.
+    let n_modified_contracts = 0;
+
+    with n_modified_contracts {
+        serialize_full_contract_state_diff_inner(
+            n_contracts=n_contracts, state_changes=contract_state_changes
+        );
+    }
+    // Write number of modified contracts.
+    assert output_n_modified_contracts = n_modified_contracts;
+
+    return ();
+}
+
+// Helper function for `serialize_full_contract_state_diff()`.
+//
+// Increases `n_modified_contracts` by the number of contracts with actual diff.
+func serialize_full_contract_state_diff_inner{range_check_ptr, res: felt*, n_modified_contracts}(
+    n_contracts: felt, state_changes: DictAccess*
+) {
+    if (n_contracts == 0) {
+        return ();
+    }
+    alloc_locals;
+
+    local prev_state: StateEntry* = cast(state_changes.prev_value, StateEntry*);
+    local new_state: StateEntry* = cast(state_changes.new_value, StateEntry*);
+
+    local storage_dict_start: DictAccess* = prev_state.storage_ptr;
+    let storage_dict_end: DictAccess* = new_state.storage_ptr;
+    local n_updates = (storage_dict_end - storage_dict_start) / DictAccess.SIZE;
+
+    // Write the full storage diff.
+    let storage_diff_ptr: felt* = &res[FullContractHeader.SIZE];
+    let n_storage_diffs = serialize_da_changes{state_updates_ptr=storage_diff_ptr}(
+        update_ptr=storage_dict_start, n_updates=n_updates, full_output=1
+    );
+    if (n_storage_diffs == 0 and prev_state.nonce == new_state.nonce and
+        prev_state.class_hash == new_state.class_hash) {
+        // There are no updates for this contract.
+        return serialize_full_contract_state_diff_inner(
+            n_contracts=n_contracts - 1, state_changes=&state_changes[1]
+        );
+    }
+
+    // Write the full contract header.
+    let contract_header = cast(res, FullContractHeader*);
+    assert [contract_header] = FullContractHeader(
+        address=state_changes.key,
+        prev_nonce=prev_state.nonce,
+        new_nonce=new_state.nonce,
+        prev_class_hash=prev_state.class_hash,
+        new_class_hash=new_state.class_hash,
+        n_storage_diffs=n_storage_diffs,
+    );
+
+    let res = cast(storage_diff_ptr, felt*);
+    let n_modified_contracts = n_modified_contracts + 1;
+    return serialize_full_contract_state_diff_inner(
+        n_contracts=n_contracts - 1, state_changes=&state_changes[1]
+    );
 }

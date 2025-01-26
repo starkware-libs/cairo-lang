@@ -154,4 +154,4 @@ class InternalStateTransaction(EverestInternalStateTransaction, ABC):
         """
         Returns the initial gas of the transaction to run with.
         """
-        return GasCost.INITIAL.value - GasCost.TRANSACTION.value
+        return GasCost.DEFAULT_INITIAL.value

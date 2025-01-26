@@ -4,7 +4,7 @@ import re
 from abc import abstractmethod
 from dataclasses import field
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 import marshmallow
 import marshmallow.fields as mfields
@@ -19,6 +19,7 @@ from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.python.utils import as_non_optional
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
+from starkware.starknet.definitions.fields import SierraVersion
 from starkware.starknet.public.abi import AbiType
 from starkware.starkware_utils.error_handling import stark_assert
 from starkware.starkware_utils.marshmallow_dataclass_fields import IntAsHex, additional_metadata
@@ -99,6 +100,15 @@ class ContractClass(ValidatedMarshmallowDataclass):
 
     def get_abi_size(self) -> int:
         return len(self.abi)
+
+    def get_sierra_version(self) -> SierraVersion:
+        # The sierra version is the first 3 Felts of the Sierra program.
+        if len(self.sierra_program) < 3:
+            raise ValueError("Sierra program is too short.")
+        return cast(SierraVersion, tuple(self.sierra_program[:3]))
+
+    def get_sierra_version_as_string(self) -> str:
+        return ".".join(map(str, self.get_sierra_version()))
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -401,3 +411,6 @@ class RawCompiledClass:
 
     raw_compiled_class: str
     version: int
+
+
+VersionedRawCompiledClass = Tuple[RawCompiledClass, SierraVersion]

@@ -1,7 +1,7 @@
 %builtins output pedersen range_check ecdsa bitwise ec_op keccak poseidon range_check96 add_mod mul_mod
 
 from starkware.cairo.common.alloc import alloc
-from starkware.cairo.common.bool import FALSE
+from starkware.cairo.common.bool import FALSE, TRUE
 from starkware.cairo.common.cairo_builtins import (
     BitwiseBuiltin,
     HashBuiltin,
@@ -18,6 +18,10 @@ from starkware.starknet.core.os.block_context import BlockContext, get_block_con
 from starkware.starknet.core.os.constants import (
     BLOCK_HASH_CONTRACT_ADDRESS,
     STORED_BLOCK_HASH_BUFFER,
+)
+from starkware.starknet.core.os.contract_class.compiled_class import (
+    guess_compiled_class_facts,
+    validate_compiled_class_facts_post_execution,
 )
 from starkware.starknet.core.os.execution.deprecated_execute_syscalls import (
     execute_deprecated_syscalls,
@@ -65,16 +69,6 @@ func main{
         ids.initial_carried_outputs.messages_to_l2 = segments.add_temp_segment()
     %}
 
-    // Build block context.
-    let (execute_syscalls_ptr) = get_label_location(label_value=execute_syscalls);
-    let (execute_deprecated_syscalls_ptr) = get_label_location(
-        label_value=execute_deprecated_syscalls
-    );
-    let (block_context: BlockContext*) = get_block_context(
-        execute_syscalls_ptr=execute_syscalls_ptr,
-        execute_deprecated_syscalls_ptr=execute_deprecated_syscalls_ptr,
-    );
-
     let (
         contract_state_changes: DictAccess*, contract_class_changes: DictAccess*
     ) = initialize_state_changes();
@@ -82,6 +76,20 @@ func main{
     // Keep a reference to the start of contract_state_changes and contract_class_changes.
     let contract_state_changes_start = contract_state_changes;
     let contract_class_changes_start = contract_class_changes;
+
+    // Build block context.
+    let (execute_syscalls_ptr) = get_label_location(label_value=execute_syscalls);
+    let (execute_deprecated_syscalls_ptr) = get_label_location(
+        label_value=execute_deprecated_syscalls
+    );
+    let (n_compiled_class_facts, compiled_class_facts, builtin_costs) = guess_compiled_class_facts(
+        );
+    let (block_context: BlockContext*) = get_block_context(
+        execute_syscalls_ptr=execute_syscalls_ptr,
+        execute_deprecated_syscalls_ptr=execute_deprecated_syscalls_ptr,
+        n_compiled_class_facts=n_compiled_class_facts,
+        compiled_class_facts=compiled_class_facts,
+    );
 
     // Pre-process block.
     with contract_state_changes {
@@ -95,10 +103,21 @@ func main{
     }
     let final_carried_outputs = outputs;
 
+    // Validate the guessed compile class facts.
+    validate_compiled_class_facts_post_execution(
+        n_compiled_class_facts=n_compiled_class_facts,
+        compiled_class_facts=compiled_class_facts,
+        builtin_costs=builtin_costs,
+    );
+
     %{
+        from starkware.starknet.definitions.constants import ALIAS_CONTRACT_ADDRESS
+
         # This hint shouldn't be whitelisted.
         vm_enter_scope(dict(
-            commitment_info_by_address=execution_helper.compute_storage_commitments(),
+            aliases=execution_helper.storage_by_address[ALIAS_CONTRACT_ADDRESS],
+            execution_helper=execution_helper,
+            __dict_manager=__dict_manager,
             os_input=os_input,
         ))
     %}
@@ -161,6 +180,7 @@ func main{
             initial_carried_outputs=initial_carried_outputs,
             final_carried_outputs=final_carried_outputs,
         ),
+        replace_keys_with_aliases=TRUE,
     );
 
     // Make sure that we report using at least 1 range check to guarantee that

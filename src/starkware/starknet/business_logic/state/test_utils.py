@@ -4,13 +4,19 @@ from starkware.starknet.business_logic.state.state_api import (
     get_stark_exception_on_undeclared_contract,
 )
 from starkware.starknet.definitions.data_availability_mode import DataAvailabilityMode
-from starkware.starknet.services.api.contract_class.contract_class import CompiledClassBase
+from starkware.starknet.services.api.contract_class.contract_class import (
+    CompiledClassBase,
+    ContractClass,
+)
 
 
 class EmptyStateReader(StateReader):
     """
     Implements a reader of an empty state.
     """
+
+    async def get_sierra_class(self, class_hash: int) -> ContractClass:
+        raise get_stark_exception_on_undeclared_contract(class_hash=class_hash)
 
     async def get_compiled_class(self, compiled_class_hash: int) -> CompiledClassBase:
         raise get_stark_exception_on_undeclared_contract(class_hash=compiled_class_hash)
@@ -39,6 +45,9 @@ class EmptySyncStateReader(SyncStateReader):
 
     def get_compiled_class(self, compiled_class_hash: int) -> CompiledClassBase:
         raise get_stark_exception_on_undeclared_contract(class_hash=compiled_class_hash)
+
+    def get_sierra_class(self, class_hash: int) -> ContractClass:
+        raise get_stark_exception_on_undeclared_contract(class_hash=class_hash)
 
     def get_compiled_class_hash(self, class_hash: int) -> int:
         return 0

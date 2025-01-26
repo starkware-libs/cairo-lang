@@ -32,6 +32,7 @@ STATE_DIFF_SIZE_WITH_KZG_WEIGHT_NAME = "state_diff_size_with_kzg"
 N_EVENTS_NAME = "n_events"
 MESSAGE_SEGMENT_LENGTH_NAME = "message_segment_length"
 GAS_WEIGHT_NAME = "gas_weight"
+SIERRA_GAS_NAME = "sierra_gas"
 
 STARKNET_LAYOUT_INSTANCE = dynamic_instance
 
@@ -69,11 +70,13 @@ DEFAULT_USE_KZG_DA = True
 
 # Given in units of wei.
 DEFAULT_DEPRECATED_L1_GAS_PRICE = 10**9
+DEFAULT_DEPRECATED_L2_GAS_PRICE = 1
 DEFAULT_DEPRECATED_L1_DATA_GAS_PRICE = 1
 
-DEFAULT_ETH_IN_FRI = 10**21
 DEFAULT_MIN_FRI_L1_GAS_PRICE = 10**6
 DEFAULT_MAX_FRI_L1_GAS_PRICE = 10**21
+DEFAULT_MIN_FRI_L2_GAS_PRICE = 10**4
+DEFAULT_MAX_FRI_L2_GAS_PRICE = 10**17
 DEFAULT_MIN_FRI_L1_DATA_GAS_PRICE = 1
 DEFAULT_MAX_FRI_L1_DATA_GAS_PRICE = 10**21
 
@@ -101,37 +104,8 @@ class StarknetOsConfig(Config):
 
 
 @marshmallow_dataclass.dataclass
-class GasPriceBounds:
-    min_wei_l1_gas_price: int = field(
-        metadata=fields.gas_price, default=DEFAULT_DEPRECATED_L1_GAS_PRICE
-    )
-
-    min_fri_l1_gas_price: int = field(
-        metadata=fields.gas_price, default=DEFAULT_MIN_FRI_L1_GAS_PRICE
-    )
-
-    max_fri_l1_gas_price: int = field(
-        metadata=fields.gas_price, default=DEFAULT_MAX_FRI_L1_GAS_PRICE
-    )
-
-    min_wei_l1_data_gas_price: int = field(
-        metadata=fields.gas_price, default=DEFAULT_DEPRECATED_L1_DATA_GAS_PRICE
-    )
-
-    min_fri_l1_data_gas_price: int = field(
-        metadata=fields.gas_price, default=DEFAULT_MIN_FRI_L1_DATA_GAS_PRICE
-    )
-
-    max_fri_l1_data_gas_price: int = field(
-        metadata=fields.gas_price, default=DEFAULT_MAX_FRI_L1_DATA_GAS_PRICE
-    )
-
-
-@marshmallow_dataclass.dataclass
 class StarknetGeneralConfig(EverestGeneralConfig):
     starknet_os_config: StarknetOsConfig = field(default_factory=StarknetOsConfig)
-
-    gas_price_bounds: GasPriceBounds = field(default_factory=GasPriceBounds)
 
     # IMPORTANT: when editing this in production, make sure to only decrease the value.
     # Increasing it in production may cause issue to nodes during execution, so only increase it
@@ -139,11 +113,6 @@ class StarknetGeneralConfig(EverestGeneralConfig):
     # This value should not be used directly, Use `get_validate_max_n_steps`.
     validate_max_n_steps_override: Optional[int] = field(
         metadata=fields.validate_max_n_steps_override_metadata, default=None
-    )
-
-    # The default price of one ETH (10**18 Wei) in STRK units. Used in case of oracle failure.
-    default_eth_price_in_fri: int = field(
-        metadata=fields.eth_price_in_fri, default=DEFAULT_ETH_IN_FRI
     )
 
     sequencer_address: int = field(
@@ -171,30 +140,6 @@ class StarknetGeneralConfig(EverestGeneralConfig):
     @property
     def fee_token_address(self) -> int:
         return self.starknet_os_config.fee_token_address
-
-    @property
-    def min_wei_l1_gas_price(self) -> int:
-        return self.gas_price_bounds.min_wei_l1_gas_price
-
-    @property
-    def min_fri_l1_gas_price(self) -> int:
-        return self.gas_price_bounds.min_fri_l1_gas_price
-
-    @property
-    def max_fri_l1_gas_price(self) -> int:
-        return self.gas_price_bounds.max_fri_l1_gas_price
-
-    @property
-    def min_wei_l1_data_gas_price(self) -> int:
-        return self.gas_price_bounds.min_wei_l1_data_gas_price
-
-    @property
-    def min_fri_l1_data_gas_price(self) -> int:
-        return self.gas_price_bounds.min_fri_l1_data_gas_price
-
-    @property
-    def max_fri_l1_data_gas_price(self) -> int:
-        return self.gas_price_bounds.max_fri_l1_data_gas_price
 
     def get_private_versioned_constants(self) -> Optional[OverridableVersionedConstants]:
         return CHAIN_ID_TO_PRIVATE_VERSIONED_CONSTANTS.get(self.chain_id)

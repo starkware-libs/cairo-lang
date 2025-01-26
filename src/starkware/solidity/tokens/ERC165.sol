@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 pragma solidity ^0.6.12;
 
-import "./IERC165.sol";
+import "starkware/solidity/tokens/IERC165.sol";
 
 /**
   Implementation of the {IERC165} interface.

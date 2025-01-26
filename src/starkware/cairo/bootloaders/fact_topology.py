@@ -6,6 +6,10 @@ import marshmallow
 import marshmallow_dataclass
 
 GPS_FACT_TOPOLOGY = "gps_fact_topology"
+# A limit on the page size (in words) we allow, which is derived from MAX_ETHEREUM_TX_SIZE
+# with some "safty" buffer.
+# Output page sizes are set by clients and therefore this limit should not be decreased
+# without prior coordination, since it may fail jobs set based on the previous limit.
 MAX_PAGE_SIZE = 3800
 
 
@@ -22,6 +26,24 @@ class FactTopology:
         """
         assert page0_size <= MAX_PAGE_SIZE, "Page size exceeded the maximum."
         return cls(tree_structure=[1, 0], page_sizes=[page0_size])
+
+    def get_output_size(self) -> int:
+        """
+        Returns the size of the output, in words. This is the sum of the sizes of all pages.
+        """
+        return sum(self.page_sizes)
+
+    def get_fact_tree_structure_len(self) -> int:
+        """
+        Returns the total length of the fact tree structure.
+        """
+        return len(self.tree_structure)
+
+    def get_n_pages(self) -> int:
+        """
+        Returns the number of pages in the fact topology.
+        """
+        return len(self.page_sizes)
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -80,13 +102,17 @@ def get_page_sizes_from_page_dict(output_size: int, pages: dict) -> List[int]:
         expected_page_id += 1
 
     if len(pages) > 0:
-        assert expected_page_start == output_size, "Pages must cover the entire program output."
+        assert expected_page_start == output_size, (
+            "Pages must cover the entire program output."
+            + f" Expected size of {expected_page_start}, found {output_size}."
+        )
 
     return [page0_size] + [page_size for _, (_, page_size) in sorted(pages.items())]
 
 
 def get_fact_topology_from_additional_data(
-    output_size: int, output_builtin_additional_data: Dict[str, Any]
+    output_size: int,
+    output_builtin_additional_data: Dict[str, Any],
 ) -> FactTopology:
     """
     Returns the fact topology from the additional data of the output builtin.

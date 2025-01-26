@@ -50,6 +50,7 @@ py_library(
         "contract_class.cairo",
         "deprecated_compiled_class.cairo",
         "//src/starkware/starknet/common:starknet_common_cairo_lib",
+        "//src/starkware/starknet/core/os:constants.cairo",
     ],
     visibility = ["//visibility:public"],
     deps = [

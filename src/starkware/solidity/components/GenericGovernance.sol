@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 pragma solidity ^0.6.12;
 
-import "./Governance.sol";
+import "starkware/solidity/components/Governance.sol";
 
 contract GenericGovernance is Governance {
     bytes32 immutable GOVERNANCE_INFO_TAG_HASH;

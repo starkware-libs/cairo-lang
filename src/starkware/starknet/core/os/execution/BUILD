@@ -6,4 +6,5 @@ exports_files([
     "execute_entry_point.cairo",
     "execute_syscalls.cairo",
     "execute_transactions.cairo",
+    "revert.cairo",
 ])

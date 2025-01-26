@@ -1,4 +1,5 @@
 import dataclasses
+from fractions import Fraction
 from typing import Dict, Optional
 
 from starkware.cairo.lang.builtins.all_builtins import (
@@ -11,12 +12,25 @@ from starkware.cairo.lang.builtins.instance_def import (
     BuiltinInstanceDefWithLowRatio,
 )
 from starkware.cairo.lang.instances import COMPONENT_HEIGHT, CairoLayout, build_dynamic_layout
-from starkware.python.math_utils import safe_div
+from starkware.python.math_utils import safe_div, safe_log2
 
 MAX_CPU_COMPONENT_STEP = 2**8
 MIN_MEMORY_UNITS_PER_STEP = 4
 NUM_COLUMNS_FIRST_BOUND = 2**16
 NUM_COLUMNS_SECOND_BOUND = 2**16
+
+ROW_RATIO_NAMES = {
+    "pedersen": "pedersen_builtin_row_ratio",
+    "range_check": "range_check_builtin_row_ratio",
+    "ecdsa": "ecdsa_builtin_row_ratio",
+    "bitwise": "bitwise__row_ratio",
+    "ec_op": "ec_op_builtin_row_ratio",
+    "keccak": "keccak__row_ratio",
+    "poseidon": "poseidon__row_ratio",
+    "range_check96": "range_check96_builtin_row_ratio",
+    "add_mod": "add_mod__row_ratio",
+    "mul_mod": "mul_mod__row_ratio",
+}
 
 
 @dataclasses.dataclass(frozen=True)
@@ -132,3 +146,54 @@ class CairoLayoutParams:
             memory_units_per_step=self.memory_units_per_step,
             **builtin_ratios,
         )
+
+
+def dynamic_params_dict_to_cairo_layout_params(
+    dynamic_params_dict: Dict[str, int]
+) -> CairoLayoutParams:
+    """
+    Creates a CairoLayoutParams object from a dynamic params dictionary.
+    """
+    builtins_params_dict: Dict[str, int] = {}
+    for builtin_name, row_ratio_name in ROW_RATIO_NAMES.items():
+        uses_builtin_str = f"uses_{builtin_name}_builtin"
+        builtin_ratio_str = f"{builtin_name}_ratio"
+        builtins_params_dict[uses_builtin_str] = dynamic_params_dict[uses_builtin_str]
+        if builtin_name in LOW_RATIO_BUILTINS:
+            builtins_params_dict[builtin_ratio_str + "_den"] = 1
+        if builtins_params_dict[uses_builtin_str] == 1:
+            # The builtin ratio can be calculated from the row_ratio as the fraction
+            # `row_ratio / (COMPONENT_HEIGHT * cpu_component_step)`. After reduction, this fraction
+            # must be in the form of either `ratio / 1` (in the general case) or `1 / ratio_den`
+            # (only for low-ratio builtins).
+            ratio_frac = Fraction(
+                dynamic_params_dict[row_ratio_name],
+                COMPONENT_HEIGHT * dynamic_params_dict["cpu_component_step"],
+            )
+            if ratio_frac.denominator != 1:
+                assert ratio_frac.numerator == 1
+                assert builtin_name in LOW_RATIO_BUILTINS
+                builtins_params_dict[builtin_ratio_str] = 1
+                builtins_params_dict[builtin_ratio_str + "_den"] = ratio_frac.denominator
+            else:
+                builtins_params_dict[builtin_ratio_str] = ratio_frac.numerator
+
+        else:
+            builtins_params_dict[builtin_ratio_str] = 0
+
+    log_diluted_units_per_step = safe_log2(
+        COMPONENT_HEIGHT * dynamic_params_dict["cpu_component_step"]
+    ) - safe_log2(dynamic_params_dict["diluted_units_row_ratio"])
+    return CairoLayoutParams(
+        cpu_component_step=dynamic_params_dict["cpu_component_step"],
+        rc_units=safe_div(
+            COMPONENT_HEIGHT * dynamic_params_dict["cpu_component_step"],
+            dynamic_params_dict["range_check_units_row_ratio"],
+        ),
+        memory_units_per_step=safe_div(
+            COMPONENT_HEIGHT * dynamic_params_dict["cpu_component_step"],
+            dynamic_params_dict["memory_units_row_ratio"],
+        ),
+        log_diluted_units_per_step=log_diluted_units_per_step,
+        **builtins_params_dict,
+    )

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 pragma solidity ^0.8.0;
 
-import "./IStarknetMessagingEvents.sol";
+import "starkware/starknet/solidity/IStarknetMessagingEvents.sol";
 
 library CommitmentTreeUpdateOutput {
     /**
@@ -102,7 +102,8 @@ library StarknetOutput {
     function processMessages(
         bool isL2ToL1,
         uint256[] calldata programOutputSlice,
-        mapping(bytes32 => uint256) storage messages
+        mapping(bytes32 => uint256) storage messages,
+        address payable feeCollector
     ) internal returns (uint256) {
         uint256 messageSegmentSize = programOutputSlice[0];
         require(messageSegmentSize < 2**30, "INVALID_MESSAGE_SEGMENT_SIZE");
@@ -116,20 +117,22 @@ library StarknetOutput {
 
         uint256 totalMsgFees = 0;
         while (offset < messageSegmentEnd) {
-            uint256 payloadLengthOffset = offset + payloadSizeOffset;
-            require(payloadLengthOffset < programOutputSlice.length, "MESSAGE_TOO_SHORT");
+            uint256 endOffset;
+            // Use a scope to prevent stack too deep error.
+            {
+                uint256 payloadLengthOffset = offset + payloadSizeOffset;
+                require(payloadLengthOffset < programOutputSlice.length, "MESSAGE_TOO_SHORT");
 
-            uint256 payloadLength = programOutputSlice[payloadLengthOffset];
-            require(payloadLength < 2**30, "INVALID_PAYLOAD_LENGTH");
+                uint256 payloadLength = programOutputSlice[payloadLengthOffset];
+                require(payloadLength < 2**30, "INVALID_PAYLOAD_LENGTH");
 
-            uint256 endOffset = payloadLengthOffset + 1 + payloadLength;
-            require(endOffset <= programOutputSlice.length, "TRUNCATED_MESSAGE_PAYLOAD");
-
+                endOffset = payloadLengthOffset + 1 + payloadLength;
+                require(endOffset <= programOutputSlice.length, "TRUNCATED_MESSAGE_PAYLOAD");
+            }
             if (isL2ToL1) {
                 bytes32 messageHash = keccak256(
                     abi.encodePacked(programOutputSlice[offset:endOffset])
                 );
-
                 emit IStarknetMessagingEvents.LogMessageToL1(
                     // from=
                     programOutputSlice[offset + MESSAGE_TO_L1_FROM_ADDRESS_OFFSET],
@@ -177,7 +180,7 @@ library StarknetOutput {
 
         if (totalMsgFees > 0) {
             // NOLINTNEXTLINE: low-level-calls.
-            (bool success, ) = msg.sender.call{value: totalMsgFees}("");
+            (bool success, ) = feeCollector.call{value: totalMsgFees}("");
             require(success, "ETH_TRANSFER_FAILED");
         }
 

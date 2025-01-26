@@ -8,8 +8,11 @@ from starkware.starknet.core.os.os_program import get_os_program
 from starkware.starknet.core.os.transaction_hash.deprecated_transaction_hash import (
     TransactionHashPrefix,
 )
+from starkware.starknet.core.os.transaction_hash.transaction_hash import (
+    resource_bounds_mapping_to_sorted_tuple,
+)
 from starkware.starknet.definitions import constants
-from starkware.starknet.definitions.fields import Resource, ResourceBoundsMapping
+from starkware.starknet.definitions.fields import ResourceBoundsMapping
 from starkware.starknet.definitions.general_config import STARKNET_LAYOUT_INSTANCE
 from starkware.starknet.public.abi import EXECUTE_ENTRY_POINT_SELECTOR
 
@@ -20,7 +23,7 @@ def hash_fee_related_fields(tip: int, resource_bounds: ResourceBoundsMapping) ->
     fee_fields_hash_list = [tip]
     resource_value_offset = constants.MAX_AMOUNT_BITS + constants.MAX_PRICE_PER_UNIT_BITS
 
-    for resource in (Resource.L1_GAS, Resource.L2_GAS):
+    for resource in resource_bounds_mapping_to_sorted_tuple(resource_bounds):
         bounds = resource_bounds[resource]
         fee_fields_hash_list += [
             (resource.value << resource_value_offset)

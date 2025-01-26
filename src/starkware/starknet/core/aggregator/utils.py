@@ -81,7 +81,7 @@ class OsOutputToCairo:
                 )
 
             storage_changes = []
-            for key, (prev_value, new_value) in contract.storage_changes.items():
+            for key, (prev_value, new_value) in contract.storage_changes:
                 storage_changes.append(key)
                 assert prev_value is not None, "Missing previous value information."
                 storage_changes.append(prev_value)
@@ -106,7 +106,7 @@ class OsOutputToCairo:
         # Handle compiled class changes.
         class_dict = []
 
-        for class_hash, (prev_compiled_hash, new_compiled_hash) in state_diff.classes.items():
+        for class_hash, (prev_compiled_hash, new_compiled_hash) in state_diff.classes:
             assert prev_compiled_hash is not None, "Missing previous compiled class hash."
             class_dict.append(class_hash)
             class_dict.append(prev_compiled_hash)

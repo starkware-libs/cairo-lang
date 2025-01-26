@@ -69,6 +69,14 @@ func combine_blocks{range_check_ptr}(
         aggregated_carried_outputs=initial_carried_outputs, current=&first
     );
 
+    // Guess whether to use KZG commitment scheme and whether to output the full state.
+    tempvar use_kzg_da = nondet %{ program_input["use_kzg_da"] %};
+    tempvar full_output = nondet %{ program_input["full_output"] %};
+
+    // Verify that the guessed values are 0 or 1.
+    assert use_kzg_da * use_kzg_da = use_kzg_da;
+    assert full_output * full_output = full_output;
+
     tempvar aggregated = new OsOutput(
         header=new OsOutputHeader(
             state_update_output=first.header.state_update_output,
@@ -78,8 +86,8 @@ func combine_blocks{range_check_ptr}(
             new_block_hash=first.header.new_block_hash,
             os_program_hash=os_program_hash,
             starknet_os_config_hash=first.header.starknet_os_config_hash,
-            use_kzg_da=nondet %{ program_input["use_kzg_da"] %},
-            full_output=nondet %{ program_input["full_output"] %},
+            use_kzg_da=use_kzg_da,
+            full_output=full_output,
         ),
         squashed_os_state_update=first.squashed_os_state_update,
         initial_carried_outputs=initial_carried_outputs,

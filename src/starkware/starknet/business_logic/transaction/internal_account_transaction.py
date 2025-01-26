@@ -24,7 +24,12 @@ from starkware.starknet.core.os.transaction_hash.transaction_hash import (
 )
 from starkware.starknet.definitions import constants, fields
 from starkware.starknet.definitions.data_availability_mode import DataAvailabilityMode
-from starkware.starknet.definitions.fields import Resource, ResourceBounds, ResourceBoundsMapping
+from starkware.starknet.definitions.fields import (
+    Resource,
+    ResourceBounds,
+    ResourceBoundsMapping,
+    SierraVersion,
+)
 from starkware.starknet.definitions.general_config import (
     DEFAULT_MAX_FRI_L1_GAS_PRICE,
     StarknetGeneralConfig,
@@ -130,6 +135,7 @@ class InternalDeclare(InternalAccountTransaction):
     class_hash: int = field(metadata=fields.new_class_hash_metadata)
     compiled_class_hash: int = field(metadata=fields.compiled_class_hash_metadata)
     sierra_program_size: int = field(metadata=fields.sierra_program_size_metadata)
+    sierra_version: Optional[SierraVersion] = field(metadata=fields.sierra_version_metadata)
     abi_size: int = field(metadata=fields.abi_size_metadata)
     account_deployment_data: List[int] = field(metadata=fields.account_deployment_data_metadata)
 
@@ -192,6 +198,7 @@ class InternalDeclare(InternalAccountTransaction):
             class_hash=class_hash,
             compiled_class_hash=compiled_class_hash,
             sierra_program_size=contract_class.get_bytecode_size(),
+            sierra_version=contract_class.get_sierra_version(),
             abi_size=contract_class.get_abi_size(),
             account_deployment_data=(
                 [] if account_deployment_data is None else account_deployment_data

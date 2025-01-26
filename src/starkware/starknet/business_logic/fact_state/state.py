@@ -1,6 +1,6 @@
 import logging
 from dataclasses import field
-from typing import Any, Dict, Mapping, MutableMapping, Optional
+from typing import Any, Callable, Dict, Mapping, MutableMapping, Optional, Tuple, Type, TypeVar
 
 import marshmallow
 import marshmallow_dataclass
@@ -42,12 +42,14 @@ from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFactDict
 from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
 from starkware.starkware_utils.config_base import Config
-from starkware.storage.storage import DBObject, FactFetchingContext, Storage
+from starkware.storage.storage import DBObject, FactFetchingContext, IndexedDBObject, Storage
 
 logger = logging.getLogger(__name__)
 state_objects_logger = logging.getLogger(f"{__name__}:state_objects_logger")
 
 ContractCarriedStateMapping = MutableMapping[int, ContractCarriedState]
+
+TStateDiff = TypeVar("TStateDiff", bound="StateDiff")
 
 
 class CarriedState(CarriedStateBase):
@@ -481,7 +483,7 @@ class StateDiff(EverestStateDiff, DBObject):
         return data
 
     @classmethod
-    def empty(cls, block_info: BlockInfo):
+    def empty(cls: Type[TStateDiff], block_info: BlockInfo) -> TStateDiff:
         """
         Returns an empty state diff object relative to the given block info.
         """
@@ -504,13 +506,13 @@ class StateDiff(EverestStateDiff, DBObject):
 
     @classmethod
     def create_l1_da_mode(
-        cls,
+        cls: Type[TStateDiff],
         address_to_class_hash: Mapping[int, int],
         nonces: Mapping[int, int],
         storage_updates: Mapping[int, Mapping[int, int]],
         declared_classes: Mapping[int, int],
         block_info: BlockInfo,
-    ) -> "StateDiff":
+    ) -> TStateDiff:
         return cls(
             address_to_class_hash=address_to_class_hash,
             nonces={DataAvailabilityMode.L1: nonces},
@@ -520,7 +522,7 @@ class StateDiff(EverestStateDiff, DBObject):
         )
 
     @classmethod
-    def from_cached_state(cls, cached_state: CachedState) -> "StateDiff":
+    def from_cached_state(cls: Type[TStateDiff], cached_state: CachedState) -> TStateDiff:
         state_cache = cached_state.cache
         storage_updates = to_state_diff_storage_mapping(
             storage_writes=subtract_mappings(
@@ -608,7 +610,9 @@ class StateDiff(EverestStateDiff, DBObject):
         """
         return len(self.to_os_state_diff().encode())
 
-    def get_marginal_os_encoded_length(self, previous_state_diff: Optional["StateDiff"]) -> int:
+    def get_marginal_os_encoded_length(
+        self: TStateDiff, previous_state_diff: Optional[TStateDiff]
+    ) -> int:
         """
         Returns the marginal addition of self to the given state diff's length.
 
@@ -623,12 +627,25 @@ class StateDiff(EverestStateDiff, DBObject):
         post_squash_size = previous_state_diff.squash(other=self).get_os_encoded_length()
         return post_squash_size - pre_squash_size
 
-    def to_os_state_diff(self) -> OsStateDiff:
+    def to_os_state_diff(self, alias_storage: Optional[Dict[int, int]] = None) -> OsStateDiff:
         self.assert_l1_da_mode()
+
+        key_sort_func: Optional[Callable[[int], int]] = None
+        item_sort_func: Optional[Callable[[Tuple[int, int]], int]] = None
+        if alias_storage is not None:
+            alias_to_key = {value: key for key, value in alias_storage.items()}
+            key_sort_func = lambda x: (
+                x if x < constants.INITIAL_AVAILABLE_ALIAS else alias_to_key[x]
+            )
+            item_sort_func = lambda item: (
+                item[0] if item[0] < constants.INITIAL_AVAILABLE_ALIAS else alias_to_key[item[0]]
+            )
+
         nonces = self.nonces.get(DataAvailabilityMode.L1, {})
         storage_updates = self.storage_updates.get(DataAvailabilityMode.L1, {})
         modified_contracts = sorted(
-            self.address_to_class_hash.keys() | nonces.keys() | storage_updates.keys()
+            self.address_to_class_hash.keys() | nonces.keys() | storage_updates.keys(),
+            key=key_sort_func,
         )
         return OsStateDiff(
             contracts=[
@@ -636,23 +653,33 @@ class StateDiff(EverestStateDiff, DBObject):
                     addr=addr,
                     new_nonce=nonces.get(addr, None),
                     new_class_hash=self.address_to_class_hash.get(addr, None),
-                    storage_changes={
-                        key: (None, value) for key, value in storage_updates.get(addr, {}).items()
-                    },
+                    storage_changes=[
+                        (key, (None, value))
+                        for key, value in sorted(
+                            storage_updates.get(addr, {}).items(),
+                            key=(
+                                None
+                                if addr <= constants.MAX_NON_COMPRESSED_CONTRACT_ADDRESS
+                                else item_sort_func
+                            ),
+                        )
+                    ],
                     # Only relevant for `full_output` mode.
                     prev_nonce=None,
                     prev_class_hash=None,
                 )
                 for addr in modified_contracts
             ],
-            classes={
-                class_hash: (None, compiled_class_hash)
-                for class_hash, compiled_class_hash in self.declared_classes.items()
-            },
+            classes=[
+                (class_hash, (None, compiled_class_hash))
+                for class_hash, compiled_class_hash in sorted(self.declared_classes.items())
+            ],
         )
 
     @classmethod
-    def from_os_state_diff(cls, os_state_diff: OsStateDiff, block_info: BlockInfo) -> "StateDiff":
+    def from_os_state_diff(
+        cls: Type[TStateDiff], os_state_diff: OsStateDiff, block_info: BlockInfo
+    ) -> TStateDiff:
         contracts = os_state_diff.contracts
         return cls.create_l1_da_mode(
             address_to_class_hash={
@@ -666,15 +693,13 @@ class StateDiff(EverestStateDiff, DBObject):
                 if contract.new_nonce is not None
             },
             storage_updates={
-                contract.addr: {
-                    key: value for key, (_prev, value) in contract.storage_changes.items()
-                }
+                contract.addr: {key: value for key, (_prev, value) in contract.storage_changes}
                 for contract in contracts
                 if len(contract.storage_changes) > 0
             },
             declared_classes={
                 class_hash: compiled_class_hash
-                for class_hash, (_prev, compiled_class_hash) in os_state_diff.classes.items()
+                for class_hash, (_prev, compiled_class_hash) in os_state_diff.classes
             },
             block_info=block_info,
         )
@@ -685,6 +710,63 @@ class StateDiff(EverestStateDiff, DBObject):
             set(self.nonces.keys() | self.storage_updates.keys()) - supported_da_modes
         )
         assert len(unsupported_da_modes) == 0, f"Unsupported DA modes: {unsupported_da_modes}."
+
+
+@marshmallow_dataclass.dataclass(frozen=True)
+class CompressedStateDiff(StateDiff, IndexedDBObject):
+    """
+    A stateful compressed state diff - the contract addresses and the storage keys are replaced with
+    aliases.
+    """
+
+    def decompress(self, alias_storage: Mapping[int, int]) -> StateDiff:
+        """
+        Decompresses a stateful compressed state diff by the alias storage state.
+        """
+        reversed_alias_storage = {value: key for key, value in alias_storage.items()}
+
+        def restore_from_alias(alias):
+            if alias < constants.INITIAL_AVAILABLE_ALIAS:
+                return alias
+            return reversed_alias_storage[alias]
+
+        address_to_class_hash = {
+            restore_from_alias(alias=alias): class_hash
+            for alias, class_hash in self.address_to_class_hash.items()
+        }
+
+        nonces = {
+            data_availability_mode: {
+                restore_from_alias(alias=alias): nonce for alias, nonce in nonce_mapping.items()
+            }
+            for data_availability_mode, nonce_mapping in self.nonces.items()
+        }
+
+        storage_updates: MutableMapping[
+            DataAvailabilityMode, MutableMapping[int, Mapping[int, int]]
+        ] = {}
+        for (
+            data_availability_mode,
+            storage_updates_mapping,
+        ) in self.storage_updates.items():
+            storage_updates[data_availability_mode] = {}
+            for contract_alias, storage_mapping in storage_updates_mapping.items():
+                contract_address = restore_from_alias(alias=contract_alias)
+                if contract_address <= constants.MAX_NON_COMPRESSED_CONTRACT_ADDRESS:
+                    storage_updates[data_availability_mode][contract_address] = storage_mapping
+                else:
+                    storage_updates[data_availability_mode][contract_address] = {
+                        restore_from_alias(alias=storage_alias): value
+                        for storage_alias, value in storage_mapping.items()
+                    }
+
+        return StateDiff(
+            address_to_class_hash=address_to_class_hash,
+            nonces=nonces,
+            storage_updates=storage_updates,
+            declared_classes=self.declared_classes,
+            block_info=self.block_info,
+        )
 
 
 @marshmallow_dataclass.dataclass(frozen=True)

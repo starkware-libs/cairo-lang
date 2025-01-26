@@ -34,7 +34,7 @@ from starkware.python.utils import as_non_optional
 from starkware.starknet.business_logic.fact_state.contract_state_objects import StateSelector
 from starkware.starknet.business_logic.state.state import StorageEntry
 from starkware.starknet.definitions import constants, fields
-from starkware.starknet.definitions.error_codes import StarknetErrorCode
+from starkware.starknet.definitions.error_codes import CairoErrorCode, StarknetErrorCode
 from starkware.starknet.definitions.execution_mode import ExecutionMode
 from starkware.starknet.public import abi as starknet_abi
 from starkware.starknet.services.api.contract_class.contract_class import EntryPointType
@@ -334,6 +334,14 @@ class CallExecution(ValidatedDataclass):
     gas_consumed: int
 
 
+class TrackedResource(Enum):
+    CairoSteps = 0  # AKA VM mode.
+    SierraGas = auto()  # AKA Sierra mode.
+
+    def is_sierra_gas(self) -> bool:
+        return self is TrackedResource.SierraGas
+
+
 # NOTE: This dataclass isn't validated due to a forward-declaration issue.
 @marshmallow_dataclass.dataclass(frozen=True)
 class CallInfo(SerializableMarshmallowDataclass):
@@ -346,6 +354,11 @@ class CallInfo(SerializableMarshmallowDataclass):
     call: CallEntryPoint
     execution: CallExecution
     resources: ExecutionResources
+    tracked_resource: TrackedResource = field(
+        metadata=additional_metadata(
+            marshmallow_field=mfields.Enum(TrackedResource, load_default=TrackedResource.CairoSteps)
+        )
+    )
 
     # Internal calls made by this call.
     inner_calls: List["CallInfo"] = field(
@@ -368,6 +381,20 @@ class CallInfo(SerializableMarshmallowDataclass):
         )
     )
 
+    read_class_hash_values: List[int] = field(
+        metadata=fields.felt_as_hex_list_with_load_default_metadata
+    )
+
+    # A list of contract addresses accessed by this call, **excluding** addresses from nested calls.
+    accessed_contract_addresses: Set[int] = field(
+        metadata=additional_metadata(
+            marshmallow_field=SetField(
+                everest_fields.felt_metadata("accessed_contract_addresses")["marshmallow_field"],
+                load_default=set,
+            )
+        )
+    )
+
     @classmethod
     def create(
         cls,
@@ -386,6 +413,8 @@ class CallInfo(SerializableMarshmallowDataclass):
         l2_to_l1_messages: List[OrderedL2ToL1Message],
         storage_read_values: List[int],
         accessed_storage_keys: Set[int],
+        read_class_hash_values: List[int],
+        accessed_contract_addresses: Set[int],
         internal_calls: List["CallInfo"],
         code_address: Optional[int],
     ) -> "CallInfo":
@@ -414,7 +443,10 @@ class CallInfo(SerializableMarshmallowDataclass):
             resources=execution_resources,
             storage_read_values=storage_read_values,
             accessed_storage_keys=accessed_storage_keys,
+            read_class_hash_values=read_class_hash_values,
+            accessed_contract_addresses=accessed_contract_addresses,
             inner_calls=internal_calls,
+            tracked_resource=TrackedResource.CairoSteps,
         )
 
     # CallEntryPoint fields.
@@ -490,6 +522,18 @@ class CallInfo(SerializableMarshmallowDataclass):
             retdata=self.retdata,
         )
 
+    def syscall_result(self) -> CallResult:
+        """
+        Same as `result`, but appends `CairoErrorCode.ENTRY_POINT_FAILED` in case of failure.
+        """
+        retdata = self.retdata
+        if self.failure_flag != 0:
+            retdata = [*retdata, CairoErrorCode.ENTRY_POINT_FAILED.to_felt()]
+
+        return CallResult(
+            gas_consumed=self.gas_consumed, failure_flag=self.failure_flag, retdata=retdata
+        )
+
     def get_visited_storage_entries(self) -> Set[StorageEntry]:
         storage_entries = {(self.contract_address, key) for key in self.accessed_storage_keys}
         internal_visited_storage_entries = CallInfo.get_visited_storage_entries_of_many(
@@ -501,7 +545,11 @@ class CallInfo(SerializableMarshmallowDataclass):
         code_address = self.contract_address if self.code_address is None else self.code_address
         assert self.class_hash is not None, "Class hash is missing from call info."
         selector = StateSelector.create(
-            contract_addresses={self.contract_address, code_address}
+            contract_addresses={
+                *self.accessed_contract_addresses,
+                self.contract_address,
+                code_address,
+            }
             - {DEFAULT_DECLARE_SENDER_ADDRESS},
             class_hashes=[self.class_hash],
         )
@@ -556,6 +604,8 @@ class CallInfo(SerializableMarshmallowDataclass):
             execution_resources=ExecutionResources.empty(),
             events=[],
             l2_to_l1_messages=[],
+            read_class_hash_values=[],
+            accessed_contract_addresses=set(),
             storage_read_values=[],
             accessed_storage_keys=set(),
             internal_calls=[],
@@ -646,10 +696,21 @@ class GasVector(ValidatedMarshmallowDataclass):
             description="Blob gas amount",
         ),
     )
+    l2_gas: int = field(
+        metadata=additional_metadata(
+            marshmallow_field=mfields.Integer(
+                strict=True,
+                validate=validate_non_negative("l2_gas"),
+                load_default=0,
+                required=False,
+            ),
+            description="L2 gas amount",
+        ),
+    )
 
     @classmethod
     def empty(cls) -> "GasVector":
-        return cls(l1_gas=0, l1_data_gas=0)
+        return cls(l1_gas=0, l1_data_gas=0, l2_gas=0)
 
 
 @marshmallow_dataclass.dataclass(frozen=True)

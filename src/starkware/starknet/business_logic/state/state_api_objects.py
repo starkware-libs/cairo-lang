@@ -7,6 +7,7 @@ from marshmallow.decorators import pre_load
 
 from starkware.cairo.lang.version import __version__ as STARKNET_VERSION
 from starkware.starknet.definitions import fields
+from starkware.starknet.definitions.constants import VERSIONED_CONSTANTS
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.general_config import (
     DEFAULT_DEPRECATED_L1_DATA_GAS_PRICE,
@@ -26,17 +27,25 @@ def rename_old_gas_price_fields(data: Dict[str, Any]) -> Dict[str, Any]:
     Pre-0.13.0, there was a "gas_price" field, with the current gas price in Wei.
     Pre-0.13.1, there were "eth_l1_gas_price" and "strk_l1_gas_price" fields, with the current
     gas prices in Wei and Fri respectively.
-    Post-0.13.1, there are "l1_gas_price" and "l1_data_gas_price" fields, each with the current
+    Pre-0.13.4, there are "l1_gas_price" and "l1_data_gas_price" fields, each with the current
     gas or data gas prices in Wei and Fri respectively.
+    Post-0.13.4, there is an additional "l2_gas_price" field, with the current gas prices in Wei and
+    Fri respectively.
     """
 
     def _add_default_data_gas_prices(data: Dict[str, Any]):
+        assert "l1_data_gas_price" not in data, "Malformed pre-0.13.1 block."
         data["l1_data_gas_price"] = dict(price_in_wei=hex(1), price_in_fri=hex(1))
+
+    def _add_default_l2_gas_prices(data: Dict[str, Any]):
+        assert "l2_gas_price" not in data, "Malformed pre-0.13.4 block."
+        data["l2_gas_price"] = dict(price_in_wei=hex(1), price_in_fri=hex(1))
 
     if "gas_price" in data:
         # Pre-0.13.0 block (no STRK price, no data gas).
         data["l1_gas_price"] = dict(price_in_wei=data.pop("gas_price"), price_in_fri=hex(0))
         _add_default_data_gas_prices(data=data)
+        _add_default_l2_gas_prices(data=data)
     elif "eth_l1_gas_price" in data:
         # Pre-0.13.1 block (no data gas).
         assert "strk_l1_gas_price" in data, "Malformed pre-0.13.1 block."
@@ -45,14 +54,19 @@ def rename_old_gas_price_fields(data: Dict[str, Any]) -> Dict[str, Any]:
             price_in_fri=data.pop("strk_l1_gas_price"),
         )
         _add_default_data_gas_prices(data=data)
+        _add_default_l2_gas_prices(data=data)
     elif "l1_gas_price" in data:
-        # 0.13.1 blocks. No need to change the fields.
-        pass
+        assert "l1_data_gas_price" in data, "Malformed pre-0.13.4 block."
+        if "l2_gas_price" not in data:
+            # Pre-0.13.4 blocks (no l2 gas).
+            _add_default_l2_gas_prices(data=data)
+        # Else - 0.13.4 blocks. No need to change the fields.
     else:
         # Older blocks.
         assert "strk_l1_gas_price" not in data, "Malformed pre-0.13.1 block."
         data["l1_gas_price"] = dict(price_in_wei=hex(1), price_in_fri=hex(1))
         _add_default_data_gas_prices(data=data)
+        _add_default_l2_gas_prices(data=data)
 
     return data
 
@@ -73,6 +87,8 @@ class GasPrices:
     l1_gas_price_fri: int
     l1_data_gas_price_wei: int
     l1_data_gas_price_fri: int
+    l2_gas_price_wei: int
+    l2_gas_price_fri: int
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -83,16 +99,15 @@ class BlockInfo(ValidatedMarshmallowDataclass):
     # Timestamp of the beginning of the last block creation attempt.
     block_timestamp: int = field(metadata=fields.timestamp_metadata)
 
-    # L1 gas price measured at the beginning of the last block creation attempt.
+    # Gas prices measured at the beginning of the last block creation attempt.
     l1_gas_price: ResourcePrice
-
-    # L1 data gas price measured at the beginning of the last block creation attempt.
     l1_data_gas_price: ResourcePrice
+    l2_gas_price: ResourcePrice
 
     # The sequencer address of this block.
     sequencer_address: Optional[int] = field(metadata=fields.optional_sequencer_address_metadata)
 
-    # The version of Starknet system (e.g., "0.13.3").
+    # The version of Starknet system (e.g., "0.13.4").
     starknet_version: Optional[str] = field(metadata=fields.starknet_version_metadata)
 
     # Indicates whether to use KZG commitment scheme for the block's Data Avilability.
@@ -109,12 +124,14 @@ class BlockInfo(ValidatedMarshmallowDataclass):
         """
         Returns an empty BlockInfo object; i.e., the one before the first in the chain.
         """
+        # As gas prices must be non-zero, just use 1 for all prices.
+        empty_resource_price = ResourcePrice(price_in_wei=1, price_in_fri=1)
         return cls(
             block_number=block_number,
             block_timestamp=0,
-            # As gas prices must be non-zero, just use 1 for all prices.
-            l1_gas_price=ResourcePrice(price_in_wei=1, price_in_fri=1),
-            l1_data_gas_price=ResourcePrice(price_in_wei=1, price_in_fri=1),
+            l1_gas_price=empty_resource_price,
+            l1_data_gas_price=empty_resource_price,
+            l2_gas_price=empty_resource_price,
             sequencer_address=sequencer_address,
             starknet_version=STARKNET_VERSION,
             use_kzg_da=True,  # Value is ignored for an empty block.
@@ -144,6 +161,10 @@ class BlockInfo(ValidatedMarshmallowDataclass):
             ),
             l1_data_gas_price=ResourcePrice(
                 price_in_wei=eth_l1_data_gas_price, price_in_fri=strk_l1_data_gas_price
+            ),
+            l2_gas_price=ResourcePrice(
+                price_in_wei=VERSIONED_CONSTANTS.l1_to_l2_gas_price_conversion(eth_l1_gas_price),
+                price_in_fri=VERSIONED_CONSTANTS.l1_to_l2_gas_price_conversion(strk_l1_gas_price),
             ),
             sequencer_address=sequencer_address,
             starknet_version=starknet_version,
@@ -176,4 +197,6 @@ class BlockInfo(ValidatedMarshmallowDataclass):
             l1_gas_price_fri=self.l1_gas_price.price_in_fri,
             l1_data_gas_price_wei=self.l1_data_gas_price.price_in_wei,
             l1_data_gas_price_fri=self.l1_data_gas_price.price_in_fri,
+            l2_gas_price_wei=self.l2_gas_price.price_in_wei,
+            l2_gas_price_fri=self.l2_gas_price.price_in_fri,
         )

@@ -55,6 +55,7 @@ cairo_library(
         "//src/starkware/starknet/core/os/execution:execute_entry_point.cairo",
         "//src/starkware/starknet/core/os/execution:execute_syscalls.cairo",
         "//src/starkware/starknet/core/os/execution:execute_transactions.cairo",
+        "//src/starkware/starknet/core/os/execution:revert.cairo",
         "//src/starkware/starknet/core/os/os_config:os_config.cairo",
         "//src/starkware/starknet/core/os/transaction_hash:transaction_hash.cairo",
     ],

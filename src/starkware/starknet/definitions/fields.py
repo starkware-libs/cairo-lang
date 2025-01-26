@@ -1,7 +1,7 @@
 import dataclasses
 from dataclasses import field
 from enum import Enum
-from typing import Any, Dict, Mapping, Optional, Type
+from typing import Any, Dict, Mapping, Optional, Tuple, Type
 
 import marshmallow
 import marshmallow.fields as mfields
@@ -36,12 +36,30 @@ from starkware.starkware_utils.marshmallow_dataclass_fields import (
 )
 from starkware.starkware_utils.marshmallow_fields_metadata import sequential_id_metadata
 from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
-from starkware.starkware_utils.validated_fields import OptionalField, RangeValidatedField
+from starkware.starkware_utils.validated_fields import (
+    BytesField,
+    BytesLengthField,
+    OptionalField,
+    RangeValidatedField,
+)
+from starkware.storage.storage import HASH_BYTES
 
 # Fields data: validation data, dataclass metadata.
 
 
 # Common.
+
+FactField = BytesField()
+FactHashField = BytesLengthField(
+    name="FactHash", error_code=StarkErrorCode.INVALID_FACT, length=HASH_BYTES
+)
+
+fact_hash_to_fact_metadata = dict(
+    marshmallow_field=mfields.Dict(
+        keys=FactHashField.get_marshmallow_field(),
+        values=FactField.get_marshmallow_field(),
+    )
+)
 
 
 def create_felt_as_hex_bounded_list_metadata(
@@ -68,6 +86,15 @@ felt_as_hex_or_str_list_metadata = dict(
         BackwardCompatibleIntAsHex(
             allow_decimal_loading=True, validate=everest_fields.FeltField.validate
         )
+    )
+)
+
+felt_as_hex_list_with_load_default_metadata = dict(
+    marshmallow_field=mfields.List(
+        BackwardCompatibleIntAsHex(
+            allow_decimal_loading=False, validate=everest_fields.FeltField.validate
+        ),
+        load_default=list,
     )
 )
 
@@ -345,6 +372,19 @@ sierra_program_size_metadata = dict(
 )
 abi_size_metadata = dict(marshmallow_field=mfields.Integer(required=False, load_default=0))
 
+SierraVersion = Tuple[int, int, int]
+
+sierra_version_metadata = dict(
+    marshmallow_field=mfields.Tuple(
+        (
+            everest_fields.FeltField.get_marshmallow_field(),
+            everest_fields.FeltField.get_marshmallow_field(),
+            everest_fields.FeltField.get_marshmallow_field(),
+        ),
+        load_default=None,
+    )
+)
+
 
 class NestedIntListField(mfields.Field):
     """
@@ -449,6 +489,7 @@ max_price_per_unit_metadata = MaxPricePerUnitField.metadata()
 class Resource(Enum):
     L1_GAS = from_bytes(b"L1_GAS")
     L2_GAS = from_bytes(b"L2_GAS")
+    L1_DATA_GAS = from_bytes(b"L1_DATA")
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -464,21 +505,29 @@ ResourceBoundsMapping = Mapping[Resource, ResourceBounds]
 
 def validate_resource_bounds(resource_bounds: ResourceBoundsMapping) -> bool:
     error_message_wrong_keys = (
-        "Invalid resource bounds keys; Input's keys: {input}; Input keys must be {resources_set}."
+        "Invalid resource bounds keys; Input's keys: {input};"
+        "Input keys must be one of {resources_set}."
     )
     error_message_wrong_bounds = (
         "Invalid resource bounds; Resource.L2_GAS input: {input}; L2_GAS values must be 0."
     )
-    if resource_bounds.keys() != set(Resource):
+
+    n_resource_bounds = len(resource_bounds)
+    valid_resource_sets = [set(Resource), {Resource.L1_GAS, Resource.L2_GAS}]
+
+    if resource_bounds.keys() not in valid_resource_sets:
         raise marshmallow.ValidationError(
             error_message_wrong_keys.format(
-                input=list(resource_bounds.keys()), resources_set=list(set(Resource))
+                input=list(resource_bounds.keys()), resources_set=valid_resource_sets
             )
         )
 
-    l2_gas_bounds = resource_bounds[Resource.L2_GAS]
-    if not (l2_gas_bounds.max_amount == l2_gas_bounds.max_price_per_unit == 0):
-        raise marshmallow.ValidationError(error_message_wrong_bounds.format(input=l2_gas_bounds))
+    if n_resource_bounds == 2:
+        l2_gas_bounds = resource_bounds[Resource.L2_GAS]
+        if not (l2_gas_bounds.max_amount == l2_gas_bounds.max_price_per_unit == 0):
+            raise marshmallow.ValidationError(
+                error_message_wrong_bounds.format(input=l2_gas_bounds)
+            )
 
     return True
 

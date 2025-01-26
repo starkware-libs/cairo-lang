@@ -53,6 +53,7 @@ MAX_MESSAGE_TO_L1_LENGTH = 100
 MAX_PRICE_PER_UNIT_BITS = 128
 MAX_PRICE_PER_UNIT_LOWER_BOUND = 0
 MAX_PRICE_PER_UNIT_UPPER_BOUND = 2**MAX_PRICE_PER_UNIT_BITS
+MAX_RESOURCE_NAME_BITS = FIELD_SIZE_BITS - MAX_PRICE_PER_UNIT_BITS - MAX_AMOUNT_BITS
 MAX_STATE_DIFF_LENGTH = 2**64
 NONCE_LOWER_BOUND = 0
 NONCE_UPPER_BOUND = 2**NONCE_BITS
@@ -87,7 +88,7 @@ DEPRECATED_OLD_DECLARE_VERSIONS = (
 )
 
 # Sierra -> Casm compilation version.
-SIERRA_VERSION = [1, 6, 0]
+SIERRA_VERSION = [1, 7, 0]
 # Contract classes with sierra version older than MIN_SIERRA_VERSION are not supported.
 MIN_SIERRA_VERSION = [1, 1, 0]
 
@@ -116,8 +117,17 @@ COMPRESSED_DA_SEGMENT_MIN_LENGTH = 3
 # OS reserved contract addresses.
 ORIGIN_ADDRESS = 0
 BLOCK_HASH_CONTRACT_ADDRESS = 1
-OS_RESERVED_CONTRACT_ADDRESSES = [ORIGIN_ADDRESS, BLOCK_HASH_CONTRACT_ADDRESS]
+ALIAS_CONTRACT_ADDRESS = 2
+OS_RESERVED_CONTRACT_ADDRESSES = [
+    ORIGIN_ADDRESS,
+    BLOCK_HASH_CONTRACT_ADDRESS,
+    ALIAS_CONTRACT_ADDRESS,
+]
 
+# Stateful compression constants.
+INITIAL_AVAILABLE_ALIAS = 128
+MAX_NON_COMPRESSED_CONTRACT_ADDRESS = 15
+ALIAS_COUNTER_STORAGE_KEY = 0
 # StarkNet solidity contract-related constants.
 N_DEFAULT_TOPICS = 1  # Events have one default topic.
 # Excluding the default topic.
@@ -137,11 +147,14 @@ STORED_BLOCK_HASH_BUFFER = 10
 # Fee resources.
 L1_GAS_RESOURCE_NAME_VALUE = from_bytes(b"L1_GAS")
 L2_GAS_RESOURCE_NAME_VALUE = from_bytes(b"L2_GAS")
+L1_DATA_GAS_RESOURCE_NAME_VALUE = from_bytes(b"L1_DATA")
 
 # Flooring factor for block number in validate mode.
 VALIDATE_BLOCK_NUMBER_ROUNDING = 100
 # Flooring factor for timestamp in validate mode.
 VALIDATE_TIMESTAMP_ROUNDING = 3600
+
+DUMMY_SIERRA_VERSION_FOR_CAIRO0_CLASS_INFO = (0, 0, 0)
 
 
 class ResourceCost:
@@ -212,49 +225,51 @@ class GasCost(Enum):
 
     STEP = 100
     RANGE_CHECK = 70
-    BITWISE_BUILTIN = 594
+    KECCAK_BUILTIN = 136189
+    PEDERSEN = 4050
+    BITWISE_BUILTIN = 583
+    ECOP = 4085
+    POSEIDON = 491
+    ADD_MOD = 230
+    MUL_MOD = 604
+    ECDSA = 10561
     MEMORY_HOLE = 10
-    INITIAL = (10**8) * STEP
+    DEFAULT_INITIAL = (10**8) * STEP
 
     # Compiler gas costs.
     SYSCALL_BASE = 100 * STEP
     ENTRY_POINT_INITIAL_BUDGET = 100 * STEP
 
-    # OS gas costs.
-    ENTRY_POINT = ENTRY_POINT_INITIAL_BUDGET + 500 * STEP
-    FEE_TRANSFER = ENTRY_POINT + 100 * STEP
-    TRANSACTION = (2 * ENTRY_POINT) + FEE_TRANSFER + (100 * STEP)
     # Syscall cas costs.
-    CALL_CONTRACT = SYSCALL_BASE + 10 * STEP + ENTRY_POINT
-    DEPLOY = SYSCALL_BASE + 200 * STEP + ENTRY_POINT
-    GET_BLOCK_HASH = SYSCALL_BASE + 50 * STEP
-    GET_EXECUTION_INFO = SYSCALL_BASE + 10 * STEP
+    CALL_CONTRACT = 866 * STEP + 15 * RANGE_CHECK
+    DEPLOY = 1132 * STEP + 18 * RANGE_CHECK + 7 * PEDERSEN
+    GET_BLOCK_HASH = 104 * STEP + 2 * RANGE_CHECK
+    GET_CLASS_HASH_AT = SYSCALL_BASE
+    GET_EXECUTION_INFO = SYSCALL_BASE
 
     # Secp256k1.
-    SECP256K1_ADD = 406 * STEP + 29 * RANGE_CHECK
-    SECP256K1_GET_POINT_FROM_X = 391 * STEP + 30 * RANGE_CHECK + 20 * MEMORY_HOLE
-    SECP256K1_GET_XY = 239 * STEP + 11 * RANGE_CHECK + 40 * MEMORY_HOLE
-    SECP256K1_MUL = 76501 * STEP + 7045 * RANGE_CHECK + 2 * MEMORY_HOLE
-    SECP256K1_NEW = 475 * STEP + 35 * RANGE_CHECK + 40 * MEMORY_HOLE
+    SECP256K1_ADD = 410 * STEP + 29 * RANGE_CHECK
+    SECP256K1_GET_POINT_FROM_X = 395 * STEP + 30 * RANGE_CHECK
+    SECP256K1_GET_XY = 207 * STEP + 11 * RANGE_CHECK
+    SECP256K1_MUL = 76505 * STEP + 7045 * RANGE_CHECK
+    SECP256K1_NEW = 461 * STEP + 35 * RANGE_CHECK
 
     # Secp256r1.
-    SECP256R1_ADD = 589 * STEP + 57 * RANGE_CHECK
-    SECP256R1_GET_POINT_FROM_X = 510 * STEP + 44 * RANGE_CHECK + 20 * MEMORY_HOLE
-    SECP256R1_GET_XY = 241 * STEP + 11 * RANGE_CHECK + 40 * MEMORY_HOLE
-    SECP256R1_MUL = 125340 * STEP + 13961 * RANGE_CHECK + 2 * MEMORY_HOLE
-    SECP256R1_NEW = 594 * STEP + 49 * RANGE_CHECK + 40 * MEMORY_HOLE
+    SECP256R1_ADD = 593 * STEP + 57 * RANGE_CHECK
+    SECP256R1_GET_POINT_FROM_X = 514 * STEP + 44 * RANGE_CHECK
+    SECP256R1_GET_XY = 209 * STEP + 11 * RANGE_CHECK
+    SECP256R1_MUL = 125344 * STEP + 13961 * RANGE_CHECK
+    SECP256R1_NEW = 580 * STEP + 49 * RANGE_CHECK
 
     KECCAK = SYSCALL_BASE
-    KECCAK_ROUND_COST = 180000
-    SHA256_PROCESS_BLOCK = (
-        1115 * BITWISE_BUILTIN + 65 * RANGE_CHECK + 1852 * STEP + 1 * SYSCALL_BASE
-    )
-    LIBRARY_CALL = CALL_CONTRACT
-    REPLACE_CLASS = SYSCALL_BASE + 50 * STEP
-    STORAGE_READ = SYSCALL_BASE + 50 * STEP
-    STORAGE_WRITE = SYSCALL_BASE + 50 * STEP
-    EMIT_EVENT = SYSCALL_BASE + 10 * STEP
-    SEND_MESSAGE_TO_L1 = SYSCALL_BASE + 50 * STEP
+    KECCAK_ROUND_COST = 281 * STEP + 6 * BITWISE_BUILTIN + 1 * KECCAK_BUILTIN + 56 * RANGE_CHECK
+    SHA256_PROCESS_BLOCK = 1115 * BITWISE_BUILTIN + 65 * RANGE_CHECK + 1865 * STEP
+    LIBRARY_CALL = 842 * STEP + 15 * RANGE_CHECK
+    REPLACE_CLASS = 104 * STEP + RANGE_CHECK
+    STORAGE_READ = SYSCALL_BASE
+    STORAGE_WRITE = SYSCALL_BASE
+    EMIT_EVENT = SYSCALL_BASE
+    SEND_MESSAGE_TO_L1 = 141 * STEP + RANGE_CHECK
 
     @property
     def int_value(self) -> int:
@@ -280,15 +295,19 @@ class ThinVersionedConstants:
 
     cairo_resource_fee_weights: Dict[str, ResourceCost]
 
-    l2_resource_gas_costs: Dict[str, "ResourceCost"]
+    archival_data_gas_costs: Dict[str, "ResourceCost"]
 
     # Os kzg commitment info.
     kzg_commitment_n_steps: int
     kzg_commitment_builtin_instance_counter: Dict[str, int]
 
+    # L2 gas per Cairo step.
+    l2_gas_per_cairo_step: int
+
     @classmethod
     def create(cls):
         versioned_constants_json = json.load(cls.VERSIONED_CONSTANTS_PATH.open())
+        vm_resource_costs = versioned_constants_json["vm_resource_fee_cost"]
 
         return ThinVersionedConstants(
             invoke_tx_max_n_steps=versioned_constants_json["invoke_tx_max_n_steps"],
@@ -298,13 +317,18 @@ class ThinVersionedConstants:
             max_contract_bytecode_size=versioned_constants_json["gateway"][
                 "max_contract_bytecode_size"
             ],
-            cairo_resource_fee_weights={
+            cairo_resource_fee_weights=dict(
+                n_steps=ResourceCost(
+                    numer=vm_resource_costs["n_steps"][0], denom=vm_resource_costs["n_steps"][1]
+                ),
+                **{
+                    key: ResourceCost(numer=val[0], denom=val[1])
+                    for key, val in vm_resource_costs["builtins"].items()
+                },
+            ),
+            archival_data_gas_costs={
                 key: ResourceCost(numer=val[0], denom=val[1])
-                for key, val in versioned_constants_json["vm_resource_fee_cost"].items()
-            },
-            l2_resource_gas_costs={
-                key: ResourceCost(numer=val[0], denom=val[1])
-                for key, val in versioned_constants_json["l2_resource_gas_costs"].items()
+                for key, val in versioned_constants_json["archival_data_gas_costs"].items()
             },
             kzg_commitment_n_steps=versioned_constants_json["os_resources"][
                 "compute_os_kzg_commitment_info"
@@ -312,6 +336,16 @@ class ThinVersionedConstants:
             kzg_commitment_builtin_instance_counter=versioned_constants_json["os_resources"][
                 "compute_os_kzg_commitment_info"
             ]["builtin_instance_counter"],
+            l2_gas_per_cairo_step=versioned_constants_json["os_constants"]["step_gas_cost"],
+        )
+
+    def l1_to_l2_gas_price_conversion(self, l1_gas_price: int) -> int:
+        return (l1_gas_price * self.l1_to_l2_gas_price_ratio()).ceil()
+
+    def l1_to_l2_gas_price_ratio(self) -> ResourceCost:
+        step_cost = self.cairo_resource_fee_weights["n_steps"]
+        return ResourceCost(
+            numer=step_cost.numer, denom=step_cost.denom * self.l2_gas_per_cairo_step
         )
 
 

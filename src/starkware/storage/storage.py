@@ -212,6 +212,10 @@ class DBObject(Serializable):
             return cls.deserialize(data=result)
 
     @classmethod
+    async def has_key(cls: Type[TDBObject], storage: Storage, suffix: bytes) -> bool:
+        return await storage.has_key(key=cls.db_key(suffix=suffix))
+
+    @classmethod
     async def get_or_fail(cls: Type[TDBObject], storage: Storage, suffix: bytes) -> TDBObject:
         """
         Returns the value under key cls.db_key(suffix) in the storage.

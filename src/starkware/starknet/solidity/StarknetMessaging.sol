@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 pragma solidity ^0.8.0;
 
-import "./IStarknetMessaging.sol";
+import "starkware/starknet/solidity/IStarknetMessaging.sol";
 import "starkware/solidity/libraries/NamedStorage8.sol";
 
 /**
@@ -106,7 +106,7 @@ contract StarknetMessaging is IStarknetMessaging {
     }
 
     /**
-      Returns the hash of an L2 -> L1 message.
+      Returns the L2 -> L1 message hash.
     */
     function l2ToL1MsgHash(
         uint256 fromAddress,
@@ -150,6 +150,7 @@ contract StarknetMessaging is IStarknetMessaging {
         returns (bytes32)
     {
         bytes32 msgHash = l2ToL1MsgHash(fromAddress, msg.sender, payload);
+
         require(l2ToL1Messages()[msgHash] > 0, "INVALID_MESSAGE_TO_CONSUME");
         emit ConsumedMessageToL1(fromAddress, msg.sender, payload);
         l2ToL1Messages()[msgHash] -= 1;

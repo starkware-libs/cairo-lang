@@ -9,6 +9,7 @@ py_library(
     ],
     data = [
         "@" + CAIRO_COMPILER_ARCHIVE,
+        "experimental_libfuncs.json",
         "mainnet_libfuncs.json",
         "testnet_libfuncs.json",
     ],

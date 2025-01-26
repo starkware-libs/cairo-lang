@@ -33,8 +33,8 @@ func compute_doubling_slope{range_check_ptr}(point: EcPoint) -> (slope: BigInt3)
         from starkware.python.math_utils import ec_double_slope
 
         # Compute the slope.
-        x = pack(ids.point.x, SECP256R1_P)
-        y = pack(ids.point.y, SECP256R1_P)
+        x = pack(ids.point.x, PRIME)
+        y = pack(ids.point.y, PRIME)
         value = slope = ec_double_slope(point=(x, y), alpha=SECP256R1_ALPHA, p=SECP256R1_P)
     %}
     let (slope: BigInt3) = nondet_bigint3();
@@ -126,9 +126,9 @@ func ec_double{range_check_ptr}(point: EcPoint) -> (res: EcPoint) {
         from starkware.cairo.common.cairo_secp.secp256r1_utils import SECP256R1_P
         from starkware.cairo.common.cairo_secp.secp_utils import pack
 
-        slope = pack(ids.slope, SECP256R1_P)
-        x = pack(ids.point.x, SECP256R1_P)
-        y = pack(ids.point.y, SECP256R1_P)
+        slope = pack(ids.slope, PRIME)
+        x = pack(ids.point.x, PRIME)
+        y = pack(ids.point.y, PRIME)
 
         value = new_x = (pow(slope, 2, SECP256R1_P) - 2 * x) % SECP256R1_P
     %}
@@ -373,7 +373,7 @@ func try_get_point_from_x{range_check_ptr}(x: BigInt3, v: felt, result: EcPoint*
         from starkware.python.math_utils import y_squared_from_x
 
         y_square_int = y_squared_from_x(
-            x=pack(ids.x, SECP256R1.prime),
+            x=pack(ids.x, PRIME),
             alpha=SECP256R1.alpha,
             beta=SECP256R1.beta,
             field_prime=SECP256R1.prime,

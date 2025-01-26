@@ -1,5 +1,8 @@
 load("@rules_python//python:defs.bzl", "py_runtime", "py_runtime_pair")
-load(":defs.bzl", "python_version_info")
+load(
+    ":defs.bzl",
+    "python_version_info",
+)
 
 python_version_info(
     name = "python_version",

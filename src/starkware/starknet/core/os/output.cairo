@@ -1,4 +1,7 @@
+from starkware.cairo.common.alloc import alloc
+from starkware.cairo.common.bool import FALSE
 from starkware.cairo.common.cairo_builtins import PoseidonBuiltin
+from starkware.cairo.common.dict import DictAccess
 from starkware.cairo.common.registers import get_fp_and_pc
 from starkware.cairo.common.segments import relocate_segment
 from starkware.cairo.common.serialize import serialize_word
@@ -9,10 +12,14 @@ from starkware.starknet.core.os.data_availability.commitment import (
     compute_os_kzg_commitment_info,
 )
 from starkware.starknet.core.os.data_availability.compression import compress
+from starkware.starknet.core.os.state.aliases import (
+    replace_aliases_and_serialize_full_contract_state_diff,
+)
 from starkware.starknet.core.os.state.commitment import CommitmentUpdate
 from starkware.starknet.core.os.state.output import (
     output_contract_class_da_changes,
-    output_contract_state,
+    pack_contract_state_diff,
+    serialize_full_contract_state_diff,
 )
 from starkware.starknet.core.os.state.state import SquashedOsStateUpdate
 
@@ -69,7 +76,7 @@ struct OsCarriedOutputs {
 }
 
 func serialize_os_output{range_check_ptr, poseidon_ptr: PoseidonBuiltin*, output_ptr: felt*}(
-    os_output: OsOutput*
+    os_output: OsOutput*, replace_keys_with_aliases: felt
 ) {
     alloc_locals;
 
@@ -95,6 +102,7 @@ func serialize_os_output{range_check_ptr, poseidon_ptr: PoseidonBuiltin*, output
         output_contract_state(
             contract_state_changes_start=squashed_os_state_update.contract_state_changes,
             n_contract_state_changes=squashed_os_state_update.n_contract_state_changes,
+            replace_keys_with_aliases=replace_keys_with_aliases,
             full_output=full_output,
         );
 
@@ -285,4 +293,60 @@ func serialize_data_availability{output_ptr: felt*}(da_start: felt*, da_end: fel
     %}
 
     return ();
+}
+
+// Serializes the contract state diff into `state_updates_ptr`, to make this data available
+// on-chain.
+// - If `replace_keys_with_aliases` is on, replaces addresses and storage keys with their aliases.
+// - If `full_output` is off, writes a shortened version of the diff; in particular, packs contract
+//   headers and drops the previous values of storage cells (see `pack_contract_state_diff`).
+//
+// Assumption: The dictionary `contract_state_changes_start` is squashed.
+func output_contract_state{range_check_ptr, state_updates_ptr: felt*}(
+    contract_state_changes_start: DictAccess*,
+    n_contract_state_changes: felt,
+    replace_keys_with_aliases: felt,
+    full_output: felt,
+) {
+    alloc_locals;
+    if (full_output != FALSE) {
+        // The full state diff can be written directly to `state_updates_ptr`.
+        serialize_contract_state_diff_conditional{res=state_updates_ptr}(
+            n_contracts=n_contract_state_changes,
+            contract_state_changes=contract_state_changes_start,
+            replace_keys_with_aliases=replace_keys_with_aliases,
+        );
+        return ();
+    }
+
+    // Serialize the full contract state diff into a new segment.
+    let contract_state_diff_start: felt* = alloc();
+    let contract_state_diff = contract_state_diff_start;
+    serialize_contract_state_diff_conditional{res=contract_state_diff}(
+        n_contracts=n_contract_state_changes,
+        contract_state_changes=contract_state_changes_start,
+        replace_keys_with_aliases=replace_keys_with_aliases,
+    );
+    // Write the packed diff into `state_updates_ptr`.
+    pack_contract_state_diff{res=state_updates_ptr}(contract_state_diff=contract_state_diff_start);
+    return ();
+}
+
+// Serializes the full contract state diff into `res`.
+// If `replace_keys_with_aliases` is True, replaces contract addresses and storage keys
+// with their aliases.
+func serialize_contract_state_diff_conditional{range_check_ptr, res: felt*}(
+    n_contracts: felt, contract_state_changes: DictAccess*, replace_keys_with_aliases: felt
+) {
+    if (replace_keys_with_aliases != FALSE) {
+        return replace_aliases_and_serialize_full_contract_state_diff(
+            n_contracts=n_contracts, contract_state_changes=contract_state_changes
+        );
+    }
+    // The contract state changes is already represented with aliases instead of keys -
+    // this flow is relevant only to the aggregator, where the block state diffs are loaded after
+    // the alias replacement.
+    return serialize_full_contract_state_diff(
+        n_contracts=n_contracts, contract_state_changes=contract_state_changes
+    );
 }

@@ -9,6 +9,7 @@ from starkware.starknet.common.syscalls import (
     deploy,
     get_caller_address,
     get_contract_address,
+    replace_class,
 )
 
 @view
@@ -64,4 +65,10 @@ func deploy_contract{syscall_ptr: felt*}(
         deploy_from_zero=FALSE,
     );
     return (contract_address=contract_address);
+}
+
+@external
+func execute_replace_class{syscall_ptr: felt*}(class_hash: felt) {
+    replace_class(class_hash=class_hash);
+    return ();
 }

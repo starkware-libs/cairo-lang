@@ -54,6 +54,7 @@ from starkware.starknet.definitions import constants, fields
 from starkware.starknet.definitions.data_availability_mode import DataAvailabilityMode
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.definitions.execution_mode import ExecutionMode
+from starkware.starknet.definitions.fields import SierraVersion
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.definitions.transaction_type import TransactionType
 from starkware.starknet.public import abi as starknet_abi
@@ -396,6 +397,7 @@ class DeprecatedInternalDeclare(DeprecatedInternalAccountTransaction):
         metadata=fields.optional_compiled_class_hash_metadata
     )
     sierra_program_size: int = field(metadata=fields.sierra_program_size_metadata)
+    sierra_version: Optional[SierraVersion] = field(metadata=fields.sierra_version_metadata)
     abi_size: int = field(metadata=fields.abi_size_metadata)
 
     # Class variables.
@@ -482,6 +484,7 @@ class DeprecatedInternalDeclare(DeprecatedInternalAccountTransaction):
             compiled_class_hash=compiled_class_hash,
             sierra_program_size=contract_class.get_bytecode_size(),
             abi_size=contract_class.get_abi_size(),
+            sierra_version=contract_class.get_sierra_version(),
             sender_address=sender_address,
             max_fee=max_fee,
             version=version,
@@ -523,6 +526,7 @@ class DeprecatedInternalDeclare(DeprecatedInternalAccountTransaction):
             version=version,
             signature=signature,
             nonce=nonce,
+            sierra_version=constants.DUMMY_SIERRA_VERSION_FOR_CAIRO0_CLASS_INFO,
             hash_value=deprecated_calculate_old_declare_transaction_hash(
                 contract_class=contract_class,
                 chain_id=chain_id,

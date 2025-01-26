@@ -22,17 +22,6 @@ sol_library(
 )
 
 sol_library(
-    name = "starknet_governance_sol",
-    srcs = [
-        "StarknetGovernance.sol",
-    ],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//src/starkware/solidity/components:governance_contract_sol",
-    ],
-)
-
-sol_library(
     name = "starknet_core_sol",
     srcs = [
         "Output.sol",

@@ -9,7 +9,6 @@ sol_library(
     srcs = [
         "BlockDirectCall.sol",
         "IFactRegistry.sol",
-        "IQueryableFactRegistry.sol",
         "Identity.sol",
     ],
     visibility = ["//visibility:public"],
@@ -186,13 +185,26 @@ sol_library(
     name = "solidity_contract_initializer_sol",
     srcs = [
         "ContractInitializer.sol",
-        "ExternalInitializer.sol",
         "ProxySupport.sol",
     ],
     visibility = ["//visibility:public"],
     deps = [
         "//src/starkware/solidity/components:governance_contract_sol",
         "//src/starkware/solidity/interfaces:solidity_contracts_interfaces_sol",
+        "//src/starkware/solidity/libraries:addresses_library_sol",
+    ],
+)
+
+sol_library(
+    name = "proxy_support_sol",
+    srcs = [
+        "ContractInitializer.sol",
+        "ProxySupport.sol",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//src/starkware/solidity/interfaces:block_direct_call_sol",
+        "//src/starkware/solidity/interfaces:governance_interface_sol",
         "//src/starkware/solidity/libraries:addresses_library_sol",
     ],
 )

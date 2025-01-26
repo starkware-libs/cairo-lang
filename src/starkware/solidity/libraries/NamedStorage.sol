@@ -7,10 +7,32 @@ pragma solidity ^0.6.12;
   New types of storage variables should be added here upon need.
 */
 library NamedStorage {
+    function bytes32ToBoolMapping(string memory tag_)
+        internal
+        pure
+        returns (mapping(bytes32 => bool) storage randomVariable)
+    {
+        bytes32 location = keccak256(abi.encodePacked(tag_));
+        assembly {
+            randomVariable_slot := location
+        }
+    }
+
     function bytes32ToUint256Mapping(string memory tag_)
         internal
         pure
         returns (mapping(bytes32 => uint256) storage randomVariable)
+    {
+        bytes32 location = keccak256(abi.encodePacked(tag_));
+        assembly {
+            randomVariable_slot := location
+        }
+    }
+
+    function addressToUint256Mapping(string memory tag_)
+        internal
+        pure
+        returns (mapping(address => uint256) storage randomVariable)
     {
         bytes32 location = keccak256(abi.encodePacked(tag_));
         assembly {
@@ -44,6 +66,17 @@ library NamedStorage {
         internal
         pure
         returns (mapping(address => address) storage randomVariable)
+    {
+        bytes32 location = keccak256(abi.encodePacked(tag_));
+        assembly {
+            randomVariable_slot := location
+        }
+    }
+
+    function addressToAddressListMapping(string memory tag_)
+        internal
+        pure
+        returns (mapping(address => address[]) storage randomVariable)
     {
         bytes32 location = keccak256(abi.encodePacked(tag_));
         assembly {

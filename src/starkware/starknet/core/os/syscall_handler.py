@@ -258,6 +258,11 @@ class SyscallHandlerBase(ABC):
                 execute_callback=cls.send_message_to_l1,
                 request_struct=structs.SendMessageToL1Request,
             ),
+            get_selector("get_class_hash_at"): SyscallInfo(
+                name="get_class_hash_at",
+                execute_callback=cls.get_class_hash_at,
+                request_struct=structs.GetClassHashAtRequest,
+            ),
         }
 
     @property
@@ -658,7 +663,22 @@ class SyscallHandlerBase(ABC):
         response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
         return response_header, tuple()
 
+    def get_class_hash_at(
+        self, remaining_gas: int, request: CairoStructProxy
+    ) -> SyscallFullResponse:
+        class_hash = self._get_class_hash_at(contract_address=cast_to_int(request.contract_address))
+
+        response_header = self.structs.ResponseHeader(gas=remaining_gas, failure_flag=0)
+        response = self.structs.GetClassHashAtResponse(class_hash=class_hash)
+        return response_header, response
+
     # Application-specific syscall implementation.
+    @abstractmethod
+    def _get_class_hash_at(self, contract_address: int) -> int:
+        """
+        Returns the class hash of the given contract address.
+        If the contract address is not in the contracts tree, returns 0.
+        """
 
     @abstractmethod
     def _call_contract_helper(
@@ -979,6 +999,11 @@ class BusinessLogicSyscallHandler(SyscallHandlerBase):
             key=block_number,
         )
 
+    def _get_class_hash_at(self, contract_address: int) -> int:
+        raise NotImplementedError(
+            "get_class_hash_at is not implemented for BusinessLogicSyscallHandler."
+        )
+
     def _get_execution_info_ptr(self) -> RelocatableValue:
         if self._execution_info_ptr is None:
             # Prepare block info.
@@ -1228,6 +1253,10 @@ class OsExecutionHelper:
         # code is executed.
         self.execute_code_read_iterator: Iterator[int] = iter([])
 
+        # An iterator to the read_class_hash_values array which is consumed when the transaction
+        # code is executed.
+        self.execute_code_class_hash_read_iterator: Iterator[int] = iter([])
+
         # The TransactionExecutionInfo for the transaction currently being executed.
         self.tx_execution_info: Optional[TransactionExecutionInfo] = None
 
@@ -1347,6 +1376,7 @@ class OsExecutionHelper:
         assert_exhausted(iterator=self.deployed_contracts_iterator)
         assert_exhausted(iterator=self.result_iterator)
         assert_exhausted(iterator=self.execute_code_read_iterator)
+        assert_exhausted(iterator=self.execute_code_class_hash_read_iterator)
 
     def enter_call(self, cairo_execution_info: Optional[VmConstsReference]):
         assert self._call_cairo_execution_info is None
@@ -1362,8 +1392,9 @@ class OsExecutionHelper:
             for call in self.call_info.internal_calls
             if call.entry_point_type is EntryPointType.CONSTRUCTOR
         )
-        self.result_iterator = (call.result() for call in self.call_info.internal_calls)
+        self.result_iterator = (call.syscall_result() for call in self.call_info.internal_calls)
         self.execute_code_read_iterator = iter(self.call_info.storage_read_values)
+        self.execute_code_class_hash_read_iterator = iter(self.call_info.read_class_hash_values)
 
     def exit_call(self):
         self._call_cairo_execution_info = None
@@ -1371,14 +1402,6 @@ class OsExecutionHelper:
         self.assert_interators_exhausted()
         assert self._call_info is not None
         self._call_info = None
-
-    def skip_call(self):
-        """
-        Called when skipping the execution of a call.
-        It replaces a call to enter_call and exit_call.
-        """
-        self.enter_call(cairo_execution_info=None)
-        self.exit_call()
 
     def skip_tx(self):
         """
@@ -1446,6 +1469,9 @@ class OsSyscallHandler(SyscallHandlerBase):
         return self.execution_helper.storage_by_address[constants.BLOCK_HASH_CONTRACT_ADDRESS].read(
             block_number
         )
+
+    def _get_class_hash_at(self, contract_address: int) -> int:
+        return next(self.execution_helper.execute_code_class_hash_read_iterator)
 
     def _get_execution_info_ptr(self) -> RelocatableValue:
         return self.execution_helper.call_cairo_execution_info.address_

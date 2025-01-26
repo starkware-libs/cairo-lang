@@ -48,20 +48,26 @@ def main():
     parser.add_argument(
         "--steps",
         type=int,
-        help="The number of instructions to perform. If steps is not given, runs the program until "
-        "the __end__ instruction, and then continues until the number of steps is a power of 2.",
+        help=(
+            "The number of instructions to perform. If steps is not given, runs the program until "
+            "the __end__ instruction, and then continues until the number of steps is a power of 2."
+        ),
     )
     parser.add_argument(
         "--min_steps",
         type=int,
-        help="The minimal number of instructions to perform. This can be used to guarantee that "
-        "there will be enough builtin instances for the program.",
+        help=(
+            "The minimal number of instructions to perform. This can be used to guarantee that "
+            "there will be enough builtin instances for the program."
+        ),
     )
     parser.add_argument(
         "--debug_error",
         action="store_true",
-        help="If there is an error during the execution, stop the execution, but produce the "
-        "partial outputs.",
+        help=(
+            "If there is an error during the execution, stop the execution, but produce the "
+            "partial outputs."
+        ),
     )
     parser.add_argument(
         "--no_end",
@@ -82,8 +88,10 @@ def main():
         "--secure_run",
         action="store_true",
         default=None,
-        help="Verify that the run is secure and can be run safely using the bootloader "
-        "(the default).",
+        help=(
+            "Verify that the run is secure and can be run safely using the bootloader "
+            "(the default)."
+        ),
     )
     parser.add_argument(
         "--no_secure_run",
@@ -119,8 +127,10 @@ def main():
     parser.add_argument(
         "--run_from_cairo_pie",
         type=argparse.FileType("rb"),
-        help="Runs a Cairo PIE file, instead of a program. "
-        "This flag can be used with --secure_run to verify the correctness of a Cairo PIE file.",
+        help=(
+            "Runs a Cairo PIE file, instead of a program. "
+            "This flag can be used with --secure_run to verify the correctness of a Cairo PIE file."
+        ),
     )
     parser.add_argument(
         "--cairo_pie_output",
@@ -160,8 +170,10 @@ def main():
     parser.add_argument(
         "--profile_output",
         type=str,
-        help="A path to an output file to write profile data to. Can be opened in pprof. "
-        'Usually "profile.pb.gz".',
+        help=(
+            "A path to an output file to write profile data to. Can be opened in pprof. "
+            'Usually "profile.pb.gz".'
+        ),
     )
     parser.add_argument(
         "--proof_mode", action="store_true", help="Prepare a provable execution trace."
@@ -316,6 +328,13 @@ def cairo_run(args):
         assert cairo_pie_input is not None
         # Add extra_segments.
         for segment_info in cairo_pie_input.metadata.extra_segments:
+            if (
+                runner.segments.zero_segment is not None
+                and segment_info.index == runner.segments.zero_segment.segment_index
+            ):
+                # If a zero segment is required for the run, don't initialize it again.
+                # It's saved as the first segment in the extra_segments list.
+                continue
             runner.segments.add(size=segment_info.size)
         # Update the builtin runners' additional_data.
         for name, builtin_runner in runner.builtin_runners.items():
@@ -466,9 +485,11 @@ def cairo_run(args):
                         f"--program={args.program.name}",
                         f"--trace={trace_file.name}",
                         f"--memory={memory_file.name}",
-                        f"--air_public_input={args.air_public_input.name}"
-                        if args.air_public_input
-                        else None,
+                        (
+                            f"--air_public_input={args.air_public_input.name}"
+                            if args.air_public_input
+                            else None
+                        ),
                         f"--debug_info={debug_info_file.name}",
                     ],
                 )
@@ -488,9 +509,11 @@ def cairo_run(args):
                         f"--program={args.program.name}",
                         f"--trace={trace_file.name}",
                         f"--memory={memory_file.name}",
-                        f"--air_public_input={args.air_public_input.name}"
-                        if args.air_public_input
-                        else None,
+                        (
+                            f"--air_public_input={args.air_public_input.name}"
+                            if args.air_public_input
+                            else None
+                        ),
                         f"--debug_info={debug_info_file.name}",
                         f"--profile_output={args.profile_output}",
                     ],

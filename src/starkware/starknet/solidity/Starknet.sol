@@ -56,6 +56,8 @@ contract Starknet is
     string internal constant PROGRAM_HASH_TAG = "STARKNET_1.0_INIT_PROGRAM_HASH_UINT";
     string internal constant AGGREGATOR_PROGRAM_HASH_TAG =
         "STARKNET_1.0_INIT_AGGREGATOR_PROGRAM_HASH_UINT";
+    string internal constant FEE_COLLECTOR_TAG = "FEE_COLLECTION_ADDRESS_SLOT_TAG";
+
     string internal constant VERIFIER_ADDRESS_TAG = "STARKNET_1.0_INIT_VERIFIER_ADDRESS";
     string internal constant STATE_STRUCT_TAG = "STARKNET_1.0_INIT_STARKNET_STATE_STRUCT";
 
@@ -102,6 +104,23 @@ contract Starknet is
         messageCancellationDelay(delayInSeconds);
     }
 
+    // Getter for the fee collection address, using msg.sender (Operator) as fallback,
+    // in case not set yet.
+    function getFeeCollectionAddress() internal view returns (address payable) {
+        address payable collector = feeCollector();
+        if (collector == address(0)) {
+            return payable(msg.sender);
+        }
+        return collector;
+    }
+
+    function setFeeCollectionAddress(address collector) external onlyGovernance {
+        // NOLINTNEXTLINE: low-level-calls.
+        (bool success, ) = payable(collector).call{value: 0}("");
+        require(success, "ADDRESS_DOES_NOT_ACCEPT_ETH");
+        feeCollector(collector);
+    }
+
     // State variable "programHash" read-access function.
     function programHash() public view returns (uint256) {
         return NamedStorage.getUintValue(PROGRAM_HASH_TAG);
@@ -120,6 +139,16 @@ contract Starknet is
     // State variable "aggregatorProgramHash" write-access function.
     function aggregatorProgramHash(uint256 value) internal {
         NamedStorage.setUintValue(AGGREGATOR_PROGRAM_HASH_TAG, value);
+    }
+
+    // State variable "feeCollector" read-access function.
+    function feeCollector() public view returns (address payable) {
+        return payable(NamedStorage.getAddressValue(FEE_COLLECTOR_TAG));
+    }
+
+    // State variable "feeCollector" write-access function.
+    function feeCollector(address value) internal {
+        NamedStorage.setAddressValue(FEE_COLLECTOR_TAG, value);
     }
 
     // State variable "verifier" access function.
@@ -294,11 +323,16 @@ contract Starknet is
 
         // Process L2 -> L1 messages.
         uint256 outputOffset = StarknetOutput.messageSegmentOffset(programOutput);
+
+        // The held L1->L2 message fee will be sent to the collector address.
+        address payable collectorAddress = getFeeCollectionAddress();
+
         outputOffset += StarknetOutput.processMessages(
             // isL2ToL1=
             true,
             programOutput[outputOffset:],
-            l2ToL1Messages()
+            l2ToL1Messages(),
+            collectorAddress
         );
 
         // Process L1 -> L2 messages.
@@ -306,7 +340,8 @@ contract Starknet is
             // isL2ToL1=
             false,
             programOutput[outputOffset:],
-            l1ToL2Messages()
+            l1ToL2Messages(),
+            collectorAddress
         );
         require(outputOffset == programOutput.length, "STARKNET_OUTPUT_TOO_LONG");
         // Note that processing L1 -> L2 messages does an external call, and it shouldn't be

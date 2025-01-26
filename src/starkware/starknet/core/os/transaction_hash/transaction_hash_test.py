@@ -34,11 +34,23 @@ from starkware.starknet.services.api.contract_class.contract_class import (
 
 
 @pytest.fixture
-def resource_bounds() -> ResourceBoundsMapping:
+def full_resource_bounds(request: pytest.FixtureRequest) -> bool:
+    return getattr(request, "param", False)
+
+
+@pytest.fixture
+def resource_bounds(full_resource_bounds: bool) -> ResourceBoundsMapping:
     """
     Returns a resource bounds mapping. The resources order should be different from the hash order
     to make sure the order does affect the hash result.
     """
+    if full_resource_bounds:
+        return {
+            Resource.L1_GAS: ResourceBounds(max_amount=1500, max_price_per_unit=1),
+            Resource.L2_GAS: ResourceBounds(max_amount=1000, max_price_per_unit=2),
+            Resource.L1_DATA_GAS: ResourceBounds(max_amount=2000, max_price_per_unit=3),
+        }
+
     return {
         Resource.L2_GAS: ResourceBounds(max_amount=0, max_price_per_unit=0),
         Resource.L1_GAS: ResourceBounds(max_amount=1993, max_price_per_unit=1),
@@ -47,15 +59,28 @@ def resource_bounds() -> ResourceBoundsMapping:
 
 def test_resource_name_value():
     """
-    The fee resource names are included in the transaction hash and therefore must be constant.
+    The fee resource names are included in the transaction hash and therefore must be constant,
+    and their values (int representation of their name) must be less than
+    2 ** constants.MAX_RESOURCE_NAME_BITS - 1.
+
     """
-    assert list(fields.Resource) == [fields.Resource.L1_GAS, fields.Resource.L2_GAS]
+    assert list(fields.Resource) == [
+        fields.Resource.L1_GAS,
+        fields.Resource.L2_GAS,
+        fields.Resource.L1_DATA_GAS,
+    ]
     assert fields.Resource.L1_GAS.value == constants.L1_GAS_RESOURCE_NAME_VALUE
+    assert fields.Resource.L1_GAS.value < 2**constants.MAX_RESOURCE_NAME_BITS - 1
     assert fields.Resource.L2_GAS.value == constants.L2_GAS_RESOURCE_NAME_VALUE
+    assert fields.Resource.L1_GAS.value < 2**constants.MAX_RESOURCE_NAME_BITS - 1
+    assert fields.Resource.L1_DATA_GAS.value == constants.L1_DATA_GAS_RESOURCE_NAME_VALUE
+    assert fields.Resource.L1_GAS.value < 2**constants.MAX_RESOURCE_NAME_BITS - 1
 
 
+@pytest.mark.parametrize("full_resource_bounds", [False, True], indirect=True)
 def test_declare_transaction_hash(resource_bounds: ResourceBoundsMapping):
     # Tested transaction data.
+    n_resource_bounds = len(resource_bounds)
     version = constants.TRANSACTION_VERSION
     nonce = 0
     sender_address = 19911992
@@ -121,18 +146,23 @@ def test_declare_transaction_hash(resource_bounds: ResourceBoundsMapping):
             sender_address=sender_address,
             chain_id=chain_id,
             nonce=nonce,
-            n_resource_bounds=2,
+            n_resource_bounds=n_resource_bounds,
             resource_bounds=create_resource_bounds_list(resource_bounds=resource_bounds),
         )
         == expected_hash
     )
 
 
-@pytest.mark.parametrize("constructor_calldata", [[], [539, 337]])
+@pytest.mark.parametrize(
+    "constructor_calldata,full_resource_bounds,",
+    [([], False), ([539, 337], True)],
+    indirect=["full_resource_bounds"],
+)
 def test_deploy_account_transaction_hash(
     constructor_calldata: List[int], resource_bounds: ResourceBoundsMapping
 ):
     # Tested transaction data.
+    n_resource_bounds = len(resource_bounds)
     version = constants.TRANSACTION_VERSION
     nonce = 0
     salt = 0
@@ -189,15 +219,17 @@ def test_deploy_account_transaction_hash(
             calldata=[class_hash, salt, *constructor_calldata],
             chain_id=chain_id,
             nonce=nonce,
-            n_resource_bounds=2,
+            n_resource_bounds=n_resource_bounds,
             resource_bounds=create_resource_bounds_list(resource_bounds=resource_bounds),
         )
         == expected_hash
     )
 
 
+@pytest.mark.parametrize("full_resource_bounds", [False, True], indirect=True)
 def test_invoke_transaction_hash(resource_bounds: ResourceBoundsMapping):
     # Tested transaction data.
+    n_resource_bounds = len(resource_bounds)
     version = constants.TRANSACTION_VERSION
     sender_address = 19911992
     calldata = [17, 38]
@@ -249,7 +281,7 @@ def test_invoke_transaction_hash(resource_bounds: ResourceBoundsMapping):
             calldata=calldata,
             chain_id=chain_id,
             nonce=nonce,
-            n_resource_bounds=2,
+            n_resource_bounds=n_resource_bounds,
             resource_bounds=create_resource_bounds_list(resource_bounds=resource_bounds),
         )
         == expected_hash
