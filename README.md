@@ -20,7 +20,7 @@ However, if you want to build it yourself, you can build it from the git reposit
 It is recommended to run the build inside a docker (as explained below),
 since it guarantees that all the dependencies
 are installed. Alternatively, you can try following the commands in the
-[docker file](https://github.com/starkware-libs/cairo-lang/blob/master/Dockerfile).
+[Dockerfile](https://github.com/starkware-libs/cairo-lang/blob/master/Dockerfile).
 
 ## Building using the dockerfile
 
