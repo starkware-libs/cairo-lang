@@ -100,7 +100,7 @@ func library_call{syscall_ptr: felt*}(
     return (retdata_size=response.retdata_size, retdata=response.retdata);
 }
 
-// Simialr to library_call(), except that the entry point is an L1 handler,
+// Similar to library_call(), except that the entry point is an L1 handler,
 // rather than an external function.
 // Note that this function does not consume an L1 message,
 // and thus it should only be called from a corresponding L1 handler.
