@@ -1,4 +1,4 @@
-// This module provides a set of functions to compute the (Ethereuem compatible) keccak hash
+// This module provides a set of functions to compute the (Ethereum compatible) keccak hash
 // function.
 //
 // In order to use the functions that get the ``keccak_ptr`` implicit argument
