@@ -342,7 +342,7 @@ func guess_compiled_class_facts{poseidon_ptr: PoseidonBuiltin*, range_check_ptr}
             cairo_contract = get_compiled_class_struct(
                 identifiers=ids._context.identifiers,
                 compiled_class=compiled_class,
-                # Load the entire bytecode - the unaccessed segments will be overriden and skipped
+                # Load the entire bytecode - the unaccessed segments will be overridden and skipped
                 # after the execution, in `validate_compiled_class_facts_post_execution`.
                 bytecode=compiled_class.bytecode,
             )
