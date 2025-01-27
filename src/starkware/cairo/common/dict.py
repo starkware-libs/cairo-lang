@@ -57,8 +57,7 @@ class DictManager:
         """
         Gets a dict tracker given the dict_ptr.
         """
-        if isinstance(dict_ptr, VmConstsReference):
-            dict_ptr = dict_ptr.address_
+        dict_ptr = dict_ptr.address_
         dict_tracker = self.trackers.get(dict_ptr.segment_index)
         if dict_tracker is None:
             raise ValueError(f"Dictionary pointer {dict_ptr} was not created using dict_new().")
