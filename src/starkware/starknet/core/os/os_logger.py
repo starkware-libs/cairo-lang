@@ -1,3 +1,4 @@
+from collections import Counter
 from typing import Dict, List, Optional
 
 import cachetools
@@ -33,6 +34,7 @@ CALL_CONTRACT_SYSCALLS = {
     "deploy",
     *DEPRECATED_CALL_CONTRACT_SYSCALLS,
 }
+
 
 DEPRECATED_SYSCALL_NAMES = {
     "delegate_call",
@@ -139,10 +141,10 @@ class SyscallTrace:
             if len(self.resources.builtin_instance_counter) > 0
             else ""
         )
-        syscall_name_set = set(syscall.name for syscall in self.inner_syscalls)
+        syscall_name_counter = Counter(syscall.name for syscall in self.inner_syscalls)
         inner_syscalls = (
-            f"\n{'  '*(self.tab_count+1)}Inner syscalls: {syscall_name_set}"
-            if len(syscall_name_set) > 0
+            f"\n{'  '*(self.tab_count+1)}Inner syscalls: {syscall_name_counter}"
+            if len(syscall_name_counter) > 0
             else ""
         )
         return f"""\
@@ -292,7 +294,8 @@ class OsLogger:
         )
         self.syscall_stack.append(syscall)
         deprecated_str = "deprecated " if deprecated else ""
-        self.log(msg=f"Entering {deprecated_str}{syscall.name}.", enter=True)
+        if syscall.name in CALL_CONTRACT_SYSCALLS:
+            self.log(msg=f"Entering {deprecated_str}{syscall.name}.", enter=True)
 
     def exit_syscall(
         self,
@@ -316,8 +319,8 @@ class OsLogger:
         current_syscall.finalize_resources(
             resources=exit_resources_counter.sub_counter(enter_counter=enter_resources_counter)
         )
-
-        self.log(msg=f"Exiting {current_syscall}.\n", enter=False)
+        if current_syscall.name in CALL_CONTRACT_SYSCALLS:
+            self.log(msg=f"Exiting {current_syscall}.\n", enter=False)
         if len(self.syscall_stack) > 0:
             # Handle the case of inner syscalls.
             self.syscall_stack[-1].inner_syscalls.append(current_syscall)
@@ -349,7 +352,7 @@ class OsLogger:
         builtin_ptrs: VmConstsReference,
         range_check_ptr: RelocatableValue,
     ):
-        assert self.current_tx is not None, "No transaction sould exit without entering."
+        assert self.current_tx is not None, "No transaction should exit without entering."
         assert len(self.syscall_stack) == 0, "All Syscalls should end when exiting a transaction."
         enter_resources_counter = self.resource_counter_stack.pop()
         exit_resources_counter = ResourceCounter(

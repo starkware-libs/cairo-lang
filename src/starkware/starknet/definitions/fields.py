@@ -321,6 +321,9 @@ NewClassHashField = BackwardCompatibleIntAsHex(
 
 new_class_hash_metadata = dict(marshmallow_field=NewClassHashField)
 
+optional_class_hash_list_metadata = dict(
+    marshmallow_field=mfields.List(NewClassHashField, required=False, load_default=None)
+)
 
 address_to_class_hash_metadata = dict(
     marshmallow_field=mfields.Dict(

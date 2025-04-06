@@ -87,6 +87,23 @@ def _starknet_contract_impl(ctx):
 
     return [DefaultInfo(files = depset(outs))]
 
+def _sierra_contract_impl(ctx):
+    compiled_sierra_name = ctx.file.sierra
+    compiled_casm_name = ctx.outputs.compiled_casm_name
+    compile_sierra_to_casm_exe = ctx.executable.compile_sierra_to_casm_exe
+
+    _compile_internal(
+        ctx = ctx,
+        srcs_list = [compiled_sierra_name],
+        main = compiled_sierra_name,
+        compiled_file_name = compiled_casm_name,
+        compile_exe = compile_sierra_to_casm_exe,
+        outs = [compiled_casm_name],
+        cairoopts = ["--add-pythonic-hints"],
+        progress_message = "Compiling sierra to casm %s..." % ctx.file.sierra.path,
+    )
+    return [DefaultInfo(files = depset([compiled_casm_name]))]
+
 def _compile_internal(
         ctx,
         srcs_list,
@@ -146,5 +163,25 @@ starknet_contract = rule(
         "main": attr.label(allow_single_file = True, mandatory = True),
         "cairo_project_file": attr.label(allow_single_file = True),
         "allowed_libfuncs_list_file": attr.label(allow_single_file = True),
+    },
+)
+
+# Compile Sierra to CASM.
+sierra_contract = rule(
+    implementation = _sierra_contract_impl,
+    attrs = {
+        "sierra": attr.label(allow_single_file = True, mandatory = True),
+        "compile_sierra_to_casm_exe": attr.label(
+            default = Label("@" + CAIRO_COMPILER_ARCHIVE + "//:bin/starknet-sierra-compile"),
+            allow_files = True,
+            executable = True,
+            # See https://bazel.build/rules/rules#configurations.
+            cfg = "exec",
+        ),
+        "compiler_data": attr.label_list(
+            allow_files = True,
+            default = ["@" + CAIRO_COMPILER_ARCHIVE],
+        ),
+        "compiled_casm_name": attr.output(),
     },
 )

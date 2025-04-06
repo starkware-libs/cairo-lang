@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, Mapping
 
 import marshmallow_dataclass
+from marshmallow.decorators import post_dump, pre_load
 
 from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
 from starkware.python.utils import snake_to_camel_case
@@ -20,6 +21,43 @@ class ResourcesParams(ValidatedMarshmallowDataclass):
     constant: ExecutionResources
     calldata_factor: ExecutionResources
 
+    @pre_load
+    def add_constant_and_calldata_factor_fields(
+        self, data: Dict[str, Any], many: bool, **kwargs
+    ) -> Dict[str, Any]:
+        """
+        If only raw resources are provided (without constant and calldata factor structure),
+        converts them into resource params format where:
+        - constant = provided resources
+        - calldata factor = empty resources
+        """
+
+        if "calldata_factor" not in data and "constant" not in data:
+            new_data = dict()
+            new_data["calldata_factor"] = ExecutionResources.empty().dump()
+            new_data["constant"] = data
+            return new_data
+        elif ("calldata_factor" in data) ^ ("constant" in data):
+            raise ValueError(
+                "Either both 'calldata_factor' and 'constant' should be provided or neither."
+                f"data = {data}"
+            )
+        else:
+            return data
+
+    @post_dump
+    def remove_trivial_calldata_factor(
+        self, data: Dict[str, Any], many: bool, **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Ensures `dump` behaves like `load`:
+        - If `calldata_factor` is empty, remove it.
+        - Otherwise, return the full dictionary.
+        """
+        if data["calldata_factor"] == ExecutionResources.empty().dump():
+            return data["constant"]
+        return data
+
 
 @marshmallow_dataclass.dataclass(frozen=True)
 class ResourcesByVersion(ValidatedMarshmallowDataclass):
@@ -30,7 +68,7 @@ class ResourcesByVersion(ValidatedMarshmallowDataclass):
 @marshmallow_dataclass.dataclass(frozen=True)
 class OsResources(ValidatedMarshmallowDataclass):
     # Mapping from every syscall to its execution resources in the OS (e.g., amount of Cairo steps).
-    execute_syscalls: Mapping[str, ExecutionResources]
+    execute_syscalls: Mapping[str, ResourcesParams]
     # Mapping from every transaction to its extra execution resources in the OS,
     # i.e., resources that don't count during the execution itself.
     execute_txs_inner: Mapping[TransactionType, ResourcesByVersion]
@@ -78,7 +116,7 @@ def get_tx_additional_os_resources(
     os_additional_resources = functools.reduce(
         ExecutionResources.__add__,
         (
-            os_resources.execute_syscalls[syscall_name] * syscall_counter[syscall_name]
+            os_resources.execute_syscalls[syscall_name].constant * syscall_counter[syscall_name]
             for syscall_name in syscall_counter.keys()
         ),
         ExecutionResources.empty(),

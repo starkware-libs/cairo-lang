@@ -7,4 +7,13 @@ exports_files([
     "execute_syscalls.cairo",
     "execute_transactions.cairo",
     "revert.cairo",
+    "version_bound_accounts.cairo",
 ])
+
+py_library(
+    name = "version_bound_accounts_lib",
+    srcs = [
+        "version_bound_accounts.py",
+    ],
+    deps = ["//src/starkware/starknet/definitions:starknet_definitions_lib"],
+)

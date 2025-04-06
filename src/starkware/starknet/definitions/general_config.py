@@ -73,6 +73,9 @@ DEFAULT_DEPRECATED_L1_GAS_PRICE = 10**9
 DEFAULT_DEPRECATED_L2_GAS_PRICE = 1
 DEFAULT_DEPRECATED_L1_DATA_GAS_PRICE = 1
 
+# Given in units of wei.
+DEFAULT_L2_GAS_PRICE = int(((10**9) * 15) * 0.000025)
+
 DEFAULT_MIN_FRI_L1_GAS_PRICE = 10**6
 DEFAULT_MAX_FRI_L1_GAS_PRICE = 10**21
 DEFAULT_MIN_FRI_L2_GAS_PRICE = 10**4
@@ -162,3 +165,11 @@ class StarknetGeneralConfig(EverestGeneralConfig):
                 return private_versioned_constants.invoke_tx_max_n_steps
 
         return VERSIONED_CONSTANTS.invoke_tx_max_n_steps
+
+    def get_max_n_events(self) -> int:
+        private_versioned_constants = self.get_private_versioned_constants()
+        if private_versioned_constants is not None:
+            if private_versioned_constants.max_n_events is not None:
+                return private_versioned_constants.max_n_events
+
+        return VERSIONED_CONSTANTS.max_n_events

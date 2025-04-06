@@ -1,4 +1,5 @@
 from starkware.cairo.common.alloc import alloc
+from starkware.cairo.common.bool import FALSE
 from starkware.cairo.common.cairo_builtins import KeccakBuiltin
 from starkware.cairo.common.dict import dict_read, dict_update
 from starkware.cairo.common.dict_access import DictAccess
@@ -51,6 +52,7 @@ from starkware.starknet.common.syscalls import (
     SendMessageToL1SysCall,
     StorageRead,
     StorageWrite,
+    TxInfo,
 )
 from starkware.starknet.core.os.block_context import BlockContext
 from starkware.starknet.core.os.builtins import (
@@ -77,6 +79,10 @@ from starkware.starknet.core.os.execution.revert import (
     CHANGE_CLASS_ENTRY,
     CHANGE_CONTRACT_ENTRY,
     RevertLogEntry,
+)
+from starkware.starknet.core.os.execution.version_bound_accounts import (
+    check_tip_for_v1_bound_accounts,
+    is_v1_bound_account_cairo0,
 )
 from starkware.starknet.core.os.output import (
     MessageToL1Header,
@@ -211,6 +217,32 @@ func execute_library_call_syscall{
         execution_context=execution_context,
         call_response=&syscall_ptr.response,
     );
+}
+
+func execute_get_tx_info_syscall{range_check_ptr}(
+    execution_context: ExecutionContext*, syscall_ptr: GetTxInfo*
+) {
+    tempvar tx_info: TxInfo* = execution_context.deprecated_tx_info;
+    tempvar class_hash = execution_context.class_hash;
+    let v1_bound = is_v1_bound_account_cairo0(class_hash);
+    let check_tip = check_tip_for_v1_bound_accounts(execution_context.execution_info.tx_info.tip);
+    if (tx_info.version == 3 and v1_bound != FALSE and check_tip != FALSE) {
+        static_assert GetTxInfoResponse.SIZE == 1;
+        assert [syscall_ptr.response.tx_info] = TxInfo(
+            version=1,
+            account_contract_address=tx_info.account_contract_address,
+            max_fee=tx_info.max_fee,
+            signature_len=tx_info.signature_len,
+            signature=tx_info.signature,
+            transaction_hash=tx_info.transaction_hash,
+            chain_id=tx_info.chain_id,
+            nonce=tx_info.nonce,
+        );
+        return ();
+    }
+
+    assert syscall_ptr.response = GetTxInfoResponse(tx_info=tx_info);
+    return ();
 }
 
 func execute_deploy_syscall{
@@ -551,8 +583,8 @@ func execute_deprecated_syscalls{
     }
 
     if (selector == GET_TX_INFO_SELECTOR) {
-        assert cast(syscall_ptr, GetTxInfo*).response = GetTxInfoResponse(
-            tx_info=execution_context.deprecated_tx_info
+        execute_get_tx_info_syscall(
+            execution_context=execution_context, syscall_ptr=cast(syscall_ptr, GetTxInfo*)
         );
         %{ exit_syscall(selector=ids.GET_TX_INFO_SELECTOR) %}
         return execute_deprecated_syscalls(

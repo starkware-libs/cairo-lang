@@ -23,6 +23,7 @@ from starkware.cairo.lang.vm.memory_segments import is_valid_memory_addr, is_val
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue, relocate_value
 from starkware.python.utils import add_counters, multiply_counter_by_scalar, sub_counters
 from starkware.starkware_utils.marshmallow_dataclass_fields import additional_metadata
+from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
 
 DEFAULT_CAIRO_PIE_VERSION = "1.0"
 CURRENT_CAIRO_PIE_VERSION = "1.1"
@@ -124,7 +125,7 @@ class CairoPieMetadata:
 
 
 @marshmallow_dataclass.dataclass
-class ExecutionResources:
+class ExecutionResources(ValidatedMarshmallowDataclass):
     """
     Indicates how many steps the program should run, how many memory cells are used from each
     builtin, and how many holes there are in the memory address space.

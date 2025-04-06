@@ -24,6 +24,10 @@ from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
 from starkware.starknet.core.os.contract_address.contract_address import (
     calculate_contract_address_from_hash,
 )
+from starkware.starknet.core.os.execution.version_bound_accounts import (
+    get_v1_bound_accounts_cairo0,
+    get_v1_bound_accounts_max_tip,
+)
 from starkware.starknet.core.os.os_logger import OptionalSegmentManager
 from starkware.starknet.core.os.syscall_handler import OsExecutionHelper
 from starkware.starknet.core.os.syscall_utils import (
@@ -90,7 +94,9 @@ class DeprecatedSysCallHandlerBase(ABC):
         )
 
     def emit_event(self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue):
-        return
+        """
+        Handles the emit_event system call.
+        """
 
     def get_caller_address(self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue):
         """
@@ -609,9 +615,6 @@ class DeprecatedBlSyscallHandler(DeprecatedSysCallHandlerBase):
         return call_info.result()
 
     def emit_event(self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue):
-        """
-        Handles the emit_event system call.
-        """
         request = self._read_and_validate_syscall_request(
             syscall_name="emit_event", syscall_ptr=syscall_ptr
         )
@@ -800,11 +803,16 @@ class DeprecatedOsSysCallHandler(DeprecatedSysCallHandlerBase):
         return segment_start
 
     def _call_contract(self, syscall_ptr: RelocatableValue, syscall_name: str) -> CallResult:
+        self._count_syscall(syscall_name)
         return next(self.execution_helper.result_iterator)
 
     def _deploy(self, syscall_ptr: RelocatableValue) -> int:
+        self._count_syscall("deploy")
         next(self.execution_helper.result_iterator)
         return next(self.execution_helper.deployed_contracts_iterator)
+
+    def emit_event(self, segments: MemorySegmentManager, syscall_ptr: RelocatableValue):
+        self._count_syscall(syscall_name="emit_event")
 
     def _get_block_number(self) -> int:
         return self.execution_helper.call_cairo_execution_info.block_info.block_number
@@ -823,7 +831,22 @@ class DeprecatedOsSysCallHandler(DeprecatedSysCallHandlerBase):
 
     def _get_tx_info_ptr(self) -> RelocatableValue:
         assert self.execution_helper.tx_info_ptr is not None
-        return self.execution_helper.tx_info_ptr
+        tx_info = self.syscall_structs.TxInfo.from_ptr(
+            memory=self.segments.memory, addr=self.execution_helper.tx_info_ptr
+        )
+        class_hash = self.execution_helper.call_info.class_hash
+        tip = self.execution_helper.call_cairo_execution_info.tx_info.tip
+        if (
+            tx_info.version == 3
+            and class_hash in get_v1_bound_accounts_cairo0()
+            and tip <= get_v1_bound_accounts_max_tip()
+        ):
+            # Return version=1 for version-bound accounts.
+            res = self.segments.gen_arg(arg=tx_info._replace(version=1))
+            assert isinstance(res, RelocatableValue)
+            return res
+        else:
+            return self.execution_helper.tx_info_ptr
 
     def _replace_class(self, class_hash: int):
         return

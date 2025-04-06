@@ -1,6 +1,8 @@
 load("//src/starkware/starknet:starknet_rules_v0.bzl", "starknet_contract_v0")
 load("//bazel_utils:get_from_cairo_lang.bzl", "get_from_cairo_lang")
 
+exports_files(glob(["*.json"]))
+
 starknet_contract_v0(
     name = "delegate_proxy",
     srcs = [

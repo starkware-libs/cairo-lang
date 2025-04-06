@@ -1,7 +1,7 @@
 enforce_l1_handler_fee: true
-sequencer_address: '0x63f4d22facf298037f9becbf3cc20bad5d8005dc49054ee1c365913b94eab1f'
+sequencer_address: '0x1f1e52d732735267ace1c3d39fd58a7b16da264383b5c54b91c6998baac8fe2'
 starknet_os_config:
   chain_id: 1536727068981429685321
-  deprecated_fee_token_address: '0x4f24cc926c99a6d14efd6fa0e9eacd1a3dbcef507a005221060ab8bd971ee33'
-  fee_token_address: '0x8f7185f254960369cacb7b021ad5b2f894646137418f8df45382941c14774c'
+  deprecated_fee_token_address: '0x7c07a3eec8ff611328722c3fc3e5d2e4ef2f60740c0bf86c756606036b74c16'
+  fee_token_address: '0x54a93d918d62b2fb62b25e77d9cb693bd277ab7e6fa236e53af263f1adb40e4'
 validate_max_n_steps_override: 1000000

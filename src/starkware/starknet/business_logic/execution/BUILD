@@ -113,6 +113,7 @@ py_library(
         "//src/starkware/python:starkware_python_utils_lib",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
         "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
+        requirement("marshmallow"),
         requirement("marshmallow_dataclass"),
     ],
 )

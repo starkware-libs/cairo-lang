@@ -109,6 +109,7 @@ from starkware.starknet.common.new_syscalls import (
     StorageReadRequest,
     StorageReadResponse,
     StorageWriteRequest,
+    TxInfo,
 )
 from starkware.starknet.core.os.block_context import BlockContext
 from starkware.starknet.core.os.builtins import (
@@ -120,6 +121,7 @@ from starkware.starknet.core.os.constants import (
     BLOCK_HASH_CONTRACT_ADDRESS,
     CALL_CONTRACT_GAS_COST,
     CONSTRUCTOR_ENTRY_POINT_SELECTOR,
+    DEPLOY_CALLDATA_FACTOR_GAS_COST,
     DEPLOY_GAS_COST,
     EMIT_EVENT_GAS_COST,
     ENTRY_POINT_TYPE_CONSTRUCTOR,
@@ -163,6 +165,10 @@ from starkware.starknet.core.os.execution.revert import (
     CHANGE_CLASS_ENTRY,
     CHANGE_CONTRACT_ENTRY,
     RevertLogEntry,
+)
+from starkware.starknet.core.os.execution.version_bound_accounts import (
+    check_tip_for_v1_bound_accounts,
+    is_v1_bound_account_cairo1,
 )
 from starkware.starknet.core.os.output import (
     MessageToL1Header,
@@ -231,7 +237,7 @@ func execute_syscalls{
     }
 
     if (selector == GET_EXECUTION_INFO_SELECTOR) {
-        execute_get_execution_info(execution_info=execution_context.execution_info);
+        execute_get_execution_info(execution_context=execution_context);
         %{ exit_syscall(selector=ids.GET_EXECUTION_INFO_SELECTOR) %}
         return execute_syscalls(
             block_context=block_context,
@@ -631,8 +637,13 @@ func execute_deploy{
 }(block_context: BlockContext*, caller_execution_context: ExecutionContext*) {
     alloc_locals;
     let request = cast(syscall_ptr + RequestHeader.SIZE, DeployRequest*);
+    local constructor_calldata_start: felt* = request.constructor_calldata_start;
+    local constructor_calldata_size = request.constructor_calldata_end - constructor_calldata_start;
+
+    let specific_base_gas_cost = DEPLOY_GAS_COST + DEPLOY_CALLDATA_FACTOR_GAS_COST *
+        constructor_calldata_size;
     let (success, remaining_gas) = reduce_syscall_base_gas(
-        specific_base_gas_cost=DEPLOY_GAS_COST, request_struct_size=DeployRequest.SIZE
+        specific_base_gas_cost=specific_base_gas_cost, request_struct_size=DeployRequest.SIZE
     );
     if (success == FALSE) {
         // Not enough gas to execute the syscall.
@@ -648,9 +659,6 @@ func execute_deploy{
     // Set deployer_address to 0 if request.deploy_from_zero is TRUE.
     let deployer_address = (1 - deploy_from_zero) * caller_address;
 
-    tempvar constructor_calldata_start = request.constructor_calldata_start;
-    tempvar constructor_calldata_size = request.constructor_calldata_end -
-        constructor_calldata_start;
     let selectable_builtins = &builtin_ptrs.selectable;
     let hash_ptr = selectable_builtins.pedersen;
     with hash_ptr {
@@ -956,8 +964,10 @@ func execute_get_block_hash{
 
 // Gets the execution info.
 func execute_get_execution_info{range_check_ptr, syscall_ptr: felt*}(
-    execution_info: ExecutionInfo*
+    execution_context: ExecutionContext*
 ) {
+    alloc_locals;
+
     // Reduce gas.
     let success = reduce_syscall_gas_and_write_response_header(
         total_gas_cost=GET_EXECUTION_INFO_GAS_COST, request_struct_size=0
@@ -967,12 +977,49 @@ func execute_get_execution_info{range_check_ptr, syscall_ptr: felt*}(
         return ();
     }
 
-    assert [cast(syscall_ptr, GetExecutionInfoResponse*)] = GetExecutionInfoResponse(
-        execution_info=execution_info
-    );
+    let response = cast(syscall_ptr, GetExecutionInfoResponse*);
     // Advance syscall pointer to the next syscall.
     let syscall_ptr = syscall_ptr + GetExecutionInfoResponse.SIZE;
 
+    local execution_info: ExecutionInfo* = execution_context.execution_info;
+    local tx_info: TxInfo* = execution_info.tx_info;
+    let v1_bound = is_v1_bound_account_cairo1(execution_context.class_hash);
+    let check_tip = check_tip_for_v1_bound_accounts(tx_info.tip);
+    if (tx_info.version == 3 and v1_bound != FALSE and check_tip != FALSE) {
+        tempvar response_tx_info = response.execution_info.tx_info;
+
+        assert [response_tx_info] = TxInfo(
+            version=1,
+            account_contract_address=tx_info.account_contract_address,
+            max_fee=tx_info.max_fee,
+            signature_start=tx_info.signature_start,
+            signature_end=tx_info.signature_end,
+            transaction_hash=tx_info.transaction_hash,
+            chain_id=tx_info.chain_id,
+            nonce=tx_info.nonce,
+            resource_bounds_start=tx_info.resource_bounds_start,
+            resource_bounds_end=tx_info.resource_bounds_end,
+            tip=tx_info.tip,
+            paymaster_data_start=tx_info.paymaster_data_start,
+            paymaster_data_end=tx_info.paymaster_data_end,
+            nonce_data_availability_mode=tx_info.nonce_data_availability_mode,
+            fee_data_availability_mode=tx_info.fee_data_availability_mode,
+            account_deployment_data_start=tx_info.account_deployment_data_start,
+            account_deployment_data_end=tx_info.account_deployment_data_end,
+        );
+
+        static_assert GetExecutionInfoResponse.SIZE == 1;
+        assert [response.execution_info] = ExecutionInfo(
+            block_info=execution_info.block_info,
+            tx_info=response_tx_info,
+            caller_address=execution_info.caller_address,
+            contract_address=execution_info.contract_address,
+            selector=execution_info.selector,
+        );
+        return ();
+    }
+
+    assert [response] = GetExecutionInfoResponse(execution_info=execution_info);
     return ();
 }
 

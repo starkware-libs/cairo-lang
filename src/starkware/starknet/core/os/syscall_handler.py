@@ -65,6 +65,10 @@ from starkware.starknet.business_logic.state.state_api_objects import BlockInfo
 from starkware.starknet.core.os.contract_address.contract_address import (
     calculate_contract_address_from_hash,
 )
+from starkware.starknet.core.os.execution.version_bound_accounts import (
+    get_v1_bound_accounts_cairo1,
+    get_v1_bound_accounts_max_tip,
+)
 from starkware.starknet.core.os.kzg_manager import CoefficientsToKzgCommitmentCallback, KzgManager
 from starkware.starknet.core.os.os_logger import OptionalSegmentManager, OsLogger
 from starkware.starknet.core.os.syscall_utils import (
@@ -296,6 +300,14 @@ class SyscallHandlerBase(ABC):
         # Check and reduce gas (after validating the syscall selector for consistency with the OS).
         initial_gas = cast_to_int(request_header.gas)
         required_gas = self._get_required_gas(name=syscall_info.name)
+        if syscall_info.name == "deploy":
+            assert isinstance(request.constructor_calldata_start, RelocatableValue)
+            assert isinstance(request.constructor_calldata_end, RelocatableValue)
+            calldata_size = request.constructor_calldata_end - request.constructor_calldata_start
+            assert isinstance(calldata_size, int)
+            linear_cost = calldata_size * GasCost.DEPLOY_CALLDATA_FACTOR.value
+            required_gas += linear_cost
+
         if initial_gas < required_gas:
             # Out of gas failure.
             response_header, response = self._handle_out_of_gas(initial_gas=initial_gas)
@@ -1474,7 +1486,27 @@ class OsSyscallHandler(SyscallHandlerBase):
         return next(self.execution_helper.execute_code_class_hash_read_iterator)
 
     def _get_execution_info_ptr(self) -> RelocatableValue:
-        return self.execution_helper.call_cairo_execution_info.address_
+        execution_info = self.execution_helper.call_cairo_execution_info
+        tx_info = execution_info.tx_info
+        class_hash = self.execution_helper.call_info.class_hash
+        if (
+            tx_info.version == 3
+            and class_hash in get_v1_bound_accounts_cairo1()
+            and tx_info.tip <= get_v1_bound_accounts_max_tip()
+        ):
+            # Return version=1 for version-bound accounts.
+            modified_tx_info = self.structs.TxInfo.from_ptr(
+                memory=self.segments.memory, addr=tx_info.address_
+            )._replace(version=1)
+            res = self.segments.gen_arg(
+                self.structs.ExecutionInfo.from_ptr(
+                    memory=self.segments.memory, addr=execution_info.address_
+                )._replace(tx_info=modified_tx_info)
+            )
+            assert isinstance(res, RelocatableValue)
+            return res
+        else:
+            return execution_info.address_
 
     def _storage_read(self, key: int) -> int:
         return next(self.execution_helper.execute_code_read_iterator)

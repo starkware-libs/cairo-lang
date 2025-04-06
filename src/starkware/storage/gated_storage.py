@@ -44,10 +44,7 @@ class GatedStorage(Storage):
             if len(key) + len(value) + RECORD_LENGTH_BUFFER <= self.limit:
                 return key, value
 
-        ukey = generate_unique_key(
-            item_type="gated",
-            props={"orig_key": key.hex()},
-        )
+        ukey = self._generate_unique_key(key)
         await self.storage1.set_value(key=ukey, value=value)
         new_value = MAGIC_HEADER + ukey
         return key, new_value
@@ -90,3 +87,15 @@ class GatedStorage(Storage):
             await self.storage1.del_value(key=ukey)
 
         await self.storage0.del_value(key=key)
+
+    def _generate_unique_key(self, key: bytes) -> bytes:
+        return generate_unique_key(item_type="gated", props={"orig_key": key.hex()})
+
+
+class DeterministicGatedStorage(GatedStorage):
+    """
+    A GatedStorage that generates deterministic unique keys for secondary storage.
+    """
+
+    def _generate_unique_key(self, key: bytes) -> bytes:
+        return "type=det-gated/".encode("ascii") + key

@@ -8,6 +8,9 @@ from starkware.crypto.signature.signature import FIELD_PRIME
 from starkware.python.utils import from_bytes
 from starkware.storage.storage import HASH_BYTES
 
+VERSIONED_CONSTANTS_FILE_NAME = "versioned_constants.json"
+VERSIONED_CONSTANTS_PATH = Path(__file__).parent / VERSIONED_CONSTANTS_FILE_NAME
+
 STARKNET_LANG_DIRECTIVE = "starknet"
 
 FIELD_SIZE = FIELD_PRIME
@@ -225,6 +228,7 @@ class GasCost(Enum):
 
     STEP = 100
     RANGE_CHECK = 70
+    RANGE_CHECK96 = 56
     KECCAK_BUILTIN = 136189
     PEDERSEN = 4050
     BITWISE_BUILTIN = 583
@@ -243,6 +247,7 @@ class GasCost(Enum):
     # Syscall cas costs.
     CALL_CONTRACT = 866 * STEP + 15 * RANGE_CHECK
     DEPLOY = 1132 * STEP + 18 * RANGE_CHECK + 7 * PEDERSEN
+    DEPLOY_CALLDATA_FACTOR = 8 * STEP + 1 * PEDERSEN
     GET_BLOCK_HASH = 104 * STEP + 2 * RANGE_CHECK
     GET_CLASS_HASH_AT = SYSCALL_BASE
     GET_EXECUTION_INFO = SYSCALL_BASE
@@ -277,14 +282,19 @@ class GasCost(Enum):
         return self.value
 
 
+def get_versioned_constants_json():
+    """
+    Returns the versioned constants as a JSON dict.
+    """
+    return json.load(VERSIONED_CONSTANTS_PATH.open())
+
+
 @dataclasses.dataclass(frozen=True)
 class ThinVersionedConstants:
-    VERSIONED_CONSTANTS_FILE_NAME = "versioned_constants.json"
-    VERSIONED_CONSTANTS_PATH = Path(__file__).parent / VERSIONED_CONSTANTS_FILE_NAME
-
     # General config.
     invoke_tx_max_n_steps: int
     validate_max_n_steps: int
+    max_n_events: int
 
     # State manager config.
     max_recursion_depth: int
@@ -306,12 +316,13 @@ class ThinVersionedConstants:
 
     @classmethod
     def create(cls):
-        versioned_constants_json = json.load(cls.VERSIONED_CONSTANTS_PATH.open())
+        versioned_constants_json = get_versioned_constants_json()
         vm_resource_costs = versioned_constants_json["vm_resource_fee_cost"]
 
         return ThinVersionedConstants(
             invoke_tx_max_n_steps=versioned_constants_json["invoke_tx_max_n_steps"],
             validate_max_n_steps=versioned_constants_json["validate_max_n_steps"],
+            max_n_events=versioned_constants_json["tx_event_limits"]["max_n_emitted_events"],
             max_recursion_depth=versioned_constants_json["max_recursion_depth"],
             max_calldata_length=versioned_constants_json["gateway"]["max_calldata_length"],
             max_contract_bytecode_size=versioned_constants_json["gateway"][

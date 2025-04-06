@@ -57,4 +57,3 @@ Once the docker image is built, you can fetch the python package zip file using:
 > docker cp ${container_id}:/app/cairo-lang-0.13.4.zip .
 > docker rm -v ${container_id}
 ```
-

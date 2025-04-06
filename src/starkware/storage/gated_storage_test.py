@@ -1,14 +1,38 @@
 import pytest
 
-from starkware.storage.gated_storage import MAGIC_HEADER, RECORD_LENGTH_BUFFER, GatedStorage
+from starkware.storage.gated_storage import (
+    MAGIC_HEADER,
+    RECORD_LENGTH_BUFFER,
+    DeterministicGatedStorage,
+    GatedStorage,
+)
 from starkware.storage.test_utils import MockStorage
 
 
+@pytest.fixture
+def gated_storage():
+    return GatedStorage(
+        limit=10 + RECORD_LENGTH_BUFFER, storage0=MockStorage(), storage1=MockStorage()
+    )
+
+
+@pytest.fixture
+def deterministic_gated_storage():
+    return DeterministicGatedStorage(
+        limit=10 + RECORD_LENGTH_BUFFER, storage0=MockStorage(), storage1=MockStorage()
+    )
+
+
+@pytest.mark.parametrize(
+    "storage_type",
+    [
+        "gated_storage",
+        "deterministic_gated_storage",
+    ],
+)
 @pytest.mark.asyncio
-async def test_gated_storage():
-    storage0 = MockStorage()
-    storage1 = MockStorage()
-    storage = GatedStorage(limit=10 + RECORD_LENGTH_BUFFER, storage0=storage0, storage1=storage1)
+async def test_gated_storage(request: pytest.FixtureRequest, storage_type: str):
+    storage = request.getfixturevalue(storage_type)
 
     keys_values = [(b"k0", b"v0"), (b"k1", b"v1" * 6)]
     for k, v in keys_values:
@@ -20,14 +44,14 @@ async def test_gated_storage():
         assert not await storage.setnx_value(key=k, value=b"wrong")
         assert await storage.get_value_or_fail(key=k) == v
 
-    assert storage0.db.keys() == {b"k0", b"k1"}
-    assert len(storage1.db.keys()) == 1
+    assert storage.storage0.db.keys() == {b"k0", b"k1"}
+    assert len(storage.storage1.db.keys()) == 1
 
     for k, _ in keys_values:
         await storage.del_value(k)
 
-    assert len(storage0.db.keys()) == 0
-    assert len(storage1.db.keys()) == 0
+    assert len(storage.storage0.db.keys()) == 0
+    assert len(storage.storage1.db.keys()) == 0
 
 
 @pytest.mark.asyncio
