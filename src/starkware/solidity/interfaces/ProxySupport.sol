@@ -29,7 +29,7 @@ abstract contract ProxySupport is MGovernance, BlockDirectCall, ContractInitiali
       1. This function cannot be called directly on the deployed contract, but only via
          delegate call.
       2. If an EIC is provided - init is passed onto EIC and the standard init flow is skipped.
-         This true for both first intialization or a later one.
+         This true for both first initialization or a later one.
       3. The data passed to this function is as follows:
          [sub_contracts addresses, eic address, initData].
 
