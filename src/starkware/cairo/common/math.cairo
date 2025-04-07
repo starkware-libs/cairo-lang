@@ -237,7 +237,7 @@ func assert_lt_felt{range_check_ptr}(a, b) {
 }
 
 // Returns the absolute value of value.
-// Prover asumption: -rc_bound < value < rc_bound.
+// Prover assumption: -rc_bound < value < rc_bound.
 @known_ap_change
 func abs_value{range_check_ptr}(value) -> felt {
     tempvar is_positive: felt;
@@ -260,7 +260,7 @@ func abs_value{range_check_ptr}(value) -> felt {
 }
 
 // Returns the sign of value: -1, 0 or 1.
-// Prover asumption: -rc_bound < value < rc_bound.
+// Prover assumption: -rc_bound < value < rc_bound.
 @known_ap_change
 func sign{range_check_ptr}(value) -> felt {
     if (value == 0) {

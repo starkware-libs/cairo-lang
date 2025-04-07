@@ -2,7 +2,7 @@
 const MAX_LENGTH = 251;
 
 // A struct of globals that are passed throughout the algorithm.
-struct ParticiaGlobals {
+struct PatriciaGlobals {
     // An array of size MAX_LENGTH, where pow2[i] = 2**i.
     pow2: felt*,
     // Offset of the relevant value field in DictAccess.
