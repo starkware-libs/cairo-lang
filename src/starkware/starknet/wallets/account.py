@@ -12,12 +12,7 @@ from starkware.starknet.services.api.gateway.account_transaction import (
     DeployAccount,
     InvokeFunction,
 )
-from starkware.starknet.services.api.gateway.deprecated_transaction import (
-    DeprecatedDeclare,
-    DeprecatedDeployAccount,
-    DeprecatedInvokeFunction,
-    DeprecatedOldDeclare,
-)
+from starkware.starknet.services.api.gateway.deprecated_transaction import DeprecatedOldDeclare
 from starkware.starknet.wallets.starknet_context import StarknetContext
 
 DEFAULT_ACCOUNT_DIR = "~/.starknet_accounts"
@@ -112,15 +107,12 @@ class Account(ABC):
         self,
         version: int,
         resource_bounds: fields.ResourceBoundsMapping,
-        calldata: List[int],
         constructor_calldata: List[int],
         class_hash: int,
         salt: int,
         deploy_from_zero: bool,
         chain_id: int,
         nonce_callback: Callable[[int], Awaitable[int]],
-        contract_address: int,
-        selector: int,
         nonce_data_availability_mode: int = DataAvailabilityMode.L1.value,
         fee_data_availability_mode: int = DataAvailabilityMode.L1.value,
         tip: int = 0,
@@ -130,81 +122,6 @@ class Account(ABC):
     ) -> Tuple[InvokeFunction, int]:
         """
         Creates an InvokeFunction object; compatible with version 3 transactions.
-        Prepares the required information for invoking a contract deployment function through
-        the account contract.
-        Returns the signed transaction and the deployed contract address.
-        """
-
-    # Deprecated transaction objects. For version 0, 1 and 2 transactions.
-
-    @abstractmethod
-    async def deprecated_declare(
-        self,
-        contract_class: ContractClass,
-        compiled_class_hash: int,
-        chain_id: int,
-        max_fee: int,
-        version: int,
-        nonce_callback: Callable[[int], Awaitable[int]],
-        dry_run: bool = False,
-    ) -> DeprecatedDeclare:
-        """
-        Creates a DeprecatedDeclare object; compatible with version 2 transactions.
-        Prepares the required information for declaring a contract class through the account
-        contract.
-        """
-
-    @abstractmethod
-    async def deprecated_deploy_account(
-        self,
-        max_fee: int,
-        version: int,
-        chain_id: int,
-        dry_run: bool = False,
-        force_deploy: bool = False,
-    ) -> Tuple[DeprecatedDeployAccount, int]:
-        """
-        Creates a DeprecatedDeployAccount object; compatible with version 1 transactions.
-        Prepares the deployment of the initialized account contract to the network.
-        Returns the transaction and the new account address.
-        """
-
-    @abstractmethod
-    async def deprecated_invoke(
-        self,
-        contract_address: int,
-        selector: int,
-        calldata: List[int],
-        chain_id: int,
-        max_fee: int,
-        version: int,
-        nonce_callback: Callable[[int], Awaitable[int]],
-        dry_run: bool = False,
-    ) -> DeprecatedInvokeFunction:
-        """
-        Creates a DeprecatedInvokeFunction object; compatible with version 0 and version 1
-        transactions.
-        Given a function (contract address, selector, calldata) to invoke (or call) within the
-        context of the account, prepares the required information for invoking it through the
-        account contract.
-        nonce_callback is a callback that gets the address of the contract and returns the next
-        nonce to use.
-        """
-
-    @abstractmethod
-    async def deprecated_deploy_contract(
-        self,
-        class_hash: int,
-        salt: int,
-        constructor_calldata: List[int],
-        deploy_from_zero: bool,
-        chain_id: int,
-        max_fee: int,
-        version: int,
-        nonce_callback: Callable[[int], Awaitable[int]],
-    ) -> Tuple[DeprecatedInvokeFunction, int]:
-        """
-        Creates a DeprecatedInvokeFunction object; compatible with version 0 transactions.
         Prepares the required information for invoking a contract deployment function through
         the account contract.
         Returns the signed transaction and the deployed contract address.

@@ -30,7 +30,6 @@ py_library(
         "//src/starkware/starknet/core/os/block_hash:starknet_block_hash_lib",
         "//src/starkware/starknet/core/test_contract:starknet_test_external_contract_test_utils_lib",
         "//src/starkware/starknet/scripts:starknet_script_lib",
-        "//src/starkware/starknet/services/utils:starknet_sequencer_api_utils_lib",
     ],
 )
 

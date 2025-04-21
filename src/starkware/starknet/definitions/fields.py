@@ -41,6 +41,7 @@ from starkware.starkware_utils.validated_fields import (
     BytesLengthField,
     OptionalField,
     RangeValidatedField,
+    ValidatedIntFormatter,
 )
 from starkware.storage.storage import HASH_BYTES
 
@@ -147,7 +148,7 @@ AddressField = RangeValidatedField(
     upper_bound=constants.ADDRESS_UPPER_BOUND,
     name="Address",
     error_code=StarknetErrorCode.OUT_OF_RANGE_ADDRESS,
-    formatter=hex,
+    formatter=ValidatedIntFormatter.HEX,
 )
 
 
@@ -191,7 +192,7 @@ NonceField = RangeValidatedField(
     upper_bound=constants.NONCE_UPPER_BOUND,
     name="Nonce",
     error_code=StarknetErrorCode.OUT_OF_RANGE_NONCE,
-    formatter=hex,
+    formatter=ValidatedIntFormatter.HEX,
 )
 nonce_metadata = NonceField.metadata()
 
@@ -217,7 +218,7 @@ BlockHashField = RangeValidatedField(
     upper_bound=constants.BLOCK_HASH_UPPER_BOUND,
     name="Block hash",
     error_code=StarknetErrorCode.OUT_OF_RANGE_BLOCK_HASH,
-    formatter=hex,
+    formatter=ValidatedIntFormatter.HEX,
 )
 block_hash_metadata = BlockHashField.metadata()
 
@@ -229,7 +230,7 @@ CommitmentField = RangeValidatedField(
     upper_bound=constants.COMMITMENT_UPPER_BOUND,
     name="Commitment",
     error_code=StarknetErrorCode.OUT_OF_RANGE_BLOCK_HASH,
-    formatter=hex,
+    formatter=ValidatedIntFormatter.HEX,
 )
 commitment_metadata = CommitmentField.metadata()
 
@@ -264,7 +265,7 @@ L2AddressField = RangeValidatedField(
     upper_bound=constants.L2_ADDRESS_UPPER_BOUND,
     name="Contract address",
     error_code=StarknetErrorCode.OUT_OF_RANGE_CONTRACT_ADDRESS,
-    formatter=hex,
+    formatter=ValidatedIntFormatter.HEX,
 )
 
 
@@ -304,7 +305,7 @@ ClassHashIntField = RangeValidatedField(
     upper_bound=constants.CLASS_HASH_UPPER_BOUND,
     name="class_hash",
     error_code=StarknetErrorCode.OUT_OF_RANGE_CLASS_HASH,
-    formatter=hex,
+    formatter=ValidatedIntFormatter.HEX,
 )
 
 
@@ -363,7 +364,7 @@ CompiledClassHashField = RangeValidatedField(
     upper_bound=constants.COMPILED_CLASS_HASH_UPPER_BOUND,
     name="compiled_class_hash",
     error_code=StarknetErrorCode.OUT_OF_RANGE_COMPILED_CLASS_HASH,
-    formatter=hex,
+    formatter=ValidatedIntFormatter.HEX,
 )
 compiled_class_hash_metadata = CompiledClassHashField.metadata()
 
@@ -422,7 +423,7 @@ EntryPointSelectorField = RangeValidatedField(
     upper_bound=constants.ENTRY_POINT_SELECTOR_UPPER_BOUND,
     name="Entry point selector",
     error_code=StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_SELECTOR,
-    formatter=hex,
+    formatter=ValidatedIntFormatter.HEX,
 )
 entry_point_selector_metadata = EntryPointSelectorField.metadata()
 
@@ -434,7 +435,7 @@ EntryPointOffsetField = RangeValidatedField(
     upper_bound=constants.ENTRY_POINT_OFFSET_UPPER_BOUND,
     name="Entry point offset",
     error_code=StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_OFFSET,
-    formatter=None,
+    formatter=ValidatedIntFormatter.INT,
 )
 entry_point_offset_metadata = EntryPointOffsetField.metadata()
 
@@ -443,7 +444,7 @@ EntryPointFunctionIdxField = RangeValidatedField(
     upper_bound=constants.ENTRY_POINT_FUNCTION_IDX_UPPER_BOUND,
     name="Entry point function_idx",
     error_code=StarknetErrorCode.OUT_OF_RANGE_ENTRY_POINT_FUNCTION_IDX,
-    formatter=None,
+    formatter=ValidatedIntFormatter.INT,
 )
 entry_point_function_idx_metadata = EntryPointFunctionIdxField.metadata()
 
@@ -454,7 +455,7 @@ FeeField = RangeValidatedField(
     upper_bound=constants.FEE_UPPER_BOUND,
     name="Fee",
     error_code=StarknetErrorCode.OUT_OF_RANGE_FEE,
-    formatter=hex,
+    formatter=ValidatedIntFormatter.HEX,
 )
 fee_metadata = FeeField.metadata(required=False, load_default=0)
 
@@ -466,7 +467,7 @@ TipField = RangeValidatedField(
     upper_bound=constants.TIP_UPPER_BOUND,
     name="Tip",
     error_code=StarknetErrorCode.OUT_OF_RANGE_TIP,
-    formatter=hex,
+    formatter=ValidatedIntFormatter.HEX,
 )
 tip_metadata = TipField.metadata(required=True)
 
@@ -475,16 +476,24 @@ MaxAmountField = RangeValidatedField(
     upper_bound=constants.MAX_AMOUNT_UPPER_BOUND,
     name="Max amount",
     error_code=StarknetErrorCode.OUT_OF_RANGE_MAX_AMOUNT,
-    formatter=hex,
+    formatter=ValidatedIntFormatter.HEX,
+)
+MaxAmountIntField = RangeValidatedField(
+    lower_bound=constants.MAX_AMOUNT_LOWER_BOUND,
+    upper_bound=constants.MAX_AMOUNT_UPPER_BOUND,
+    name="Max amount",
+    error_code=StarknetErrorCode.OUT_OF_RANGE_MAX_AMOUNT,
+    formatter=ValidatedIntFormatter.INT,
 )
 max_amount_metadata = MaxAmountField.metadata()
+optional_max_amount_metadata = MaxAmountIntField.metadata(required=False, load_default=0)
 
 MaxPricePerUnitField = RangeValidatedField(
     lower_bound=constants.MAX_PRICE_PER_UNIT_LOWER_BOUND,
     upper_bound=constants.MAX_PRICE_PER_UNIT_UPPER_BOUND,
     name="Max amount",
     error_code=StarknetErrorCode.OUT_OF_RANGE_MAX_PRICE_PER_UNIT,
-    formatter=hex,
+    formatter=ValidatedIntFormatter.HEX,
 )
 max_price_per_unit_metadata = MaxPricePerUnitField.metadata()
 
@@ -501,6 +510,10 @@ class ResourceBounds(ValidatedMarshmallowDataclass):
     max_amount: int = field(metadata=max_amount_metadata)
     # The maximum price the user is willing to pay for the resource unit.
     max_price_per_unit: int = field(metadata=max_price_per_unit_metadata)
+
+    @classmethod
+    def trivial(cls) -> "ResourceBounds":
+        return cls(max_amount=0, max_price_per_unit=0)
 
 
 ResourceBoundsMapping = Mapping[Resource, ResourceBounds]
@@ -552,10 +565,10 @@ GasPriceField = RangeValidatedField(
     upper_bound=constants.GAS_PRICE_UPPER_BOUND,
     name="Gas price",
     error_code=StarknetErrorCode.OUT_OF_RANGE_GAS_PRICE,
-    formatter=hex,
+    formatter=ValidatedIntFormatter.HEX,
 )
 gas_price_metadata = GasPriceField.metadata(required=False, load_default=0)
-
+gas_price_metadata_default_1 = GasPriceField.metadata(required=False, load_default=1)
 
 # Transaction version.
 
@@ -564,7 +577,7 @@ TransactionVersionField = RangeValidatedField(
     upper_bound=constants.TRANSACTION_VERSION_UPPER_BOUND,
     name="Transaction version",
     error_code=StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_VERSION,
-    formatter=hex,
+    formatter=ValidatedIntFormatter.HEX,
 )
 non_required_tx_version_metadata = TransactionVersionField.metadata(required=False, load_default=0)
 
@@ -617,7 +630,7 @@ TransactionHashField = RangeValidatedField(
     upper_bound=constants.TRANSACTION_HASH_UPPER_BOUND,
     name="Transaction hash",
     error_code=StarknetErrorCode.OUT_OF_RANGE_TRANSACTION_HASH,
-    formatter=hex,
+    formatter=ValidatedIntFormatter.HEX,
 )
 transaction_hash_metadata = TransactionHashField.metadata()
 
@@ -669,7 +682,6 @@ gas_consumed_metadata = everest_fields.FeltField.metadata(
     field_name="gas_consumed", required=False, load_default=0
 )
 
-
 # Commitment info.
 
 commitment_facts_metadata = dict(
@@ -699,7 +711,7 @@ DataAvailabilityModeField = RangeValidatedField(
     upper_bound=DataAvailabilityMode.L2.value + 1,
     name="Data availability mode",
     error_code=StarknetErrorCode.OUT_OF_RANGE_DATA_AVAILABILITY_MODE,
-    formatter=None,
+    formatter=ValidatedIntFormatter.INT,
 )
 data_availability_mode_metadata = dict(
     marshmallow_field=DataAvailabilityModeField.get_marshmallow_field(
@@ -762,7 +774,7 @@ StateDiffLengthField = RangeValidatedField(
     upper_bound=constants.MAX_STATE_DIFF_LENGTH,
     name="State diff length",
     error_code=StarknetErrorCode.OUT_OF_RANGE_BLOCK_HASH,
-    formatter=None,
+    formatter=ValidatedIntFormatter.INT,
 )
 OptionalStateDiffLengthField = OptionalField(field=StateDiffLengthField, none_probability=0)
 
@@ -789,5 +801,5 @@ PrivateKeyField = RangeValidatedField(
     upper_bound=EC_ORDER,
     name="Private key",
     error_code=StarkErrorCode.OUT_OF_RANGE_PRIVATE_KEY,
-    formatter=hex,
+    formatter=ValidatedIntFormatter.HEX,
 )

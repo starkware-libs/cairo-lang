@@ -16,6 +16,7 @@ class StarknetChainId(Enum):
     TESTNET2 = from_bytes(b"SN_GOERLI2")
     TESTNET_SEPOLIA = from_bytes(b"SN_SEPOLIA")
     INTEGRATION_SEPOLIA = from_bytes(b"SN_INTEGRATION_SEPOLIA")
+    PREINTEGRATION_SEPOLIA = from_bytes(b"SN_PREINTEGRATION_SEPOLIA")
 
     def is_private(self) -> bool:
         return self.name in PRIVATE_CHAIN_IDS

@@ -50,6 +50,7 @@ pytest_test(
         "//src/starkware/starknet/core/os/data_availability:bls_field",
     ],
     deps = [
+        ":aggregate_program_lib",
         ":cairo_aggregator_lib",
         "//src/starkware/cairo/bootloaders:cairo_bootloader_fact_topology_lib",
         "//src/starkware/cairo/bootloaders:cairo_bootloader_generate_fact_lib",
@@ -69,9 +70,14 @@ py_library(
         "aggregator_program.py",
     ],
     data = [
+        "aggregator.json",
         "program_hash.json",
     ],
-    deps = [requirement("cachetools")],
+    deps = [
+        "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
+        "//src/starkware/python:starkware_python_utils_lib",
+        requirement("cachetools"),
+    ],
 )
 
 pytest_test(

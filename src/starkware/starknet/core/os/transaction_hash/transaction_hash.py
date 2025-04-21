@@ -200,8 +200,6 @@ def resource_bounds_mapping_to_sorted_tuple(
     Converts the resource bounds mapping to a tuple of resources,
     in the desired order for the hash computation.
     """
-    return (
-        (Resource.L1_GAS, Resource.L2_GAS, Resource.L1_DATA_GAS)
-        if Resource.L1_DATA_GAS in resource_bounds
-        else (Resource.L1_GAS, Resource.L2_GAS)
-    )
+    if Resource.L1_DATA_GAS not in resource_bounds:
+        return (Resource.L1_GAS, Resource.L2_GAS)
+    return (Resource.L1_GAS, Resource.L2_GAS, Resource.L1_DATA_GAS)

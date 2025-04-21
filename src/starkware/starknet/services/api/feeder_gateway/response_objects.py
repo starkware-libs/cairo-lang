@@ -17,7 +17,7 @@ from services.everest.api.feeder_gateway.response_objects import (
 )
 from services.everest.business_logic.transaction_execution_objects import TransactionFailureReason
 from services.everest.definitions import fields as everest_fields
-from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
+from starkware.cairo.lang.vm.cairo_pie import ExecutionResourcesStone
 from starkware.crypto.signature.signature import ECSignature
 from starkware.eth.web3_wrapper import Web3
 from starkware.python.utils import as_non_optional, to_bytes
@@ -495,7 +495,7 @@ class ReceiptExecutionResources(ValidatedResponseObject):
     @classmethod
     def create(
         cls,
-        execution_resources: ExecutionResources,
+        execution_resources: ExecutionResourcesStone,
         da_gas: Optional[GasVector],
         total_gas_consumed: Optional[GasVector],
     ) -> "ReceiptExecutionResources":
@@ -781,7 +781,7 @@ class FunctionInvocation(BaseResponseObject, SerializableMarshmallowDataclass):
     gas_consumed: Optional[int] = field(
         metadata=dict(marshmallow_field=mfields.Integer(required=False, load_default=None))
     )
-    execution_resources: ExecutionResources
+    execution_resources: ExecutionResourcesStone
     internal_calls: List["FunctionInvocation"] = field(
         metadata=additional_metadata(
             marshmallow_field=mfields.List(mfields.Nested(lambda: FunctionInvocation.Schema()))
@@ -928,6 +928,8 @@ class StarknetBlock(ValidatedResponseObject):
         )
     )
     starknet_version: Optional[str] = field(metadata=fields.starknet_version_metadata)
+    l2_gas_consumed: Optional[int] = field(metadata=fields.optional_max_amount_metadata)
+    next_l2_gas_price: Optional[int] = field(metadata=fields.gas_price_metadata_default_1)
 
     @pre_load
     def rename_old_gas_price_fields(
@@ -955,6 +957,8 @@ class StarknetBlock(ValidatedResponseObject):
         gas_prices: GasPrices,
         transaction_receipts: Optional[Tuple[TransactionExecution, ...]],
         starknet_version: Optional[str],
+        l2_gas_consumed: Optional[int],
+        next_l2_gas_price: Optional[int],
     ) -> TBlockInfo:
         return cls(
             block_hash=block_hash,
@@ -985,6 +989,8 @@ class StarknetBlock(ValidatedResponseObject):
             ),
             transaction_receipts=transaction_receipts,
             starknet_version=starknet_version,
+            l2_gas_consumed=l2_gas_consumed,
+            next_l2_gas_price=next_l2_gas_price,
         )
 
     def __post_init__(self):
@@ -1027,6 +1033,12 @@ class StarknetBlock(ValidatedResponseObject):
 
         return data
 
+    def dump_without_fee_market_info(self) -> dict:
+        data = self.dump()
+        data.pop("l2_gas_consumed")
+        data.pop("next_l2_gas_price")
+        return data
+
 
 @dataclasses.dataclass(frozen=True)
 class BlockSignatureInput(ValidatedResponseObject):
@@ -1042,28 +1054,6 @@ class BlockSignature(ValidatedResponseObject):
 
     block_hash: int = field(metadata=fields.block_hash_metadata)
     signature: ECSignature = field(metadata=fields.ec_signature_metadata)
-
-
-@marshmallow_dataclass.dataclass(frozen=True)
-class FeeEstimationInfo(ValidatedResponseObject):
-    """
-    Represents the fee estimation information.
-    """
-
-    overall_fee: int
-    gas_price: int
-    gas_usage: int
-    unit: str = "wei"
-
-
-@marshmallow_dataclass.dataclass(frozen=True)
-class TransactionSimulationInfo(ValidatedResponseObject):
-    """
-    Represents the information regarding a StarkNet transaction's simulation.
-    """
-
-    trace: TransactionTrace
-    fee_estimation: FeeEstimationInfo
 
 
 @marshmallow_dataclass.dataclass(frozen=True)

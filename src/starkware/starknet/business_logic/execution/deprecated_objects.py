@@ -12,7 +12,7 @@ from services.everest.business_logic.transaction_execution_objects import (
     EverestTransactionExecutionInfo,
 )
 from services.everest.definitions import fields as everest_fields
-from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
+from starkware.cairo.lang.vm.cairo_pie import ExecutionResourcesStone
 from starkware.starknet.business_logic.execution.objects import (
     CallInfo,
     CallType,
@@ -96,7 +96,7 @@ class DeprecatedCallInfo(SerializableMarshmallowDataclass):
     failure_flag: int = field(metadata=fields.failure_flag_metadata)
     retdata: List[int]
 
-    execution_resources: ExecutionResources
+    execution_resources: ExecutionResourcesStone
     events: List[DeprecatedOrderedEvent]
     l2_to_l1_messages: List[DeprecatedOrderedL2ToL1Message]
 
@@ -130,7 +130,7 @@ class DeprecatedCallInfo(SerializableMarshmallowDataclass):
         gas_consumed: int,
         failure_flag: int,
         retdata: List[int],
-        execution_resources: ExecutionResources,
+        execution_resources: ExecutionResourcesStone,
         events: List[DeprecatedOrderedEvent],
         l2_to_l1_messages: List[DeprecatedOrderedL2ToL1Message],
         storage_read_values: List[int],
@@ -178,6 +178,8 @@ class DeprecatedCallInfo(SerializableMarshmallowDataclass):
             accessed_storage_keys=self.accessed_storage_keys,
             read_class_hash_values=[],
             accessed_contract_addresses=set(),
+            read_block_hash_values=[],
+            accessed_blocks=set(),
             internal_calls=[
                 internal_call.to_non_deprecated() for internal_call in self.internal_calls
             ],
@@ -194,7 +196,9 @@ class DeprecatedCallInfo(SerializableMarshmallowDataclass):
         entry_point_type: Optional[EntryPointType] = None,
         entry_point_selector: Optional[int] = None,
     ) -> "DeprecatedCallInfo":
-        vm_resources = ExecutionResources(n_steps=0, builtin_instance_counter={}, n_memory_holes=0)
+        vm_resources = ExecutionResourcesStone(
+            n_steps=0, builtin_instance_counter={}, n_memory_holes=0
+        )
         return cls.create(
             caller_address=caller_address,
             call_type=call_type,
@@ -300,7 +304,7 @@ class ContractCall(ValidatedMarshmallowDataclass):
 
     # Execution info.
 
-    cairo_usage: ExecutionResources
+    cairo_usage: ExecutionResourcesStone
     # Note that the order starts from a transaction-global offset.
     events: List[OrderedEvent] = field(metadata=nonrequired_list_metadata)
     l2_to_l1_messages: List[L2ToL1MessageInfo] = field(metadata=nonrequired_list_metadata)
@@ -332,7 +336,7 @@ class ContractCall(ValidatedMarshmallowDataclass):
             entry_point_selector=None,
             calldata=[],
             signature=[],
-            cairo_usage=ExecutionResources.empty(),
+            cairo_usage=ExecutionResourcesStone.empty(),
             events=[],
             l2_to_l1_messages=[],
             internal_call_responses=[],
@@ -427,7 +431,7 @@ class ExecutionResourcesManager:
     Aggregates execution resources throughout transaction stream processing.
     """
 
-    def __init__(self, cairo_usage: ExecutionResources, syscall_counter: Dict[str, int]):
+    def __init__(self, cairo_usage: ExecutionResourcesStone, syscall_counter: Dict[str, int]):
         # The accumulated Cairo usage.
         self.cairo_usage = cairo_usage
 
@@ -439,6 +443,6 @@ class ExecutionResourcesManager:
     @classmethod
     def empty(cls) -> "ExecutionResourcesManager":
         return cls(
-            cairo_usage=ExecutionResources.empty(),
+            cairo_usage=ExecutionResourcesStone.empty(),
             syscall_counter={},
         )

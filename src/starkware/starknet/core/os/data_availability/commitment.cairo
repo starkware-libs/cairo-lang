@@ -1,7 +1,7 @@
 from starkware.cairo.common.bool import FALSE
 from starkware.cairo.common.builtin_poseidon.poseidon import poseidon_hash, poseidon_hash_many
 from starkware.cairo.common.cairo_builtins import PoseidonBuiltin
-from starkware.cairo.common.math import assert_in_range, assert_lt, assert_nn_le
+from starkware.cairo.common.math import assert_le, assert_lt, assert_nn_le
 from starkware.cairo.common.uint256 import Uint256
 from starkware.starknet.core.os.data_availability.bls_field import (
     BigInt3,
@@ -12,8 +12,6 @@ from starkware.starknet.core.os.data_availability.bls_field import (
 )
 
 const BLOB_LENGTH = 4096;
-// Maximum number of blobs per L1 transaction (state_update).
-const MAX_N_BLOBS = 6;
 
 // Represents an integer in the range [0, 2^384).
 struct Uint384 {
@@ -80,9 +78,10 @@ func compute_os_kzg_commitment_info{range_check_ptr, poseidon_ptr: PoseidonBuilt
         segments.write_arg(ids.kzg_commitments.address_, list(itertools.chain(*kzg_commitments)))
     %}
 
-    // Assert valid number of blobs: 1 <= n_blobs <= MAX_N_BLOBS.
+    // Note: the number of blobs per L1 transaction is limited, and should be checked ouside
+    // of this program.
     with_attr error_message("Invalid number of blobs.") {
-        assert_in_range(n_blobs, 1, MAX_N_BLOBS + 1);
+        assert_le(1, n_blobs);
     }
 
     // Calculate `z`.

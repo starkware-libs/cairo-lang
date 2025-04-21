@@ -2,7 +2,7 @@ from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.bool import FALSE, TRUE
 from starkware.cairo.common.dict import DictAccess
 from starkware.cairo.common.find_element import find_element, search_sorted_lower
-from starkware.cairo.common.math import assert_le_felt, assert_lt_felt, assert_nn_le
+from starkware.cairo.common.math import assert_le_felt, assert_nn_le
 from starkware.cairo.common.memcpy import memcpy
 from starkware.cairo.common.squash_dict import squash_dict
 from starkware.starknet.core.os.constants import ALIAS_CONTRACT_ADDRESS
@@ -393,7 +393,7 @@ func should_skip_contract{range_check_ptr}(contract_address: felt) -> felt {
         assert_nn_le(a=contract_address, b=MAX_NON_COMPRESSED_CONTRACT_ADDRESS);
         return TRUE;
     }
-    assert_lt_felt(a=MAX_NON_COMPRESSED_CONTRACT_ADDRESS, b=contract_address);
+    assert_le_felt(a=MAX_NON_COMPRESSED_CONTRACT_ADDRESS + 1, b=contract_address);
     return FALSE;
 }
 

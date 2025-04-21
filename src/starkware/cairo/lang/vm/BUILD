@@ -60,6 +60,7 @@ py_library(
         "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
         requirement("marshmallow"),
         requirement("marshmallow_dataclass"),
+        requirement("marshmallow_oneofschema"),
         requirement("typing_extensions"),
     ],
 )
@@ -162,6 +163,7 @@ pytest_test(
         "//src/starkware/python:starkware_python_test_utils_lib",
         "//src/starkware/python:starkware_python_utils_lib",
         "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
+        requirement("marshmallow"),
         requirement("marshmallow_dataclass"),
     ],
 )

@@ -11,7 +11,6 @@ py_library(
         "@" + CAIRO_COMPILER_ARCHIVE,
         "experimental_libfuncs.json",
         "mainnet_libfuncs.json",
-        "testnet_libfuncs.json",
     ],
     visibility = ["//visibility:public"],
     deps = [

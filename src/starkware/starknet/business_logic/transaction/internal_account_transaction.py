@@ -30,10 +30,7 @@ from starkware.starknet.definitions.fields import (
     ResourceBoundsMapping,
     SierraVersion,
 )
-from starkware.starknet.definitions.general_config import (
-    DEFAULT_MAX_FRI_L1_GAS_PRICE,
-    StarknetGeneralConfig,
-)
+from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.definitions.transaction_type import TransactionType
 from starkware.starknet.services.api.contract_class.contract_class import (
     CompiledClass,
@@ -50,8 +47,10 @@ from starkware.starkware_utils.config_base import Config
 from starkware.storage.storage import FactFetchingContext
 
 TRIVIAL_RESOURCE_BOUNDS = {
-    Resource.L1_GAS: ResourceBounds(max_amount=0, max_price_per_unit=DEFAULT_MAX_FRI_L1_GAS_PRICE),
-    Resource.L2_GAS: ResourceBounds(max_amount=0, max_price_per_unit=0),
+    Resource.L1_GAS: ResourceBounds.trivial(),
+    # The max amount here is not zero size the OS sets it as the initial Sierra gas.
+    Resource.L2_GAS: ResourceBounds(max_amount=10**8, max_price_per_unit=0),
+    Resource.L1_DATA_GAS: ResourceBounds.trivial(),
 }
 
 
@@ -84,10 +83,12 @@ class InternalAccountTransaction(InternalTransaction):
     def zero_max_fee(self) -> bool:
         """
         Returns whether the indicated max fee user committed on is zero.
-        Currently takes only L1 gas into account, since L2 is not yet in use.
         """
-        l1_bounds = self.resource_bounds[fields.Resource.L1_GAS]
-        return l1_bounds.max_amount * l1_bounds.max_price_per_unit == 0
+        max_fee = sum(
+            resource.max_amount * resource.max_price_per_unit
+            for resource in self.resource_bounds.values()
+        )
+        return max_fee == 0
 
     def verify_version(self):
         expected_transaction_version_constant = 3

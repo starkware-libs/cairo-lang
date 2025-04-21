@@ -9,7 +9,6 @@ from starkware.starknet.core.os.contract_class.deprecated_class_hash import (
 )
 from starkware.starknet.core.os.transaction_hash.deprecated_transaction_hash import (
     TransactionHashPrefix,
-    _deprecated_calculate_transaction_hash_common,
     compute_hash_on_elements,
     deprecated_calculate_declare_transaction_hash,
     deprecated_calculate_deploy_account_transaction_hash,
@@ -19,11 +18,7 @@ from starkware.starknet.core.os.transaction_hash.deprecated_transaction_hash imp
     deprecated_calculate_old_declare_transaction_hash,
 )
 from starkware.starknet.core.os.transaction_hash.transaction_hash_test_utils import (
-    run_cairo_declare_transaction_hash,
-    run_cairo_deploy_account_transaction_hash,
-    run_cairo_invoke_transaction_hash,
     run_cairo_l1_handler_transaction_hash,
-    run_cairo_transaction_hash,
 )
 from starkware.starknet.core.test_contract.test_utils import get_deprecated_compiled_class
 from starkware.starknet.definitions import constants
@@ -33,48 +28,6 @@ from starkware.starknet.services.api.contract_class.contract_class import (
     ContractEntryPoint,
     EntryPointType,
 )
-
-
-@pytest.mark.parametrize("tx_hash_prefix", set(TransactionHashPrefix))
-@pytest.mark.parametrize("calldata", [[], [540, 338]])
-@pytest.mark.parametrize("version", [0])
-@pytest.mark.parametrize("additional_data", [[], [17]])
-def test_transaction_hash_common_flow(
-    tx_hash_prefix: TransactionHashPrefix,
-    version: int,
-    calldata: List[int],
-    additional_data: List[int],
-):
-    """
-    Tests that the Python and Cairo tx_hash implementations return the same value.
-    """
-    contract_address = 42
-    entry_point_selector = 100
-    chain_id = 1
-    max_fee = 299
-
-    tx_hash = _deprecated_calculate_transaction_hash_common(
-        tx_hash_prefix=tx_hash_prefix,
-        version=version,
-        contract_address=contract_address,
-        entry_point_selector=entry_point_selector,
-        calldata=calldata,
-        max_fee=max_fee,
-        chain_id=chain_id,
-        hash_function=fast_pedersen_hash,
-        additional_data=additional_data,
-    )
-
-    assert tx_hash == run_cairo_transaction_hash(
-        tx_hash_prefix=tx_hash_prefix,
-        contract_address=contract_address,
-        entry_point_selector=entry_point_selector,
-        calldata=calldata,
-        max_fee=max_fee,
-        chain_id=chain_id,
-        version=version,
-        additional_data=additional_data,
-    )
 
 
 @pytest.mark.parametrize("constructor_calldata", [[], [539, 337]])
@@ -157,18 +110,6 @@ def test_deploy_account_transaction_hash(constructor_calldata: List[int]):
         == expected_hash
     )
 
-    assert (
-        run_cairo_deploy_account_transaction_hash(
-            version=version,
-            contract_address=contract_address,
-            calldata=calldata,
-            max_fee=max_fee,
-            chain_id=chain_id,
-            nonce=nonce,
-        )
-        == expected_hash
-    )
-
 
 def test_old_declare_transaction_hash():
     # Constant value unrelated to the transaction data.
@@ -206,18 +147,6 @@ def test_old_declare_transaction_hash():
             sender_address=sender_address,
             max_fee=max_fee,
             version=version,
-            nonce=nonce,
-        )
-        == expected_hash
-    )
-
-    assert (
-        run_cairo_declare_transaction_hash(
-            class_hash=class_hash,
-            version=version,
-            sender_address=sender_address,
-            max_fee=max_fee,
-            chain_id=chain_id,
             nonce=nonce,
         )
         == expected_hash
@@ -275,19 +204,6 @@ def test_declare_transaction_hash():
         == expected_hash
     )
 
-    assert (
-        run_cairo_declare_transaction_hash(
-            class_hash=class_hash,
-            compiled_class_hash=compiled_class_hash,
-            version=version,
-            sender_address=sender_address,
-            max_fee=max_fee,
-            chain_id=chain_id,
-            nonce=nonce,
-        )
-        == expected_hash
-    )
-
 
 def test_invoke_transaction_hash():
     # Constant value unrelated to the transaction data.
@@ -321,18 +237,6 @@ def test_invoke_transaction_hash():
             version=version,
             sender_address=sender_address,
             entry_point_selector=entry_point_selector,
-            calldata=calldata,
-            max_fee=max_fee,
-            chain_id=chain_id,
-            nonce=nonce,
-        )
-        == expected_hash
-    )
-
-    assert (
-        run_cairo_invoke_transaction_hash(
-            version=version,
-            sender_address=sender_address,
             calldata=calldata,
             max_fee=max_fee,
             chain_id=chain_id,

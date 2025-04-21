@@ -1,4 +1,4 @@
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from starkware.cairo.lang.builtins.ec.instance_def import (
     CELLS_PER_EC_OP,
@@ -17,6 +17,12 @@ OUTPUT_INDICES = EC_POINT_INDICES[2]
 INPUT_NAMES = ["p_x", "p_y", "q_x", "q_y", "m"]
 assert INPUT_CELLS_PER_EC_OP == len(INPUT_NAMES)
 assert INPUT_CELLS_PER_EC_OP + len(OUTPUT_INDICES) == CELLS_PER_EC_OP
+
+
+EC_OP_NAME = "ec_op"
+SCALAR_HEIGHT = 256
+SCALAR_BITS = 252
+SCALAR_LIMIT = 2**251 + 17 * 2**192 + 1
 
 
 def point_on_curve(x: int, y: int, alpha: int, beta: int, p: int) -> bool:
@@ -60,6 +66,69 @@ def ec_op_impl(
     return partial_sum
 
 
+def ec_op_auto_deduction_rule_wrapper(ec_op_cache, ec_op_builtin: Optional[EcOpInstanceDef] = None):
+    """
+    Returns an auto-deduction rule for the ec_op builtin to be used by the vm.
+    Defined in the builtin runner, or manually in a hint by the program.
+    """
+    if ec_op_builtin is not None:
+        scalar_limit = ec_op_builtin.scalar_limit
+        scalar_height = ec_op_builtin.scalar_height
+        scalar_bits = ec_op_builtin.scalar_bits
+    else:
+        scalar_limit = SCALAR_LIMIT
+        scalar_height = SCALAR_HEIGHT
+        scalar_bits = SCALAR_BITS
+
+    def ec_op_auto_deduction_rule(vm, addr):
+        memory = vm.run_context.memory
+        index = addr.offset % CELLS_PER_EC_OP
+        instance = addr - index
+        x_addr = instance + INPUT_CELLS_PER_EC_OP
+
+        # If the index is not an output cell or not all input cells are filled, return None.
+        if index not in OUTPUT_INDICES:
+            return None
+        if addr in ec_op_cache:
+            return ec_op_cache[addr]
+        if not all(instance + i in memory for i in range(INPUT_CELLS_PER_EC_OP)):
+            return None
+
+        for i in range(INPUT_CELLS_PER_EC_OP):
+            assert vm.is_integer_value(memory[instance + i]), (
+                f"{EC_OP_NAME} builtin: Expected integer at address {instance + i}."
+                f"Got: {memory[instance + i]}."
+            )
+
+        # Assert that m is under the limit defined by scalar_limit or scalar_bits.
+        limit = scalar_limit if scalar_limit is not None else (1 << scalar_bits)
+
+        assert (
+            memory[instance + M_INDEX] < limit
+        ), f"{EC_OP_NAME} builtin: m must be at most {limit}."
+
+        # Assert that if the current address is part of a point which is all set in the
+        # memory, the point is on the curve.
+        for pair in EC_POINT_INDICES[:2]:
+            ec_point_x, ec_point_y = [memory[instance + i] for i in pair]
+            assert point_on_curve(
+                ec_point_x, ec_point_y, ALPHA, BETA, FIELD_PRIME
+            ), f"{EC_OP_NAME} builtin: point ({ec_point_x}, {ec_point_y}) is not on the curve."
+
+        res = ec_op_impl(  # type: ignore
+            *[memory[instance + i] for i in range(INPUT_CELLS_PER_EC_OP)],
+            alpha=ALPHA,
+            prime=FIELD_PRIME,
+            height=scalar_height,
+        )
+
+        ec_op_cache[x_addr] = res[0]
+        ec_op_cache[x_addr + 1] = res[1]
+        return res[index - INPUT_CELLS_PER_EC_OP]
+
+    return ec_op_auto_deduction_rule
+
+
 class EcOpBuiltinRunner(SimpleBuiltinRunner):
     def __init__(self, included: bool, ec_op_builtin: EcOpInstanceDef):
         super().__init__(
@@ -76,57 +145,12 @@ class EcOpBuiltinRunner(SimpleBuiltinRunner):
         return self.ec_op_builtin
 
     def add_auto_deduction_rules(self, runner):
-        def rule(vm, addr):
-            memory = vm.run_context.memory
-            index = addr.offset % CELLS_PER_EC_OP
-            instance = addr - index
-            x_addr = instance + INPUT_CELLS_PER_EC_OP
-
-            # If the index is not an output cell or not all input cells are filled, return None.
-            if index not in OUTPUT_INDICES:
-                return None
-            if addr in self.cache:
-                return self.cache[addr]
-            if not all(instance + i in memory for i in range(INPUT_CELLS_PER_EC_OP)):
-                return None
-
-            for i in range(INPUT_CELLS_PER_EC_OP):
-                assert vm.is_integer_value(memory[instance + i]), (
-                    f"{self.name} builtin: Expected integer at address {instance + i}."
-                    f"Got: {memory[instance + i]}."
-                )
-
-            # Assert that m is under the limit defined by scalar_limit or scalar_bits.
-            limit = (
-                self.ec_op_builtin.scalar_limit
-                if self.ec_op_builtin.scalar_limit is not None
-                else (1 << self.ec_op_builtin.scalar_bits)
-            )
-
-            assert (
-                memory[instance + M_INDEX] < limit
-            ), f"{self.name} builtin: m must be at most {limit}."
-
-            # Assert that if the current address is part of a point which is all set in the
-            # memory, the point is on the curve.
-            for pair in EC_POINT_INDICES[:2]:
-                ec_point_x, ec_point_y = [memory[instance + i] for i in pair]
-                assert point_on_curve(
-                    ec_point_x, ec_point_y, ALPHA, BETA, FIELD_PRIME
-                ), f"{self.name} builtin: point ({ec_point_x}, {ec_point_y}) is not on the curve."
-
-            res = ec_op_impl(  # type: ignore
-                *[memory[instance + i] for i in range(INPUT_CELLS_PER_EC_OP)],
-                alpha=ALPHA,
-                prime=FIELD_PRIME,
-                height=self.ec_op_builtin.scalar_height,
-            )
-
-            self.cache[x_addr] = res[0]
-            self.cache[x_addr + 1] = res[1]
-            return res[index - INPUT_CELLS_PER_EC_OP]
-
-        runner.vm.add_auto_deduction_rule(self.base.segment_index, rule)
+        runner.vm.add_auto_deduction_rule(
+            self.base.segment_index,
+            ec_op_auto_deduction_rule_wrapper(
+                ec_op_cache=self.cache, ec_op_builtin=self.ec_op_builtin
+            ),
+        )
 
     def air_private_input(self, runner) -> Dict[str, Any]:
         assert self.base is not None, "Uninitialized self.base."

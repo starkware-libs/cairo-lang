@@ -8,7 +8,7 @@ from typing import Any, Dict, Mapping
 import marshmallow_dataclass
 from marshmallow.decorators import post_dump, pre_load
 
-from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
+from starkware.cairo.lang.vm.cairo_pie import ExecutionResourcesStone
 from starkware.python.utils import snake_to_camel_case
 from starkware.starknet.definitions.transaction_type import TransactionType
 from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
@@ -17,9 +17,60 @@ DIR = os.path.dirname(__file__)
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
+class CallDataFactor(ValidatedMarshmallowDataclass):
+    resources: ExecutionResourcesStone
+    scaling_factor: int
+
+    @classmethod
+    def empty(cls) -> "CallDataFactor":
+        return CallDataFactor(
+            resources=ExecutionResourcesStone.empty(),
+            scaling_factor=1,
+        )
+
+    @pre_load
+    def add_scaling_factor_field(
+        self, data: Dict[str, Any], many: bool, **kwargs
+    ) -> Dict[str, Any]:
+        """
+        If only resources are provided (without scaling factor),
+        converts them into scaling factor format where:
+        - scaling factor = 1
+        - resources = provided resources
+        """
+        if "scaling_factor" not in data:
+            new_data: Dict[str, Any] = dict()
+            new_data["scaling_factor"] = 1
+            new_data["resources"] = data
+            return new_data
+        else:
+            return data
+
+    @post_dump
+    def remove_trivial_scaling_factor(
+        self, data: Dict[str, Any], many: bool, **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Ensures `dump` behaves like `load`:
+        - If `scaling factor` is trivial, remove it.
+        - Otherwise, return the full dictionary.
+        """
+        if data["scaling_factor"] == 1:
+            return data["resources"]
+        return data
+
+
+@marshmallow_dataclass.dataclass(frozen=True)
 class ResourcesParams(ValidatedMarshmallowDataclass):
-    constant: ExecutionResources
-    calldata_factor: ExecutionResources
+    constant: ExecutionResourcesStone
+    calldata_factor: CallDataFactor
+
+    @classmethod
+    def empty(cls) -> "ResourcesParams":
+        return cls(
+            constant=ExecutionResourcesStone.empty(),
+            calldata_factor=CallDataFactor.empty(),
+        )
 
     @pre_load
     def add_constant_and_calldata_factor_fields(
@@ -34,7 +85,7 @@ class ResourcesParams(ValidatedMarshmallowDataclass):
 
         if "calldata_factor" not in data and "constant" not in data:
             new_data = dict()
-            new_data["calldata_factor"] = ExecutionResources.empty().dump()
+            new_data["calldata_factor"] = ExecutionResourcesStone.empty().dump()
             new_data["constant"] = data
             return new_data
         elif ("calldata_factor" in data) ^ ("constant" in data):
@@ -54,15 +105,9 @@ class ResourcesParams(ValidatedMarshmallowDataclass):
         - If `calldata_factor` is empty, remove it.
         - Otherwise, return the full dictionary.
         """
-        if data["calldata_factor"] == ExecutionResources.empty().dump():
+        if "calldata_factor" in data and data["calldata_factor"] == CallDataFactor.empty().dump():
             return data["constant"]
         return data
-
-
-@marshmallow_dataclass.dataclass(frozen=True)
-class ResourcesByVersion(ValidatedMarshmallowDataclass):
-    deprecated_resources: ResourcesParams
-    resources: ResourcesParams
 
 
 @marshmallow_dataclass.dataclass(frozen=True)
@@ -71,8 +116,8 @@ class OsResources(ValidatedMarshmallowDataclass):
     execute_syscalls: Mapping[str, ResourcesParams]
     # Mapping from every transaction to its extra execution resources in the OS,
     # i.e., resources that don't count during the execution itself.
-    execute_txs_inner: Mapping[TransactionType, ResourcesByVersion]
-    compute_os_kzg_commitment_info: ExecutionResources
+    execute_txs_inner: Mapping[TransactionType, ResourcesParams]
+    compute_os_kzg_commitment_info: ExecutionResourcesStone
 
     def into_blockifier_json_object(self) -> Dict[str, Any]:
         """
@@ -109,24 +154,21 @@ def get_os_resources() -> OsResources:
 
 def get_tx_additional_os_resources(
     syscall_counter: Mapping[str, int], tx_type: TransactionType
-) -> ExecutionResources:
+) -> ExecutionResourcesStone:
     os_resources = get_os_resources()
     # Calculate the additional resources needed for the OS to run the given syscalls;
     # i.e., the resources of the function execute_syscalls().
     os_additional_resources = functools.reduce(
-        ExecutionResources.__add__,
+        ExecutionResourcesStone.__add__,
         (
             os_resources.execute_syscalls[syscall_name].constant * syscall_counter[syscall_name]
             for syscall_name in syscall_counter.keys()
         ),
-        ExecutionResources.empty(),
+        ExecutionResourcesStone.empty(),
     )
     if tx_type is TransactionType.DEPLOY:
         return os_additional_resources
 
     # Calculate the additional resources needed for the OS to run the given transaction;
     # i.e., the resources of the StarkNet OS function execute_transactions_inner().
-    return (
-        os_additional_resources
-        + os_resources.execute_txs_inner[tx_type].deprecated_resources.constant
-    )
+    return os_additional_resources + os_resources.execute_txs_inner[tx_type].constant

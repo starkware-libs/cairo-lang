@@ -3,11 +3,7 @@ import os
 
 from starkware.python.utils import get_source_dir_path
 from starkware.starknet.core.os.os_config.os_config_hash import calculate_starknet_config_hash
-from starkware.starknet.definitions.chain_ids import (
-    CHAIN_ID_TO_DEPRECATED_FEE_TOKEN_ADDRESS,
-    CHAIN_ID_TO_FEE_TOKEN_ADDRESS,
-    StarknetChainId,
-)
+from starkware.starknet.definitions.chain_ids import CHAIN_ID_TO_FEE_TOKEN_ADDRESS, StarknetChainId
 from starkware.starknet.definitions.general_config import StarknetOsConfig
 
 CONFIG_HASH_DIR_PATH = get_source_dir_path(
@@ -25,7 +21,6 @@ def run_starknet_os_config_hash_test(fix: bool):
     configs = {
         chain_id.name: StarknetOsConfig(
             chain_id=chain_id.value,
-            deprecated_fee_token_address=CHAIN_ID_TO_DEPRECATED_FEE_TOKEN_ADDRESS[chain_id],
             fee_token_address=CHAIN_ID_TO_FEE_TOKEN_ADDRESS[chain_id],
         )
         for chain_id in StarknetChainId

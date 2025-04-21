@@ -198,7 +198,7 @@ def validate_positive(field_name: str, *, allow_none: bool = False) -> Validator
     )
 
 
-def validate_non_negative_or_selected_negative_vals(
+def validate_non_negative_or_selected_negative_values(
     field_name: str, *, selected_negative_vals: List[int], allow_none: bool = False
 ) -> ValidatorType:
     """

@@ -9,7 +9,7 @@ import tempfile
 from typing import List, Optional
 
 from starkware.cairo.bootloaders.generate_fact import get_cairo_pie_fact_info
-from starkware.cairo.bootloaders.hash_program import compute_program_hash_chain
+from starkware.cairo.bootloaders.hash_program import HashFunction, compute_program_hash_chain
 from starkware.cairo.lang.compiler.assembler import Program
 from starkware.cairo.lang.vm.crypto import get_crypto_lib_context_manager
 from starkware.cairo.sharp.client_lib import CairoPie, ClientLib
@@ -97,7 +97,9 @@ class SharpClient:
         The verification is trust worthy when this fact is registered
         on the Verifier Fact-Registry.
         """
-        program_hash = compute_program_hash_chain(program=cairo_pie.program, use_poseidon=False)
+        program_hash = compute_program_hash_chain(
+            program=cairo_pie.program, program_hash_function=HashFunction.PEDERSEN
+        )
         return get_cairo_pie_fact_info(cairo_pie, program_hash).fact
 
     def fact_registered(self, fact: str) -> bool:

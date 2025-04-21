@@ -133,7 +133,7 @@ func deprecated_execute_entry_point{
 
     if (success == 0) {
         %{ execution_helper.exit_call() %}
-        tempvar retdata = cast(nondet %{ segments.add() %}, felt*);
+        let (retdata: felt*) = alloc();
         assert retdata[0] = ERROR_ENTRY_POINT_NOT_FOUND;
         return (is_reverted=1, retdata_size=1, retdata=retdata);
     }
@@ -148,13 +148,9 @@ func deprecated_execute_entry_point{
     local range_check_ptr = range_check_ptr;
     local contract_entry_point: felt* = compiled_class.bytecode_ptr + entry_point_offset;
 
-    local os_context: felt*;
-    local syscall_ptr: felt*;
+    let (local os_context: felt*) = alloc();
+    let (local syscall_ptr: felt*) = alloc();
 
-    %{
-        ids.os_context = segments.add()
-        ids.syscall_ptr = segments.add()
-    %}
     assert [os_context] = cast(syscall_ptr, felt);
 
     let n_builtins = BuiltinEncodings.SIZE;
@@ -224,7 +220,12 @@ func select_execute_entry_point_func{
     is_reverted: felt, retdata_size: felt, retdata: felt*, is_deprecated: felt
 ) {
     alloc_locals;
-    %{ execution_helper.enter_call(cairo_execution_info=ids.execution_context.execution_info) %}
+    %{
+        execution_helper.enter_call(
+            cairo_execution_info=ids.execution_context.execution_info,
+            deprecated_tx_info=ids.execution_context.deprecated_tx_info,
+        )
+    %}
 
     %{ is_deprecated = 1 if ids.execution_context.class_hash in __deprecated_class_hashes else 0 %}
     // Note that the class_hash is validated in both the `if` and `else` cases, so a malicious

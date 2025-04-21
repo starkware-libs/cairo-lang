@@ -32,6 +32,7 @@ package(default_visibility = ["//visibility:public"])
 
 exports_files([
     "example_fact_topologies.json",
+    "example_single_fact_topologies.json",
     "example_proof.json",
     "objects.cairo",
 ])

@@ -172,12 +172,26 @@ class Program(ProgramBase, SerializableMarshmallowDataclass):
             return 0
 
 
+def is_valid_name(name: str, valid_name_length: int) -> bool:
+    """
+    Validity check for a name.
+    """
+    return (
+        isinstance(name, str)
+        and len(name) < valid_name_length
+        and set(name) <= {*string.ascii_lowercase, *string.digits, "_"}
+    )
+
+
 def is_valid_builtin_name(name: str) -> bool:
     """
     Returns true if name may be used as a builtin name.
     """
-    return (
-        isinstance(name, str)
-        and len(name) < 1000
-        and set(name) <= {*string.ascii_lowercase, *string.digits, "_"}
-    )
+    return is_valid_name(name, 1000)
+
+
+def is_valid_opcode_name(name: str) -> bool:
+    """
+    Returns true if name may be used as an opcode name.
+    """
+    return is_valid_name(name, 500)

@@ -47,16 +47,18 @@ cairo_library(
         "os.cairo",
         "//src/starkware/starknet/common:constants.cairo",
         "//src/starkware/starknet/common:storage.cairo",
+        "//src/starkware/starknet/core/aggregator:combine_blocks.cairo",
         "//src/starkware/starknet/core/os/contract_address:contract_address.cairo",
         "//src/starkware/starknet/core/os/contract_class:compiled_class.cairo",
         "//src/starkware/starknet/core/os/contract_class:deprecated_compiled_class.cairo",
+        "//src/starkware/starknet/core/os/execution:account_backward_compatibility.cairo",
         "//src/starkware/starknet/core/os/execution:deprecated_execute_entry_point.cairo",
         "//src/starkware/starknet/core/os/execution:deprecated_execute_syscalls.cairo",
         "//src/starkware/starknet/core/os/execution:execute_entry_point.cairo",
         "//src/starkware/starknet/core/os/execution:execute_syscalls.cairo",
+        "//src/starkware/starknet/core/os/execution:execute_transaction_utils.cairo",
         "//src/starkware/starknet/core/os/execution:execute_transactions.cairo",
         "//src/starkware/starknet/core/os/execution:revert.cairo",
-        "//src/starkware/starknet/core/os/execution:version_bound_accounts.cairo",
         "//src/starkware/starknet/core/os/os_config:os_config.cairo",
         "//src/starkware/starknet/core/os/transaction_hash:transaction_hash.cairo",
     ],
@@ -129,15 +131,37 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        ":starknet_deprecated_syscall_handler_lib",
-        ":starknet_syscall_handler_lib",
+        ":starknet_bl_syscall_handler_lib",
+        ":starknet_deprecated_bl_syscall_handler_lib",
         "//src/starkware/cairo/common:cairo_function_runner_lib",
         "//src/starkware/cairo/lang/vm:cairo_relocatable_lib",
         "//src/starkware/cairo/lang/vm:cairo_vm_lib",
         "//src/starkware/python:starkware_python_utils_lib",
+        "//src/starkware/starknet/business_logic/fact_state:starknet_business_logic_patricia_state_lib",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
         "//src/starkware/starknet/public:starknet_abi_lib",
+        "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",
         "//src/starkware/starkware_utils:starkware_error_handling_lib",
+        "//src/starkware/storage:starkware_abstract_storage_lib",
+    ],
+)
+
+py_library(
+    name = "starknet_os_hints_lib",
+    srcs = [
+        "os_hints.py",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":kzg_manager_lib",
+        ":os_logger_lib",
+        ":starknet_deprecated_os_syscall_handler_lib",
+        ":starknet_os_execution_helper_lib",
+        ":starknet_os_lib",
+        ":starknet_os_syscall_handler_lib",
+        "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
+        "//src/starkware/storage:starkware_abstract_storage_lib",
+        requirement("marshmallow_dataclass"),
     ],
 )
 
@@ -222,37 +246,23 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        ":kzg_manager_lib",
         ":os_logger_lib",
         ":syscall_utils_lib",
         "//src/starkware/cairo/common:cairo_common_lib",
-        "//src/starkware/cairo/common:cairo_function_runner_lib",
         "//src/starkware/cairo/common/cairo_secp:utils",
         "//src/starkware/cairo/lang/vm:cairo_relocatable_lib",
         "//src/starkware/cairo/lang/vm:cairo_vm_lib",
         "//src/starkware/python:starkware_python_utils_lib",
-        "//src/starkware/starknet/business_logic/execution:starknet_deprecated_transaction_execution_objects_lib",
-        "//src/starkware/starknet/business_logic/execution:starknet_execute_entry_point_base_lib",
         "//src/starkware/starknet/business_logic/execution:starknet_transaction_execution_objects_lib",
-        "//src/starkware/starknet/business_logic/fact_state:starknet_business_logic_patricia_state_lib",
-        "//src/starkware/starknet/business_logic/state:starknet_business_logic_state_lib",
-        "//src/starkware/starknet/core/os/contract_address:starknet_contract_address_lib",
-        "//src/starkware/starknet/core/os/execution:version_bound_accounts_lib",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
-        "//src/starkware/starknet/definitions:starknet_general_config_lib",
-        "//src/starkware/starknet/public:starknet_abi_lib",
-        "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",
-        "//src/starkware/starknet/storage:starknet_storage_lib",
-        "//src/starkware/starkware_utils:starkware_error_handling_lib",
-        "//src/starkware/storage:starkware_abstract_storage_lib",
         requirement("cachetools"),
     ],
 )
 
 py_library(
-    name = "starknet_deprecated_syscall_handler_lib",
+    name = "starknet_bl_syscall_handler_lib",
     srcs = [
-        "deprecated_syscall_handler.py",
+        "bl_syscall_handler.py",
     ],
     visibility = ["//visibility:public"],
     deps = [
@@ -269,12 +279,74 @@ py_library(
         "//src/starkware/starknet/business_logic/execution:starknet_transaction_execution_objects_lib",
         "//src/starkware/starknet/business_logic/state:starknet_business_logic_state_lib",
         "//src/starkware/starknet/core/os/contract_address:starknet_contract_address_lib",
-        "//src/starkware/starknet/core/os/execution:version_bound_accounts_lib",
+        "//src/starkware/starknet/core/os/execution:account_backward_compatibility_lib",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
         "//src/starkware/starknet/definitions:starknet_general_config_lib",
         "//src/starkware/starknet/public:starknet_abi_lib",
         "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",
         "//src/starkware/starkware_utils:starkware_error_handling_lib",
+    ],
+)
+
+py_library(
+    name = "starknet_deprecated_syscall_handler_lib",
+    srcs = [
+        "deprecated_syscall_handler.py",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":os_logger_lib",
+        ":syscall_utils_lib",
+        "//src/starkware/cairo/common:cairo_common_lib",
+        "//src/starkware/cairo/lang/vm:cairo_relocatable_lib",
+        "//src/starkware/cairo/lang/vm:cairo_vm_lib",
+        "//src/starkware/python:starkware_python_utils_lib",
+        "//src/starkware/starknet/business_logic/execution:starknet_transaction_execution_objects_lib",
+        "//src/starkware/starknet/business_logic/state:starknet_business_logic_state_lib",
+    ],
+)
+
+py_library(
+    name = "starknet_deprecated_bl_syscall_handler_lib",
+    srcs = [
+        "deprecated_bl_syscall_handler.py",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":os_logger_lib",
+        ":starknet_deprecated_syscall_handler_lib",
+        ":syscall_utils_lib",
+        "//src/starkware/cairo/common:cairo_common_lib",
+        "//src/starkware/cairo/common:cairo_function_runner_lib",
+        "//src/starkware/cairo/lang/vm:cairo_relocatable_lib",
+        "//src/starkware/cairo/lang/vm:cairo_vm_lib",
+        "//src/starkware/starknet/business_logic/execution:starknet_deprecated_transaction_execution_objects_lib",
+        "//src/starkware/starknet/business_logic/execution:starknet_execute_entry_point_base_lib",
+        "//src/starkware/starknet/business_logic/execution:starknet_transaction_execution_objects_lib",
+        "//src/starkware/starknet/business_logic/state:starknet_business_logic_state_lib",
+        "//src/starkware/starknet/core/os/contract_address:starknet_contract_address_lib",
+        "//src/starkware/starknet/definitions:starknet_definitions_lib",
+        "//src/starkware/starknet/definitions:starknet_general_config_lib",
+        "//src/starkware/starknet/public:starknet_abi_lib",
+        "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",
+        "//src/starkware/starkware_utils:starkware_error_handling_lib",
+    ],
+)
+
+py_library(
+    name = "starknet_deprecated_os_syscall_handler_lib",
+    srcs = [
+        "deprecated_os_syscall_handler.py",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":starknet_deprecated_syscall_handler_lib",
+        ":starknet_os_execution_helper_lib",
+        "//src/starkware/cairo/common:cairo_common_lib",
+        "//src/starkware/cairo/lang/vm:cairo_relocatable_lib",
+        "//src/starkware/starknet/business_logic/execution:starknet_transaction_execution_objects_lib",
+        "//src/starkware/starknet/business_logic/state:starknet_business_logic_state_lib",
+        "//src/starkware/starknet/core/os/execution:account_backward_compatibility_lib",
     ],
 )
 
@@ -308,10 +380,13 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        ":starknet_deprecated_syscall_handler_lib",
-        ":starknet_syscall_handler_lib",
+        ":starknet_os_utils_lib",
+        "//src/starkware/starknet/business_logic/execution:starknet_transaction_execution_objects_lib",
         "//src/starkware/starknet/business_logic/fact_state:starknet_business_logic_patricia_state_lib",
+        "//src/starkware/starknet/business_logic/state:starknet_business_logic_state_lib",
         "//src/starkware/starknet/business_logic/transaction:internal_transaction_schema",
+        "//src/starkware/starknet/business_logic/transaction:starknet_account_transaction_objects_lib",
+        "//src/starkware/starknet/business_logic/transaction:starknet_transaction_deprecated_objects_lib",
         "//src/starkware/starknet/business_logic/transaction:starknet_transaction_objects_lib",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
         "//src/starkware/starknet/definitions:starknet_general_config_lib",
@@ -320,5 +395,44 @@ py_library(
         "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
         requirement("marshmallow"),
         requirement("marshmallow_dataclass"),
+    ],
+)
+
+py_library(
+    name = "starknet_os_execution_helper_lib",
+    srcs = [
+        "execution_helper.py",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":kzg_manager_lib",
+        ":os_logger_lib",
+        ":starknet_os_lib",
+        "//src/starkware/cairo/lang/vm:cairo_relocatable_lib",
+        "//src/starkware/cairo/lang/vm:cairo_vm_lib",
+        "//src/starkware/python:starkware_python_utils_lib",
+        "//src/starkware/starknet/business_logic/execution:starknet_transaction_execution_objects_lib",
+        "//src/starkware/starknet/definitions:starknet_definitions_lib",
+        "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",
+        "//src/starkware/starknet/storage:starknet_storage_lib",
+        "//src/starkware/storage:starkware_abstract_storage_lib",
+    ],
+)
+
+py_library(
+    name = "starknet_os_syscall_handler_lib",
+    srcs = [
+        "os_syscall_handler.py",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":starknet_os_execution_helper_lib",
+        ":starknet_syscall_handler_lib",
+        "//src/starkware/cairo/common:cairo_common_lib",
+        "//src/starkware/cairo/lang/vm:cairo_relocatable_lib",
+        "//src/starkware/starknet/business_logic/execution:starknet_transaction_execution_objects_lib",
+        "//src/starkware/starknet/business_logic/state:starknet_business_logic_state_lib",
+        "//src/starkware/starknet/core/os/execution:account_backward_compatibility_lib",
+        "//src/starkware/starknet/definitions:starknet_definitions_lib",
     ],
 )

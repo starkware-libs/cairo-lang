@@ -47,7 +47,7 @@ func copy_l1l2_messages(
 //
 // `os_program_hash` is used for the `os_program_hash` field of the combined output.
 func combine_blocks{range_check_ptr}(
-    n: felt, os_outputs: OsOutput*, os_program_hash: felt
+    n: felt, os_outputs: OsOutput*, os_program_hash: felt, use_kzg_da: felt, full_output: felt
 ) -> OsOutput* {
     alloc_locals;
 
@@ -63,15 +63,18 @@ func combine_blocks{range_check_ptr}(
     %}
 
     let first = os_outputs[0];
+    // Validate fields of the first inner OS outputs. It cannot be checked in the inner function
+    // as we only have the aggregated version of the first block where these fields are not
+    // taken from the OS outputs.
+    tempvar first_header: OsOutputHeader* = first.header;
+    assert first_header.use_kzg_da = 0;
+    assert first_header.full_output = 1;
+    assert first_header.os_program_hash = 0;
 
     // Copy the messages of the first block.
     let final_carried_outputs = copy_l1l2_messages(
         aggregated_carried_outputs=initial_carried_outputs, current=&first
     );
-
-    // Guess whether to use KZG commitment scheme and whether to output the full state.
-    tempvar use_kzg_da = nondet %{ program_input["use_kzg_da"] %};
-    tempvar full_output = nondet %{ program_input["full_output"] %};
 
     // Verify that the guessed values are 0 or 1.
     assert use_kzg_da * use_kzg_da = use_kzg_da;
@@ -96,6 +99,8 @@ func combine_blocks{range_check_ptr}(
 
     let res = combine_blocks_inner(aggregated=aggregated, n=n - 1, os_outputs=&os_outputs[1]);
     local res_state_update: SquashedOsStateUpdate = [res.squashed_os_state_update];
+
+    %{ state_update_pointers = None %}
 
     // Squash the contract state tree.
     let (n_contract_state_changes, squashed_contract_state_dict) = squash_state_changes(
@@ -137,19 +142,26 @@ func combine_blocks_inner(aggregated: OsOutput*, n: felt, os_outputs: OsOutput*)
     alloc_locals;
 
     let current = os_outputs[0];
+    tempvar current_header: OsOutputHeader* = current.header;
+    tempvar aggregated_header: OsOutputHeader* = aggregated.header;
 
     // Check the size of `OsOutput` and `OsOutputHeader` to ensure that if new fields are added
-    // they are handled by the aggregator, either in this function or in `output_blocks()`.
+    // they are handled by the aggregator.
     static_assert OsOutput.SIZE == 4;
     static_assert OsOutputHeader.SIZE == 9;
 
+    // Validate fields of the inner OS outputs.
+    assert current_header.use_kzg_da = 0;
+    assert current_header.full_output = 1;
+    assert current_header.os_program_hash = 0;
+
     // Check header consistency.
-    assert current.header.state_update_output.initial_root = (
-        aggregated.header.state_update_output.final_root
+    assert current_header.state_update_output.initial_root = (
+        aggregated_header.state_update_output.final_root
     );
-    assert current.header.prev_block_number = aggregated.header.new_block_number;
-    assert current.header.prev_block_hash = aggregated.header.new_block_hash;
-    assert current.header.starknet_os_config_hash = aggregated.header.starknet_os_config_hash;
+    assert current_header.prev_block_number = aggregated_header.new_block_number;
+    assert current_header.prev_block_hash = aggregated_header.new_block_hash;
+    assert current_header.starknet_os_config_hash = aggregated_header.starknet_os_config_hash;
 
     // Check `squashed_os_state_update` consistency: the dictionary entries of the blocks must form
     // one contiguous segment (this is done as part of the hint generating them). Check that the
@@ -171,17 +183,17 @@ func combine_blocks_inner(aggregated: OsOutput*, n: felt, os_outputs: OsOutput*)
     tempvar new_aggregated = new OsOutput(
         header=new OsOutputHeader(
             state_update_output=new CommitmentUpdate(
-                initial_root=aggregated.header.state_update_output.initial_root,
-                final_root=current.header.state_update_output.final_root,
+                initial_root=aggregated_header.state_update_output.initial_root,
+                final_root=current_header.state_update_output.final_root,
             ),
-            prev_block_number=aggregated.header.prev_block_number,
-            new_block_number=current.header.new_block_number,
-            prev_block_hash=aggregated.header.prev_block_hash,
-            new_block_hash=current.header.new_block_hash,
-            os_program_hash=aggregated.header.os_program_hash,
-            starknet_os_config_hash=aggregated.header.starknet_os_config_hash,
-            use_kzg_da=aggregated.header.use_kzg_da,
-            full_output=aggregated.header.full_output,
+            prev_block_number=aggregated_header.prev_block_number,
+            new_block_number=current_header.new_block_number,
+            prev_block_hash=aggregated_header.prev_block_hash,
+            new_block_hash=current_header.new_block_hash,
+            os_program_hash=aggregated_header.os_program_hash,
+            starknet_os_config_hash=aggregated_header.starknet_os_config_hash,
+            use_kzg_da=aggregated_header.use_kzg_da,
+            full_output=aggregated_header.full_output,
         ),
         squashed_os_state_update=new SquashedOsStateUpdate(
             contract_state_changes=aggregated_update.contract_state_changes,

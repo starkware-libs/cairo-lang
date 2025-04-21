@@ -1,7 +1,9 @@
 import asyncio
-import dataclasses
+import logging
 from dataclasses import field
 from typing import Collection, Dict, Mapping, Set, Tuple, Type
+
+import marshmallow_dataclass
 
 from starkware.python.utils import execute_coroutine_threadsafe, from_bytes
 from starkware.starknet.definitions import fields
@@ -9,8 +11,11 @@ from starkware.starkware_utils.commitment_tree.binary_fact_tree import BinaryFac
 from starkware.starkware_utils.commitment_tree.leaf_fact import LeafFact, TLeafFact
 from starkware.starkware_utils.commitment_tree.leaf_fact_utils import FeltLeaf
 from starkware.starkware_utils.commitment_tree.patricia_tree.patricia_tree import PatriciaTree
-from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
+from starkware.starkware_utils.marshmallow_dataclass_fields import IntAsHex
+from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
 from starkware.storage.storage import FactFetchingContext
+
+logger = logging.getLogger(__name__)
 
 ContractStorageMapping = Dict[int, "StorageLeaf"]
 
@@ -25,14 +30,14 @@ class StorageLeaf(FeltLeaf):
         return b"starknet_storage_leaf"
 
 
-@dataclasses.dataclass(frozen=True)
-class CommitmentInfo(ValidatedDataclass):
+@marshmallow_dataclass.dataclass(frozen=True)
+class CommitmentInfo(ValidatedMarshmallowDataclass):
     """
     Contains hints needed for the commitment tree update in the OS.
     """
 
-    previous_root: int
-    updated_root: int
+    previous_root: int = field(metadata=dict(marshmallow_field=IntAsHex()))
+    updated_root: int = field(metadata=dict(marshmallow_field=IntAsHex()))
     tree_height: int
     commitment_facts: Mapping[int, Tuple[int, ...]] = field(
         metadata=fields.commitment_facts_metadata
@@ -89,29 +94,11 @@ class CommitmentInfo(ValidatedDataclass):
         )
 
 
-class OsSingleStarknetStorage:
-    """
-    Represents a single contract storage.
-    It is used by the Starknet OS run in the GpsAmbassador.
-    """
-
-    def __init__(
-        self,
-        previous_tree: PatriciaTree,
-        expected_updated_root: int,
-        ongoing_storage_changes: Dict[int, int],
-        ffc: FactFetchingContext,
-    ):
-        """
-        The constructor is private.
-        """
-        self.previous_tree = previous_tree
-        self.expected_updated_root = expected_updated_root
-        self.ongoing_storage_changes = ongoing_storage_changes
-        self.ffc = ffc
-
-        # Current running event loop; used for running async tasks in a synchronous context.
-        self.loop: asyncio.AbstractEventLoop = asyncio.get_running_loop()
+@marshmallow_dataclass.dataclass
+class OsSingleStarknetStorageData:
+    previous_tree: PatriciaTree
+    expected_updated_root: int
+    ongoing_storage_changes: Dict[int, int]
 
     @classmethod
     async def create(
@@ -120,7 +107,7 @@ class OsSingleStarknetStorage:
         updated_tree: PatriciaTree,
         accessed_addresses: Set[int],
         ffc: FactFetchingContext,
-    ) -> "OsSingleStarknetStorage":
+    ) -> "OsSingleStarknetStorageData":
         # Fetch initial values of keys accessed by this contract.
         # NOTE: this is an optimization - not all values can be fetched ahead.
         initial_leaves = await previous_tree.get_leaves(
@@ -132,8 +119,33 @@ class OsSingleStarknetStorage:
             previous_tree=previous_tree,
             expected_updated_root=from_bytes(updated_tree.root),
             ongoing_storage_changes=initial_entries,
-            ffc=ffc,
         )
+
+
+class OsSingleStarknetStorage:
+    """
+    Represents a single contract storage.
+    It is used by the Starknet OS run in the GpsAmbassador.
+    """
+
+    def __init__(
+        self,
+        data: OsSingleStarknetStorageData,
+        ffc: FactFetchingContext,
+        dynamic_read_fallback: bool,
+        loop: asyncio.AbstractEventLoop,
+    ):
+        """
+        The constructor is private.
+        """
+        self.previous_tree = data.previous_tree
+        self.expected_updated_root = data.expected_updated_root
+        self.ongoing_storage_changes = data.ongoing_storage_changes
+        self.ffc = ffc
+        self.dynamic_read_fallback = dynamic_read_fallback
+
+        # Current running event loop; used for running async tasks in a synchronous context.
+        self.loop = loop
 
     async def compute_commitment(self) -> CommitmentInfo:
         """
@@ -166,4 +178,13 @@ class OsSingleStarknetStorage:
 
     def _fetch_storage_leaf(self, key) -> StorageLeaf:
         coroutine = self.previous_tree.get_leaf(ffc=self.ffc, index=key, fact_cls=StorageLeaf)
-        return execute_coroutine_threadsafe(coroutine=coroutine, loop=self.loop)
+        storage_leaf = execute_coroutine_threadsafe(coroutine=coroutine, loop=self.loop)
+        if not self.dynamic_read_fallback:
+            raise LookupError(
+                f"Key {key} not found in the ongoing storage changes. \
+                    Expected value: {storage_leaf}"
+            )
+        logger.warning(
+            f"Key {key} not found in the ongoing storage changes. Looked up value: {storage_leaf}"
+        )
+        return storage_leaf

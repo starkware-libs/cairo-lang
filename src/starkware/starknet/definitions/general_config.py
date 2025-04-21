@@ -1,8 +1,9 @@
 import os
 from dataclasses import field
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import marshmallow_dataclass
+from marshmallow import pre_load
 
 from services.everest.definitions.general_config import EverestGeneralConfig
 from starkware.cairo.lang.instances import dynamic_instance
@@ -33,6 +34,7 @@ N_EVENTS_NAME = "n_events"
 MESSAGE_SEGMENT_LENGTH_NAME = "message_segment_length"
 GAS_WEIGHT_NAME = "gas_weight"
 SIERRA_GAS_NAME = "sierra_gas"
+N_TXS_NAME = "n_txs"
 
 STARKNET_LAYOUT_INSTANCE = dynamic_instance
 
@@ -55,7 +57,7 @@ STRK_TOKEN_SALT = 1
 DEFAULT_CHAIN_ID = StarknetChainId.TESTNET.value
 DEFAULT_DEPRECATED_FEE_TOKEN_ADDRESS = load_int_value(
     field_metadata=fields.fee_token_address_metadata,
-    value=default_general_config["starknet_os_config"]["deprecated_fee_token_address"],
+    value=default_general_config["deprecated_fee_token_address"],
 )
 DEFAULT_FEE_TOKEN_ADDRESS = load_int_value(
     field_metadata=fields.fee_token_address_metadata,
@@ -66,7 +68,6 @@ DEFAULT_SEQUENCER_ADDRESS = load_int_value(
     value=default_general_config["sequencer_address"],
 )
 DEFAULT_ENFORCE_L1_FEE = True
-DEFAULT_USE_KZG_DA = True
 
 # Given in units of wei.
 DEFAULT_DEPRECATED_L1_GAS_PRICE = 10**9
@@ -91,13 +92,6 @@ DEFAULT_MAX_FRI_L1_DATA_GAS_PRICE = 10**21
 class StarknetOsConfig(Config):
     chain_id: int = field(default=DEFAULT_CHAIN_ID)
 
-    deprecated_fee_token_address: int = field(
-        metadata=additional_metadata(
-            **fields.fee_token_address_metadata, description="Starknet old fee token L2 address."
-        ),
-        default=DEFAULT_DEPRECATED_FEE_TOKEN_ADDRESS,
-    )
-
     fee_token_address: int = field(
         metadata=additional_metadata(
             **fields.fee_token_address_metadata, description="Starknet fee token L2 address."
@@ -109,6 +103,15 @@ class StarknetOsConfig(Config):
 @marshmallow_dataclass.dataclass
 class StarknetGeneralConfig(EverestGeneralConfig):
     starknet_os_config: StarknetOsConfig = field(default_factory=StarknetOsConfig)
+
+    # This field used to be part of the OS config, but now the OS does not support deprecated
+    # transactions. Keep it here since the Blockifier infra still needs it (e.g., for reexecution).
+    deprecated_fee_token_address: int = field(
+        metadata=additional_metadata(
+            **fields.fee_token_address_metadata, description="Starknet old fee token L2 address."
+        ),
+        default=DEFAULT_DEPRECATED_FEE_TOKEN_ADDRESS,
+    )
 
     # IMPORTANT: when editing this in production, make sure to only decrease the value.
     # Increasing it in production may cause issue to nodes during execution, so only increase it
@@ -132,13 +135,18 @@ class StarknetGeneralConfig(EverestGeneralConfig):
         default=DEFAULT_ENFORCE_L1_FEE,
     )
 
+    @pre_load
+    def load_0_13_5_config(self, data: Dict[str, Any], many: bool, **kwargs) -> Dict[str, Any]:
+        deprecated_token_field = "deprecated_fee_token_address"
+        os_config_field = "starknet_os_config"
+        if deprecated_token_field not in data:
+            assert deprecated_token_field in data[os_config_field]
+            data[deprecated_token_field] = data[os_config_field].pop(deprecated_token_field)
+        return data
+
     @property
     def chain_id(self) -> StarknetChainId:
         return StarknetChainId(self.starknet_os_config.chain_id)
-
-    @property
-    def deprecated_fee_token_address(self) -> int:
-        return self.starknet_os_config.deprecated_fee_token_address
 
     @property
     def fee_token_address(self) -> int:

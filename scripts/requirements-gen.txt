@@ -10,7 +10,7 @@ lark
 marshmallow-dataclass==8.6.1
 marshmallow-enum
 marshmallow-oneofschema
-marshmallow>=3.2.1
+marshmallow>=3.13.0,<4.0
 mpmath
 numpy
 pipdeptree

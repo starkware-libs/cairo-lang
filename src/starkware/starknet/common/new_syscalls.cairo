@@ -27,6 +27,7 @@ const SEND_MESSAGE_TO_L1_SELECTOR = 'SendMessageToL1';
 const STORAGE_READ_SELECTOR = 'StorageRead';
 const STORAGE_WRITE_SELECTOR = 'StorageWrite';
 const GET_CLASS_HASH_AT_SELECTOR = 'GetClassHashAt';
+const META_TX_V0_SELECTOR = 'MetaTxV0';
 
 // Syscall structs.
 
@@ -316,4 +317,17 @@ struct GetClassHashAtRequest {
 
 struct GetClassHashAtResponse {
     class_hash: felt,
+}
+
+struct MetaTxV0Request {
+    // The address of the L2 contract to call.
+    contract_address: felt,
+    // The selector of the function to call.
+    selector: felt,
+    // The calldata.
+    calldata_start: felt*,
+    calldata_end: felt*,
+    // The signature.
+    signature_start: felt*,
+    signature_end: felt*,
 }

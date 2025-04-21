@@ -1,4 +1,6 @@
+import base64
 import dataclasses
+import gzip
 import hashlib
 import inspect
 import random
@@ -10,7 +12,10 @@ import marshmallow_dataclass
 import typeguard
 
 from starkware.starkware_utils.error_handling import StarkErrorCode, stark_assert
-from starkware.starkware_utils.serializable_dataclass import SerializableMarshmallowDataclass
+from starkware.starkware_utils.serializable_dataclass import (
+    SerializableMarshmallowDataclass,
+    TSerializableDataclass,
+)
 from starkware.starkware_utils.validated_fields import Field, ValidatedField
 
 TValidatedDataclass = TypeVar("TValidatedDataclass", bound="ValidatedDataclass")
@@ -155,6 +160,35 @@ class ValidatedMarshmallowDataclass(ValidatedDataclass, SerializableMarshmallowD
     """
     Base class to classes decorated with marshmallow_dataclass.dataclass, containing validations.
     """
+
+
+MAGIC_COMPRESSION_HEADER = "MAGIC_COMPRESSION_HEADER"
+
+
+class CompressedValidatedMarshmallowDataclass(ValidatedMarshmallowDataclass):
+    """
+    Base class to apply compression on the serialized object.
+    """
+
+    def dumps(self, indent: Optional[int] = None, sort_keys: Optional[bool] = None) -> str:
+        return (
+            MAGIC_COMPRESSION_HEADER
+            + base64.b64encode(
+                gzip.compress(super().dumps(indent=indent, sort_keys=sort_keys).encode("utf-8"))
+            ).decode()
+        )
+
+    @classmethod
+    def loads(cls: Type[TSerializableDataclass], data: str) -> TSerializableDataclass:
+        # Bug ([here](https://github.com/python/mypy/issues/12885)) with super() in classmethods.
+        # Ignore mypy issues.
+        if data.startswith(MAGIC_COMPRESSION_HEADER):
+            return super().loads(  # type: ignore[misc]
+                gzip.decompress(base64.b64decode(data[len(MAGIC_COMPRESSION_HEADER) :])).decode(
+                    "utf-8"
+                )
+            )
+        return super().loads(data=data)  # type: ignore[misc]
 
 
 class HashableMarshmallowDataclass(ValidatedMarshmallowDataclass):

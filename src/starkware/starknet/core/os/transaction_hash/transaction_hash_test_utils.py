@@ -41,7 +41,6 @@ def create_common_tx_fields(
     sender_address: int,
     chain_id: int,
     nonce: int,
-    max_fee: int,
     n_resource_bounds: int = 0,
     resource_bounds: Optional[List[int]] = None,
 ):
@@ -59,7 +58,6 @@ def create_common_tx_fields(
         tx_hash_prefix=tx_hash_prefix,
         version=version,
         sender_address=sender_address,
-        max_fee=max_fee,
         chain_id=chain_id,
         nonce=nonce,
         tip=0,
@@ -111,7 +109,6 @@ def run_cairo_invoke_transaction_hash(
     calldata: List[int],
     chain_id: int,
     nonce: int,
-    max_fee: int = 0,
     n_resource_bounds: int = 0,
     resource_bounds: Optional[List[int]] = None,
 ) -> int:
@@ -121,7 +118,6 @@ def run_cairo_invoke_transaction_hash(
     runner.run(
         func_name=f"{CAIRO_TX_HASH_PATH}.compute_invoke_transaction_hash",
         range_check_ptr=runner.range_check_builtin.base,
-        pedersen_ptr=runner.pedersen_builtin.base,
         poseidon_ptr=runner.poseidon_builtin.base,
         common_fields=create_common_tx_fields(
             program=program,
@@ -130,7 +126,6 @@ def run_cairo_invoke_transaction_hash(
             sender_address=sender_address,
             chain_id=chain_id,
             nonce=nonce,
-            max_fee=max_fee,
             n_resource_bounds=n_resource_bounds,
             resource_bounds=resource_bounds,
         ),
@@ -185,7 +180,6 @@ def run_cairo_deploy_account_transaction_hash(
     calldata: List[int],
     chain_id: int,
     nonce: int,
-    max_fee: int = 0,
     n_resource_bounds: int = 0,
     resource_bounds: Optional[List[int]] = None,
 ) -> int:
@@ -195,7 +189,6 @@ def run_cairo_deploy_account_transaction_hash(
     runner.run(
         func_name=f"{CAIRO_TX_HASH_PATH}.compute_deploy_account_transaction_hash",
         range_check_ptr=runner.range_check_builtin.base,
-        pedersen_ptr=runner.pedersen_builtin.base,
         poseidon_ptr=runner.poseidon_builtin.base,
         common_fields=create_common_tx_fields(
             program=program,
@@ -204,7 +197,6 @@ def run_cairo_deploy_account_transaction_hash(
             sender_address=contract_address,
             chain_id=chain_id,
             nonce=nonce,
-            max_fee=max_fee,
             n_resource_bounds=n_resource_bounds,
             resource_bounds=resource_bounds,
         ),
@@ -224,8 +216,7 @@ def run_cairo_declare_transaction_hash(
     sender_address: int,
     chain_id: int,
     nonce: int,
-    max_fee: int = 0,
-    compiled_class_hash: Optional[int] = None,
+    compiled_class_hash: int,
     n_resource_bounds: int = 0,
     resource_bounds: Optional[List[int]] = None,
 ) -> int:
@@ -235,7 +226,6 @@ def run_cairo_declare_transaction_hash(
     runner.run(
         func_name=f"{CAIRO_TX_HASH_PATH}.compute_declare_transaction_hash",
         range_check_ptr=runner.range_check_builtin.base,
-        pedersen_ptr=runner.pedersen_builtin.base,
         poseidon_ptr=runner.poseidon_builtin.base,
         common_fields=create_common_tx_fields(
             program=program,
@@ -244,16 +234,11 @@ def run_cairo_declare_transaction_hash(
             sender_address=sender_address,
             chain_id=chain_id,
             nonce=nonce,
-            max_fee=max_fee,
             n_resource_bounds=n_resource_bounds,
             resource_bounds=resource_bounds,
         ),
-        execution_context=create_execution_context(
-            program=program,
-            contract_address=sender_address,
-            calldata=[class_hash],
-        ),
-        compiled_class_hash=0 if compiled_class_hash is None else compiled_class_hash,
+        class_hash=class_hash,
+        compiled_class_hash=compiled_class_hash,
         account_deployment_data_size=0,
         account_deployment_data=0,
         use_full_name=True,
@@ -261,41 +246,4 @@ def run_cairo_declare_transaction_hash(
     )
     (class_hash,) = runner.get_return_values(1)
 
-    return class_hash
-
-
-def run_cairo_transaction_hash(
-    tx_hash_prefix: TransactionHashPrefix,
-    version: int,
-    contract_address: int,
-    entry_point_selector: int,
-    calldata: List[int],
-    max_fee: int,
-    chain_id: int,
-    additional_data: List[int],
-) -> int:
-    program = get_os_program()
-    runner = CairoFunctionRunner(program, layout=STARKNET_LAYOUT_INSTANCE)
-
-    runner.run(
-        func_name=f"{CAIRO_TX_HASH_PATH}.deprecated_get_transaction_hash",
-        hash_ptr=runner.pedersen_builtin.base,
-        tx_hash_prefix=tx_hash_prefix.value,
-        version=version,
-        contract_address=contract_address,
-        entry_point_selector=entry_point_selector,
-        calldata_size=len(calldata),
-        calldata=calldata,
-        max_fee=max_fee,
-        chain_id=chain_id,
-        additional_data_size=len(additional_data),
-        additional_data=additional_data,
-        use_full_name=True,
-        verify_secure=False,
-    )
-    pedersen_ptr, class_hash = runner.get_return_values(2)
-
-    assert pedersen_ptr == runner.pedersen_builtin.base + (
-        runner.pedersen_builtin.cells_per_instance * (9 + len(calldata) + len(additional_data))
-    )
     return class_hash

@@ -19,21 +19,6 @@ class BytecodeSegmentStructure(ABC):
         Computes the hash of the node.
         """
 
-    def bytecode_with_skipped_segments(self):
-        """
-        Returns the bytecode of the node.
-        Skipped segments are replaced with [-1, -2, -2, -2, ...].
-        """
-        res: List[int] = []
-        self._add_bytecode_with_skipped_segments(res)
-        return res
-
-    @abstractmethod
-    def _add_bytecode_with_skipped_segments(self, data: List[int]):
-        """
-        Same as bytecode_with_skipped_segments, but appends the result to the given list.
-        """
-
 
 @dataclasses.dataclass
 class BytecodeLeaf(BytecodeSegmentStructure):
@@ -45,9 +30,6 @@ class BytecodeLeaf(BytecodeSegmentStructure):
 
     def hash(self) -> int:
         return poseidon_hash_many(self.data)
-
-    def _add_bytecode_with_skipped_segments(self, data: List[int]):
-        data.extend(self.data)
 
 
 @dataclasses.dataclass
@@ -69,14 +51,6 @@ class BytecodeSegmentedNode(BytecodeSegmentStructure):
             + 1
         )
 
-    def _add_bytecode_with_skipped_segments(self, data: List[int]):
-        for segment in self.segments:
-            if segment.is_used:
-                segment.inner_structure._add_bytecode_with_skipped_segments(data)
-            else:
-                data.append(-1)
-                data.extend(-2 for _ in range(segment.segment_length - 1))
-
 
 @dataclasses.dataclass
 class BytecodeSegment:
@@ -86,12 +60,6 @@ class BytecodeSegment:
 
     # The length of the segment.
     segment_length: int
-    # Should the segment (or part of it) be loaded to memory.
-    # In other words, is the segment used during the execution.
-    # Note that if is_used is False, the entire segment is not loaded to memory.
-    # If is_used is True, it is possible that part of the segment will be skipped (according
-    # to the "is_used" field of the child segments).
-    is_used: bool
     # The inner structure of the segment.
     inner_structure: BytecodeSegmentStructure
 

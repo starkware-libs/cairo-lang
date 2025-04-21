@@ -1,3 +1,5 @@
+load("//bazel_utils/python:defs.bzl", "requirement")
+
 package(default_visibility = ["//visibility:public"])
 
 py_library(
@@ -14,5 +16,6 @@ py_library(
         "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
         "//src/starkware/starkware_utils:starkware_utils_lib",
         "//src/starkware/storage:starkware_abstract_storage_lib",
+        requirement("marshmallow_dataclass"),
     ],
 )

@@ -25,10 +25,7 @@ def test_get_starknet_config_hash(seed: int):
     assert config_version == STARKNET_OS_CONFIG_HASH_VERSION
 
     runner = CairoFunctionRunner(os_program, layout=STARKNET_LAYOUT_INSTANCE.layout_name)
-    starknet_os_config = StarknetOsConfig(
-        deprecated_fee_token_address=fields.AddressField.get_random_value(),
-        fee_token_address=fields.AddressField.get_random_value(),
-    )
+    starknet_os_config = StarknetOsConfig(fee_token_address=fields.AddressField.get_random_value())
     structs = CairoStructFactory(
         identifiers=os_program.identifiers,
         additional_imports=[
@@ -40,7 +37,6 @@ def test_get_starknet_config_hash(seed: int):
         hash_ptr=runner.pedersen_builtin.base,
         starknet_os_config=structs.StarknetOsConfig(
             chain_id=starknet_os_config.chain_id,
-            deprecated_fee_token_address=starknet_os_config.deprecated_fee_token_address,
             fee_token_address=starknet_os_config.fee_token_address,
         ),
         use_full_name=True,

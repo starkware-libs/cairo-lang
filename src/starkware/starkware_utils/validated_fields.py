@@ -2,7 +2,8 @@ import dataclasses
 import random
 from abc import ABC, abstractmethod
 from dataclasses import field
-from typing import Any, Callable, Dict, Generic, List, Optional, Type, TypeVar
+from enum import Enum
+from typing import Any, Dict, Generic, List, Optional, Type, TypeVar
 
 import marshmallow.fields as mfields
 import marshmallow.utils
@@ -267,6 +268,12 @@ class OptionalField(ValidatedField[Optional[T]]):
         return super().get_validated_marshmallow_field(required=required, **kwargs)
 
 
+class ValidatedIntFormatter(Enum):
+    HEX = 1
+    STR = 2
+    INT = 3
+
+
 # Mypy has a problem with dataclasses that contain unimplemented abstract methods.
 # See https://github.com/python/mypy/issues/5374 for details on this problem.
 @dataclasses.dataclass(frozen=True)  # type: ignore[misc]
@@ -275,13 +282,10 @@ class BaseRangeValidatedField(ValidatedField[int]):
     Abstract class that represents a range-validated integer field.
     """
 
-    formatter: Optional[Callable[[int], str]]
-
-    def __post_init__(self):
-        assert self.formatter in {hex, str, None}
+    formatter: ValidatedIntFormatter
 
     def format(self, value: int) -> str:
-        if self.formatter is hex:
+        if self.formatter == ValidatedIntFormatter.HEX:
             return hex(value)
         return str(value)
 
@@ -289,19 +293,18 @@ class BaseRangeValidatedField(ValidatedField[int]):
         return f"{self.name} {self.format(value=value)} is out of range"
 
     def get_marshmallow_type(self) -> Type[mfields.Field]:
-        if self.formatter == hex:
+        if self.formatter == ValidatedIntFormatter.HEX:
             return IntAsHex
-        if self.formatter == str:
+        if self.formatter == ValidatedIntFormatter.STR:
             return IntAsStr
-        if self.formatter is None:
+        if self.formatter == ValidatedIntFormatter.INT:
             return mfields.Integer
         raise NotImplementedError(
-            f"{self.name}: The given formatter {self.formatter.__name__} "
-            "does not have a suitable metadata."
+            f"{self.name}: The given formatter {self.formatter} does not have a suitable metadata."
         )
 
     def get_marshmallow_field(self, required: bool = True, **kwargs) -> mfields.Field:
-        if self.formatter is None and "strict" not in kwargs:
+        if self.formatter == ValidatedIntFormatter.INT and "strict" not in kwargs:
             kwargs["strict"] = True
         return super().get_marshmallow_field(required=required, **kwargs)
 

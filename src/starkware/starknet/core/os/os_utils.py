@@ -1,17 +1,26 @@
 import dataclasses
-from typing import List, Tuple
+from typing import Dict, Iterable, List, Tuple
 
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
-from starkware.python.utils import blockify
+from starkware.python.utils import blockify, gather_in_chunks, safe_zip, to_bytes
+from starkware.starknet.business_logic.fact_state.contract_class_objects import (
+    CompiledClassFact,
+    DeprecatedCompiledClassFact,
+)
 from starkware.starknet.core.os import segment_utils
-from starkware.starknet.core.os.deprecated_syscall_handler import DeprecatedBlSyscallHandler
-from starkware.starknet.core.os.syscall_handler import BusinessLogicSyscallHandler
+from starkware.starknet.core.os.bl_syscall_handler import BusinessLogicSyscallHandler
+from starkware.starknet.core.os.deprecated_bl_syscall_handler import DeprecatedBlSyscallHandler
 from starkware.starknet.definitions.constants import OsOutputConstant
 from starkware.starknet.definitions.error_codes import StarknetErrorCode
 from starkware.starknet.public.abi import SYSCALL_PTR_OFFSET_IN_VERSION0
+from starkware.starknet.services.api.contract_class.contract_class import (
+    CompiledClass,
+    DeprecatedCompiledClass,
+)
 from starkware.starkware_utils.error_handling import wrap_with_stark_exception
+from starkware.storage.storage import Storage
 
 # KZG-related fields, outputted by the Starknet OS program.
 
@@ -212,3 +221,45 @@ def extract_kzg_segment(program_output: List[int]) -> OsKzgCommitmentInfo:
     ), "A blob was attached but the KZG flag is off."
 
     return OsKzgCommitmentInfo.from_flat(array=program_output[OsOutputConstant.HEADER_SIZE.value :])
+
+
+async def fetch_compiled_classes(
+    compiled_class_hashes: Iterable[int], fact_storage: Storage
+) -> Dict[int, CompiledClass]:
+    """
+    Returns the compiled classes corresponding to the given compiled class hashes.
+    """
+    compiled_class_facts = await gather_in_chunks(
+        awaitables=(
+            CompiledClassFact.get_or_fail(
+                storage=fact_storage, suffix=to_bytes(compiled_class_hash)
+            )
+            for compiled_class_hash in compiled_class_hashes
+        )
+    )
+
+    return {
+        compiled_class_hash: fact.compiled_class
+        for compiled_class_hash, fact in safe_zip(compiled_class_hashes, compiled_class_facts)
+    }
+
+
+async def fetch_deprecated_compiled_classes(
+    compiled_class_hashes: Iterable[int], fact_storage: Storage
+) -> Dict[int, DeprecatedCompiledClass]:
+    """
+    Returns the deprecated compiled classes corresponding to the given compiled class hashes.
+    """
+    deprecated_compiled_class_facts = await gather_in_chunks(
+        awaitables=(
+            DeprecatedCompiledClassFact.get_or_fail(
+                storage=fact_storage, suffix=to_bytes(class_hash)
+            )
+            for class_hash in compiled_class_hashes
+        )
+    )
+
+    return {
+        class_hash: fact.contract_definition
+        for class_hash, fact in safe_zip(compiled_class_hashes, deprecated_compiled_class_facts)
+    }

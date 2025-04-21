@@ -6,7 +6,7 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.lang.builtins.all_builtins import with_suffix
-from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
+from starkware.cairo.lang.vm.cairo_pie import ExecutionResourcesStone
 from starkware.python.utils import from_bytes, sub_counters, to_bytes
 from starkware.starknet.business_logic.execution.deprecated_objects import ExecutionResourcesManager
 from starkware.starknet.business_logic.execution.gas_usage import calculate_tx_gas_usage
@@ -138,13 +138,13 @@ def validate_selector_for_fee(tx: DeprecatedInvokeFunction):
 
 def total_cairo_usage_from_execution_infos(
     execution_infos: Iterable[TransactionExecutionInfo],
-) -> ExecutionResources:
+) -> ExecutionResourcesStone:
     """
     Returns the sum of the Cairo usage (pure Cairo of the EP run, without OS cost) of calls in
     the given execution Infos. Excludes the fee_transfer_info resources,
     since it is part of the OS additional cost.
     """
-    cairo_usage = ExecutionResources.empty()
+    cairo_usage = ExecutionResourcesStone.empty()
 
     for execution_info in execution_infos:
         if execution_info.validate_info is not None:

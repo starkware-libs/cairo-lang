@@ -152,6 +152,11 @@ func compiled_class_hash{range_check_ptr, poseidon_ptr: PoseidonBuiltin*}(
 // As long as one function does not jump into the middle of another function and as long as there
 // are no jumps into the middle of a branch segment, the loading process described above will be
 // sound.
+//
+// Hint arguments:
+// bytecode_segment_structure: A BytecodeSegmentStructure object that describes the bytecode
+// structure.
+// is_segment_used_callback: A callback that returns whether a segment is used.
 func bytecode_hash_node{range_check_ptr, poseidon_ptr: PoseidonBuiltin*}(
     data_ptr: felt*, data_length: felt
 ) -> felt {
@@ -210,7 +215,7 @@ func bytecode_hash_internal_node{
     %{
         current_segment_info = next(bytecode_segments)
 
-        is_used = current_segment_info.is_used
+        is_used = is_segment_used_callback(ids.data_ptr, current_segment_info.segment_length)
         ids.is_segment_used = 1 if is_used else 0
 
         is_used_leaf = is_used and isinstance(current_segment_info.inner_structure, BytecodeLeaf)
@@ -219,13 +224,13 @@ func bytecode_hash_internal_node{
         ids.segment_length = current_segment_info.segment_length
         vm_enter_scope(new_scope_locals={
             "bytecode_segment_structure": current_segment_info.inner_structure,
+            "is_segment_used_callback": is_segment_used_callback
         })
     %}
 
     if (is_used_leaf != 0) {
         // Repeat the code of bytecode_hash_node() for performance reasons, instead of calling it.
         let (current_segment_hash) = poseidon_hash_many(n=segment_length, elements=data_ptr);
-        // tempvar current_segment_hash = nondet %{ bytecode_segment_structure.hash() %};
         tempvar range_check_ptr = range_check_ptr;
         tempvar poseidon_ptr = poseidon_ptr;
         tempvar current_segment_hash = current_segment_hash;
@@ -239,7 +244,11 @@ func bytecode_hash_internal_node{
             // to this segment (-1 is an invalid opcode).
             // The hash in this case is guessed and the actual bytecode is unconstrained (except for
             // the first felt).
-            %{ del memory.data[ids.data_ptr] %}
+            %{
+                # Sanity check.
+                assert not is_accessed(ids.data_ptr), "The segment is skipped but was accessed."
+                del memory.data[ids.data_ptr]
+            %}
             assert data_ptr[0] = -1;
 
             assert [range_check_ptr] = segment_length;
@@ -377,51 +386,31 @@ func validate_compiled_class_facts_post_execution{poseidon_ptr: PoseidonBuiltin*
     n_compiled_class_facts, compiled_class_facts: CompiledClassFact*, builtin_costs: felt*
 ) {
     %{
-        from starkware.cairo.lang.vm.relocatable import RelocatableValue
+        from starkware.starknet.core.os.contract_class.compiled_class_hash import (
+            BytecodeAccessOracle,
+        )
 
-        bytecode_segment_to_length = {}
-        compiled_hash_to_bytecode_segment = {}
-        for i in range(ids.n_compiled_class_facts):
-            fact = ids.compiled_class_facts[i]
-            bytecode_segment = fact.compiled_class.bytecode_ptr.segment_index
-            bytecode_segment_to_length[bytecode_segment] = fact.compiled_class.bytecode_length
-            compiled_hash_to_bytecode_segment[fact.hash] = bytecode_segment
-
-        bytecode_segment_to_visited_pcs = {
-            bytecode_segment: [] for bytecode_segment in bytecode_segment_to_length
-        }
-        for addr in iter_accessed_addresses():
-            if (
-                isinstance(addr, RelocatableValue)
-                and addr.segment_index in bytecode_segment_to_visited_pcs
-            ):
-                bytecode_segment_to_visited_pcs[addr.segment_index].append(addr.offset)
-
-        # Sort and remove the program extra data, which is not part of the hash.
-        for bytecode_segment, visited_pcs in bytecode_segment_to_visited_pcs.items():
-            visited_pcs.sort()
-            while (
-                len(visited_pcs) > 0
-                and visited_pcs[-1] >= bytecode_segment_to_length[bytecode_segment]
-            ):
-                visited_pcs.pop()
-
-        # Build the bytecode segment structures based on the execution info.
+        # Build the bytecode segment structures.
         bytecode_segment_structures = {
             compiled_hash: create_bytecode_segment_structure(
                 bytecode=compiled_class.bytecode,
                 bytecode_segment_lengths=compiled_class.bytecode_segment_lengths,
-                visited_pcs=bytecode_segment_to_visited_pcs[
-                    compiled_hash_to_bytecode_segment[compiled_hash]
-                ],
             ) for compiled_hash, compiled_class in os_input.compiled_classes.items()
         }
+        bytecode_segment_access_oracle = BytecodeAccessOracle(is_pc_accessed_callback=is_accessed)
+        vm_enter_scope({
+            "bytecode_segment_structures": bytecode_segment_structures,
+            "is_segment_used_callback": bytecode_segment_access_oracle.is_segment_used
+        })
     %}
-    return validate_compiled_class_facts(
+    validate_compiled_class_facts(
         n_compiled_class_facts=n_compiled_class_facts,
         compiled_class_facts=compiled_class_facts,
         builtin_costs=builtin_costs,
     );
+    %{ vm_exit_scope() %}
+
+    return ();
 }
 
 // Validates the compiled class facts structure and hash, using the hint variable
@@ -455,7 +444,8 @@ func validate_compiled_class_facts{poseidon_ptr: PoseidonBuiltin*, range_check_p
     // Calculate the compiled class hash.
     %{
         vm_enter_scope({
-            "bytecode_segment_structure": bytecode_segment_structures[ids.compiled_class_fact.hash]
+            "bytecode_segment_structure": bytecode_segment_structures[ids.compiled_class_fact.hash],
+            "is_segment_used_callback": is_segment_used_callback
         })
     %}
     let (hash) = compiled_class_hash(compiled_class);

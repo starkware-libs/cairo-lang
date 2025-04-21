@@ -8,12 +8,12 @@ import sys
 import traceback
 from typing import Awaitable, Callable, Dict, List, Optional, Tuple
 
-from eth_utils import from_wei
-
 from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.version import __version__
 from starkware.cairo.lang.vm.crypto import get_crypto_lib_context_manager
-from starkware.python.utils import as_non_optional
+from starkware.starknet.business_logic.transaction.internal_account_transaction import (
+    TRIVIAL_RESOURCE_BOUNDS,
+)
 from starkware.starknet.cli.reconstruct_starknet_traceback import reconstruct_starknet_traceback
 from starkware.starknet.cli.starknet_cli_utils import (
     LIBFUNC_LIST_FILES,
@@ -22,23 +22,18 @@ from starkware.starknet.cli.starknet_cli_utils import (
     InvokeFunctionArgs,
     NetworkData,
     NetworkNameError,
-    OldDeclareArgs,
-    compute_max_fee_for_tx,
-    construct_deprecated_declare_tx,
-    construct_deprecated_deploy_account_tx,
-    construct_deprecated_invoke_tx,
-    construct_deprecated_invoke_tx_for_deploy,
+    construct_declare_tx,
+    construct_deploy_account_tx,
     construct_feeder_gateway_client,
     construct_gateway_client,
+    construct_invoke_tx,
+    construct_invoke_tx_for_deploy,
     construct_nonce_callback,
-    construct_old_declare_tx,
     create_call_function,
     create_call_l1_handler,
     get_chain_id_from_str,
     load_account,
     parse_block_identifiers,
-    simulate_tx_at_block,
-    simulate_tx_at_pending_block,
     tx_received,
 )
 from starkware.starknet.core.os.contract_class.compiled_class_hash import (
@@ -46,6 +41,7 @@ from starkware.starknet.core.os.contract_class.compiled_class_hash import (
 )
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.chain_ids import StarknetChainId
+from starkware.starknet.definitions.fields import ResourceBoundsMapping
 from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.public.abi import AbiType
 from starkware.starknet.services.api.contract_class.contract_class import DeprecatedCompiledClass
@@ -58,18 +54,13 @@ from starkware.starknet.services.api.feeder_gateway.request_objects import (
     CallFunction,
     CallL1Handler,
 )
-from starkware.starknet.services.api.feeder_gateway.response_objects import (
-    LATEST_BLOCK_ID,
-    FeeEstimationInfo,
-    TransactionSimulationInfo,
+from starkware.starknet.services.api.feeder_gateway.response_objects import LATEST_BLOCK_ID
+from starkware.starknet.services.api.gateway.account_transaction import (
+    Declare,
+    DeployAccount,
+    InvokeFunction,
 )
-from starkware.starknet.services.api.gateway.deprecated_transaction import (
-    DeprecatedAccountTransaction,
-    DeprecatedDeclare,
-    DeprecatedDeployAccount,
-    DeprecatedInvokeFunction,
-    DeprecatedOldDeclare,
-)
+from starkware.starknet.services.api.gateway.deprecated_transaction import DeprecatedOldDeclare
 from starkware.starknet.services.api.gateway.gateway_client import GatewayClient
 from starkware.starknet.services.api.gateway.transaction_schema import DeprecatedTransactionSchema
 from starkware.starknet.utils.api_utils import cast_to_felts
@@ -81,9 +72,9 @@ from starkware.starknet.wallets.starknet_context import StarknetContext
 
 async def declare(args: argparse.Namespace, command_args: List[str]):
     """
-    If the `--deprecated` flag is used, creates a version 1 - declare transaction (which is used
+    If the `--deprecated` flag is used, creates a version 0 - declare transaction (which is used
     to declare Cairo 0 contracts) and sends it to the gateway. If the `--deprecated` flag is not
-    used, creates a version 2 - declare transaction (which is used to declare Cairo 1.0 contracts)
+    used, creates a version 3 - declare transaction (which is used to declare Cairo 1.0 contracts)
     and sends it to the gateway. In case a wallet is provided, the transaction is wrapped and signed
     by the wallet provider. Otherwise, a sender address and a valid signature must be provided as
     arguments.
@@ -96,38 +87,17 @@ async def declare(args: argparse.Namespace, command_args: List[str]):
         assert (
             args.compiler_args is None and args.compiler_dir is None
         ), "compiler_args and compiler_dir are not supported for deprecated declare."
-        await deprecated_declare(args=args)
+        await declare_v0(args=args)
         return
 
     has_wallet = get_wallet_provider(args=args) is not None
     declare_tx_args = parse_declare_tx_args(args=args)
 
-    declare_tx_for_simulate: Optional[DeprecatedDeclare] = None
-    if need_simulate_tx(args=args, has_wallet=has_wallet):
-        declare_tx_for_simulate = await create_deprecated_declare_tx(
-            args=args,
-            declare_tx_args=declare_tx_args,
-            max_fee=args.max_fee if args.max_fee is not None else 0,
-            has_wallet=has_wallet,
-            query=True,
-        )
-        if args.simulate or args.estimate_fee:
-            await simulate_or_estimate_fee(args=args, tx=declare_tx_for_simulate)
-            return
-
-    max_fee = await compute_max_fee(
-        args=args,
-        tx=declare_tx_for_simulate,
-        has_wallet=has_wallet,
-        skip_validate=args.skip_validate,
-    )
-
-    tx = await create_deprecated_declare_tx(
+    tx = await create_declare_tx(
         args=args,
         declare_tx_args=declare_tx_args,
-        max_fee=max_fee,
+        resource_bounds=parse_resource_bounds(args),
         has_wallet=has_wallet,
-        query=False,
     )
     gateway_client = get_gateway_client(args)
     gateway_response = await gateway_client.add_transaction(tx=tx)
@@ -141,43 +111,22 @@ Transaction hash: {gateway_response['transaction_hash']}"""
     )
 
 
-async def deprecated_declare(args: argparse.Namespace):
+async def declare_v0(args: argparse.Namespace):
     """
-    Creates an old declare transaction and sends it to the gateway. In case a wallet is
-    provided, the transaction is wrapped and signed by the wallet provider. Otherwise, a sender
-    address and a valid signature must be provided as arguments.
+    Creates an old declare transaction and sends it to the gateway.
     """
-
-    declare_tx_args = parse_old_declare_tx_args(args=args)
-    has_wallet = get_wallet_provider(args=args) is not None
-
-    declare_tx_for_simulate: Optional[DeprecatedOldDeclare] = None
-    if need_simulate_tx(args=args, has_wallet=has_wallet):
-        declare_tx_for_simulate = await create_old_declare_tx(
-            args=args,
-            declare_tx_args=declare_tx_args,
-            max_fee=args.max_fee if args.max_fee is not None else 0,
-            has_wallet=has_wallet,
-            query=True,
-        )
-        if args.simulate or args.estimate_fee:
-            await simulate_or_estimate_fee(args=args, tx=declare_tx_for_simulate)
-            return
-
-    max_fee = await compute_max_fee(
-        args=args,
-        tx=declare_tx_for_simulate,
-        has_wallet=has_wallet,
-        skip_validate=args.skip_validate,
+    assert args.sender is None, "Sender address must be 1 in deprecated (V0) declare."
+    assert len(args.signature) == 0, "Signature must be empty in deprecated (V0) declare."
+    assert args.nonce is None, "Nonce is not supported in deprecated (V0) declare."
+    tx = DeprecatedOldDeclare(
+        contract_class=DeprecatedCompiledClass.loads(data=args.contract.read()),
+        sender_address=1,
+        max_fee=0,
+        signature=[],
+        nonce=0,
+        version=0,
     )
 
-    tx = await create_old_declare_tx(
-        args=args,
-        declare_tx_args=declare_tx_args,
-        max_fee=max_fee,
-        has_wallet=has_wallet,
-        query=False,
-    )
     gateway_client = get_gateway_client(args)
     gateway_response = await gateway_client.add_transaction(tx=tx)
     assert_tx_received(gateway_response=gateway_response)
@@ -218,9 +167,6 @@ async def deploy(args, command_args):
         ),
     )
     parser.add_argument(
-        "--max_fee", type=int, help="The maximal fee to be paid for the deployment."
-    )
-    parser.add_argument(
         "--deploy_from_zero",
         action="store_true",
         help="Use 0 instead of the deployer address for the contract address computation.",
@@ -238,24 +184,12 @@ async def deploy_with_invoke(args: argparse.Namespace):
     salt = get_salt(salt=args.salt)
     class_hash = parse_hex_arg(arg=args.class_hash, arg_name="class_hash")
     constructor_calldata = cast_to_felts(values=args.inputs)
-    invoke_tx_for_fee_estimation, _ = await create_deprecated_invoke_tx_for_deploy(
+    tx, contract_address = await create_invoke_tx_for_deploy(
         args=args,
         salt=salt,
         class_hash=class_hash,
         constructor_calldata=constructor_calldata,
-        max_fee=0,
-        call=True,
-    )
-    max_fee = await compute_max_fee(
-        args=args, tx=invoke_tx_for_fee_estimation, has_wallet=True, skip_validate=False
-    )
-    tx, contract_address = await create_deprecated_invoke_tx_for_deploy(
-        args=args,
-        salt=salt,
-        class_hash=class_hash,
-        constructor_calldata=constructor_calldata,
-        max_fee=max_fee,
-        call=False,
+        resource_bounds=parse_resource_bounds(args),
     )
 
     gateway_client = get_gateway_client(args)
@@ -288,33 +222,10 @@ async def deploy_account(args: argparse.Namespace, command_args: List[str]):
     add_deploy_account_tx_arguments(parser=parser)
     # Use parse_args to add the --help flag for the subcommand.
     parser.parse_args(command_args, namespace=args)
-    validate_max_fee(max_fee=args.max_fee)
     account = await load_account_from_args(args)
 
-    deploy_account_tx_for_simulate: Optional[DeprecatedDeployAccount] = None
-    if need_simulate_tx(args=args, has_wallet=True):
-        deploy_account_tx_for_simulate, _ = await create_deprecated_deploy_account_tx(
-            args=args,
-            account=account,
-            max_fee=args.max_fee if args.max_fee is not None else 0,
-            query=True,
-        )
-        if args.simulate or args.estimate_fee:
-            await simulate_or_estimate_fee(args=args, tx=deploy_account_tx_for_simulate)
-            return
-
-    max_fee = await compute_max_fee(
-        args=args,
-        tx=deploy_account_tx_for_simulate,
-        has_wallet=True,
-        skip_validate=args.skip_validate,
-    )
-
-    tx, contract_address = await create_deprecated_deploy_account_tx(
-        args=args,
-        account=account,
-        max_fee=max_fee,
-        query=False,
+    tx, contract_address = await create_deploy_account_tx(
+        args=args, account=account, resource_bounds=parse_resource_bounds(args), dry_run=False
     )
 
     gateway_client = get_gateway_client(args)
@@ -362,36 +273,15 @@ async def invoke(args: argparse.Namespace, command_args: List[str]):
     invoke_tx_args = parse_invoke_tx_args(args=args)
 
     has_wallet = get_wallet_provider(args=args) is not None
-    invoke_tx_for_simulate: Optional[DeprecatedInvokeFunction] = None
-    if need_simulate_tx(args=args, has_wallet=has_wallet):
-        invoke_tx_for_simulate = await create_deprecated_invoke_tx(
-            args=args,
-            invoke_tx_args=invoke_tx_args,
-            max_fee=args.max_fee if args.max_fee is not None else 0,
-            has_wallet=has_wallet,
-            query=True,
-        )
-
-        if args.simulate or args.estimate_fee:
-            await simulate_or_estimate_fee(args=args, tx=invoke_tx_for_simulate)
-            return
 
     if args.dry_run:
         assert has_wallet, "--dry_run can only be used for invocation through an account contract."
 
-    max_fee = await compute_max_fee(
-        args=args,
-        tx=invoke_tx_for_simulate,
-        has_wallet=has_wallet,
-        skip_validate=args.skip_validate,
-    )
-
-    tx = await create_deprecated_invoke_tx(
+    tx = await create_invoke_tx(
         args=args,
         invoke_tx_args=invoke_tx_args,
-        max_fee=max_fee,
+        resource_bounds=parse_resource_bounds(args),
         has_wallet=has_wallet,
-        query=False,
     )
     if not args.dry_run:
         gateway_client = get_gateway_client(args)
@@ -406,25 +296,6 @@ Transaction hash: {gateway_response['transaction_hash']}"""
         )
     else:
         print_invoke_tx(tx=tx, chain_id=get_chain_id(args))
-
-
-async def estimate_message_fee(args: argparse.Namespace, command_args: List[str]):
-    parser = argparse.ArgumentParser(description="Estimates the fee of an L1-to-L2 message.")
-    add_block_identifier_arguments(
-        parser=parser, block_role_description="be used as the context for the call operation"
-    )
-    add_call_l1_handler_arguments(parser=parser)
-
-    parser.parse_args(command_args, namespace=args)
-    args.block_hash, args.block_number = parse_block_identifiers(args.block_hash, args.block_number)
-    call_l1_handler = parse_call_l1_handler_args(args=args)
-
-    feeder_client = get_feeder_gateway_client(args=args)
-    fee_info = await feeder_client.estimate_message_fee(
-        call_l1_handler=call_l1_handler, block_hash=args.block_hash, block_number=args.block_number
-    )
-
-    print_fee_info(fee_info=fee_info)
 
 
 async def tx_status(args, command_args):
@@ -906,59 +777,6 @@ def get_salt(salt: Optional[str]) -> int:
     return parse_hex_arg(arg=salt, arg_name="salt")
 
 
-def validate_max_fee(max_fee: Optional[int]):
-    if max_fee is None:
-        return
-    assert max_fee >= 0, f"The 'max_fee' argument, --max_fee, must be non-negative, got {max_fee}."
-
-
-async def compute_max_fee(
-    args: argparse.Namespace,
-    tx: Optional[DeprecatedAccountTransaction],
-    has_wallet: bool,
-    skip_validate: bool,
-) -> int:
-    """
-    Returns max_fee argument if passed, and estimates and returns the max fee otherwise.
-    """
-    if args.max_fee is not None:
-        validate_max_fee(max_fee=args.max_fee)
-        return args.max_fee
-
-    if has_wallet:
-        max_fee = await compute_max_fee_for_tx(
-            feeder_client=get_feeder_gateway_client(args),
-            tx=as_non_optional(tx),
-            skip_validate=skip_validate,
-        )
-        max_fee_eth = float(from_wei(number=max_fee, unit="ether"))
-
-        print(f"Sending the transaction with max_fee: {max_fee_eth:.6f} ETH ({max_fee} WEI).")
-    else:
-        max_fee = 0
-
-    return max_fee
-
-
-def need_simulate_tx(args: argparse.Namespace, has_wallet: bool) -> bool:
-    """
-    Returns whether a simulate is required.
-    If simulation was not requested, asserts that no other simulation related flags appear.
-    """
-    simulate_requested = args.simulate or args.estimate_fee
-    if not simulate_requested:
-        assert args.block_hash is None and args.block_number is None, (
-            "--block_hash and --block_number should only be passed when either --simulate or "
-            "--estimate_fee flag are used."
-        )
-        assert not args.skip_validate, (
-            "--skip_validate should only be passed when either --simulate or "
-            "--estimate_fee flag are used."
-        )
-
-    return (args.max_fee is None and has_wallet) or simulate_requested
-
-
 async def load_account_from_args(args) -> Account:
     wallet = get_wallet_provider(args)
     assert wallet is not None, f'--wallet must be specified with the "{args.command}" subcommand.'
@@ -1019,10 +837,13 @@ def parse_call_l1_handler_args(args: argparse.Namespace) -> CallL1Handler:
 
 
 def parse_invoke_tx_args(args: argparse.Namespace) -> InvokeFunctionArgs:
-    validate_max_fee(max_fee=args.max_fee)
     return InvokeFunctionArgs.from_call_function(
         call_function=parse_call_function_args(args), signature=cast_to_felts(values=args.signature)
     )
+
+
+def parse_resource_bounds(args: argparse.Namespace) -> ResourceBoundsMapping:
+    return TRIVIAL_RESOURCE_BOUNDS
 
 
 def parse_declare_tx_args(args: argparse.Namespace) -> DeclareArgs:
@@ -1068,29 +889,18 @@ def parse_declare_tx_args(args: argparse.Namespace) -> DeclareArgs:
     )
 
 
-def parse_old_declare_tx_args(args: argparse.Namespace) -> OldDeclareArgs:
-    validate_max_fee(max_fee=args.max_fee)
-    sender = parse_hex_arg(arg=args.sender, arg_name="sender") if args.sender is not None else None
-    return OldDeclareArgs(
-        sender=sender,
-        signature=cast_to_felts(values=args.signature),
-        contract_class=DeprecatedCompiledClass.loads(data=args.contract.read()),
-    )
-
-
-async def create_deprecated_invoke_tx_for_deploy(
+async def create_invoke_tx_for_deploy(
     args: argparse.Namespace,
     salt: int,
     class_hash: int,
     constructor_calldata: List[int],
-    max_fee: int,
-    call: bool,
-) -> Tuple[DeprecatedInvokeFunction, int]:
+    resource_bounds: ResourceBoundsMapping,
+) -> Tuple[InvokeFunction, int]:
     """
     Creates and returns an invoke transaction to deploy a contract with the given
     arguments, which is wrapped and signed by the wallet provider.
     """
-    return await construct_deprecated_invoke_tx_for_deploy(
+    return await construct_invoke_tx_for_deploy(
         feeder_client=get_feeder_gateway_client(args=args),
         account=await load_account_from_args(args=args),
         salt=salt,
@@ -1098,123 +908,72 @@ async def create_deprecated_invoke_tx_for_deploy(
         constructor_calldata=constructor_calldata,
         deploy_from_zero=args.deploy_from_zero,
         chain_id=get_chain_id(args),
-        max_fee=max_fee,
-        call=call,
+        resource_bounds=resource_bounds,
         explicit_nonce=args.nonce,
     )
 
 
-async def create_deprecated_invoke_tx(
+async def create_invoke_tx(
     args: argparse.Namespace,
     invoke_tx_args: InvokeFunctionArgs,
-    max_fee: int,
+    resource_bounds: ResourceBoundsMapping,
     has_wallet: bool,
-    query: bool,
-) -> DeprecatedInvokeFunction:
+) -> InvokeFunction:
     """
     Creates and returns a deprecated invoke transaction with the given parameters.
     If a wallet provider was provided in args, that transaction will be wrapped and signed.
     """
-    return await construct_deprecated_invoke_tx(
+    return await construct_invoke_tx(
         feeder_client=get_feeder_gateway_client(args=args),
         invoke_tx_args=invoke_tx_args,
         chain_id=get_chain_id(args=args),
-        max_fee=max_fee,
+        resource_bounds=resource_bounds,
         account=await load_account_from_args(args=args) if has_wallet else None,
         explicit_nonce=args.nonce,
-        simulate=query,
         dry_run=args.dry_run,
     )
 
 
-async def create_deprecated_declare_tx(
+async def create_declare_tx(
     args: argparse.Namespace,
     declare_tx_args: DeclareArgs,
-    max_fee: int,
+    resource_bounds: ResourceBoundsMapping,
     has_wallet: bool,
-    query: bool,
-) -> DeprecatedDeclare:
+) -> Declare:
     """
-    Creates and returns an old declare transaction with the given parameters.
+    Creates and returns a declare transaction with the given parameters.
     If a wallet provider was provided in args, that transaction will be wrapped and signed.
     """
-    return await construct_deprecated_declare_tx(
+    return await construct_declare_tx(
         feeder_client=get_feeder_gateway_client(args=args),
         declare_tx_args=declare_tx_args,
         chain_id=get_chain_id(args=args),
-        max_fee=max_fee,
+        resource_bounds=resource_bounds,
         account=await load_account_from_args(args=args) if has_wallet else None,
         explicit_nonce=args.nonce,
-        simulate=query,
     )
 
 
-async def create_old_declare_tx(
-    args: argparse.Namespace,
-    declare_tx_args: OldDeclareArgs,
-    max_fee: int,
-    has_wallet: bool,
-    query: bool,
-) -> DeprecatedOldDeclare:
-    """
-    Creates and returns an old declare transaction with the given parameters.
-    If a wallet provider was provided in args, that transaction will be wrapped and signed.
-    """
-    return await construct_old_declare_tx(
-        feeder_client=get_feeder_gateway_client(args=args),
-        declare_tx_args=declare_tx_args,
-        chain_id=get_chain_id(args=args),
-        max_fee=max_fee,
-        account=await load_account_from_args(args=args) if has_wallet else None,
-        explicit_nonce=args.nonce,
-        simulate=query,
-    )
-
-
-async def create_deprecated_deploy_account_tx(
+async def create_deploy_account_tx(
     args: argparse.Namespace,
     account: Account,
-    max_fee: int,
-    query: bool,
-) -> Tuple[DeprecatedDeployAccount, int]:
+    resource_bounds: ResourceBoundsMapping,
+    dry_run: bool,
+) -> Tuple[DeployAccount, int]:
     """
-    Creates and returns a deprecated Deploy Account transaction with the given parameters along with
+    Creates and returns a Deploy Account transaction with the given parameters along with
     the new account address.
     """
-    return await construct_deprecated_deploy_account_tx(
+    return await construct_deploy_account_tx(
         account=account,
-        max_fee=max_fee,
+        resource_bounds=resource_bounds,
         chain_id=get_chain_id(args),
-        dry_run=query,
+        dry_run=dry_run,
         force_deploy=args.force,
     )
 
 
-async def simulate_tx_inner(
-    args: argparse.Namespace,
-    tx: DeprecatedAccountTransaction,
-    has_block_info: bool,
-) -> TransactionSimulationInfo:
-    """
-    Simulates a transaction with the given parameters.
-    Returns a TransactionSimulationInfo object.
-    """
-    feeder_client = get_feeder_gateway_client(args=args)
-    skip_validate = args.skip_validate
-    if has_block_info:
-        return await simulate_tx_at_block(
-            feeder_client=feeder_client,
-            tx=tx,
-            block_hash=args.block_hash,
-            block_number=args.block_number,
-            skip_validate=skip_validate,
-        )
-    return await simulate_tx_at_pending_block(
-        feeder_client=feeder_client, tx=tx, skip_validate=skip_validate
-    )
-
-
-def print_invoke_tx(tx: DeprecatedInvokeFunction, chain_id: int):
+def print_invoke_tx(tx: InvokeFunction, chain_id: int):
     sn_config_dict = StarknetGeneralConfig().dump()
     sn_config_dict["starknet_os_config"]["chain_id"] = StarknetChainId(chain_id).value
     sn_config = StarknetGeneralConfig.load(sn_config_dict)
@@ -1224,20 +983,6 @@ def print_invoke_tx(tx: DeprecatedInvokeFunction, chain_id: int):
         "transaction_hash": hex(tx_hash),
     }
     print(json.dumps(out_dict, indent=4))
-
-
-def print_fee_info(fee_info: FeeEstimationInfo):
-    """
-    Prints the fee information based on the FeeEstimationInfo object.
-    """
-    fee_wei = fee_info.overall_fee
-    fee_eth = float(from_wei(number=fee_wei, unit="ether"))
-    print(
-        f"""\
-The estimated fee is: {fee_wei} WEI ({fee_eth:.6f} ETH).
-Gas usage: {fee_info.gas_usage}
-Gas price: {fee_info.gas_price} WEI"""
-    )
 
 
 def create_get_nonce_callback(args: argparse.Namespace) -> Callable[[int], Awaitable[int]]:
@@ -1250,16 +995,6 @@ def assert_tx_received(gateway_response: Dict[str, str]):
     assert tx_received(
         gateway_response=gateway_response
     ), f"Failed to send transaction. Response: {gateway_response}."
-
-
-async def simulate_or_estimate_fee(args: argparse.Namespace, tx: DeprecatedAccountTransaction):
-    args.block_hash, args.block_number = parse_block_identifiers(args.block_hash, args.block_number)
-    tx_simulate_info = await simulate_tx_inner(args=args, tx=tx, has_block_info=True)
-    print_fee_info(fee_info=tx_simulate_info.fee_estimation)
-
-    if args.simulate:
-        print()
-        print(tx_simulate_info.trace.dumps(indent=4, sort_keys=True))
 
 
 # Add arguments.
@@ -1285,37 +1020,6 @@ def add_account_tx_arguments(parser: argparse.ArgumentParser):
         default=[],
         help="The signature information for transaction.",
     )
-    parser.add_argument(
-        "--max_fee",
-        type=int,
-        help="The maximal fee to be paid for the execution of the transaction.",
-    )
-
-
-def add_simulate_tx_arguments(parser: argparse.ArgumentParser):
-    """
-    Adds the arguments: simulate, estimate_fee and the block identifier arguments.
-    """
-    parser.add_argument(
-        "--simulate",
-        action="store_true",
-        help="Simulates the transaction and prints its trace and its estimated cost.",
-    )
-    parser.add_argument(
-        "--estimate_fee",
-        action="store_true",
-        help="Estimates the fee of the transaction.",
-    )
-    parser.add_argument(
-        "--skip_validate",
-        action="store_true",
-        help="Skips the validate function on simulate and estimate_fee.",
-    )
-    add_block_identifier_arguments(
-        parser=parser,
-        block_role_description="be used as the context for the transaction simulation",
-    )
-
 
 def add_declare_tx_arguments(parser: argparse.ArgumentParser):
     """
@@ -1354,13 +1058,12 @@ def add_declare_tx_arguments(parser: argparse.ArgumentParser):
         type=str,
         help=(
             "The compilation arguments for the Cairo 1.0 compiler. For example, "
-            "--compiler_args='--add-pythonic-hints --allowed-libfuncs-list-file testnet_libfuncs'. "
+            "--compiler_args='--add-pythonic-hints --allowed-libfuncs-list-file mainnet_libfuncs'. "
             "If '--compiler_args' is not specified, "
             "the libfunc list will be chosen according to the specified network."
         ),
     )
     add_account_tx_arguments(parser=parser)
-    add_simulate_tx_arguments(parser=parser)
 
 
 def add_call_function_arguments(parser: argparse.ArgumentParser):
@@ -1402,7 +1105,6 @@ def add_invoke_tx_arguments(parser: argparse.ArgumentParser):
         action="store_true",
         help="Prepare the transaction and print it without signing or sending it.",
     )
-    add_simulate_tx_arguments(parser=parser)
 
 
 def add_deploy_account_tx_arguments(parser: argparse.ArgumentParser):
@@ -1410,14 +1112,10 @@ def add_deploy_account_tx_arguments(parser: argparse.ArgumentParser):
     Adds the arguments: max_fee, the simulate arguments and the block identifier arguments.
     """
     parser.add_argument(
-        "--max_fee", type=int, help="The maximal fee to be paid for the deployment."
-    )
-    parser.add_argument(
         "--force",
         action="store_true",
         help="Send the transaction even if it was already sent.",
     )
-    add_simulate_tx_arguments(parser=parser)
 
 
 def add_block_identifier_arguments(
@@ -1445,7 +1143,6 @@ async def main():
         "declare": declare,
         "deploy": deploy,
         "deploy_account": deploy_account,
-        "estimate_message_fee": estimate_message_fee,
         "get_block": get_block,
         "get_block_traces": get_block_traces,
         "get_class_by_hash": get_class_by_hash,

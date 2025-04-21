@@ -1,7 +1,8 @@
-from typing import List, Optional, Sequence, Tuple
+from typing import Callable, List, Optional, Sequence, Tuple
 
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.lang.vm.crypto import poseidon_hash_many
+from starkware.cairo.lang.vm.relocatable import RelocatableValue
 from starkware.python.utils import as_non_optional, from_bytes
 from starkware.starknet.core.os.contract_class.compiled_class_hash_objects import (
     BytecodeLeaf,
@@ -22,6 +23,30 @@ from starkware.starknet.services.api.contract_class.contract_class import (
     EntryPointType,
     NestedIntList,
 )
+
+
+class BytecodeAccessOracle:
+    def __init__(self, is_pc_accessed_callback: Callable[[RelocatableValue], bool]):
+        self.is_pc_accessed_callback = is_pc_accessed_callback
+
+    def is_segment_used(self, start_pc: RelocatableValue, segment_length: int) -> bool:
+        """
+        Returns whether the bytecode segment starting at `start_pc` with length `segment_length` is
+        used.
+        """
+        if self.is_pc_accessed_callback(start_pc):
+            return True
+
+        # Sanity check: if the first PC of the segment was not accessed, the entire segment
+        # should not be accessed as well.
+        for i in range(segment_length):
+            pc = start_pc + i
+            assert not self.is_pc_accessed_callback(pc), (
+                f"PC {pc.offset} was visited, "
+                f"but the beginning of the segment ({start_pc.offset}) was not"
+            )
+
+        return False
 
 
 def compute_compiled_class_hash(compiled_class: CompiledClass) -> int:
@@ -72,7 +97,6 @@ def _compute_compiled_class_hash_inner(compiled_class: CompiledClass) -> int:
     bytecode_hash = create_bytecode_segment_structure(
         bytecode=compiled_class.bytecode,
         bytecode_segment_lengths=compiled_class.bytecode_segment_lengths,
-        visited_pcs=None,
     ).hash()
 
     # Compute total hash by hashing each component on top of the previous one.
@@ -88,75 +112,41 @@ def _compute_compiled_class_hash_inner(compiled_class: CompiledClass) -> int:
 
 
 def create_bytecode_segment_structure(
-    bytecode: List[int],
-    bytecode_segment_lengths: NestedIntList,
-    visited_pcs: Optional[Sequence[int]],
+    bytecode: List[int], bytecode_segment_lengths: NestedIntList
 ) -> BytecodeSegmentStructure:
     """
     Creates a BytecodeSegmentStructure instance from the given bytecode and
     bytecode_segment_lengths.
     """
-    rev_visited_pcs = list(visited_pcs if visited_pcs is not None else range(len(bytecode)))[::-1]
-
     res, total_len = _create_bytecode_segment_structure_inner(
-        bytecode=bytecode,
-        bytecode_segment_lengths=bytecode_segment_lengths,
-        visited_pcs=rev_visited_pcs,
-        bytecode_offset=0,
+        bytecode=bytecode, bytecode_segment_lengths=bytecode_segment_lengths, bytecode_offset=0
     )
     assert total_len == len(
         bytecode
     ), f"Invalid length bytecode segment structure: {total_len}. Bytecode length: {len(bytecode)}."
-    assert len(rev_visited_pcs) == 0, f"PC {rev_visited_pcs[-1]} is out of range."
     return res
 
 
 def _create_bytecode_segment_structure_inner(
     bytecode: List[int],
     bytecode_segment_lengths: NestedIntList,
-    visited_pcs: List[int],
     bytecode_offset: int,
 ) -> Tuple[BytecodeSegmentStructure, int]:
     """
     Helper function for `create_bytecode_segment_structure`.
-    `visited_pcs` should be given in reverse order, and is consumed by the function.
     Returns the BytecodeSegmentStructure and the total length of the processed segment.
     """
     if isinstance(bytecode_segment_lengths, int):
         segment_end = bytecode_offset + bytecode_segment_lengths
-
-        # Remove all the visited PCs that are in the segment.
-        while len(visited_pcs) > 0 and bytecode_offset <= visited_pcs[-1] < segment_end:
-            visited_pcs.pop()
-
         return (BytecodeLeaf(data=bytecode[bytecode_offset:segment_end]), bytecode_segment_lengths)
 
     res = []
     total_len = 0
     for item in bytecode_segment_lengths:
-        visited_pc_before = visited_pcs[-1] if len(visited_pcs) > 0 else None
-
         current_structure, item_len = _create_bytecode_segment_structure_inner(
-            bytecode=bytecode,
-            bytecode_segment_lengths=item,
-            visited_pcs=visited_pcs,
-            bytecode_offset=bytecode_offset,
+            bytecode=bytecode, bytecode_segment_lengths=item, bytecode_offset=bytecode_offset
         )
-
-        visited_pc_after = visited_pcs[-1] if len(visited_pcs) > 0 else None
-        is_used = visited_pc_after != visited_pc_before
-
-        if is_used and visited_pc_before != bytecode_offset:
-            raise ValueError(
-                f"Invalid segment structure: PC {visited_pc_before} was visited, "
-                f"but the beginning of the segment ({bytecode_offset}) was not."
-            )
-
-        res.append(
-            BytecodeSegment(
-                segment_length=item_len, is_used=is_used, inner_structure=current_structure
-            )
-        )
+        res.append(BytecodeSegment(segment_length=item_len, inner_structure=current_structure))
         bytecode_offset += item_len
         total_len += item_len
 
@@ -172,15 +162,19 @@ def run_compiled_class_hash(
     bytecode_segment_structure = create_bytecode_segment_structure(
         bytecode=compiled_class.bytecode,
         bytecode_segment_lengths=compiled_class.bytecode_segment_lengths,
-        visited_pcs=visited_pcs,
     )
 
     compiled_class_struct = get_compiled_class_struct(
         identifiers=program.identifiers,
         compiled_class=compiled_class,
-        bytecode=bytecode_segment_structure.bytecode_with_skipped_segments(),
+        bytecode=compiled_class.bytecode,
     )
-
+    visited_pcs_set = (
+        set(visited_pcs) if visited_pcs is not None else set(range(len(compiled_class.bytecode)))
+    )
+    bytecode_segment_access_oracle = BytecodeAccessOracle(
+        is_pc_accessed_callback=lambda pc: pc.offset in visited_pcs_set
+    )
     runner.run(
         "starkware.starknet.core.os.contract_class.compiled_class.compiled_class_hash",
         range_check_ptr=runner.range_check_builtin.base,
@@ -188,6 +182,9 @@ def run_compiled_class_hash(
         compiled_class=compiled_class_struct,
         use_full_name=True,
         verify_secure=False,
-        hint_locals={"bytecode_segment_structure": bytecode_segment_structure},
+        hint_locals={
+            "bytecode_segment_structure": bytecode_segment_structure,
+            "is_segment_used_callback": bytecode_segment_access_oracle.is_segment_used,
+        },
     )
     return runner

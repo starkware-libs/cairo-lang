@@ -182,12 +182,12 @@ func execute_tasks{builtin_ptrs: BuiltinData*, self_range_check_ptr}(
         task_id = len(simple_bootloader_input.tasks) - ids.n_tasks
         task = simple_bootloader_input.tasks[task_id].load_task()
     %}
-    tempvar use_poseidon = nondet %{ 1 if task.use_poseidon else 0 %};
+    tempvar program_hash_function = nondet %{ 1 if task.use_poseidon else 0 %};
     // Call execute_task to execute the current task.
     execute_task(
         builtin_encodings=builtin_encodings,
         builtin_instance_sizes=builtin_instance_sizes,
-        use_poseidon=use_poseidon,
+        program_hash_function=program_hash_function,
     );
 
     return execute_tasks(

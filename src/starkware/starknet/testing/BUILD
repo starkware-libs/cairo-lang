@@ -42,8 +42,10 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
+        "//src/starkware/starknet/business_logic/transaction:starknet_account_transaction_objects_lib",
         "//src/starkware/starknet/business_logic/transaction:starknet_transaction_deprecated_objects_lib",
         "//src/starkware/starknet/core/os/contract_address:starknet_contract_address_lib",
+        "//src/starkware/starknet/definitions:starknet_definitions_lib",
         "//src/starkware/starknet/public:starknet_abi_lib",
         requirement("web3"),
     ],

@@ -47,32 +47,48 @@ func squash_state_changes_inner{range_check_ptr}(
 
     local prev_state: StateEntry* = cast(state_changes.prev_value, StateEntry*);
     local new_state: StateEntry* = cast(state_changes.new_value, StateEntry*);
-    let (local squashed_contract_state_dict: DictAccess*) = alloc();
+    local squashed_storage_ptr: DictAccess*;
+    local squashed_prev_state: StateEntry*;
+    %{
+        if state_update_pointers is None:
+            ids.squashed_storage_ptr = segments.add()
+            ids.squashed_prev_state = segments.add()
+        else:
+            ids.squashed_prev_state, ids.squashed_storage_ptr = (
+                state_update_pointers.get_contract_state_entry_and_storage_ptr(
+                    contract_address=ids.state_changes.key
+                )
+            )
+    %}
 
-    let (local squashed_contract_state_dict_end) = squash_dict(
+    let (local squashed_storage_ptr_end) = squash_dict(
         dict_accesses=prev_state.storage_ptr,
         dict_accesses_end=new_state.storage_ptr,
-        squashed_dict=squashed_contract_state_dict,
+        squashed_dict=squashed_storage_ptr,
     );
+
+    assert [squashed_prev_state] = StateEntry(
+        class_hash=prev_state.class_hash, storage_ptr=squashed_storage_ptr, nonce=prev_state.nonce
+    );
+
+    local squashed_new_state: StateEntry* = new StateEntry(
+        class_hash=new_state.class_hash, storage_ptr=squashed_storage_ptr_end, nonce=new_state.nonce
+    );
+
+    %{
+        if state_update_pointers is not None:
+            state_update_pointers.contract_address_to_state_entry_and_storage_ptr[
+                ids.state_changes.key
+            ] = (
+                ids.squashed_new_state.address_,
+                ids.squashed_storage_ptr_end.address_,
+            )
+    %}
 
     assert squashed_state_changes[0] = DictAccess(
         key=state_changes.key,
-        prev_value=cast(
-            new StateEntry(
-                class_hash=prev_state.class_hash,
-                storage_ptr=squashed_contract_state_dict,
-                nonce=prev_state.nonce,
-            ),
-            felt,
-        ),
-        new_value=cast(
-            new StateEntry(
-                class_hash=new_state.class_hash,
-                storage_ptr=squashed_contract_state_dict_end,
-                nonce=new_state.nonce,
-            ),
-            felt,
-        ),
+        prev_value=cast(squashed_prev_state, felt),
+        new_value=cast(squashed_new_state, felt),
     );
 
     return squash_state_changes_inner(
@@ -88,12 +104,23 @@ func squash_class_changes{range_check_ptr}(
 ) -> (n_class_updates: felt, squashed_contract_state_dict: DictAccess*) {
     alloc_locals;
 
-    let (local squashed_dict: DictAccess*) = alloc();
+    local squashed_dict: DictAccess*;
+    %{
+        if state_update_pointers is None:
+            ids.squashed_dict = segments.add()
+        else:
+            ids.squashed_dict = state_update_pointers.class_tree_ptr
+    %}
     let (local squashed_dict_end) = squash_dict(
         dict_accesses=class_changes_start,
         dict_accesses_end=class_changes_end,
         squashed_dict=squashed_dict,
     );
+
+    %{
+        if state_update_pointers is not None:
+            state_update_pointers.class_tree_ptr = ids.squashed_dict_end.address_
+    %}
 
     return (
         n_class_updates=(squashed_dict_end - squashed_dict) / DictAccess.SIZE,

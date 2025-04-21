@@ -15,7 +15,6 @@ from starkware.starknet.definitions.general_config import (
     DEFAULT_MIN_FRI_L1_DATA_GAS_PRICE,
     DEFAULT_MIN_FRI_L1_GAS_PRICE,
     DEFAULT_SEQUENCER_ADDRESS,
-    DEFAULT_USE_KZG_DA,
 )
 from starkware.starkware_utils.error_handling import stark_assert_eq, stark_assert_le
 from starkware.starkware_utils.serializable_dataclass import SerializableMarshmallowDataclass
@@ -107,7 +106,7 @@ class BlockInfo(ValidatedMarshmallowDataclass):
     # The sequencer address of this block.
     sequencer_address: Optional[int] = field(metadata=fields.optional_sequencer_address_metadata)
 
-    # The version of Starknet system (e.g., "0.13.4").
+    # The version of Starknet system (e.g., "0.14.0").
     starknet_version: Optional[str] = field(metadata=fields.starknet_version_metadata)
 
     # Indicates whether to use KZG commitment scheme for the block's Data Avilability.
@@ -148,7 +147,7 @@ class BlockInfo(ValidatedMarshmallowDataclass):
         strk_l1_data_gas_price: int = DEFAULT_MIN_FRI_L1_DATA_GAS_PRICE,
         sequencer_address: int = DEFAULT_SEQUENCER_ADDRESS,
         starknet_version: str = STARKNET_VERSION,
-        use_kzg_da: bool = DEFAULT_USE_KZG_DA,
+        use_kzg_da: bool = True,
     ) -> "BlockInfo":
         """
         Returns a BlockInfo object with default gas_price.

@@ -17,6 +17,7 @@ from starkware.starkware_utils.validated_fields import (
     OptionalField,
     RangeValidatedField,
     ValidatedField,
+    ValidatedIntFormatter,
 )
 
 # Fields data: validation data, dataclass metadata.
@@ -75,17 +76,17 @@ EthAddressIntField = RangeValidatedField(
     upper_bound=constants.ETH_ADDRESS_UPPER_BOUND,
     name="Ethereum address",
     error_code=StarkErrorCode.OUT_OF_RANGE_ETH_ADDRESS,
-    formatter=None,
+    formatter=ValidatedIntFormatter.INT,
 )
 
-EthAddressHexField = dataclasses.replace(EthAddressIntField, formatter=hex)
+EthAddressHexField = dataclasses.replace(EthAddressIntField, formatter=ValidatedIntFormatter.HEX)
 
 FeltField = RangeValidatedField(
     lower_bound=0,
     upper_bound=FIELD_PRIME,
     name="Field element",
     error_code=StarkErrorCode.OUT_OF_RANGE_FIELD_ELEMENT,
-    formatter=hex,
+    formatter=ValidatedIntFormatter.HEX,
 )
 
 OptionalFeltField = OptionalField(field=FeltField, none_probability=0)
@@ -94,14 +95,16 @@ felt_as_hex_list_metadata = dict(marshmallow_field=mfields.List(FeltField.get_ma
 
 
 def get_bounded_int_range_validator(
-    lower_bound: int = 0, upper_bound: int = FIELD_PRIME
+    lower_bound: int = 0,
+    upper_bound: int = FIELD_PRIME,
+    formatter: ValidatedIntFormatter = ValidatedIntFormatter.HEX,
 ) -> RangeValidatedField:
     return RangeValidatedField(
         lower_bound=lower_bound,
         upper_bound=upper_bound,
         name=f"Integer in range [{lower_bound}, {upper_bound})",
         error_code=StarkErrorCode.OUT_OF_RANGE_FIELD_ELEMENT,
-        formatter=hex,
+        formatter=formatter,
     )
 
 

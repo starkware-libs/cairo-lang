@@ -1,6 +1,6 @@
 import logging
 from dataclasses import field
-from typing import Any, Callable, Dict, Mapping, MutableMapping, Optional, Tuple, Type, TypeVar
+from typing import Any, Callable, Dict, Mapping, MutableMapping, Optional, Set, Tuple, Type, TypeVar
 
 import marshmallow
 import marshmallow_dataclass
@@ -230,9 +230,7 @@ class SharedState(SharedStateBase):
             block_info=BlockInfo.empty(sequencer_address=general_config.sequencer_address),
         )
 
-    async def get_contract_class_tree(
-        self, ffc: FactFetchingContext, general_config: StarknetGeneralConfig
-    ) -> PatriciaTree:
+    async def get_contract_class_tree(self, ffc: FactFetchingContext) -> PatriciaTree:
         """
         Returns the state's contract class Patricia tree if it exists;
         Otherwise returns an empty tree.
@@ -710,6 +708,47 @@ class StateDiff(EverestStateDiff, DBObject):
             set(self.nonces.keys() | self.storage_updates.keys()) - supported_da_modes
         )
         assert len(unsupported_da_modes) == 0, f"Unsupported DA modes: {unsupported_da_modes}."
+
+    def gather_accessed_aliases(self) -> Set[int]:
+        """
+        Gather the accessed leaves in the aliases contract.
+        """
+        accessed_alias_contract_keys = set([constants.ALIAS_COUNTER_STORAGE_KEY])
+        accessed_alias_contract_keys.update(
+            {
+                address
+                for address in (
+                    self.address_to_class_hash.keys()
+                    | self.nonces.get(DataAvailabilityMode.L1, {}).keys()
+                    | self.storage_updates.get(DataAvailabilityMode.L1, {}).keys()
+                )
+                if address >= constants.INITIAL_AVAILABLE_ALIAS
+            }
+        )
+        for address, storge_updates in self.storage_updates.get(
+            DataAvailabilityMode.L1, {}
+        ).items():
+            if address > constants.MAX_NON_COMPRESSED_CONTRACT_ADDRESS:
+                accessed_alias_contract_keys.update(
+                    {
+                        storage_key
+                        for storage_key in storge_updates.keys()
+                        if storage_key >= constants.INITIAL_AVAILABLE_ALIAS
+                    }
+                )
+        return accessed_alias_contract_keys
+
+    @classmethod
+    def from_compressed_state_diff(
+        cls, compressed_state_diff: "CompressedStateDiff"
+    ) -> "StateDiff":
+        return StateDiff(
+            address_to_class_hash=compressed_state_diff.address_to_class_hash,
+            nonces=compressed_state_diff.nonces,
+            storage_updates=compressed_state_diff.storage_updates,
+            declared_classes=compressed_state_diff.declared_classes,
+            block_info=compressed_state_diff.block_info,
+        )
 
 
 @marshmallow_dataclass.dataclass(frozen=True)

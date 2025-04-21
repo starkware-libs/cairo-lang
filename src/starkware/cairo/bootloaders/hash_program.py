@@ -1,5 +1,6 @@
 import argparse
 import json
+from enum import Enum
 
 from starkware.cairo.common.hash_chain import compute_hash_chain
 from starkware.cairo.lang.compiler.program import Program, ProgramBase
@@ -8,7 +9,19 @@ from starkware.cairo.lang.vm.crypto import get_crypto_lib_context_manager, posei
 from starkware.python.utils import from_bytes
 
 
-def compute_program_hash_chain(program: ProgramBase, use_poseidon: bool, bootloader_version=0):
+class HashFunction(Enum):
+    """
+    A hash function. These can be used e.g. for hashing a program within the bootloader.
+    """
+
+    PEDERSEN = 0
+    POSEIDON = 1
+    BLAKE = 2
+
+
+def compute_program_hash_chain(
+    program: ProgramBase, program_hash_function: HashFunction, bootloader_version=0
+):
     """
     Computes a hash chain over a program, including the length of the data chain.
     """
@@ -17,9 +30,13 @@ def compute_program_hash_chain(program: ProgramBase, use_poseidon: bool, bootloa
     program_header = [bootloader_version, program.main, len(program.builtins)] + builtin_list
     data_chain = program_header + program.data
 
-    if use_poseidon:
+    if program_hash_function == HashFunction.POSEIDON:
         return poseidon_hash_many(data_chain)
-    return compute_hash_chain([len(data_chain)] + data_chain)
+    elif program_hash_function == HashFunction.PEDERSEN:
+        return compute_hash_chain([len(data_chain)] + data_chain)
+    else:
+        assert program_hash_function == HashFunction.BLAKE
+        return 0x123456789
 
 
 def main():
@@ -39,16 +56,24 @@ def main():
         help="Build flavor",
     )
     parser.add_argument(
-        "--use_poseidon",
-        type=bool,
-        default=False,
-        help="Use Poseidon hash.",
+        "--program-hash-function",
+        type=str,
+        choices=[hf.name.lower() for hf in HashFunction],
+        default=HashFunction.PEDERSEN.name.lower(),
+        help="Hash function to be used. Options: pedersen, poseidon, blake. Default: pedersen.",
     )
     args = parser.parse_args()
 
     with get_crypto_lib_context_manager(args.flavor):
         program = Program.Schema().load(json.load(args.program))
-        print(hex(compute_program_hash_chain(program=program, use_poseidon=args.use_poseidon)))
+        print(
+            hex(
+                compute_program_hash_chain(
+                    program=program,
+                    program_hash_function=HashFunction[args.program_hash_function.upper()],
+                )
+            )
+        )
 
 
 if __name__ == "__main__":

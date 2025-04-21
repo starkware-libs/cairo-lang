@@ -32,9 +32,17 @@ func main{output_ptr: felt*, range_check_ptr, poseidon_ptr: PoseidonBuiltin*}() 
             )
     %}
 
+    // Guess whether to use KZG commitment scheme and whether to output the full state.
+    tempvar use_kzg_da = nondet %{ program_input["use_kzg_da"] %};
+    tempvar full_output = nondet %{ program_input["full_output"] %};
+
     // Compute the aggregated output.
     let combined_output = combine_blocks(
-        n=n_tasks, os_outputs=os_outputs, os_program_hash=os_program_hash
+        n=n_tasks,
+        os_outputs=os_outputs,
+        os_program_hash=os_program_hash,
+        use_kzg_da=use_kzg_da,
+        full_output=full_output,
     );
 
     // Output the bootloader output of the inner OsOutput instances.
@@ -91,12 +99,6 @@ func output_blocks{output_ptr: felt*, range_check_ptr, poseidon_ptr: PoseidonBui
 
     assert output_ptr[0] = os_program_hash;
     let output_ptr = output_ptr + 1;
-
-    // Validate fields of the inner OS outputs.
-    tempvar header = os_outputs[0].header;
-    assert header.use_kzg_da = 0;
-    assert header.full_output = 1;
-    assert header.os_program_hash = 0;
 
     %{
         # Note that `serialize_os_output` splits its output to memory pages

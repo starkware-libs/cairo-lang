@@ -1,4 +1,3 @@
-load("//bazel_utils/python:defs.bzl", "requirement")
 load("//bazel_utils:python.bzl", "pytest_test")
 
 pytest_test(
@@ -14,7 +13,9 @@ pytest_test(
         "//src/starkware/cairo/common:cairo_common_lib",
         "//src/starkware/cairo/common:cairo_function_runner_lib",
         "//src/starkware/cairo/lang:cairo_constants_lib",
-        requirement("pytest_asyncio"),
+        "//src/starkware/cairo/lang/builtins:cairo_run_builtins_lib",
+        "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
+        "//src/starkware/python:starkware_python_utils_lib",
     ],
 )
 

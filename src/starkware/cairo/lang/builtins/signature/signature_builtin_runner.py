@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from starkware.cairo.lang.builtins.signature.instance_def import (
     CELLS_PER_SIGNATURE,
@@ -8,6 +8,64 @@ from starkware.cairo.lang.builtins.signature.instance_def import (
 from starkware.cairo.lang.vm.builtin_runner import BuiltinVerifier, SimpleBuiltinRunner
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
 from starkware.python.math_utils import safe_div
+
+
+def signature_rule_wrapper(verify_signature_func: Callable, signature_cache: Dict):
+    """
+    Returns a validation rule for the ecdsa builtin to be used by the vm.
+    Defined in the builtin runner, or manually in a hint by the program.
+    """
+
+    def rule(memory, addr):
+        # A signature builtin instance consists of a pair of public key and message.
+        if addr.offset % CELLS_PER_SIGNATURE == 0 and addr + 1 in memory:
+            pubkey_addr = addr
+            msg_addr = addr + 1
+        elif addr.offset % CELLS_PER_SIGNATURE == 1 and addr - 1 in memory:
+            pubkey_addr = addr - 1
+            msg_addr = addr
+        else:
+            return set()
+
+        pubkey = memory[pubkey_addr]
+        msg = memory[msg_addr]
+        assert isinstance(pubkey, int), (
+            f"ECDSA builtin: Expected public key at address {pubkey_addr} to be an integer. "
+            f"Got: {pubkey}."
+        )
+        assert isinstance(msg, int), (
+            f"ECDSA builtin: Expected message hash at address {msg_addr} to be an integer. "
+            f"Got: {msg}."
+        )
+        assert pubkey_addr in signature_cache, (
+            f"Signature hint is missing for ECDSA builtin at address {pubkey_addr}. "
+            "Add it using 'ecdsa_builtin.add_signature'."
+        )
+
+        signature = signature_cache[pubkey_addr]
+        assert verify_signature_func(pubkey, msg, signature), (
+            f"Signature {signature}, is invalid, with respect to the public key {pubkey}, "
+            f"and the message hash {msg}."
+        )
+        return {pubkey_addr, msg_addr}
+
+    return rule
+
+
+def extend_ecdsa_additional_data(data, relocate_callback, signature_cache, base):
+    """
+    Given ecdsa additional data of a task, extends the signature cache with the additional data
+    after relocating it using the provided callback.
+    Makes sure the addr after relocation aligns with the ecdsa segment base.
+    """
+    for addr, signature in data:
+        relocated_addr = relocate_callback(RelocatableValue.from_tuple(addr))
+        assert relocated_addr.segment_index == base.segment_index, (
+            "Error while loading ECDSA builtin additional data: "
+            "Signature hint must point to the signature builtin segment. "
+            f"Found: {addr} (after relocation: {relocated_addr})."
+        )
+        signature_cache[relocated_addr] = signature
 
 
 class SignatureBuiltinRunner(SimpleBuiltinRunner):
@@ -44,40 +102,12 @@ class SignatureBuiltinRunner(SimpleBuiltinRunner):
         return self.instance_def
 
     def add_validation_rules(self, runner):
-        def rule(memory, addr):
-            # A signature builtin instance consists of a pair of public key and message.
-            if addr.offset % CELLS_PER_SIGNATURE == 0 and addr + 1 in memory:
-                pubkey_addr = addr
-                msg_addr = addr + 1
-            elif addr.offset % CELLS_PER_SIGNATURE == 1 and addr - 1 in memory:
-                pubkey_addr = addr - 1
-                msg_addr = addr
-            else:
-                return set()
-
-            pubkey = memory[pubkey_addr]
-            msg = memory[msg_addr]
-            assert isinstance(pubkey, int), (
-                f"ECDSA builtin: Expected public key at address {pubkey_addr} to be an integer. "
-                f"Got: {pubkey}."
-            )
-            assert isinstance(msg, int), (
-                f"ECDSA builtin: Expected message hash at address {msg_addr} to be an integer. "
-                f"Got: {msg}."
-            )
-            assert pubkey_addr in self.signatures, (
-                f"Signature hint is missing for ECDSA builtin at address {pubkey_addr}. "
-                "Add it using 'ecdsa_builtin.add_signature'."
-            )
-
-            signature = self.signatures[pubkey_addr]
-            assert self.verify_signature(pubkey, msg, signature), (
-                f"Signature {signature}, is invalid, with respect to the public key {pubkey}, "
-                f"and the message hash {msg}."
-            )
-            return {pubkey_addr, msg_addr}
-
-        runner.vm.add_validation_rule(self.base.segment_index, rule)
+        runner.vm.add_validation_rule(
+            segment_index=self.base.segment_index,
+            rule=signature_rule_wrapper(
+                verify_signature_func=self.verify_signature, signature_cache=self.signatures
+            ),
+        )
 
     def air_private_input(self, runner) -> Dict[str, Any]:
         res: Dict[int, Any] = {}
@@ -117,14 +147,7 @@ class SignatureBuiltinRunner(SimpleBuiltinRunner):
         ]
 
     def extend_additional_data(self, data, relocate_callback, data_is_trusted=True):
-        for addr, signature in data:
-            relocated_addr = relocate_callback(RelocatableValue.from_tuple(addr))
-            assert relocated_addr.segment_index == self.base.segment_index, (
-                f"Error while loading {self.name} builtin additional data: "
-                "Signature hint must point to the signature builtin segment. "
-                f"Found: {addr} (after relocation: {relocated_addr})."
-            )
-            self.signatures[relocated_addr] = signature
+        extend_ecdsa_additional_data(data, relocate_callback, self.signatures, self.base)
 
 
 class SignatureBuiltinVerifier(BuiltinVerifier):

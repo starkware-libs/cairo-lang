@@ -1,3 +1,4 @@
+from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.bool import FALSE
 from starkware.cairo.common.builtin_keccak.keccak import (
     KECCAK_FULL_RATE_IN_WORDS,
@@ -45,6 +46,7 @@ from starkware.cairo.common.secp256r1.ec import (
 from starkware.cairo.common.segments import relocate_segment
 from starkware.cairo.common.sha256_state import Sha256Input, Sha256ProcessBlock, Sha256State
 from starkware.cairo.common.uint256 import Uint256, assert_uint256_lt, uint256_lt
+from starkware.starknet.common.constants import ORIGIN_ADDRESS
 from starkware.starknet.common.new_syscalls import (
     CALL_CONTRACT_SELECTOR,
     DEPLOY_SELECTOR,
@@ -54,6 +56,7 @@ from starkware.starknet.common.new_syscalls import (
     GET_EXECUTION_INFO_SELECTOR,
     KECCAK_SELECTOR,
     LIBRARY_CALL_SELECTOR,
+    META_TX_V0_SELECTOR,
     REPLACE_CLASS_SELECTOR,
     SECP256K1_ADD_SELECTOR,
     SECP256K1_GET_POINT_FROM_X_SELECTOR,
@@ -84,8 +87,10 @@ from starkware.starknet.common.new_syscalls import (
     KeccakRequest,
     KeccakResponse,
     LibraryCallRequest,
+    MetaTxV0Request,
     ReplaceClassRequest,
     RequestHeader,
+    ResourceBounds,
     ResponseHeader,
     Secp256k1AddRequest,
     Secp256k1AddResponse,
@@ -111,6 +116,7 @@ from starkware.starknet.common.new_syscalls import (
     StorageWriteRequest,
     TxInfo,
 )
+from starkware.starknet.common.syscalls import TxInfo as DeprecatedTxInfo
 from starkware.starknet.core.os.block_context import BlockContext
 from starkware.starknet.core.os.builtins import (
     BuiltinPointers,
@@ -137,6 +143,8 @@ from starkware.starknet.core.os.constants import (
     KECCAK_GAS_COST,
     KECCAK_ROUND_COST_GAS_COST,
     LIBRARY_CALL_GAS_COST,
+    META_TX_V0_CALLDATA_FACTOR_GAS_COST,
+    META_TX_V0_GAS_COST,
     REPLACE_CLASS_GAS_COST,
     SECP256K1_ADD_GAS_COST,
     SECP256K1_GET_POINT_FROM_X_GAS_COST,
@@ -156,19 +164,22 @@ from starkware.starknet.core.os.constants import (
     SYSCALL_BASE_GAS_COST,
 )
 from starkware.starknet.core.os.contract_address.contract_address import get_contract_address
+from starkware.starknet.core.os.execution.account_backward_compatibility import (
+    check_tip_for_v1_bound_accounts,
+    exclude_data_gas_of_resource_bounds,
+    is_v1_bound_account_cairo1,
+    should_exclude_l1_data_gas,
+)
 from starkware.starknet.core.os.execution.deprecated_execute_entry_point import (
     select_execute_entry_point_func,
 )
 from starkware.starknet.core.os.execution.deprecated_execute_syscalls import deploy_contract
 from starkware.starknet.core.os.execution.execute_entry_point import ExecutionContext
+from starkware.starknet.core.os.execution.execute_transaction_utils import fill_deprecated_tx_info
 from starkware.starknet.core.os.execution.revert import (
     CHANGE_CLASS_ENTRY,
     CHANGE_CONTRACT_ENTRY,
     RevertLogEntry,
-)
-from starkware.starknet.core.os.execution.version_bound_accounts import (
-    check_tip_for_v1_bound_accounts,
-    is_v1_bound_account_cairo1,
 )
 from starkware.starknet.core.os.output import (
     MessageToL1Header,
@@ -176,6 +187,10 @@ from starkware.starknet.core.os.output import (
     os_carried_outputs_new,
 )
 from starkware.starknet.core.os.state.commitment import StateEntry
+from starkware.starknet.core.os.transaction_hash.transaction_hash import (
+    compute_meta_tx_v0_hash,
+    update_pedersen_in_builtin_ptrs,
+)
 
 // Executes the system calls in syscall_ptr.
 // The signature of the function 'call_execute_syscalls' must match this function's signature.
@@ -193,11 +208,12 @@ func execute_syscalls{
     revert_log: RevertLogEntry*,
     outputs: OsCarriedOutputs*,
 }(block_context: BlockContext*, execution_context: ExecutionContext*, syscall_ptr_end: felt*) {
+    alloc_locals;
     if (syscall_ptr == syscall_ptr_end) {
         return ();
     }
 
-    tempvar selector = [syscall_ptr];
+    local selector = [syscall_ptr];
     %{
         execution_helper.os_logger.enter_syscall(
             n_steps=current_step,
@@ -208,17 +224,17 @@ func execute_syscalls{
         )
 
         # Prepare a short callable to save code duplication.
-        exit_syscall = lambda selector: execution_helper.os_logger.exit_syscall(
+        exit_syscall = lambda: execution_helper.os_logger.exit_syscall(
             n_steps=current_step,
             builtin_ptrs=ids.builtin_ptrs,
             range_check_ptr=ids.range_check_ptr,
-            selector=selector,
+            selector=ids.selector,
         )
     %}
 
     if (selector == STORAGE_READ_SELECTOR) {
         execute_storage_read(contract_address=execution_context.execution_info.contract_address);
-        %{ exit_syscall(selector=ids.STORAGE_READ_SELECTOR) %}
+        %{ exit_syscall() %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -228,7 +244,7 @@ func execute_syscalls{
 
     if (selector == STORAGE_WRITE_SELECTOR) {
         execute_storage_write(contract_address=execution_context.execution_info.contract_address);
-        %{ exit_syscall(selector=ids.STORAGE_WRITE_SELECTOR) %}
+        %{ exit_syscall() %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -238,7 +254,7 @@ func execute_syscalls{
 
     if (selector == GET_EXECUTION_INFO_SELECTOR) {
         execute_get_execution_info(execution_context=execution_context);
-        %{ exit_syscall(selector=ids.GET_EXECUTION_INFO_SELECTOR) %}
+        %{ exit_syscall() %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -250,7 +266,7 @@ func execute_syscalls{
         execute_call_contract(
             block_context=block_context, caller_execution_context=execution_context
         );
-        %{ exit_syscall(selector=ids.CALL_CONTRACT_SELECTOR) %}
+        %{ exit_syscall() %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -262,7 +278,7 @@ func execute_syscalls{
         execute_library_call(
             block_context=block_context, caller_execution_context=execution_context
         );
-        %{ exit_syscall(selector=ids.LIBRARY_CALL_SELECTOR) %}
+        %{ exit_syscall() %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -275,7 +291,7 @@ func execute_syscalls{
         reduce_syscall_gas_and_write_response_header(
             total_gas_cost=EMIT_EVENT_GAS_COST, request_struct_size=EmitEventRequest.SIZE
         );
-        %{ exit_syscall(selector=ids.EMIT_EVENT_SELECTOR) %}
+        %{ exit_syscall() %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -285,7 +301,7 @@ func execute_syscalls{
 
     if (selector == DEPLOY_SELECTOR) {
         execute_deploy(block_context=block_context, caller_execution_context=execution_context);
-        %{ exit_syscall(selector=ids.DEPLOY_SELECTOR) %}
+        %{ exit_syscall() %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -295,7 +311,7 @@ func execute_syscalls{
 
     if (selector == GET_BLOCK_HASH_SELECTOR) {
         execute_get_block_hash(block_context=block_context);
-        %{ exit_syscall(selector=ids.GET_BLOCK_HASH_SELECTOR) %}
+        %{ exit_syscall() %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -305,7 +321,7 @@ func execute_syscalls{
 
     if (selector == GET_CLASS_HASH_AT_SELECTOR) {
         execute_get_class_hash_at();
-        %{ exit_syscall(selector=ids.GET_CLASS_HASH_AT_SELECTOR) %}
+        %{ exit_syscall() %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -315,7 +331,7 @@ func execute_syscalls{
 
     if (selector == REPLACE_CLASS_SELECTOR) {
         execute_replace_class(contract_address=execution_context.execution_info.contract_address);
-        %{ exit_syscall(selector=ids.REPLACE_CLASS_SELECTOR) %}
+        %{ exit_syscall() %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -325,7 +341,7 @@ func execute_syscalls{
 
     if (selector == KECCAK_SELECTOR) {
         execute_keccak();
-        %{ exit_syscall(selector=ids.KECCAK_SELECTOR) %}
+        %{ exit_syscall() %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -335,7 +351,7 @@ func execute_syscalls{
 
     if (selector == SHA256_PROCESS_BLOCK_SELECTOR) {
         execute_sha256_process_block();
-        %{ exit_syscall(selector=ids.SHA256_PROCESS_BLOCK_SELECTOR) %}
+        %{ exit_syscall() %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -345,7 +361,7 @@ func execute_syscalls{
 
     if (selector == SECP256K1_GET_POINT_FROM_X_SELECTOR) {
         execute_secp256k1_get_point_from_x();
-        %{ exit_syscall(selector=ids.SECP256K1_GET_POINT_FROM_X_SELECTOR) %}
+        %{ exit_syscall() %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -355,7 +371,7 @@ func execute_syscalls{
 
     if (selector == SECP256R1_GET_POINT_FROM_X_SELECTOR) {
         execute_secp256r1_get_point_from_x();
-        %{ exit_syscall(selector=ids.SECP256R1_GET_POINT_FROM_X_SELECTOR) %}
+        %{ exit_syscall() %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -365,7 +381,7 @@ func execute_syscalls{
 
     if (selector == SECP256K1_NEW_SELECTOR) {
         execute_secp256k1_new();
-        %{ exit_syscall(selector=ids.SECP256K1_NEW_SELECTOR) %}
+        %{ exit_syscall() %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -375,7 +391,7 @@ func execute_syscalls{
 
     if (selector == SECP256R1_NEW_SELECTOR) {
         execute_secp256r1_new();
-        %{ exit_syscall(selector=ids.SECP256R1_NEW_SELECTOR) %}
+        %{ exit_syscall() %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -385,7 +401,7 @@ func execute_syscalls{
 
     if (selector == SECP256K1_ADD_SELECTOR) {
         execute_secp256k1_add();
-        %{ exit_syscall(selector=ids.SECP256K1_ADD_SELECTOR) %}
+        %{ exit_syscall() %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -395,7 +411,7 @@ func execute_syscalls{
 
     if (selector == SECP256R1_ADD_SELECTOR) {
         execute_secp256r1_add();
-        %{ exit_syscall(selector=ids.SECP256R1_ADD_SELECTOR) %}
+        %{ exit_syscall() %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -405,7 +421,7 @@ func execute_syscalls{
 
     if (selector == SECP256K1_MUL_SELECTOR) {
         execute_secp256k1_mul();
-        %{ exit_syscall(selector=ids.SECP256K1_MUL_SELECTOR) %}
+        %{ exit_syscall() %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -415,7 +431,7 @@ func execute_syscalls{
 
     if (selector == SECP256R1_MUL_SELECTOR) {
         execute_secp256r1_mul();
-        %{ exit_syscall(selector=ids.SECP256R1_MUL_SELECTOR) %}
+        %{ exit_syscall() %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -428,7 +444,7 @@ func execute_syscalls{
             curve_prime=Uint256(low=SECP256K1_PRIME_LOW, high=SECP256K1_PRIME_HIGH),
             gas_cost=SECP256K1_GET_XY_GAS_COST,
         );
-        %{ exit_syscall(selector=ids.SECP256K1_GET_XY_SELECTOR) %}
+        %{ exit_syscall() %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -441,7 +457,7 @@ func execute_syscalls{
             curve_prime=Uint256(low=SECP256R1_PRIME_LOW, high=SECP256R1_PRIME_HIGH),
             gas_cost=SECP256R1_GET_XY_GAS_COST,
         );
-        %{ exit_syscall(selector=ids.SECP256R1_GET_XY_SELECTOR) %}
+        %{ exit_syscall() %}
         return execute_syscalls(
             block_context=block_context,
             execution_context=execution_context,
@@ -449,10 +465,21 @@ func execute_syscalls{
         );
     }
 
-    assert selector = SEND_MESSAGE_TO_L1_SELECTOR;
+    if (selector == SEND_MESSAGE_TO_L1_SELECTOR) {
+        execute_send_message_to_l1(
+            contract_address=execution_context.execution_info.contract_address
+        );
+        %{ exit_syscall() %}
+        return execute_syscalls(
+            block_context=block_context,
+            execution_context=execution_context,
+            syscall_ptr_end=syscall_ptr_end,
+        );
+    }
 
-    execute_send_message_to_l1(contract_address=execution_context.execution_info.contract_address);
-    %{ exit_syscall(selector=ids.SEND_MESSAGE_TO_L1_SELECTOR) %}
+    assert selector = META_TX_V0_SELECTOR;
+    execute_meta_tx_v0(block_context=block_context, caller_execution_context=execution_context);
+    %{ exit_syscall() %}
     return execute_syscalls(
         block_context=block_context,
         execution_context=execution_context,
@@ -564,6 +591,117 @@ func execute_library_call{
         block_context=block_context,
         execution_context=execution_context,
     );
+}
+
+// Executes a v0 meta transaction. Specifically, calls another contract where:
+// * The signature is replaced with the given signature.
+// * The caller is the OS (address 0).
+// * The transaction version is replaced by 0.
+// * The transaction hash is replaced by the corresponding version-0 transaction hash.
+// The changes apply to the called contract and the inner contracts it calls.
+func execute_meta_tx_v0{
+    range_check_ptr,
+    syscall_ptr: felt*,
+    builtin_ptrs: BuiltinPointers*,
+    contract_state_changes: DictAccess*,
+    contract_class_changes: DictAccess*,
+    revert_log: RevertLogEntry*,
+    outputs: OsCarriedOutputs*,
+}(block_context: BlockContext*, caller_execution_context: ExecutionContext*) {
+    alloc_locals;
+
+    let request = cast(syscall_ptr + RequestHeader.SIZE, MetaTxV0Request*);
+    local calldata_start: felt* = request.calldata_start;
+    local calldata_size = request.calldata_end - calldata_start;
+
+    let specific_base_gas_cost = (
+        META_TX_V0_GAS_COST + META_TX_V0_CALLDATA_FACTOR_GAS_COST * calldata_size
+    );
+    let (success, remaining_gas) = reduce_syscall_base_gas(
+        specific_base_gas_cost=specific_base_gas_cost, request_struct_size=MetaTxV0Request.SIZE
+    );
+    if (success == FALSE) {
+        // Not enough gas to execute the syscall.
+        return ();
+    }
+
+    local contract_address = request.contract_address;
+    local selector = request.selector;
+    local caller_execution_info: ExecutionInfo* = caller_execution_context.execution_info;
+    local old_tx_info: TxInfo* = caller_execution_info.tx_info;
+
+    let (state_entry: StateEntry*) = dict_read{dict_ptr=contract_state_changes}(
+        key=contract_address
+    );
+
+    // Compute the meta-transaction hash.
+    let pedersen_ptr = builtin_ptrs.selectable.pedersen;
+    with pedersen_ptr {
+        let meta_tx_hash = compute_meta_tx_v0_hash(
+            contract_address=contract_address,
+            entry_point_selector=selector,
+            calldata=calldata_start,
+            calldata_size=calldata_size,
+            chain_id=old_tx_info.chain_id,
+        );
+    }
+    update_pedersen_in_builtin_ptrs(pedersen_ptr=pedersen_ptr);
+
+    // Prepare execution context.
+    tempvar new_tx_info = new TxInfo(
+        version=0,
+        account_contract_address=contract_address,
+        max_fee=0,
+        signature_start=request.signature_start,
+        signature_end=request.signature_end,
+        transaction_hash=meta_tx_hash,
+        chain_id=old_tx_info.chain_id,
+        nonce=0,
+        resource_bounds_start=cast(0, ResourceBounds*),
+        resource_bounds_end=cast(0, ResourceBounds*),
+        tip=0,
+        paymaster_data_start=cast(0, felt*),
+        paymaster_data_end=cast(0, felt*),
+        nonce_data_availability_mode=0,
+        fee_data_availability_mode=0,
+        account_deployment_data_start=cast(0, felt*),
+        account_deployment_data_end=cast(0, felt*),
+    );
+
+    tempvar execution_context: ExecutionContext* = new ExecutionContext(
+        entry_point_type=ENTRY_POINT_TYPE_EXTERNAL,
+        class_hash=state_entry.class_hash,
+        calldata_size=calldata_size,
+        calldata=calldata_start,
+        execution_info=new ExecutionInfo(
+            block_info=caller_execution_info.block_info,
+            tx_info=new_tx_info,
+            caller_address=ORIGIN_ADDRESS,
+            contract_address=contract_address,
+            selector=selector,
+        ),
+        deprecated_tx_info=cast(nondet %{ segments.add() %}, DeprecatedTxInfo*),
+    );
+    fill_deprecated_tx_info(tx_info=new_tx_info, dst=execution_context.deprecated_tx_info);
+
+    // Since we process the revert log backwards, entries before this point belong to the calling
+    // contract.
+    assert [revert_log] = RevertLogEntry(
+        selector=CHANGE_CONTRACT_ENTRY, value=caller_execution_info.contract_address
+    );
+    let revert_log = &revert_log[1];
+
+    contract_call_helper(
+        remaining_gas=remaining_gas,
+        block_context=block_context,
+        execution_context=execution_context,
+    );
+
+    // Entries before this point belong to the callee.
+    assert [revert_log] = RevertLogEntry(selector=CHANGE_CONTRACT_ENTRY, value=contract_address);
+    let revert_log = &revert_log[1];
+
+    return ();
 }
 
 // Executes the entry point and writes the corresponding response to the syscall_ptr.
@@ -793,11 +931,9 @@ func execute_storage_read{range_check_ptr, syscall_ptr: felt*, contract_state_ch
     let syscall_ptr = syscall_ptr + StorageReadResponse.SIZE;
 
     local state_entry: StateEntry*;
-    local new_state_entry: StateEntry*;
     %{
         # Fetch a state_entry in this hint and validate it in the update that comes next.
         ids.state_entry = __dict_manager.get_dict(ids.contract_state_changes)[ids.contract_address]
-        ids.new_state_entry = segments.add()
     %}
 
     // Update the contract's storage.
@@ -815,13 +951,15 @@ func execute_storage_read{range_check_ptr, syscall_ptr: felt*, contract_state_ch
     let storage_ptr = storage_ptr + DictAccess.SIZE;
 
     // Update the state.
-    assert [new_state_entry] = StateEntry(
-        class_hash=state_entry.class_hash, storage_ptr=storage_ptr, nonce=state_entry.nonce
-    );
     dict_update{dict_ptr=contract_state_changes}(
         key=contract_address,
         prev_value=cast(state_entry, felt),
-        new_value=cast(new_state_entry, felt),
+        new_value=cast(
+            new StateEntry(
+                class_hash=state_entry.class_hash, storage_ptr=storage_ptr, nonce=state_entry.nonce
+            ),
+            felt,
+        ),
     );
 
     return ();
@@ -848,7 +986,6 @@ func execute_storage_write{
 
     local prev_value: felt;
     local state_entry: StateEntry*;
-    local new_state_entry: StateEntry*;
     %{
         storage = execution_helper.storage_by_address[ids.contract_address]
         ids.prev_value = storage.read(key=ids.request.key)
@@ -856,7 +993,6 @@ func execute_storage_write{
 
         # Fetch a state_entry in this hint and validate it in the update that comes next.
         ids.state_entry = __dict_manager.get_dict(ids.contract_state_changes)[ids.contract_address]
-        ids.new_state_entry = segments.add()
     %}
 
     // Update the contract's storage.
@@ -873,13 +1009,15 @@ func execute_storage_write{
     let revert_log = &revert_log[1];
 
     // Update the state.
-    assert [new_state_entry] = StateEntry(
-        class_hash=state_entry.class_hash, storage_ptr=storage_ptr, nonce=state_entry.nonce
-    );
     dict_update{dict_ptr=contract_state_changes}(
         key=contract_address,
         prev_value=cast(state_entry, felt),
-        new_value=cast(new_state_entry, felt),
+        new_value=cast(
+            new StateEntry(
+                class_hash=state_entry.class_hash, storage_ptr=storage_ptr, nonce=state_entry.nonce
+            ),
+            felt,
+        ),
     );
 
     return ();
@@ -933,12 +1071,10 @@ func execute_get_block_hash{
 
     // Fetch the block hash contract state.
     local state_entry: StateEntry*;
-    local new_state_entry: StateEntry*;
     %{
         # Fetch a state_entry in this hint. Validate it in the update that comes next.
         ids.state_entry = __dict_manager.get_dict(ids.contract_state_changes)[
             ids.BLOCK_HASH_CONTRACT_ADDRESS]
-        ids.new_state_entry = segments.add()
     %}
 
     // Read from storage.
@@ -950,13 +1086,15 @@ func execute_get_block_hash{
     let storage_ptr = storage_ptr + DictAccess.SIZE;
 
     // Update the state.
-    assert [new_state_entry] = StateEntry(
-        class_hash=state_entry.class_hash, storage_ptr=storage_ptr, nonce=state_entry.nonce
-    );
     dict_update{dict_ptr=contract_state_changes}(
         key=BLOCK_HASH_CONTRACT_ADDRESS,
         prev_value=cast(state_entry, felt),
-        new_value=cast(new_state_entry, felt),
+        new_value=cast(
+            new StateEntry(
+                class_hash=state_entry.class_hash, storage_ptr=storage_ptr, nonce=state_entry.nonce
+            ),
+            felt,
+        ),
     );
 
     return ();
@@ -983,9 +1121,12 @@ func execute_get_execution_info{range_check_ptr, syscall_ptr: felt*}(
 
     local execution_info: ExecutionInfo* = execution_context.execution_info;
     local tx_info: TxInfo* = execution_info.tx_info;
+    let exclude_l1_data_gas = should_exclude_l1_data_gas(execution_context.class_hash);
     let v1_bound = is_v1_bound_account_cairo1(execution_context.class_hash);
     let check_tip = check_tip_for_v1_bound_accounts(tx_info.tip);
     if (tx_info.version == 3 and v1_bound != FALSE and check_tip != FALSE) {
+        assert exclude_l1_data_gas = FALSE;
+
         tempvar response_tx_info = response.execution_info.tx_info;
 
         assert [response_tx_info] = TxInfo(
@@ -999,6 +1140,44 @@ func execute_get_execution_info{range_check_ptr, syscall_ptr: felt*}(
             nonce=tx_info.nonce,
             resource_bounds_start=tx_info.resource_bounds_start,
             resource_bounds_end=tx_info.resource_bounds_end,
+            tip=tx_info.tip,
+            paymaster_data_start=tx_info.paymaster_data_start,
+            paymaster_data_end=tx_info.paymaster_data_end,
+            nonce_data_availability_mode=tx_info.nonce_data_availability_mode,
+            fee_data_availability_mode=tx_info.fee_data_availability_mode,
+            account_deployment_data_start=tx_info.account_deployment_data_start,
+            account_deployment_data_end=tx_info.account_deployment_data_end,
+        );
+
+        static_assert GetExecutionInfoResponse.SIZE == 1;
+        assert [response.execution_info] = ExecutionInfo(
+            block_info=execution_info.block_info,
+            tx_info=response_tx_info,
+            caller_address=execution_info.caller_address,
+            contract_address=execution_info.contract_address,
+            selector=execution_info.selector,
+        );
+        return ();
+    }
+
+    if (tx_info.version == 3 and exclude_l1_data_gas != FALSE) {
+        tempvar response_tx_info = response.execution_info.tx_info;
+        let (excluded_resource_bounds_end) = exclude_data_gas_of_resource_bounds(
+            resource_bounds_start=tx_info.resource_bounds_start,
+            resource_bounds_end=tx_info.resource_bounds_end,
+        );
+
+        assert [response_tx_info] = TxInfo(
+            version=tx_info.version,
+            account_contract_address=tx_info.account_contract_address,
+            max_fee=tx_info.max_fee,
+            signature_start=tx_info.signature_start,
+            signature_end=tx_info.signature_end,
+            transaction_hash=tx_info.transaction_hash,
+            chain_id=tx_info.chain_id,
+            nonce=tx_info.nonce,
+            resource_bounds_start=tx_info.resource_bounds_start,
+            resource_bounds_end=excluded_resource_bounds_end,
             tip=tx_info.tip,
             paymaster_data_start=tx_info.paymaster_data_start,
             paymaster_data_end=tx_info.paymaster_data_end,

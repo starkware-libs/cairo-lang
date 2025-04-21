@@ -146,6 +146,11 @@ class VirtualMachine(VirtualMachineBase):
         # Set this flag to False to avoid tracking register values each instruction.
         self.enable_instruction_trace = enable_instruction_trace
 
+        # Additional data for ecdsa. This is used when no runner for ecdsa is initialized, but
+        # the program uses ecdsa, so instead of saving the signature in the runner's state, we save
+        # it here.
+        self.ecdsa_additional_data: Dict = {}
+
     @property
     def trace(self) -> List[TraceEntry[MaybeRelocatable]]:
         assert self._trace is not None, "Trace is disabled."
@@ -380,6 +385,12 @@ class VirtualMachine(VirtualMachineBase):
         """
         return isinstance(value, int)
 
+    def is_accessed(self, addr: RelocatableValue) -> bool:
+        """
+        Returns True if the address was accessed by the program.
+        """
+        return addr in self.accessed_addresses
+
     @staticmethod
     @lru_cache(None)
     def decode_instruction(encoded_inst: int, imm: Optional[int] = None) -> Instruction:
@@ -473,7 +484,10 @@ class VirtualMachine(VirtualMachineBase):
             exec_locals.update(self.static_locals)
             exec_locals["builtin_runners"] = self.builtin_runners
             exec_locals.update(self.builtin_runners)
-            exec_locals["iter_accessed_addresses"] = lambda: iter(self.accessed_addresses)
+            exec_locals["is_accessed"] = self.is_accessed
+            exec_locals["vm_add_auto_deduction_rule"] = self.add_auto_deduction_rule
+            exec_locals["vm_add_validation_rule"] = self.add_validation_rule
+            exec_locals["vm_ecdsa_additional_data"] = self.ecdsa_additional_data
 
             self.exec_hint(hint.compiled, exec_locals, hint_index=hint_index)
 
@@ -491,7 +505,10 @@ class VirtualMachine(VirtualMachineBase):
             del exec_locals["vm_load_program"]
             del exec_locals["ids"]
             del exec_locals["memory"]
-            del exec_locals["iter_accessed_addresses"]
+            del exec_locals["is_accessed"]
+            del exec_locals["vm_add_auto_deduction_rule"]
+            del exec_locals["vm_add_validation_rule"]
+            del exec_locals["vm_ecdsa_additional_data"]
 
             if self.skip_instruction_execution:
                 return

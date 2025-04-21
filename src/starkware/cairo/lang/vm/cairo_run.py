@@ -138,6 +138,11 @@ def main():
         help="Output file name for the CairoPIE object.",
     )
     parser.add_argument(
+        "--merge_extra_segments",
+        action="store_true",
+        help="Merge extra memory segments in the output CairoPIE object.",
+    )
+    parser.add_argument(
         "--debug_info_file",
         type=argparse.FileType("w"),
         help="Output file name for debug information created at run time.",
@@ -221,6 +226,10 @@ def main():
         assert args.proof_mode, "--air_private_input can only be used in proof_mode."
     if args.layout == "dynamic":
         assert args.cairo_layout_params_file is not None
+    if args.merge_extra_segments:
+        assert (
+            args.cairo_pie_output is not None
+        ), "--merge_extra_segments is applicable only when --cairo_pie_output is specified."
 
     # If secure_run is not specified, the default is False in proof mode and True otherwise.
     if args.secure_run is None:
@@ -405,7 +414,7 @@ def cairo_run(args):
             )
 
     if args.cairo_pie_output:
-        runner.get_cairo_pie().to_file(args.cairo_pie_output)
+        runner.get_cairo_pie().to_file(args.cairo_pie_output, args.merge_extra_segments)
 
     runner.relocate()
 

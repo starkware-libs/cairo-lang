@@ -8,6 +8,10 @@ from starkware.cairo.common.registers import get_ap, get_fp_and_pc
 
 const BOOTLOADER_VERSION = 0;
 
+const PEDERSEN_HASH = 0;
+const POSEIDON_HASH = 1;
+const BLAKE_HASH = 2;
+
 // Use an empty struct to encode an arbitrary-length array.
 struct BuiltinList {
 }
@@ -41,21 +45,24 @@ struct BuiltinData {
 // Computes the hash of a program.
 // Arguments:
 //  * program_data_ptr - the pointer to the program to be hashed.
-//  * use_poseidon - a flag that determines whether the hashing will use Poseidon hash.
+//  * program_hash_function - determines which hash function is to be used.
 // Return values:
 //  * hash - the computed program hash.
 func compute_program_hash{pedersen_ptr: HashBuiltin*, poseidon_ptr: PoseidonBuiltin*}(
-    program_data_ptr: felt*, use_poseidon: felt
+    program_data_ptr: felt*, program_hash_function: felt
 ) -> (hash: felt) {
-    if (use_poseidon == 1) {
+    if (program_hash_function == POSEIDON_HASH) {
         let (hash) = poseidon_hash_many{poseidon_ptr=poseidon_ptr}(
             n=program_data_ptr[0], elements=&program_data_ptr[1]
         );
         return (hash=hash);
-    } else {
+    }
+    if (program_hash_function == PEDERSEN_HASH) {
         let (hash) = hash_chain{hash_ptr=pedersen_ptr}(data_ptr=program_data_ptr);
         return (hash=hash);
     }
+    assert program_hash_function = BLAKE_HASH;
+    return (hash=0x123456789);
 }
 
 // Executes a single task.
@@ -64,8 +71,12 @@ func compute_program_hash{pedersen_ptr: HashBuiltin*, poseidon_ptr: PoseidonBuil
 //   a. Output size (including this prefix)
 //   b. hash_chain(ProgramHeader || task.program.data) where ProgramHeader is defined below.
 // The function returns a pointer to the updated builtin pointers after executing the task.
+// Hint argument: `vm_ecdsa_additional_data` - stores the signatures if the ecdsa builtin was
+// used, but the ecdsa runner wasn't initialized.
 func execute_task{builtin_ptrs: BuiltinData*, self_range_check_ptr}(
-    builtin_encodings: BuiltinData*, builtin_instance_sizes: BuiltinData*, use_poseidon: felt
+    builtin_encodings: BuiltinData*,
+    builtin_instance_sizes: BuiltinData*,
+    program_hash_function: felt,
 ) {
     // Allocate memory for local variables.
     alloc_locals;
@@ -100,7 +111,7 @@ func execute_task{builtin_ptrs: BuiltinData*, self_range_check_ptr}(
     let poseidon_ptr = cast(input_builtin_ptrs.poseidon, PoseidonBuiltin*);
     with pedersen_ptr, poseidon_ptr {
         let (hash) = compute_program_hash(
-            program_data_ptr=program_data_ptr, use_poseidon=use_poseidon
+            program_data_ptr=program_data_ptr, program_hash_function=program_hash_function
         );
     }
 
@@ -177,7 +188,8 @@ func execute_task{builtin_ptrs: BuiltinData*, self_range_check_ptr}(
             load_cairo_pie(
                 task=task.cairo_pie, memory=memory, segments=segments,
                 program_address=program_address, execution_segment_address= ap - n_builtins,
-                builtin_runners=builtin_runners, ret_fp=fp, ret_pc=ret_pc)
+                builtin_runners=builtin_runners, ret_fp=fp, ret_pc=ret_pc,
+                ecdsa_additional_data=vm_ecdsa_additional_data)
         else:
             raise NotImplementedError(f'Unexpected task type: {type(task).__name__}.')
 

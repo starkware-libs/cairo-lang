@@ -303,3 +303,47 @@ def test_blake2s_felts(program, big_endian: bool):
     data = b"".join(num.to_bytes(32, "big" if big_endian else "little") for num in nums)
     expected_res = int.from_bytes(hashlib.blake2s(data).digest(), "little")
     assert expected_res == res_low + (res_high << 128)
+
+
+def test_unpack_into_u32s(program):
+    random.seed(0)
+    runner = CairoFunctionRunner(program, layout="all_solidity")
+
+    values = [
+        random.randrange(2**63) if random.random() < 0.8 else random.randrange(2**250)
+        for _ in range(998)
+    ] + [2**63, 2**63 - 1]
+
+    values_ptr = runner.segments.gen_arg(values)
+    out_ptr = runner.segments.add()
+    runner.run(
+        "unpack_u32s",
+        runner.range_check_builtin.base,
+        packed_values_len=len(values),
+        packed_values=values_ptr,
+        unpacked_u32s=out_ptr,
+    )
+    range_check_builtin_end, n_out = runner.get_return_values(2)
+
+    n_small = sum(map(lambda x: x < 2**63, values))
+    n_big = len(values) - n_small
+
+    expected_rc_uses = n_small + n_big
+    expected_n_out = 2 * n_small + 8 * n_big
+    expected_out = []
+    for val in values:
+        limbs = []
+        val_len = 2 if val < 2**63 else 8
+        if val_len == 8:
+            val += 2**255
+        for _ in range(val_len):
+            val, res = divmod(val, 2**32)
+            limbs.append(res)
+        expected_out.extend(limbs[::-1])
+    assert range_check_builtin_end == runner.range_check_builtin.base + expected_rc_uses
+    assert n_out == expected_n_out
+
+    u32s = runner.memory.get_range(out_ptr, n_out)
+    assert u32s == expected_out
+
+    print("Steps per felt:", runner.vm.current_step / 1000)

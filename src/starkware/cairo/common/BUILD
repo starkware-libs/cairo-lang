@@ -52,10 +52,12 @@ cairo_library(
         "//src/starkware/cairo/common/builtin_poseidon:poseidon.cairo",
         "//src/starkware/cairo/common/cairo_blake2s:blake2s.cairo",
         "//src/starkware/cairo/common/cairo_blake2s:packed_blake2s.cairo",
+        "//src/starkware/cairo/common/cairo_ec_op:ec_op.cairo",
         "//src/starkware/cairo/common/cairo_keccak:keccak.cairo",
         "//src/starkware/cairo/common/cairo_keccak:packed_keccak.cairo",
         "//src/starkware/cairo/common/cairo_sha256:sha256_utils.cairo",
         "//src/starkware/cairo/common/keccak_utils:keccak_utils.cairo",
+        "//src/starkware/cairo/common/simulate_builtin_keccak_with_cairo:simulate_keccak.cairo",
     ] + CAIRO_COMMON_LIB_ADDITIONAL_FILES,
     hint_deps = [
         "//src/starkware/crypto:starkware_crypto_lib",

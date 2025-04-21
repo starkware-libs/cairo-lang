@@ -1,4 +1,3 @@
-import os
 from enum import Enum, auto
 from typing import List, Optional, Sequence, Tuple
 
@@ -15,6 +14,7 @@ from starkware.cairo.common.validate_utils import validate_builtin_usage
 from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.vm.vm_exceptions import VmException
 from starkware.python.test_utils import maybe_raises
+from starkware.starknet.core.aggregator.aggregator_program import get_aggregator_program
 from starkware.starknet.core.aggregator.output_parser import (
     N_UPDATES_SMALL_PACKING_BOUND,
     ContractChanges,
@@ -29,8 +29,8 @@ from starkware.starknet.core.os.data_availability.compression import compress
 # Dummy values for the test.
 OS_PROGRAM_HASH = 0x7E0B89C77D0003C05511B9F0E1416F1328C2132E41E056B2EF3BC950135360F
 OS_CONFIG_HASH = 0x3410F9DCE5078BFA24B30F28F9F9107A995E5F339334A7126730A993045681
-BLOCK0_HASH = 0x1C5CA4BCC4C03D843B8C08F9C8628BA7A108D2B62F4C0F6EF224F250679230E
-BLOCK1_HASH = 0x378294C261592B32272381910BCB2402A864E1CDF68EDC855CAA24CACF68B65
+MULTI_BLOCK0_HASH = 0x1C5CA4BCC4C03D843B8C08F9C8628BA7A108D2B62F4C0F6EF224F250679230E
+MULTI_BLOCK1_HASH = 0x378294C261592B32272381910BCB2402A864E1CDF68EDC855CAA24CACF68B65
 ROOT0 = 0
 ROOT1 = 0x3BCBB6FD22F39E772ACE7F905AC64FBF6D7139CAC2C44189D59B37618BB62D0
 ROOT2 = 0x269DDFB6E729A030E3513A7E8208D68BE9AB97852681FB531E7FC69FAC2852A
@@ -97,12 +97,12 @@ MSG_TO_L2_1 = [
 
 MOCK_COMMITMENT = 0x1234, 0x5678
 
-AGGREGATOR_COMPILED_PATH = os.path.join(os.path.dirname(__file__), "aggregator.json")
+NUMBER_OF_BLOCKS_IN_MULTI_BLOCK = 13
 
 
 @pytest.fixture(scope="session")
 def aggregator_program() -> Program:
-    return Program.loads(data=open(AGGREGATOR_COMPILED_PATH).read())
+    return get_aggregator_program()
 
 
 def remove_none_values(array: Sequence[Optional[int]]) -> List[int]:
@@ -120,7 +120,7 @@ class FailureModifier(Enum):
     COMPILED_CLASS_HASH = auto()
 
 
-def block0_output(full_output: bool):
+def multi_block0_output(full_output: bool):
     partial_res_with_nones = [
         # initial_root.
         ROOT0,
@@ -129,11 +129,11 @@ def block0_output(full_output: bool):
         # Previous block number.
         0,
         # New block_number.
-        1,
+        NUMBER_OF_BLOCKS_IN_MULTI_BLOCK,
         # Previous block hash.
         0,
         # New block hash.
-        BLOCK0_HASH,
+        MULTI_BLOCK0_HASH,
         # OS program hash.
         0,
         OS_CONFIG_HASH,
@@ -194,7 +194,10 @@ def block0_output(full_output: bool):
     return partial_res + da
 
 
-def block1_output(full_output: bool, modifier: FailureModifier = FailureModifier.NONE):
+def multi_block1_output(
+    full_output: bool,
+    modifier: FailureModifier = FailureModifier.NONE,
+):
     maybe_wrong = lambda x, modifier0: x + (10 if modifier == modifier0 else 0)
     partial_res_with_nones = [
         # initial_root.
@@ -202,13 +205,13 @@ def block1_output(full_output: bool, modifier: FailureModifier = FailureModifier
         # final_root.
         ROOT2,
         # Previous block number.
-        maybe_wrong(1, FailureModifier.BLOCK_NUMBER),
+        maybe_wrong(NUMBER_OF_BLOCKS_IN_MULTI_BLOCK, FailureModifier.BLOCK_NUMBER),
         # New block_number.
-        2,
+        NUMBER_OF_BLOCKS_IN_MULTI_BLOCK + 1,
         # Previous block hash.
-        maybe_wrong(BLOCK0_HASH, FailureModifier.BLOCK_HASH),
+        maybe_wrong(MULTI_BLOCK0_HASH, FailureModifier.BLOCK_HASH),
         # New block hash.
-        BLOCK1_HASH,
+        MULTI_BLOCK1_HASH,
         # OS program hash.
         maybe_wrong(0, FailureModifier.PROGRAM_HASH),
         maybe_wrong(OS_CONFIG_HASH, FailureModifier.OS_CONFIG_HASH),
@@ -296,11 +299,11 @@ def combined_output(full_output: bool, use_kzg_da: bool = False):
         # Previous block number.
         0,
         # New block_number.
-        2,
+        NUMBER_OF_BLOCKS_IN_MULTI_BLOCK + 1,
         # Previous block hash.
         0,
         # New block hash.
-        BLOCK1_HASH,
+        MULTI_BLOCK1_HASH,
         OS_PROGRAM_HASH,
         OS_CONFIG_HASH,
         # use_kzg_da.
@@ -380,10 +383,10 @@ def combined_kzg_info(da: List[int]) -> List[int]:
 
 
 def bootloader_output(full_output: bool, modifier: FailureModifier = FailureModifier.NONE):
-    block0 = block0_output(full_output=full_output)
-    block1 = block1_output(full_output=full_output, modifier=modifier)
+    block0 = multi_block0_output(full_output=full_output)
+    block1 = multi_block1_output(full_output=full_output, modifier=modifier)
     return [
-        # Number of blocks.
+        # Number of multi-blocks.
         2,
         len(block0) + 2,
         OS_PROGRAM_HASH,
@@ -403,9 +406,9 @@ def test_output_parser(full_output: bool):
                 initial_root=ROOT0,
                 final_root=ROOT1,
                 prev_block_number=0,
-                new_block_number=1,
+                new_block_number=NUMBER_OF_BLOCKS_IN_MULTI_BLOCK,
                 prev_block_hash=0,
-                new_block_hash=BLOCK0_HASH,
+                new_block_hash=MULTI_BLOCK0_HASH,
                 os_program_hash=0,
                 starknet_os_config_hash=OS_CONFIG_HASH,
                 use_kzg_da=0,
@@ -487,10 +490,10 @@ def test_output_parser(full_output: bool):
             os_output=OsOutput(
                 initial_root=ROOT1,
                 final_root=ROOT2,
-                prev_block_number=1,
-                new_block_number=2,
-                prev_block_hash=BLOCK0_HASH,
-                new_block_hash=BLOCK1_HASH,
+                prev_block_number=NUMBER_OF_BLOCKS_IN_MULTI_BLOCK,
+                new_block_number=NUMBER_OF_BLOCKS_IN_MULTI_BLOCK + 1,
+                prev_block_hash=MULTI_BLOCK0_HASH,
+                new_block_hash=MULTI_BLOCK1_HASH,
                 os_program_hash=0,
                 starknet_os_config_hash=OS_CONFIG_HASH,
                 use_kzg_da=0,
@@ -606,9 +609,9 @@ def test_parse_and_output(aggregator_program, block_idx: int, full_output_result
         runner.output_builtin.base, output_builtin_end - runner.output_builtin.base
     )
     if block_idx == 0:
-        assert res == block0_output(full_output=full_output_result)
+        assert res == multi_block0_output(full_output=full_output_result)
     else:
-        assert res == block1_output(full_output=full_output_result)
+        assert res == multi_block1_output(full_output=full_output_result)
 
 
 def mock_polynomial_coefficients_to_kzg_commitment(coefficients: List[int]) -> Tuple[int, int]:
@@ -623,8 +626,18 @@ def mock_polynomial_coefficients_to_kzg_commitment(coefficients: List[int]) -> T
         (False, True, FailureModifier.NONE, None),
         (True, True, FailureModifier.NONE, None),
         (True, False, FailureModifier.ROOT, f"{ROOT1} != {ROOT1 + 10}"),
-        (True, False, FailureModifier.BLOCK_HASH, f"{BLOCK0_HASH} != {BLOCK0_HASH + 10}"),
-        (True, False, FailureModifier.BLOCK_NUMBER, f"1 != 11"),
+        (
+            True,
+            False,
+            FailureModifier.BLOCK_HASH,
+            f"{MULTI_BLOCK0_HASH} != {MULTI_BLOCK0_HASH + 10}",
+        ),
+        (
+            True,
+            False,
+            FailureModifier.BLOCK_NUMBER,
+            f"{NUMBER_OF_BLOCKS_IN_MULTI_BLOCK} != {NUMBER_OF_BLOCKS_IN_MULTI_BLOCK + 10}",
+        ),
         (True, False, FailureModifier.PROGRAM_HASH, f"0 != 10"),
         (True, False, FailureModifier.OS_CONFIG_HASH, f"{OS_CONFIG_HASH} != {OS_CONFIG_HASH + 10}"),
         (

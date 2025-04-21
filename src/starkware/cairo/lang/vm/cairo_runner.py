@@ -41,7 +41,7 @@ from starkware.cairo.lang.vm.builtin_runner import BuiltinRunner, InsufficientAl
 from starkware.cairo.lang.vm.cairo_pie import (
     CairoPie,
     CairoPieMetadata,
-    ExecutionResources,
+    ExecutionResourcesStone,
     SegmentInfo,
 )
 from starkware.cairo.lang.vm.crypto import pedersen_hash, verify_ecdsa
@@ -823,14 +823,14 @@ fp = {fp}
                 builtin_segments[name] = SegmentInfo(index=segment_index, size=segment_size)
         return builtin_segments
 
-    def get_execution_resources(self) -> ExecutionResources:
+    def get_execution_resources(self) -> ExecutionResourcesStone:
         n_steps = self.vm.current_step if self.original_steps is None else self.original_steps
         n_memory_holes = self.get_memory_holes()
         builtin_instance_counter = {
             builtin_name: builtin_runner.get_used_instances(self)
             for builtin_name, builtin_runner in self.builtin_runners.items()
         }
-        return ExecutionResources(
+        return ExecutionResourcesStone(
             n_steps=n_steps,
             n_memory_holes=n_memory_holes,
             builtin_instance_counter=builtin_instance_counter,

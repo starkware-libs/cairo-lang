@@ -172,7 +172,7 @@ func execute_entry_point{
 
     if (success == 0) {
         %{ execution_helper.exit_call() %}
-        tempvar retdata = cast(nondet %{ segments.add() %}, felt*);
+        let (retdata: felt*) = alloc();
         assert retdata[0] = ERROR_ENTRY_POINT_NOT_FOUND;
         return (is_reverted=1, retdata_size=1, retdata=retdata);
     }
@@ -188,15 +188,10 @@ func execute_entry_point{
     local range_check_ptr = range_check_ptr;
     local contract_entry_point: felt* = compiled_class.bytecode_ptr + entry_point_offset;
 
-    local os_context: felt*;
-    local syscall_ptr: felt*;
+    let (local os_context: felt*) = alloc();
+    let (local syscall_ptr: felt*) = alloc();
 
-    %{
-        ids.os_context = segments.add()
-        ids.syscall_ptr = segments.add()
-
-        syscall_handler.set_syscall_ptr(syscall_ptr=ids.syscall_ptr)
-    %}
+    %{ syscall_handler.set_syscall_ptr(syscall_ptr=ids.syscall_ptr) %}
     assert [os_context] = cast(syscall_ptr, felt);
 
     if (nondet %{ ids.remaining_gas < ids.ENTRY_POINT_INITIAL_BUDGET %} != FALSE) {

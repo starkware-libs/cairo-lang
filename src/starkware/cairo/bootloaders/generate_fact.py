@@ -10,7 +10,7 @@ from starkware.cairo.bootloaders.fact_topology import (
     FactInfo,
     get_fact_topology_from_additional_data,
 )
-from starkware.cairo.bootloaders.hash_program import compute_program_hash_chain
+from starkware.cairo.bootloaders.hash_program import HashFunction, compute_program_hash_chain
 from starkware.cairo.lang.vm.cairo_pie import CairoPie
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 
@@ -75,4 +75,6 @@ def get_cairo_pie_fact_info(
 
 
 def get_program_hash(cairo_pie: CairoPie) -> int:
-    return compute_program_hash_chain(program=cairo_pie.metadata.program, use_poseidon=False)
+    return compute_program_hash_chain(
+        program=cairo_pie.metadata.program, program_hash_function=HashFunction.PEDERSEN
+    )

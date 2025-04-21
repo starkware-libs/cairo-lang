@@ -34,26 +34,15 @@ from starkware.starknet.services.api.contract_class.contract_class import (
 
 
 @pytest.fixture
-def full_resource_bounds(request: pytest.FixtureRequest) -> bool:
-    return getattr(request, "param", False)
-
-
-@pytest.fixture
-def resource_bounds(full_resource_bounds: bool) -> ResourceBoundsMapping:
+def resource_bounds() -> ResourceBoundsMapping:
     """
     Returns a resource bounds mapping. The resources order should be different from the hash order
     to make sure the order does affect the hash result.
     """
-    if full_resource_bounds:
-        return {
-            Resource.L1_GAS: ResourceBounds(max_amount=1500, max_price_per_unit=1),
-            Resource.L2_GAS: ResourceBounds(max_amount=1000, max_price_per_unit=2),
-            Resource.L1_DATA_GAS: ResourceBounds(max_amount=2000, max_price_per_unit=3),
-        }
-
     return {
-        Resource.L2_GAS: ResourceBounds(max_amount=0, max_price_per_unit=0),
-        Resource.L1_GAS: ResourceBounds(max_amount=1993, max_price_per_unit=1),
+        Resource.L1_GAS: ResourceBounds(max_amount=1500, max_price_per_unit=1),
+        Resource.L2_GAS: ResourceBounds(max_amount=1000, max_price_per_unit=2),
+        Resource.L1_DATA_GAS: ResourceBounds(max_amount=2000, max_price_per_unit=3),
     }
 
 
@@ -77,7 +66,6 @@ def test_resource_name_value():
     assert fields.Resource.L1_GAS.value < 2**constants.MAX_RESOURCE_NAME_BITS - 1
 
 
-@pytest.mark.parametrize("full_resource_bounds", [False, True], indirect=True)
 def test_declare_transaction_hash(resource_bounds: ResourceBoundsMapping):
     # Tested transaction data.
     n_resource_bounds = len(resource_bounds)
@@ -154,9 +142,8 @@ def test_declare_transaction_hash(resource_bounds: ResourceBoundsMapping):
 
 
 @pytest.mark.parametrize(
-    "constructor_calldata,full_resource_bounds,",
-    [([], False), ([539, 337], True)],
-    indirect=["full_resource_bounds"],
+    "constructor_calldata,",
+    [[], [539, 337]],
 )
 def test_deploy_account_transaction_hash(
     constructor_calldata: List[int], resource_bounds: ResourceBoundsMapping
@@ -226,7 +213,6 @@ def test_deploy_account_transaction_hash(
     )
 
 
-@pytest.mark.parametrize("full_resource_bounds", [False, True], indirect=True)
 def test_invoke_transaction_hash(resource_bounds: ResourceBoundsMapping):
     # Tested transaction data.
     n_resource_bounds = len(resource_bounds)

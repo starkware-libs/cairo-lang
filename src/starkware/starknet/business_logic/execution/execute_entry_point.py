@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Union, cast
 
 from services.everest.definitions.fields import format_felt_list
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
-from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
+from starkware.cairo.lang.vm.cairo_pie import ExecutionResourcesStone
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 from starkware.cairo.lang.vm.security import SecurityError
 from starkware.cairo.lang.vm.utils import ResourcesError, RunResources
@@ -37,8 +37,8 @@ from starkware.starknet.business_logic.utils import (
     validate_contract_deployed,
 )
 from starkware.starknet.core.os import os_utils, syscall_utils
-from starkware.starknet.core.os.deprecated_syscall_handler import DeprecatedBlSyscallHandler
-from starkware.starknet.core.os.syscall_handler import BusinessLogicSyscallHandler
+from starkware.starknet.core.os.bl_syscall_handler import BusinessLogicSyscallHandler
+from starkware.starknet.core.os.deprecated_bl_syscall_handler import DeprecatedBlSyscallHandler
 from starkware.starknet.definitions import fields
 from starkware.starknet.definitions.constants import VERSIONED_CONSTANTS, GasCost
 from starkware.starknet.definitions.error_codes import CairoErrorCode, StarknetErrorCode
@@ -282,7 +282,7 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
                 gas_consumed=0,
                 failure_flag=1,
                 retdata=[CairoErrorCode.OUT_OF_GAS.to_felt()],
-                execution_resources=ExecutionResources.empty(),
+                execution_resources=ExecutionResourcesStone.empty(),
                 events=[],
                 l2_to_l1_messages=[],
                 # Necessary info. for the OS run.
@@ -292,6 +292,8 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
                 internal_calls=[],
                 accessed_contract_addresses=set(),
                 read_class_hash_values=[],
+                accessed_blocks=set(),
+                read_block_hash_values=[],
             )
         implicit_args = os_utils.prepare_os_implicit_args(runner=runner, gas=initial_gas_call)
 
@@ -481,7 +483,7 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
         events: List[OrderedEvent],
         l2_to_l1_messages: List[OrderedL2ToL1Message],
         internal_calls: List[CallInfo],
-        execution_resources: ExecutionResources,
+        execution_resources: ExecutionResourcesStone,
         result: CallResult,
         class_hash: int,
     ) -> CallInfo:
@@ -509,6 +511,8 @@ class ExecuteEntryPoint(ExecuteEntryPointBase):
             internal_calls=internal_calls,
             accessed_contract_addresses=set(),
             read_class_hash_values=[],
+            accessed_blocks=set(),
+            read_block_hash_values=[],
         )
 
     def _get_non_optional_class_hash(

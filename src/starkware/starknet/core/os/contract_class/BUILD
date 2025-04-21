@@ -60,6 +60,7 @@ py_library(
         "//src/starkware/cairo/lang:cairo_constants_lib",
         "//src/starkware/cairo/lang/builtins:cairo_run_builtins_lib",
         "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
+        "//src/starkware/cairo/lang/vm:cairo_relocatable_lib",
         "//src/starkware/cairo/lang/vm:cairo_vm_crypto_lib",
         "//src/starkware/python:starkware_python_utils_lib",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
@@ -77,7 +78,10 @@ pytest_test(
     ],
     visibility = ["//visibility:public"],
     deps = [
+        ":compiled_class_hash_objects",
         ":starknet_os_abi_lib",
+        "//src/starkware/cairo/lang/builtins:cairo_all_builtins_lib",
+        "//src/starkware/cairo/lang/vm:cairo_vm_lib",
         "//src/starkware/python:starkware_python_test_utils_lib",
         "//src/starkware/starknet/core/test_contract:starknet_test_external_contract_test_utils_lib",
         "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",

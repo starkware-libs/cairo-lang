@@ -10,7 +10,6 @@ from starkware.starknet.core.os.constants import (
 from starkware.starknet.core.os.contract_class.compiled_class import CompiledClassFact
 from starkware.starknet.core.os.contract_class.deprecated_compiled_class import (
     DeprecatedCompiledClassFact,
-    deprecated_load_compiled_class_facts,
 )
 from starkware.starknet.core.os.os_config.os_config import StarknetOsConfig
 
@@ -45,17 +44,16 @@ struct BlockContext {
 
 // Returns a BlockContext instance.
 //
-// 'syscall_handler' and 'os_input' should be passed as hint variables.
-func get_block_context{poseidon_ptr: PoseidonBuiltin*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+// 'syscall_handler' and 'block_input' should be passed as hint variables.
+func get_block_context{range_check_ptr}(
     execute_syscalls_ptr: felt*,
     execute_deprecated_syscalls_ptr: felt*,
     n_compiled_class_facts: felt,
     compiled_class_facts: CompiledClassFact*,
+    n_deprecated_compiled_class_facts: felt,
+    deprecated_compiled_class_facts: DeprecatedCompiledClassFact*,
 ) -> (block_context: BlockContext*) {
     alloc_locals;
-    let (
-        n_deprecated_compiled_class_facts, deprecated_compiled_class_facts
-    ) = deprecated_load_compiled_class_facts();
     let (builtin_params) = get_builtin_params();
     tempvar block_number = nondet %{ syscall_handler.block_info.block_number %};
     tempvar block_timestamp = nondet %{ syscall_handler.block_info.block_timestamp %};
@@ -82,11 +80,8 @@ func get_block_context{poseidon_ptr: PoseidonBuiltin*, pedersen_ptr: HashBuiltin
             sequencer_address=0,
         ),
         starknet_os_config=StarknetOsConfig(
-            chain_id=nondet %{ os_input.general_config.chain_id.value %},
-            deprecated_fee_token_address=(
-                nondet %{ os_input.general_config.deprecated_fee_token_address %}
-            ),
-            fee_token_address=nondet %{ os_input.general_config.fee_token_address %},
+            chain_id=nondet %{ block_input.general_config.chain_id.value %},
+            fee_token_address=nondet %{ block_input.general_config.fee_token_address %},
         ),
         execute_syscalls_ptr=execute_syscalls_ptr,
         execute_deprecated_syscalls_ptr=execute_deprecated_syscalls_ptr,

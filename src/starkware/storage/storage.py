@@ -4,7 +4,20 @@ import contextlib
 import dataclasses
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, Generic, Optional, Sequence, Tuple, Type, TypeVar, cast
+from copy import deepcopy
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generic,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    TypeVar,
+    cast,
+)
 
 from starkware.python.object_utils import generic_object_repr
 from starkware.python.utils import from_bytes, get_exception_repr, to_bytes
@@ -315,6 +328,91 @@ class IndexedDBObject(DBObject):
     async def setnx_obj(self, storage: Storage, index: int) -> bool:
         return await self.setnx(storage=storage, suffix=str(index).encode("ascii"))
 
+    async def setnx_or_same_obj(
+        self, storage: Storage, index: int, fields_to_ignore: Optional[List[str]] = None
+    ) -> Optional["IndexedDBObject"]:
+        """
+        Attempts to store the object with the given index if it doesn't exist.
+        If it does exist, checks if the existing object is the same as this one,
+        ignoring the fields specified by `fields_to_ignore` when comparing.
+        Returns the existing object if one exists and differs, None otherwise
+        """
+        obj_cls = type(self)
+        if await self.setnx_obj(storage=storage, index=index) == True:
+            logger.debug(f"Successfully set {obj_cls.__name__} at {index=} to {self}")
+            return None
+
+        existing_obj = await obj_cls.get_obj_or_fail(storage=storage, index=index)
+
+        # Closure to log the error and return the existing object in case the existing object
+        # differs from self.
+        def log_error_and_return_existing_obj():
+            logger.error(
+                f"Failed to write {obj_cls.__name__} object to storage at {index=}, due to a"
+                " different object already set at the same index. This should never happen!\n"
+                f" Failed setting the object {self}\n Found object: {existing_obj}"
+            )
+            return existing_obj
+
+        # Make sure objects are of the same type.
+        if not isinstance(existing_obj, obj_cls):
+            return log_error_and_return_existing_obj()
+
+        current_obj_to_compare = self
+
+        if fields_to_ignore is not None and len(fields_to_ignore) > 0:
+            field_overrides = {}
+            for field in fields_to_ignore:
+                if hasattr(current_obj_to_compare, field):
+                    try:
+                        field_overrides[field] = getattr(existing_obj, field)
+                    except AttributeError:
+                        continue
+            if dataclasses.is_dataclass(current_obj_to_compare):
+                current_obj_to_compare = dataclasses.replace(
+                    current_obj_to_compare, **field_overrides
+                )
+            else:
+                current_obj_to_compare = deepcopy(current_obj_to_compare)
+                for field, value in field_overrides.items():
+                    setattr(current_obj_to_compare, field, value)
+
+        if current_obj_to_compare == existing_obj:
+            logger.warning(f"Found existing {obj_cls.__name__} object in storage at id {index}")
+            return None
+
+        # A different object was found.
+        return log_error_and_return_existing_obj()
+
+    async def handle_setnx_or_same_obj_conflict(self, existing_obj: Optional["IndexedDBObject"]):
+        """
+        Handles the conflict when attempting to set an object using `setnx_or_same`, but
+        an existing object is already present at the same `index`.
+
+        Raises:
+            StorageConflictError: If an object already exists at the intended `index`.
+        """
+        if existing_obj is not None:
+            # Found a different object in storage at the same id.
+            # Should never get here!
+            raise StorageConflictError(
+                obj_name=existing_obj.__class__.__name__,
+                existing_obj=existing_obj,
+                expected_obj=self,
+            )
+
+    async def setnx_or_fail_obj(
+        self, storage: Storage, index: int, fields_to_ignore: Optional[List[str]] = None
+    ):
+        """
+        Attempts to store the object with the given index if it doesn't exist.
+        If finds a diffrent obj in the index raises an exception.
+        """
+        existing_obj = await self.setnx_or_same_obj(
+            storage=storage, index=index, fields_to_ignore=fields_to_ignore
+        )
+        await self.handle_setnx_or_same_obj_conflict(existing_obj=existing_obj)
+
     def get_indexed_update_for_mset(self, index: int) -> Tuple[bytes, bytes]:
         """
         Returns a (key, value) pair that can be converted to a dict for mset.
@@ -364,6 +462,57 @@ class IntMapping(ValidatedDataclass, DBObject, Generic[TKey]):
     async def set_int(cls, storage: Storage, key: TKey, value: int):
         obj = cls(value=value)
         await obj.set(storage=storage, suffix=cls.encode_db_key(key=key))
+
+    @classmethod
+    async def setnx_or_same_int(cls, storage: Storage, key: TKey, value: int) -> Optional[int]:
+        """
+        Attempts to store the int value with the given key if it doesn't exist.
+        If it does exist, checks if the existing value is the same as the provided one.
+        Returns existing value if one exists and differs, None otherwise
+        """
+        if await cls(value=value).setnx_int(storage=storage, key=key) == True:
+            logger.debug(f"Successfully mapped {cls.__name__} with {key=} to {value=}.")
+            return None
+        existing_value = await cls.get_int_or_fail(storage=storage, key=key)
+        if existing_value == value:
+            logger.warning(f"Mapping of {cls.__name__} with {key=} to {value=} already exists.")
+            return None
+
+        logger.error(
+            f"Failed to write {cls.__name__} mapping of {key=} to {value=}, due to a different"
+            f" value already set at the same key: {existing_value=}. This should never happen!"
+        )
+        return existing_value
+
+    @classmethod
+    async def handle_setnx_or_same_int_conflict(
+        cls, existing_mapped_value: Optional[int], expected_mapped_value: int
+    ):
+        """
+        Handles the conflict when attempting to set a mapping using `setnx_or_same`, but
+        an existing mapping is already present at the same `key`.
+
+        Raises:
+            StorageConflictError: If an object already exists at the intended `key`.
+        """
+        if existing_mapped_value is not None:
+            # Found a different mapped value in storage at the same key. Should never get here!
+            raise StorageConflictError(
+                obj_name=cls.__name__,
+                existing_obj=existing_mapped_value,
+                expected_obj=expected_mapped_value,
+            )
+
+    @classmethod
+    async def setnx_or_fail_int(cls, storage: Storage, key: TKey, value: int):
+        """
+        Attempts to store the int value with the given key if it doesn't exist.
+        If finds a different mapped value in the key raises an exception.
+        """
+        existing_mapped_value = await cls.setnx_or_same_int(storage=storage, key=key, value=value)
+        await cls.handle_setnx_or_same_int_conflict(
+            existing_mapped_value=existing_mapped_value, expected_mapped_value=value
+        )
 
     @classmethod
     async def get_int(cls, storage: Storage, key: TKey) -> Optional[int]:
@@ -519,3 +668,17 @@ class LockManager(ABC):
         """
         Closes the LockManager.
         """
+
+
+class StorageConflictError(Exception):
+    """
+    Raised when a storage operation fails due to an existing object
+    at the target key or identifier, causing a conflict.
+    """
+
+    def __init__(self, obj_name: str, existing_obj, expected_obj):
+        message = (
+            f"Inconsistent attempt to write {obj_name} object. "
+            f"Found {existing_obj}, but expected {expected_obj}"
+        )
+        super().__init__(message)

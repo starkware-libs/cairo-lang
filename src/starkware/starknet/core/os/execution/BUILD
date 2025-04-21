@@ -5,15 +5,16 @@ exports_files([
     "deprecated_execute_syscalls.cairo",
     "execute_entry_point.cairo",
     "execute_syscalls.cairo",
+    "execute_transaction_utils.cairo",
     "execute_transactions.cairo",
     "revert.cairo",
-    "version_bound_accounts.cairo",
+    "account_backward_compatibility.cairo",
 ])
 
 py_library(
-    name = "version_bound_accounts_lib",
+    name = "account_backward_compatibility_lib",
     srcs = [
-        "version_bound_accounts.py",
+        "account_backward_compatibility.py",
     ],
     deps = ["//src/starkware/starknet/definitions:starknet_definitions_lib"],
 )

@@ -27,7 +27,7 @@ from services.everest.business_logic.transaction_execution_objects import (
     TransactionFailureReason,
 )
 from services.everest.definitions import fields as everest_fields
-from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
+from starkware.cairo.lang.vm.cairo_pie import ExecutionResourcesStone
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable
 from starkware.cairo.lang.vm.utils import RunResources
 from starkware.python.utils import as_non_optional
@@ -54,6 +54,7 @@ from starkware.starkware_utils.validated_dataclass import (
     ValidatedDataclass,
     ValidatedMarshmallowDataclass,
 )
+from starkware.starkware_utils.validated_fields import ValidatedIntFormatter
 
 logger = logging.getLogger(__name__)
 ResourcesMapping = Mapping[str, int]
@@ -342,32 +343,11 @@ class TrackedResource(Enum):
         return self is TrackedResource.SierraGas
 
 
-# NOTE: This dataclass isn't validated due to a forward-declaration issue.
-@marshmallow_dataclass.dataclass(frozen=True)
-class CallInfo(SerializableMarshmallowDataclass):
+@dataclasses.dataclass(frozen=True)
+class StorageAccessTracker(ValidatedDataclass):
     """
-    Represents a contract call, either internal or external.
-    Holds the information needed for the execution of the represented contract call by the OS.
-    No need for validations here, as the fields are taken from validated objects.
+    Information kept for the StarkNet OS run in the GpsAmbassador.
     """
-
-    call: CallEntryPoint
-    execution: CallExecution
-    resources: ExecutionResources
-    tracked_resource: TrackedResource = field(
-        metadata=additional_metadata(
-            marshmallow_field=mfields.Enum(TrackedResource, load_default=TrackedResource.CairoSteps)
-        )
-    )
-
-    # Internal calls made by this call.
-    inner_calls: List["CallInfo"] = field(
-        metadata=additional_metadata(
-            marshmallow_field=mfields.List(mfields.Nested(lambda: CallInfo.Schema()))
-        )
-    )
-
-    # Information kept for the StarkNet OS run in the GpsAmbassador.
 
     # A list of values read from storage by this call, **excluding** readings from nested calls.
     storage_read_values: List[int] = field(metadata=fields.felt_as_hex_or_str_list_metadata)
@@ -395,6 +375,66 @@ class CallInfo(SerializableMarshmallowDataclass):
         )
     )
 
+    read_block_hash_values: List[int] = field(
+        metadata=fields.felt_as_hex_list_with_load_default_metadata
+    )
+
+    # A list of block numbers' hashes accessed by this call.
+    accessed_blocks: Set[int] = field(
+        metadata=additional_metadata(
+            marshmallow_field=SetField(
+                everest_fields.get_bounded_int_range_validator(
+                    formatter=ValidatedIntFormatter.INT
+                ).metadata()["marshmallow_field"],
+                load_default=set,
+            )
+        )
+    )
+
+
+# NOTE: This dataclass isn't validated due to a forward-declaration issue.
+@marshmallow_dataclass.dataclass(frozen=True)
+class CallInfo(SerializableMarshmallowDataclass):
+    """
+    Represents a contract call, either internal or external.
+    Holds the information needed for the execution of the represented contract call by the OS.
+    No need for validations here, as the fields are taken from validated objects.
+    """
+
+    call: CallEntryPoint
+    execution: CallExecution
+    resources: ExecutionResourcesStone
+    tracked_resource: TrackedResource = field(
+        metadata=additional_metadata(
+            marshmallow_field=mfields.Enum(TrackedResource, load_default=TrackedResource.CairoSteps)
+        )
+    )
+
+    # Internal calls made by this call.
+    inner_calls: List["CallInfo"] = field(
+        metadata=additional_metadata(
+            marshmallow_field=mfields.List(mfields.Nested(lambda: CallInfo.Schema()))
+        )
+    )
+
+    storage_access_tracker: StorageAccessTracker
+
+    @marshmallow.pre_load
+    def from_explicit_storage_access_tracker(
+        cls, data: Dict[str, Any], many: bool, **kwargs
+    ) -> Dict[str, Any]:
+        """
+        This method is used to convert the old call_info without the storage_access_tracker field.
+        """
+        if not data.get("storage_access_tracker"):
+            data["storage_access_tracker"] = {
+                "storage_read_values": data.pop("storage_read_values"),
+                "accessed_storage_keys": data.pop("accessed_storage_keys"),
+                "read_class_hash_values": data.pop("read_class_hash_values", []),
+                "accessed_contract_addresses": data.pop("accessed_contract_addresses", set()),
+            }
+        return data
+
     @classmethod
     def create(
         cls,
@@ -408,13 +448,15 @@ class CallInfo(SerializableMarshmallowDataclass):
         gas_consumed: int,
         failure_flag: int,
         retdata: List[int],
-        execution_resources: ExecutionResources,
+        execution_resources: ExecutionResourcesStone,
         events: List[OrderedEvent],
         l2_to_l1_messages: List[OrderedL2ToL1Message],
         storage_read_values: List[int],
         accessed_storage_keys: Set[int],
         read_class_hash_values: List[int],
         accessed_contract_addresses: Set[int],
+        read_block_hash_values: List[int],
+        accessed_blocks: Set[int],
         internal_calls: List["CallInfo"],
         code_address: Optional[int],
     ) -> "CallInfo":
@@ -437,14 +479,20 @@ class CallInfo(SerializableMarshmallowDataclass):
             gas_consumed=gas_consumed,
         )
 
-        return cls(
-            call=call,
-            execution=execution,
-            resources=execution_resources,
+        storage_access_tracker = StorageAccessTracker(
             storage_read_values=storage_read_values,
             accessed_storage_keys=accessed_storage_keys,
             read_class_hash_values=read_class_hash_values,
             accessed_contract_addresses=accessed_contract_addresses,
+            read_block_hash_values=read_block_hash_values,
+            accessed_blocks=accessed_blocks,
+        )
+
+        return cls(
+            call=call,
+            execution=execution,
+            resources=execution_resources,
+            storage_access_tracker=storage_access_tracker,
             inner_calls=internal_calls,
             tracked_resource=TrackedResource.CairoSteps,
         )
@@ -508,7 +556,7 @@ class CallInfo(SerializableMarshmallowDataclass):
     # Remaining fields.
 
     @property
-    def execution_resources(self) -> ExecutionResources:
+    def execution_resources(self) -> ExecutionResourcesStone:
         return self.resources
 
     @property
@@ -535,7 +583,13 @@ class CallInfo(SerializableMarshmallowDataclass):
         )
 
     def get_visited_storage_entries(self) -> Set[StorageEntry]:
-        storage_entries = {(self.contract_address, key) for key in self.accessed_storage_keys}
+        storage_entries = {
+            (self.contract_address, key)
+            for key in self.storage_access_tracker.accessed_storage_keys
+        } | {
+            (constants.BLOCK_HASH_CONTRACT_ADDRESS, block_number)
+            for block_number in self.storage_access_tracker.accessed_blocks
+        }
         internal_visited_storage_entries = CallInfo.get_visited_storage_entries_of_many(
             call_infos=self.inner_calls
         )
@@ -546,7 +600,7 @@ class CallInfo(SerializableMarshmallowDataclass):
         assert self.class_hash is not None, "Class hash is missing from call info."
         selector = StateSelector.create(
             contract_addresses={
-                *self.accessed_contract_addresses,
+                *self.storage_access_tracker.accessed_contract_addresses,
                 self.contract_address,
                 code_address,
             }
@@ -601,13 +655,15 @@ class CallInfo(SerializableMarshmallowDataclass):
             gas_consumed=0,
             failure_flag=0,
             retdata=[],
-            execution_resources=ExecutionResources.empty(),
+            execution_resources=ExecutionResourcesStone.empty(),
             events=[],
             l2_to_l1_messages=[],
             read_class_hash_values=[],
             accessed_contract_addresses=set(),
             storage_read_values=[],
             accessed_storage_keys=set(),
+            read_block_hash_values=[],
+            accessed_blocks=set(),
             internal_calls=[],
             code_address=None,
         )

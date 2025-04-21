@@ -1,3 +1,4 @@
+from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.hash_state import (
     HashState,
@@ -150,11 +151,10 @@ func deprecated_load_compiled_class_facts{pedersen_ptr: HashBuiltin*, range_chec
 ) {
     alloc_locals;
     local n_compiled_class_facts;
-    local compiled_class_facts: DeprecatedCompiledClassFact*;
+    let (local compiled_class_facts: DeprecatedCompiledClassFact*) = alloc();
     %{
         # Creates a set of deprecated class hashes to distinguish calls to deprecated entry points.
         __deprecated_class_hashes=set(os_input.deprecated_compiled_classes.keys())
-        ids.compiled_class_facts = segments.add()
         ids.n_compiled_class_facts = len(os_input.deprecated_compiled_classes)
         vm_enter_scope({
             'compiled_class_facts': iter(os_input.deprecated_compiled_classes.items()),

@@ -46,13 +46,13 @@ from starkware.starknet.core.os.constants import (
     L1_DATA_GAS,
     L1_DATA_GAS_INDEX,
     L1_GAS_INDEX,
+    L1_HANDLER_L2_GAS_MAX_AMOUNT,
     L1_HANDLER_VERSION,
     L2_GAS_INDEX,
     SIERRA_ARRAY_LEN_BOUND,
     TRANSFER_ENTRY_POINT_SELECTOR,
     VALIDATE_DECLARE_ENTRY_POINT_SELECTOR,
     VALIDATE_DEPLOY_ENTRY_POINT_SELECTOR,
-    VALIDATE_ENTRY_POINT_SELECTOR,
     VALIDATE_MAX_SIERRA_GAS,
     VALIDATED,
 )
@@ -70,6 +70,14 @@ from starkware.starknet.core.os.execution.deprecated_execute_entry_point import 
 )
 from starkware.starknet.core.os.execution.deprecated_execute_syscalls import deploy_contract
 from starkware.starknet.core.os.execution.execute_entry_point import ExecutionContext
+from starkware.starknet.core.os.execution.execute_transaction_utils import (
+    assert_deprecated_tx_fields_consistency,
+    cap_remaining_gas,
+    check_and_increment_nonce,
+    fill_deprecated_tx_info,
+    run_validate,
+    update_class_hash_in_execution_context,
+)
 from starkware.starknet.core.os.execution.revert import init_revert_log
 from starkware.starknet.core.os.output import (
     MessageToL2Header,
@@ -83,60 +91,17 @@ from starkware.starknet.core.os.transaction_hash.transaction_hash import (
     compute_deploy_account_transaction_hash,
     compute_invoke_transaction_hash,
     compute_l1_handler_transaction_hash,
-    update_builtin_ptrs,
+    update_pedersen_in_builtin_ptrs,
+    update_poseidon_in_builtin_ptrs,
 )
 
-// Verifies that the given (non-deprecated) `TxInfo` object is consistent with its version, in the
-// sense that deprecated transactions (version < 3) have all new fields set to zero and
-// non-deprecated transactions (version = 3) have old fields set to zero.
-func assert_deprecated_tx_fields_consistency(tx_info: TxInfo*) {
-    tempvar version = tx_info.version;
-    if (version * (version - 1) * (version - 2) == 0) {
-        let nullptr = cast(0, felt*);
-        assert tx_info.tip = 0;
-        assert tx_info.resource_bounds_start = cast(0, ResourceBounds*);
-        assert tx_info.resource_bounds_end = cast(0, ResourceBounds*);
-        assert tx_info.paymaster_data_start = nullptr;
-        assert tx_info.paymaster_data_end = nullptr;
-        assert tx_info.nonce_data_availability_mode = 0;
-        assert tx_info.fee_data_availability_mode = 0;
-        assert tx_info.account_deployment_data_start = nullptr;
-        assert tx_info.account_deployment_data_end = nullptr;
-    } else {
-        with_attr error_message("Invalid transaction version: {version}.") {
-            assert version = 3;
-        }
-        assert tx_info.max_fee = 0;
-    }
-    return ();
-}
-
-// Caps the remaining gas to the given max_gas.
-//
-// Arguments:
-// max_gas - expected to be the maximal validate or execute gas constant.
-func cap_remaining_gas{range_check_ptr, remaining_gas: felt}(max_gas: felt) -> () {
-    if (nondet %{ ids.remaining_gas > ids.max_gas %} != FALSE) {
-        assert_nn_le(max_gas, remaining_gas - 1);
-        tempvar remaining_gas = max_gas;
-    } else {
-        assert_nn_le(remaining_gas, max_gas);
-        tempvar remaining_gas = remaining_gas;
-    }
-    return ();
-}
-
 // Returns the transaction's initial gas derived from its resource bounds.
-func get_initial_user_gas_bound(n_resource_bounds: felt, resource_bounds: ResourceBounds*) -> felt {
-    if (n_resource_bounds * (n_resource_bounds - 2) == 0) {
-        // Resource bounds with two entries contain a trivial value (0) for L2 gas.
-        return DEFAULT_INITIAL_GAS_COST_NO_L2;
-    }
-    assert n_resource_bounds = 3;
-    return resource_bounds[L2_GAS_INDEX].max_amount;
+func get_initial_user_gas_bound(common_tx_fields: CommonTxFields*) -> felt {
+    assert common_tx_fields.n_resource_bounds = 3;
+    return common_tx_fields.resource_bounds[L2_GAS_INDEX].max_amount;
 }
 
-// Executes the transactions in the hint variable os_input.transactions.
+// Executes the transactions in the hint variable block_input.transactions.
 //
 // Returns:
 // reserved_range_checks_end - end pointer for the reserved range checks.
@@ -160,7 +125,8 @@ func execute_transactions{
     contract_state_changes: DictAccess*,
     contract_class_changes: DictAccess*,
     outputs: OsCarriedOutputs*,
-}(block_context: BlockContext*) -> (reserved_range_checks_end: felt) {
+    txs_range_check_ptr,
+}(block_context: BlockContext*) {
     alloc_locals;
 
     // Prepare builtin pointers.
@@ -172,7 +138,7 @@ func execute_transactions{
     local local_builtin_ptrs: BuiltinPointers = BuiltinPointers(
         selectable=SelectableBuiltins(
             pedersen=pedersen_ptr,
-            range_check=nondet %{ segments.add_temp_segment() %},
+            range_check=txs_range_check_ptr,
             ecdsa=ecdsa_ptr,
             bitwise=bitwise_ptr,
             ec_op=ec_op_ptr,
@@ -189,12 +155,12 @@ func execute_transactions{
     let sha256_ptr_start = builtin_ptrs.non_selectable.sha256;
 
     // Execute transactions.
-    local n_txs = nondet %{ len(os_input.transactions) %};
+    local n_txs = nondet %{ len(block_input.transactions) %};
     %{
         vm_enter_scope({
             '__deprecated_class_hashes': __deprecated_class_hashes,
-            'transactions': iter(os_input.transactions),
-            'component_hashes': os_input.declared_class_hash_to_component_hashes,
+            'transactions': iter(block_input.transactions),
+            'component_hashes': block_input.declared_class_hash_to_component_hashes,
             'execution_helper': execution_helper,
             'deprecated_syscall_handler': deprecated_syscall_handler,
             'syscall_handler': syscall_handler,
@@ -208,16 +174,8 @@ func execute_transactions{
     }(block_context=block_context, n_txs=n_txs);
     %{ vm_exit_scope() %}
 
-    let reserved_range_checks_end = range_check_ptr;
-    // Relocate the range checks used by the transactions to reserved_range_checks_end.
-    relocate_segment(
-        src_ptr=cast(local_builtin_ptrs.selectable.range_check, felt*),
-        dest_ptr=cast(reserved_range_checks_end, felt*),
-    );
-
     let selectable_builtins = &builtin_ptrs.selectable;
     let pedersen_ptr = selectable_builtins.pedersen;
-    let range_check_ptr = selectable_builtins.range_check;
     let ecdsa_ptr = selectable_builtins.ecdsa;
     let bitwise_ptr = selectable_builtins.bitwise;
     let ec_op_ptr = selectable_builtins.ec_op;
@@ -226,6 +184,8 @@ func execute_transactions{
     let add_mod_ptr = selectable_builtins.add_mod;
     let mul_mod_ptr = selectable_builtins.mul_mod;
     let keccak_ptr = builtin_ptrs.non_selectable.keccak;
+
+    let txs_range_check_ptr = selectable_builtins.range_check;
 
     // Fill holes in the rc96 segment.
     %{
@@ -242,7 +202,7 @@ func execute_transactions{
         sha256_ptr_start=sha256_ptr_start, sha256_ptr_end=builtin_ptrs.non_selectable.sha256
     );
 
-    return (reserved_range_checks_end=reserved_range_checks_end);
+    return ();
 }
 
 // Inner function for execute_transactions.
@@ -275,9 +235,6 @@ func execute_transactions_inner{
 
     // Guess the current transaction's type.
     %{
-        from src.starkware.starknet.core.os.transaction_hash.transaction_hash import (
-            create_resource_bounds_list,
-        )
         tx = next(transactions)
         assert tx.tx_type.name in ('INVOKE_FUNCTION', 'L1_HANDLER', 'DEPLOY_ACCOUNT', 'DECLARE'), (
             f"Unexpected transaction type: {tx.type.name}."
@@ -298,63 +255,56 @@ func execute_transactions_inner{
             builtin_ptrs=ids.builtin_ptrs,
             range_check_ptr=ids.range_check_ptr,
         )
-
-        # Guess the resource bounds.
-        if tx.tx_type.name == 'L1_HANDLER' or tx.version < 3:
-            ids.resource_bounds = 0
-            ids.n_resource_bounds = 0
-        else:
-            ids.resource_bounds = segments.gen_arg(create_resource_bounds_list(tx.resource_bounds))
-            ids.n_resource_bounds = len(tx.resource_bounds)
     %}
 
-    let remaining_gas = get_initial_user_gas_bound(
-        n_resource_bounds=n_resource_bounds, resource_bounds=resource_bounds
-    );
-    with remaining_gas {
-        if (tx_type == 'INVOKE_FUNCTION') {
-            // Handle the invoke-function transaction.
-            execute_invoke_function_transaction(
-                block_context=block_context,
-                n_resource_bounds=n_resource_bounds,
-                resource_bounds=resource_bounds,
-            );
-            %{ exit_tx() %}
-            return execute_transactions_inner(block_context=block_context, n_txs=n_txs - 1);
-        }
-        if (tx_type == 'L1_HANDLER') {
-            // Handle the L1-handler transaction.
-            execute_l1_handler_transaction(block_context=block_context);
-            %{ exit_tx() %}
-            return execute_transactions_inner(block_context=block_context, n_txs=n_txs - 1);
-        }
-        if (tx_type == 'DEPLOY_ACCOUNT') {
-            // Handle the deploy-account transaction.
-            execute_deploy_account_transaction(
-                block_context=block_context,
-                n_resource_bounds=n_resource_bounds,
-                resource_bounds=resource_bounds,
-            );
-            %{ exit_tx() %}
-            return execute_transactions_inner(block_context=block_context, n_txs=n_txs - 1);
-        }
-
-        assert tx_type = 'DECLARE';
-        // Handle the declare transaction.
-        execute_declare_transaction(
-            block_context=block_context,
-            n_resource_bounds=n_resource_bounds,
-            resource_bounds=resource_bounds,
-        );
+    if (tx_type == 'INVOKE_FUNCTION') {
+        // Handle the invoke-function transaction.
+        execute_invoke_function_transaction(block_context=block_context);
         %{ exit_tx() %}
         return execute_transactions_inner(block_context=block_context, n_txs=n_txs - 1);
     }
+    if (tx_type == 'L1_HANDLER') {
+        // Handle the L1-handler transaction.
+        execute_l1_handler_transaction(block_context=block_context);
+        %{ exit_tx() %}
+        return execute_transactions_inner(block_context=block_context, n_txs=n_txs - 1);
+    }
+    if (tx_type == 'DEPLOY_ACCOUNT') {
+        // Handle the deploy-account transaction.
+        execute_deploy_account_transaction(block_context=block_context);
+        %{ exit_tx() %}
+        return execute_transactions_inner(block_context=block_context, n_txs=n_txs - 1);
+    }
+
+    assert tx_type = 'DECLARE';
+    // Handle the declare transaction.
+    execute_declare_transaction(block_context=block_context);
+    %{ exit_tx() %}
+    return execute_transactions_inner(block_context=block_context, n_txs=n_txs - 1);
 }
 
 // Represents the calldata of an ERC20 transfer.
 struct TransferCallData {
     recipient: felt,
     amount: Uint256,
+}
+
+// Returns the maximum possible fee that can be charged for the transaction.
+func compute_max_possible_fee(tx_info: TxInfo*) -> felt {
+    tempvar resource_bounds: ResourceBounds* = tx_info.resource_bounds_start;
+    let n_resource_bounds = (tx_info.resource_bounds_end - resource_bounds) / ResourceBounds.SIZE;
+
+    // Only V3 transactions with all resource bounds are supported.
+    assert tx_info.version = 3;
+    assert n_resource_bounds = 3;
+
+    tempvar l1_gas_bounds: ResourceBounds = resource_bounds[L1_GAS_INDEX];
+    tempvar l2_gas_bounds: ResourceBounds = resource_bounds[L2_GAS_INDEX];
+    tempvar l1_data_gas_bounds = resource_bounds[L1_DATA_GAS_INDEX];
+
+    return l1_gas_bounds.max_amount * l1_gas_bounds.max_price_per_unit + l2_gas_bounds.max_amount *
+        (l2_gas_bounds.max_price_per_unit + tx_info.tip) + l1_data_gas_bounds.max_amount *
+        l1_data_gas_bounds.max_price_per_unit;
 }
 
 // Charges a fee from the user.
@@ -370,42 +320,15 @@ func charge_fee{
     contract_state_changes: DictAccess*,
     contract_class_changes: DictAccess*,
     outputs: OsCarriedOutputs*,
-}(block_context: BlockContext*, tx_execution_context: ExecutionContext*, n_resource_bounds: felt) {
+}(block_context: BlockContext*, tx_execution_context: ExecutionContext*) {
     alloc_locals;
-    local execution_info: ExecutionInfo* = tx_execution_context.execution_info;
-    local tx_info: TxInfo* = execution_info.tx_info;
-    tempvar version = tx_info.version;
-    tempvar not_deprecated_version = version * (version - 1) * (version - 2);
 
-    local max_fee: felt;
-    if (not_deprecated_version == 0) {
-        assert max_fee = tx_info.max_fee;
-    } else {
-        local resource_bounds: ResourceBounds* = tx_info.resource_bounds_start;
-        if (n_resource_bounds == 2) {
-            tempvar l1_data_gas_bounds = ResourceBounds(
-                resource=L1_DATA_GAS, max_amount=0, max_price_per_unit=0
-            );
-        } else {
-            assert n_resource_bounds = 3;
-            tempvar l1_data_gas_bounds = resource_bounds[L1_DATA_GAS_INDEX];
-        }
-        tempvar l1_gas_bounds: ResourceBounds = resource_bounds[L1_GAS_INDEX];
-        tempvar l2_gas_bounds: ResourceBounds = resource_bounds[L2_GAS_INDEX];
-        assert max_fee = l1_gas_bounds.max_amount * l1_gas_bounds.max_price_per_unit +
-            l2_gas_bounds.max_amount * l2_gas_bounds.max_price_per_unit +
-            l1_data_gas_bounds.max_amount * l1_data_gas_bounds.max_price_per_unit;
-    }
+    local tx_info: TxInfo* = tx_execution_context.execution_info.tx_info;
+    let max_fee = compute_max_possible_fee(tx_info=tx_info);
 
     if (max_fee == 0) {
         return ();
     }
-
-    // Transactions with fee should go through an account contract.
-    tempvar selector = execution_info.selector;
-    assert (selector - EXECUTE_ENTRY_POINT_SELECTOR) * (
-        selector - VALIDATE_DECLARE_ENTRY_POINT_SELECTOR
-    ) * (selector - VALIDATE_DEPLOY_ENTRY_POINT_SELECTOR) = 0;
 
     local calldata: TransferCallData = TransferCallData(
         recipient=block_context.block_info_for_execute.sequencer_address,
@@ -415,13 +338,7 @@ func charge_fee{
     // Verify that the charged amount is not larger than the transaction's max_fee field.
     assert_nn_le(calldata.amount.low, max_fee);
 
-    local fee_token_address: felt;
-    if (not_deprecated_version == 0) {
-        fee_token_address = block_context.starknet_os_config.deprecated_fee_token_address;
-    } else {
-        // The fee token is STRK.
-        fee_token_address = block_context.starknet_os_config.fee_token_address;
-    }
+    local fee_token_address = block_context.starknet_os_config.fee_token_address;
     let (fee_state_entry: StateEntry*) = dict_read{dict_ptr=contract_state_changes}(
         key=fee_token_address
     );
@@ -450,82 +367,53 @@ func charge_fee{
     return ();
 }
 
-// Executes an invoke-function transaction.
+// Guesses and returns the account transaction common fields.
 //
-// The transaction should be passed in the hint variable 'tx'.
+// The account transaction should be passed in the hint variable 'tx'.
+func get_account_tx_common_fields(
+    block_context: BlockContext*, tx_hash_prefix: felt, sender_address: felt
+) -> CommonTxFields* {
+    tempvar resource_bounds: ResourceBounds*;
+    %{
+        from src.starkware.starknet.core.os.transaction_hash.transaction_hash import (
+            create_resource_bounds_list,
+        )
+        assert len(tx.resource_bounds) == 3, (
+            "Only transactions with 3 resource bounds are supported. "
+            f"Got {len(tx.resource_bounds)} resource bounds."
+        )
+        ids.resource_bounds = segments.gen_arg(create_resource_bounds_list(tx.resource_bounds))
+    %}
+    tempvar common_tx_fields = new CommonTxFields(
+        tx_hash_prefix=tx_hash_prefix,
+        version=3,
+        sender_address=sender_address,
+        chain_id=block_context.starknet_os_config.chain_id,
+        nonce=nondet %{ tx.nonce %},
+        tip=nondet %{ tx.tip %},
+        n_resource_bounds=3,
+        resource_bounds=resource_bounds,
+        paymaster_data_length=nondet %{ len(tx.paymaster_data) %},
+        paymaster_data=cast(nondet %{ segments.gen_arg(tx.paymaster_data) %}, felt*),
+        nonce_data_availability_mode=nondet %{ tx.nonce_data_availability_mode %},
+        fee_data_availability_mode=nondet %{ tx.fee_data_availability_mode %},
+    );
+    return common_tx_fields;
+}
+
+// Fills the transaction info and deprecated transaction info structs for account transactions.
 //
-// Arguments:
-// block_context - a global context that is fixed throughout the block.
-func execute_invoke_function_transaction{
-    range_check_ptr,
-    remaining_gas: felt,
-    builtin_ptrs: BuiltinPointers*,
-    contract_state_changes: DictAccess*,
-    contract_class_changes: DictAccess*,
-    outputs: OsCarriedOutputs*,
-}(block_context: BlockContext*, n_resource_bounds: felt, resource_bounds: ResourceBounds*) {
+// The account transaction should be passed in the hint variable 'tx'.
+func fill_account_tx_info{range_check_ptr}(
+    transaction_hash: felt,
+    common_tx_fields: CommonTxFields*,
+    account_deployment_data_size: felt,
+    account_deployment_data: felt*,
+    tx_info_dst: TxInfo*,
+    deprecated_tx_info_dst: DeprecatedTxInfo*,
+) {
     alloc_locals;
 
-    let (local tx_execution_context: ExecutionContext*) = get_invoke_tx_execution_context(
-        block_context=block_context, entry_point_type=ENTRY_POINT_TYPE_EXTERNAL
-    );
-    local tx_execution_info: ExecutionInfo* = tx_execution_context.execution_info;
-
-    // Guess tx fields.
-    // The version validation is done in `compute_invoke_transaction_hash()`.
-    let (__fp__, _) = get_fp_and_pc();
-    local common_tx_fields: CommonTxFields = CommonTxFields(
-        tx_hash_prefix=INVOKE_HASH_PREFIX,
-        version=nondet %{ tx.version %},
-        sender_address=tx_execution_info.contract_address,
-        max_fee=nondet %{ tx.max_fee if tx.version < 3 else 0 %},
-        chain_id=block_context.starknet_os_config.chain_id,
-        nonce=nondet %{ 0 if tx.nonce is None else tx.nonce %},
-        tip=nondet %{ 0 if tx.version < 3 else tx.tip %},
-        n_resource_bounds=n_resource_bounds,
-        resource_bounds=resource_bounds,
-        paymaster_data_length=nondet %{ 0 if tx.version < 3 else len(tx.paymaster_data) %},
-        paymaster_data=cast(
-            nondet %{ 0 if tx.version < 3 else segments.gen_arg(tx.paymaster_data) %}, felt*
-        ),
-        nonce_data_availability_mode=(
-            nondet %{ 0 if tx.version < 3 else tx.nonce_data_availability_mode %}
-        ),
-        fee_data_availability_mode=(
-            nondet %{ 0 if tx.version < 3 else tx.fee_data_availability_mode %}
-        ),
-    );
-
-    if (common_tx_fields.version != 0) {
-        assert tx_execution_info.selector = EXECUTE_ENTRY_POINT_SELECTOR;
-    }
-
-    local account_deployment_data_size = (
-        nondet %{ 0 if tx.version < 3 else len(tx.account_deployment_data) %}
-    );
-    local account_deployment_data: felt* = cast(
-        nondet %{ 0 if tx.version < 3 else segments.gen_arg(tx.account_deployment_data) %}, felt*
-    );
-    let pedersen_ptr = builtin_ptrs.selectable.pedersen;
-    let poseidon_ptr = builtin_ptrs.selectable.poseidon;
-    with pedersen_ptr, poseidon_ptr {
-        let transaction_hash = compute_invoke_transaction_hash(
-            common_fields=&common_tx_fields,
-            execution_context=tx_execution_context,
-            account_deployment_data_size=account_deployment_data_size,
-            account_deployment_data=account_deployment_data,
-        );
-    }
-    update_builtin_ptrs(pedersen_ptr=pedersen_ptr, poseidon_ptr=poseidon_ptr);
-
-    %{
-        assert ids.transaction_hash == tx.hash_value, (
-            "Computed transaction_hash is inconsistent with the hash in the transaction. "
-            f"Computed hash = {ids.transaction_hash}, Expected hash = {tx.hash_value}.")
-    %}
-
-    // Write the transaction info and complete the ExecutionInfo struct.
-    tempvar tx_info = tx_execution_info.tx_info;
     local signature_start: felt*;
     local signature_len: felt;
     %{
@@ -533,10 +421,10 @@ func execute_invoke_function_transaction{
         ids.signature_len = len(tx.signature)
     %}
     assert_nn_le(signature_len, SIERRA_ARRAY_LEN_BOUND - 1);
-    assert [tx_info] = TxInfo(
+    assert [tx_info_dst] = TxInfo(
         version=common_tx_fields.version,
-        account_contract_address=tx_execution_info.contract_address,
-        max_fee=common_tx_fields.max_fee,
+        account_contract_address=common_tx_fields.sender_address,
+        max_fee=0,
         signature_start=signature_start,
         signature_end=&signature_start[signature_len],
         transaction_hash=transaction_hash,
@@ -552,32 +440,100 @@ func execute_invoke_function_transaction{
         account_deployment_data_start=account_deployment_data,
         account_deployment_data_end=&account_deployment_data[account_deployment_data_size],
     );
-    fill_deprecated_tx_info(tx_info=tx_info, dst=tx_execution_context.deprecated_tx_info);
-    assert_deprecated_tx_fields_consistency(tx_info=tx_info);
+    fill_deprecated_tx_info(tx_info=tx_info_dst, dst=deprecated_tx_info_dst);
+    assert_deprecated_tx_fields_consistency(tx_info=tx_info_dst);
+    return ();
+}
+
+// Executes an invoke-function transaction.
+//
+// The transaction should be passed in the hint variable 'tx'.
+//
+// Arguments:
+// block_context - a global context that is fixed throughout the block.
+func execute_invoke_function_transaction{
+    range_check_ptr,
+    builtin_ptrs: BuiltinPointers*,
+    contract_state_changes: DictAccess*,
+    contract_class_changes: DictAccess*,
+    outputs: OsCarriedOutputs*,
+}(block_context: BlockContext*) {
+    alloc_locals;
+
+    let (local tx_execution_context: ExecutionContext*) = get_invoke_tx_execution_context(
+        block_context=block_context,
+        entry_point_type=ENTRY_POINT_TYPE_EXTERNAL,
+        entry_point_selector=EXECUTE_ENTRY_POINT_SELECTOR,
+    );
+    local tx_execution_info: ExecutionInfo* = tx_execution_context.execution_info;
+
+    // Guess transaction fields.
+    // The version validation is done in `compute_invoke_transaction_hash()`.
+    let common_tx_fields = get_account_tx_common_fields(
+        block_context=block_context,
+        tx_hash_prefix=INVOKE_HASH_PREFIX,
+        sender_address=tx_execution_info.contract_address,
+    );
+    local account_deployment_data_size = nondet %{ len(tx.account_deployment_data) %};
+    local account_deployment_data: felt* = cast(
+        nondet %{ segments.gen_arg(tx.account_deployment_data) %}, felt*
+    );
+    let poseidon_ptr = builtin_ptrs.selectable.poseidon;
+    with poseidon_ptr {
+        let transaction_hash = compute_invoke_transaction_hash(
+            common_fields=common_tx_fields,
+            execution_context=tx_execution_context,
+            account_deployment_data_size=account_deployment_data_size,
+            account_deployment_data=account_deployment_data,
+        );
+    }
+    update_poseidon_in_builtin_ptrs(poseidon_ptr=poseidon_ptr);
+
+    %{
+        assert ids.transaction_hash == tx.hash_value, (
+            "Computed transaction_hash is inconsistent with the hash in the transaction. "
+            f"Computed hash = {ids.transaction_hash}, Expected hash = {tx.hash_value}.")
+    %}
+
+    // Write the transaction info and complete the ExecutionInfo struct.
+    tempvar tx_info = tx_execution_info.tx_info;
+    fill_account_tx_info(
+        transaction_hash=transaction_hash,
+        common_tx_fields=common_tx_fields,
+        account_deployment_data_size=account_deployment_data_size,
+        account_deployment_data=account_deployment_data,
+        tx_info_dst=tx_info,
+        deprecated_tx_info_dst=tx_execution_context.deprecated_tx_info,
+    );
 
     check_and_increment_nonce(tx_info=tx_info);
 
-    %{
-        tx_info_ptr = ids.tx_execution_context.deprecated_tx_info.address_
-        execution_helper.start_tx(tx_info_ptr=tx_info_ptr)
-    %}
+    %{ execution_helper.start_tx() %}
 
-    let initial_user_gas_bound = remaining_gas;
-    cap_remaining_gas(max_gas=VALIDATE_MAX_SIERRA_GAS);
-    let pre_validate_gas = remaining_gas;
-    run_validate(block_context=block_context, tx_execution_context=tx_execution_context);
+    let initial_user_gas_bound = get_initial_user_gas_bound(common_tx_fields=common_tx_fields);
+    let remaining_gas = initial_user_gas_bound;
+
+    // Validate.
+    with remaining_gas {
+        cap_remaining_gas(max_gas=VALIDATE_MAX_SIERRA_GAS);
+        let pre_validate_gas = remaining_gas;
+        run_validate(block_context=block_context, tx_execution_context=tx_execution_context);
+    }
+    let validate_gas_consumed = pre_validate_gas - remaining_gas;
+    tempvar remaining_gas = initial_user_gas_bound - validate_gas_consumed;
+
     let updated_tx_execution_context = update_class_hash_in_execution_context(
         execution_context=tx_execution_context
     );
-    let validate_gas_consumed = pre_validate_gas - remaining_gas;
 
-    tempvar remaining_gas = initial_user_gas_bound - validate_gas_consumed;
-    // Execute only non-reverted transactions.
     if (nondet %{ execution_helper.tx_execution_info.is_reverted %} == 0) {
-        cap_remaining_gas(max_gas=EXECUTE_MAX_SIERRA_GAS);
-        non_reverting_select_execute_entry_point_func(
-            block_context=block_context, execution_context=updated_tx_execution_context
-        );
+        // Execute only non-reverted transactions.
+        with remaining_gas {
+            cap_remaining_gas(max_gas=EXECUTE_MAX_SIERRA_GAS);
+            non_reverting_select_execute_entry_point_func(
+                block_context=block_context, execution_context=updated_tx_execution_context
+            );
+        }
     } else {
         // Align the stack with the `if` branch to avoid revoked references.
         tempvar range_check_ptr = range_check_ptr;
@@ -588,14 +544,9 @@ func execute_invoke_function_transaction{
         tempvar outputs = outputs;
         tempvar _dummy_return_value: non_reverting_select_execute_entry_point_func.Return;
     }
-    local remaining_gas = remaining_gas;
 
     // Charge fee.
-    charge_fee(
-        block_context=block_context,
-        tx_execution_context=updated_tx_execution_context,
-        n_resource_bounds=common_tx_fields.n_resource_bounds,
-    );
+    charge_fee(block_context=block_context, tx_execution_context=updated_tx_execution_context);
 
     %{ execution_helper.end_tx() %}
 
@@ -610,7 +561,6 @@ func execute_invoke_function_transaction{
 // block_context - a global context that is fixed throughout the block.
 func execute_l1_handler_transaction{
     range_check_ptr,
-    remaining_gas: felt,
     builtin_ptrs: BuiltinPointers*,
     contract_state_changes: DictAccess*,
     contract_class_changes: DictAccess*,
@@ -619,7 +569,9 @@ func execute_l1_handler_transaction{
     alloc_locals;
 
     let (local tx_execution_context: ExecutionContext*) = get_invoke_tx_execution_context(
-        block_context=block_context, entry_point_type=ENTRY_POINT_TYPE_L1_HANDLER
+        block_context=block_context,
+        entry_point_type=ENTRY_POINT_TYPE_L1_HANDLER,
+        entry_point_selector=nondet %{ tx.entry_point_selector %},
     );
     local tx_execution_info: ExecutionInfo* = tx_execution_context.execution_info;
 
@@ -627,13 +579,12 @@ func execute_l1_handler_transaction{
     local chain_id = block_context.starknet_os_config.chain_id;
 
     let pedersen_ptr = builtin_ptrs.selectable.pedersen;
-    let poseidon_ptr = builtin_ptrs.selectable.poseidon;
     with pedersen_ptr {
         let transaction_hash = compute_l1_handler_transaction_hash(
             execution_context=tx_execution_context, chain_id=chain_id, nonce=nonce
         );
     }
-    update_builtin_ptrs(pedersen_ptr=pedersen_ptr, poseidon_ptr=poseidon_ptr);
+    update_pedersen_in_builtin_ptrs(pedersen_ptr=pedersen_ptr);
 
     %{
         assert ids.transaction_hash == tx.hash_value, (
@@ -667,21 +618,13 @@ func execute_l1_handler_transaction{
 
     // Consume L1-to-L2 message.
     consume_l1_to_l2_message(execution_context=tx_execution_context, nonce=nonce);
-    %{
-        tx_info_ptr = ids.tx_execution_context.deprecated_tx_info.address_
-        execution_helper.start_tx(tx_info_ptr=tx_info_ptr)
-    %}
-    let initial_user_gas_bound = remaining_gas;
-    cap_remaining_gas(max_gas=EXECUTE_MAX_SIERRA_GAS);
-    let pre_execute_gas = remaining_gas;
-    non_reverting_select_execute_entry_point_func(
+    %{ execution_helper.start_tx() %}
+    let remaining_gas = L1_HANDLER_L2_GAS_MAX_AMOUNT;
+    non_reverting_select_execute_entry_point_func{remaining_gas=remaining_gas}(
         block_context=block_context, execution_context=tx_execution_context
     );
-    let execute_gas_consumed = pre_execute_gas - remaining_gas;
-    let remaining_gas = initial_user_gas_bound - execute_gas_consumed;
 
     %{ execution_helper.end_tx() %}
-
     return ();
 }
 
@@ -689,7 +632,7 @@ func execute_l1_handler_transaction{
 // Leaves 'execution_info.tx_info' and 'deprecated_tx_info' empty - should be
 // filled later on.
 func get_invoke_tx_execution_context{range_check_ptr, contract_state_changes: DictAccess*}(
-    block_context: BlockContext*, entry_point_type: felt
+    block_context: BlockContext*, entry_point_type: felt, entry_point_selector: felt
 ) -> (tx_execution_context: ExecutionContext*) {
     alloc_locals;
     local contract_address;
@@ -714,142 +657,13 @@ func get_invoke_tx_execution_context{range_check_ptr, contract_state_changes: Di
             tx_info=cast(nondet %{ segments.add() %}, TxInfo*),
             caller_address=ORIGIN_ADDRESS,
             contract_address=contract_address,
-            selector=nondet %{ tx.entry_point_selector %},
+            selector=entry_point_selector,
         ),
         deprecated_tx_info=cast(nondet %{ segments.add() %}, DeprecatedTxInfo*),
     );
     assert_nn_le(tx_execution_context.calldata_size, SIERRA_ARRAY_LEN_BOUND - 1);
 
     return (tx_execution_context=tx_execution_context);
-}
-
-// Changes the class_hash according to the class that belongs to the executed contract address.
-// Therefore, it shouldn't be used for execution_context that was created for library_call
-// (since the class hash has nothing to do with the contract address in that case).
-func update_class_hash_in_execution_context{range_check_ptr, contract_state_changes: DictAccess*}(
-    execution_context: ExecutionContext*
-) -> ExecutionContext* {
-    let (state_entry: StateEntry*) = dict_read{dict_ptr=contract_state_changes}(
-        key=execution_context.execution_info.contract_address
-    );
-    return new ExecutionContext(
-        entry_point_type=execution_context.entry_point_type,
-        class_hash=state_entry.class_hash,
-        calldata_size=execution_context.calldata_size,
-        calldata=execution_context.calldata,
-        execution_info=execution_context.execution_info,
-        deprecated_tx_info=execution_context.deprecated_tx_info,
-    );
-}
-
-// Initializes the given DeprecatedTxInfo (dst) based on the given TxInfo.
-func fill_deprecated_tx_info(tx_info: TxInfo*, dst: DeprecatedTxInfo*) {
-    tempvar signature_start = tx_info.signature_start;
-    assert [dst] = DeprecatedTxInfo(
-        version=tx_info.version,
-        account_contract_address=tx_info.account_contract_address,
-        max_fee=tx_info.max_fee,
-        signature_len=tx_info.signature_end - signature_start,
-        signature=signature_start,
-        transaction_hash=tx_info.transaction_hash,
-        chain_id=tx_info.chain_id,
-        nonce=tx_info.nonce,
-    );
-    return ();
-}
-
-// Verifies that the transaction's nonce matches the contract's nonce and increments the
-// latter.
-func check_and_increment_nonce{contract_state_changes: DictAccess*}(tx_info: TxInfo*) -> () {
-    // Do not handle nonce for version 0.
-    if (tx_info.version == 0) {
-        return ();
-    }
-
-    tempvar state_entry: StateEntry*;
-    %{
-        # Fetch a state_entry in this hint and validate it in the update that comes next.
-        ids.state_entry = __dict_manager.get_dict(ids.contract_state_changes)[
-            ids.tx_info.account_contract_address
-        ]
-    %}
-
-    tempvar current_nonce = state_entry.nonce;
-    with_attr error_message("Unexpected nonce.") {
-        assert current_nonce = tx_info.nonce;
-    }
-
-    // Update contract_state_changes.
-    tempvar new_state_entry = new StateEntry(
-        class_hash=state_entry.class_hash,
-        storage_ptr=state_entry.storage_ptr,
-        nonce=current_nonce + 1,
-    );
-    dict_update{dict_ptr=contract_state_changes}(
-        key=tx_info.account_contract_address,
-        prev_value=cast(state_entry, felt),
-        new_value=cast(new_state_entry, felt),
-    );
-    return ();
-}
-
-// Runs the account contract's "__validate__" entry point, which is responsible for
-// signature verification.
-//
-// Arguments:
-// block_context - a global context that is fixed throughout the block.
-// tx_execution_context - The execution context of the underlying invoke transaction.
-func run_validate{
-    range_check_ptr,
-    remaining_gas: felt,
-    builtin_ptrs: BuiltinPointers*,
-    contract_state_changes: DictAccess*,
-    contract_class_changes: DictAccess*,
-    outputs: OsCarriedOutputs*,
-}(block_context: BlockContext*, tx_execution_context: ExecutionContext*) {
-    alloc_locals;
-    local tx_execution_info: ExecutionInfo* = tx_execution_context.execution_info;
-
-    // Do not run "__validate__" for version 0.
-    if (tx_execution_info.tx_info.version == 0) {
-        return ();
-    }
-
-    // "__validate__" is expected to get the same calldata as "__execute__".
-    local validate_execution_context: ExecutionContext* = new ExecutionContext(
-        entry_point_type=ENTRY_POINT_TYPE_EXTERNAL,
-        class_hash=tx_execution_context.class_hash,
-        calldata_size=tx_execution_context.calldata_size,
-        calldata=tx_execution_context.calldata,
-        execution_info=new ExecutionInfo(
-            block_info=block_context.block_info_for_validate,
-            tx_info=tx_execution_info.tx_info,
-            caller_address=tx_execution_info.caller_address,
-            contract_address=tx_execution_info.contract_address,
-            selector=VALIDATE_ENTRY_POINT_SELECTOR,
-        ),
-        deprecated_tx_info=tx_execution_context.deprecated_tx_info,
-    );
-
-    let (retdata_size, retdata, is_deprecated) = non_reverting_select_execute_entry_point_func(
-        block_context=block_context, execution_context=validate_execution_context
-    );
-    // The __validate__ function should not revert.
-    if (is_deprecated == 0) {
-        %{
-            # Fetch the result, up to 100 elements.
-            result = memory.get_range(ids.retdata, min(100, ids.retdata_size))
-
-            if result != [ids.VALIDATED]:
-                print("Invalid return value from __validate__:")
-                print(f"  Size: {ids.retdata_size}")
-                print(f"  Result (at most 100 elements): {result}")
-        %}
-        assert retdata_size = 1;
-        assert retdata[0] = VALIDATED;
-    }
-
-    return ();
 }
 
 // Adds 'tx' with the given 'nonce' to 'outputs.messages_to_l2'.
@@ -912,7 +726,7 @@ func prepare_constructor_execution_context{range_check_ptr, builtin_ptrs: Builti
             deployer_address=0,
         );
     }
-    update_builtin_ptrs(pedersen_ptr=hash_ptr, poseidon_ptr=builtin_ptrs.selectable.poseidon);
+    update_pedersen_in_builtin_ptrs(pedersen_ptr=hash_ptr);
 
     tempvar constructor_execution_context = new ExecutionContext(
         entry_point_type=ENTRY_POINT_TYPE_CONSTRUCTOR,
@@ -936,12 +750,11 @@ func prepare_constructor_execution_context{range_check_ptr, builtin_ptrs: Builti
 
 func execute_deploy_account_transaction{
     range_check_ptr,
-    remaining_gas: felt,
     builtin_ptrs: BuiltinPointers*,
     contract_state_changes: DictAccess*,
     contract_class_changes: DictAccess*,
     outputs: OsCarriedOutputs*,
-}(block_context: BlockContext*, n_resource_bounds: felt, resource_bounds: ResourceBounds*) {
+}(block_context: BlockContext*) {
     alloc_locals;
 
     // Calculate address and prepare constructor execution context.
@@ -962,41 +775,23 @@ func execute_deploy_account_transaction{
         len=constructor_execution_context.calldata_size,
     );
 
-    // Guess tx fields.
+    // Guess transaction fields.
     // Compute transaction hash and prepare transaction info.
     // The version validation is done in `compute_deploy_account_transaction_hash()`.
-    let (__fp__, _) = get_fp_and_pc();
-    local common_tx_fields: CommonTxFields = CommonTxFields(
+    let common_tx_fields = get_account_tx_common_fields(
+        block_context=block_context,
         tx_hash_prefix=DEPLOY_ACCOUNT_HASH_PREFIX,
-        version=nondet %{ tx.version %},
         sender_address=sender_address,
-        max_fee=nondet %{ tx.max_fee if tx.version < 3 else 0 %},
-        chain_id=block_context.starknet_os_config.chain_id,
-        nonce=nondet %{ tx.nonce %},
-        tip=nondet %{ 0 if tx.version < 3 else tx.tip %},
-        n_resource_bounds=n_resource_bounds,
-        resource_bounds=resource_bounds,
-        paymaster_data_length=nondet %{ 0 if tx.version < 3 else len(tx.paymaster_data) %},
-        paymaster_data=cast(
-            nondet %{ 0 if tx.version < 3 else segments.gen_arg(tx.paymaster_data) %}, felt*
-        ),
-        nonce_data_availability_mode=(
-            nondet %{ 0 if tx.version < 3 else tx.nonce_data_availability_mode %}
-        ),
-        fee_data_availability_mode=(
-            nondet %{ 0 if tx.version < 3 else tx.fee_data_availability_mode %}
-        ),
     );
-    let pedersen_ptr = builtin_ptrs.selectable.pedersen;
     let poseidon_ptr = builtin_ptrs.selectable.poseidon;
-    with pedersen_ptr, poseidon_ptr {
+    with poseidon_ptr {
         let transaction_hash = compute_deploy_account_transaction_hash(
-            common_fields=&common_tx_fields,
+            common_fields=common_tx_fields,
             calldata_size=validate_deploy_calldata_size,
             calldata=validate_deploy_calldata,
         );
     }
-    update_builtin_ptrs(pedersen_ptr=pedersen_ptr, poseidon_ptr=poseidon_ptr);
+    update_poseidon_in_builtin_ptrs(poseidon_ptr=poseidon_ptr);
 
     %{
         assert ids.transaction_hash == tx.hash_value, (
@@ -1008,46 +803,32 @@ func execute_deploy_account_transaction{
     local tx_info: TxInfo* = constructor_execution_info.tx_info;
     local deprecated_tx_info: DeprecatedTxInfo* = constructor_execution_context.deprecated_tx_info;
 
-    local signature_start: felt*;
-    local signature_len: felt;
-    %{
-        ids.signature_start = segments.gen_arg(arg=tx.signature)
-        ids.signature_len = len(tx.signature)
-    %}
-    assert_nn_le(signature_len, SIERRA_ARRAY_LEN_BOUND - 1);
-    assert [tx_info] = TxInfo(
-        version=common_tx_fields.version,
-        account_contract_address=sender_address,
-        max_fee=common_tx_fields.max_fee,
-        signature_start=signature_start,
-        signature_end=&signature_start[signature_len],
+    fill_account_tx_info(
         transaction_hash=transaction_hash,
-        chain_id=common_tx_fields.chain_id,
-        nonce=common_tx_fields.nonce,
-        resource_bounds_start=common_tx_fields.resource_bounds,
-        resource_bounds_end=&common_tx_fields.resource_bounds[common_tx_fields.n_resource_bounds],
-        tip=common_tx_fields.tip,
-        paymaster_data_start=common_tx_fields.paymaster_data,
-        paymaster_data_end=&common_tx_fields.paymaster_data[common_tx_fields.paymaster_data_length],
-        nonce_data_availability_mode=common_tx_fields.nonce_data_availability_mode,
-        fee_data_availability_mode=common_tx_fields.fee_data_availability_mode,
-        account_deployment_data_start=cast(0, felt*),
-        account_deployment_data_end=cast(0, felt*),
+        common_tx_fields=common_tx_fields,
+        account_deployment_data_size=0,
+        account_deployment_data=cast(0, felt*),
+        tx_info_dst=tx_info,
+        deprecated_tx_info_dst=deprecated_tx_info,
     );
-    fill_deprecated_tx_info(tx_info=tx_info, dst=deprecated_tx_info);
-    assert_deprecated_tx_fields_consistency(tx_info=tx_info);
 
-    %{ execution_helper.start_tx(tx_info_ptr=ids.deprecated_tx_info.address_) %}
+    %{ execution_helper.start_tx() %}
 
-    let initial_user_gas_bound = remaining_gas;
-    // The constructor entry point runs with a validate call context.
-    cap_remaining_gas(max_gas=VALIDATE_MAX_SIERRA_GAS);
-    let pre_execute_gas = remaining_gas;
-    let revert_log = init_revert_log();
-    deploy_contract{revert_log=revert_log}(
-        block_context=block_context, constructor_execution_context=constructor_execution_context
-    );
-    let execute_gas_consumed = pre_execute_gas - remaining_gas;
+    let initial_user_gas_bound = get_initial_user_gas_bound(common_tx_fields=common_tx_fields);
+    let remaining_gas = initial_user_gas_bound;
+
+    // Constructor.
+    with remaining_gas {
+        // The constructor entry point runs with a validate call context.
+        cap_remaining_gas(max_gas=VALIDATE_MAX_SIERRA_GAS);
+        let pre_constructor_gas = remaining_gas;
+        let revert_log = init_revert_log();
+        deploy_contract{revert_log=revert_log}(
+            block_context=block_context, constructor_execution_context=constructor_execution_context
+        );
+    }
+    let constructor_gas_consumed = pre_constructor_gas - remaining_gas;
+    tempvar remaining_gas = initial_user_gas_bound - constructor_gas_consumed;
 
     // Handle nonce here since 'deploy_contract' verifies that the nonce is zeroed.
     check_and_increment_nonce(tx_info=tx_info);
@@ -1072,23 +853,21 @@ func execute_deploy_account_transaction{
         deprecated_tx_info=deprecated_tx_info,
     );
 
-    tempvar remaining_gas = initial_user_gas_bound - execute_gas_consumed;
-    cap_remaining_gas(max_gas=VALIDATE_MAX_SIERRA_GAS);
-    // Run the entrypoint.
-    let (retdata_size, retdata, is_deprecated) = non_reverting_select_execute_entry_point_func(
-        block_context=block_context, execution_context=validate_deploy_execution_context
-    );
+    // Validate.
+    with remaining_gas {
+        cap_remaining_gas(max_gas=VALIDATE_MAX_SIERRA_GAS);
+        // Run the entrypoint.
+        let (retdata_size, retdata, is_deprecated) = non_reverting_select_execute_entry_point_func(
+            block_context=block_context, execution_context=validate_deploy_execution_context
+        );
+    }
     if (is_deprecated == 0) {
         assert retdata_size = 1;
         assert retdata[0] = VALIDATED;
     }
 
     // Charge fee.
-    charge_fee(
-        block_context=block_context,
-        tx_execution_context=validate_deploy_execution_context,
-        n_resource_bounds=common_tx_fields.n_resource_bounds,
-    );
+    charge_fee(block_context=block_context, tx_execution_context=validate_deploy_execution_context);
 
     %{ execution_helper.end_tx() %}
     return ();
@@ -1096,47 +875,106 @@ func execute_deploy_account_transaction{
 
 func execute_declare_transaction{
     range_check_ptr,
-    remaining_gas: felt,
     builtin_ptrs: BuiltinPointers*,
     contract_state_changes: DictAccess*,
     contract_class_changes: DictAccess*,
     outputs: OsCarriedOutputs*,
-}(block_context: BlockContext*, n_resource_bounds: felt, resource_bounds: ResourceBounds*) {
+}(block_context: BlockContext*) {
     alloc_locals;
 
-    // Guess tx fields.
-    // The version validation is done in `compute_declare_transaction_hash()`.
-    local tx_version;
-    local sender_address;
-    local class_hash_ptr: felt*;
-    local compiled_class_hash;
-    local account_deployment_data_size = (
-        nondet %{ 0 if tx.version < 3 else len(tx.account_deployment_data) %}
-    );
-    local account_deployment_data: felt* = cast(
-        nondet %{ 0 if tx.version < 3 else segments.gen_arg(tx.account_deployment_data) %}, felt*
-    );
-    %{
-        ids.tx_version = tx.version
-        ids.sender_address = tx.sender_address
-        ids.class_hash_ptr = segments.gen_arg([tx.class_hash])
-        if tx.version <= 1:
-            assert tx.compiled_class_hash is None, (
-                "Deprecated declare must not have compiled_class_hash."
-            )
-            ids.compiled_class_hash = 0
-        else:
-            assert tx.compiled_class_hash is not None, (
-                "Declare must have a concrete compiled_class_hash."
-            )
-            ids.compiled_class_hash = tx.compiled_class_hash
-    %}
-
-    if (tx_version == 0) {
+    if (nondet %{ tx.version %} == 0) {
         %{ execution_helper.skip_tx() %}
         return ();
     }
 
+    // Guess transaction fields.
+    local sender_address;
+    local class_hash_ptr: felt*;
+    local compiled_class_hash;
+    local account_deployment_data_size;
+    local account_deployment_data: felt*;
+    %{
+        assert tx.version == 3, f"Unsupported declare version: {tx.version}."
+        ids.sender_address = tx.sender_address
+        ids.account_deployment_data_size = len(tx.account_deployment_data)
+        ids.account_deployment_data = segments.gen_arg(tx.account_deployment_data)
+        ids.class_hash_ptr = segments.gen_arg([tx.class_hash])
+        ids.compiled_class_hash = tx.compiled_class_hash
+    %}
+    let common_tx_fields = get_account_tx_common_fields(
+        block_context=block_context,
+        tx_hash_prefix=DECLARE_HASH_PREFIX,
+        sender_address=sender_address,
+    );
+
+    let poseidon_ptr = builtin_ptrs.selectable.poseidon;
+    with poseidon_ptr {
+        // Compute transaction hash.
+        let transaction_hash = compute_declare_transaction_hash(
+            common_fields=common_tx_fields,
+            class_hash=[class_hash_ptr],
+            compiled_class_hash=compiled_class_hash,
+            account_deployment_data_size=account_deployment_data_size,
+            account_deployment_data=account_deployment_data,
+        );
+        %{
+            assert ids.transaction_hash == tx.hash_value, (
+                "Computed transaction_hash is inconsistent with the hash in the transaction. "
+                f"Computed hash = {ids.transaction_hash}, Expected hash = {tx.hash_value}.")
+        %}
+
+        // Ensure the given class hash is a result of a Sierra class hash calculation.
+        local contract_class_component_hashes: ContractClassComponentHashes*;
+        %{
+            class_component_hashes = component_hashes[tx.class_hash]
+            assert (
+                len(class_component_hashes) == ids.ContractClassComponentHashes.SIZE
+            ), "Wrong number of class component hashes."
+            ids.contract_class_component_hashes = segments.gen_arg(class_component_hashes)
+        %}
+
+        let expected_class_hash = finalize_class_hash(
+            contract_class_component_hashes=contract_class_component_hashes
+        );
+        with_attr error_message("Invalid class hash pre-image.") {
+            assert [class_hash_ptr] = expected_class_hash;
+        }
+    }
+    update_poseidon_in_builtin_ptrs(poseidon_ptr=poseidon_ptr);
+
+    // Get the account transaction info.
+    tempvar tx_info = cast(nondet %{ segments.add() %}, TxInfo*);
+    tempvar deprecated_tx_info = cast(nondet %{ segments.add() %}, DeprecatedTxInfo*);
+    fill_account_tx_info(
+        transaction_hash=transaction_hash,
+        common_tx_fields=common_tx_fields,
+        account_deployment_data_size=account_deployment_data_size,
+        account_deployment_data=account_deployment_data,
+        tx_info_dst=tx_info,
+        deprecated_tx_info_dst=deprecated_tx_info,
+    );
+
+    // Do not run validate or perform any account-related actions for declare transactions that
+    // meet the following conditions.
+    // This flow is used for the sequencer to bootstrap a new system.
+    if (sender_address == 'BOOTSTRAP' and tx_info.nonce == 0 and tx_info.version == 3) {
+        let max_possible_fee = compute_max_possible_fee(tx_info=tx_info);
+        if (max_possible_fee == 0) {
+            // Declare the class hash and skip the rest of the transaction.
+            // Note that prev_value=0 enforces that a class may be declared only once.
+            assert_not_zero(compiled_class_hash);
+            dict_update{dict_ptr=contract_class_changes}(
+                key=[class_hash_ptr], prev_value=0, new_value=compiled_class_hash
+            );
+            %{ execution_helper.skip_tx() %}
+            return ();
+        }
+    }
+
+    // Increment nonce.
+    check_and_increment_nonce(tx_info=tx_info);
+
+    // Prepare the validate execution context.
     let (state_entry: StateEntry*) = dict_read{dict_ptr=contract_state_changes}(key=sender_address);
     // The calldata for declare tx is the class hash.
     local validate_declare_execution_context: ExecutionContext* = new ExecutionContext(
@@ -1146,152 +984,39 @@ func execute_declare_transaction{
         calldata=class_hash_ptr,
         execution_info=new ExecutionInfo(
             block_info=block_context.block_info_for_validate,
-            tx_info=cast(nondet %{ segments.add() %}, TxInfo*),
+            tx_info=tx_info,
             caller_address=ORIGIN_ADDRESS,
             contract_address=sender_address,
             selector=VALIDATE_DECLARE_ENTRY_POINT_SELECTOR,
         ),
-        deprecated_tx_info=cast(nondet %{ segments.add() %}, DeprecatedTxInfo*),
+        deprecated_tx_info=deprecated_tx_info,
     );
 
-    let (__fp__, _) = get_fp_and_pc();
-    local common_tx_fields: CommonTxFields = CommonTxFields(
-        tx_hash_prefix=DECLARE_HASH_PREFIX,
-        version=tx_version,
-        sender_address=sender_address,
-        max_fee=nondet %{ tx.max_fee if tx.version < 3 else 0 %},
-        chain_id=block_context.starknet_os_config.chain_id,
-        nonce=nondet %{ tx.nonce %},
-        tip=nondet %{ 0 if tx.version < 3 else tx.tip %},
-        n_resource_bounds=n_resource_bounds,
-        resource_bounds=resource_bounds,
-        paymaster_data_length=nondet %{ 0 if tx.version < 3 else len(tx.paymaster_data) %},
-        paymaster_data=cast(
-            nondet %{ 0 if tx.version < 3 else segments.gen_arg(tx.paymaster_data) %}, felt*
-        ),
-        nonce_data_availability_mode=(
-            nondet %{ 0 if tx.version < 3 else tx.nonce_data_availability_mode %}
-        ),
-        fee_data_availability_mode=(
-            nondet %{ 0 if tx.version < 3 else tx.fee_data_availability_mode %}
-        ),
-    );
-    let pedersen_ptr = builtin_ptrs.selectable.pedersen;
-    let poseidon_ptr = builtin_ptrs.selectable.poseidon;
-    with pedersen_ptr, poseidon_ptr {
-        let transaction_hash = compute_declare_transaction_hash(
-            common_fields=&common_tx_fields,
-            execution_context=validate_declare_execution_context,
-            compiled_class_hash=compiled_class_hash,
-            account_deployment_data_size=account_deployment_data_size,
-            account_deployment_data=account_deployment_data,
+    let remaining_gas = get_initial_user_gas_bound(common_tx_fields=common_tx_fields);
+    with remaining_gas {
+        cap_remaining_gas(max_gas=VALIDATE_MAX_SIERRA_GAS);
+        // Run the account contract's "__validate_declare__" entry point.
+        %{ execution_helper.start_tx() %}
+        let (retdata_size, retdata, is_deprecated) = non_reverting_select_execute_entry_point_func(
+            block_context=block_context, execution_context=validate_declare_execution_context
         );
-
-        if (tx_version != 1) {
-            // Declare of version >= 2 (Sierra contract class).
-
-            // Ensure the given class hash is a result of a Sierra class hash calculation.
-            local contract_class_component_hashes: ContractClassComponentHashes*;
-            %{
-                class_component_hashes = component_hashes[tx.class_hash]
-                assert (
-                    len(class_component_hashes) == ids.ContractClassComponentHashes.SIZE
-                ), "Wrong number of class component hashes."
-                ids.contract_class_component_hashes = segments.gen_arg(class_component_hashes)
-            %}
-
-            let expected_class_hash = finalize_class_hash(
-                contract_class_component_hashes=contract_class_component_hashes
-            );
-            with_attr error_message("Invalid class hash pre-image.") {
-                assert [class_hash_ptr] = expected_class_hash;
-            }
-
-            // Declare the class hash.
-            // Note that prev_value=0 enforces that a class may be declared only once.
-            assert_not_zero(compiled_class_hash);
-            dict_update{dict_ptr=contract_class_changes}(
-                key=[class_hash_ptr], prev_value=0, new_value=compiled_class_hash
-            );
-            tempvar range_check_ptr = range_check_ptr;
-            tempvar poseidon_ptr = poseidon_ptr;
-        } else {
-            tempvar contract_class_changes = contract_class_changes;
-            tempvar range_check_ptr = range_check_ptr;
-            tempvar poseidon_ptr = poseidon_ptr;
-        }
-        let contract_class_changes = contract_class_changes;
     }
-    update_builtin_ptrs(pedersen_ptr=pedersen_ptr, poseidon_ptr=poseidon_ptr);
-
-    %{
-        assert ids.transaction_hash == tx.hash_value, (
-            "Computed transaction_hash is inconsistent with the hash in the transaction. "
-            f"Computed hash = {ids.transaction_hash}, Expected hash = {tx.hash_value}.")
-    %}
-
-    // Write the transaction info and complete the ExecutionInfo struct.
-    tempvar tx_info = validate_declare_execution_context.execution_info.tx_info;
-    local signature_start: felt*;
-    local signature_len: felt;
-    %{
-        ids.signature_start = segments.gen_arg(arg=tx.signature)
-        ids.signature_len = len(tx.signature)
-    %}
-    assert_nn_le(signature_len, SIERRA_ARRAY_LEN_BOUND - 1);
-    assert [tx_info] = TxInfo(
-        version=tx_version,
-        account_contract_address=sender_address,
-        max_fee=common_tx_fields.max_fee,
-        signature_start=signature_start,
-        signature_end=&signature_start[signature_len],
-        transaction_hash=transaction_hash,
-        chain_id=common_tx_fields.chain_id,
-        nonce=common_tx_fields.nonce,
-        resource_bounds_start=common_tx_fields.resource_bounds,
-        resource_bounds_end=&common_tx_fields.resource_bounds[common_tx_fields.n_resource_bounds],
-        tip=common_tx_fields.tip,
-        paymaster_data_start=common_tx_fields.paymaster_data,
-        paymaster_data_end=&common_tx_fields.paymaster_data[common_tx_fields.paymaster_data_length],
-        nonce_data_availability_mode=common_tx_fields.nonce_data_availability_mode,
-        fee_data_availability_mode=common_tx_fields.fee_data_availability_mode,
-        account_deployment_data_start=account_deployment_data,
-        account_deployment_data_end=&account_deployment_data[account_deployment_data_size],
-    );
-    fill_deprecated_tx_info(
-        tx_info=tx_info, dst=validate_declare_execution_context.deprecated_tx_info
-    );
-    assert_deprecated_tx_fields_consistency(tx_info=tx_info);
-
-    check_and_increment_nonce(tx_info=tx_info);
-
-    %{
-        execution_helper.start_tx(
-            tx_info_ptr=ids.validate_declare_execution_context.deprecated_tx_info.address_
-        )
-    %}
-
-    let initial_user_gas_bound = remaining_gas;
-    cap_remaining_gas(max_gas=VALIDATE_MAX_SIERRA_GAS);
-    let pre_validate_gas = remaining_gas;
-    // Run the account contract's "__validate_declare__" entry point.
-    let (retdata_size, retdata, is_deprecated) = non_reverting_select_execute_entry_point_func(
-        block_context=block_context, execution_context=validate_declare_execution_context
-    );
     if (is_deprecated == 0) {
         assert retdata_size = 1;
         assert retdata[0] = VALIDATED;
     }
-    let validate_gas_consumed = pre_validate_gas - remaining_gas;
-    let remaining_gas = initial_user_gas_bound - validate_gas_consumed;
+
+    // Declare the class hash.
+    // Note that prev_value=0 enforces that a class may be declared only once.
+    assert_not_zero(compiled_class_hash);
+    dict_update{dict_ptr=contract_class_changes}(
+        key=[class_hash_ptr], prev_value=0, new_value=compiled_class_hash
+    );
 
     // Charge fee.
     charge_fee(
-        block_context=block_context,
-        tx_execution_context=validate_declare_execution_context,
-        n_resource_bounds=common_tx_fields.n_resource_bounds,
+        block_context=block_context, tx_execution_context=validate_declare_execution_context
     );
-
     %{ execution_helper.end_tx() %}
 
     return ();

@@ -14,8 +14,6 @@ py_library(
         "//src/services/everest/api/feeder_gateway:everest_feeder_gateway_client_lib",
         "//src/services/external_api:services_external_api_lib",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
-        "//src/starkware/starknet/services/api/gateway:starknet_deprecated_transaction_lib",
-        "//src/starkware/starknet/services/api/gateway:starknet_transaction_schema_lib",
         "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
     ],
 )

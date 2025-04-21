@@ -54,6 +54,7 @@ py_library(
         "//src/starkware/python:starkware_python_utils_lib",
         "//src/starkware/starkware_utils:starkware_config_utils_lib",
         "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
+        requirement("marshmallow"),
         requirement("marshmallow_dataclass"),
     ],
 )

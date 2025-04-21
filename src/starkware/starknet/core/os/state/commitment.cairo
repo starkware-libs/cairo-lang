@@ -99,13 +99,14 @@ func compute_contract_state_commitment{hash_ptr: HashBuiltin*, range_check_ptr}(
     local final_root;
 
     %{
-        ids.initial_root = os_input.contract_state_commitment_info.previous_root
-        ids.final_root = os_input.contract_state_commitment_info.updated_root
+        ids.initial_root = block_input.contract_state_commitment_info.previous_root
+        ids.final_root = block_input.contract_state_commitment_info.updated_root
+        commitment_facts = block_input.contract_state_commitment_info.commitment_facts.items()
         preimage = {
             int(root): children
-            for root, children in os_input.contract_state_commitment_info.commitment_facts.items()
+            for root, children in commitment_facts
         }
-        assert os_input.contract_state_commitment_info.tree_height == ids.MERKLE_HEIGHT
+        assert block_input.contract_state_commitment_info.tree_height == ids.MERKLE_HEIGHT
     %}
 
     // Call patricia_update_using_update_constants() instead of patricia_update()
@@ -270,13 +271,14 @@ func compute_class_commitment{poseidon_ptr: PoseidonBuiltin*, range_check_ptr}(
     local initial_root;
     local final_root;
     %{
-        ids.initial_root = os_input.contract_class_commitment_info.previous_root
-        ids.final_root = os_input.contract_class_commitment_info.updated_root
+        ids.initial_root = block_input.contract_class_commitment_info.previous_root
+        ids.final_root = block_input.contract_class_commitment_info.updated_root
+        commitment_facts = block_input.contract_class_commitment_info.commitment_facts.items()
         preimage = {
             int(root): children
-            for root, children in os_input.contract_class_commitment_info.commitment_facts.items()
+            for root, children in commitment_facts
         }
-        assert os_input.contract_class_commitment_info.tree_height == ids.MERKLE_HEIGHT
+        assert block_input.contract_class_commitment_info.tree_height == ids.MERKLE_HEIGHT
     %}
 
     // Create a dictionary mapping class hash to the contract class leaf hash,

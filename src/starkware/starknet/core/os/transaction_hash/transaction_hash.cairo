@@ -1,3 +1,4 @@
+from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.builtin_poseidon.poseidon import poseidon_hash_many
 from starkware.cairo.common.cairo_builtins import HashBuiltin, PoseidonBuiltin
 from starkware.cairo.common.hash_state import (
@@ -19,7 +20,11 @@ from starkware.cairo.common.hash_state_poseidon import (
 )
 from starkware.cairo.common.math import assert_nn, assert_nn_le, assert_not_zero
 from starkware.cairo.common.registers import get_fp_and_pc
-from starkware.starknet.common.constants import DEPLOY_HASH_PREFIX, L1_HANDLER_HASH_PREFIX
+from starkware.starknet.common.constants import (
+    DEPLOY_HASH_PREFIX,
+    INVOKE_HASH_PREFIX,
+    L1_HANDLER_HASH_PREFIX,
+)
 from starkware.starknet.common.new_syscalls import ResourceBounds
 from starkware.starknet.core.os.builtins import BuiltinPointers, SelectableBuiltins
 from starkware.starknet.core.os.constants import (
@@ -35,7 +40,7 @@ from starkware.starknet.core.os.constants import (
 )
 from starkware.starknet.core.os.execution.execute_entry_point import ExecutionContext
 
-// Common fields of a transaction. Used in hash calculation.
+// Common fields of an account transaction. Used in hash calculation.
 struct CommonTxFields {
     // The prefix of the transaction hash.
     tx_hash_prefix: felt,
@@ -43,8 +48,6 @@ struct CommonTxFields {
     version: felt,
     // The address of the account contract that sent the transaction.
     sender_address: felt,
-    // The maximal fee to be paid in Wei for executing the transaction.
-    max_fee: felt,
     // The chain id.
     chain_id: felt,
     // The nonce of the transaction: a sequential transaction number, attached to the account
@@ -101,24 +104,20 @@ func deprecated_get_transaction_hash{hash_ptr: HashBuiltin*}(
     return (tx_hash=tx_hash);
 }
 
-func add_resource_bounds_to_hash_list{range_check_ptr}(
-    resource_bounds: ResourceBounds, data_to_hash: felt*
-) {
-    // Pack the resource bounds into a felt.
+// Packs the given resource bounds in a single felt.
+func pack_resource_bounds{range_check_ptr}(resource_bounds: ResourceBounds) -> felt {
     assert_nn_le(resource_bounds.max_amount, 2 ** 64 - 1);
     assert_nn(resource_bounds.max_price_per_unit);
-    // Add the packed resource bounds to the hash list.
-    assert data_to_hash[0] = (resource_bounds.resource * 2 ** 64 + resource_bounds.max_amount) *
-        2 ** 128 + resource_bounds.max_price_per_unit;
-    return ();
+    return (resource_bounds.resource * 2 ** 64 + resource_bounds.max_amount) * 2 ** 128 +
+        resource_bounds.max_price_per_unit;
 }
 
 func hash_fee_fields{range_check_ptr, poseidon_ptr: PoseidonBuiltin*}(
     tip: felt, resource_bounds: ResourceBounds*, n_resource_bounds: felt
 ) -> felt {
     alloc_locals;
-    local data_to_hash: felt*;
-    %{ ids.data_to_hash = segments.add() %}
+
+    let (local data_to_hash: felt*) = alloc();
     assert data_to_hash[0] = tip;
     assert_nn_le(tip, 2 ** 64 - 1);
 
@@ -126,33 +125,26 @@ func hash_fee_fields{range_check_ptr, poseidon_ptr: PoseidonBuiltin*}(
     static_assert L2_GAS_INDEX == 1;
     static_assert L1_DATA_GAS_INDEX == 2;
 
+    with_attr error_message("Invalid number of resource bounds: {n_resource_bounds}.") {
+        assert n_resource_bounds = 3;
+    }
+
     // L1 gas.
     let l1_gas_bounds = resource_bounds[L1_GAS_INDEX];
     assert l1_gas_bounds.resource = L1_GAS;
-    add_resource_bounds_to_hash_list(l1_gas_bounds, data_to_hash + 1);
+    assert data_to_hash[1] = pack_resource_bounds(l1_gas_bounds);
 
     // L2 gas.
     let l2_gas_bounds = resource_bounds[L2_GAS_INDEX];
     assert l2_gas_bounds.resource = L2_GAS;
-    add_resource_bounds_to_hash_list(l2_gas_bounds, data_to_hash + 2);
-    if (n_resource_bounds == 2) {
-        // L2 gas must be trivial in old V3 transactions.
-        assert l2_gas_bounds.max_amount = 0;
-        assert l2_gas_bounds.max_price_per_unit = 0;
-        tempvar range_check_ptr = range_check_ptr;
-    } else {
-        assert n_resource_bounds = 3;
+    assert data_to_hash[2] = pack_resource_bounds(l2_gas_bounds);
 
-        // L1 data gas.
-        let l1_data_gas_bounds = resource_bounds[L1_DATA_GAS_INDEX];
-        assert l1_data_gas_bounds.resource = L1_DATA_GAS;
-        add_resource_bounds_to_hash_list(l1_data_gas_bounds, data_to_hash + 3);
-        tempvar range_check_ptr = range_check_ptr;
-    }
-    local range_check_ptr = range_check_ptr;
+    // L1 data gas.
+    let l1_data_gas_bounds = resource_bounds[L1_DATA_GAS_INDEX];
+    assert l1_data_gas_bounds.resource = L1_DATA_GAS;
+    assert data_to_hash[3] = pack_resource_bounds(l1_data_gas_bounds);
 
     let (hash) = poseidon_hash_many(n=n_resource_bounds + 1, elements=data_to_hash);
-
     return hash;
 }
 
@@ -190,9 +182,7 @@ func hash_tx_common_fields{
 
 // Note that 'execution_context.execution_info.tx_info' and 'deprecated_tx_info' are uninitialized
 // when this functions is called. In particular, these fields are not used in this function.
-func compute_invoke_transaction_hash{
-    range_check_ptr, pedersen_ptr: HashBuiltin*, poseidon_ptr: PoseidonBuiltin*
-}(
+func compute_invoke_transaction_hash{range_check_ptr, poseidon_ptr: PoseidonBuiltin*}(
     common_fields: CommonTxFields*,
     execution_context: ExecutionContext*,
     account_deployment_data_size: felt,
@@ -201,39 +191,8 @@ func compute_invoke_transaction_hash{
     alloc_locals;
 
     assert account_deployment_data_size = 0;
-    local version = common_fields.version;
-    if ((version - 0) * (version - 1) == 0) {
-        let (__fp__, _) = get_fp_and_pc();
-
-        if (version == 0) {
-            tempvar entry_point_selector_field = execution_context.execution_info.selector;
-            tempvar additional_data_size = 0;
-            tempvar additional_data = cast(0, felt*);
-        } else {
-            tempvar entry_point_selector_field = 0;
-            tempvar additional_data_size = 1;
-            tempvar additional_data = &common_fields.nonce;
-        }
-
-        let (transaction_hash) = deprecated_get_transaction_hash{hash_ptr=pedersen_ptr}(
-            tx_hash_prefix=common_fields.tx_hash_prefix,
-            version=version,
-            contract_address=common_fields.sender_address,
-            entry_point_selector=entry_point_selector_field,
-            calldata_size=execution_context.calldata_size,
-            calldata=execution_context.calldata,
-            max_fee=common_fields.max_fee,
-            chain_id=common_fields.chain_id,
-            additional_data_size=additional_data_size,
-            additional_data=additional_data,
-        );
-
-        return transaction_hash;
-    }
-
-    // The invoke transaction has only versions 0, 1 and 3.
     with_attr error_message("Invalid transaction version: {version}.") {
-        assert version = 3;
+        assert common_fields.version = 3;
     }
 
     let hash_state: PoseidonHashState = poseidon_hash_init();
@@ -246,8 +205,8 @@ func compute_invoke_transaction_hash{
             data_ptr=execution_context.calldata, data_length=execution_context.calldata_size
         );
     }
-    let transaction_hash = poseidon_hash_finalize(hash_state=hash_state);
 
+    let transaction_hash = poseidon_hash_finalize(hash_state=hash_state);
     return transaction_hash;
 }
 
@@ -273,33 +232,13 @@ func compute_l1_handler_transaction_hash{pedersen_ptr: HashBuiltin*}(
 }
 
 // See comment above `compute_invoke_transaction_hash()`.
-func compute_deploy_account_transaction_hash{
-    range_check_ptr, pedersen_ptr: HashBuiltin*, poseidon_ptr: PoseidonBuiltin*
-}(common_fields: CommonTxFields*, calldata_size: felt, calldata: felt*) -> felt {
+func compute_deploy_account_transaction_hash{range_check_ptr, poseidon_ptr: PoseidonBuiltin*}(
+    common_fields: CommonTxFields*, calldata_size: felt, calldata: felt*
+) -> felt {
     alloc_locals;
 
-    local version = common_fields.version;
-    if (version == 1) {
-        let (__fp__, _) = get_fp_and_pc();
-        let (transaction_hash) = deprecated_get_transaction_hash{hash_ptr=pedersen_ptr}(
-            tx_hash_prefix=common_fields.tx_hash_prefix,
-            version=version,
-            contract_address=common_fields.sender_address,
-            entry_point_selector=0,
-            calldata_size=calldata_size,
-            calldata=calldata,
-            max_fee=common_fields.max_fee,
-            chain_id=common_fields.chain_id,
-            additional_data_size=1,
-            additional_data=&common_fields.nonce,
-        );
-
-        return transaction_hash;
-    }
-
-    // The deploy account transaction has only versions 1 and 3.
     with_attr error_message("Invalid transaction version: {version}.") {
-        assert version = 3;
+        assert common_fields.version = 3;
     }
 
     let hash_state: PoseidonHashState = poseidon_hash_init();
@@ -310,17 +249,15 @@ func compute_deploy_account_transaction_hash{
         // Add the class hash and the contract address salt to the hash state.
         poseidon_hash_update(data_ptr=calldata, data_length=2);
     }
-    let transaction_hash = poseidon_hash_finalize(hash_state=hash_state);
 
+    let transaction_hash = poseidon_hash_finalize(hash_state=hash_state);
     return transaction_hash;
 }
 
 // See comment above `compute_invoke_transaction_hash()`.
-func compute_declare_transaction_hash{
-    range_check_ptr, pedersen_ptr: HashBuiltin*, poseidon_ptr: PoseidonBuiltin*
-}(
+func compute_declare_transaction_hash{range_check_ptr, poseidon_ptr: PoseidonBuiltin*}(
     common_fields: CommonTxFields*,
-    execution_context: ExecutionContext*,
+    class_hash: felt,
     compiled_class_hash: felt,
     account_deployment_data_size: felt,
     account_deployment_data: felt*,
@@ -328,40 +265,8 @@ func compute_declare_transaction_hash{
     alloc_locals;
 
     assert account_deployment_data_size = 0;
-    // Declare of version 0 should not reach this function.
-    local version = common_fields.version;
-    if ((version - 1) * (version - 2) == 0) {
-        // For deprecated declare (of version 1), additional_data == [nonce];
-        // otherwise, additional_data == [nonce, compiled_class_hash].
-        local additional_data_size;
-        local additional_data: felt*;
-        %{ ids.additional_data = segments.add() %}
-        assert additional_data[0] = common_fields.nonce;
-        if (version == 1) {
-            assert additional_data_size = 1;
-        } else {
-            assert additional_data_size = 2;
-            assert additional_data[1] = compiled_class_hash;
-        }
-
-        let (transaction_hash) = deprecated_get_transaction_hash{hash_ptr=pedersen_ptr}(
-            tx_hash_prefix=common_fields.tx_hash_prefix,
-            version=version,
-            contract_address=common_fields.sender_address,
-            entry_point_selector=0,
-            calldata_size=execution_context.calldata_size,
-            calldata=execution_context.calldata,
-            max_fee=common_fields.max_fee,
-            chain_id=common_fields.chain_id,
-            additional_data_size=additional_data_size,
-            additional_data=additional_data,
-        );
-
-        return transaction_hash;
-    }
-
     with_attr error_message("Invalid transaction version: {version}.") {
-        assert version = 3;
+        assert common_fields.version = 3;
     }
 
     let hash_state: PoseidonHashState = poseidon_hash_init();
@@ -371,7 +276,7 @@ func compute_declare_transaction_hash{
             data_ptr=account_deployment_data, data_length=account_deployment_data_size
         );
         // Add the class hash to the hash state.
-        poseidon_hash_update_single(item=execution_context.calldata[0]);
+        poseidon_hash_update_single(item=class_hash);
         poseidon_hash_update_single(item=compiled_class_hash);
     }
     let transaction_hash = poseidon_hash_finalize(hash_state=hash_state);
@@ -379,12 +284,55 @@ func compute_declare_transaction_hash{
     return transaction_hash;
 }
 
-func update_builtin_ptrs{builtin_ptrs: BuiltinPointers*}(
-    pedersen_ptr: HashBuiltin*, poseidon_ptr: PoseidonBuiltin*
-) {
+// Computes the hash of a v0 meta transaction. See the `meta_tx_v0` syscall.
+func compute_meta_tx_v0_hash{pedersen_ptr: HashBuiltin*}(
+    contract_address: felt,
+    entry_point_selector: felt,
+    calldata: felt*,
+    calldata_size: felt,
+    chain_id: felt,
+) -> felt {
+    let (tx_hash) = deprecated_get_transaction_hash{hash_ptr=pedersen_ptr}(
+        tx_hash_prefix=INVOKE_HASH_PREFIX,
+        version=0,
+        contract_address=contract_address,
+        entry_point_selector=entry_point_selector,
+        calldata_size=calldata_size,
+        calldata=calldata,
+        max_fee=0,
+        chain_id=chain_id,
+        additional_data_size=0,
+        additional_data=cast(0, felt*),
+    );
+    return tx_hash;
+}
+
+func update_pedersen_in_builtin_ptrs{builtin_ptrs: BuiltinPointers*}(pedersen_ptr: HashBuiltin*) {
     tempvar builtin_ptrs = new BuiltinPointers(
         selectable=SelectableBuiltins(
             pedersen=pedersen_ptr,
+            range_check=builtin_ptrs.selectable.range_check,
+            ecdsa=builtin_ptrs.selectable.ecdsa,
+            bitwise=builtin_ptrs.selectable.bitwise,
+            ec_op=builtin_ptrs.selectable.ec_op,
+            poseidon=builtin_ptrs.selectable.poseidon,
+            segment_arena=builtin_ptrs.selectable.segment_arena,
+            range_check96=builtin_ptrs.selectable.range_check96,
+            add_mod=builtin_ptrs.selectable.add_mod,
+            mul_mod=builtin_ptrs.selectable.mul_mod,
+        ),
+        non_selectable=builtin_ptrs.non_selectable,
+    );
+
+    return ();
+}
+
+func update_poseidon_in_builtin_ptrs{builtin_ptrs: BuiltinPointers*}(
+    poseidon_ptr: PoseidonBuiltin*
+) {
+    tempvar builtin_ptrs = new BuiltinPointers(
+        selectable=SelectableBuiltins(
+            pedersen=builtin_ptrs.selectable.pedersen,
             range_check=builtin_ptrs.selectable.range_check,
             ecdsa=builtin_ptrs.selectable.ecdsa,
             bitwise=builtin_ptrs.selectable.bitwise,

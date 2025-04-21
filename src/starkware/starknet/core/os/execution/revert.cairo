@@ -1,6 +1,5 @@
 from starkware.cairo.common.alloc import alloc
-from starkware.cairo.common.dict import DictAccess, dict_update, squash_dict
-from starkware.starknet.core.os.builtins import BuiltinPointers, update_builtin_ptrs
+from starkware.cairo.common.dict import DictAccess, dict_update
 from starkware.starknet.core.os.state.commitment import StateEntry
 
 const CONTRACT_ADDRESS_UPPER_BOUND = 2 ** 251;
@@ -25,7 +24,7 @@ struct RevertLogEntry {
 }
 
 func init_revert_log() -> RevertLogEntry* {
-    tempvar revert_log = cast(nondet %{ segments.add() %}, RevertLogEntry*);
+    let (revert_log: RevertLogEntry*) = alloc();
     // Add termination entry.
     assert revert_log[0] = RevertLogEntry(
         selector=CHANGE_CONTRACT_ENTRY, value=CONTRACT_ADDRESS_UPPER_BOUND
@@ -41,12 +40,10 @@ func handle_revert{contract_state_changes: DictAccess*}(
     alloc_locals;
 
     local state_entry: StateEntry*;
-    local new_state_entry: StateEntry*;
 
     %{
         # Fetch a state_entry in this hint and validate it in the update that comes next.
         ids.state_entry = __dict_manager.get_dict(ids.contract_state_changes)[ids.contract_address]
-        ids.new_state_entry = segments.add()
 
         # Fetch the relevant storage.
         storage = execution_helper.storage_by_address[ids.contract_address]
@@ -57,14 +54,14 @@ func handle_revert{contract_state_changes: DictAccess*}(
     with class_hash, storage_ptr, revert_log_end {
         revert_contract_changes();
     }
-    assert [new_state_entry] = StateEntry(
-        class_hash=class_hash, storage_ptr=storage_ptr, nonce=state_entry.nonce
-    );
 
     dict_update{dict_ptr=contract_state_changes}(
         key=contract_address,
         prev_value=cast(state_entry, felt),
-        new_value=cast(new_state_entry, felt),
+        new_value=cast(
+            new StateEntry(class_hash=class_hash, storage_ptr=storage_ptr, nonce=state_entry.nonce),
+            felt,
+        ),
     );
 
     // `revert_contract_changes()` stops where

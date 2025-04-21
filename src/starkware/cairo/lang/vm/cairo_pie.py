@@ -10,14 +10,25 @@ import io
 import json
 import math
 import zipfile
+from abc import ABC
 from dataclasses import field
 from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple, Type
 
 import marshmallow
 import marshmallow.fields as mfields
 import marshmallow_dataclass
+from marshmallow_oneofschema.one_of_schema import OneOfSchema
 
-from starkware.cairo.lang.compiler.program import StrippedProgram, is_valid_builtin_name
+from starkware.cairo.lang.builtins.all_builtins import (
+    ALL_BUILTINS,
+    BUILTIN_NAME_SUFFIX,
+    remove_builtin_suffix,
+)
+from starkware.cairo.lang.compiler.program import (
+    StrippedProgram,
+    is_valid_builtin_name,
+    is_valid_opcode_name,
+)
 from starkware.cairo.lang.vm.memory_dict import MemoryDict, RelocateValueFunc
 from starkware.cairo.lang.vm.memory_segments import is_valid_memory_addr, is_valid_memory_value
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue, relocate_value
@@ -125,81 +136,38 @@ class CairoPieMetadata:
 
 
 @marshmallow_dataclass.dataclass
-class ExecutionResources(ValidatedMarshmallowDataclass):
+class ExecutionResources(ValidatedMarshmallowDataclass, ABC):
     """
+    Base class for Execution resources class.
     Indicates how many steps the program should run, how many memory cells are used from each
     builtin, and how many holes there are in the memory address space.
     """
 
-    n_steps: int
     builtin_instance_counter: Dict[str, int]
     n_memory_holes: int = field(
         metadata=additional_metadata(marshmallow_field=mfields.Integer(load_default=0))
     )
-    Schema: ClassVar[Type[marshmallow.Schema]] = marshmallow.Schema
 
     def run_validity_checks(self):
-        assert (
-            isinstance(self.n_steps, int) and 1 <= self.n_steps < MAX_N_STEPS
-        ), f"Invalid n_steps: {self.n_steps}."
-        assert (
-            isinstance(self.n_memory_holes, int) and 0 <= self.n_memory_holes < 2**30
-        ), f"Invalid n_memory_holes: {self.n_memory_holes}."
         assert isinstance(self.builtin_instance_counter, dict) and all(
             is_valid_builtin_name(name) and isinstance(size, int) and 0 <= size < 2**30
             for name, size in self.builtin_instance_counter.items()
         ), "Invalid builtin_instance_counter."
+        assert (
+            isinstance(self.n_memory_holes, int) and 0 <= self.n_memory_holes < 2**30
+        ), f"Invalid n_memory_holes: {self.n_memory_holes}."
 
     def __add__(self, other: "ExecutionResources") -> "ExecutionResources":
-        total_builtin_instance_counter = add_counters(
-            self.builtin_instance_counter, other.builtin_instance_counter
-        )
-
-        return ExecutionResources(
-            n_steps=self.n_steps + other.n_steps,
-            builtin_instance_counter=total_builtin_instance_counter,
-            n_memory_holes=self.n_memory_holes + other.n_memory_holes,
-        )
+        raise NotImplementedError(f"Should not be called from {self.__class__.__name__} class.")
 
     def __sub__(self, other: "ExecutionResources") -> "ExecutionResources":
-        diff_builtin_instance_counter = sub_counters(
-            self.builtin_instance_counter, other.builtin_instance_counter
-        )
-        return ExecutionResources(
-            n_steps=self.n_steps - other.n_steps,
-            builtin_instance_counter=diff_builtin_instance_counter,
-            n_memory_holes=self.n_memory_holes - other.n_memory_holes,
-        )
+        raise NotImplementedError(f"Should not be called from {self.__class__.__name__} class.")
 
     def __mul__(self, other: int) -> "ExecutionResources":
-        if not isinstance(other, int):
-            return NotImplemented
-
-        total_builtin_instance_counter = multiply_counter_by_scalar(
-            scalar=other, counter=self.builtin_instance_counter
-        )
-
-        return ExecutionResources(
-            n_steps=other * self.n_steps,
-            builtin_instance_counter=total_builtin_instance_counter,
-            n_memory_holes=other * self.n_memory_holes,
-        )
+        raise NotImplementedError(f"Should not be called from {self.__class__.__name__} class.")
 
     def __rmul__(self, other: int) -> "ExecutionResources":
-        return self * other
-
-    @classmethod
-    def empty(cls):
-        return cls(n_steps=0, builtin_instance_counter={}, n_memory_holes=0)
-
-    def copy(self) -> "ExecutionResources":
-        return copy.deepcopy(self)
-
-    def to_dict(self) -> Dict[str, int]:
-        return dict(
-            **self.builtin_instance_counter,
-            n_steps=self.n_steps + self.n_memory_holes,
-        )
+        raise NotImplementedError(f"Should not be called from {self.__class__.__name__} class.")
 
     def filter_unused_builtins(self) -> "ExecutionResources":
         """
@@ -216,6 +184,262 @@ class ExecutionResources(ValidatedMarshmallowDataclass):
         )
 
 
+@marshmallow_dataclass.dataclass
+class ExecutionResourcesStone(ExecutionResources):
+    """
+    ExecutionResources class for Stone.
+    """
+
+    n_steps: int
+    def run_validity_checks(self):
+        super().run_validity_checks()
+        assert (
+            isinstance(self.n_steps, int) and 1 <= self.n_steps < MAX_N_STEPS
+        ), f"Invalid n_steps: {self.n_steps}."
+
+    def convert_to_stwo(self) -> "ExecutionResourcesStwo":
+        """
+        Returns a ExecutionResourcesStwo version of self.
+        """
+        return ExecutionResourcesStwo(
+            builtin_instance_counter=self.builtin_instance_counter,
+            n_memory_holes=self.n_memory_holes,
+            opcodes_instance_counter={
+                "generic_opcode": self.n_steps,
+            },
+            memory_tables_sizes={},
+            n_verify_instructions=0,
+        )
+
+    def __add__(self, other: ExecutionResources) -> "ExecutionResourcesStone":
+        assert isinstance(other, ExecutionResourcesStone), "Invalid type for other."
+        total_builtin_instance_counter = add_counters(
+            self.builtin_instance_counter, other.builtin_instance_counter
+        )
+
+        return ExecutionResourcesStone(
+            n_steps=self.n_steps + other.n_steps,
+            builtin_instance_counter=total_builtin_instance_counter,
+            n_memory_holes=self.n_memory_holes + other.n_memory_holes,
+        )
+
+    def __sub__(self, other: ExecutionResources) -> "ExecutionResourcesStone":
+        assert isinstance(other, ExecutionResourcesStone), "Invalid type for other."
+        diff_builtin_instance_counter = sub_counters(
+            self.builtin_instance_counter, other.builtin_instance_counter
+        )
+        return ExecutionResourcesStone(
+            n_steps=self.n_steps - other.n_steps,
+            builtin_instance_counter=diff_builtin_instance_counter,
+            n_memory_holes=self.n_memory_holes - other.n_memory_holes,
+        )
+
+    def __mul__(self, other: int) -> "ExecutionResourcesStone":
+        if not isinstance(other, int):
+            return NotImplemented
+
+        total_builtin_instance_counter = multiply_counter_by_scalar(
+            scalar=other, counter=self.builtin_instance_counter
+        )
+
+        return ExecutionResourcesStone(
+            n_steps=other * self.n_steps,
+            builtin_instance_counter=total_builtin_instance_counter,
+            n_memory_holes=other * self.n_memory_holes,
+        )
+
+    def __rmul__(self, other: int) -> "ExecutionResourcesStone":
+        return self * other
+
+    @classmethod
+    def empty(cls):
+        return cls(n_steps=0, builtin_instance_counter={}, n_memory_holes=0)
+
+    def copy(self) -> "ExecutionResourcesStone":
+        return copy.deepcopy(self)
+
+    def to_dict(self) -> Dict[str, int]:
+        return dict(
+            **self.builtin_instance_counter,
+            n_steps=self.n_steps + self.n_memory_holes,
+        )
+
+    def filter_unused_builtins(self) -> "ExecutionResourcesStone":
+        filtered = super().filter_unused_builtins()
+        assert isinstance(filtered, ExecutionResourcesStone)
+        return filtered
+
+
+@marshmallow_dataclass.dataclass
+class ExecutionResourcesStwo(ExecutionResources):
+    """
+    ExecutionResources class for Stwo.
+    """
+
+    opcodes_instance_counter: Dict[str, int]
+    memory_tables_sizes: Dict[str, int]
+    n_verify_instructions: int = field(
+        metadata=additional_metadata(marshmallow_field=mfields.Integer(load_default=0))
+    )
+
+    def __post_init__(self):
+        """
+        Validates items in builtin_instance_counter.
+        """
+        for builtin_name in self.builtin_instance_counter.keys():
+            assert builtin_name.endswith(
+                BUILTIN_NAME_SUFFIX
+            ), f"Invalid builtin name: {builtin_name}."
+            assert remove_builtin_suffix(builtin_name=builtin_name) in ALL_BUILTINS, (
+                f"Invalid builtin name: {builtin_name}. " f"Expected one of: {ALL_BUILTINS}."
+            )
+
+    @property
+    def n_steps(self) -> int:
+        """
+        Returns the number of steps, such that each opcode is counted as one step.
+        """
+        return sum(self.opcodes_instance_counter.values())
+
+    def convert_to_stone(self) -> ExecutionResourcesStone:
+        """
+        Returns a ExecutionResourcesStone version of self.
+        """
+        return ExecutionResourcesStone(
+            n_steps=self.n_steps,
+            builtin_instance_counter=self.builtin_instance_counter,
+            n_memory_holes=self.n_memory_holes,
+        )
+
+    def run_validity_checks(self):
+        super().run_validity_checks()
+        assert isinstance(self.opcodes_instance_counter, dict) and all(
+            is_valid_opcode_name(name) and isinstance(size, int) and 0 <= size < 2**30
+            for name, size in self.opcodes_instance_counter.items()
+        ), "Invalid opcodes_instance_counter."
+        assert isinstance(self.memory_tables_sizes, dict) and all(
+            isinstance(size, int) and size >= 0 for size in self.memory_tables_sizes.values()
+        ), "Invalid memory_tables_sizes."
+
+    def __add__(self, other: ExecutionResources) -> "ExecutionResourcesStwo":
+        assert isinstance(other, ExecutionResourcesStwo), "Invalid type for other."
+        total_builtin_instance_counter = add_counters(
+            self.builtin_instance_counter, other.builtin_instance_counter
+        )
+
+        total_opcodes_instance_counter = add_counters(
+            self.opcodes_instance_counter, other.opcodes_instance_counter
+        )
+
+        total_memory_tables_sizes = add_counters(
+            self.memory_tables_sizes, other.memory_tables_sizes
+        )
+
+        return ExecutionResourcesStwo(
+            builtin_instance_counter=total_builtin_instance_counter,
+            opcodes_instance_counter=total_opcodes_instance_counter,
+            memory_tables_sizes=total_memory_tables_sizes,
+            n_memory_holes=self.n_memory_holes + other.n_memory_holes,
+            n_verify_instructions=self.n_verify_instructions + other.n_verify_instructions,
+        )
+
+    def __sub__(self, other: ExecutionResources) -> "ExecutionResourcesStwo":
+        assert isinstance(other, ExecutionResourcesStwo), "Invalid type for other."
+        diff_builtin_instance_counter = sub_counters(
+            self.builtin_instance_counter, other.builtin_instance_counter
+        )
+
+        diff_opcodes_instance_counter = sub_counters(
+            self.opcodes_instance_counter, other.opcodes_instance_counter
+        )
+
+        diff_memory_tables_sizes = sub_counters(self.memory_tables_sizes, other.memory_tables_sizes)
+
+        return ExecutionResourcesStwo(
+            builtin_instance_counter=diff_builtin_instance_counter,
+            opcodes_instance_counter=diff_opcodes_instance_counter,
+            memory_tables_sizes=diff_memory_tables_sizes,
+            n_memory_holes=self.n_memory_holes - other.n_memory_holes,
+            n_verify_instructions=self.n_verify_instructions - other.n_verify_instructions,
+        )
+
+    def __mul__(self, other: int) -> "ExecutionResourcesStwo":
+        if not isinstance(other, int):
+            return NotImplemented
+
+        total_builtin_instance_counter = multiply_counter_by_scalar(
+            scalar=other, counter=self.builtin_instance_counter
+        )
+
+        total_opcodes_instance_counter = multiply_counter_by_scalar(
+            scalar=other, counter=self.opcodes_instance_counter
+        )
+
+        total_memory_tables_sizes = multiply_counter_by_scalar(
+            scalar=other, counter=self.memory_tables_sizes
+        )
+
+        return ExecutionResourcesStwo(
+            builtin_instance_counter=total_builtin_instance_counter,
+            opcodes_instance_counter=total_opcodes_instance_counter,
+            memory_tables_sizes=total_memory_tables_sizes,
+            n_memory_holes=other * self.n_memory_holes,
+            n_verify_instructions=other * self.n_verify_instructions,
+        )
+
+    def __rmul__(self, other: int) -> "ExecutionResourcesStwo":
+        if not isinstance(other, int):
+            return NotImplemented
+
+        return self * other
+
+    @classmethod
+    def empty(cls):
+        return cls(
+            opcodes_instance_counter={},
+            builtin_instance_counter={},
+            memory_tables_sizes={},
+            n_verify_instructions=0,
+            n_memory_holes=0,
+        )
+
+    def copy(self) -> "ExecutionResourcesStwo":
+        return copy.deepcopy(self)
+
+    def to_dict(self) -> Dict[str, int]:
+        return dict(
+            **self.builtin_instance_counter,
+            **self.opcodes_instance_counter,
+            **self.memory_tables_sizes,
+            n_verify_instructions=self.n_verify_instructions,
+            n_memory_holes=self.n_memory_holes,
+        )
+
+
+class ExecutionResourcesSchema(OneOfSchema):
+    """
+    Schema for ExecutionResources.
+    OneOfSchema adds a "type" field.
+    """
+
+    type_schemas: Dict[str, Type[marshmallow.Schema]] = {
+        ExecutionResourcesStone.__name__: ExecutionResourcesStone.Schema,
+        ExecutionResourcesStwo.__name__: ExecutionResourcesStwo.Schema,
+    }
+
+    def load(self, data, *args, **kwargs):
+        """
+        Sets the type field to ExecutionResourcesStone if it is missing.
+        Used for backward compatibility.
+        """
+        if self.type_field not in data:
+            data[self.type_field] = ExecutionResourcesStone.__name__
+        return super().load(data, *args, **kwargs)
+
+
+ExecutionResources.Schema = ExecutionResourcesSchema
+
+
 @dataclasses.dataclass
 class CairoPie:
     """
@@ -228,7 +452,7 @@ class CairoPie:
     metadata: CairoPieMetadata
     memory: MemoryDict
     additional_data: Dict[str, Any]
-    execution_resources: ExecutionResources
+    execution_resources: ExecutionResourcesStone
     version: Dict[str, str] = field(
         default_factory=lambda: {"cairo_pie": CURRENT_CAIRO_PIE_VERSION}
     )
@@ -274,7 +498,7 @@ class CairoPie:
             with zf.open(cls.ADDITIONAL_DATA_FILENAME, "r") as fp:
                 additional_data = json.loads(fp.read(cls.MAX_SIZE).decode("ascii"))
             with zf.open(cls.EXECUTION_RESOURCES_FILENAME, "r") as fp:
-                execution_resources = ExecutionResources.Schema().load(
+                execution_resources = ExecutionResourcesStone.Schema().load(
                     json.loads(fp.read(cls.MAX_SIZE).decode("ascii"))
                 )
             version = {"cairo_pie": DEFAULT_CAIRO_PIE_VERSION}
@@ -350,9 +574,9 @@ class CairoPie:
                 fp.write(json.dumps(self.additional_data).encode("ascii"))
             with zf.open(self.EXECUTION_RESOURCES_FILENAME, "w") as fp:
                 fp.write(
-                    json.dumps(ExecutionResources.Schema().dump(self.execution_resources)).encode(
-                        "ascii"
-                    )
+                    json.dumps(
+                        ExecutionResourcesStone.Schema().dump(self.execution_resources)
+                    ).encode("ascii")
                 )
             with zf.open(self.VERSION_FILENAME, "w") as fp:
                 fp.write(json.dumps(self.version).encode("ascii"))

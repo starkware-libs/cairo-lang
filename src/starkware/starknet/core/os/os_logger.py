@@ -5,7 +5,7 @@ import cachetools
 
 from starkware.cairo.lang.builtins.all_builtins import with_suffix
 from starkware.cairo.lang.compiler.program import Program
-from starkware.cairo.lang.vm.cairo_pie import ExecutionResources
+from starkware.cairo.lang.vm.cairo_pie import ExecutionResourcesStone
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
 from starkware.cairo.lang.vm.memory_segments import MemorySegmentManager
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
@@ -32,6 +32,7 @@ CALL_CONTRACT_SYSCALLS = {
     "call_contract",
     "library_call",
     "deploy",
+    "meta_tx_v0",
     *DEPRECATED_CALL_CONTRACT_SYSCALLS,
 }
 
@@ -51,26 +52,27 @@ DEPRECATED_SYSCALL_NAMES = {
 }
 SYSCALLS_NAMES = {
     "call_contract",
-    "library_call",
     "deploy",
-    "keccak",
-    "sha256_process_block",
     "emit_event",
     "get_block_hash",
     "get_class_hash_at",
     "get_execution_info",
+    "keccak",
+    "library_call",
+    "meta_tx_v0",
     "replace_class",
-    "send_message_to_l1",
-    "secp256k1_new",
     "secp256k1_add",
     "secp256k1_get_point_from_x",
     "secp256k1_get_xy",
     "secp256k1_mul",
-    "secp256r1_new",
+    "secp256k1_new",
     "secp256r1_add",
     "secp256r1_get_point_from_x",
     "secp256r1_get_xy",
     "secp256r1_mul",
+    "secp256r1_new",
+    "send_message_to_l1",
+    "sha256_process_block",
     "storage_read",
     "storage_write",
 }
@@ -121,16 +123,16 @@ class SyscallTrace:
         self.tab_count = tab_count
         self.inner_syscalls: List[SyscallTrace] = []
         self.builtin_count_dict: Dict[str, int] = {}
-        self._resources: Optional[ExecutionResources] = None
+        self._resources: Optional[ExecutionResourcesStone] = None
 
     @property
-    def resources(self) -> ExecutionResources:
+    def resources(self) -> ExecutionResourcesStone:
         assert (
             self._resources is not None
         ), "SyscallTrace should be finalized before accessing resources."
         return self._resources
 
-    def finalize_resources(self, resources: ExecutionResources):
+    def finalize_resources(self, resources: ExecutionResourcesStone):
         assert self._resources is None, "SyscallTrace should be finalized only once."
         self._resources = resources
 
@@ -161,16 +163,16 @@ class TransactionTrace:
         self.name = name
         self.tx_hash = tx_hash
         self.syscalls: List[SyscallTrace] = []
-        self._resources: Optional[ExecutionResources] = None
+        self._resources: Optional[ExecutionResourcesStone] = None
 
     @property
-    def resources(self) -> ExecutionResources:
+    def resources(self) -> ExecutionResourcesStone:
         assert (
             self._resources is not None
         ), "TransactionTrace should be finalized before accessing resources."
         return self._resources
 
-    def finalize_resources(self, resources: ExecutionResources):
+    def finalize_resources(self, resources: ExecutionResourcesStone):
         assert self._resources is None, "TransactionTrace should be finalized only once."
         self._resources = resources
 
@@ -214,7 +216,7 @@ class ResourceCounter:
         builtins_dict.pop("sha256")
         return builtins_dict
 
-    def sub_counter(self, enter_counter: "ResourceCounter") -> ExecutionResources:
+    def sub_counter(self, enter_counter: "ResourceCounter") -> ExecutionResourcesStone:
         builtins_count_ptr = {
             key: cast_to_int(self.builtin_ptrs_dict[key] - enter_counter.builtin_ptrs_dict[key])
             for key in self.builtin_ptrs_dict.keys()
@@ -228,7 +230,7 @@ class ResourceCounter:
             if count != 0
         }
         final_n_steps = self.n_steps - enter_counter.n_steps
-        return ExecutionResources(
+        return ExecutionResourcesStone(
             n_steps=final_n_steps, builtin_instance_counter=builtins_count_ptr, n_memory_holes=0
         )
 
@@ -277,7 +279,7 @@ class OsLogger:
             parent_syscall_name = self.syscall_stack[-1].name
             assert (
                 parent_syscall_name in CALL_CONTRACT_SYSCALLS
-            ), f"the {parent_syscall_name} syscall is not suppouse to have an inner syscall."
+            ), f"the {parent_syscall_name} syscall is not supposed to have an inner syscall."
 
         self.resource_counter_stack.append(
             ResourceCounter(

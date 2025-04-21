@@ -4,26 +4,15 @@ from typing import Dict, List, Optional, Union
 from services.everest.api.feeder_gateway.feeder_gateway_client import EverestFeederGatewayClient
 from services.external_api.client import JsonObject
 from starkware.starknet.definitions import fields
-from starkware.starknet.services.api.feeder_gateway.request_objects import (
-    CallFunction,
-    CallL1Handler,
-)
+from starkware.starknet.services.api.feeder_gateway.request_objects import CallFunction
 from starkware.starknet.services.api.feeder_gateway.response_objects import (
     BlockIdentifier,
     BlockSignature,
     BlockTransactionTraces,
-    FeeEstimationInfo,
     StarknetBlock,
     TransactionInfo,
     TransactionReceipt,
-    TransactionSimulationInfo,
     TransactionTrace,
-)
-from starkware.starknet.services.api.gateway.deprecated_transaction import (
-    DeprecatedAccountTransaction,
-)
-from starkware.starknet.services.api.gateway.transaction_schema import (
-    DeprecatedAccountTransactionSchema,
 )
 from starkware.starkware_utils.validated_fields import RangeValidatedField
 
@@ -86,73 +75,6 @@ class FeederGatewayClient(EverestFeederGatewayClient):
             data=call_function.dumps(),
         )
         return json.loads(raw_response)
-
-    async def estimate_fee(
-        self,
-        tx: DeprecatedAccountTransaction,
-        block_hash: Optional[CastableToHash] = None,
-        block_number: Optional[BlockIdentifier] = None,
-        skip_validate: bool = False,
-    ) -> FeeEstimationInfo:
-        formatted_simulate_tx_arguments = get_formatted_simulate_tx_arguments(
-            block_hash=block_hash, block_number=block_number, skip_validate=skip_validate
-        )
-        raw_response = await self._send_request(
-            send_method="POST",
-            uri=f"/estimate_fee?{formatted_simulate_tx_arguments}",
-            data=DeprecatedAccountTransactionSchema().dumps(obj=tx),
-        )
-        return FeeEstimationInfo.loads(data=raw_response)
-
-    async def estimate_fee_bulk(
-        self,
-        txs: List[DeprecatedAccountTransaction],
-        block_hash: Optional[CastableToHash] = None,
-        block_number: Optional[BlockIdentifier] = None,
-        skip_validate: bool = False,
-    ) -> List[FeeEstimationInfo]:
-        formatted_simulate_tx_arguments = get_formatted_simulate_tx_arguments(
-            block_hash=block_hash, block_number=block_number, skip_validate=skip_validate
-        )
-        raw_response = await self._send_request(
-            send_method="POST",
-            uri=f"/estimate_fee_bulk?{formatted_simulate_tx_arguments}",
-            data=DeprecatedAccountTransactionSchema().dumps(obj=txs, many=True),
-        )
-        return FeeEstimationInfo.Schema().loads(json_data=raw_response, many=True)
-
-    async def estimate_message_fee(
-        self,
-        call_l1_handler: CallL1Handler,
-        block_hash: Optional[CastableToHash] = None,
-        block_number: Optional[BlockIdentifier] = None,
-    ) -> FeeEstimationInfo:
-        formatted_block_named_argument = get_formatted_block_named_argument(
-            block_hash=block_hash, block_number=block_number
-        )
-        raw_response = await self._send_request(
-            send_method="POST",
-            uri=f"/estimate_message_fee?{formatted_block_named_argument}",
-            data=call_l1_handler.dumps(),
-        )
-        return FeeEstimationInfo.loads(data=raw_response)
-
-    async def simulate_transaction(
-        self,
-        tx: DeprecatedAccountTransaction,
-        block_hash: Optional[CastableToHash] = None,
-        block_number: Optional[BlockIdentifier] = None,
-        skip_validate: bool = False,
-    ) -> TransactionSimulationInfo:
-        formatted_simulate_tx_arguments = get_formatted_simulate_tx_arguments(
-            block_hash=block_hash, block_number=block_number, skip_validate=skip_validate
-        )
-        raw_response = await self._send_request(
-            send_method="POST",
-            uri=f"/simulate_transaction?{formatted_simulate_tx_arguments}",
-            data=DeprecatedAccountTransactionSchema().dumps(obj=tx),
-        )
-        return TransactionSimulationInfo.loads(data=raw_response)
 
     async def get_block(
         self,
@@ -405,19 +327,3 @@ def get_formatted_block_named_argument(
         return f"blockNumber={block_number_str}"
     else:
         return f"blockHash={format_hash(hash_value=block_hash, hash_field=fields.BlockHashField)}"
-
-
-def get_formatted_simulate_tx_arguments(
-    block_hash: Optional[CastableToHash],
-    block_number: Optional[BlockIdentifier],
-    skip_validate: bool,
-) -> str:
-    """
-    Returns formatted simulate transaction arguments, corresponding to the request's arguments.
-    """
-    formatted_block_named_argument = get_formatted_block_named_argument(
-        block_hash=block_hash, block_number=block_number
-    )
-    formatted_simulation_flags = f"{SKIP_VALIDATE}={json.dumps(skip_validate)}"
-
-    return "&".join([formatted_block_named_argument, formatted_simulation_flags])

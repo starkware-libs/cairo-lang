@@ -1,7 +1,7 @@
 import json
 from typing import Any, Callable, Optional
 
-from starkware.cairo.bootloaders.hash_program import compute_program_hash_chain
+from starkware.cairo.bootloaders.hash_program import HashFunction, compute_program_hash_chain
 from starkware.cairo.lang.compiler.program import Program
 
 
@@ -17,7 +17,11 @@ def run_generate_hash_test(
     If post_process is given, it may add additional fields to the expected JSON.
     """
     compiled_program = Program.Schema().load(json.load(open(program_path)))
-    program_hash = hex(compute_program_hash_chain(program=compiled_program, use_poseidon=False))
+    program_hash = hex(
+        compute_program_hash_chain(
+            program=compiled_program, program_hash_function=HashFunction.PEDERSEN
+        )
+    )
     program_hash_key = "program_hash"
 
     expected_json = {program_hash_key: program_hash}
