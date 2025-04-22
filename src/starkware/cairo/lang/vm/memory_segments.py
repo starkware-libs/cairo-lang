@@ -189,7 +189,7 @@ class MemorySegmentManager:
                 cairo_args.append(self.gen_arg(arg=value))
             elif field_type is TypeStruct:
                 # Struct.
-                cairo_args += self.gen_typed_args(args=value)
+                cairo_args.extend(self.gen_typed_args(args=value))
             else:
                 raise NotImplementedError(f"{field_type.__name__} is not supported.")
 
