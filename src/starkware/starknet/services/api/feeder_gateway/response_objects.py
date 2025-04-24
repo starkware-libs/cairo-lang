@@ -355,9 +355,11 @@ class TransactionInBlockInfo(ValidatedResponseObject):
             else:
                 assert (self.execution_status is None) and (
                     self.transaction_failure_reason is None
-                ), f"For a non-reverted transaction with finality status: {self.finality_status}, "
-                f"the following fields must be None, but are instead: "
-                f"{self.execution_status=}, {self.transaction_failure_reason=}."
+                ), (
+                    f"For a non-reverted transaction with finality status: {self.finality_status}, "
+                    f"the following fields must be None, but are instead: "
+                    f"{self.execution_status=}, {self.transaction_failure_reason=}."
+                )
 
             return
 
