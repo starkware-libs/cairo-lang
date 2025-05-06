@@ -928,7 +928,7 @@ def test_func_expr():
 def test_parent_location():
     location = parse_expr("1 + 2").location
     assert location is not None
-    parent_location = (location, "An error ocurred while processing:")
+    parent_location = (location, "An error occurred while processing:")
 
     code_element = parse_code_element(
         "let x = 3 + 4;", parser_context=ParserContext(parent_location=parent_location)
@@ -939,7 +939,7 @@ def test_parent_location():
     assert (
         str(location_err)
         == """\
-:1:1: An error ocurred while processing:
+:1:1: An error occurred while processing:
 1 + 2
 ^***^
 :1:9: Error

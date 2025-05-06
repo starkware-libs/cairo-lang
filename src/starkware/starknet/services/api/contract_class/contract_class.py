@@ -162,7 +162,7 @@ class CompiledClassBase(ValidatedMarshmallowDataclass):
     @abstractmethod
     def is_cairo1(self) -> bool:
         """
-        Retruns whether the class was compiled from Cairo 1.
+        Returns whether the class was compiled from Cairo 1.
         """
 
     def __post_init__(self):
