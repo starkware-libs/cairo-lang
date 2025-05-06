@@ -1,6 +1,7 @@
 from starkware.cairo.bootloaders.simple_bootloader.execute_task import BuiltinData, execute_task
 from starkware.cairo.common.cairo_builtins import HashBuiltin, PoseidonBuiltin
 from starkware.cairo.common.registers import get_fp_and_pc
+from starkware.cairo.common.segments import relocate_segment
 
 // Loads the given tasks and executes them.
 // Outputs the program hashes of the tasks, and their outputs.
@@ -32,20 +33,14 @@ func run_simple_bootloader{
     mul_mod_ptr,
 }() {
     alloc_locals;
-    local task_range_check_ptr;
 
-    %{
-        n_tasks = len(simple_bootloader_input.tasks)
-        memory[ids.output_ptr] = n_tasks
+    local initial_subtasks_range_check_ptr;
 
-        # Task range checks are located right after simple bootloader validation range checks, and
-        # this is validated later in this function.
-        ids.task_range_check_ptr = ids.range_check_ptr + ids.BuiltinData.SIZE * n_tasks
-
-        # A list of fact_toplogies that instruct how to generate the fact from the program output
-        # for each task.
-        fact_topologies = []
-    %}
+    // The following hint is used to:
+    // 1. Write the number of tasks into `output_ptr[0]`.
+    // 2. Set `initial_subtasks_range_check_ptr` to a new temporary segment.
+    // 3. Initialize the `fact_topologies` hint variable to an empty array.
+    %{ SETUP_RUN_SIMPLE_BOOTLOADER_BEFORE_TASK_EXECUTION %}
 
     let n_tasks = [output_ptr];
     let output_ptr = output_ptr + 1;
@@ -54,7 +49,7 @@ func run_simple_bootloader{
     local builtin_ptrs_before: BuiltinData = BuiltinData(
         output=cast(output_ptr, felt),
         pedersen=cast(pedersen_ptr, felt),
-        range_check=task_range_check_ptr,
+        range_check=initial_subtasks_range_check_ptr,
         ecdsa=ecdsa_ptr,
         bitwise=bitwise_ptr,
         ec_op=ec_op_ptr,
@@ -108,8 +103,11 @@ func run_simple_bootloader{
         );
     }
 
-    // Verify that the task range checks appear after the self range checks of execute_task.
-    assert self_range_check_ptr = task_range_check_ptr;
+    // Relocate the range checks used by the subtasks after the range checks used by the bootloader.
+    relocate_segment(
+        src_ptr=cast(initial_subtasks_range_check_ptr, felt*),
+        dest_ptr=cast(self_range_check_ptr, felt*),
+    );
 
     // Return the updated builtin pointers.
     local builtin_ptrs: BuiltinData* = builtin_ptrs;

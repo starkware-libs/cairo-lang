@@ -21,6 +21,7 @@ setuptools.setup(
     setup_requires=["wheel"],
     url="https://cairo-lang.org/",
     package_data={
+        "starkware.cairo": ["builtin_selection/*.cairo"],
         "starkware.cairo.common": ["*.cairo", "*/*.cairo"],
         "starkware.cairo.lang.compiler": ["cairo.ebnf", "lib/*.cairo"],
         "starkware.cairo.lang.migrators": ["*.ebnf"],
@@ -32,6 +33,7 @@ setuptools.setup(
             "common/*.cairo",
             "definitions/*.yml",
             "definitions/versioned_constants.json",
+            "builtins/segment_arena/segment_arena.cairo",
         ],
         "starkware.starknet.compiler.v1": [
             "*.json",

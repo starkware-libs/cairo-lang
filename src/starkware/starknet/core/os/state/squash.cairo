@@ -51,8 +51,8 @@ func squash_state_changes_inner{range_check_ptr}(
     local squashed_prev_state: StateEntry*;
     %{
         if state_update_pointers is None:
-            ids.squashed_storage_ptr = segments.add()
             ids.squashed_prev_state = segments.add()
+            ids.squashed_storage_ptr = segments.add()
         else:
             ids.squashed_prev_state, ids.squashed_storage_ptr = (
                 state_update_pointers.get_contract_state_entry_and_storage_ptr(

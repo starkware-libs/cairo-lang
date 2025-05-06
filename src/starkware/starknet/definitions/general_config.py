@@ -99,6 +99,12 @@ class StarknetOsConfig(Config):
         default=DEFAULT_FEE_TOKEN_ADDRESS,
     )
 
+    def starknet_chain_id(self) -> StarknetChainId:
+        """
+        Returns the starknet chain ID.
+        """
+        return StarknetChainId(self.chain_id)
+
 
 @marshmallow_dataclass.dataclass
 class StarknetGeneralConfig(EverestGeneralConfig):

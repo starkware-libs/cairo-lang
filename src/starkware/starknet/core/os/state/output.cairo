@@ -1,3 +1,4 @@
+from starkware.cairo.common.bool import FALSE
 from starkware.cairo.common.dict import DictAccess
 from starkware.cairo.common.math import assert_nn_le
 from starkware.cairo.common.math_cmp import is_not_zero
@@ -146,9 +147,8 @@ func serialize_da_changes_inner_full{state_updates: FullStateUpdateEntry*}(
 // Assumption: `contract_state_diff` came from `serialize_full_contract_state_diff`, and
 // therefore does not contain trivial updates.
 func pack_contract_state_diff{range_check_ptr, res: felt*}(contract_state_diff: felt*) {
-    alloc_locals;
-    local n_contracts = contract_state_diff[0];
-    res[0] = n_contracts;
+    tempvar n_contracts = contract_state_diff[0];
+    assert res[0] = n_contracts;
     let res = &res[1];
     return pack_contract_state_diff_inner(
         n_contracts=n_contracts, contract_state_diff=&contract_state_diff[1]
@@ -185,7 +185,7 @@ func pack_contract_state_diff_inner{range_check_ptr, res: felt*}(
     %{ ids.is_n_updates_small = ids.n_updates < ids.N_UPDATES_SMALL_PACKING_BOUND %}
     // Verify that the guessed value is 0 or 1.
     assert is_n_updates_small * is_n_updates_small = is_n_updates_small;
-    if (is_n_updates_small != 0) {
+    if (is_n_updates_small != FALSE) {
         tempvar n_updates_bound = N_UPDATES_SMALL_PACKING_BOUND;
     } else {
         tempvar n_updates_bound = N_UPDATES_BOUND;
@@ -204,7 +204,7 @@ func pack_contract_state_diff_inner{range_check_ptr, res: felt*}(
     assert res[1] = packed_info;
 
     // Handle the class hash.
-    if (was_class_updated != 0) {
+    if (was_class_updated != FALSE) {
         // Write the new class hash.
         assert res[2] = new_class_hash;
         tempvar res = &res[3];

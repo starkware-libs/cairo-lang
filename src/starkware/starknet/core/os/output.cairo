@@ -122,7 +122,7 @@ func serialize_os_output{range_check_ptr, poseidon_ptr: PoseidonBuiltin*, output
         compress_state_updates=compress_state_updates,
     );
 
-    if (use_kzg_da != 0) {
+    if (use_kzg_da != FALSE) {
         let os_kzg_commitment_info = compute_os_kzg_commitment_info(
             state_updates_start=da_start, state_updates_end=da_end
         );

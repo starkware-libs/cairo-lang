@@ -1064,3 +1064,9 @@ class StarknetBlockAndStateUpdate(ValidatedResponseObject):
 
     block: StarknetBlock
     state_update: BlockStateUpdate
+
+    def dump_without_fee_market_info(self) -> dict:
+        block_data = self.block.dump()
+        block_data.pop("l2_gas_consumed")
+        block_data.pop("next_l2_gas_price")
+        return {"block": block_data, "state_update": self.state_update.dump()}

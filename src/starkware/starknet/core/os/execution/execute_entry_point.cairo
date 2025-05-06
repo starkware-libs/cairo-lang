@@ -32,6 +32,7 @@ from starkware.starknet.core.os.constants import (
     ERROR_ENTRY_POINT_NOT_FOUND,
     ERROR_OUT_OF_GAS,
     NOP_ENTRY_POINT_OFFSET,
+    SIERRA_ARRAY_LEN_BOUND,
 )
 from starkware.starknet.core.os.contract_class.compiled_class import (
     CompiledClass,
@@ -127,7 +128,7 @@ func get_entry_point{range_check_ptr}(
         n_elms=n_entry_points,
         key=execution_context.execution_info.selector,
     );
-    if (success != 0) {
+    if (success != FALSE) {
         return (success=1, entry_point=entry_point_desc);
     }
 
@@ -210,10 +211,18 @@ func execute_entry_point{
 
     let n_builtins = BuiltinEncodings.SIZE;
     local builtin_params: BuiltinParams* = block_context.builtin_params;
+    local calldata_size: felt = execution_context.calldata_size;
     local calldata_start: felt* = execution_context.calldata;
-    local calldata_end: felt* = calldata_start + execution_context.calldata_size;
+    local calldata_end: felt* = calldata_start + calldata_size;
     local entry_point_n_builtins = compiled_class_entry_point.n_builtins;
     local entry_point_builtin_list: felt* = compiled_class_entry_point.builtin_list;
+
+    // Sanity check: Verify that `calldata` is a valid Sierra array.
+    // Don't use `assert_nn_le` for efficiency.
+    assert [range_check_ptr] = calldata_size;
+    assert [range_check_ptr + 1] = calldata_size + 2 ** 128 - SIERRA_ARRAY_LEN_BOUND;
+    let range_check_ptr = range_check_ptr + 2;
+
     // Call select_input_builtins to push the relevant builtin pointer arguments on the stack.
     select_input_builtins(
         all_encodings=builtin_params.builtin_encodings,
@@ -295,7 +304,7 @@ func execute_entry_point{
 
     // If necessary, create a new revert_log and dummy outputs before calling
     // `call_execute_syscalls`.
-    if (is_reverted != 0) {
+    if (is_reverted != FALSE) {
         // Create a new revert log for the reverted entry point. This will be used to revert the
         // entry point changes after calling `call_execute_syscalls`.
         let revert_log = init_revert_log();
@@ -316,7 +325,7 @@ func execute_entry_point{
         );
     }
 
-    if (is_reverted != 0) {
+    if (is_reverted != FALSE) {
         handle_revert(
             contract_address=execution_context.execution_info.contract_address,
             revert_log_end=revert_log,

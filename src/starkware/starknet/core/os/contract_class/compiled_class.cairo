@@ -1,4 +1,5 @@
 from starkware.cairo.common.alloc import alloc
+from starkware.cairo.common.bool import FALSE
 from starkware.cairo.common.cairo_builtins import PoseidonBuiltin
 from starkware.cairo.common.hash_state_poseidon import (
     HashState,
@@ -172,7 +173,7 @@ func bytecode_hash_node{range_check_ptr, poseidon_ptr: PoseidonBuiltin*}(
     %}
 
     // Guess if the bytecode is a leaf or an internal node in the tree.
-    if (is_leaf != 0) {
+    if (is_leaf != FALSE) {
         // If the bytecode is a leaf, it must be loaded into memory. Compute its hash.
         let (hash) = poseidon_hash_many(n=data_length, elements=data_ptr);
         return hash;
@@ -228,14 +229,14 @@ func bytecode_hash_internal_node{
         })
     %}
 
-    if (is_used_leaf != 0) {
+    if (is_used_leaf != FALSE) {
         // Repeat the code of bytecode_hash_node() for performance reasons, instead of calling it.
         let (current_segment_hash) = poseidon_hash_many(n=segment_length, elements=data_ptr);
         tempvar range_check_ptr = range_check_ptr;
         tempvar poseidon_ptr = poseidon_ptr;
         tempvar current_segment_hash = current_segment_hash;
     } else {
-        if (is_segment_used != 0) {
+        if (is_segment_used != FALSE) {
             let current_segment_hash = bytecode_hash_node(
                 data_ptr=data_ptr, data_length=segment_length
             );

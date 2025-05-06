@@ -2,6 +2,9 @@ from starkware.cairo.builtin_selection.inner_select_builtins import inner_select
 from starkware.cairo.builtin_selection.select_input_builtins import select_input_builtins
 from starkware.cairo.builtin_selection.validate_builtins import validate_builtins
 from starkware.cairo.common.builtin_poseidon.poseidon import PoseidonBuiltin, poseidon_hash_many
+from starkware.cairo.common.cairo_blake2s.blake2s import (
+    encode_felt252_data_and_calc_224_bit_blake_hash,
+)
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.hash_chain import hash_chain
 from starkware.cairo.common.registers import get_ap, get_fp_and_pc
@@ -48,21 +51,24 @@ struct BuiltinData {
 //  * program_hash_function - determines which hash function is to be used.
 // Return values:
 //  * hash - the computed program hash.
-func compute_program_hash{pedersen_ptr: HashBuiltin*, poseidon_ptr: PoseidonBuiltin*}(
-    program_data_ptr: felt*, program_hash_function: felt
-) -> (hash: felt) {
-    if (program_hash_function == POSEIDON_HASH) {
-        let (hash) = poseidon_hash_many{poseidon_ptr=poseidon_ptr}(
-            n=program_data_ptr[0], elements=&program_data_ptr[1]
-        );
+func compute_program_hash{
+    pedersen_ptr: HashBuiltin*, poseidon_ptr: PoseidonBuiltin*, self_range_check_ptr: felt
+}(program_data_ptr: felt*, program_hash_function: felt) -> (hash: felt) {
+    if (program_hash_function == BLAKE_HASH) {
+        let (hash) = encode_felt252_data_and_calc_224_bit_blake_hash{
+            range_check_ptr=self_range_check_ptr
+        }(data_len=program_data_ptr[0], data=&program_data_ptr[1]);
         return (hash=hash);
     }
     if (program_hash_function == PEDERSEN_HASH) {
         let (hash) = hash_chain{hash_ptr=pedersen_ptr}(data_ptr=program_data_ptr);
         return (hash=hash);
     }
-    assert program_hash_function = BLAKE_HASH;
-    return (hash=0x123456789);
+    assert program_hash_function = POSEIDON_HASH;
+    let (hash) = poseidon_hash_many{poseidon_ptr=poseidon_ptr}(
+        n=program_data_ptr[0], elements=&program_data_ptr[1]
+    );
+    return (hash=hash);
 }
 
 // Executes a single task.

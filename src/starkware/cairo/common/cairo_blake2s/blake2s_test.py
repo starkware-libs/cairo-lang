@@ -317,7 +317,7 @@ def test_unpack_into_u32s(program):
     values_ptr = runner.segments.gen_arg(values)
     out_ptr = runner.segments.add()
     runner.run(
-        "unpack_u32s",
+        "encode_felt252_to_u32s",
         runner.range_check_builtin.base,
         packed_values_len=len(values),
         packed_values=values_ptr,

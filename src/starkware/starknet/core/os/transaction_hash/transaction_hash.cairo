@@ -20,20 +20,18 @@ from starkware.cairo.common.hash_state_poseidon import (
 )
 from starkware.cairo.common.math import assert_nn, assert_nn_le, assert_not_zero
 from starkware.cairo.common.registers import get_fp_and_pc
-from starkware.starknet.common.constants import (
-    DEPLOY_HASH_PREFIX,
-    INVOKE_HASH_PREFIX,
-    L1_HANDLER_HASH_PREFIX,
-)
 from starkware.starknet.common.new_syscalls import ResourceBounds
 from starkware.starknet.core.os.builtins import BuiltinPointers, SelectableBuiltins
 from starkware.starknet.core.os.constants import (
     CONSTRUCTOR_ENTRY_POINT_SELECTOR,
+    DEPLOY_HASH_PREFIX,
     EXECUTE_ENTRY_POINT_SELECTOR,
+    INVOKE_HASH_PREFIX,
     L1_DATA_GAS,
     L1_DATA_GAS_INDEX,
     L1_GAS,
     L1_GAS_INDEX,
+    L1_HANDLER_HASH_PREFIX,
     L1_HANDLER_VERSION,
     L2_GAS,
     L2_GAS_INDEX,

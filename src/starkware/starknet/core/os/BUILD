@@ -41,9 +41,17 @@ cairo_library(
 )
 
 cairo_library(
-    name = "starknet_os_program_cairo_lib",
+    name = "os_constants",
     srcs = [
         "constants.cairo",
+    ],
+    deps = [
+    ],
+)
+
+cairo_library(
+    name = "starknet_os_program_cairo_lib",
+    srcs = [
         "os.cairo",
         "//src/starkware/starknet/common:constants.cairo",
         "//src/starkware/starknet/common:storage.cairo",
@@ -69,6 +77,7 @@ cairo_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
+        ":os_constants",
         ":output",
         ":starknet_builtins_cairo_lib",
         ":starknet_new_syscalls_cairo_lib",
@@ -159,6 +168,7 @@ py_library(
         ":starknet_os_execution_helper_lib",
         ":starknet_os_lib",
         ":starknet_os_syscall_handler_lib",
+        "//src/starkware/starknet/definitions:starknet_general_config_lib",
         "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
         "//src/starkware/storage:starkware_abstract_storage_lib",
         requirement("marshmallow_dataclass"),
@@ -255,6 +265,7 @@ py_library(
         "//src/starkware/python:starkware_python_utils_lib",
         "//src/starkware/starknet/business_logic/execution:starknet_transaction_execution_objects_lib",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
+        "//src/starkware/starknet/public:starknet_abi_lib",
         requirement("cachetools"),
     ],
 )
@@ -389,7 +400,6 @@ py_library(
         "//src/starkware/starknet/business_logic/transaction:starknet_transaction_deprecated_objects_lib",
         "//src/starkware/starknet/business_logic/transaction:starknet_transaction_objects_lib",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
-        "//src/starkware/starknet/definitions:starknet_general_config_lib",
         "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",
         "//src/starkware/starknet/storage:starknet_storage_lib",
         "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",

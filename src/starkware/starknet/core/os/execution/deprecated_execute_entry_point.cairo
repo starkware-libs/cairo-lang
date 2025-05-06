@@ -1,5 +1,6 @@
 from starkware.cairo.builtin_selection.select_builtins import select_builtins
 from starkware.cairo.common.alloc import alloc
+from starkware.cairo.common.bool import FALSE
 from starkware.cairo.common.dict_access import DictAccess
 from starkware.cairo.common.find_element import find_element, search_sorted_optimistic
 from starkware.cairo.common.math import assert_not_zero
@@ -69,7 +70,7 @@ func get_entry_point_offset{range_check_ptr}(
         n_elms=n_entry_points,
         key=execution_context.execution_info.selector,
     );
-    if (success != 0) {
+    if (success != FALSE) {
         return (success=1, entry_point_offset=entry_point_desc.offset);
     }
 
@@ -230,7 +231,7 @@ func select_execute_entry_point_func{
     %{ is_deprecated = 1 if ids.execution_context.class_hash in __deprecated_class_hashes else 0 %}
     // Note that the class_hash is validated in both the `if` and `else` cases, so a malicious
     // prover won't be able to produce a proof if guesses the wrong case.
-    if (nondet %{ is_deprecated %} != 0) {
+    if (nondet %{ is_deprecated %} != FALSE) {
         let (is_reverted, retdata_size, retdata: felt*) = deprecated_execute_entry_point(
             block_context=block_context, execution_context=execution_context
         );
@@ -242,7 +243,7 @@ func select_execute_entry_point_func{
     local caller_remaining_gas = remaining_gas;
     local is_sierra_gas_mode;
     %{ ids.is_sierra_gas_mode = execution_helper.call_info.tracked_resource.is_sierra_gas() %}
-    if (is_sierra_gas_mode != 0) {
+    if (is_sierra_gas_mode != FALSE) {
         tempvar remaining_gas = remaining_gas;
     } else {
         // Run with high enough gas to avoid out-of-gas.
@@ -262,7 +263,7 @@ func select_execute_entry_point_func{
         block_context=block_context, execution_context=execution_context
     );
 
-    if (is_sierra_gas_mode != 0) {
+    if (is_sierra_gas_mode != FALSE) {
         tempvar remaining_gas = remaining_gas;
     } else {
         // Do not count Sierra gas for the caller in this case.

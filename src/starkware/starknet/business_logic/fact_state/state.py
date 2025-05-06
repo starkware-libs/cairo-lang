@@ -259,12 +259,6 @@ class SharedState(SharedStateBase):
             # The shared state is empty.
             return 0
 
-        # Backward compatibility; Used during the migration from a state without a
-        # contract class tree to a state with a contract class tree.
-        if contract_classes_root == to_bytes(0):
-            # The contract classes' state is empty.
-            return from_bytes(contract_states_root)
-
         # Return H(contract_state_root, contract_class_root, state_version).
         hash_value = poseidon_hash_many(
             [

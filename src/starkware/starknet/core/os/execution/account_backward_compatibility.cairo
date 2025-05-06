@@ -13,6 +13,7 @@ from starkware.starknet.core.os.constants import (
     V1_BOUND_ACCOUNTS_CAIRO0_1,
     V1_BOUND_ACCOUNTS_CAIRO0_2,
     V1_BOUND_ACCOUNTS_CAIRO0_3,
+    V1_BOUND_ACCOUNTS_CAIRO0_4,
     V1_BOUND_ACCOUNTS_CAIRO0_LEN,
     V1_BOUND_ACCOUNTS_CAIRO1_0,
     V1_BOUND_ACCOUNTS_CAIRO1_1,
@@ -28,11 +29,12 @@ from starkware.starknet.core.os.constants import (
 // Returns TRUE for the hard-coded list of CairoZero class hashes that are version-bound to v1
 // transactions.
 func is_v1_bound_account_cairo0(class_hash: felt) -> felt {
-    static_assert V1_BOUND_ACCOUNTS_CAIRO0_LEN == 4;
+    static_assert V1_BOUND_ACCOUNTS_CAIRO0_LEN == 5;
     if ((class_hash - V1_BOUND_ACCOUNTS_CAIRO0_0) *
         (class_hash - V1_BOUND_ACCOUNTS_CAIRO0_1) *
         (class_hash - V1_BOUND_ACCOUNTS_CAIRO0_2) *
-        (class_hash - V1_BOUND_ACCOUNTS_CAIRO0_3) == 0) {
+        (class_hash - V1_BOUND_ACCOUNTS_CAIRO0_3) *
+        (class_hash - V1_BOUND_ACCOUNTS_CAIRO0_4) == 0) {
         return TRUE;
     }
     return FALSE;

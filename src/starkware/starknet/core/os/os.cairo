@@ -209,6 +209,7 @@ func execute_blocks{
     n_deprecated_compiled_class_facts: felt,
     deprecated_compiled_class_facts: DeprecatedCompiledClassFact*,
 ) {
+    %{ print(f"execute_blocks: {ids.n_blocks} blocks remaining.") %}
     if (n_blocks == 0) {
         return ();
     }

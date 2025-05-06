@@ -80,8 +80,8 @@ func get_block_context{range_check_ptr}(
             sequencer_address=0,
         ),
         starknet_os_config=StarknetOsConfig(
-            chain_id=nondet %{ block_input.general_config.chain_id.value %},
-            fee_token_address=nondet %{ block_input.general_config.fee_token_address %},
+            chain_id=nondet %{ os_hints_config.starknet_os_config.chain_id %},
+            fee_token_address=nondet %{ os_hints_config.starknet_os_config.fee_token_address %},
         ),
         execute_syscalls_ptr=execute_syscalls_ptr,
         execute_deprecated_syscalls_ptr=execute_deprecated_syscalls_ptr,

@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import List, Optional, Tuple
+from enum import Enum, auto
+from typing import List, Optional, Tuple, Type
 
 from starkware.crypto.signature.signature import sign
 from starkware.starknet.core.os.contract_address.contract_address import (
@@ -626,3 +627,26 @@ class TrivialSigner(SignerBase):
             len(call.calldata),
             *call.calldata,
         ]
+
+
+class SignerType(Enum):
+    """
+    Enum for the different signer types.
+    """
+
+    OPEN_ZEPPELIN = 0
+    STANDARD = auto()
+    TRIVIAL = auto()
+
+    def get_signer(self) -> Type[SignerBase]:
+        """
+        Returns the corresponding signer class for the given signer type.
+        """
+        if self is SignerType.OPEN_ZEPPELIN:
+            return OpenZeppelinSigner
+        elif self is SignerType.STANDARD:
+            return StandardSigner
+        elif self is SignerType.TRIVIAL:
+            return TrivialSigner
+        else:
+            raise ValueError(f"Unknown signer type: {self}.")

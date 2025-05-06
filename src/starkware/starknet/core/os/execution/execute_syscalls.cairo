@@ -32,6 +32,7 @@ from starkware.cairo.common.math import (
     assert_le,
     assert_lt,
     assert_nn,
+    assert_nn_le,
     assert_not_zero,
     unsigned_div_rem,
 )
@@ -137,6 +138,7 @@ from starkware.starknet.core.os.constants import (
     ERROR_INVALID_ARGUMENT,
     ERROR_INVALID_INPUT_LEN,
     ERROR_OUT_OF_GAS,
+    EXECUTE_ENTRY_POINT_SELECTOR,
     GET_BLOCK_HASH_GAS_COST,
     GET_CLASS_HASH_AT_GAS_COST,
     GET_EXECUTION_INFO_GAS_COST,
@@ -158,6 +160,7 @@ from starkware.starknet.core.os.constants import (
     SECP256R1_NEW_GAS_COST,
     SEND_MESSAGE_TO_L1_GAS_COST,
     SHA256_PROCESS_BLOCK_GAS_COST,
+    SIERRA_ARRAY_LEN_BOUND,
     STORAGE_READ_GAS_COST,
     STORAGE_WRITE_GAS_COST,
     STORED_BLOCK_HASH_BUFFER,
@@ -630,6 +633,14 @@ func execute_meta_tx_v0{
     local caller_execution_info: ExecutionInfo* = caller_execution_context.execution_info;
     local old_tx_info: TxInfo* = caller_execution_info.tx_info;
 
+    if (selector != EXECUTE_ENTRY_POINT_SELECTOR) {
+        write_failure_response(remaining_gas=remaining_gas, failure_felt=ERROR_INVALID_ARGUMENT);
+        return ();
+    }
+
+    // Sanity check: Verify that `signature` is a valid Sierra array.
+    assert_nn_le(request.signature_end - request.signature_start, SIERRA_ARRAY_LEN_BOUND - 1);
+
     let (state_entry: StateEntry*) = dict_read{dict_ptr=contract_state_changes}(
         key=contract_address
     );
@@ -721,7 +732,7 @@ func contract_call_helper{
         );
     }
 
-    if (is_reverted != 0) {
+    if (is_reverted != FALSE) {
         // Append `ERROR_ENTRY_POINT_FAILED` to the retdata.
         assert retdata[retdata_size] = ERROR_ENTRY_POINT_FAILED;
         tempvar retdata_size = retdata_size + 1;
@@ -731,7 +742,6 @@ func contract_call_helper{
     }
 
     let response_header = cast(syscall_ptr, ResponseHeader*);
-    // Advance syscall pointer to the response body.
     let syscall_ptr = syscall_ptr + ResponseHeader.SIZE;
 
     // Write the response header.
@@ -846,7 +856,6 @@ func execute_deploy{
     }
 
     let response_header = cast(syscall_ptr, ResponseHeader*);
-    // Advance syscall pointer to the response body.
     let syscall_ptr = syscall_ptr + ResponseHeader.SIZE;
 
     // Write the response header.
@@ -895,7 +904,6 @@ func execute_get_class_hash_at{
     }
 
     let response = cast(syscall_ptr, GetClassHashAtResponse*);
-    // Advance syscall pointer to the response body.
     let syscall_ptr = syscall_ptr + GetClassHashAtResponse.SIZE;
 
     // Read the state entry of the requested address.
@@ -1061,7 +1069,6 @@ func execute_get_block_hash{
 
     // Gas reduction has succeeded and the request is valid; write the response header.
     let response_header = cast(syscall_ptr, ResponseHeader*);
-    // Advance syscall pointer to the response body.
     let syscall_ptr = syscall_ptr + ResponseHeader.SIZE;
     assert [response_header] = ResponseHeader(gas=remaining_gas, failure_flag=0);
 
@@ -1716,7 +1723,6 @@ func reduce_syscall_gas_and_write_response_header{range_check_ptr, syscall_ptr: 
     if (success != FALSE) {
         // Reduction has succeeded; write the response header.
         let response_header = cast(syscall_ptr, ResponseHeader*);
-        // Advance syscall pointer to the response body.
         let syscall_ptr = syscall_ptr + ResponseHeader.SIZE;
         assert [response_header] = ResponseHeader(gas=remaining_gas, failure_flag=0);
 
@@ -1732,7 +1738,6 @@ func reduce_syscall_gas_and_write_response_header{range_check_ptr, syscall_ptr: 
 @known_ap_change
 func write_failure_response{syscall_ptr: felt*}(remaining_gas: felt, failure_felt: felt) {
     let response_header = cast(syscall_ptr, ResponseHeader*);
-    // Advance syscall pointer to the response body.
     let syscall_ptr = syscall_ptr + ResponseHeader.SIZE;
 
     // Write the response header.

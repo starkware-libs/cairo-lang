@@ -131,7 +131,8 @@ func allocate_aliases_and_squash_state_changes{range_check_ptr}(
         );
     }
 
-    // Verify that ALIAS_CONTRACT_ADDRESS is not included in the state diff (before the allocation).
+    // Sanity check: ensure ALIAS_CONTRACT_ADDRESS is not included in the state diff
+    // (before the allocation).
     let (_, success) = search_sorted(
         array_ptr=squashed_contract_state_dict,
         elm_size=DictAccess.SIZE,
@@ -147,8 +148,8 @@ func allocate_aliases_and_squash_state_changes{range_check_ptr}(
     local prev_aliases_state_entry: StateEntry*;
     %{
         if state_update_pointers is None:
-            ids.squashed_aliases_storage_start = segments.add()
             ids.prev_aliases_state_entry = segments.add()
+            ids.squashed_aliases_storage_start = segments.add()
         else:
             ids.prev_aliases_state_entry, ids.squashed_aliases_storage_start = (
                 state_update_pointers.get_contract_state_entry_and_storage_ptr(

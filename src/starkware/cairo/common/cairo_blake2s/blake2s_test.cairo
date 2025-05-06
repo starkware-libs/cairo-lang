@@ -10,8 +10,8 @@ from starkware.cairo.common.cairo_blake2s.blake2s import (
     blake2s_as_words,
     blake2s_bigend,
     blake2s_felts,
+    encode_felt252_to_u32s,
     finalize_blake2s,
-    unpack_u32s,
 )
 from starkware.cairo.common.cairo_builtins import BitwiseBuiltin
 

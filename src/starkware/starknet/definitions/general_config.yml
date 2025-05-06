@@ -1,6 +1,6 @@
 deprecated_fee_token_address: '0x497d1c054cec40f64454b45deecdc83e0c7f7b961c63531eae03748abd95350'
 enforce_l1_handler_fee: true
-sequencer_address: '0x61a342ce11aa3ba7770c592537270fbd64f4bd7e6fa0904498c2b5675da0f48'
+sequencer_address: '0x295548396b1c6cb8a9e420773c28f1531492f73bc45c35e2f499e3d3a6605b2'
 starknet_os_config:
   chain_id: 1536727068981429685321
   fee_token_address: '0x4fa9355c504fa2de263bd7920644b5e48794fe1450ec2a6526518ad77d6a567'

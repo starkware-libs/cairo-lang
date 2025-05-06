@@ -566,8 +566,8 @@ func blake2s_felts{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: f
     return (res=res);
 }
 
-// Takes an array of `packed_values_len` felts at `packed_values` and unpacks it into an array of
-// u32s at `unpacked_u32s` in the following way:
+// Takes an array of `packed_values_len` felt252s at `packed_values` and encodes them into an array
+// of u32s at `unpacked_u32s` in the following way:
 //  * If a felt is less than 2^63, it's unpacked to 2 felts, each representing 32 bits.
 //  * Otherwise, it's unpacked into 8 felts, each under 2^32, where the most significant
 //    limb has its MSB set (Note that the prime is less than 2^255 so the MSB could not be
@@ -579,7 +579,7 @@ func blake2s_felts{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: f
 // Note: This function can nondeterministically choose between several encodings of felts,
 //      x < PRIME can be encoded as x + PRIME, x + 2 * PRIME, etc. The canonical encoding is
 //      given when x < PRIME.
-func unpack_u32s{range_check_ptr: felt}(
+func encode_felt252_to_u32s{range_check_ptr: felt}(
     packed_values_len: felt, packed_values: felt*, unpacked_u32s: felt*
 ) -> felt {
     alloc_locals;
@@ -727,4 +727,24 @@ func blake_with_opcode{range_check_ptr}(len: felt, data: felt*, out: felt*) {
 
     tempvar data = data + 16;
     jmp loop;
+}
+
+// Given `data_len` felt252s at `data`, encodes them as u32s as defined in `encode_felt252_to_u32s`
+// and computes the blake2s hash of the result using the dedicated opcodes.
+// The result is then returned as a 224-bit felt, ignoring the last 32 bits.
+func encode_felt252_data_and_calc_224_bit_blake_hash{range_check_ptr: felt}(
+    data_len: felt, data: felt*
+) -> (hash: felt) {
+    alloc_locals;
+    let (local encoded_data: felt*) = alloc();
+    let encoded_data_len = encode_felt252_to_u32s(
+        packed_values_len=data_len, packed_values=data, unpacked_u32s=encoded_data
+    );
+    let (local blake_output: felt*) = alloc();
+    blake_with_opcode(len=encoded_data_len, data=encoded_data, out=blake_output);
+    return (
+        hash=blake_output[6] * 2 ** 192 + blake_output[5] * 2 ** 160 + blake_output[4] * 2 ** 128 +
+        blake_output[3] * 2 ** 96 + blake_output[2] * 2 ** 64 + blake_output[1] * 2 ** 32 +
+        blake_output[0],
+    );
 }

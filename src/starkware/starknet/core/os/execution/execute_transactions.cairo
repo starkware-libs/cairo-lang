@@ -18,12 +18,7 @@ from starkware.cairo.common.segments import relocate_segment
 from starkware.cairo.common.sha256_state import Sha256ProcessBlock
 from starkware.cairo.common.uint256 import Uint256
 from starkware.starknet.builtins.segment_arena.segment_arena import new_arena
-from starkware.starknet.common.constants import (
-    DECLARE_HASH_PREFIX,
-    DEPLOY_ACCOUNT_HASH_PREFIX,
-    INVOKE_HASH_PREFIX,
-    ORIGIN_ADDRESS,
-)
+from starkware.starknet.common.constants import ORIGIN_ADDRESS
 from starkware.starknet.common.new_syscalls import BlockInfo, ExecutionInfo, ResourceBounds, TxInfo
 from starkware.starknet.common.syscalls import Deploy
 from starkware.starknet.common.syscalls import TxInfo as DeprecatedTxInfo
@@ -35,14 +30,17 @@ from starkware.starknet.core.os.builtins import (
 )
 from starkware.starknet.core.os.constants import (
     CONSTRUCTOR_ENTRY_POINT_SELECTOR,
+    DECLARE_HASH_PREFIX,
     DEFAULT_ENTRY_POINT_SELECTOR,
     DEFAULT_INITIAL_GAS_COST,
     DEFAULT_INITIAL_GAS_COST_NO_L2,
+    DEPLOY_ACCOUNT_HASH_PREFIX,
     ENTRY_POINT_TYPE_CONSTRUCTOR,
     ENTRY_POINT_TYPE_EXTERNAL,
     ENTRY_POINT_TYPE_L1_HANDLER,
     EXECUTE_ENTRY_POINT_SELECTOR,
     EXECUTE_MAX_SIERRA_GAS,
+    INVOKE_HASH_PREFIX,
     L1_DATA_GAS,
     L1_DATA_GAS_INDEX,
     L1_GAS_INDEX,

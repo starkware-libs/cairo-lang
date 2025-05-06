@@ -28,7 +28,6 @@ from starkware.starknet.core.os.os_utils import (
     fetch_deprecated_compiled_classes,
 )
 from starkware.starknet.definitions import fields
-from starkware.starknet.definitions.general_config import StarknetGeneralConfig
 from starkware.starknet.services.api.contract_class.contract_class import (
     CompiledClass,
     DeprecatedCompiledClass,
@@ -148,7 +147,6 @@ class OsBlockInput(ValidatedMarshmallowDataclass):
 
     contracts: Dict[int, ContractState]
     class_hash_to_compiled_class_hash: Dict[int, int]
-    general_config: StarknetGeneralConfig
     transactions: Sequence[InternalTransaction] = field(
         metadata=dict(marshmallow_field=mfields.List(mfields.Nested(InternalTransactionSchema)))
     )

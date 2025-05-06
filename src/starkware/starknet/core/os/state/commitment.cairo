@@ -40,13 +40,6 @@ func calculate_global_state_root{poseidon_ptr: PoseidonBuiltin*, range_check_ptr
         return (global_root=0);
     }
 
-    // Backward compatibility; Used during the migration from a state without a
-    // contract class tree to a state with a contract class tree.
-    if (contract_class_root == 0) {
-        // The contract classes' state is empty.
-        return (global_root=contract_state_root);
-    }
-
     tempvar elements: felt* = new (GLOBAL_STATE_VERSION, contract_state_root, contract_class_root);
     let (global_root) = poseidon_hash_many(n=3, elements=elements);
     return (global_root=global_root);

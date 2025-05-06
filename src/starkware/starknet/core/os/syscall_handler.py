@@ -35,6 +35,7 @@ from starkware.starknet.core.os.syscall_utils import (
 from starkware.starknet.definitions import constants
 from starkware.starknet.definitions.constants import GasCost
 from starkware.starknet.definitions.error_codes import CairoErrorCode
+from starkware.starknet.public.abi import EXECUTE_ENTRY_POINT_SELECTOR
 
 SyscallFullResponse = Tuple[tuple, tuple]  # Response header + specific syscall response.
 ExecuteSyscallCallback = Callable[
@@ -285,6 +286,11 @@ class SyscallHandlerBase(ABC):
         )
 
     def meta_tx_v0(self, remaining_gas: int, request: CairoStructProxy) -> SyscallFullResponse:
+        if request.selector != EXECUTE_ENTRY_POINT_SELECTOR:
+            return self._handle_failure(
+                final_gas=remaining_gas,
+                error_code=CairoErrorCode.INVALID_ARGUMENT,
+            )
         return self.call_contract_helper(
             remaining_gas=remaining_gas, request=request, syscall_name="meta_tx_v0"
         )

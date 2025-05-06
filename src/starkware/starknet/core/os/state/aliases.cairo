@@ -78,7 +78,7 @@ func maybe_allocate_alias_for_big_key{
 }
 
 // Returns the next available alias.
-// Deploys the stateful compression feature if needed.
+// Initializes the stateful compression feature if needed.
 func get_next_available_alias{aliases_storage_updates: DictAccess*, range_check_ptr}() -> felt {
     tempvar next_available_alias = nondet %{ aliases.read(key=ids.ALIAS_COUNTER_STORAGE_KEY) %};
     assert aliases_storage_updates[0] = DictAccess(
@@ -181,10 +181,12 @@ func allocate_aliases_for_contract_state_diff{
 
     let contract_header = cast(contract_state_diff, FullContractHeader*);
     local contract_address = contract_header.address;
-    local storage_diff: FullStateUpdateEntry* = cast(
+    local storage_diff_start: FullStateUpdateEntry* = cast(
         &contract_state_diff[FullContractHeader.SIZE], FullStateUpdateEntry*
     );
-    local storage_diff_end: FullStateUpdateEntry* = &storage_diff[contract_header.n_storage_diffs];
+    local storage_diff_end: FullStateUpdateEntry* = &storage_diff_start[
+        contract_header.n_storage_diffs
+    ];
     let skip_contract = should_skip_contract(contract_address=contract_address);
     if (skip_contract != FALSE) {
         return allocate_aliases_for_contract_state_diff(
@@ -194,7 +196,7 @@ func allocate_aliases_for_contract_state_diff{
 
     // Allocate for the storage diff.
     allocate_aliases_for_storage_diff(
-        storage_diff_start=storage_diff, storage_diff_end=storage_diff_end
+        storage_diff_start=storage_diff_start, storage_diff_end=storage_diff_end
     );
     // Allocate for the contract address.
     maybe_allocate_alias_for_key(key=contract_address);
@@ -223,6 +225,7 @@ func replace_aliases_and_serialize_full_contract_state_diff{range_check_ptr, res
 
     // Extract the final aliases - all aliases that were accessed during the execution
     // (both existing and newly allocated - see `allocate_aliases` documentation).
+    static_assert DictAccess.key == 0;
     let (aliases_entry: DictAccess*) = find_element(
         array_ptr=contract_state_changes,
         elm_size=DictAccess.SIZE,
@@ -259,11 +262,11 @@ func replace_contract_state_diff{range_check_ptr, res: felt*}(
 
     let contract_header = cast(contract_state_diff, FullContractHeader*);
     local contract_address = contract_header.address;
-    local storage_diff: FullStateUpdateEntry* = cast(
+    local storage_diff_start: FullStateUpdateEntry* = cast(
         &contract_state_diff[FullContractHeader.SIZE], FullStateUpdateEntry*
     );
     local n_storage_diffs = contract_header.n_storage_diffs;
-    local storage_diff_end: FullStateUpdateEntry* = &storage_diff[n_storage_diffs];
+    local storage_diff_end: FullStateUpdateEntry* = &storage_diff_start[n_storage_diffs];
     let skip_contract = should_skip_contract(contract_address=contract_address);
     if (skip_contract != FALSE) {
         // No aliases for this contract - copy the diff and continue.
@@ -291,7 +294,7 @@ func replace_contract_state_diff{range_check_ptr, res: felt*}(
 
     // Replace the storage diff.
     replace_storage_diff(
-        aliases=aliases, storage_diff_start=storage_diff, storage_diff_end=storage_diff_end
+        aliases=aliases, storage_diff_start=storage_diff_start, storage_diff_end=storage_diff_end
     );
     return replace_contract_state_diff(
         aliases=aliases, n_contracts=n_contracts - 1, contract_state_diff=storage_diff_end
@@ -361,6 +364,7 @@ func get_alias{range_check_ptr}(aliases: Aliases, key: felt) -> felt {
 func get_alias_of_big_key{range_check_ptr}(aliases: Aliases, key: felt) -> felt {
     // Sanity check.
     %{ assert ids.key >= ids.MIN_VALUE_FOR_ALIAS_ALLOC, f"Key {ids.key} is too small." %}
+    static_assert DictAccess.key == 0;
     let (entry: DictAccess*) = find_element(
         array_ptr=aliases.ptr, elm_size=DictAccess.SIZE, n_elms=aliases.len, key=key
     );

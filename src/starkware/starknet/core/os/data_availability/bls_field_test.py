@@ -137,7 +137,7 @@ def test_horner_eval(program: Program, structs: CairoStructProxy, n: int, seed: 
     expected_result = (
         sum(coef * pow(point, i, BLS_PRIME) for i, coef in enumerate(coefficients)) % BLS_PRIME
     )
-    assert res_d0 + res_d1 * BASE + res_d2 * (BASE**2) == expected_result
+    assert (res_d0 + res_d1 * BASE + res_d2 * (BASE**2)) % BLS_PRIME == expected_result
 
 
 @pytest.mark.parametrize(

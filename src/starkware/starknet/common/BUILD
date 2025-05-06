@@ -32,7 +32,10 @@ pytest_test(
         "eth_utils_test.py",
         "storage_test.py",
     ],
-    data = [":starknet_common_cairo_lib"],
+    data = [
+        ":starknet_common_cairo_lib",
+        "//src/starkware/starknet/core/os:os_constants",
+    ],
     visibility = ["//visibility:public"],
     deps = [
         "//src/starkware/cairo/common:cairo_function_runner_lib",

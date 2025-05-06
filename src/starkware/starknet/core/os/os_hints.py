@@ -1,5 +1,6 @@
 import asyncio
 import dataclasses
+from dataclasses import field
 from typing import Any, Dict, Tuple
 
 import marshmallow_dataclass
@@ -10,6 +11,7 @@ from starkware.starknet.core.os.kzg_manager import KzgManager
 from starkware.starknet.core.os.os_input import OsBlockInput, StarknetOsInput
 from starkware.starknet.core.os.os_logger import OptionalSegmentManager
 from starkware.starknet.core.os.os_syscall_handler import OsSyscallHandler
+from starkware.starknet.definitions.general_config import StarknetOsConfig
 from starkware.starkware_utils.validated_dataclass import (
     ValidatedDataclass,
     ValidatedMarshmallowDataclass,
@@ -31,6 +33,7 @@ class OsHintsConfig(ValidatedMarshmallowDataclass):
     debug_mode: bool
     full_output: int
     use_kzg_da: bool
+    starknet_os_config: StarknetOsConfig = field(default_factory=StarknetOsConfig)
 
 
 @dataclasses.dataclass(frozen=True)
