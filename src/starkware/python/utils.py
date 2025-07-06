@@ -94,7 +94,7 @@ class TriviallyCopyable:
 class TriviallyCopyableCallback(TriviallyCopyable, Generic[T]):
     """
     Pypy's deepcopy has a bug with copying some objects, such as functions.
-    This class wrapps callable objects and implements the expected behaviour of the copy
+    This class wraps callable objects and implements the expected behaviour of the copy
     functions on functions (which is trivial; see copy.py documentation).
     """
 
@@ -273,7 +273,7 @@ def indent(code, indentation):
         raise TypeError(f"Supports only int or str, got {type(indentation).__name__}")
 
     # Replace every occurrence of \n, with \n followed by indentation,
-    # unless the \n is the last characther of the string or is followed by another \n.
+    # unless the \n is the last character of the string or is followed by another \n.
     # We enforce the "not followed by ..." condition using negative lookahead (?!\n|$),
     # looking for end of string ($) or another \n.
     return indentation + re.sub(r"\n(?!\n|$)", "\n" + indentation, code)
@@ -621,7 +621,7 @@ def execute_coroutine_threadsafe(
     coroutine_name = coroutine.__name__  # type: ignore[attr-defined]
     # NOTE: this is not accurate. A running event loop has an associated (unique)
     #   thread, so running 'run_coroutine_threadsafe' will block if called from that thread, not
-    #   necessaily the main.
+    #   necessarily the main.
     assert (
         threading.current_thread() is not threading.main_thread()
     ), f"Cannot run {coroutine_name} synchronously in main thread."
