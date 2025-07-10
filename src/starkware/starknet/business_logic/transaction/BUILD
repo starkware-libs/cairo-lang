@@ -32,6 +32,7 @@ py_library(
         "//src/starkware/starknet/business_logic:starknet_business_logic_utils_lib",
         "//src/starkware/starknet/core/os/contract_address:starknet_contract_address_lib",
         "//src/starkware/starknet/core/os/contract_class:starknet_os_abi_lib",
+        "//src/starkware/starknet/core/os/contract_class:starknet_os_compiled_class_hash_lib",
         "//src/starkware/starknet/core/os/transaction_hash",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
         "//src/starkware/starknet/definitions:starknet_general_config_lib",

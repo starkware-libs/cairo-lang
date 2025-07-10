@@ -10,6 +10,8 @@ from starkware.python.test_utils import maybe_raises
 from starkware.starknet.core.os.contract_class.compiled_class_hash import (
     compute_compiled_class_hash,
     create_bytecode_segment_structure,
+)
+from starkware.starknet.core.os.contract_class.compiled_class_hash_cairo_utils import (
     run_compiled_class_hash,
 )
 from starkware.starknet.core.os.contract_class.compiled_class_hash_objects import (

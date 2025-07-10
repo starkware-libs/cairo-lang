@@ -6,11 +6,16 @@ from typing import List, Sequence
 
 import pytest
 
+from starkware.cairo.common.cairo_blake2s.blake2s_test_utils import (
+    generate_encoding_felts_test_param,
+)
 from starkware.cairo.common.cairo_blake2s.blake2s_utils import (
     IV,
     SIGMA,
     blake2s_compress,
     blake_round,
+    blake_state_into_felt,
+    calculate_blake2s_hash_from_felt252s,
 )
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.common.structs import CairoStructFactory, CairoStructProxy
@@ -306,16 +311,12 @@ def test_blake2s_felts(program, big_endian: bool):
 
 
 def test_unpack_into_u32s(program):
-    random.seed(0)
+    values, expected_out = generate_encoding_felts_test_param()
+
     runner = CairoFunctionRunner(program, layout="all_solidity")
-
-    values = [
-        random.randrange(2**63) if random.random() < 0.8 else random.randrange(2**250)
-        for _ in range(998)
-    ] + [2**63, 2**63 - 1]
-
     values_ptr = runner.segments.gen_arg(values)
     out_ptr = runner.segments.add()
+
     runner.run(
         "encode_felt252_to_u32s",
         runner.range_check_builtin.base,
@@ -323,6 +324,7 @@ def test_unpack_into_u32s(program):
         packed_values=values_ptr,
         unpacked_u32s=out_ptr,
     )
+
     range_check_builtin_end, n_out = runner.get_return_values(2)
 
     n_small = sum(map(lambda x: x < 2**63, values))
@@ -330,16 +332,7 @@ def test_unpack_into_u32s(program):
 
     expected_rc_uses = n_small + n_big
     expected_n_out = 2 * n_small + 8 * n_big
-    expected_out = []
-    for val in values:
-        limbs = []
-        val_len = 2 if val < 2**63 else 8
-        if val_len == 8:
-            val += 2**255
-        for _ in range(val_len):
-            val, res = divmod(val, 2**32)
-            limbs.append(res)
-        expected_out.extend(limbs[::-1])
+
     assert range_check_builtin_end == runner.range_check_builtin.base + expected_rc_uses
     assert n_out == expected_n_out
 
@@ -347,3 +340,110 @@ def test_unpack_into_u32s(program):
     assert u32s == expected_out
 
     print("Steps per felt:", runner.vm.current_step / 1000)
+
+
+@pytest.mark.parametrize(
+    "data,encode,expected_hash,little_endian",
+    [
+        (
+            [
+                0x0000000100000002000000030000000400000005000000060000000700000008,
+                0x0000000200000003000000040000000500000006000000070000000800000009,
+                0x000000030000000400000005000000060000000700000008000000090000000A,
+            ],
+            False,
+            blake_state_into_felt(
+                [
+                    3098114871,
+                    843612567,
+                    2372208999,
+                    1823639248,
+                    1136624132,
+                    2551058277,
+                    1389013608,
+                    1207876589,
+                ]
+            ),
+            False,
+        ),
+        (
+            [
+                0x0000000800000007000000060000000500000004000000030000000200000001,
+                0x0000000900000008000000070000000600000005000000040000000300000002,
+                0x0000000A00000009000000080000000700000006000000050000000400000003,
+            ],
+            False,
+            blake_state_into_felt(
+                [
+                    3098114871,
+                    843612567,
+                    2372208999,
+                    1823639248,
+                    1136624132,
+                    2551058277,
+                    1389013608,
+                    1207876589,
+                ]
+            ),
+            True,
+        ),
+        (
+            [0, 0],
+            False,
+            blake_state_into_felt(
+                [
+                    2094729646,
+                    3024244693,
+                    3054104464,
+                    4128920764,
+                    2610291848,
+                    893371832,
+                    3814092698,
+                    2740237450,
+                ]
+            ),
+            False,
+        ),
+        (
+            [456710651],
+            True,
+            blake_state_into_felt(
+                [
+                    367970813,
+                    2169544128,
+                    1372733201,
+                    3889200361,
+                    2173410734,
+                    130978920,
+                    1716071737,
+                    186387338,
+                ]
+            ),
+            False,
+        ),
+        (
+            [0x0000000100000002000000030000000400000005000000060000000700000008, 456710651],
+            True,
+            blake_state_into_felt(
+                [
+                    2955739784,
+                    2036533208,
+                    61500239,
+                    3826628264,
+                    44266080,
+                    203933266,
+                    214821852,
+                    409203158,
+                ]
+            ),
+            False,
+        ),
+    ],
+)
+def test_calculate_blake2s_hash_from_felt252s(
+    data: List[int], encode: bool, expected_hash: int, little_endian: bool
+):
+    assert (
+        calculate_blake2s_hash_from_felt252s(data=data, encode=encode, little_endian=little_endian)
+        == expected_hash
+    )

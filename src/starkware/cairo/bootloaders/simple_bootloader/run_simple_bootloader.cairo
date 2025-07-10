@@ -1,4 +1,8 @@
-from starkware.cairo.bootloaders.simple_bootloader.execute_task import BuiltinData, execute_task
+from starkware.cairo.bootloaders.simple_bootloader.execute_task import (
+    BuiltinData,
+    PrevProgramTaskParams,
+    execute_task,
+)
 from starkware.cairo.common.cairo_builtins import HashBuiltin, PoseidonBuiltin
 from starkware.cairo.common.registers import get_fp_and_pc
 from starkware.cairo.common.segments import relocate_segment
@@ -95,7 +99,11 @@ func run_simple_bootloader{
     %{ tasks = simple_bootloader_input.tasks %}
     let builtin_ptrs = &builtin_ptrs_before;
     let self_range_check_ptr = range_check_ptr;
-    with builtin_ptrs, self_range_check_ptr {
+    // The first prev task is a dummy task as we don't have a previous task to compare to.
+    tempvar prev_program_task_params = new PrevProgramTaskParams(
+        prev_hash=0, prev_program_segment_ptr=cast(0, felt*), prev_program_hash_function=-1
+    );
+    with builtin_ptrs, self_range_check_ptr, prev_program_task_params {
         execute_tasks(
             builtin_encodings=&builtin_encodings,
             builtin_instance_sizes=&builtin_instance_sizes,
@@ -163,24 +171,23 @@ func verify_non_negative(num: felt, n_bits: felt) {
 // Implicit arguments:
 // builtin_ptrs - Pointer to the builtin pointers before/after executing the tasks.
 // self_range_check_ptr - range_check pointer (used for validating the builtins).
+// prev_program_task_params - The parameters of the previous program task. Used for
+//   optimization by reusing the previous task's hash and segment if the current
+//   task is identical to the previous one.
 //
 // Hint arguments:
 // tasks - A list of tasks to execute.
-func execute_tasks{builtin_ptrs: BuiltinData*, self_range_check_ptr}(
-    builtin_encodings: BuiltinData*, builtin_instance_sizes: BuiltinData*, n_tasks: felt
-) {
+func execute_tasks{
+    builtin_ptrs: BuiltinData*,
+    self_range_check_ptr,
+    prev_program_task_params: PrevProgramTaskParams*,
+}(builtin_encodings: BuiltinData*, builtin_instance_sizes: BuiltinData*, n_tasks: felt) {
     if (n_tasks == 0) {
         return ();
     }
 
-    %{
-        from starkware.cairo.bootloaders.simple_bootloader.objects import Task
-
-        # Pass current task to execute_task.
-        task_id = len(simple_bootloader_input.tasks) - ids.n_tasks
-        task = simple_bootloader_input.tasks[task_id].load_task()
-    %}
-    tempvar program_hash_function = nondet %{ 1 if task.use_poseidon else 0 %};
+    %{ SIMPLE_BOOTLOADER_SET_CURRENT_TASK %}
+    tempvar program_hash_function = nondet %{ task.program_hash_function %};
     // Call execute_task to execute the current task.
     execute_task(
         builtin_encodings=builtin_encodings,

@@ -794,7 +794,9 @@ ec_signature_metadata = dict(
     )
 )
 
-public_key_metadata = everest_fields.FeltField.metadata(field_name="public key", required=True)
+PublicKeyField = everest_fields.FeltField
+
+public_key_metadata = PublicKeyField.metadata(field_name="public key", required=True)
 
 PrivateKeyField = RangeValidatedField(
     lower_bound=1,
@@ -803,3 +805,7 @@ PrivateKeyField = RangeValidatedField(
     error_code=StarkErrorCode.OUT_OF_RANGE_PRIVATE_KEY,
     formatter=ValidatedIntFormatter.HEX,
 )
+
+OptionalPublicKeyField = OptionalField(field=PublicKeyField, none_probability=0)
+optional_public_key_metadata = OptionalPublicKeyField.metadata(field_name="public key")
+OptionalPrivateKeyField = OptionalField(field=PrivateKeyField, none_probability=0)

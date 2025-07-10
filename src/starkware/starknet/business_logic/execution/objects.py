@@ -331,6 +331,11 @@ class CallExecution(ValidatedDataclass):
     # Note that the order starts from a transaction-global offset.
     events: List[OrderedEvent]
     l2_to_l1_messages: List[OrderedL2ToL1Message]
+    cairo_native: bool = field(
+        metadata=additional_metadata(
+            marshmallow_field=mfields.Boolean(required=False, load_default=False)
+        )
+    )
     failed: bool
     gas_consumed: int
 
@@ -419,6 +424,16 @@ class CallInfo(SerializableMarshmallowDataclass):
 
     storage_access_tracker: StorageAccessTracker
 
+    builtin_counters: Dict[str, int] = field(
+        metadata=additional_metadata(
+            marshmallow_field=mfields.Dict(
+                keys=mfields.String,
+                values=mfields.Integer(validate=validate_non_negative("Builtin Counter")),
+                load_default=dict,
+            ),
+        )
+    )
+
     @marshmallow.pre_load
     def from_explicit_storage_access_tracker(
         cls, data: Dict[str, Any], many: bool, **kwargs
@@ -475,6 +490,7 @@ class CallInfo(SerializableMarshmallowDataclass):
             retdata=retdata,
             events=events,
             l2_to_l1_messages=l2_to_l1_messages,
+            cairo_native=False,
             failed=failure_flag != 0,
             gas_consumed=gas_consumed,
         )
@@ -494,6 +510,7 @@ class CallInfo(SerializableMarshmallowDataclass):
             resources=execution_resources,
             storage_access_tracker=storage_access_tracker,
             inner_calls=internal_calls,
+            builtin_counters=dict(),
             tracked_resource=TrackedResource.CairoSteps,
         )
 
@@ -544,6 +561,10 @@ class CallInfo(SerializableMarshmallowDataclass):
     @property
     def l2_to_l1_messages(self) -> List[OrderedL2ToL1Message]:
         return self.execution.l2_to_l1_messages
+
+    @property
+    def cairo_native(self) -> int:
+        return self.execution.cairo_native
 
     @property
     def failure_flag(self) -> int:

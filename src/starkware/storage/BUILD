@@ -24,6 +24,7 @@ py_library(
     srcs = [
         "__init__.py",
         "storage.py",
+        "storage_conflict.py",
     ],
     deps = [
         "//src/starkware/python:starkware_python_utils_lib",

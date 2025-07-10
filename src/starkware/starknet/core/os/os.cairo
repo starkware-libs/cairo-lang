@@ -344,7 +344,7 @@ func initialize_state_changes() -> (
         initial_dict = {
             address: segments.gen_arg(
                 (from_bytes(contract.contract_hash), segments.add(), contract.nonce))
-            for address, contract in block_input.contracts.items()
+            for address, contract in sorted(block_input.contracts.items())
         }
     %}
     // A dictionary from contract address to a dict of storage changes of type StateEntry.

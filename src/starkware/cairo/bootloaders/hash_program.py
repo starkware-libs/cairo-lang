@@ -2,6 +2,7 @@ import argparse
 import json
 from enum import Enum
 
+from starkware.cairo.common.cairo_blake2s.blake2s_utils import calculate_blake2s_hash_from_felt252s
 from starkware.cairo.common.hash_chain import compute_hash_chain
 from starkware.cairo.lang.compiler.program import Program, ProgramBase
 from starkware.cairo.lang.version import __version__
@@ -20,10 +21,17 @@ class HashFunction(Enum):
 
 
 def compute_program_hash_chain(
-    program: ProgramBase, program_hash_function: HashFunction, bootloader_version=0
+    program: ProgramBase,
+    program_hash_function: HashFunction,
+    bootloader_version=0,
+    encode_blake2s_input: bool = False,
+    little_endian_for_blake2s: bool = True,
 ):
     """
     Computes a hash chain over a program, including the length of the data chain.
+    If `encode_blake2s_input` is True, the data chain is encoded according to the specification
+    documented inside the `calculate_blake2s_hash_from_felt252s` function.
+    If `little_endian_for_blake2s` is True, the blake input is encoded in little-endian u32s.
     """
     builtin_list = [from_bytes(builtin.encode("ascii")) for builtin in program.builtins]
     # The program header below is missing the data length, which is later added to the data_chain.
@@ -36,7 +44,12 @@ def compute_program_hash_chain(
         return compute_hash_chain([len(data_chain)] + data_chain)
     else:
         assert program_hash_function == HashFunction.BLAKE
-        return 0x123456789
+        return calculate_blake2s_hash_from_felt252s(
+            data=data_chain,
+            encode=encode_blake2s_input,
+            little_endian=little_endian_for_blake2s,
+            prime=program.prime,
+        )
 
 
 def main():

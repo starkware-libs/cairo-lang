@@ -7,7 +7,6 @@ cairo_library(
         "constants.cairo",
         "eth_utils.cairo",
         "messages.cairo",
-        "new_syscalls.cairo",
         "storage.cairo",
         "syscalls.cairo",
     ],

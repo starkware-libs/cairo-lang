@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from enum import Enum, auto
+from enum import Enum
 from typing import List, Optional, Tuple, Type
 
 from starkware.crypto.signature.signature import sign
@@ -503,6 +503,7 @@ class SignerBase(ABC):
         nonce: int,
         deploy_from_zero: bool = False,
         salt: int = 0,
+        tip: int = 0,
     ) -> Tuple[int, InvokeFunction]:
         """
         Returns a signed external `InvokeFunction` object that deploys a contract
@@ -528,6 +529,7 @@ class SignerBase(ABC):
             version=version,
             nonce=nonce,
             resource_bounds=resource_bounds,
+            tip=tip,
         )
         return contract_address, deploy_tx
 
@@ -634,9 +636,9 @@ class SignerType(Enum):
     Enum for the different signer types.
     """
 
-    OPEN_ZEPPELIN = 0
-    STANDARD = auto()
-    TRIVIAL = auto()
+    OPEN_ZEPPELIN = "open_zeppelin"
+    STANDARD = "standard"
+    TRIVIAL = "trivial"
 
     def get_signer(self) -> Type[SignerBase]:
         """

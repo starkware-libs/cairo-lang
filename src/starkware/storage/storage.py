@@ -24,6 +24,7 @@ from starkware.python.utils import from_bytes, get_exception_repr, to_bytes
 from starkware.starkware_utils.config_base import get_object_by_path
 from starkware.starkware_utils.serializable import Serializable
 from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
+from starkware.storage.storage_conflict import StorageConflictError, StorageConflictStatus
 
 logger = logging.getLogger(__name__)
 
@@ -202,6 +203,12 @@ class LargeStorage(Storage, ABC):
     def escape(self, key: bytes) -> str:
         return codecs.escape_encode(key)[0].decode("ascii")  # type: ignore
 
+    def _get_bucket_and_key(self, key: bytes) -> Tuple[str, str]:
+        """
+        Returns a pair of bucket name and full key name (full key includes the prefix).
+        """
+        return self.bucket, f"{self.prefix}/{self.escape(key=key)}"
+
 
 class DBObject(Serializable):
     @classmethod
@@ -330,7 +337,7 @@ class IndexedDBObject(DBObject):
 
     async def setnx_or_same_obj(
         self, storage: Storage, index: int, fields_to_ignore: Optional[List[str]] = None
-    ) -> Optional["IndexedDBObject"]:
+    ) -> Tuple[StorageConflictStatus, Optional["IndexedDBObject"]]:
         """
         Attempts to store the object with the given index if it doesn't exist.
         If it does exist, checks if the existing object is the same as this one,
@@ -339,27 +346,17 @@ class IndexedDBObject(DBObject):
         """
         obj_cls = type(self)
         if await self.setnx_obj(storage=storage, index=index) == True:
-            logger.debug(f"Successfully set {obj_cls.__name__} at {index=} to {self}")
-            return None
+            return StorageConflictStatus.NO_OBJECT, None
 
         existing_obj = await obj_cls.get_obj_or_fail(storage=storage, index=index)
 
-        # Closure to log the error and return the existing object in case the existing object
-        # differs from self.
-        def log_error_and_return_existing_obj():
-            logger.error(
-                f"Failed to write {obj_cls.__name__} object to storage at {index=}, due to a"
-                " different object already set at the same index. This should never happen!\n"
-                f" Failed setting the object {self}\n Found object: {existing_obj}"
-            )
-            return existing_obj
-
         # Make sure objects are of the same type.
         if not isinstance(existing_obj, obj_cls):
-            return log_error_and_return_existing_obj()
+            return StorageConflictStatus.DIFFERENT_CLASS, existing_obj
 
+        # Create a deep copy of the current object and replace ignored fields with those
+        # of the existing object.
         current_obj_to_compare = self
-
         if fields_to_ignore is not None and len(fields_to_ignore) > 0:
             field_overrides = {}
             for field in fields_to_ignore:
@@ -378,13 +375,17 @@ class IndexedDBObject(DBObject):
                     setattr(current_obj_to_compare, field, value)
 
         if current_obj_to_compare == existing_obj:
-            logger.warning(f"Found existing {obj_cls.__name__} object in storage at id {index}")
-            return None
+            return StorageConflictStatus.SAME_OBJECT, existing_obj
 
         # A different object was found.
-        return log_error_and_return_existing_obj()
+        return StorageConflictStatus.DIFFERENT_OBJECT, existing_obj
 
-    async def handle_setnx_or_same_obj_conflict(self, existing_obj: Optional["IndexedDBObject"]):
+    async def handle_setnx_or_same_obj_conflict(
+        self,
+        index: int,
+        existing_obj: Optional["IndexedDBObject"],
+        storage_conflict_status: StorageConflictStatus,
+    ):
         """
         Handles the conflict when attempting to set an object using `setnx_or_same`, but
         an existing object is already present at the same `index`.
@@ -392,9 +393,19 @@ class IndexedDBObject(DBObject):
         Raises:
             StorageConflictError: If an object already exists at the intended `index`.
         """
-        if existing_obj is not None:
+        obj_cls = type(self)
+        if storage_conflict_status == StorageConflictStatus.NO_OBJECT:
+            logger.debug(f"Successfully set {obj_cls.__name__} at {index=} to {self}")
+        elif storage_conflict_status == StorageConflictStatus.SAME_OBJECT:
+            logger.warning(f"Found existing {obj_cls.__name__} object in storage at id {index}")
+        else:
             # Found a different object in storage at the same id.
             # Should never get here!
+            logger.error(
+                f"Failed to write {obj_cls.__name__} object to storage at {index=}, due to a"
+                " different object already set at the same index. This should never happen!\n"
+                f" Failed setting the object {self}\n Found object: {existing_obj}"
+            )
             raise StorageConflictError(
                 obj_name=existing_obj.__class__.__name__,
                 existing_obj=existing_obj,
@@ -408,10 +419,12 @@ class IndexedDBObject(DBObject):
         Attempts to store the object with the given index if it doesn't exist.
         If finds a diffrent obj in the index raises an exception.
         """
-        existing_obj = await self.setnx_or_same_obj(
+        storage_conflict_status, existing_obj = await self.setnx_or_same_obj(
             storage=storage, index=index, fields_to_ignore=fields_to_ignore
         )
-        await self.handle_setnx_or_same_obj_conflict(existing_obj=existing_obj)
+        await self.handle_setnx_or_same_obj_conflict(
+            index=index, existing_obj=existing_obj, storage_conflict_status=storage_conflict_status
+        )
 
     def get_indexed_update_for_mset(self, index: int) -> Tuple[bytes, bytes]:
         """
@@ -668,17 +681,3 @@ class LockManager(ABC):
         """
         Closes the LockManager.
         """
-
-
-class StorageConflictError(Exception):
-    """
-    Raised when a storage operation fails due to an existing object
-    at the target key or identifier, causing a conflict.
-    """
-
-    def __init__(self, obj_name: str, existing_obj, expected_obj):
-        message = (
-            f"Inconsistent attempt to write {obj_name} object. "
-            f"Found {existing_obj}, but expected {expected_obj}"
-        )
-        super().__init__(message)

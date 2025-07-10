@@ -5,6 +5,10 @@ from typing import Any, Optional, Tuple
 
 import cachetools
 
+from starkware.starknet.public.abi import starknet_keccak
+
+CLASS_VERSION_PREFIX = "CONTRACT_CLASS_V"
+
 
 class ClassHashType(Enum):
     CONTRACT_CLASS = 0
@@ -31,3 +35,7 @@ def set_class_hash_cache(cache: cachetools.LRUCache[ClassHashCacheKeyType, int])
         yield
     finally:
         class_hash_cache_ctx_var.reset(token)
+
+
+def hash_abi(abi: str) -> int:
+    return starknet_keccak(data=bytes(abi, encoding="UTF-8"))

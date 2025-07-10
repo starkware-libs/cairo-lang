@@ -5,7 +5,7 @@ import pytest
 
 from starkware.storage.dict_storage import CachedStorage, DictStorage
 from starkware.storage.storage import IntToIntMapping, Storage
-from starkware.storage.test_utils import DummyLockManager
+from starkware.storage.test_utils import DummyLockManager, MockLargeStorage
 
 
 @pytest.mark.asyncio
@@ -75,3 +75,15 @@ async def test_cached_storage():
         assert await cached_storage.mget_or_fail(keys=[b"1", b"2", b"4", b"3"])
 
     assert await cached_storage.mget_or_fail(keys=[b"3", b"1", b"2"]) == (b"3", b"A", b"2")
+
+
+@pytest.mark.asyncio
+async def test_get_bucket_and_key():
+    test_bucket = "test-bucket"
+    test_prefix = "test-prefix"
+    test_key = "test-key"
+    storage = MockLargeStorage(bucket_name=test_bucket, prefix=test_prefix)
+    assert storage._get_bucket_and_key(key=test_key.encode("ascii")) == (
+        test_bucket,
+        "files/" + test_prefix + "/" + test_key,
+    )

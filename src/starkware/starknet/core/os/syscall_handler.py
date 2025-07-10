@@ -276,6 +276,12 @@ class SyscallHandlerBase(ABC):
     # Syscalls.
 
     def call_contract(self, remaining_gas: int, request: CairoStructProxy) -> SyscallFullResponse:
+        if request.selector == EXECUTE_ENTRY_POINT_SELECTOR:
+            return self._handle_failure(
+                final_gas=remaining_gas,
+                error_code=CairoErrorCode.INVALID_ARGUMENT,
+            )
+
         return self.call_contract_helper(
             remaining_gas=remaining_gas, request=request, syscall_name="call_contract"
         )

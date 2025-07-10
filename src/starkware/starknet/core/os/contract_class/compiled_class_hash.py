@@ -1,6 +1,5 @@
-from typing import Callable, List, Optional, Sequence, Tuple
+from typing import Callable, List, Tuple
 
-from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
 from starkware.cairo.lang.vm.crypto import poseidon_hash_many
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
 from starkware.python.utils import as_non_optional, from_bytes
@@ -9,10 +8,6 @@ from starkware.starknet.core.os.contract_class.compiled_class_hash_objects impor
     BytecodeSegment,
     BytecodeSegmentedNode,
     BytecodeSegmentStructure,
-)
-from starkware.starknet.core.os.contract_class.compiled_class_hash_utils import (
-    get_compiled_class_struct,
-    load_compiled_class_cairo_program,
 )
 from starkware.starknet.core.os.contract_class.utils import ClassHashType, class_hash_cache_ctx_var
 from starkware.starknet.definitions import constants
@@ -151,40 +146,3 @@ def _create_bytecode_segment_structure_inner(
         total_len += item_len
 
     return BytecodeSegmentedNode(segments=res), total_len
-
-
-def run_compiled_class_hash(
-    compiled_class: CompiledClass, visited_pcs: Optional[Sequence[int]] = None
-) -> CairoFunctionRunner:
-    program = load_compiled_class_cairo_program()
-    runner = CairoFunctionRunner(program=program)
-
-    bytecode_segment_structure = create_bytecode_segment_structure(
-        bytecode=compiled_class.bytecode,
-        bytecode_segment_lengths=compiled_class.bytecode_segment_lengths,
-    )
-
-    compiled_class_struct = get_compiled_class_struct(
-        identifiers=program.identifiers,
-        compiled_class=compiled_class,
-        bytecode=compiled_class.bytecode,
-    )
-    visited_pcs_set = (
-        set(visited_pcs) if visited_pcs is not None else set(range(len(compiled_class.bytecode)))
-    )
-    bytecode_segment_access_oracle = BytecodeAccessOracle(
-        is_pc_accessed_callback=lambda pc: pc.offset in visited_pcs_set
-    )
-    runner.run(
-        "starkware.starknet.core.os.contract_class.compiled_class.compiled_class_hash",
-        range_check_ptr=runner.range_check_builtin.base,
-        poseidon_ptr=runner.poseidon_builtin.base,
-        compiled_class=compiled_class_struct,
-        use_full_name=True,
-        verify_secure=False,
-        hint_locals={
-            "bytecode_segment_structure": bytecode_segment_structure,
-            "is_segment_used_callback": bytecode_segment_access_oracle.is_segment_used,
-        },
-    )
-    return runner

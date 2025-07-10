@@ -2,7 +2,6 @@ from starkware.cairo.bootloaders.bootloader.constants import BOOTLOADER_CONFIG_S
 from starkware.cairo.bootloaders.simple_bootloader.run_simple_bootloader import (
     run_simple_bootloader,
 )
-from starkware.cairo.cairo_verifier.objects import CairoVerifierOutput
 from starkware.cairo.common.builtin_poseidon.poseidon import poseidon_hash_many
 from starkware.cairo.common.cairo_builtins import HashBuiltin, PoseidonBuiltin
 from starkware.cairo.common.find_element import find_element
@@ -10,8 +9,10 @@ from starkware.cairo.common.hash_state import hash_felts
 from starkware.cairo.common.memcpy import memcpy
 
 struct BootloaderConfig {
-    // The hash of the simple bootloader program.
-    simple_bootloader_program_hash: felt,
+    // The supported hashes of the simple bootloader program. Currently, we hash it using either
+    // the poseidon or blake hash function in our verifiers.
+    supported_simple_bootloader_hash_list_len: felt,
+    supported_simple_bootloader_hash_list: felt*,
     // The hashes of the supported (Cairo) programs that verify a STARK proof for the Cairo machine.
     supported_cairo_verifier_program_hashes_len: felt,
     supported_cairo_verifier_program_hashes: felt*,
@@ -110,7 +111,8 @@ func run_bootloader{
 
         ids.bootloader_config = segments.gen_arg(
             [
-                bootloader_config.simple_bootloader_program_hash,
+                len(bootloader_config.supported_simple_bootloader_hash_list),
+                bootloader_config.supported_simple_bootloader_hash_list,
                 len(bootloader_config.supported_cairo_verifier_program_hashes),
                 bootloader_config.supported_cairo_verifier_program_hashes,
                 bootloader_config.applicative_bootloader_program_hash,
@@ -232,7 +234,12 @@ func serialize_bootloader_config{output_ptr: felt*, pedersen_ptr: HashBuiltin*}(
     bootloader_config: BootloaderConfig*
 ) {
     static_assert BOOTLOADER_CONFIG_SIZE == 3;
-    assert [output_ptr] = bootloader_config.simple_bootloader_program_hash;
+    // Compute the hash of the supported simple bootloader hash list.
+    let (supported_simple_bootloader_hash_list_hash) = hash_felts{hash_ptr=pedersen_ptr}(
+        data=bootloader_config.supported_simple_bootloader_hash_list,
+        length=bootloader_config.supported_simple_bootloader_hash_list_len,
+    );
+    assert [output_ptr] = supported_simple_bootloader_hash_list_hash;
     assert [output_ptr + 1] = bootloader_config.applicative_bootloader_program_hash;
 
     // Compute the hash of the supported Cairo verifiers.
@@ -279,23 +286,25 @@ func unpack_composite_packed_task{
 }(bootloader_config: BootloaderConfig*, bootloader_config_output_start: felt*) {
     ap += SIZEOF_LOCALS;
 
-    // Guess the pre-image of subtasks_output_hash (subtasks_output_hash appears in task_output).
+    // Guess the output of the composite packed task.
     local nested_subtasks_output: felt*;
     local nested_subtasks_output_len;
+    // Note that in the hint below we use `elements_for_hash`, but no loner hash them. The name
+    // comes from a legacy flow, which we no longer follow.
     %{
         data = packed_output.elements_for_hash()
         ids.nested_subtasks_output_len = len(data)
         ids.nested_subtasks_output = segments.gen_arg(data)
     %}
 
-    // Compute the hash of nested_subtasks_output.
-    let (subtasks_output_hash: felt) = poseidon_hash_many(
-        n=nested_subtasks_output_len, elements=nested_subtasks_output
-    );
-
-    // Verify task output header.
+    // Verify task output header. The output of the simple bootloader when running a verifier
+    // program follows the following format:
+    // [size, verifier_hash, verified_program_hash, output_size, *output],
+    // where [verified_program_hash, output_size, *output] is the output of the verifier program.
+    // We currently only verify runs of the simple bootloader, and so the above becomes:
+    // [size, verifier_hash, simple_bootloader_hash, output_size,  *output].
     let (task_header: TaskOutputHeader*) = parse_task_header();
-    assert task_header.size = TaskOutputHeader.SIZE + CairoVerifierOutput.SIZE;
+    assert task_header.size - 4 = nested_subtasks_output_len;
 
     // Make sure the program hash is one of the supported verifier program hashes.
     find_element(
@@ -304,13 +313,21 @@ func unpack_composite_packed_task{
         n_elms=bootloader_config.supported_cairo_verifier_program_hashes_len,
         key=task_header.program_hash,
     );
+    local range_check_ptr = range_check_ptr;
 
-    // Verify task output.
-    assert [cast(task_output, CairoVerifierOutput*)] = CairoVerifierOutput(
-        program_hash=bootloader_config.simple_bootloader_program_hash,
-        output_hash=subtasks_output_hash,
+    // Make sure the program hash of the task is one of the supported simple bootloader hashes.
+    find_element(
+        array_ptr=bootloader_config.supported_simple_bootloader_hash_list,
+        elm_size=1,
+        n_elms=bootloader_config.supported_simple_bootloader_hash_list_len,
+        key=task_output[0],
     );
-    local task_output: felt* = task_output + CairoVerifierOutput.SIZE;
+    local range_check_ptr = range_check_ptr;
+    local task_output: felt* = task_output + 1;
+    assert task_output[0] = nested_subtasks_output_len;
+    // Verify task output.
+    memcpy(dst=task_output + 1, src=nested_subtasks_output, len=nested_subtasks_output_len);
+    local task_output: felt* = task_output + 1 + nested_subtasks_output_len;
 
     // Call recursively to parse the composite task's subtasks.
     local nested_subtasks_output_start: felt* = nested_subtasks_output;

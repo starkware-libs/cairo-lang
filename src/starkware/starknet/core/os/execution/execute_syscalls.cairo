@@ -490,6 +490,26 @@ func execute_syscalls{
     );
 }
 
+// Returns a failure response with a single felt.
+@known_ap_change
+func write_failure_response{syscall_ptr: felt*}(remaining_gas: felt, failure_felt: felt) {
+    let response_header = cast(syscall_ptr, ResponseHeader*);
+    let syscall_ptr = syscall_ptr + ResponseHeader.SIZE;
+
+    // Write the response header.
+    assert [response_header] = ResponseHeader(gas=remaining_gas, failure_flag=1);
+
+    let failure_reason: FailureReason* = cast(syscall_ptr, FailureReason*);
+    // Advance syscall pointer to the next syscall.
+    let syscall_ptr = syscall_ptr + FailureReason.SIZE;
+
+    // Write the failure reason.
+    tempvar start = failure_reason.start;
+    assert start[0] = failure_felt;
+    assert failure_reason.end = start + 1;
+    return ();
+}
+
 // Executes a syscall that calls another contract.
 func execute_call_contract{
     range_check_ptr,
@@ -506,6 +526,10 @@ func execute_call_contract{
     );
     if (success == FALSE) {
         // Not enough gas to execute the syscall.
+        return ();
+    }
+    if (request.selector == EXECUTE_ENTRY_POINT_SELECTOR) {
+        write_failure_response(remaining_gas=remaining_gas, failure_felt=ERROR_INVALID_ARGUMENT);
         return ();
     }
 
@@ -1732,26 +1756,6 @@ func reduce_syscall_gas_and_write_response_header{range_check_ptr, syscall_ptr: 
     // Reduction has failed; in that case, 'reduce_syscall_base_gas' already wrote the response
     // objects and advanced the syscall pointer.
     return 0;
-}
-
-// Returns a failure response with a single felt.
-@known_ap_change
-func write_failure_response{syscall_ptr: felt*}(remaining_gas: felt, failure_felt: felt) {
-    let response_header = cast(syscall_ptr, ResponseHeader*);
-    let syscall_ptr = syscall_ptr + ResponseHeader.SIZE;
-
-    // Write the response header.
-    assert [response_header] = ResponseHeader(gas=remaining_gas, failure_flag=1);
-
-    let failure_reason: FailureReason* = cast(syscall_ptr, FailureReason*);
-    // Advance syscall pointer to the next syscall.
-    let syscall_ptr = syscall_ptr + FailureReason.SIZE;
-
-    // Write the failure reason.
-    tempvar start = failure_reason.start;
-    assert start[0] = failure_felt;
-    assert failure_reason.end = start + 1;
-    return ();
 }
 
 // Reduces the base amount of gas for the current syscall.

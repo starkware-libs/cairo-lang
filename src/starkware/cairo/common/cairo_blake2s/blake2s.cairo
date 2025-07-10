@@ -731,8 +731,8 @@ func blake_with_opcode{range_check_ptr}(len: felt, data: felt*, out: felt*) {
 
 // Given `data_len` felt252s at `data`, encodes them as u32s as defined in `encode_felt252_to_u32s`
 // and computes the blake2s hash of the result using the dedicated opcodes.
-// The result is then returned as a 224-bit felt, ignoring the last 32 bits.
-func encode_felt252_data_and_calc_224_bit_blake_hash{range_check_ptr: felt}(
+// The 256 bit result is then returned as a felt252 (i.e. modulo PRIME).
+func encode_felt252_data_and_calc_blake_hash{range_check_ptr: felt}(
     data_len: felt, data: felt*
 ) -> (hash: felt) {
     alloc_locals;
@@ -743,8 +743,8 @@ func encode_felt252_data_and_calc_224_bit_blake_hash{range_check_ptr: felt}(
     let (local blake_output: felt*) = alloc();
     blake_with_opcode(len=encoded_data_len, data=encoded_data, out=blake_output);
     return (
-        hash=blake_output[6] * 2 ** 192 + blake_output[5] * 2 ** 160 + blake_output[4] * 2 ** 128 +
-        blake_output[3] * 2 ** 96 + blake_output[2] * 2 ** 64 + blake_output[1] * 2 ** 32 +
-        blake_output[0],
+        hash=blake_output[7] * 2 ** 224 + blake_output[6] * 2 ** 192 + blake_output[5] * 2 ** 160 +
+        blake_output[4] * 2 ** 128 + blake_output[3] * 2 ** 96 + blake_output[2] * 2 ** 64 +
+        blake_output[1] * 2 ** 32 + blake_output[0],
     );
 }

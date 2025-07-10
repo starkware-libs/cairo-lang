@@ -3,6 +3,8 @@ from typing import List, Tuple
 from starkware.cairo.lang.vm.memory_segments import MemorySegmentManager
 from starkware.cairo.lang.vm.relocatable import RelocatableValue
 
+PRIME = 2**251 + 17 * 2**192 + 1
+
 IV = [
     0x6A09E667,
     0xBB67AE85,
@@ -108,3 +110,75 @@ def mix(a: int, b: int, c: int, d: int, m0: int, m1: int) -> Tuple[int, int, int
     b = right_rot((b ^ c), 7)
 
     return a, b, c, d
+
+
+def blake_state_into_felt(state: List[int], prime: int = PRIME) -> int:
+    digest_int = 0
+    for idx, word in enumerate(state):
+        digest_int |= (word & 0xFFFFFFFF) << (32 * idx)
+
+    return digest_int % prime
+
+
+def calculate_blake2s_hash_from_felt252s(
+    data: List[int], encode: bool, little_endian: bool, prime: int = PRIME
+) -> int:
+    """
+    Converts a list of Felt252s to the BLAKE2s input format and returns the BLAKE2s hash as
+    a single Felt252 (combining the final state words into a 256 bit number and taking it
+    modulo prime).
+
+    • Each field element in `data` is reduced mod `prime`.
+    • When `encode` is True, values < 2**63 are encoded in 2 32-bit words;
+      otherwise they are encoded in 8 words with the 255-bit flag set.
+      If `encode` is False, the 255-bit flag is not set, and all values are
+      taken as 8 words.
+    • When `little_endian` is True, the input is treated as little-endian.
+    • The data stream is fed into `blake2s_compress` in 64-byte blocks (16 words).
+    • `t0` is the running byte counter; `t1 = 0`, `f1 = 0`.
+    • The final block is padded with zeros and flagged by `f0 = 0xffffffff`.
+    """
+    POW2_63 = 1 << 63
+    POW2_255 = 1 << 255
+
+    words: List[int] = []
+    for felt in data:
+        val = felt % prime
+        word_cnt = 2 if encode and val < POW2_63 else 8
+        if encode and word_cnt == 8:
+            val += POW2_255  # Set the 255-bit flag.
+        shifts = range(0, 32 * word_cnt, 32)
+        if not little_endian:
+            shifts = reversed(shifts)
+        for shift in shifts:
+            words.append((val >> shift) & 0xFFFFFFFF)
+
+    state: List[int] = [
+        0x6B08E647,
+        0xBB67AE85,
+        0x3C6EF372,
+        0xA54FF53A,
+        0x510E527F,
+        0x9B05688C,
+        0x1F83D9AB,
+        0x5BE0CD19,
+    ]
+    total_bytes = len(words) * 4
+    bytes_seen = 0
+
+    for i in range(0, len(words), 16):
+        block = words[i : i + 16]
+        if len(block) < 16:
+            block += [0] * (16 - len(block))
+        bytes_seen += min(64, total_bytes - bytes_seen)
+        f0 = 0xFFFFFFFF if bytes_seen == total_bytes else 0
+        state = blake2s_compress(
+            h=state,
+            message=block,
+            t0=bytes_seen,
+            t1=0,
+            f0=f0,
+            f1=0,
+        )
+
+    return blake_state_into_felt(state=state, prime=prime)

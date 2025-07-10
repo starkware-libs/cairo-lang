@@ -220,12 +220,12 @@ class InternalDeclare(InternalAccountTransaction):
         version: int = constants.TRANSACTION_VERSION,
         signature: Optional[List[int]] = None,
         nonce: int = 0,
+        chain_id: int = 0,
         nonce_data_availability_mode: int = DataAvailabilityMode.L1.value,
         fee_data_availability_mode: int = DataAvailabilityMode.L1.value,
         tip: int = 0,
         paymaster_data: Optional[List[int]] = None,
         account_deployment_data: Optional[List[int]] = None,
-        chain_id: int = 0,
     ) -> "InternalDeclare":
         """
         Creates a declare transaction and writes its contract class to the DB.

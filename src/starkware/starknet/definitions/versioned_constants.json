@@ -25,6 +25,7 @@
             1
         ]
     },
+    "block_direct_execute_call": true,
     "comprehensive_state_diff": true,
     "deprecated_l2_resource_gas_costs": {
         "event_key_factor": [
@@ -98,7 +99,7 @@
         "l1_handler_max_amount_bounds": {
             "l1_data_gas": 20000,
             "l1_gas": 40000,
-            "l2_gas": 1000000
+            "l2_gas": 100000000
         },
         "l1_handler_version": 0,
         "l2_gas": "L2_GAS",

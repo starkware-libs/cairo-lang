@@ -1,8 +1,11 @@
+load("//src/starkware/starknet/compiler/fixed_version_compiler:compile_in_fixed_venv.bzl", "cairo_compile_os_fixed_version")
 load("//bazel_utils/python:defs.bzl", "requirement")
-load("//src/starkware/cairo/lang:cairo_rules.bzl", "cairo_binary")
+load("//src/starkware/cairo/lang:cairo_rules.bzl", "cairo_library")
 load("//bazel_utils:python.bzl", "pytest_test")
 
 package(default_visibility = ["//visibility:public"])
+
+exports_files(["program_hash.json"])
 
 py_library(
     name = "cairo_aggregator_lib",
@@ -19,25 +22,32 @@ py_library(
     ],
 )
 
-cairo_binary(
-    name = "aggregator",
+cairo_library(
+    name = "aggregator_cairo_lib",
     srcs = [
         "combine_blocks.cairo",
         "main.cairo",
     ],
-    cairoopts = [
-        "--debug_info_with_source",
-    ],
-    compiled_program_name = "aggregator.json",
     hint_deps = [
         "//src/starkware/starknet/core/os:kzg_manager_lib",
     ],
-    main = "main.cairo",
+    visibility = ["//visibility:public"],
     deps = [
         "//src/starkware/starknet/core/os:output",
         "//src/starkware/starknet/core/os/data_availability:bls_field",
         "//src/starkware/starknet/core/os/state:starknet_os_state_lib",
     ],
+)
+
+cairo_compile_os_fixed_version(
+    name = "aggregator",
+    cairo_lang_version = "0.14.0a1",
+    cairoopts = [
+        "--debug_info_with_source",
+    ],
+    compiled_program_name = "aggregator.json",
+    main = "main.cairo",
+    deps = [":aggregator_cairo_lib"],
 )
 
 pytest_test(
@@ -90,6 +100,7 @@ pytest_test(
         ":aggregator",
     ],
     deps = [
+        ":cairo_aggregator_lib",
         "//src/starkware/cairo/bootloaders:aggregator_utils",
         "//src/starkware/cairo/bootloaders:program_hash_test_utils_lib",
         "//src/starkware/python:starkware_python_utils_lib",

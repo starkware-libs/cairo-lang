@@ -1,6 +1,5 @@
 load("//src/starkware/cairo/lang:cairo_rules.bzl", "cairo_binary", "cairo_library")
 load("//bazel_utils/python:defs.bzl", "requirement")
-load("//bazel_utils:python.bzl", "pytest_test")
 
 cairo_library(
     name = "starknet_builtins_cairo_lib",
@@ -73,6 +72,7 @@ cairo_library(
     hint_deps = [
         "//src/starkware/python:starkware_python_utils_lib",
         "//src/starkware/starknet/business_logic/transaction:starknet_transaction_deprecated_objects_lib",
+        "//src/starkware/starknet/core/os/contract_class:starknet_os_abi_cairo_py_hints_lib",
         "//src/starkware/starknet/core/os/transaction_hash:transaction_hash",
     ],
     visibility = ["//visibility:public"],
@@ -122,16 +122,6 @@ cairo_binary(
     deps = [":starknet_new_syscalls_cairo_lib"],
 )
 
-cairo_binary(
-    name = "starknet_os_program",
-    cairoopts = [
-        "--debug_info_with_source",
-    ],
-    compiled_program_name = "starknet_os_compiled.json",
-    main = "os.cairo",
-    deps = [":starknet_os_program_cairo_lib"],
-)
-
 py_library(
     name = "starknet_os_utils_lib",
     srcs = [
@@ -144,14 +134,17 @@ py_library(
         ":starknet_deprecated_bl_syscall_handler_lib",
         "//src/starkware/cairo/common:cairo_function_runner_lib",
         "//src/starkware/cairo/lang/vm:cairo_relocatable_lib",
+        "//src/starkware/cairo/lang/vm:cairo_run_lib",
         "//src/starkware/cairo/lang/vm:cairo_vm_lib",
         "//src/starkware/python:starkware_python_utils_lib",
         "//src/starkware/starknet/business_logic/fact_state:starknet_business_logic_patricia_state_lib",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
         "//src/starkware/starknet/public:starknet_abi_lib",
         "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",
+        "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
         "//src/starkware/starkware_utils:starkware_error_handling_lib",
         "//src/starkware/storage:starkware_abstract_storage_lib",
+        requirement("marshmallow_dataclass"),
     ],
 )
 
@@ -181,22 +174,6 @@ py_library(
         "kzg_manager.py",
     ],
     visibility = ["//visibility:public"],
-)
-
-py_library(
-    name = "starknet_os_program_py_lib",
-    srcs = [
-        "os_program.py",
-    ],
-    data = [
-        ":starknet_os_program",
-    ],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//src/starkware/cairo/bootloaders:cairo_hash_program_lib",
-        "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
-        requirement("cachetools"),
-    ],
 )
 
 py_library(
@@ -364,22 +341,6 @@ py_library(
 package(default_visibility = ["//visibility:public"])
 
 exports_files(["program_hash.json"])
-
-pytest_test(
-    name = "starknet_os_program_hash_test",
-    srcs = [
-        "program_hash_test.py",
-    ],
-    data = [
-        "program_hash.json",
-        ":starknet_os_program",
-    ],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//src/starkware/cairo/bootloaders:program_hash_test_utils_lib",
-        "//src/starkware/python:starkware_python_utils_lib",
-    ],
-)
 
 py_library(
     name = "starknet_os_lib",

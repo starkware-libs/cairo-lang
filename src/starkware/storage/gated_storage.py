@@ -30,19 +30,13 @@ class GatedStorage(Storage):
 
     async def _compress_value(self, key: bytes, value: bytes) -> Tuple[bytes, bytes]:
         """
-        In case that the length of the key + the length of the value is greater than the limit,
-        stores the value in the second storage, with a unique key and returns the new value that
-        will be stored to the first storage which indicates that the original value is stored in
-        storage1.
-        """
-        if value[: len(MAGIC_HEADER)] != MAGIC_HEADER:
-            # If the value starts with MAGIC_HEADER, treat the value as a large value; Hence, it
-            # will be stored in the second storage.
+        If compression is needed, store the value in the large storage and compress it by replacing
+        it with the MAGIC_HEADER and the reference to the large storage.
 
-            # RECORD_LENGTH_BUFFER is added to the calculation in order to avoid edge cases where
-            # record metadata causes it to exceed the maximum allowed length.
-            if len(key) + len(value) + RECORD_LENGTH_BUFFER <= self.limit:
-                return key, value
+        Returns the key-value pair to be stored in storage0.
+        """
+        if not should_compress(self.limit, key=key, value=value):
+            return key, value
 
         ukey = self._generate_unique_key(key)
         await self.storage1.set_value(key=ukey, value=value)
@@ -99,3 +93,24 @@ class DeterministicGatedStorage(GatedStorage):
 
     def _generate_unique_key(self, key: bytes) -> bytes:
         return "type=det-gated/".encode("ascii") + key
+
+
+def is_forced_large_storage(key: bytes, value: bytes) -> bool:
+    """
+    Returns True if the value is explicitly marked for large storage by being prefixed with
+    MAGIC_HEADER, regardless of its size.
+    """
+    return value[: len(MAGIC_HEADER)] == MAGIC_HEADER
+
+
+def should_compress(limit: int, key: bytes, value: bytes) -> bool:
+    """
+    Determines whether to compress the value based on the size of the key, the value and the
+    buffer.
+    """
+    return (
+        is_forced_large_storage(key=key, value=value)
+        # RECORD_LENGTH_BUFFER is added to the calculation in order to avoid edge cases where
+        # record metadata causes it to exceed the maximum allowed length.
+        or len(value) + len(key) + RECORD_LENGTH_BUFFER > limit
+    )

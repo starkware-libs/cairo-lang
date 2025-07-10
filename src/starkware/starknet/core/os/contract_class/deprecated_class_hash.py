@@ -1,41 +1,19 @@
 import dataclasses
-import itertools
 import json
-import os
-from functools import lru_cache
-from typing import Callable, List
+from typing import Callable, Dict, List
 
-from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
-from starkware.cairo.common.structs import CairoStructFactory, CairoStructProxy
-from starkware.cairo.lang.builtins.hash.hash_builtin_runner import HashBuiltinRunner
-from starkware.cairo.lang.cairo_constants import DEFAULT_PRIME
+from starkware.cairo.common.hash_state import HashState
+from starkware.cairo.common.structs import CairoStructProxy
 from starkware.cairo.lang.compiler.ast.cairo_types import add_backward_compatibility_space
-from starkware.cairo.lang.compiler.cairo_compile import compile_cairo_files
-from starkware.cairo.lang.compiler.identifier_definition import ConstDefinition
-from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
-from starkware.cairo.lang.compiler.program import Program
-from starkware.cairo.lang.compiler.scoped_name import ScopedName
 from starkware.cairo.lang.vm.crypto import pedersen_hash
 from starkware.python.utils import from_bytes
 from starkware.starknet.core.os.contract_class.utils import ClassHashType, class_hash_cache_ctx_var
 from starkware.starknet.public.abi import starknet_keccak
 from starkware.starknet.services.api.contract_class.contract_class import (
+    CompiledClassEntryPoint,
     DeprecatedCompiledClass,
     EntryPointType,
 )
-
-CAIRO_FILE = os.path.join(os.path.dirname(__file__), "deprecated_compiled_class.cairo")
-
-
-@lru_cache()
-def load_program() -> Program:
-    return compile_cairo_files(
-        [CAIRO_FILE],
-        prime=DEFAULT_PRIME,
-        main_scope=ScopedName.from_string(
-            "starkware.starknet.core.os.contract_class.deprecated_compiled_class"
-        ),
-    )
 
 
 def compute_deprecated_class_hash(
@@ -64,28 +42,26 @@ def compute_deprecated_class_hash(
 def compute_deprecated_class_hash_inner(
     contract_class: DeprecatedCompiledClass, hash_func: Callable[[int, int], int]
 ) -> int:
-    program = load_program()
-    compiled_class_struct = get_deprecated_contract_class_struct(
-        identifiers=program.identifiers, contract_class=contract_class
+    deprecated_compiled_class_version = 0
+    flat_entry_point_lists = py_get_flat_entry_points(contract_class=contract_class)
+    external_entry_points, l1_handlers, ctor_entry_points = (
+        flat_entry_point_lists[EntryPointType.EXTERNAL],
+        flat_entry_point_lists[EntryPointType.L1_HANDLER],
+        flat_entry_point_lists[EntryPointType.CONSTRUCTOR],
     )
-    runner = CairoFunctionRunner(program)
+    builtins = get_builtins_as_integers(contract_class=contract_class)
+    hinted_class_hash = compute_deprecated_hinted_class_hash(contract_class=contract_class)
+    bytecode = contract_class.program.data
 
-    hash_builtin = HashBuiltinRunner(
-        name="custom_hasher", included=True, ratio=32, hash_func=hash_func
-    )
-    runner.builtin_runners["hash_builtin"] = hash_builtin
-    hash_builtin.initialize_segments(runner)
-
-    runner.run(
-        "starkware.starknet.core.os.contract_class.deprecated_compiled_class."
-        + "deprecated_compiled_class_hash",
-        hash_ptr=hash_builtin.base,
-        compiled_class=compiled_class_struct,
-        use_full_name=True,
-        verify_secure=False,
-    )
-    _, class_hash = runner.get_return_values(2)
-    return class_hash
+    hash_state = HashState.init(hash_func=hash_func)
+    hash_state.update_single(value=deprecated_compiled_class_version)
+    hash_state.update_with_hashchain(values=external_entry_points)
+    hash_state.update_with_hashchain(values=l1_handlers)
+    hash_state.update_with_hashchain(values=ctor_entry_points)
+    hash_state.update_with_hashchain(values=builtins)
+    hash_state.update_single(value=hinted_class_hash)
+    hash_state.update_with_hashchain(values=bytecode)
+    return hash_state.finalize()
 
 
 def compute_deprecated_hinted_class_hash(contract_class: DeprecatedCompiledClass) -> int:
@@ -116,11 +92,14 @@ def compute_deprecated_hinted_class_hash(contract_class: DeprecatedCompiledClass
     return starknet_keccak(data=json.dumps(input_to_hash, sort_keys=True).encode())
 
 
-def get_contract_entry_points(
-    structs: CairoStructProxy,
+def get_builtins_as_integers(contract_class: DeprecatedCompiledClass) -> List[int]:
+    return [from_bytes(builtin.encode("ascii")) for builtin in contract_class.program.builtins]
+
+
+def py_get_contract_entry_points(
     contract_class: DeprecatedCompiledClass,
     entry_point_type: EntryPointType,
-) -> List[CairoStructProxy]:
+) -> List[CompiledClassEntryPoint]:
     # Check validity of entry points.
     program_length = len(contract_class.program.data)
     entry_points = contract_class.entry_points_by_type[entry_point_type]
@@ -128,38 +107,14 @@ def get_contract_entry_points(
         assert (
             0 <= entry_point.offset < program_length
         ), f"Invalid entry point offset {entry_point.offset}, len(program_data)={program_length}."
-
-    return [
-        structs.DeprecatedContractEntryPoint(
-            selector=entry_point.selector, offset=entry_point.offset
-        )
-        for entry_point in entry_points
-    ]
+    return entry_points
 
 
-def get_deprecated_contract_class_struct(
-    identifiers: IdentifierManager, contract_class: DeprecatedCompiledClass
-) -> CairoStructProxy:
-    """
-    Returns the serialization of a contract as a list of field elements.
-    """
-    path = "starkware.starknet.core.os.contract_class.deprecated_compiled_class"
-    structs = CairoStructFactory(
-        identifiers=identifiers,
-        additional_imports=[
-            f"{path}.DeprecatedCompiledClass",
-            f"{path}.DeprecatedContractEntryPoint",
-        ],
-    ).structs
-
-    DEPRECATED_COMPILED_CLASS_VERSION_IDENT = identifiers.get_by_full_name(
-        ScopedName.from_string(f"{path}.DEPRECATED_COMPILED_CLASS_VERSION")
-    )
-    assert isinstance(DEPRECATED_COMPILED_CLASS_VERSION_IDENT, ConstDefinition)
-
+def py_get_flat_entry_points(
+    contract_class: DeprecatedCompiledClass,
+) -> Dict[EntryPointType, List[int]]:
     external_functions, l1_handlers, constructors = (
-        get_contract_entry_points(
-            structs=structs,
+        py_get_contract_entry_points(
             contract_class=contract_class,
             entry_point_type=entry_point_type,
         )
@@ -170,22 +125,28 @@ def get_deprecated_contract_class_struct(
         )
     )
     flat_external_functions, flat_l1_handlers, flat_constructors = (
-        list(itertools.chain.from_iterable(entry_points))
+        [x for entry_point in entry_points for x in (entry_point.selector, entry_point.offset)]
         for entry_points in (external_functions, l1_handlers, constructors)
     )
+    return {
+        EntryPointType.EXTERNAL: flat_external_functions,
+        EntryPointType.L1_HANDLER: flat_l1_handlers,
+        EntryPointType.CONSTRUCTOR: flat_constructors,
+    }
 
-    builtin_list = contract_class.program.builtins
-    return structs.DeprecatedCompiledClass(
-        compiled_class_version=DEPRECATED_COMPILED_CLASS_VERSION_IDENT.value,
-        n_external_functions=len(external_functions),
-        external_functions=flat_external_functions,
-        n_l1_handlers=len(l1_handlers),
-        l1_handlers=flat_l1_handlers,
-        n_constructors=len(constructors),
-        constructors=flat_constructors,
-        n_builtins=len(builtin_list),
-        builtin_list=[from_bytes(builtin.encode("ascii")) for builtin in builtin_list],
-        hinted_class_hash=compute_deprecated_hinted_class_hash(contract_class=contract_class),
-        bytecode_length=len(contract_class.program.data),
-        bytecode_ptr=contract_class.program.data,
+
+def get_contract_entry_points(
+    structs: CairoStructProxy,
+    contract_class: DeprecatedCompiledClass,
+    entry_point_type: EntryPointType,
+) -> List[CairoStructProxy]:
+    entry_points = py_get_contract_entry_points(
+        contract_class=contract_class, entry_point_type=entry_point_type
     )
+
+    return [
+        structs.DeprecatedContractEntryPoint(
+            selector=entry_point.selector, offset=entry_point.offset
+        )
+        for entry_point in entry_points
+    ]

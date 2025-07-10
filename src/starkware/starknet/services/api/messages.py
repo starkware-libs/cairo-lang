@@ -69,12 +69,16 @@ class StarknetMessageToL2(StarknetMessage):
     def get_hash(self) -> str:
         return keccak_ints(values=self.encode())
 
-    @staticmethod
-    def get_message_hash_from_tx(tx: InternalL1Handler) -> str:
-        return StarknetMessageToL2(
+    @classmethod
+    def from_internal_l1_handler(cls, tx: InternalL1Handler) -> "StarknetMessageToL2":
+        return cls(
             from_address=tx.calldata[0],
             to_address=tx.contract_address,
             l1_handler_selector=tx.entry_point_selector,
             payload=tx.calldata[1:],
             nonce=as_non_optional(tx.nonce),
-        ).get_hash()
+        )
+
+    @classmethod
+    def get_message_hash_from_tx(cls, tx: InternalL1Handler) -> str:
+        return cls.from_internal_l1_handler(tx=tx).get_hash()

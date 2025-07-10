@@ -157,7 +157,7 @@ func deprecated_load_compiled_class_facts{pedersen_ptr: HashBuiltin*, range_chec
         __deprecated_class_hashes=set(os_input.deprecated_compiled_classes.keys())
         ids.n_compiled_class_facts = len(os_input.deprecated_compiled_classes)
         vm_enter_scope({
-            'compiled_class_facts': iter(os_input.deprecated_compiled_classes.items()),
+            'compiled_class_facts': iter(sorted(os_input.deprecated_compiled_classes.items())),
         })
     %}
 
@@ -186,7 +186,7 @@ func deprecated_load_compiled_class_facts_inner{pedersen_ptr: HashBuiltin*, rang
 
     // Fetch contract data form hints.
     %{
-        from starkware.starknet.core.os.contract_class.deprecated_class_hash import (
+        from starkware.starknet.core.os.contract_class.deprecated_class_hash_cairo_utils import (
             get_deprecated_contract_class_struct,
         )
 

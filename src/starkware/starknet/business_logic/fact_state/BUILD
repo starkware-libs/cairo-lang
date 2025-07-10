@@ -40,6 +40,7 @@ py_library(
         "//src/starkware/python:starkware_python_utils_lib",
         "//src/starkware/starknet/business_logic/state:starknet_business_logic_state_lib",
         "//src/starkware/starknet/core/os/contract_class:starknet_os_abi_lib",
+        "//src/starkware/starknet/core/os/contract_class:starknet_os_compiled_class_hash_lib",
         "//src/starkware/starknet/definitions:starknet_definitions_lib",
         "//src/starkware/starknet/services/api/contract_class:starknet_contract_class_lib",
         "//src/starkware/starknet/storage:starknet_storage_lib",

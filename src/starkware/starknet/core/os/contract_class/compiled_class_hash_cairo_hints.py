@@ -1,5 +1,4 @@
 import itertools
-import os
 from functools import lru_cache
 from typing import List
 
@@ -10,13 +9,15 @@ from starkware.cairo.lang.compiler.identifier_definition import ConstDefinition
 from starkware.cairo.lang.compiler.identifier_manager import IdentifierManager
 from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.compiler.scoped_name import ScopedName
-from starkware.python.utils import as_non_optional, from_bytes
+from starkware.python.utils import as_non_optional, from_bytes, get_build_dir_path
 from starkware.starknet.services.api.contract_class.contract_class import (
     CompiledClass,
     EntryPointType,
 )
 
-CAIRO_FILE = os.path.join(os.path.dirname(__file__), "compiled_class.cairo")
+CAIRO_FILE = get_build_dir_path(
+    "src/starkware/starknet/core/os/contract_class/compiled_class.cairo"
+)
 COMPILED_CLASS_MODULE = "starkware.starknet.core.os.contract_class.compiled_class"
 
 

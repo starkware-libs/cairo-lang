@@ -1,5 +1,5 @@
 from starkware.cairo.common.alloc import alloc
-from starkware.cairo.common.bool import FALSE, TRUE
+from starkware.cairo.common.bool import FALSE
 from starkware.cairo.common.builtin_poseidon.poseidon import poseidon_hash_many
 from starkware.cairo.common.cairo_builtins import (
     BitwiseBuiltin,
@@ -524,7 +524,7 @@ func execute_invoke_function_transaction{
         execution_context=tx_execution_context
     );
 
-    if (nondet %{ execution_helper.tx_execution_info.is_reverted %} == 0) {
+    if (nondet %{ execution_helper.tx_execution_info.is_reverted %} == FALSE) {
         // Execute only non-reverted transactions.
         with remaining_gas {
             cap_remaining_gas(max_gas=EXECUTE_MAX_SIERRA_GAS);
@@ -565,6 +565,13 @@ func execute_l1_handler_transaction{
     outputs: OsCarriedOutputs*,
 }(block_context: BlockContext*) {
     alloc_locals;
+
+    %{ execution_helper.start_tx() %}
+    // Skip the execution step for reverted transaction.
+    if (nondet %{ execution_helper.tx_execution_info.is_reverted %} != FALSE) {
+        %{ execution_helper.end_tx() %}
+        return ();
+    }
 
     let (local tx_execution_context: ExecutionContext*) = get_invoke_tx_execution_context(
         block_context=block_context,
@@ -616,7 +623,6 @@ func execute_l1_handler_transaction{
 
     // Consume L1-to-L2 message.
     consume_l1_to_l2_message(execution_context=tx_execution_context, nonce=nonce);
-    %{ execution_helper.start_tx() %}
     let remaining_gas = L1_HANDLER_L2_GAS_MAX_AMOUNT;
     non_reverting_select_execute_entry_point_func{remaining_gas=remaining_gas}(
         block_context=block_context, execution_context=tx_execution_context

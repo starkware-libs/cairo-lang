@@ -56,6 +56,7 @@ pytest_test(
     data = [
         "starknet_common.cairo",
         "//src/starkware/starknet/common:starknet_common_cairo_lib",
+        "//src/starkware/starknet/core/os:starknet_new_syscalls_cairo_lib",
     ],
     visibility = ["//visibility:public"],
     deps = [

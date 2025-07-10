@@ -17,6 +17,16 @@ func assert_not_zero(value) {
     return ();
 }
 
+// Verifies that ptr != nullptr. The proof will fail otherwise.
+func assert_not_nullptr(ptr: felt*) {
+    if (ptr == 0) {
+        // If ptr == 0, add an unsatisfiable requirement.
+        ptr = 1;
+    }
+
+    return ();
+}
+
 // Verifies that a != b. The proof will fail otherwise.
 func assert_not_equal(a, b) {
     %{

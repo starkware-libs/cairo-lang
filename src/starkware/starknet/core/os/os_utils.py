@@ -1,10 +1,21 @@
 import dataclasses
+import os
+from dataclasses import field
 from typing import Dict, Iterable, List, Tuple
 
+import marshmallow_dataclass
+
 from starkware.cairo.common.cairo_function_runner import CairoFunctionRunner
+from starkware.cairo.lang.vm.cairo_runner import CairoRunner
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
-from starkware.python.utils import blockify, gather_in_chunks, safe_zip, to_bytes
+from starkware.python.utils import (
+    blockify,
+    gather_in_chunks,
+    get_source_dir_path,
+    safe_zip,
+    to_bytes,
+)
 from starkware.starknet.business_logic.fact_state.contract_class_objects import (
     CompiledClassFact,
     DeprecatedCompiledClassFact,
@@ -20,7 +31,15 @@ from starkware.starknet.services.api.contract_class.contract_class import (
     DeprecatedCompiledClass,
 )
 from starkware.starkware_utils.error_handling import wrap_with_stark_exception
+from starkware.starkware_utils.marshmallow_dataclass_fields import IntAsHex, additional_metadata
+from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
 from starkware.storage.storage import Storage
+
+OS_PROGRAM_HASH_RELATIVE_PATH = "src/starkware/starknet/core/os/program_hash.json"
+OS_PROGRAM_HASH_PATH = get_source_dir_path(
+    OS_PROGRAM_HASH_RELATIVE_PATH,
+    default_value=os.path.join(os.path.dirname(__file__), "program_hash.json"),
+)
 
 # KZG-related fields, outputted by the Starknet OS program.
 
@@ -32,6 +51,15 @@ PointEvaluation = Tuple[int, int]
 
 # 48bytes (as Uint384), split into low and high parts, each of 192 bits.
 KzgCommitment = Tuple[int, int]
+
+
+@marshmallow_dataclass.dataclass
+class RustProgramHashes(ValidatedMarshmallowDataclass):
+    os: int = field(metadata=additional_metadata(marshmallow_field=IntAsHex(required=True)))
+    aggregator: int = field(metadata=additional_metadata(marshmallow_field=IntAsHex(required=True)))
+    aggregator_with_prefix: int = field(
+        metadata=additional_metadata(marshmallow_field=IntAsHex(required=True))
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -174,7 +202,7 @@ def validate_and_process_os_implicit_args(
     syscall_handler.post_run(runner=runner, syscall_end_ptr=syscall_stop_ptr)
 
 
-def validate_builtins(runner: CairoFunctionRunner, builtins_end: MaybeRelocatable, n_builtins: int):
+def validate_builtins(runner: CairoRunner, builtins_end: MaybeRelocatable, n_builtins: int):
     stack_ptr = builtins_end
     for builtin in runner.program.builtins[::-1]:
         builtin_runner = runner.builtin_runners[f"{builtin}_builtin"]

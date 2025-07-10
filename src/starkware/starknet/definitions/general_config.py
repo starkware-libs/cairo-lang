@@ -35,6 +35,7 @@ MESSAGE_SEGMENT_LENGTH_NAME = "message_segment_length"
 GAS_WEIGHT_NAME = "gas_weight"
 SIERRA_GAS_NAME = "sierra_gas"
 N_TXS_NAME = "n_txs"
+PROVING_GAS_NAME = "proving_gas"
 
 STARKNET_LAYOUT_INSTANCE = dynamic_instance
 

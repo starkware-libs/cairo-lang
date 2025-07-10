@@ -37,12 +37,15 @@ def get_program_output(cairo_pie: CairoPie) -> List[int]:
 def get_cairo_pie_fact_info(
     cairo_pie: CairoPie,
     program_hash: Optional[int] = None,
+    program_output: Optional[List[int]] = None,
     aggregator: bool = False,
 ) -> FactInfo:
     """
     Generates the fact of the Cairo program of cairo_pie. Returns the cairo-pie fact info.
     """
-    program_output = get_program_output(cairo_pie=cairo_pie)
+    if program_output is None:
+        program_output = get_program_output(cairo_pie=cairo_pie)
+
     fact_topology = get_fact_topology_from_additional_data(
         output_size=len(program_output),
         output_builtin_additional_data=cairo_pie.additional_data["output_builtin"],

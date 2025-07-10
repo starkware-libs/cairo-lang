@@ -109,6 +109,7 @@ py_library(
         "poseidon_utils_lib",
         "//src/starkware/cairo/lang:cairo_constants_lib",
         "//src/starkware/cairo/lang/vm:cairo_vm_crypto_lib",
+        "//src/starkware/cairo/lang/vm:cairo_vm_lib",
         "//src/starkware/python:starkware_merkle_tree_lib",
         "//src/starkware/python:starkware_python_utils_lib",
     ] + CAIRO_COMMON_LIB_ADDITIONAL_LIBS,

@@ -340,13 +340,15 @@ func guess_compiled_class_facts{poseidon_ptr: PoseidonBuiltin*, range_check_ptr}
     %{
         from starkware.starknet.core.os.contract_class.compiled_class_hash import (
             create_bytecode_segment_structure,
+        )
+        from starkware.starknet.core.os.contract_class.compiled_class_hash_cairo_hints import (
             get_compiled_class_struct,
         )
 
         ids.n_compiled_class_facts = len(os_input.compiled_classes)
-        ids.compiled_class_facts = (compiled_class_facts_end := segments.add())
+        ids.compiled_class_facts = segments.add()
         for i, (compiled_class_hash, compiled_class) in enumerate(
-            os_input.compiled_classes.items()
+            sorted(os_input.compiled_classes.items())
         ):
             # Load the compiled class.
             cairo_contract = get_compiled_class_struct(
@@ -396,7 +398,7 @@ func validate_compiled_class_facts_post_execution{poseidon_ptr: PoseidonBuiltin*
             compiled_hash: create_bytecode_segment_structure(
                 bytecode=compiled_class.bytecode,
                 bytecode_segment_lengths=compiled_class.bytecode_segment_lengths,
-            ) for compiled_hash, compiled_class in os_input.compiled_classes.items()
+            ) for compiled_hash, compiled_class in sorted(os_input.compiled_classes.items())
         }
         bytecode_segment_access_oracle = BytecodeAccessOracle(is_pc_accessed_callback=is_accessed)
         vm_enter_scope({

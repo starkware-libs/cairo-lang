@@ -1,10 +1,18 @@
 import dataclasses
+import os
 from typing import Dict, List
 
 from starkware.cairo.lang.vm.memory_segments import MemorySegmentManager
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
 from starkware.python.math_utils import safe_div
+from starkware.python.utils import get_source_dir_path
 from starkware.starknet.core.aggregator.output_parser import OsOutput
+
+AGGREGATOR_PROGRAM_HASH_RELATIVE_PATH = "src/starkware/starknet/core/aggregator/program_hash.json"
+AGGREGATOR_PROGRAM_HASH_PATH = get_source_dir_path(
+    AGGREGATOR_PROGRAM_HASH_RELATIVE_PATH,
+    default_value=os.path.join(os.path.dirname(__file__), "program_hash.json"),
+)
 
 
 @dataclasses.dataclass

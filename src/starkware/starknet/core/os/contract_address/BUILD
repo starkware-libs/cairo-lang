@@ -13,6 +13,7 @@ py_library(
     data = [
         "contract_address.cairo",
         "//src/starkware/starknet/common:starknet_common_cairo_lib",
+        "//src/starkware/starknet/core/os:starknet_new_syscalls_cairo_lib",
     ],
     visibility = ["//visibility:public"],
     deps = [

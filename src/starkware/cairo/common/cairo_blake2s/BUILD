@@ -10,6 +10,7 @@ pytest_test(
     ],
     visibility = ["//visibility:public"],
     deps = [
+        ":blake2s_test_utils",
         "//src/starkware/cairo/common:cairo_common_lib",
         "//src/starkware/cairo/common:cairo_function_runner_lib",
         "//src/starkware/cairo/lang:cairo_constants_lib",
@@ -17,6 +18,14 @@ pytest_test(
         "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
         "//src/starkware/python:starkware_python_utils_lib",
     ],
+)
+
+py_library(
+    name = "blake2s_test_utils",
+    srcs = [
+        "blake2s_test_utils.py",
+    ],
+    visibility = ["//visibility:public"],
 )
 
 exports_files([
