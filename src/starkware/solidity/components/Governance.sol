@@ -40,7 +40,7 @@ abstract contract Governance is MGovernance {
         GovernanceInfoStruct storage gub = getGovernanceInfo();
         require(!gub.initialized, "ALREADY_INITIALIZED");
         gub.initialized = true; // to ensure acceptNewGovernor() won't fail.
-        // Add the initial governer.
+        // Add the initial governor.
         acceptNewGovernor(msg.sender);
     }
 
