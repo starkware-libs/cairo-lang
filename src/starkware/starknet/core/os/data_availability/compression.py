@@ -60,7 +60,7 @@ class UniqueValueBucket:
 class CompressionSet:
     """
     A utility class for compression.
-    Used to manage and store the unique values in seperate buckets according to their bit length.
+    Used to manage and store the unique values in separate buckets according to their bit length.
     """
 
     def __init__(self, n_bits_per_bucket: List[int]):

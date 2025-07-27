@@ -25,7 +25,7 @@ struct Header {
     // Total data length before compression.
     data_len: felt,
     unique_value_bucket_lengths: UniqueValueBucketLengths,
-    // Number of elements in the special bucket that holds pointers of repeating vaules.
+    // Number of elements in the special bucket that holds pointers of repeating values.
     n_repeating_values: felt,
 }
 

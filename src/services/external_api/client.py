@@ -80,7 +80,7 @@ class BadRequest(Exception):
         self.text = text
 
     def __repr__(self) -> str:
-        return f"HTTP error ocurred. Status: {self.status_code}. Text: {self.text}"
+        return f"HTTP error occurred. Status: {self.status_code}. Text: {self.text}"
 
     def __str__(self) -> str:
         """
