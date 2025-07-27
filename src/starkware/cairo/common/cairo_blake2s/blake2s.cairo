@@ -667,7 +667,6 @@ const BLAKE2S_FINALIZE_INSTRUCTION = OFF_MINUS_1 * COUNTER_OFFSET + OFF_MINUS_3 
     OPCODE_EXT_OFFSET;
 
 // Computes blake2s of `input` of size `len` felts, representing 32 bits each.
-// Note: this function guarantees that len > 0.
 func blake_with_opcode{range_check_ptr}(len: felt, data: felt*, out: felt*) {
     alloc_locals;
 
@@ -682,8 +681,16 @@ func blake_with_opcode{range_check_ptr}(len: felt, data: felt*, out: felt*) {
     assert state[7] = 0x5BE0CD19;
 
     // Express the length in bytes, subtract the remainder for finalize.
-    let (_, rem) = unsigned_div_rem(len - 1, 16);
-    local rem = rem + 1;
+    local rem;
+    if (len == 0) {
+        assert rem = 0;
+        tempvar range_check_ptr = range_check_ptr;
+    } else {
+        let (_, r) = unsigned_div_rem(len - 1, 16);
+        assert rem = r + 1;
+        tempvar range_check_ptr = range_check_ptr;
+    }
+
     local len_in_bytes = (len - rem) * 4;
 
     local range_check_ptr = range_check_ptr;

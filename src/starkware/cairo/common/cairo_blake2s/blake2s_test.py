@@ -438,6 +438,23 @@ def test_unpack_into_u32s(program):
             ),
             False,
         ),
+        (
+            [],
+            True,
+            blake_state_into_felt(
+                [
+                    813310313,
+                    2491453561,
+                    3491828193,
+                    2085238082,
+                    1219908895,
+                    514171180,
+                    4245497115,
+                    4193177630,
+                ]
+            ),
+            False,
+        ),
     ],
 )
 def test_calculate_blake2s_hash_from_felt252s(

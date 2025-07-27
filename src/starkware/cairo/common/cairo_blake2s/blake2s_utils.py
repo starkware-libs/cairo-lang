@@ -166,7 +166,7 @@ def calculate_blake2s_hash_from_felt252s(
     total_bytes = len(words) * 4
     bytes_seen = 0
 
-    for i in range(0, len(words), 16):
+    for i in range(0, max(len(words), 1), 16):
         block = words[i : i + 16]
         if len(block) < 16:
             block += [0] * (16 - len(block))

@@ -35,7 +35,8 @@ from starkware.starkware_utils.marshmallow_dataclass_fields import IntAsHex, add
 from starkware.starkware_utils.validated_dataclass import ValidatedMarshmallowDataclass
 from starkware.storage.storage import Storage
 
-OS_PROGRAM_HASH_RELATIVE_PATH = "src/starkware/starknet/core/os/program_hash.json"
+STARKNET_CORE_PATH_FROM_SRC = "starkware/starknet/core"
+OS_PROGRAM_HASH_RELATIVE_PATH = f"src/{STARKNET_CORE_PATH_FROM_SRC}/os/program_hash.json"
 OS_PROGRAM_HASH_PATH = get_source_dir_path(
     OS_PROGRAM_HASH_RELATIVE_PATH,
     default_value=os.path.join(os.path.dirname(__file__), "program_hash.json"),

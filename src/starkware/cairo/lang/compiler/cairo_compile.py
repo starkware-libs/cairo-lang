@@ -379,6 +379,25 @@ def cairo_assemble_program(
     return program
 
 
+def cairo_compile_wrapper(args: argparse.Namespace):
+    """
+    Wraps cairo_compile_common with the default pass manager and the assembler.
+    """
+
+    def pass_manager_factory(args: argparse.Namespace, module_reader: ModuleReader) -> PassManager:
+        return default_pass_manager(
+            prime=args.prime,
+            read_module=module_reader.read,
+            opt_unused_functions=args.opt_unused_functions,
+        )
+
+    cairo_compile_common(
+        args=args,
+        pass_manager_factory=pass_manager_factory,
+        assemble_func=cairo_assemble_program,
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description="A tool to compile Cairo code.")
     parser.add_argument(
@@ -395,21 +414,10 @@ def main():
         help="Disable proof mode (see --proof_mode).",
     )
 
-    def pass_manager_factory(args: argparse.Namespace, module_reader: ModuleReader) -> PassManager:
-        return default_pass_manager(
-            prime=args.prime,
-            read_module=module_reader.read,
-            opt_unused_functions=args.opt_unused_functions,
-        )
-
     try:
         cairo_compile_add_common_args(parser)
         args = parser.parse_args()
-        cairo_compile_common(
-            args=args,
-            pass_manager_factory=pass_manager_factory,
-            assemble_func=cairo_assemble_program,
-        )
+        cairo_compile_wrapper(args=args)
     except LocationError as err:
         print(err, file=sys.stderr)
         return 1

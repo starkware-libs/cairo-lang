@@ -789,6 +789,9 @@ class FunctionInvocation(BaseResponseObject, SerializableMarshmallowDataclass):
     )
     events: List[OrderedEventResponse]
     messages: List[OrderedL2ToL1MessageResponse]
+    cairo_native: bool = field(
+        metadata=dict(marshmallow_field=mfields.Boolean(required=False, load_default=False))
+    )
 
     @classmethod
     def from_inner(cls, call_type: CallType) -> ResponseCallType:
@@ -825,6 +828,7 @@ class FunctionInvocation(BaseResponseObject, SerializableMarshmallowDataclass):
             messages=OrderedL2ToL1MessageResponse.from_internal(
                 messages=call_info.l2_to_l1_messages
             ),
+            cairo_native=call_info.execution.cairo_native,
         )
 
     @classmethod

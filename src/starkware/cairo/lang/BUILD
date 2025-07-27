@@ -10,12 +10,14 @@ py_library(
     ],
     data = [
         "@" + CAIRO_COMPILER_ARCHIVE,
+        "//src/starkware/starknet/builtins/segment_arena:segment_arena_cairo_lib",
     ],
     visibility = ["//visibility:public"],
     deps = [
         "//src/starkware/cairo/bootloaders:cairo_bootloader_generate_fact_lib",
         "//src/starkware/cairo/bootloaders:cairo_hash_program_lib",
         "//src/starkware/cairo/bootloaders:program_hash_test_utils_lib",
+        "//src/starkware/cairo/builtin_selection:cairo_builtin_selection_lib",
         "//src/starkware/cairo/common:cairo_common_lib",
         "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
         "//src/starkware/cairo/lang/compiler:cairo_compile_test_utils_lib",
