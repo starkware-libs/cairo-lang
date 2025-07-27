@@ -22,7 +22,7 @@ SUPPORTED_LAYOUTS = [
     "starknet_with_keccak",
     "recursive_with_poseidon",
 ]
-ADDITONAL_IMPORTS_STARK_CONFIG = [
+ADDITIONAL_IMPORTS_STARK_CONFIG = [
     "starkware.cairo.stark_verifier.air.config_instances.TracesConfig",
     "starkware.cairo.stark_verifier.air.public_input.PublicInput",
     "starkware.cairo.stark_verifier.air.public_input.SegmentInfo",
@@ -47,7 +47,7 @@ ADDITIONAL_IMPORTS_PARSE_PROOF = [
     "starkware.cairo.stark_verifier.core.stark.StarkUnsentCommitment",
     "starkware.cairo.stark_verifier.core.stark.StarkWitness",
     "starkware.cairo.stark_verifier.core.vector_commitment.VectorCommitmentWitness",
-] + ADDITONAL_IMPORTS_STARK_CONFIG
+] + ADDITIONAL_IMPORTS_STARK_CONFIG
 
 
 def extract_annotations(annotations: Sequence[str], prefix: str, kind: str) -> List[int]:
@@ -88,7 +88,7 @@ def parse_proof(
     structs = CairoStructFactory(
         identifiers=identifiers,
         additional_imports=(
-            ADDITONAL_IMPORTS_STARK_CONFIG if only_config else ADDITIONAL_IMPORTS_PARSE_PROOF
+            ADDITIONAL_IMPORTS_STARK_CONFIG if only_config else ADDITIONAL_IMPORTS_PARSE_PROOF
         ),
     ).structs
 

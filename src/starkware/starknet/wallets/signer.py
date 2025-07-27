@@ -605,7 +605,7 @@ class StandardSigner(EcdsaSignerBase):
 
 class TrivialSigner(SignerBase):
     """
-    Trivial implementation for accounts without multicalls nor signature verfication.
+    Trivial implementation for accounts without multicalls nor signature verification.
     """
 
     @classmethod
