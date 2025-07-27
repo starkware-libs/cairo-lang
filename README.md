@@ -12,7 +12,7 @@ We recommend starting from [Setting up the environment](https://cairo-lang.org/d
 # Installation instructions
 
 You should be able to download the python package zip file directly from
-[github](https://github.com/starkware-libs/cairo-lang/releases/tag/v0.14.0)
+[github]()
 and install it using ``pip``.
 See [Setting up the environment](https://cairo-lang.org/docs/quickstart.html).
 
