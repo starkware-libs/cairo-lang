@@ -87,6 +87,14 @@ def deploy_contract(batch_prover: BatchProver, w3: Web3, operator: BaseAccount) 
     )
     print("Deploying the AMM demo smart contract...")
     tx_receipt = send_transaction(w3, transaction, operator)
+
+    # Check if the contract address is found in the tx_receipt
+        if tx_receipt.get("contractAddress"):
+        contract_address = tx_receipt["contractAddress"]
+        else:
+        print("Error: Contract address not found.")
+        exit(1)
+    
     assert (
         tx_receipt["status"] == 1
     ), f'Failed to deploy contract. Transaction hash: {tx_receipt["transactionHash"]}.'
