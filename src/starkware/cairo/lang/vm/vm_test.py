@@ -465,7 +465,7 @@ def test_skip_instruction_execution():
     vm.run_context.pc += 2
     vm.skip_instruction_execution = True
 %}
-[ap] = [ap] + 1, ap++;  // This intruction will not be executed.
+[ap] = [ap] + 1, ap++;  // This instruction will not be executed.
 %{ x = 1 %}
 [ap] = 10, ap++;
 """
