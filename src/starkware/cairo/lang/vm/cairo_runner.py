@@ -761,6 +761,21 @@ class CairoRunner:
                 print("  <missing>")
 
         print()
+    
+    def get_output(self) -> List[int]:
+        if "output_builtin" not in self.builtin_runners:
+            return
+
+        output_memory_cells = []
+
+        output_runner = self.builtin_runners["output_builtin"]
+        assert isinstance(output_runner, OutputBuiltinRunner)
+        _, size = output_runner.get_used_cells_and_allocated_size(self)
+        for i in range(size):
+            val = self.vm_memory.get(output_runner.base + i)
+            output_memory_cells.append(val)
+
+        return output_memory_cells
 
     def print_info(self, relocated: bool):
         print(self.get_info(relocated=relocated))
