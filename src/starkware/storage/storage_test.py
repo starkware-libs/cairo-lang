@@ -1,10 +1,12 @@
 import asyncio
+import dataclasses
 from typing import Any, Dict
 
 import pytest
 
 from starkware.storage.dict_storage import CachedStorage, DictStorage
-from starkware.storage.storage import IntToIntMapping, Storage
+from starkware.storage.storage import IndexedDBObject, IntToIntMapping, ObjectId, Storage
+from starkware.storage.storage_conflict import StorageConflictError
 from starkware.storage.test_utils import DummyLockManager, MockLargeStorage
 
 
@@ -87,3 +89,84 @@ async def test_get_bucket_and_key():
         test_bucket,
         "files/" + test_prefix + "/" + test_key,
     )
+
+
+class TestStorage(DictStorage):
+    async def setnx_value(self, key: bytes, value: bytes) -> bool:
+        if key in self.db:
+            return False
+        self.db[key] = value
+        return True
+
+
+class TestId(ObjectId):
+    def __str__(self) -> str:
+        return f"test{self.id}"
+
+
+@dataclasses.dataclass(frozen=True)
+class TestIndexedDBObject(IndexedDBObject):
+    """
+    A simple test implementation of IndexedDBObject with in-memory storage capability.
+    """
+
+    value: str = ""
+
+    @classmethod
+    def prefix(cls) -> bytes:
+        return b"test_obj"
+
+    def serialize(self) -> bytes:
+        return self.value.encode("utf-8")
+
+    @classmethod
+    def deserialize(cls, data: bytes) -> "TestIndexedDBObject":
+        return cls(value=data.decode("utf-8"))
+
+
+@pytest.mark.asyncio
+async def test_union_typing():
+    """Test IndexedDBObject methods with Union[int, ObjectId] index parameters."""
+    storage = TestStorage()
+    int_id = 1
+    test_id = TestId(int_id)
+    obj = TestIndexedDBObject(value="hello world")
+
+    # Test `set_obj`.
+    await obj.set_obj(storage=storage, index=int_id)
+    await obj.set_obj(storage=storage, index=test_id)
+
+    # Test `get_obj`.
+    optional_obj_int = await TestIndexedDBObject.get_obj(storage=storage, index=int_id)
+    optional_obj_test_id = await TestIndexedDBObject.get_obj(storage=storage, index=test_id)
+    assert optional_obj_int == obj
+    assert optional_obj_test_id == optional_obj_int
+
+    # Test `get_obj_or_fail`.
+    obj_int = await TestIndexedDBObject.get_obj_or_fail(storage=storage, index=int_id)
+    obj_test_id = await TestIndexedDBObject.get_obj_or_fail(storage=storage, index=test_id)
+    assert obj_int == obj
+    assert obj_test_id == obj_int
+
+    # Test `key`.
+    key_int = TestIndexedDBObject.key(index=int_id)
+    key_test_id = TestIndexedDBObject.key(index=test_id)
+    assert key_int == b"test_obj:1"
+    assert key_test_id == key_int
+
+    # Test `setnx_obj`.
+    assert await obj.setnx_obj(storage=storage, index=int_id) is False
+    assert await obj.setnx_obj(storage=storage, index=test_id) is False
+    assert await obj.setnx_obj(storage=storage, index=2) is True
+    assert await obj.setnx_obj(storage=storage, index=TestId(3)) is True
+
+    # Test `setnx_or_fail_obj` success.
+    await obj.setnx_or_fail_obj(storage=storage, index=4)
+    await obj.setnx_or_fail_obj(storage=storage, index=TestId(5))
+
+    # Test `setnx_or_fail_obj` failure.
+    different_obj = TestIndexedDBObject(value="hello universe")
+    with pytest.raises(StorageConflictError):
+        await different_obj.setnx_or_fail_obj(storage=storage, index=5)
+    with pytest.raises(StorageConflictError):
+        await different_obj.setnx_or_fail_obj(storage=storage, index=TestId(4))

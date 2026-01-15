@@ -7,13 +7,14 @@ RELOCATABLE_OFFSET_LOWER_BOUND = -(2**63)
 RELOCATABLE_OFFSET_UPPER_BOUND = 2**63
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass()
 class RelocatableValue:
     """
     A value in the cairo vm representing an address in some memory segment. This is meant to be
     replaced by a real memory address (field element) after the VM finished.
     """
 
+    __slots__ = ("segment_index", "offset")
     segment_index: int
     offset: int
 

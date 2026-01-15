@@ -221,18 +221,18 @@ def test_references():
         consts.x.typeref.SIZE
 
     with pytest.raises(AssertionError, match="Cannot change the value of a struct definition."):
-        consts.MyStruct = 13
+        setattr(consts, "MyStruct", 13)
 
     assert consts.MyStruct.member == 10
     with pytest.raises(AssertionError, match="Cannot change the value of a constant."):
-        consts.MyStruct.member = 13
+        setattr(consts.MyStruct, "member", 13)
 
     assert consts.MyStruct.SIZE == MY_STRUCT_SIZE
     with pytest.raises(AssertionError, match="Cannot change the value of a constant."):
-        consts.MyStruct.SIZE = 13
+        setattr(consts.MyStruct, "SIZE", 13)
 
     with pytest.raises(IdentifierError, match="'abc' is not a member of 'MyStruct'."):
-        consts.MyStruct.abc
+        getattr(consts.MyStruct, "abc")
 
     # Test that VmConsts can be used to assign values to references of the form '[...]'.
     memory.clear()
@@ -268,12 +268,12 @@ def test_references():
         AssertionError,
         match=r"x.ref2 \(= \[ap \+ 1\] \+ 0\) does not reference memory and cannot be assigned.",
     ):
-        consts.x.ref2 = 1000
+        setattr(consts.x, "ref2", 1000)
     with pytest.raises(
         AssertionError,
         match=r"x.typeref \(= ap \+ 1\) does not reference memory and cannot be assigned.",
     ):
-        consts.x.typeref = 1000
+        setattr(consts.x, "typeref", 1000)
 
 
 def get_vm_consts(

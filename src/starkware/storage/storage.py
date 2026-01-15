@@ -10,12 +10,14 @@ from typing import (
     Callable,
     Dict,
     Generic,
+    Iterator,
     List,
     Optional,
     Sequence,
     Tuple,
     Type,
     TypeVar,
+    Union,
     cast,
 )
 
@@ -38,6 +40,39 @@ TSingletonDBObject = TypeVar("TSingletonDBObject", bound="SingletonDBObject")
 TIndexedDBObject = TypeVar("TIndexedDBObject", bound="IndexedDBObject")
 TKey = TypeVar("TKey")
 TIntMapping = TypeVar("TIntMapping", bound="IntMapping[Any]")
+
+
+ObjectIdSubtype = TypeVar("ObjectIdSubtype", bound="ObjectId")
+
+
+# Mypy has a problem with dataclasses that contain unimplemented abstract methods.
+# See https://github.com/python/mypy/issues/5374 for details on this problem.
+@dataclasses.dataclass(frozen=True)  # type: ignore[misc]
+class ObjectId(ABC):
+    """
+    An ID of a storage object.
+    """
+
+    id: int
+
+    def __post_init__(self):
+        if self.id < 0:
+            raise ValueError(f"{self.__class__.__name__} must be non-negative, got {self.id}.")
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    @abstractmethod
+    def __str__(self) -> str:
+        pass
+
+    def __int__(self) -> int:
+        return self.id
+
+    @classmethod
+    def range(cls: Type[ObjectIdSubtype], start: int, end: int) -> Iterator[ObjectIdSubtype]:
+        for i in range(start, end):
+            yield cls(i)
 
 
 class Storage(ABC):
@@ -352,7 +387,7 @@ class DBObject(Serializable):
     ):
         """
         Attempts to store the object with the given index if it doesn't exist.
-        If finds a diffrent obj in the index raises an exception.
+        If finds a different obj in the index raises an exception.
         """
         storage_conflict_status, existing_obj = await self.setnx_or_same(
             storage=storage, suffix=suffix, fields_to_ignore=fields_to_ignore
@@ -412,44 +447,49 @@ class IndexedDBObject(DBObject):
     """
 
     @classmethod
-    def key(cls, index: int) -> bytes:
-        return cls.db_key(suffix=str(index).encode("ascii"))
+    def key(cls, index: Union[int, ObjectId]) -> bytes:
+        return cls.db_key(suffix=str(int(index)).encode("ascii"))
 
     @classmethod
     async def get_obj(
-        cls: Type[TIndexedDBObject], storage: Storage, index: int
+        cls: Type[TIndexedDBObject], storage: Storage, index: Union[int, ObjectId]
     ) -> Optional[TIndexedDBObject]:
-        return await cls.get(storage=storage, suffix=str(index).encode("ascii"))
+        return await cls.get(storage=storage, suffix=str(int(index)).encode("ascii"))
 
     @classmethod
     async def get_obj_or_fail(
-        cls: Type[TIndexedDBObject], storage: Storage, index: int
+        cls: Type[TIndexedDBObject], storage: Storage, index: Union[int, ObjectId]
     ) -> TIndexedDBObject:
         db_object_or_aborted = await cls.get_obj(storage=storage, index=index)
         assert (
             db_object_or_aborted is not None
-        ), f"{cls.__name__} at index {index} does not exist in storage."
+        ), f"{cls.__name__} at index {int(index)} does not exist in storage."
 
         return db_object_or_aborted
 
-    async def set_obj(self, storage: Storage, index: int):
+    async def set_obj(self, storage: Storage, index: Union[int, ObjectId]):
         """
         Stores object in storage with given index.
         """
-        await self.set(storage=storage, suffix=str(index).encode("ascii"))
+        await self.set(storage=storage, suffix=str(int(index)).encode("ascii"))
 
-    async def setnx_obj(self, storage: Storage, index: int) -> bool:
-        return await self.setnx(storage=storage, suffix=str(index).encode("ascii"))
+    async def setnx_obj(self, storage: Storage, index: Union[int, ObjectId]) -> bool:
+        return await self.setnx(storage=storage, suffix=str(int(index)).encode("ascii"))
 
     async def setnx_or_fail_obj(
-        self, storage: Storage, index: int, fields_to_ignore: Optional[List[str]] = None
+        self,
+        storage: Storage,
+        index: Union[int, ObjectId],
+        fields_to_ignore: Optional[List[str]] = None,
     ):
         """
         Attempts to store the object with the given index if it doesn't exist.
-        If finds a diffrent obj in the index raises an exception.
+        If finds a different obj in the index raises an exception.
         """
         await self.setnx_or_fail(
-            storage=storage, suffix=str(index).encode("ascii"), fields_to_ignore=fields_to_ignore
+            storage=storage,
+            suffix=str(int(index)).encode("ascii"),
+            fields_to_ignore=fields_to_ignore,
         )
 
     def get_indexed_update_for_mset(self, index: int) -> Tuple[bytes, bytes]:

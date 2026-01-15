@@ -214,7 +214,7 @@ class ExecutionResourcesStone(ExecutionResources):
                 "generic_opcode": self.n_steps,
             },
             memory_tables_sizes={},
-            n_verify_instructions=0,
+            verify_instruction=0,
         )
 
     def __add__(self, other: ExecutionResources) -> "ExecutionResourcesStone":
@@ -284,7 +284,7 @@ class ExecutionResourcesStwo(ExecutionResources):
 
     opcodes_instance_counter: Dict[str, int]
     memory_tables_sizes: Dict[str, int]
-    n_verify_instructions: int = field(
+    verify_instruction: int = field(
         metadata=additional_metadata(marshmallow_field=mfields.Integer(load_default=0))
     )
 
@@ -363,7 +363,7 @@ class ExecutionResourcesStwo(ExecutionResources):
             opcodes_instance_counter=total_opcodes_instance_counter,
             memory_tables_sizes=total_memory_tables_sizes,
             n_memory_holes=self.n_memory_holes + other.n_memory_holes,
-            n_verify_instructions=self.n_verify_instructions + other.n_verify_instructions,
+            verify_instruction=self.verify_instruction + other.verify_instruction,
         )
 
     def __sub__(self, other: ExecutionResources) -> "ExecutionResourcesStwo":
@@ -383,7 +383,7 @@ class ExecutionResourcesStwo(ExecutionResources):
             opcodes_instance_counter=diff_opcodes_instance_counter,
             memory_tables_sizes=diff_memory_tables_sizes,
             n_memory_holes=self.n_memory_holes - other.n_memory_holes,
-            n_verify_instructions=self.n_verify_instructions - other.n_verify_instructions,
+            verify_instruction=self.verify_instruction - other.verify_instruction,
         )
 
     def __mul__(self, other: int) -> "ExecutionResourcesStwo":
@@ -407,7 +407,7 @@ class ExecutionResourcesStwo(ExecutionResources):
             opcodes_instance_counter=total_opcodes_instance_counter,
             memory_tables_sizes=total_memory_tables_sizes,
             n_memory_holes=other * self.n_memory_holes,
-            n_verify_instructions=other * self.n_verify_instructions,
+            verify_instruction=other * self.verify_instruction,
         )
 
     def __rmul__(self, other: int) -> "ExecutionResourcesStwo":
@@ -422,7 +422,7 @@ class ExecutionResourcesStwo(ExecutionResources):
             opcodes_instance_counter={},
             builtin_instance_counter={},
             memory_tables_sizes={},
-            n_verify_instructions=0,
+            verify_instruction=0,
             n_memory_holes=0,
         )
 
@@ -434,7 +434,7 @@ class ExecutionResourcesStwo(ExecutionResources):
             **self.builtin_instance_counter,
             **self.opcodes_instance_counter,
             **self.memory_tables_sizes,
-            n_verify_instructions=self.n_verify_instructions,
+            verify_instruction=self.verify_instruction,
             n_memory_holes=self.n_memory_holes,
         )
 

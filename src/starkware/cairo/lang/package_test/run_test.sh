@@ -6,7 +6,7 @@
 set -e
 
 root_dir=$(pwd)
-package_path=${root_dir}/cairo-lang-$(cat src/starkware/cairo/lang/VERSION).zip
+package_path=${root_dir}/cairo_lang-$(cat src/starkware/cairo/lang/VERSION).tar.gz
 cairo_source_path=${root_dir}/src/starkware/cairo/lang/package_test/main.cairo
 
 tmpdir=$(mktemp -d)

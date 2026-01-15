@@ -31,14 +31,7 @@ setuptools.setup(
         "starkware.crypto.signature": ["pedersen_params.json"],
         "starkware.starknet": [
             "common/*.cairo",
-        ],
-        "starkware.starknet.compiler.v1": [
-            "*.json",
-            "sierra-compiler-major-*/corelib/*.cairo",
-            "sierra-compiler-major-*/corelib/src/*.cairo",
-            "sierra-compiler-major-*/corelib/src/starknet/*.cairo",
-            "sierra-compiler-major-*/bin/starknet-sierra-compile",
-            "sierra-compiler-major-*/bin/starknet-compile",
+            "builtins/segment_arena/segment_arena.cairo",
         ],
     },
     scripts=[

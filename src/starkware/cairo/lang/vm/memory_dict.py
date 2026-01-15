@@ -1,3 +1,4 @@
+import struct
 from typing import Callable, Dict, Iterable, List, Mapping, Optional, Tuple, Type, Union, cast
 
 from starkware.cairo.lang.vm.memory_dict_backend import MemoryDictBackend
@@ -42,6 +43,8 @@ class MemoryDict:
     * getitem: Checks that the memory address is initialized.
     * setitem: Checks that memory value is not changed.
     """
+
+    __slots__ = ("data", "_frozen", "relocation_rules")
 
     def __init__(
         self,
@@ -247,18 +250,55 @@ class MemoryDict:
         return cast(List[int], mem_range)
 
     @classmethod
-    def deserialize(cls, data, field_bytes):
+    def deserialize(cls, data: bytes, field_bytes: int):
+        """
+        PyPy-optimized deserialization of (address, value) pairs
+        with inlined RelocatableValue logic.
+        """
         pair_size = ADDR_SIZE_IN_BYTES + field_bytes
         assert (
             len(data) % (pair_size) == 0
         ), f"Data must consist of pairs of address (8 bytes) and value ({field_bytes} bytes)."
-        pair_stream = (
-            data[pair_size * i : pair_size * (i + 1)] for i in range(len(data) // pair_size)
-        )
-        return cls(
-            (
-                RelocatableValue.from_bytes(pair[:ADDR_SIZE_IN_BYTES], "little"),
-                RelocatableValue.from_bytes(pair[ADDR_SIZE_IN_BYTES:], "little"),
-            )
-            for pair in pair_stream
-        )
+
+        n_pairs = len(data) // pair_size
+        fmt = f"<Q{field_bytes}s"
+        s = struct.Struct(fmt)
+        unpack_from = s.unpack_from
+
+        OFFSET_BITS = RelocatableValue.OFFSET_BITS
+        SEGMENT_BITS = RelocatableValue.SEGMENT_BITS
+        ADDR_MASK = 1 << (8 * ADDR_SIZE_IN_BYTES - 1)
+        ADDR_OFFSET_MASK = (1 << OFFSET_BITS) - 1
+        ADDR_SEG_MASK = (1 << SEGMENT_BITS) - 1
+        VAL_MASK = 1 << (8 * field_bytes - 1)
+        VAL_OFFSET_MASK = ADDR_OFFSET_MASK
+        VAL_SEG_MASK = ADDR_SEG_MASK
+
+        def iter_pairs():
+            offset = 0
+            val: "MaybeRelocatable"
+            addr: "MaybeRelocatable"
+            for _ in range(n_pairs):
+                addr_num, val_raw = unpack_from(data, offset)
+                offset += pair_size
+
+                # Inline RelocatableValue.from_bytes logic for addr.
+                if addr_num & ADDR_MASK:
+                    off = addr_num & ADDR_OFFSET_MASK
+                    seg = (addr_num >> OFFSET_BITS) & ADDR_SEG_MASK
+                    addr = RelocatableValue(seg, off)
+                else:
+                    addr = addr_num
+
+                # Inline logic for val.
+                num_val = int.from_bytes(val_raw, "little")
+                if num_val & VAL_MASK:
+                    off = num_val & VAL_OFFSET_MASK
+                    seg = (num_val >> OFFSET_BITS) & VAL_SEG_MASK
+                    val = RelocatableValue(seg, off)
+                else:
+                    val = num_val
+
+                yield (addr, val)
+
+        return cls(iter_pairs())

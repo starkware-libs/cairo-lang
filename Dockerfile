@@ -1,11 +1,10 @@
 FROM ciimage/python:3.9-ci
 
-# Install Node.js v20.10.0 (fixes undici/vsce issue)
-RUN curl -sL https://nodejs.org/dist/v20.10.0/node-v20.10.0-linux-x64.tar.xz -o node-v20.10.0-linux-x64.tar.xz && \
-    tar -xf node-v20.10.0-linux-x64.tar.xz -C /opt/ && \
-    rm -f node-v20.10.0-linux-x64.tar.xz
+RUN curl -sL https://nodejs.org/dist/v20.14.0/node-v20.14.0-linux-x64.tar.xz -o node-v20.14.0-linux-x64.tar.xz && \
+    tar -xf node-v20.14.0-linux-x64.tar.xz -C /opt/ && \
+    rm -f node-v20.14.0-linux-x64.tar.xz
 
-ENV PATH="${PATH}:/opt/node-v20.10.0-linux-x64/bin"
+ENV PATH="${PATH}:/opt/node-v20.14.0-linux-x64/bin"
 
 COPY ./docker_common_deps.sh /app/
 WORKDIR /app/

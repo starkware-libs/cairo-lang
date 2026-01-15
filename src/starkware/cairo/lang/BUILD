@@ -1,5 +1,4 @@
 load("//src/starkware/cairo:vars.bzl", "CAIRO_INSTANCES_LIB_ADDITIONAL_FILES")
-load("//src/starkware/cairo:vars_cairo_compiler.bzl", "CAIRO_COMPILER_ARCHIVE")
 load("//bazel_utils:python.bzl", "py_exe")
 
 # Python library with all the dependencies that should be part of the cairo-lang package.
@@ -9,7 +8,6 @@ py_library(
         "create_cairo_lang_zip.py",
     ],
     data = [
-        "@" + CAIRO_COMPILER_ARCHIVE,
         "//src/starkware/starknet/builtins/segment_arena:segment_arena_cairo_lib",
     ],
     visibility = ["//visibility:public"],

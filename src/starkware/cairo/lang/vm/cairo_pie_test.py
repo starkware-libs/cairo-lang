@@ -219,7 +219,7 @@ def test_dump_load_stwo_execution_resources():
             "table2": 20,
         },
         n_memory_holes=12,
-        n_verify_instructions=5,
+        verify_instruction=5,
     )
     dumped = ExecutionResources.Schema().dump(execution_resources_stwo)
     loaded = ExecutionResources.Schema().load(dumped)
@@ -228,7 +228,7 @@ def test_dump_load_stwo_execution_resources():
     assert loaded.opcodes_instance_counter == execution_resources_stwo.opcodes_instance_counter
     assert loaded.memory_tables_sizes == execution_resources_stwo.memory_tables_sizes
     assert loaded.n_memory_holes == execution_resources_stwo.n_memory_holes
-    assert loaded.n_verify_instructions == execution_resources_stwo.n_verify_instructions
+    assert loaded.verify_instruction == execution_resources_stwo.verify_instruction
     assert loaded.n_stwo_unique_opcodes == execution_resources_stwo.n_stwo_unique_opcodes
     assert loaded.n_normal_opcodes == execution_resources_stwo.n_normal_opcodes
 
@@ -248,7 +248,7 @@ def test_dumps_loads_stwo_execution_resources():
             "table2": 20,
         },
         n_memory_holes=12,
-        n_verify_instructions=5,
+        verify_instruction=5,
     )
     dumped = ExecutionResources.Schema().dumps(execution_resources_stwo)
     loaded = ExecutionResources.Schema().loads(dumped)
@@ -257,7 +257,7 @@ def test_dumps_loads_stwo_execution_resources():
     assert loaded.opcodes_instance_counter == execution_resources_stwo.opcodes_instance_counter
     assert loaded.memory_tables_sizes == execution_resources_stwo.memory_tables_sizes
     assert loaded.n_memory_holes == execution_resources_stwo.n_memory_holes
-    assert loaded.n_verify_instructions == execution_resources_stwo.n_verify_instructions
+    assert loaded.verify_instruction == execution_resources_stwo.verify_instruction
     assert loaded.n_stwo_unique_opcodes == execution_resources_stwo.n_stwo_unique_opcodes
     assert loaded.n_normal_opcodes == execution_resources_stwo.n_normal_opcodes
 
@@ -357,7 +357,7 @@ def test_n_steps_execution_resources_stwo(monkeypatch: MonkeyPatch):
         opcodes_instance_counter=opcodes_instance_counter,
         memory_tables_sizes={"table1": 10, "table2": 20},
         n_memory_holes=5,
-        n_verify_instructions=3,
+        verify_instruction=3,
     )
 
     # Calculate the expected n_steps.
@@ -388,7 +388,7 @@ def test_n_opcodes_in_execution_resources_stwo(monkeypatch: MonkeyPatch):
         opcodes_instance_counter=opcodes_instance_counter,
         memory_tables_sizes={"table1": 10, "table2": 20},
         n_memory_holes=5,
-        n_verify_instructions=3,
+        verify_instruction=3,
     )
 
     assert execution_resources.n_stwo_unique_opcodes == 5
@@ -483,7 +483,7 @@ def test_add_execution_resources_stwo(monkeypatch: MonkeyPatch):
             opcodes_instance_counter=random_opcode_counter,
             memory_tables_sizes=random_memory_tables_sizes,
             n_memory_holes=1,
-            n_verify_instructions=1,
+            verify_instruction=1,
         )
 
         # Update totals.
@@ -510,7 +510,7 @@ def test_add_execution_resources_stwo(monkeypatch: MonkeyPatch):
     assert total_execution_resources.opcodes_instance_counter == total_opcode_counter
     assert total_execution_resources.memory_tables_sizes == total_memory_tables_sizes
     assert total_execution_resources.n_memory_holes == random_n_execution_resources
-    assert total_execution_resources.n_verify_instructions == random_n_execution_resources
+    assert total_execution_resources.verify_instruction == random_n_execution_resources
     assert total_execution_resources.n_stwo_unique_opcodes == total_n_stwo_unique_opcodes
     assert total_execution_resources.n_normal_opcodes == total_n_normal_opcodes
 
@@ -533,7 +533,7 @@ def test_sub_execution_resources_stwo(monkeypatch: MonkeyPatch):
         },
         memory_tables_sizes={"table1": 1, "table2": 2, "table3": 3, "table4": 4},
         n_memory_holes=5,
-        n_verify_instructions=10,
+        verify_instruction=10,
     )
 
     execution_resources2 = ExecutionResourcesStwo(
@@ -548,7 +548,7 @@ def test_sub_execution_resources_stwo(monkeypatch: MonkeyPatch):
         },
         memory_tables_sizes={"table1": 10, "table2": 20, "table3": 30, "table4": 40},
         n_memory_holes=15,
-        n_verify_instructions=10,
+        verify_instruction=10,
     )
 
     diff = execution_resources2 - execution_resources1
@@ -570,7 +570,7 @@ def test_sub_execution_resources_stwo(monkeypatch: MonkeyPatch):
     }
     assert diff.memory_tables_sizes == {"table1": 9, "table2": 18, "table3": 27, "table4": 36}
     assert diff.n_memory_holes == 10
-    assert diff.n_verify_instructions == 0
+    assert diff.verify_instruction == 0
     assert diff.n_stwo_unique_opcodes == 3
     assert diff.n_normal_opcodes == 2
 
@@ -602,7 +602,7 @@ def test_filter_unused_builtins(monkeypatch: MonkeyPatch):
         opcodes_instance_counter={"opcode1": 1, "opcode2": 2, "opcode3": 1, "opcode4": 4},
         memory_tables_sizes={"table1": 1, "table2": 2, "table3": 3, "table4": 4},
         n_memory_holes=5,
-        n_verify_instructions=10,
+        verify_instruction=10,
     )
 
     execution_resources4 = ExecutionResourcesStwo(
@@ -610,7 +610,7 @@ def test_filter_unused_builtins(monkeypatch: MonkeyPatch):
         opcodes_instance_counter={"opcode1": 1, "opcode2": 2, "opcode3": 3, "opcode4": 4},
         memory_tables_sizes={"table1": 1, "table2": 2, "table3": 3, "table4": 4},
         n_memory_holes=5,
-        n_verify_instructions=10,
+        verify_instruction=10,
     )
 
     stwo_diff = (execution_resources4 - execution_resources3).filter_unused_builtins()
@@ -736,7 +736,7 @@ def test_equivalent_stone_version():
             "table1": 10,
             "table2": 20,
         },
-        n_verify_instructions=5,
+        verify_instruction=5,
         n_memory_holes=12,
     )
 
@@ -766,7 +766,7 @@ def test_equivalent_stwo_version():
             "generic_opcode": 10,
         },
         memory_tables_sizes={},
-        n_verify_instructions=0,
+        verify_instruction=0,
         n_memory_holes=12,
     )
 

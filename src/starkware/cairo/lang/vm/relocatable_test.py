@@ -1,5 +1,3 @@
-import dataclasses
-
 import pytest
 
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
@@ -68,11 +66,3 @@ def test_to_felt_or_relocatable():
 
     assert RelocatableValue.to_felt_or_relocatable(True) == 1
     assert RelocatableValue.to_felt_or_relocatable(False) == 0
-
-
-def test_relocatable_value_frozen():
-    x = RelocatableValue(1, 2)
-    with pytest.raises(
-        dataclasses.FrozenInstanceError, match="cannot assign to field 'no_such_field'"
-    ):
-        x.no_such_field = 5  # type: ignore

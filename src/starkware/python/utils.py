@@ -580,9 +580,9 @@ def func_args_to_string(
 
 
 @contextlib.contextmanager
-def log_time(logger: logging.Logger, name: str):
+def log_time(logger: logging.Logger, name: str, threshold: float = 0.0):
     """
-    Logs the elapsed time in seconds.
+    Logs the elapsed time in seconds if it is above the given threshold.
 
     Example:
         with log_time(logger=logger, name="Foo"):
@@ -592,7 +592,9 @@ def log_time(logger: logging.Logger, name: str):
     try:
         yield
     finally:
-        logger.info(f"Ran '{name}'. Elapsed: {time.time() - start}.")
+        elapsed = time.time() - start
+        if elapsed >= threshold:
+            logger.info(f"Ran '{name}'. Elapsed: {elapsed}.")
 
 
 def to_ascii_string(value: str) -> str:
@@ -652,7 +654,7 @@ class aclosing(contextlib.AbstractAsyncContextManager, Generic[TAsyncGenerator])
 
 
 def aclosing_context_manager(
-    function: Callable[P, TAsyncGenerator]
+    function: Callable[P, TAsyncGenerator],
 ) -> Callable[P, AsyncContextManager[TAsyncGenerator]]:
     """
     Wraps a function that returns an async generator with aclosing context manager.

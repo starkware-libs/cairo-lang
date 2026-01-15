@@ -24,8 +24,8 @@ def compute_program_hash_chain(
     program: ProgramBase,
     program_hash_function: HashFunction,
     bootloader_version=0,
-    encode_blake2s_input: bool = False,
-    little_endian_for_blake2s: bool = True,
+    encode_blake2s_input: bool = True,
+    little_endian_for_blake2s: bool = False,
 ):
     """
     Computes a hash chain over a program, including the length of the data chain.

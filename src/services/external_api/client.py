@@ -193,8 +193,7 @@ class ClientBase(HasUriPrefix):
             n_retries_left -= 1
 
             try:
-                ssl_param = self.ssl_context or False
-                async with aiohttp.TCPConnector(ssl=ssl_param) as connector:
+                async with aiohttp.TCPConnector(ssl=self.ssl_context or False) as connector:
                     async with aiohttp.ClientSession(connector=connector) as session:
                         async with session.request(
                             method=send_method,
