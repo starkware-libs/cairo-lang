@@ -4,10 +4,8 @@ from starkware.cairo.bootloaders.simple_bootloader.run_simple_bootloader import 
     run_simple_bootloader,
 )
 from starkware.cairo.bootloaders.simple_bootloader.verify_builtins import (
-    create_ec_op_builtin_segment_if_needed,
     create_ecdsa_builtin_segment_if_needed,
     create_keccak_builtin_segment_if_needed,
-    verify_ec_op_builtin_if_needed,
     verify_ecdsa_builtin_if_needed,
     verify_keccak_builtin_if_needed,
 )
@@ -44,14 +42,6 @@ func main{
         simple_bootloader_input = SimpleBootloaderInput.Schema().load(program_input)
     %}
 
-    // Handle ec_op builtin.
-    // See docstring of `create_ec_op_builtin_segment_if_needed` for more info.
-    local ec_op_ptr_orig: EcOpBuiltin* = ec_op_ptr;
-    let (local ec_op_ptr: EcOpBuiltin*) = create_ec_op_builtin_segment_if_needed(
-        ec_op_ptr=ec_op_ptr
-    );
-    local ec_op_start_ptr: EcOpBuiltin* = ec_op_ptr;
-
     // Handle keccak builtin.
     // See docstring of `create_keccak_builtin_segment_if_needed` for more info.
     local keccak_ptr_orig: KeccakBuiltin* = keccak_ptr;
@@ -70,11 +60,6 @@ func main{
 
     // Execute tasks.
     run_simple_bootloader();
-
-    // Verify the ec_op builtin. See docstring of `verify_ec_op_builtin_if_needed` for more info.
-    let (local ec_op_ptr: EcOpBuiltin*) = verify_ec_op_builtin_if_needed(
-        ec_op_ptr=ec_op_ptr, ec_op_ptr_orig=ec_op_ptr_orig, ec_op_start_ptr=ec_op_start_ptr
-    );
 
     // Verify the keccak builtin. See docstring of `verify_keccak_builtin_if_needed` for more
     // info.

@@ -20,6 +20,16 @@ struct NodeEdge {
     bottom: felt,
 }
 
+// Represents a single entry in the siblings list produced by tree traversal.
+// The two fields represent:
+//   - type == 0: a plain sibling with the given hash/leaf value (0 means empty subtree).
+//   - type == 1: a descent of `value` steps (2 <= value <= MAX_LENGTH), compressing `value`
+//     consecutive zero siblings on the descent path into a single entry.
+struct Sibling {
+    type: felt,
+    value: felt,
+}
+
 // Holds the constants needed for Patricia updates.
 struct PatriciaUpdateConstants {
     globals_pow2: felt*,

@@ -29,6 +29,7 @@ class CairoPieData:
     def from_cairo_pie(
         cls,
         cairo_pie: CairoPie,
+        program_hash_function: HashFunction,
         program_output: Optional[List[int]] = None,
         program_hash: Optional[int] = None,
     ) -> "CairoPieData":
@@ -41,7 +42,9 @@ class CairoPieData:
             else get_program_output(cairo_pie=cairo_pie)
         )
         program_hash = (
-            program_hash if program_hash is not None else get_program_hash(cairo_pie=cairo_pie)
+            program_hash
+            if program_hash is not None
+            else get_program_hash(cairo_pie=cairo_pie, program_hash_function=program_hash_function)
         )
         return CairoPieData(
             program_output=program_output,
@@ -71,6 +74,7 @@ def get_program_output(cairo_pie: CairoPie) -> List[int]:
 
 def get_cairo_pie_fact_info(
     cairo_pie: CairoPie,
+    program_hash_function: HashFunction,
     program_hash: Optional[int] = None,
     program_output: Optional[List[int]] = None,
     aggregator: bool = False,
@@ -80,14 +84,18 @@ def get_cairo_pie_fact_info(
     """
     return get_fact_info_from_cairo_pie_data(
         cairo_pie_data=CairoPieData.from_cairo_pie(
-            cairo_pie=cairo_pie, program_output=program_output, program_hash=program_hash
+            cairo_pie=cairo_pie,
+            program_hash_function=program_hash_function,
+            program_output=program_output,
+            program_hash=program_hash,
         ),
         aggregator=aggregator,
+        program_hash_function=program_hash_function,
     )
 
 
 def get_fact_info_from_cairo_pie_data(
-    cairo_pie_data: CairoPieData, aggregator: bool = False
+    cairo_pie_data: CairoPieData, program_hash_function: HashFunction, aggregator: bool = False
 ) -> FactInfo:
     """
     Generates the fact of the Cairo program of cairo_pie from the cairo_pie_data.
@@ -117,13 +125,17 @@ def get_fact_info_from_cairo_pie_data(
                 *fact_topology.page_sizes[1:],
             ],
         )
-        program_hash = add_aggregator_prefix(program_hash)
+        program_hash = add_aggregator_prefix(
+            program_hash=program_hash, program_hash_function=program_hash_function
+        )
 
     fact = generate_program_fact(program_hash, program_output, fact_topology=fact_topology)
     return FactInfo(program_output=program_output, fact_topology=fact_topology, fact=fact)
 
 
-def get_program_hash(cairo_pie: CairoPie) -> int:
+def get_program_hash(
+    cairo_pie: CairoPie, program_hash_function: HashFunction = HashFunction.PEDERSEN
+) -> int:
     return compute_program_hash_chain(
-        program=cairo_pie.metadata.program, program_hash_function=HashFunction.PEDERSEN
+        program=cairo_pie.metadata.program, program_hash_function=program_hash_function
     )

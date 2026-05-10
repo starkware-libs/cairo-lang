@@ -44,6 +44,10 @@ def _starknet_contract_impl(ctx):
         cairoopts = cairoopts + [
             "--allowed-libfuncs-list-file=%s" % ctx.file.allowed_libfuncs_list_file.path,
         ]
+    elif ctx.attr.allowed_libfuncs_list_name != "":
+        cairoopts = cairoopts + [
+            "--allowed-libfuncs-list-name=%s" % ctx.attr.allowed_libfuncs_list_name,
+        ]
 
     cairoopts_for_cairo_compile = [] + cairoopts
     if ctx.attr.contract_path != "":
@@ -163,6 +167,11 @@ starknet_contract = rule(
         "main": attr.label(allow_single_file = True, mandatory = True),
         "cairo_project_file": attr.label(allow_single_file = True),
         "allowed_libfuncs_list_file": attr.label(allow_single_file = True),
+        "allowed_libfuncs_list_name": attr.string(
+            default = "",
+            doc = "The name of the allowed libfuncs list.",
+            mandatory = False,
+        ),
     },
 )
 

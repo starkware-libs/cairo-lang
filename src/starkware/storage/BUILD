@@ -38,6 +38,19 @@ py_library(
 )
 
 py_library(
+    name = "starkware_storage_mapping_lib",
+    srcs = [
+        "mapping.py",
+    ],
+    deps = [
+        ":starkware_abstract_storage_lib",
+        "//src/starkware/python:starkware_python_utils_lib",
+        "//src/starkware/starkware_utils:starkware_dataclasses_utils_lib",
+        requirement("marshmallow"),
+    ],
+)
+
+py_library(
     name = "starkware_dict_storage_lib",
     srcs = [
         "dict_storage.py",
@@ -66,6 +79,7 @@ pytest_test(
     deps = [
         ":starkware_abstract_storage_lib",
         ":starkware_dict_storage_lib",
+        ":starkware_storage_mapping_lib",
         ":starkware_storage_test_utils_lib",
         requirement("pytest_asyncio"),
     ],

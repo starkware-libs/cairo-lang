@@ -9,7 +9,6 @@ from starkware.cairo.common.cairo_builtins import (
 from starkware.cairo.common.cairo_ec_op.ec_op import simulate_builtin_ec_op_with_cairo
 from starkware.cairo.common.cairo_ecdsa.ecdsa import verify_ecdsa_signature_cairo
 from starkware.cairo.common.cairo_keccak.keccak import KECCAK_STATE_SIZE_FELTS, finalize_keccak
-from starkware.cairo.common.ec_point import EcPoint
 from starkware.cairo.common.simulate_builtin_keccak_with_cairo.simulate_keccak import (
     keccak_builtin_state_to_felts,
 )
@@ -131,9 +130,9 @@ func verify_keccak_builtin_if_needed{range_check_ptr: felt, bitwise_ptr: Bitwise
 
 // Given a range in a memory segment, assumed to contain only ECDSA builtin instances, verifies
 // that all the ECDSA instances have the correct values in memory.
-func verify_ecdsa_builtin{range_check96_ptr: felt, mul_mod_ptr: ModBuiltin*}(
-    start: SignatureBuiltin*, end: SignatureBuiltin*
-) {
+func verify_ecdsa_builtin{
+    range_check96_ptr: felt, mul_mod_ptr: ModBuiltin*, ec_op_ptr: EcOpBuiltin*
+}(start: SignatureBuiltin*, end: SignatureBuiltin*) {
     if (start == end) {
         return ();
     }
@@ -179,7 +178,9 @@ func create_ecdsa_builtin_segment_if_needed(ecdsa_ptr: SignatureBuiltin*) -> (
 
 // Verifies of the ecdsa builtin if it was simulated and not included in the
 // layout. If the pointer was initialized by the layout, the function does nothing.
-func verify_ecdsa_builtin_if_needed{mul_mod_ptr: ModBuiltin*, range_check96_ptr: felt}(
+func verify_ecdsa_builtin_if_needed{
+    mul_mod_ptr: ModBuiltin*, range_check96_ptr: felt, ec_op_ptr: EcOpBuiltin*
+}(
     ecdsa_ptr: SignatureBuiltin*,
     ecdsa_ptr_orig: SignatureBuiltin*,
     ecdsa_start_ptr: SignatureBuiltin*,

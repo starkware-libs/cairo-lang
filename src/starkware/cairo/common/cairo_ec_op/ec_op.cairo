@@ -1,7 +1,6 @@
-from src.starkware.cairo.common.ec import StarkCurve, assert_on_curve, ec_add, ec_sub
-
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.cairo_builtins import EcOpBuiltin
+from starkware.cairo.common.ec import StarkCurve, assert_on_curve, ec_add, ec_sub
 from starkware.cairo.common.ec_point import EcPoint
 from starkware.cairo.common.math import assert_not_zero
 from starkware.cairo.common.memset import memset

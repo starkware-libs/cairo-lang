@@ -355,7 +355,7 @@ contract Starknet is
       Returns a string that identifies the contract.
     */
     function identify() external pure override returns (string memory) {
-        return "StarkWare_Starknet_2025_10";
+        return "StarkWare_Starknet_2026_11";
     }
 
     /**
@@ -383,16 +383,16 @@ contract Starknet is
       Validates that all the values are in the range [0, FIELD_PRIME).
     */
     function validateProgramOutput(uint256[] calldata programOutput) internal pure {
+        uint256 fieldPrime = FIELD_PRIME;
         bool success = true;
         assembly {
-            let FIELD_PRIME := 0x800000000000011000000000000000000000000000000000000000000000001
             let programOutputEnd := add(programOutput.offset, mul(programOutput.length, 0x20))
             for {
                 let ptr := programOutput.offset
             } lt(ptr, programOutputEnd) {
                 ptr := add(ptr, 0x20)
             } {
-                if iszero(lt(calldataload(ptr), FIELD_PRIME)) {
+                if iszero(lt(calldataload(ptr), fieldPrime)) {
                     success := 0
                     break
                 }

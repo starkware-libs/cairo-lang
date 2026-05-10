@@ -55,7 +55,6 @@ sol_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "//src/starkware/solidity/libraries:starkex_types_library_sol",
     ],
 )
 
@@ -233,6 +232,5 @@ sol_library(
     visibility = ["//visibility:public"],
     deps = [
         ":main_dispatcher_base_sol",
-        "//src/starkware/solidity/components:main_storage_sol",
     ],
 )

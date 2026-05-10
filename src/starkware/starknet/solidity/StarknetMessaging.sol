@@ -28,6 +28,9 @@ contract StarknetMessaging is IStarknetMessaging {
 
     uint256 constant MAX_L1_MSG_FEE = 1 ether;
 
+    uint256 constant FIELD_PRIME =
+        0x800000000000011000000000000000000000000000000000000000000000001;
+
     function getMaxL1MsgFee() public pure override returns (uint256) {
         return MAX_L1_MSG_FEE;
     }
@@ -106,6 +109,24 @@ contract StarknetMessaging is IStarknetMessaging {
     }
 
     /**
+      Validates that all L2-bound fields are valid field elements, then returns the message hash.
+    */
+    function l1ToL2MsgHashSafe(
+        address fromAddress,
+        uint256 toAddress,
+        uint256 selector,
+        uint256[] calldata payload,
+        uint256 nonce
+    ) internal pure returns (bytes32) {
+        require(toAddress < FIELD_PRIME, "OUT_OF_BOUND_TO_ADDRESS");
+        require(selector < FIELD_PRIME, "OUT_OF_BOUND_SELECTOR");
+        for (uint256 i = 0; i < payload.length; i++) {
+            require(payload[i] < FIELD_PRIME, "OUT_OF_BOUND_PAYLOAD");
+        }
+        return l1ToL2MsgHash(fromAddress, toAddress, selector, payload, nonce);
+    }
+
+    /**
       Returns the L2 -> L1 message hash.
     */
     function l2ToL1MsgHash(
@@ -132,7 +153,7 @@ contract StarknetMessaging is IStarknetMessaging {
         uint256 nonce = l1ToL2MessageNonce();
         NamedStorage.setUintValue(L1L2_MESSAGE_NONCE_TAG, nonce + 1);
         emit LogMessageToL2(msg.sender, toAddress, selector, payload, nonce, msg.value);
-        bytes32 msgHash = l1ToL2MsgHash(msg.sender, toAddress, selector, payload, nonce);
+        bytes32 msgHash = l1ToL2MsgHashSafe(msg.sender, toAddress, selector, payload, nonce);
         // Note that the inclusion of the unique nonce in the message hash implies that
         // l1ToL2Messages()[msgHash] was not accessed before.
         l1ToL2Messages()[msgHash] = msg.value + 1;

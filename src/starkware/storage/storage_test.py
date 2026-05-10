@@ -5,7 +5,8 @@ from typing import Any, Dict
 import pytest
 
 from starkware.storage.dict_storage import CachedStorage, DictStorage
-from starkware.storage.storage import IndexedDBObject, IntToIntMapping, ObjectId, Storage
+from starkware.storage.mapping import IntToIntMapping
+from starkware.storage.storage import IndexedDBObject, ObjectId, Storage
 from starkware.storage.storage_conflict import StorageConflictError
 from starkware.storage.test_utils import DummyLockManager, MockLargeStorage
 

@@ -76,7 +76,7 @@ def test_get_fact(monkeypatch: MonkeyPatch):
     monkeypatch.setattr(
         sharp_client,
         "get_cairo_pie_fact_info",
-        lambda cairo_pie, program_hash: FactInfo(
+        lambda cairo_pie, program_hash_function, program_hash: FactInfo(
             fact=f"hash({program_hash}, hash({cairo_pie.output}))",
             program_output=None,
             fact_topology=None,

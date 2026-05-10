@@ -9,10 +9,11 @@ import subprocess
 import tempfile
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pytest
 import web3.exceptions
+from hexbytes import HexBytes
 from web3 import HTTPProvider
 from web3 import logs as web3_logs
 from web3 import types as web3_types
@@ -472,3 +473,50 @@ def handle_w3_value(val):
     if isinstance(val, bytes):
         return f"0x{val.hex()}"
     return val
+
+
+def split_sel_data(
+    tx_data: str, as_list: bool = False
+) -> Union[Tuple[str, str], Tuple[List[str], List[str]]]:
+    """
+    Gets the transaction data field, and returns the selector and data.
+    If as_list is True, returns a list of selectors and list of datas.
+    """
+    if isinstance(tx_data, list):
+        _sel_bytes = [HexBytes(d)[:4] for d in tx_data]
+        _data_bytes = [HexBytes(d)[4:] for d in tx_data]
+        selectors = [HexBytes(s).hex() for s in _sel_bytes]
+        datas = [HexBytes(d).hex() for d in _data_bytes]
+        return selectors, datas
+
+    assert isinstance(tx_data, str), f"Invalid tx_data type: {type(tx_data)} {tx_data!r}"
+    _data_bytes = HexBytes(tx_data)
+    _selector = HexBytes(_data_bytes[:4]).hex()
+    _data = HexBytes(_data_bytes[4:]).hex()
+    if as_list:
+        return [_selector], [_data]
+    else:
+        return _selector, _data
+
+
+def merge_sel_data(
+    selector: Union[str, List[str]], data: Union[str, List[str]]
+) -> Union[str, List[str]]:
+    """
+    Merge selector and data to one data field.
+    """
+    if isinstance(selector, list):
+        assert isinstance(data, list), f"Invalid data type: {type(data)} {data!r}"
+        assert len(selector) == len(
+            data
+        ), f"Invalid selector and data length: {len(selector)} {len(data)}"
+        selector_byte_list = [HexBytes(s) for s in selector]
+        assert all(len(s) == 4 for s in selector_byte_list), "Invalid selector length"
+        data_byte_list = [HexBytes(d) for d in data]
+        return [HexBytes(s + d).hex() for s, d in zip(selector_byte_list, data_byte_list)]
+    else:
+        assert isinstance(data, str), f"Invalid data type: {type(data)} {data!r}"
+    selector_bytes = HexBytes(selector)
+    data_bytes = HexBytes(data)
+    assert len(selector_bytes) == 4, f"Invalid selector length: {len(selector_bytes)}"
+    return HexBytes(selector_bytes + data_bytes).hex()

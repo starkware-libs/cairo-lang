@@ -13,6 +13,7 @@ from starkware.cairo.common.patricia_utils import (
     NodeEdge,
     ParticiaGlobals,
     PatriciaUpdateConstants,
+    Sibling,
     split_reads_writes,
 )
 from starkware.cairo.common.sponge_as_hash import SpongeHashBuiltin as HashBuiltin
@@ -53,15 +54,11 @@ func open_edge{hash_ptr: HashBuiltin*, range_check_ptr}(globals: ParticiaGlobals
 // The patricia updates algorithm is composed of 2 traversals: on the previous and the new trees.
 // Each traversal outputs:
 // 1. update_ptr - Sorted list of leaf indices and values of the traversal.
-// 2. siblings - An encoding of the list of untraversed siblings of the nodes we traversed:
+// 2. siblings - A list of Sibling structs for the untraversed siblings of nodes we traversed:
 //      For every node in the underlying merkle tree (in-order), if we only traverse one of its
-//      children, the other child will be encoded in this list.
-//      The encoding is as follows:
-//      * A value of 0 means a 0-sibling - empty subtree.
-//      * A value of n, for 2 <= n <= MAX_LENGTH means n non leaf 0-siblings.
-//      * Otherwise, the value is the sibling value.
-//          It may be a hash (which we assume to be > MAX_LENGTH) for an inner node or a value
-//          (any felt) for a leaf sibling.
+//      children, the other child is encoded as a Sibling entry in this list.
+//      The entry represents either a descent of a certain length or
+//      a plain sibling with the given hash/leaf value (0 means empty subtree).
 // If the tree traversals output the same leaf indices, and the same siblings, it is guaranteed
 // that all the non traversed leaves have the same value.
 // All traversal functions do at least one leaf update in the given subtree.
@@ -77,7 +74,7 @@ func open_edge{hash_ptr: HashBuiltin*, range_check_ptr}(globals: ParticiaGlobals
 // * common_args - Contains itself and other relevant hint variables in the context of a traversal.
 
 // Traverses an empty subtree.
-func traverse_empty{update_ptr: DictAccess*, range_check_ptr, siblings: felt*}(
+func traverse_empty{update_ptr: DictAccess*, range_check_ptr, siblings: Sibling*}(
     globals: ParticiaGlobals*, height: felt, path: felt
 ) {
     if (height == 0) {
@@ -122,18 +119,19 @@ func traverse_empty{update_ptr: DictAccess*, range_check_ptr, siblings: felt*}(
         vm_enter_scope(dict(node=new_node, **common_args))
     %}
     child_bit = child_bit * child_bit, ap++;
-    assert [siblings] = 0;
-    let siblings = siblings + 1;
+    assert siblings[0] = Sibling(type=0, value=0);
+    let siblings = &siblings[1];
     traverse_empty(globals=globals, height=height - 1, path=path * 2 + child_bit);
     %{ vm_exit_scope() %}
     return ();
 
     skip_single:
     // Descend.
+    tempvar length;
     tempvar word;
-    %{ memory[ids.siblings], ids.word = descend %}
-    tempvar length = [siblings];
-    let siblings = siblings + 1;
+    %{ ids.length, ids.word = descend %}
+    assert siblings[0] = Sibling(type=1, value=length);
+    let siblings = &siblings[1];
 
     assert_in_range(length, 2, height + 1);
     tempvar length_pow2 = globals.pow2[length];
@@ -151,7 +149,7 @@ func traverse_empty{update_ptr: DictAccess*, range_check_ptr, siblings: felt*}(
 
 // Traverses a subtree rooted at the given NodeEdge.
 func traverse_edge{
-    hash_ptr: HashBuiltin*, range_check_ptr, update_ptr: DictAccess*, siblings: felt*
+    hash_ptr: HashBuiltin*, range_check_ptr, update_ptr: DictAccess*, siblings: Sibling*
 }(globals: ParticiaGlobals*, height: felt, path: felt, edge: NodeEdge) {
     if (edge.length == 0) {
         return traverse_binary_or_leaf(globals=globals, height=height, path=path, node=edge.bottom);
@@ -183,6 +181,13 @@ func traverse_edge{
     %}
     jmp skip_both if [ap] != 0, ap++;
 
+    // Traverse edge regular.
+
+    // Case 1: the updates are in both subtrees.
+    //
+    // (1) traverse both children.
+    // (2) No sibling.
+
     // Traverse both children.
     if (bit == 0) {
         %{ vm_enter_scope(dict(node=left_child, **common_args)) %}
@@ -198,7 +203,6 @@ func traverse_edge{
         %{ vm_enter_scope(dict(node=left_child, **common_args)) %}
         traverse_empty(globals=globals, height=height - 1, path=path * 2);
         %{ vm_exit_scope() %}
-        ap += 0;
 
         %{ vm_enter_scope(dict(node=right_child, **common_args)) %}
         traverse_edge(globals=globals, height=height - 1, path=path * 2 + 1, edge=new_edge);
@@ -210,9 +214,15 @@ func traverse_edge{
     %{ memory[ap] = int(case == 'right') ^ ids.bit %}
     jmp skip_non_empty_child if [ap] != 0, ap++;
 
+    // Case 2: all the updates are in one of the two subtrees and the other subtree is zero
+    //   (in particular, all the updates are in the direction of the edge).
+    //
+    // (1) traverse the non-empty child.
+    // (2) sibling is zero.
+
     // Traverse the non-empty child.
-    assert [siblings] = 0;
-    let siblings = siblings + 1;
+    assert siblings[0] = Sibling(type=0, value=0);
+    let siblings = &siblings[1];
     %{
         new_node = left_child if ids.bit == 0 else right_child
         vm_enter_scope(dict(node=new_node, **common_args))
@@ -222,14 +232,34 @@ func traverse_edge{
     return ();
 
     skip_non_empty_child:
+    // Case 3: all the updates are in one of the two subtrees and that subtree is zero
+    //   (in particular, all the updates have zero values).
+    //
+    // (1) Traverse the empty child to visit the updates.
+    // (2) Its sibling is:
+    //   (a) If edge.length > 1, an edge of length smaller by 1:
+    //       H(edge.bottom, new_path) + (edge.length - 1)
+    //   (b) If edge.length = 1, the sibling is edge.bottom.
+    //
+    // We require height == 1 => edge.length = 1, for the following to be true:
+    // If edge.length > 1, then height > 1 => sibling is not a leaf.
+    // In this case the sibling `H(edge.bottom, new_path) + (edge.length - 1)` represents
+    // a proper edge. Since it's the sibling, it is identical in both prev and new trees, and
+    // therefore (as it appears in the prev tree), it must be a valid edge
+    // (its length is <= height and its bottom is not empty and not an edge).
+
+    if (height == 1) {
+        assert edge.length = 1;
+    }
+
     // Traverse the empty child.
     local range_check_ptr = range_check_ptr;
     local new_hash_ptr: HashBuiltin*;
 
     // Reserve a spot for the sibling. It is more efficient to compute it after the recursive
     // traversal.
-    let current_sibling = siblings;
-    let siblings = siblings + 1;
+    let current_sibling = &siblings[0];
+    let siblings = &siblings[1];
 
     // Traverse empty side.
     %{
@@ -239,10 +269,33 @@ func traverse_edge{
     traverse_empty(globals=globals, height=height - 1, path=path * 2 + 1 - bit);
     %{ vm_exit_scope() %}
 
+    // Check that the resulting topology is valid.
+    //
+    // To illustrate, consider the following example: an edge A->B of length L, children C,X of B,
+    // and a deleted child D of C (D may be a deleted leaf, or a subtree that becomes empty):
+    //
+    //     A                A
+    //      \                \
+    //       \ L              \
+    //        \                \ L+1
+    //         B        ->      \
+    //       /   \               \
+    //      C     X               X
+    //       \
+    //        D
+    //
+    // By the traversal of the previous tree, we know X is a valid node, but we do not guarantee the
+    // type of node X is - it could potentially be an edge node, in which case the above drawing is
+    // an invalid tree topology (if X is the bottom of an edge A->X, then X cannot be an edge, as
+    // two consecutive edges is illegal in a Patricia tree).
+    // Without the following check, a malicious prover could inject an invalid edge node starting at
+    // X. This is especially important for allowing escape-hatch mechanisms: if a user only has the
+    // data-availability (state of the leaves), in order to prove the state of any leaf the user
+    // must rely on the tree being well-formed.
     if (edge.length == 1) {
         // In this case, the sibling is the bottom of our edge.
-        // Make sure edge.bottom is binary or leaf.
-        assert [current_sibling] = edge.bottom;
+        // Make sure edge.bottom is binary or a non-zero leaf.
+        assert [current_sibling] = Sibling(type=0, value=edge.bottom);
         if (height != 1) {
             // This check should only be done on the new tree.
             if (globals.access_offset == 2) {
@@ -261,22 +314,31 @@ func traverse_edge{
             } else {
                 return ();
             }
+        } else {
+            // As `height = edge.length = 1`, edge.bottom is a leaf and we only need to check that
+            // it is not zero.
+            assert_not_zero(edge.bottom);
         }
         return ();
     }
 
     // This is the case where we split an edge.
     let (hash) = hash2(edge.bottom, new_edge.path);
-    assert [current_sibling] = hash + new_edge.length;
+    assert [current_sibling] = Sibling(type=0, value=hash + new_edge.length);
     return ();
 
-    // Descend.
     descend:
+    // Descent: descend `length` (>= 2) levels along the edge in a single step.
+    // `word` represents the next `length` bits of the path.
+    //
+    // (1) Recurse on the truncated edge.
+    // (2) Record `length` as a Sibling entry in the siblings list.
+
     local length;
     local word;
     %{ ids.length, ids.word = descend %}
-    assert [siblings] = length;
-    let siblings = siblings + 1;
+    assert siblings[0] = Sibling(type=1, value=length);
+    let siblings = &siblings[1];
 
     // Check that the descend is valid.
     assert_in_range(length, 2, edge.length + 1);
@@ -304,7 +366,7 @@ func traverse_edge{
 
 // Traverses a subtree rooted at the given binary or leaf node with given hash/value.
 func traverse_binary_or_leaf{
-    hash_ptr: HashBuiltin*, range_check_ptr, update_ptr: DictAccess*, siblings: felt*
+    hash_ptr: HashBuiltin*, range_check_ptr, update_ptr: DictAccess*, siblings: Sibling*
 }(globals: ParticiaGlobals*, height: felt, path: felt, node: felt) {
     if (height == 0) {
         // Leaf.
@@ -344,6 +406,11 @@ func traverse_binary_or_leaf{
     %}
     jmp skip_both if [ap] != 0, ap++;
 
+    // Case 1: the updates are in both subtrees.
+    //
+    // (1) Traverse both children.
+    // (2) No sibling.
+
     // Traverse both children.
     %{ vm_enter_scope(dict(node=left_child, **common_args)) %}
     traverse_non_empty(globals=globals, height=height - 1, path=path * 2, node=current_hash.x);
@@ -360,11 +427,16 @@ func traverse_binary_or_leaf{
     %{ memory[ap] = int(case != 'left') %}
     jmp skip_left if [ap] != 0, ap++;
 
+    // Case 2: the updates are only in the left subtree.
+    //
+    // (1) Traverse the left child.
+    // (2) The sibling is the right child (must be non-zero).
+
     // Left.
     tempvar sib = current_hash.y;
     assert_not_zero(sib);
-    assert [siblings] = sib;
-    let siblings = siblings + 1;
+    assert siblings[0] = Sibling(type=0, value=sib);
+    let siblings = &siblings[1];
     %{ vm_enter_scope(dict(node=left_child, **common_args)) %}
     traverse_non_empty(globals=globals, height=height - 1, path=path * 2, node=current_hash.x);
     %{ vm_exit_scope() %}
@@ -372,11 +444,17 @@ func traverse_binary_or_leaf{
 
     skip_left:
     %{ assert case == 'right' %}
+
+    // Case 3: the updates are only in the right subtree.
+    //
+    // (1) Traverse the right child.
+    // (2) The sibling is the left child (must be non-zero).
+
     // Right.
     tempvar sib = current_hash.x;
     assert_not_zero(sib);
-    assert [siblings] = sib;
-    let siblings = siblings + 1;
+    assert siblings[0] = Sibling(type=0, value=sib);
+    let siblings = &siblings[1];
     %{ vm_enter_scope(dict(node=right_child, **common_args)) %}
     traverse_non_empty(globals=globals, height=height - 1, path=path * 2 + 1, node=current_hash.y);
     %{ vm_exit_scope() %}
@@ -385,7 +463,7 @@ func traverse_binary_or_leaf{
 
 // Traverses some of the leaves in the subtree rooted at node.
 func traverse_node{
-    hash_ptr: HashBuiltin*, range_check_ptr, update_ptr: DictAccess*, siblings: felt*
+    hash_ptr: HashBuiltin*, range_check_ptr, update_ptr: DictAccess*, siblings: Sibling*
 }(globals: ParticiaGlobals*, height: felt, path: felt, node: felt) {
     if (node == 0) {
         // Empty:
@@ -398,7 +476,7 @@ func traverse_node{
 
 // Same as traverse_node, but disallows empty nodes.
 func traverse_non_empty{
-    hash_ptr: HashBuiltin*, range_check_ptr, update_ptr: DictAccess*, siblings: felt*
+    hash_ptr: HashBuiltin*, range_check_ptr, update_ptr: DictAccess*, siblings: Sibling*
 }(globals: ParticiaGlobals*, height: felt, path: felt, node: felt) {
     %{ memory[ap] = 1 if ids.height == 0 or len(preimage[ids.node]) == 2 else 0 %}
     jmp binary if [ap] != 0, ap++;
@@ -482,7 +560,7 @@ func patricia_update_using_update_constants{hash_ptr: HashBuiltin*, range_check_
     alloc_locals;
 
     // Traverse prev tree.
-    let (local original_siblings) = alloc();
+    let (local original_siblings: Sibling*) = alloc();
     let siblings = original_siblings;
     with siblings {
         traverse_prev_tree(
@@ -494,7 +572,7 @@ func patricia_update_using_update_constants{hash_ptr: HashBuiltin*, range_check_
             new_root=new_root,
         );
     }
-    local siblings_end: felt* = siblings;
+    local siblings_end: Sibling* = siblings;
 
     // Traverse new tree.
     let siblings = original_siblings;
@@ -521,7 +599,7 @@ func patricia_update_using_update_constants{hash_ptr: HashBuiltin*, range_check_
 // Guarantees:
 // * After execution, update_ptr will have advanced by n_updates entries.
 // * The siblings list will be populated with the sibling encoding from the previous tree.
-func traverse_prev_tree{hash_ptr: HashBuiltin*, range_check_ptr, siblings: felt*}(
+func traverse_prev_tree{hash_ptr: HashBuiltin*, range_check_ptr, siblings: Sibling*}(
     patricia_update_constants: PatriciaUpdateConstants*,
     update_ptr: DictAccess*,
     n_updates: felt,
@@ -626,7 +704,7 @@ func patricia_update_read_optimized{hash_ptr: HashBuiltin*, range_check_ptr}(
     }
 
     // Traverse the previous tree using the reads to verify their values.
-    let (siblings) = alloc();
+    let (siblings: Sibling*) = alloc();
     traverse_prev_tree{siblings=siblings}(
         patricia_update_constants=patricia_update_constants,
         update_ptr=reads,

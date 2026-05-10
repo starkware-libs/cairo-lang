@@ -3,7 +3,7 @@
         "initial_hash_chain_seed": "0x01ef2d2ec63f6394b65ca02a710f0eb3bf471aa4f914e37597964064e7d6f35c"
     },
     "dynamic_layout_public_input_test": {
-        "initial_hash_chain_seed": "0x07863516243c10b43da6b548b852bc6ee29fc70a1301220c13ed0835de971fc2"
+        "initial_hash_chain_seed": "0x047b5a8f6286e5cd6cd77abc4886b44d669c6ec3c4575a9a6d7d1b0a2f622ca4"
     },
     "diluted_test": {
         "spacing": 4,

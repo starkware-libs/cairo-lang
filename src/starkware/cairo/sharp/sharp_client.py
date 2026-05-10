@@ -100,7 +100,11 @@ class SharpClient:
         program_hash = compute_program_hash_chain(
             program=cairo_pie.program, program_hash_function=HashFunction.PEDERSEN
         )
-        return get_cairo_pie_fact_info(cairo_pie, program_hash).fact
+        return get_cairo_pie_fact_info(
+            cairo_pie=cairo_pie,
+            program_hash_function=HashFunction.PEDERSEN,
+            program_hash=program_hash,
+        ).fact
 
     def fact_registered(self, fact: str) -> bool:
         """

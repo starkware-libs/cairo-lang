@@ -1,9 +1,7 @@
-from src.starkware.cairo.common.cairo_ec_op.ec_op import ec_mul_cairo
-
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.bool import FALSE, TRUE
-from starkware.cairo.common.cairo_builtins import ModBuiltin, UInt384
-from starkware.cairo.common.ec import StarkCurve, ec_add, ec_sub, is_x_on_curve, recover_y
+from starkware.cairo.common.cairo_builtins import EcOpBuiltin, ModBuiltin, UInt384
+from starkware.cairo.common.ec import StarkCurve, ec_add, ec_mul, ec_sub, is_x_on_curve, recover_y
 from starkware.cairo.common.ec_point import EcPoint
 from starkware.cairo.common.registers import get_label_location
 
@@ -23,9 +21,9 @@ const ORDER3 = 0;
 //   signature_s - the s component of the ECDSA signature.
 //
 // Note that the implementation in Stone forbids signatures where r >= 2**251 or w = 1/s >= 2**251.
-func verify_ecdsa_signature_cairo{range_check96_ptr, mul_mod_ptr: ModBuiltin*}(
-    message, public_key, signature_r, signature_s
-) {
+func verify_ecdsa_signature_cairo{
+    range_check96_ptr, mul_mod_ptr: ModBuiltin*, ec_op_ptr: EcOpBuiltin*
+}(message, public_key, signature_r, signature_s) {
     alloc_locals;
     // Check that s != 0 (mod StarkCurve.ORDER).
     if (signature_s == 0) {
@@ -91,9 +89,9 @@ func verify_ecdsa_signature_cairo{range_check96_ptr, mul_mod_ptr: ModBuiltin*}(
     // and check that:
     //   wzG +/- wrQ = +/- R, or more efficiently that:
     //   (wzG +/- wrQ).x = R.x.
-    let (wzG: EcPoint) = ec_mul_cairo(m=wz, p=EcPoint(x=StarkCurve.GEN_X, y=StarkCurve.GEN_Y));
+    let (wzG: EcPoint) = ec_mul(m=wz, p=EcPoint(x=StarkCurve.GEN_X, y=StarkCurve.GEN_Y));
     let (public_key_point: EcPoint) = recover_y(public_key);
-    let (wrQ: EcPoint) = ec_mul_cairo(wr, public_key_point);
+    let (wrQ: EcPoint) = ec_mul(wr, public_key_point);
 
     let (candidate: EcPoint) = ec_add(wzG, wrQ);
     if (candidate.x == signature_r) {

@@ -74,6 +74,8 @@ py_library(
         "aggregator_utils.py",
     ],
     deps = [
+        ":cairo_hash_program_lib",
+        "//src/starkware/cairo/common:cairo_common_lib",
         "//src/starkware/cairo/lang/vm:cairo_vm_crypto_lib",
         "//src/starkware/python:starkware_python_utils_lib",
     ],

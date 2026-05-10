@@ -1,4 +1,4 @@
-load("//src/starkware/cairo:vars.bzl", "CAIRO_COMMON_LIB_ADDITIONAL_FILES", "CAIRO_COMMON_LIB_ADDITIONAL_LIBS")
+load("//src/starkware/cairo:vars.bzl", "CAIRO_COMMON_LIB_ADDITIONAL_LIBS")
 load("//src/starkware/cairo/lang:cairo_rules.bzl", "cairo_library")
 load("//bazel_utils/python:defs.bzl", "requirement")
 
@@ -58,7 +58,7 @@ cairo_library(
         "//src/starkware/cairo/common/cairo_sha256:sha256_utils.cairo",
         "//src/starkware/cairo/common/keccak_utils:keccak_utils.cairo",
         "//src/starkware/cairo/common/simulate_builtin_keccak_with_cairo:simulate_keccak.cairo",
-    ] + CAIRO_COMMON_LIB_ADDITIONAL_FILES,
+    ],
     hint_deps = [
         "//src/starkware/crypto:starkware_crypto_lib",
         "//src/starkware/python:starkware_python_utils_lib",

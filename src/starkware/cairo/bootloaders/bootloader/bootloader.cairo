@@ -28,10 +28,7 @@ func main{
     add_mod_ptr: ModBuiltin*,
     mul_mod_ptr: ModBuiltin*,
 }() {
-    %{
-        from starkware.cairo.bootloaders.bootloader.objects import BootloaderInput
-        bootloader_input = BootloaderInput.Schema().load(program_input)
-    %}
+    %{ BOOTLOADER_READ_UNPACKER_BOOTLOADER_INPUT %}
 
     // Execute bootloader.
     run_bootloader(unpacking_mode=POSEIDON_UNPACKING);

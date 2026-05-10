@@ -188,8 +188,10 @@ def compute_siblings_from_tree(
     height, node: UpdateTree, node_at_path, descent_map, hash_func, path=0
 ):
     """
-    Returns the encoding of the list of untraversed siblings. See the documentation in
-    patricia.cairo for more details.
+    Returns the flat encoding [type_0, value_0, type_1, value_1, ...] matching the Sibling
+    struct layout written by the Cairo traversal functions.
+    See the Sibling struct in patricia_utils.cairo and the traversal documentation in patricia.cairo
+    for more details.
     """
     if not isinstance(node, tuple):
         assert height == 0
@@ -198,13 +200,15 @@ def compute_siblings_from_tree(
     left, right = node
     if left is None:
         res = [
-            hash_node(node_at_path[height - 1, path * 2], hash_func)
+            0,
+            hash_node(node_at_path[height - 1, path * 2], hash_func),
         ] + compute_siblings_from_tree(
             height - 1, right, node_at_path, descent_map, hash_func, path * 2 + 1
         )
     elif right is None:
         res = [
-            hash_node(node_at_path[height - 1, path * 2 + 1], hash_func)
+            0,
+            hash_node(node_at_path[height - 1, path * 2 + 1], hash_func),
         ] + compute_siblings_from_tree(
             height - 1, left, node_at_path, descent_map, hash_func, path * 2
         )
@@ -219,11 +223,10 @@ def compute_siblings_from_tree(
     if descend is None:
         return res
 
-    # If current node has a descent, siblings should be compressed.
-    # A descent of length L, compresses L zeros into a single element, L.
+    # A descent of length L compresses L empty sibling entries into a single (1, L) entry.
     length, _ = descend
-    assert res[:length] == [0] * length
-    return [length] + res[length:]
+    assert res[: 2 * length] == [0, 0] * length
+    return [1, length] + res[2 * length :]
 
 
 def canonic(preimage: dict, node_hash: int) -> Triplet:

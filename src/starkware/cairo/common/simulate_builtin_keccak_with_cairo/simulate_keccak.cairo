@@ -1,6 +1,5 @@
-from src.starkware.cairo.common.cairo_keccak.keccak import finalize_keccak
-
 from starkware.cairo.common.alloc import alloc
+from starkware.cairo.common.cairo_keccak.keccak import finalize_keccak
 from starkware.cairo.common.keccak_state import KeccakBuiltinState
 
 // This function converts a KeccakBuiltinState to an array of 25 felts, each representing 64 bits.

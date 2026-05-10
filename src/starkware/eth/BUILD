@@ -15,6 +15,7 @@ py_library(
     visibility = ["//visibility:public"],
     deps = [
         ":web3_wrapper_lib",
+        requirement("hexbytes"),
         requirement("pytest"),
         requirement("web3"),
     ],

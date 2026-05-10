@@ -2,9 +2,12 @@
 
 from starkware.cairo.bootloaders.bootloader.constants import BOOTLOADER_CONFIG_SIZE
 from starkware.cairo.bootloaders.bootloader.run_bootloader import BLAKE_UNPACKING, run_bootloader
+from starkware.cairo.bootloaders.simple_bootloader.execute_task import BLAKE_HASH, PEDERSEN_HASH
 from starkware.cairo.bootloaders.simple_bootloader.run_simple_bootloader import (
     run_simple_bootloader,
 )
+from starkware.cairo.common.alloc import alloc
+from starkware.cairo.common.cairo_blake2s.blake2s import encode_felt252_data_and_calc_blake_hash
 from starkware.cairo.common.cairo_builtins import (
     BitwiseBuiltin,
     EcOpBuiltin,
@@ -18,6 +21,34 @@ from starkware.cairo.common.hash import hash2
 from starkware.cairo.common.memcpy import memcpy
 
 const AGGREGATOR_CONSTANT = 'AGGREGATOR';
+
+// Computes a modified program hash for the aggregator task by hashing the word "AGGREGATOR" with
+// the aggregator program hash. This distinguishes aggregator programs from regular programs.
+//
+// Arguments:
+// aggregator_program_hash - The original program hash of the aggregator task.
+// program_hash_function - The hash function H to use (PEDERSEN_HASH or BLAKE_HASH).
+//
+// Implicit arguments:
+// range_check_ptr - Pointer to the range check builtin (used for Blake).
+// pedersen_ptr - Pointer to the pedersen builtin.
+//
+// Returns:
+// hash - The modified aggregator program hash: H("AGGREGATOR", aggregator_program_hash).
+func compute_modified_aggregator_program_hash{pedersen_ptr: HashBuiltin*, range_check_ptr: felt}(
+    aggregator_program_hash: felt, program_hash_function: felt
+) -> (hash: felt) {
+    if (program_hash_function == BLAKE_HASH) {
+        let (input_data: felt*) = alloc();
+        assert input_data[0] = AGGREGATOR_CONSTANT;
+        assert input_data[1] = aggregator_program_hash;
+        let (hash) = encode_felt252_data_and_calc_blake_hash(data_len=2, data=input_data);
+        return (hash=hash);
+    }
+    assert program_hash_function = PEDERSEN_HASH;
+    let (hash) = hash2{hash_ptr=pedersen_ptr}(AGGREGATOR_CONSTANT, aggregator_program_hash);
+    return (hash=hash);
+}
 
 // Runs the simple bootloader on the aggregator task, the unpacker bootloader on the other tasks,
 // compares the input of the aggregator task with the output of the other tasks, and outputs the
@@ -73,7 +104,6 @@ func main{
         applicative_output_builtin_state = output_builtin.get_state()
         output_builtin.new_state(base=ids.aggregator_output_ptr)
     %}
-
     // Save aggregator output start.
     let aggregator_output_start: felt* = aggregator_output_ptr;
 
@@ -150,11 +180,14 @@ func main{
 
     // Save the applicative bootloader output start.
     let output_start: felt* = output_ptr;
-    // Use Pedersen hash as it's cheaper with Stwo.
-    let (modified_aggregator_program_hash) = hash2{hash_ptr=pedersen_ptr}(
-        AGGREGATOR_CONSTANT, aggregator_program_hash
+    // Read the aggregator task program hash function from the bootloader input.
+    tempvar aggregator_program_hash_function = nondet %{ aggregator_program_hash_function %};
+    let (modified_aggregator_program_hash) = compute_modified_aggregator_program_hash(
+        aggregator_program_hash=aggregator_program_hash,
+        program_hash_function=aggregator_program_hash_function,
     );
     local pedersen_ptr: HashBuiltin* = pedersen_ptr;
+    local range_check_ptr = range_check_ptr;
     assert output_ptr[0] = modified_aggregator_program_hash;
     let output_ptr = &output_ptr[1];
     // Copy the bootloader config.

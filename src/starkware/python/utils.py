@@ -690,3 +690,22 @@ def subtract_mappings(a: Mapping[K, V], b: Mapping[K, V]) -> Mapping[K, V]:
     Uses to take only updated cells from a mapping.
     """
     return dict(a.items() - b.items())
+
+
+async def async_bisect_right(
+    a: Sequence[T], x: TComparable, key: Callable[[T], Awaitable[TComparable]]
+) -> int:
+    """
+    Assuming a is sorted, returns value i such that for all e in a[:i] e <= x, and for all e in
+    a[i:] e > x.
+    """
+    lo = 0
+    hi = len(a)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        mid_key = await key(a[mid])
+        if x < mid_key:
+            hi = mid
+        else:
+            lo = mid + 1
+    return lo

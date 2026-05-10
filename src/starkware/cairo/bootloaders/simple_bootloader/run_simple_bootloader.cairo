@@ -104,7 +104,6 @@ func run_simple_bootloader{
     // Call execute_tasks.
     let (__fp__, _) = get_fp_and_pc();
 
-    %{ tasks = simple_bootloader_input.tasks %}
     let builtin_ptrs = &builtin_ptrs_before;
     let self_range_check_ptr = range_check_ptr;
     // The first prev task is a dummy task as we don't have a previous task to compare to.

@@ -9,7 +9,6 @@ from typing import (
     Any,
     Callable,
     Dict,
-    Generic,
     Iterator,
     List,
     Optional,
@@ -22,10 +21,9 @@ from typing import (
 )
 
 from starkware.python.object_utils import generic_object_repr
-from starkware.python.utils import from_bytes, get_exception_repr, to_bytes
+from starkware.python.utils import get_exception_repr
 from starkware.starkware_utils.config_base import get_object_by_path
 from starkware.starkware_utils.serializable import Serializable
-from starkware.starkware_utils.validated_dataclass import ValidatedDataclass
 from starkware.storage.general_storage_config import GeneralStorageConfig
 from starkware.storage.storage_conflict import StorageConflictError, StorageConflictStatus
 
@@ -38,8 +36,6 @@ HashFunctionType = Callable[[bytes, bytes], bytes]
 TDBObject = TypeVar("TDBObject", bound="DBObject")
 TSingletonDBObject = TypeVar("TSingletonDBObject", bound="SingletonDBObject")
 TIndexedDBObject = TypeVar("TIndexedDBObject", bound="IndexedDBObject")
-TKey = TypeVar("TKey")
-TIntMapping = TypeVar("TIntMapping", bound="IntMapping[Any]")
 
 
 ObjectIdSubtype = TypeVar("ObjectIdSubtype", bound="ObjectId")
@@ -73,6 +69,9 @@ class ObjectId(ABC):
     def range(cls: Type[ObjectIdSubtype], start: int, end: int) -> Iterator[ObjectIdSubtype]:
         for i in range(start, end):
             yield cls(i)
+
+    def __add__(self: ObjectIdSubtype, other: int) -> ObjectIdSubtype:
+        return self.__class__(id=self.id + other)
 
 
 class Storage(ABC):
@@ -344,7 +343,7 @@ class DBObject(Serializable):
         # A different object was found.
         return StorageConflictStatus.DIFFERENT_OBJECT, existing_obj
 
-    async def handle_setnx_or_same_conflict(
+    async def _handle_setnx_or_same_conflict(
         self,
         suffix: bytes,
         existing_obj: Optional["DBObject"],
@@ -392,7 +391,7 @@ class DBObject(Serializable):
         storage_conflict_status, existing_obj = await self.setnx_or_same(
             storage=storage, suffix=suffix, fields_to_ignore=fields_to_ignore
         )
-        await self.handle_setnx_or_same_conflict(
+        await self._handle_setnx_or_same_conflict(
             suffix=suffix,
             existing_obj=existing_obj,
             storage_conflict_status=storage_conflict_status,
@@ -502,138 +501,6 @@ class IndexedDBObject(DBObject):
             ))
         """
         return (self.key(index), self.serialize())
-
-
-# Mypy has a problem with dataclasses that contain unimplemented abstract methods.
-# See https://github.com/python/mypy/issues/5374 for details on this problem.
-@dataclasses.dataclass(frozen=True)  # type: ignore[misc]
-class IntMapping(ValidatedDataclass, DBObject, Generic[TKey]):
-    """
-    Represents a mapping from type `TKey` to an `int` value.
-    """
-
-    value: int
-
-    @classmethod
-    @abstractmethod
-    def encode_db_key(cls, key: TKey) -> bytes:
-        """
-        Transforms the given key into bytes.
-        """
-
-    def serialize(self) -> bytes:
-        byte_length = (self.value.bit_length() + 7) // 8  # Floor division.
-        return to_bytes(value=self.value, length=byte_length)
-
-    @classmethod
-    def deserialize(cls: Type[TIntMapping], data: bytes) -> TIntMapping:
-        return cls(value=from_bytes(data))
-
-    async def setnx_int(self, storage: Storage, key: TKey) -> bool:
-        return await self.setnx(storage=storage, suffix=self.encode_db_key(key=key))
-
-    @classmethod
-    async def create_and_setnx_int(cls, storage: Storage, key: TKey, value: int) -> bool:
-        obj = cls(value=value)
-        return await obj.setnx_int(storage=storage, key=key)
-
-    @classmethod
-    async def set_int(cls, storage: Storage, key: TKey, value: int):
-        obj = cls(value=value)
-        await obj.set(storage=storage, suffix=cls.encode_db_key(key=key))
-
-    @classmethod
-    async def setnx_or_same_int(cls, storage: Storage, key: TKey, value: int) -> Optional[int]:
-        """
-        Attempts to store the int value with the given key if it doesn't exist.
-        If it does exist, checks if the existing value is the same as the provided one.
-        Returns existing value if one exists and differs, None otherwise
-        """
-        if await cls(value=value).setnx_int(storage=storage, key=key) == True:
-            logger.debug(f"Successfully mapped {cls.__name__} with {key=} to {value=}.")
-            return None
-        existing_value = await cls.get_int_or_fail(storage=storage, key=key)
-        if existing_value == value:
-            logger.warning(f"Mapping of {cls.__name__} with {key=} to {value=} already exists.")
-            return None
-
-        logger.error(
-            f"Failed to write {cls.__name__} mapping of {key=} to {value=}, due to a different"
-            f" value already set at the same key: {existing_value=}. This should never happen!"
-        )
-        return existing_value
-
-    @classmethod
-    async def handle_setnx_or_same_int_conflict(
-        cls, existing_mapped_value: Optional[int], expected_mapped_value: int
-    ):
-        """
-        Handles the conflict when attempting to set a mapping using `setnx_or_same`, but
-        an existing mapping is already present at the same `key`.
-
-        Raises:
-            StorageConflictError: If an object already exists at the intended `key`.
-        """
-        if existing_mapped_value is not None:
-            # Found a different mapped value in storage at the same key. Should never get here!
-            raise StorageConflictError(
-                obj_name=cls.__name__,
-                existing_obj=existing_mapped_value,
-                expected_obj=expected_mapped_value,
-            )
-
-    @classmethod
-    async def setnx_or_fail_int(cls, storage: Storage, key: TKey, value: int):
-        """
-        Attempts to store the int value with the given key if it doesn't exist.
-        If finds a different mapped value in the key raises an exception.
-        """
-        existing_mapped_value = await cls.setnx_or_same_int(storage=storage, key=key, value=value)
-        await cls.handle_setnx_or_same_int_conflict(
-            existing_mapped_value=existing_mapped_value, expected_mapped_value=value
-        )
-
-    @classmethod
-    async def get_int(cls, storage: Storage, key: TKey) -> Optional[int]:
-        obj = await cls.get(storage=storage, suffix=cls.encode_db_key(key))
-        if obj is None:
-            return None
-
-        return obj.value
-
-    @classmethod
-    async def get_int_or_fail(cls, storage: Storage, key: TKey) -> int:
-        """
-        Reads the value object from storage under the given key, and
-        returns its corresponding value. Raises an error, if does not exist in storage.
-        """
-        value = await cls.get_int(storage=storage, key=key)
-
-        assert value is not None, f"{cls.__name__} value of key {key} does not appear in storage."
-
-        return value
-
-
-@dataclasses.dataclass(frozen=True)
-class IntToIntMapping(IntMapping[int]):
-    """
-    Represents a mapping from integer key to integer value.
-    """
-
-    @classmethod
-    def encode_db_key(cls, key: int) -> bytes:
-        return str(key).encode("ascii")
-
-
-@dataclasses.dataclass(frozen=True)
-class StringToIntMapping(IntMapping[str]):
-    """
-    Represents a mapping from a string key to an integer value.
-    """
-
-    @classmethod
-    def encode_db_key(cls, key: str) -> bytes:
-        return key.encode("ascii")
 
 
 class FactFetchingContext:

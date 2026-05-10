@@ -14,6 +14,7 @@ from starkware.python.utils import (
     all_subclasses,
     as_non_optional,
     assert_exhausted,
+    async_bisect_right,
     blockify,
     composite,
     execute_coroutine_threadsafe,
@@ -298,3 +299,30 @@ def test_subtract_mappings():
     a = {"red": 1, "green": 2, "blue": 3}
     b = {"yellow": 1, "green": 2, "blue": 4}
     assert subtract_mappings(a, b) == {"red": 1, "blue": 3}
+
+
+async def _identity(x: int) -> int:
+    return x
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "a, x, expected",
+    [
+        pytest.param([], 5, 0, id="empty"),
+        pytest.param([10], 5, 0, id="single_smaller"),
+        pytest.param([10], 10, 1, id="single_larger"),
+        pytest.param([10], 15, 1, id="single_after"),
+        pytest.param([2, 4, 6, 8], 1, 0, id="insert_at_beginning"),
+        pytest.param([2, 4, 6, 8], 5, 2, id="insert_in_middle"),
+        pytest.param([2, 4, 6, 8], 9, 4, id="insert_at_end"),
+        pytest.param([2, 4, 6, 8], 4, 2, id="element_exists"),
+        pytest.param([2, 8], 4, 1, id="two_elements"),
+        pytest.param([2, 4, 6, 8], 2, 1, id="element_exists_first"),
+        pytest.param([2, 4, 6, 8], 8, 4, id="element_exists_last"),
+        pytest.param([5, 5, 5, 5], 5, 4, id="all_equal"),
+        pytest.param([-10, -5, 0, 5, 10], -3, 2, id="negative_values"),
+    ],
+)
+async def test_async_bisect_right(a: list, x: int, expected: int):
+    assert await async_bisect_right(a=a, x=x, key=_identity) == expected
