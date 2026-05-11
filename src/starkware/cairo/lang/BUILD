@@ -9,6 +9,7 @@ py_library(
     ],
     data = [
         "//src/starkware/starknet/builtins/segment_arena:segment_arena_cairo_lib",
+        "//src/starkware/starknet/common:starknet_common_cairo_lib",
     ],
     visibility = ["//visibility:public"],
     deps = [
