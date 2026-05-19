@@ -42,6 +42,7 @@ cairo_library(
         "serialize.cairo",
         "set.cairo",
         "sha256_state.cairo",
+        "sha512_state.cairo",
         "signature.cairo",
         "small_merkle_tree.cairo",
         "sponge_as_hash.cairo",
@@ -56,6 +57,7 @@ cairo_library(
         "//src/starkware/cairo/common/cairo_keccak:keccak.cairo",
         "//src/starkware/cairo/common/cairo_keccak:packed_keccak.cairo",
         "//src/starkware/cairo/common/cairo_sha256:sha256_utils.cairo",
+        "//src/starkware/cairo/common/cairo_sha512:sha512_utils.cairo",
         "//src/starkware/cairo/common/keccak_utils:keccak_utils.cairo",
         "//src/starkware/cairo/common/simulate_builtin_keccak_with_cairo:simulate_keccak.cairo",
     ],
@@ -99,6 +101,7 @@ py_library(
         "//src/starkware/cairo/common/cairo_secp:secp256r1_utils.py",
         "//src/starkware/cairo/common/cairo_secp:secp_utils.py",
         "//src/starkware/cairo/common/cairo_sha256:sha256_utils.py",
+        "//src/starkware/cairo/common/cairo_sha512:sha512_utils.py",
         "//src/starkware/cairo/common/keccak_utils:keccak_utils.py",
     ],
     data = [

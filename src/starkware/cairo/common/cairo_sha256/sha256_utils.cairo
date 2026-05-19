@@ -304,7 +304,6 @@ func get_round_constants() -> felt* {
 }
 
 const SHA256_INPUT_CHUNK_SIZE_FELTS = 16;
-const SHA256_INPUT_CHUNK_SIZE_BYTES = 64;
 const SHA256_STATE_SIZE_FELTS = 8;
 // Each instance consists of a message (16 words), an input state (8 words),
 // and an output state (8 words).
