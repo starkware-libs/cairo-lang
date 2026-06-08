@@ -12,26 +12,11 @@ def run_generate_hash_test(
     command: str,
     post_process: Optional[Callable[[Any], Any]] = None,
 ):
-    return run_generate_hash_test_with_program(
-        fix=fix,
-        compiled_program=Program.from_file(file_path=program_path),
-        hash_path=hash_path,
-        command=command,
-        post_process=post_process,
-    )
-
-
-def run_generate_hash_test_with_program(
-    fix: bool,
-    compiled_program: Program,
-    hash_path: str,
-    command: str,
-    post_process: Optional[Callable[[Any], Any]] = None,
-):
     """
     Compares the JSON content of 'hash_path' with the program hash of the given program.
     If post_process is given, it may add additional fields to the expected JSON.
     """
+    compiled_program = Program.Schema().load(json.load(open(program_path)))
     program_hash = hex(
         compute_program_hash_chain(
             program=compiled_program, program_hash_function=HashFunction.PEDERSEN
@@ -65,29 +50,15 @@ def program_hash_test_main(
     command: str,
     post_process: Optional[Callable[[Any], Any]] = None,
 ):
-    program_hash_test_main_with_program(
-        compiled_program=Program.from_file(file_path=program_path),
-        hash_path=hash_path,
-        command=command,
-        post_process=post_process,
-    )
-
-
-def program_hash_test_main_with_program(
-    compiled_program: Program,
-    hash_path: str,
-    command: str,
-    post_process: Optional[Callable[[Any], Any]] = None,
-):
     import argparse
 
     parser = argparse.ArgumentParser(description="Create or test the program hash.")
     parser.add_argument("--fix", action="store_true", help="Fix the value of the program hash.")
 
     args = parser.parse_args()
-    run_generate_hash_test_with_program(
+    run_generate_hash_test(
         fix=args.fix,
-        compiled_program=compiled_program,
+        program_path=program_path,
         hash_path=hash_path,
         command=command,
         post_process=post_process,

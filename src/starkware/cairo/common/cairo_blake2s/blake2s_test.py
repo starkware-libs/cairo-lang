@@ -318,7 +318,7 @@ def test_unpack_into_u32s(program):
     out_ptr = runner.segments.add()
 
     runner.run(
-        "encode_felt252_to_u32s",
+        "encode_felt252s_to_u32s",
         runner.range_check_builtin.base,
         packed_values_len=len(values),
         packed_values=values_ptr,
@@ -434,23 +434,6 @@ def test_unpack_into_u32s(program):
                     203933266,
                     214821852,
                     409203158,
-                ]
-            ),
-            False,
-        ),
-        (
-            [],
-            True,
-            blake_state_into_felt(
-                [
-                    813310313,
-                    2491453561,
-                    3491828193,
-                    2085238082,
-                    1219908895,
-                    514171180,
-                    4245497115,
-                    4193177630,
                 ]
             ),
             False,

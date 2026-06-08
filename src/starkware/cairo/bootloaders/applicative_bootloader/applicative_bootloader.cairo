@@ -1,11 +1,19 @@
 %builtins output pedersen range_check ecdsa bitwise ec_op keccak poseidon range_check96 add_mod mul_mod
 
 from starkware.cairo.bootloaders.bootloader.constants import BOOTLOADER_CONFIG_SIZE
-from starkware.cairo.bootloaders.bootloader.run_bootloader import run_bootloader
+from starkware.cairo.bootloaders.bootloader.run_bootloader import BLAKE_UNPACKING, run_bootloader
 from starkware.cairo.bootloaders.simple_bootloader.run_simple_bootloader import (
     run_simple_bootloader,
 )
-from starkware.cairo.common.cairo_builtins import HashBuiltin, PoseidonBuiltin
+from starkware.cairo.common.cairo_builtins import (
+    BitwiseBuiltin,
+    EcOpBuiltin,
+    HashBuiltin,
+    KeccakBuiltin,
+    ModBuiltin,
+    PoseidonBuiltin,
+    SignatureBuiltin,
+)
 from starkware.cairo.common.hash import hash2
 from starkware.cairo.common.memcpy import memcpy
 
@@ -28,14 +36,14 @@ func main{
     output_ptr: felt*,
     pedersen_ptr: HashBuiltin*,
     range_check_ptr,
-    ecdsa_ptr,
-    bitwise_ptr,
-    ec_op_ptr,
-    keccak_ptr,
+    ecdsa_ptr: SignatureBuiltin*,
+    bitwise_ptr: BitwiseBuiltin*,
+    ec_op_ptr: EcOpBuiltin*,
+    keccak_ptr: KeccakBuiltin*,
     poseidon_ptr: PoseidonBuiltin*,
     range_check96_ptr,
-    add_mod_ptr,
-    mul_mod_ptr,
+    add_mod_ptr: ModBuiltin*,
+    mul_mod_ptr: ModBuiltin*,
 }() {
     ap += SIZEOF_LOCALS;
     local task_range_check_ptr;
@@ -117,19 +125,19 @@ func main{
     let bootloader_output_start = bootloader_output_ptr;
 
     // Execute the bootloader.
-    run_bootloader{output_ptr=bootloader_output_ptr}();
+    run_bootloader{output_ptr=bootloader_output_ptr}(unpacking_mode=BLAKE_UNPACKING);
     local bootloader_output_end: felt* = bootloader_output_ptr;
 
     local range_check_ptr = range_check_ptr;
-    local ecdsa_ptr = ecdsa_ptr;
-    local bitwise_ptr = bitwise_ptr;
-    local ec_op_ptr = ec_op_ptr;
-    local keccak_ptr = keccak_ptr;
+    local ecdsa_ptr: SignatureBuiltin* = ecdsa_ptr;
+    local bitwise_ptr: BitwiseBuiltin* = bitwise_ptr;
+    local ec_op_ptr: EcOpBuiltin* = ec_op_ptr;
+    local keccak_ptr: KeccakBuiltin* = keccak_ptr;
     local pedersen_ptr: HashBuiltin* = pedersen_ptr;
     local poseidon_ptr: PoseidonBuiltin* = poseidon_ptr;
     local range_check96_ptr = range_check96_ptr;
-    local add_mod_ptr = add_mod_ptr;
-    local mul_mod_ptr = mul_mod_ptr;
+    local add_mod_ptr: ModBuiltin* = add_mod_ptr;
+    local mul_mod_ptr: ModBuiltin* = mul_mod_ptr;
 
     %{
         # Restore the output builtin state.

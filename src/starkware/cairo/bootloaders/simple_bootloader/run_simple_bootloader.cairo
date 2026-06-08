@@ -3,7 +3,15 @@ from starkware.cairo.bootloaders.simple_bootloader.execute_task import (
     PrevProgramTaskParams,
     execute_task,
 )
-from starkware.cairo.common.cairo_builtins import HashBuiltin, PoseidonBuiltin
+from starkware.cairo.common.cairo_builtins import (
+    BitwiseBuiltin,
+    EcOpBuiltin,
+    HashBuiltin,
+    KeccakBuiltin,
+    ModBuiltin,
+    PoseidonBuiltin,
+    SignatureBuiltin,
+)
 from starkware.cairo.common.registers import get_fp_and_pc
 from starkware.cairo.common.segments import relocate_segment
 
@@ -27,14 +35,14 @@ func run_simple_bootloader{
     output_ptr: felt*,
     pedersen_ptr: HashBuiltin*,
     range_check_ptr,
-    ecdsa_ptr,
-    bitwise_ptr,
-    ec_op_ptr,
-    keccak_ptr,
+    ecdsa_ptr: SignatureBuiltin*,
+    bitwise_ptr: BitwiseBuiltin*,
+    ec_op_ptr: EcOpBuiltin*,
+    keccak_ptr: KeccakBuiltin*,
     poseidon_ptr: PoseidonBuiltin*,
     range_check96_ptr,
-    add_mod_ptr,
-    mul_mod_ptr,
+    add_mod_ptr: ModBuiltin*,
+    mul_mod_ptr: ModBuiltin*,
 }() {
     alloc_locals;
 
@@ -54,14 +62,14 @@ func run_simple_bootloader{
         output=cast(output_ptr, felt),
         pedersen=cast(pedersen_ptr, felt),
         range_check=initial_subtasks_range_check_ptr,
-        ecdsa=ecdsa_ptr,
-        bitwise=bitwise_ptr,
-        ec_op=ec_op_ptr,
-        keccak=keccak_ptr,
+        ecdsa=cast(ecdsa_ptr, felt),
+        bitwise=cast(bitwise_ptr, felt),
+        ec_op=cast(ec_op_ptr, felt),
+        keccak=cast(keccak_ptr, felt),
         poseidon=cast(poseidon_ptr, felt),
         range_check96=range_check96_ptr,
-        add_mod=add_mod_ptr,
-        mul_mod=mul_mod_ptr,
+        add_mod=cast(add_mod_ptr, felt),
+        mul_mod=cast(mul_mod_ptr, felt),
     );
 
     // A struct containing the encoding of each builtin.
@@ -122,14 +130,14 @@ func run_simple_bootloader{
     let output_ptr = cast(builtin_ptrs.output, felt*);
     let pedersen_ptr = cast(builtin_ptrs.pedersen, HashBuiltin*);
     let range_check_ptr = builtin_ptrs.range_check;
-    let ecdsa_ptr = builtin_ptrs.ecdsa;
-    let bitwise_ptr = builtin_ptrs.bitwise;
-    let ec_op_ptr = builtin_ptrs.ec_op;
-    let keccak_ptr = builtin_ptrs.keccak;
+    let ecdsa_ptr = cast(builtin_ptrs.ecdsa, SignatureBuiltin*);
+    let bitwise_ptr = cast(builtin_ptrs.bitwise, BitwiseBuiltin*);
+    let ec_op_ptr = cast(builtin_ptrs.ec_op, EcOpBuiltin*);
+    let keccak_ptr = cast(builtin_ptrs.keccak, KeccakBuiltin*);
     let poseidon_ptr = cast(builtin_ptrs.poseidon, PoseidonBuiltin*);
     let range_check96_ptr = builtin_ptrs.range_check96;
-    let add_mod_ptr = builtin_ptrs.add_mod;
-    let mul_mod_ptr = builtin_ptrs.mul_mod;
+    let add_mod_ptr = cast(builtin_ptrs.add_mod, ModBuiltin*);
+    let mul_mod_ptr = cast(builtin_ptrs.mul_mod, ModBuiltin*);
 
     // 'execute_tasks' runs untrusted code and uses the range_check builtin to verify that
     // the builtin pointers were advanced correctly by said code.

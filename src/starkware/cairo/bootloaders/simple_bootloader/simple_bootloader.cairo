@@ -4,14 +4,22 @@ from starkware.cairo.bootloaders.simple_bootloader.run_simple_bootloader import 
     run_simple_bootloader,
 )
 from starkware.cairo.bootloaders.simple_bootloader.verify_builtins import (
-    handle_ec_op_builtin_verification,
-    handle_ecdsa_builtin_verification,
-    handle_keccak_builtin_verification,
-    handle_uninitialized_ec_op_builtin,
-    handle_uninitialized_ecdsa_builtin,
-    handle_uninitialized_keccak_builtin,
+    create_ec_op_builtin_segment_if_needed,
+    create_ecdsa_builtin_segment_if_needed,
+    create_keccak_builtin_segment_if_needed,
+    verify_ec_op_builtin_if_needed,
+    verify_ecdsa_builtin_if_needed,
+    verify_keccak_builtin_if_needed,
 )
-from starkware.cairo.common.cairo_builtins import HashBuiltin, PoseidonBuiltin
+from starkware.cairo.common.cairo_builtins import (
+    BitwiseBuiltin,
+    EcOpBuiltin,
+    HashBuiltin,
+    KeccakBuiltin,
+    ModBuiltin,
+    PoseidonBuiltin,
+    SignatureBuiltin,
+)
 from starkware.cairo.common.registers import get_fp_and_pc
 
 // For documentation of the simple bootloader, see the docstring of `run_simple_bootloader'.
@@ -21,14 +29,14 @@ func main{
     output_ptr: felt*,
     pedersen_ptr: HashBuiltin*,
     range_check_ptr,
-    ecdsa_ptr,
-    bitwise_ptr,
-    ec_op_ptr,
-    keccak_ptr,
+    ecdsa_ptr: SignatureBuiltin*,
+    bitwise_ptr: BitwiseBuiltin*,
+    ec_op_ptr: EcOpBuiltin*,
+    keccak_ptr: KeccakBuiltin*,
     poseidon_ptr: PoseidonBuiltin*,
     range_check96_ptr,
-    add_mod_ptr,
-    mul_mod_ptr,
+    add_mod_ptr: ModBuiltin*,
+    mul_mod_ptr: ModBuiltin*,
 }() {
     alloc_locals;
     %{
@@ -36,37 +44,46 @@ func main{
         simple_bootloader_input = SimpleBootloaderInput.Schema().load(program_input)
     %}
 
-    // Handle ec_op builtin. See docstring of `handle_uninitialized_ec_op_builtin` for more info.
-    local ec_op_ptr_orig = ec_op_ptr;
-    let (local ec_op_ptr) = handle_uninitialized_ec_op_builtin(ec_op_ptr=ec_op_ptr);
-    local ec_op_start_ptr = ec_op_ptr;
+    // Handle ec_op builtin.
+    // See docstring of `create_ec_op_builtin_segment_if_needed` for more info.
+    local ec_op_ptr_orig: EcOpBuiltin* = ec_op_ptr;
+    let (local ec_op_ptr: EcOpBuiltin*) = create_ec_op_builtin_segment_if_needed(
+        ec_op_ptr=ec_op_ptr
+    );
+    local ec_op_start_ptr: EcOpBuiltin* = ec_op_ptr;
 
-    // Handle keccak builtin. See docstring of `handle_uninitialized_keccak_builtin` for more info.
-    local keccak_ptr_orig = keccak_ptr;
-    let (local keccak_ptr) = handle_uninitialized_keccak_builtin(keccak_ptr=keccak_ptr);
-    local keccak_start_ptr = keccak_ptr;
+    // Handle keccak builtin.
+    // See docstring of `create_keccak_builtin_segment_if_needed` for more info.
+    local keccak_ptr_orig: KeccakBuiltin* = keccak_ptr;
+    let (local keccak_ptr: KeccakBuiltin*) = create_keccak_builtin_segment_if_needed(
+        keccak_ptr=keccak_ptr
+    );
+    local keccak_start_ptr: KeccakBuiltin* = keccak_ptr;
 
-    // Handle ecdsa builtin. See docstring of `handle_uninitialized_ecdsa_builtin` for more info.
-    local ecdsa_ptr_orig = ecdsa_ptr;
-    let (local ecdsa_ptr) = handle_uninitialized_ecdsa_builtin(ecdsa_ptr=ecdsa_ptr);
-    local ecdsa_start_ptr = ecdsa_ptr;
+    // Handle ecdsa builtin.
+    // See docstring of `create_ecdsa_builtin_segment_if_needed` for more info.
+    local ecdsa_ptr_orig: SignatureBuiltin* = ecdsa_ptr;
+    let (local ecdsa_ptr: SignatureBuiltin*) = create_ecdsa_builtin_segment_if_needed(
+        ecdsa_ptr=ecdsa_ptr
+    );
+    local ecdsa_start_ptr: SignatureBuiltin* = ecdsa_ptr;
 
     // Execute tasks.
     run_simple_bootloader();
 
-    // Verify the ec_op builtin. See docstring of `handle_ec_op_builtin_verification` for more info.
-    let (local ec_op_ptr) = handle_ec_op_builtin_verification(
+    // Verify the ec_op builtin. See docstring of `verify_ec_op_builtin_if_needed` for more info.
+    let (local ec_op_ptr: EcOpBuiltin*) = verify_ec_op_builtin_if_needed(
         ec_op_ptr=ec_op_ptr, ec_op_ptr_orig=ec_op_ptr_orig, ec_op_start_ptr=ec_op_start_ptr
     );
 
-    // Verify the keccak builtin. See docstring of `handle_keccak_builtin_verification` for more
+    // Verify the keccak builtin. See docstring of `verify_keccak_builtin_if_needed` for more
     // info.
-    let (local keccak_ptr) = handle_keccak_builtin_verification(
+    let (local keccak_ptr: KeccakBuiltin*) = verify_keccak_builtin_if_needed(
         keccak_ptr=keccak_ptr, keccak_ptr_orig=keccak_ptr_orig, keccak_start_ptr=keccak_start_ptr
     );
 
-    // Verify the ecdsa builtin. See docstring of `handle_ecdsa_builtin_verification` for more info.
-    let (local ecdsa_ptr) = handle_ecdsa_builtin_verification(
+    // Verify the ecdsa builtin. See docstring of `verify_ecdsa_builtin_if_needed` for more info.
+    let (local ecdsa_ptr: SignatureBuiltin*) = verify_ecdsa_builtin_if_needed(
         ecdsa_ptr=ecdsa_ptr, ecdsa_ptr_orig=ecdsa_ptr_orig, ecdsa_start_ptr=ecdsa_start_ptr
     );
 

@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from starkware.cairo.bootloaders.aggregator_utils import (
     add_aggregator_prefix,
@@ -13,41 +13,6 @@ from starkware.cairo.bootloaders.fact_topology import (
 from starkware.cairo.bootloaders.hash_program import HashFunction, compute_program_hash_chain
 from starkware.cairo.lang.vm.cairo_pie import CairoPie
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable, RelocatableValue
-
-
-@dataclasses.dataclass
-class CairoPieData:
-    """
-    Contains some of the data of a CairoPie used in the ambassador to create the fact info.
-    """
-
-    program_output: List[int]
-    program_hash: int
-    additional_data: Dict[str, Any]
-
-    @classmethod
-    def from_cairo_pie(
-        cls,
-        cairo_pie: CairoPie,
-        program_output: Optional[List[int]] = None,
-        program_hash: Optional[int] = None,
-    ) -> "CairoPieData":
-        """
-        Creates a CairoPieData instance from a CairoPie.
-        """
-        program_output = (
-            program_output
-            if program_output is not None
-            else get_program_output(cairo_pie=cairo_pie)
-        )
-        program_hash = (
-            program_hash if program_hash is not None else get_program_hash(cairo_pie=cairo_pie)
-        )
-        return CairoPieData(
-            program_output=program_output,
-            program_hash=program_hash,
-            additional_data=cairo_pie.additional_data,
-        )
 
 
 def get_program_output(cairo_pie: CairoPie) -> List[int]:
@@ -72,33 +37,19 @@ def get_program_output(cairo_pie: CairoPie) -> List[int]:
 def get_cairo_pie_fact_info(
     cairo_pie: CairoPie,
     program_hash: Optional[int] = None,
-    program_output: Optional[List[int]] = None,
     aggregator: bool = False,
 ) -> FactInfo:
     """
     Generates the fact of the Cairo program of cairo_pie. Returns the cairo-pie fact info.
     """
-    return get_fact_info_from_cairo_pie_data(
-        cairo_pie_data=CairoPieData.from_cairo_pie(
-            cairo_pie=cairo_pie, program_output=program_output, program_hash=program_hash
-        ),
-        aggregator=aggregator,
-    )
-
-
-def get_fact_info_from_cairo_pie_data(
-    cairo_pie_data: CairoPieData, aggregator: bool = False
-) -> FactInfo:
-    """
-    Generates the fact of the Cairo program of cairo_pie from the cairo_pie_data.
-    Returns the cairo-pie fact info.
-    """
-    program_output = cairo_pie_data.program_output
-    program_hash = cairo_pie_data.program_hash
+    program_output = get_program_output(cairo_pie=cairo_pie)
     fact_topology = get_fact_topology_from_additional_data(
         output_size=len(program_output),
-        output_builtin_additional_data=cairo_pie_data.additional_data["output_builtin"],
+        output_builtin_additional_data=cairo_pie.additional_data["output_builtin"],
     )
+
+    if program_hash is None:
+        program_hash = get_program_hash(cairo_pie)
 
     if aggregator:
         # The aggregator program output is composed of the aggregator input (output of the

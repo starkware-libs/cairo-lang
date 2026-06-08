@@ -575,11 +575,11 @@ func blake2s_felts{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: f
 // All 32-bit limbs are arranged in big-endian order.
 // Returns the size of the unpacked array in felts.
 // Assumes:
-//  * All output felts in `upnacked_u32s` are extrenally verified to be in [0, 2^32).
-// Note: This function can nondeterministically choose between several encodings of felts,
-//      x < PRIME can be encoded as x + PRIME, x + 2 * PRIME, etc. The canonical encoding is
-//      given when x < PRIME.
-func encode_felt252_to_u32s{range_check_ptr: felt}(
+//  * All output felts in `upnacked_u32s` are externally verified to be in [0, 2^32).
+// Note: A malicious prover may choose a non-canonical encoding, that is:
+//       A felt x can be encoded as any u256 value congruent to x modulo PRIME,
+//       and for x < 2^63, the encoding may use either 2 u32s or 8 u32s.
+func encode_felt252s_to_u32s{range_check_ptr: felt}(
     packed_values_len: felt, packed_values: felt*, unpacked_u32s: felt*
 ) -> felt {
     alloc_locals;
@@ -600,6 +600,7 @@ func encode_felt252_to_u32s{range_check_ptr: felt}(
             assert val == 0
             offset += val_len
     %}
+    local limb_shift = 2 ** 32;
     tempvar out = unpacked_u32s;
     tempvar packed_values = packed_values;
     tempvar range_check_ptr = range_check_ptr;
@@ -629,13 +630,15 @@ func encode_felt252_to_u32s{range_check_ptr: felt}(
     // Assert that the top limb is over 2^31, as its MSB is artificially set for encoding.
     tempvar raw_out_0 = out[0] - EXP31;
     assert [range_check_ptr] = raw_out_0;
-    // Assert that the limbs represent the number. Set the MSB of the most significant limb.
-    assert packed_values[0] = (
-        (out[7] + (2 ** 32 * out[6])) +
-        2 ** (32 * 2) * (out[5] + 2 ** 32 * out[4]) +
-        2 ** (32 * 4) * (out[3] + 2 ** 32 * out[2]) +
-        2 ** (32 * 6) * (out[1] + 2 ** 32 * raw_out_0)
-    );
+    // Assert that the limbs represent the number, after reverting the MSB of the most significant
+    // limb to 0.
+    tempvar curr_packed_value = raw_out_0 * limb_shift + out[1];
+    tempvar curr_packed_value = curr_packed_value * limb_shift + out[2];
+    tempvar curr_packed_value = curr_packed_value * limb_shift + out[3];
+    tempvar curr_packed_value = curr_packed_value * limb_shift + out[4];
+    tempvar curr_packed_value = curr_packed_value * limb_shift + out[5];
+    tempvar curr_packed_value = curr_packed_value * limb_shift + out[6];
+    assert packed_values[0] = curr_packed_value * limb_shift + out[7];
 
     tempvar out = &out[8];
     tempvar packed_values = &packed_values[1];
@@ -667,6 +670,7 @@ const BLAKE2S_FINALIZE_INSTRUCTION = OFF_MINUS_1 * COUNTER_OFFSET + OFF_MINUS_3 
     OPCODE_EXT_OFFSET;
 
 // Computes blake2s of `input` of size `len` felts, representing 32 bits each.
+// Note: this function guarantees that len > 0.
 func blake_with_opcode{range_check_ptr}(len: felt, data: felt*, out: felt*) {
     alloc_locals;
 
@@ -681,16 +685,8 @@ func blake_with_opcode{range_check_ptr}(len: felt, data: felt*, out: felt*) {
     assert state[7] = 0x5BE0CD19;
 
     // Express the length in bytes, subtract the remainder for finalize.
-    local rem;
-    if (len == 0) {
-        assert rem = 0;
-        tempvar range_check_ptr = range_check_ptr;
-    } else {
-        let (_, r) = unsigned_div_rem(len - 1, 16);
-        assert rem = r + 1;
-        tempvar range_check_ptr = range_check_ptr;
-    }
-
+    let (_, rem) = unsigned_div_rem(len - 1, 16);
+    local rem = rem + 1;
     local len_in_bytes = (len - rem) * 4;
 
     local range_check_ptr = range_check_ptr;
@@ -736,7 +732,7 @@ func blake_with_opcode{range_check_ptr}(len: felt, data: felt*, out: felt*) {
     jmp loop;
 }
 
-// Given `data_len` felt252s at `data`, encodes them as u32s as defined in `encode_felt252_to_u32s`
+// Given `data_len` felt252s at `data`, encodes them as u32s as defined in `encode_felt252s_to_u32s`
 // and computes the blake2s hash of the result using the dedicated opcodes.
 // The 256 bit result is then returned as a felt252 (i.e. modulo PRIME).
 func encode_felt252_data_and_calc_blake_hash{range_check_ptr: felt}(
@@ -744,7 +740,7 @@ func encode_felt252_data_and_calc_blake_hash{range_check_ptr: felt}(
 ) -> (hash: felt) {
     alloc_locals;
     let (local encoded_data: felt*) = alloc();
-    let encoded_data_len = encode_felt252_to_u32s(
+    let encoded_data_len = encode_felt252s_to_u32s(
         packed_values_len=data_len, packed_values=data, unpacked_u32s=encoded_data
     );
     let (local blake_output: felt*) = alloc();
