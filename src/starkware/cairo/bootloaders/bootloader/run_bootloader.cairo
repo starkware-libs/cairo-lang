@@ -2,11 +2,32 @@ from starkware.cairo.bootloaders.bootloader.constants import BOOTLOADER_CONFIG_S
 from starkware.cairo.bootloaders.simple_bootloader.run_simple_bootloader import (
     run_simple_bootloader,
 )
-from starkware.cairo.common.builtin_poseidon.poseidon import poseidon_hash_many
-from starkware.cairo.common.cairo_builtins import HashBuiltin, PoseidonBuiltin
+from starkware.cairo.cairo_verifier.objects import (
+    CairoVerifierHashedOutput,
+    CairoVerifierOutputHeader,
+)
+from starkware.cairo.common.cairo_blake2s.blake2s import encode_felt252_data_and_calc_blake_hash
+from starkware.cairo.common.cairo_builtins import (
+    BitwiseBuiltin,
+    EcOpBuiltin,
+    HashBuiltin,
+    KeccakBuiltin,
+    ModBuiltin,
+    PoseidonBuiltin,
+    SignatureBuiltin,
+)
 from starkware.cairo.common.find_element import find_element
 from starkware.cairo.common.hash_state import hash_felts
 from starkware.cairo.common.memcpy import memcpy
+
+// The unpacking modes for the bootloader.
+// NO_UNPACKING - The composite packed task output is not unpacked, but rather the
+// CairoVerifierOutputHeader is parsed and the output is returned as is.
+const NO_UNPACKING = 0;
+// BLAKE_UNPACKING - The composite packed task output is unpacked using the Blake hash function.
+// The unpacking is done by guessing the output of the subtasks and verifying that it matches the
+// output hash given in the Cairo verifier output.
+const BLAKE_UNPACKING = 1;
 
 struct BootloaderConfig {
     // The supported hashes of the simple bootloader program. Currently, we hash it using either
@@ -31,9 +52,11 @@ struct TaskOutputHeader {
 // 'plain_packed_task').
 // The unpacking is done as follows:
 // For each non-recursive task, outputs the program hash and the output of the task.
-// For each recursive task, guesses the output of its children (using `packed_outputs`), and
-// verifies that it matches the output hash given in the cairo verifier output. Then, unpack each
-// child recursively.
+// For each recursive task:
+// - If `unpacking_mode` is `NO_UNPACKING`: No unpacking is done, as the output isn't hashed.
+// - If `unpacking_mode` is `BLAKE_UNPACKING`: guesses the output of its children
+//      (using `packed_outputs`), and verifies that it matches the output hash given in the cairo
+//      verifier output. Then, unpack each child recursively.
 // Moreover, if a non-recursive task has the program hash of the applicative bootloader, then it
 // verifies that it used the correct bootloader config and outputs the modified aggregator hash and
 // the aggregated output, instead of the applicative bootloader hash and output.
@@ -44,7 +67,7 @@ struct TaskOutputHeader {
 // - packed_outputs: The packed outputs of the tasks, used for unpacking recursive tasks.
 // - bootloader_config: The bootloader config, consisting of the simple bootloader program hash, the
 //   applicative bootloader program hash, and the hash of the supported Cairo verifier programs.
-
+//
 // Returns (written to output_ptr):
 // - The bootloader config.
 // - The number of plain packed tasks (leaves) executed.
@@ -59,15 +82,15 @@ func run_bootloader{
     output_ptr: felt*,
     pedersen_ptr: HashBuiltin*,
     range_check_ptr,
-    ecdsa_ptr,
-    bitwise_ptr,
-    ec_op_ptr,
-    keccak_ptr,
+    ecdsa_ptr: SignatureBuiltin*,
+    bitwise_ptr: BitwiseBuiltin*,
+    ec_op_ptr: EcOpBuiltin*,
+    keccak_ptr: KeccakBuiltin*,
     poseidon_ptr: PoseidonBuiltin*,
     range_check96_ptr,
-    add_mod_ptr,
-    mul_mod_ptr,
-}() {
+    add_mod_ptr: ModBuiltin*,
+    mul_mod_ptr: ModBuiltin*,
+}(unpacking_mode: felt) {
     ap += SIZEOF_LOCALS;
 
     local simple_bootloader_output_start: felt*;
@@ -88,14 +111,14 @@ func run_bootloader{
     %{ simple_bootloader_input = bootloader_input %}
     run_simple_bootloader{output_ptr=simple_bootloader_output_ptr}();
     local range_check_ptr = range_check_ptr;
-    local ecdsa_ptr = ecdsa_ptr;
-    local bitwise_ptr = bitwise_ptr;
-    local ec_op_ptr = ec_op_ptr;
-    local keccak_ptr = keccak_ptr;
+    local ecdsa_ptr: SignatureBuiltin* = ecdsa_ptr;
+    local bitwise_ptr: BitwiseBuiltin* = bitwise_ptr;
+    local ec_op_ptr: EcOpBuiltin* = ec_op_ptr;
+    local keccak_ptr: KeccakBuiltin* = keccak_ptr;
     local poseidon_ptr: PoseidonBuiltin* = poseidon_ptr;
     local range_check96_ptr = range_check96_ptr;
-    local add_mod_ptr = add_mod_ptr;
-    local mul_mod_ptr = mul_mod_ptr;
+    local add_mod_ptr: ModBuiltin* = add_mod_ptr;
+    local mul_mod_ptr: ModBuiltin* = mul_mod_ptr;
     local simple_bootloader_output_end: felt* = simple_bootloader_output_ptr;
 
     %{
@@ -143,6 +166,7 @@ func run_bootloader{
             bootloader_config=bootloader_config,
             n_subtasks=n_subtasks,
             bootloader_config_output_start=bootloader_config_output_start,
+            unpacking_mode=unpacking_mode,
         );
     }
 
@@ -162,6 +186,8 @@ func run_bootloader{
 // Arguments:
 // n_subtasks - Number of direct subtasks to unfold.
 // bootloader_config.
+// bootloader_config_output_start - A pointer to the start of the bootloader config in the output.
+// unpacking_mode - The unpacking mode to use for composite packed tasks.
 //
 // Hint arguments:
 // packed_outputs - PackedOutput object that stores the task tree structure.
@@ -174,11 +200,15 @@ func run_bootloader{
 func parse_tasks{
     output_ptr: felt*,
     pedersen_ptr: HashBuiltin*,
-    poseidon_ptr: PoseidonBuiltin*,
     range_check_ptr,
     n_total_tasks: felt,
     subtasks_output: felt*,
-}(bootloader_config: BootloaderConfig*, n_subtasks: felt, bootloader_config_output_start: felt*) {
+}(
+    bootloader_config: BootloaderConfig*,
+    n_subtasks: felt,
+    bootloader_config_output_start: felt*,
+    unpacking_mode: felt,
+) {
     if (n_subtasks == 0) {
         return ();
     }
@@ -213,6 +243,7 @@ func parse_tasks{
         unpack_composite_packed_task{task_output=subtasks_output}(
             bootloader_config=bootloader_config,
             bootloader_config_output_start=bootloader_config_output_start,
+            unpacking_mode=unpacking_mode,
         );
     }
 
@@ -223,6 +254,7 @@ func parse_tasks{
         bootloader_config=bootloader_config,
         n_subtasks=n_subtasks - 1,
         bootloader_config_output_start=bootloader_config_output_start,
+        unpacking_mode=unpacking_mode,
     );
 }
 
@@ -263,15 +295,120 @@ func parse_task_header{task_output: felt*}() -> (task_header: TaskOutputHeader*)
     return (task_header=task_header);
 }
 
+// "Unpacks" a composite packed task output when no unpacking is needed.
+//
+// Arguments:
+// expected_task_size - Used to verify the size of the task after parsing the
+// CairoVerifierOutputHeader.
+//
+// Implicit arguments:
+// range_check_ptr - Pointer to the range check builtin.
+// task_output - A pointer to the output of the composite packed task. task_output should be of the
+// following format:
+// (simple_bootloader_program_hash, output_len, *output).
+func handle_no_unpacking_flow{task_output: felt*, range_check_ptr}(expected_task_size: felt) -> (
+    nested_subtasks_output: felt*,
+    nested_subtasks_output_len: felt,
+    nested_subtasks_program_hash: felt,
+) {
+    // `task_output` points to the output of the task, which starts with the
+    // CairoVerifierOutputHeader followed by the output elements.
+    let nested_subtasks_output_header: CairoVerifierOutputHeader* = cast(
+        task_output, CairoVerifierOutputHeader*
+    );
+    let nested_subtasks_output_len: felt = nested_subtasks_output_header.output_len;
+    let nested_subtasks_output: felt* = &task_output[CairoVerifierOutputHeader.SIZE];
+
+    // Verify task output header size. The output of the simple bootloader when running a verifier
+    // program follows the following format:
+    // [size, verifier_hash, verified_program_hash, output_size, *output],
+    // where [verified_program_hash, output_size, *output] is the output of the verifier program.
+    // We currently only verify runs of the simple bootloader, and so the above becomes:
+    // [size, verifier_hash, simple_bootloader_hash, output_size,  *output].
+    assert expected_task_size = TaskOutputHeader.SIZE + CairoVerifierOutputHeader.SIZE +
+        nested_subtasks_output_len;
+
+    let nested_subtasks_program_hash: felt = nested_subtasks_output_header.program_hash;
+    let task_output: felt* = &task_output[
+        CairoVerifierOutputHeader.SIZE + nested_subtasks_output_len
+    ];
+    return (
+        nested_subtasks_output=nested_subtasks_output,
+        nested_subtasks_output_len=nested_subtasks_output_len,
+        nested_subtasks_program_hash=nested_subtasks_program_hash,
+    );
+}
+
+// Unpacks a composite packed task output using the Blake hash function.
+//
+// Arguments:
+// expected_task_size - Used to verify the size of the task after parsing the
+// CairoVerifierHashedOutput.
+//
+// Implicit arguments:
+// range_check_ptr - Pointer to the range check builtin.
+// task_output - A pointer to the output of the composite packed task. task_output should be of the
+// following format:
+// (simple_bootloader_program_hash, output_hash).
+//
+// Hint arguments:
+// packed_output - CompositePackedOutput object which's used for unpacking the task.
+func handle_blake_unpacking_flow{task_output: felt*, range_check_ptr}(expected_task_size: felt) -> (
+    nested_subtasks_output: felt*,
+    nested_subtasks_output_len: felt,
+    nested_subtasks_program_hash: felt,
+) {
+    alloc_locals;
+    // Guess the pre-image of subtasks_output_hash (subtasks_output_hash appears in task_output).
+    local nested_subtasks_output_len: felt;
+    local nested_subtasks_output: felt*;
+    %{
+        data = packed_output.elements_for_hash()
+        ids.nested_subtasks_output_len = len(data)
+        ids.nested_subtasks_output = segments.gen_arg(data)
+    %}
+
+    // Compute the Blake hash of nested_subtasks_output.
+    let (subtasks_output_hash: felt) = encode_felt252_data_and_calc_blake_hash(
+        data_len=nested_subtasks_output_len, data=nested_subtasks_output
+    );
+
+    // Verify task output header size. The output of the simple bootloader when running a verifier
+    // program follows the following format:
+    // [size, verifier_hash, verified_program_hash, output_hash],
+    // where [verified_program_hash, output_hash] is the output of the verifier program.
+    // We currently only verify runs of the simple bootloader, and so the above becomes:
+    // [size, verifier_hash, simple_bootloader_hash, output_hash].
+    assert expected_task_size = TaskOutputHeader.SIZE + CairoVerifierHashedOutput.SIZE;
+    let cairo_verifier_hashed_output = cast(task_output, CairoVerifierHashedOutput*);
+
+    // Verify task output hash.
+    assert subtasks_output_hash = cairo_verifier_hashed_output.output_hash;
+
+    let nested_subtasks_program_hash = cairo_verifier_hashed_output.program_hash;
+    let task_output: felt* = &task_output[CairoVerifierHashedOutput.SIZE];
+    return (
+        nested_subtasks_output=nested_subtasks_output,
+        nested_subtasks_output_len=nested_subtasks_output_len,
+        nested_subtasks_program_hash=nested_subtasks_program_hash,
+    );
+}
+
 // Unpacks a composite packed task output.
 //
 // Arguments:
 // bootloader_config.
+// bootloader_config_output_start - A pointer to the start of the bootloader config in the output.
+// unpacking_mode - The unpacking mode to use for composite packed tasks.
 //
 // Implicit arguments:
 // task_output - A pointer to the output of the composite packed task. task_output should be of the
 // following format:
-// (output_len, cairo_verifier_program_hash, simple_bootloader_program_hash, output_hash).
+// If unpacking_mode is NO_UNPACKING:
+// (output_size, cairo_verifier_program_hash, simple_bootloader_program_hash, nested_output_len,
+// *nested_output).
+// If unpacking_mode is BLAKE_UNPACKING:
+// (output_size, cairo_verifier_program_hash, simple_bootloader_program_hash, output_hash).
 // n_total_tasks - Number of PlainPackedOutput that were unpacked.
 //
 // Hint arguments:
@@ -279,32 +416,17 @@ func parse_task_header{task_output: felt*}() -> (task_header: TaskOutputHeader*)
 func unpack_composite_packed_task{
     output_ptr: felt*,
     pedersen_ptr: HashBuiltin*,
-    poseidon_ptr: PoseidonBuiltin*,
     range_check_ptr,
     n_total_tasks: felt,
     task_output: felt*,
-}(bootloader_config: BootloaderConfig*, bootloader_config_output_start: felt*) {
+}(
+    bootloader_config: BootloaderConfig*,
+    bootloader_config_output_start: felt*,
+    unpacking_mode: felt,
+) {
     ap += SIZEOF_LOCALS;
 
-    // Guess the output of the composite packed task.
-    local nested_subtasks_output: felt*;
-    local nested_subtasks_output_len;
-    // Note that in the hint below we use `elements_for_hash`, but no loner hash them. The name
-    // comes from a legacy flow, which we no longer follow.
-    %{
-        data = packed_output.elements_for_hash()
-        ids.nested_subtasks_output_len = len(data)
-        ids.nested_subtasks_output = segments.gen_arg(data)
-    %}
-
-    // Verify task output header. The output of the simple bootloader when running a verifier
-    // program follows the following format:
-    // [size, verifier_hash, verified_program_hash, output_size, *output],
-    // where [verified_program_hash, output_size, *output] is the output of the verifier program.
-    // We currently only verify runs of the simple bootloader, and so the above becomes:
-    // [size, verifier_hash, simple_bootloader_hash, output_size,  *output].
-    let (task_header: TaskOutputHeader*) = parse_task_header();
-    assert task_header.size - 4 = nested_subtasks_output_len;
+    let (local task_header: TaskOutputHeader*) = parse_task_header();
 
     // Make sure the program hash is one of the supported verifier program hashes.
     find_element(
@@ -313,24 +435,32 @@ func unpack_composite_packed_task{
         n_elms=bootloader_config.supported_cairo_verifier_program_hashes_len,
         key=task_header.program_hash,
     );
-    local range_check_ptr = range_check_ptr;
 
+    // Handle the task's output based on the unpacking mode.
+    if (unpacking_mode == NO_UNPACKING) {
+        let (
+            nested_subtasks_output, nested_subtasks_output_len, nested_subtasks_program_hash
+        ) = handle_no_unpacking_flow(expected_task_size=task_header.size);
+    } else {
+        assert unpacking_mode = BLAKE_UNPACKING;
+        let (
+            nested_subtasks_output, nested_subtasks_output_len, nested_subtasks_program_hash
+        ) = handle_blake_unpacking_flow(expected_task_size=task_header.size);
+    }
+    local task_output: felt* = task_output;
+
+    // Verify the program hash of the nested subtasks.
     // Make sure the program hash of the task is one of the supported simple bootloader hashes.
     find_element(
         array_ptr=bootloader_config.supported_simple_bootloader_hash_list,
         elm_size=1,
         n_elms=bootloader_config.supported_simple_bootloader_hash_list_len,
-        key=task_output[0],
+        key=nested_subtasks_program_hash,
     );
-    local range_check_ptr = range_check_ptr;
-    local task_output: felt* = task_output + 1;
-    assert task_output[0] = nested_subtasks_output_len;
-    // Verify task output.
-    memcpy(dst=task_output + 1, src=nested_subtasks_output, len=nested_subtasks_output_len);
-    local task_output: felt* = task_output + 1 + nested_subtasks_output_len;
 
     // Call recursively to parse the composite task's subtasks.
-    local nested_subtasks_output_start: felt* = nested_subtasks_output;
+    local expected_nested_subtasks_output_after_consumption: felt* = nested_subtasks_output +
+        nested_subtasks_output_len;
     let n_subtasks = [nested_subtasks_output];
     let nested_subtasks_output = nested_subtasks_output + 1;
     %{ packed_outputs = packed_output.subtasks %}
@@ -339,11 +469,12 @@ func unpack_composite_packed_task{
             bootloader_config=bootloader_config,
             n_subtasks=n_subtasks,
             bootloader_config_output_start=bootloader_config_output_start,
+            unpacking_mode=unpacking_mode,
         );
     }
 
     // Assert that the entire subtask output was used.
-    assert nested_subtasks_output = nested_subtasks_output_start + nested_subtasks_output_len;
+    assert nested_subtasks_output = expected_nested_subtasks_output_after_consumption;
     return ();
 }
 
@@ -360,7 +491,6 @@ func unpack_composite_packed_task{
 func unpack_plain_packed_task{
     output_ptr: felt*,
     pedersen_ptr: HashBuiltin*,
-    poseidon_ptr: PoseidonBuiltin*,
     range_check_ptr,
     n_total_tasks: felt,
     task_output: felt*,

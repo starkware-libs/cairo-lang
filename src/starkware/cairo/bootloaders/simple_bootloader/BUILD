@@ -4,6 +4,7 @@ cairo_library(
     name = "simple_bootloader_lib",
     srcs = [
         "execute_task.cairo",
+        "no_builtin_simulation_simple_bootloader.cairo",
         "run_simple_bootloader.cairo",
         "simple_bootloader.cairo",
         "verify_builtins.cairo",
@@ -33,6 +34,17 @@ cairo_binary(
     ],
     compiled_program_name = "simple_bootloader_compiled.json",
     main = "simple_bootloader.cairo",
+    deps = [":simple_bootloader_lib"],
+)
+
+cairo_binary(
+    name = "no_builtin_simulation_simple_bootloader_program",
+    cairoopts = [
+        "--debug_info_with_source",
+        "--proof_mode",
+    ],
+    compiled_program_name = "no_builtin_simulation_simple_bootloader_compiled.json",
+    main = "no_builtin_simulation_simple_bootloader.cairo",
     deps = [":simple_bootloader_lib"],
 )
 

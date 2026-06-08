@@ -34,6 +34,7 @@ exports_files([
     "example_fact_topologies.json",
     "example_single_fact_topologies.json",
     "example_proof.json",
+    "no_builtin_simulation_simple_bl_example_proof.json",
     "example_stwo_proof.json",
     "objects.cairo",
 ])

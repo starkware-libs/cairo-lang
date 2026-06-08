@@ -575,18 +575,17 @@ func blake2s_felts{range_check_ptr, bitwise_ptr: BitwiseBuiltin*, blake2s_ptr: f
 // All 32-bit limbs are arranged in big-endian order.
 // Returns the size of the unpacked array in felts.
 // Assumes:
-//  * All output felts in `upnacked_u32s` are extrenally verified to be in [0, 2^32).
-// Note: This function can nondeterministically choose between several encodings of felts,
-//      x < PRIME can be encoded as x + PRIME, x + 2 * PRIME, etc. The canonical encoding is
-//      given when x < PRIME.
-func encode_felt252_to_u32s{range_check_ptr: felt}(
+//  * All output felts in `upnacked_u32s` are externally verified to be in [0, 2^32).
+// Note: A malicious prover may choose a non-canonical encoding, that is:
+//       A felt x can be encoded as any u256 value congruent to x modulo PRIME,
+//       and for x < 2^63, the encoding may use either 2 u32s or 8 u32s.
+func encode_felt252s_to_u32s{range_check_ptr: felt}(
     packed_values_len: felt, packed_values: felt*, unpacked_u32s: felt*
 ) -> felt {
     alloc_locals;
 
-    local U63_MAX = 2 ** 63 - 1;
     local EXP31 = 2 ** 31;
-    local end = cast(packed_values, felt) + packed_values_len;
+    local end: felt* = &packed_values[packed_values_len];
 
     %{
         offset = 0
@@ -600,6 +599,7 @@ func encode_felt252_to_u32s{range_check_ptr: felt}(
             assert val == 0
             offset += val_len
     %}
+    local limb_shift = 2 ** 32;
     tempvar out = unpacked_u32s;
     tempvar packed_values = packed_values;
     tempvar range_check_ptr = range_check_ptr;
@@ -610,10 +610,12 @@ func encode_felt252_to_u32s{range_check_ptr: felt}(
         // Unpack small felt.
 
         tempvar current_val = packed_values[0];
-        // Assert that the value is in [0, 2^63).
-        assert [range_check_ptr] = U63_MAX - current_val;
+        tempvar out_0 = out[0];
         // Assert that the limbs represent the number.
-        assert current_val = out[1] + 2 ** 32 * out[0];
+        assert current_val = out[1] + 2 ** 32 * out_0;
+        // Assert that out0 is in the range [0, 2 ** 31).
+        // This ensures that current_val is in the range [0, 2 ** 63).
+        assert [range_check_ptr] = out_0 + (2 ** 128 - 2 ** 31);
 
         tempvar out = &out[2];
         tempvar packed_values = &packed_values[1];
@@ -621,7 +623,7 @@ func encode_felt252_to_u32s{range_check_ptr: felt}(
         jmp loop;
     }
 
-    if (end - cast(packed_values, felt) == 0) {
+    if (end == packed_values) {
         return out - unpacked_u32s;
     }
 
@@ -629,13 +631,15 @@ func encode_felt252_to_u32s{range_check_ptr: felt}(
     // Assert that the top limb is over 2^31, as its MSB is artificially set for encoding.
     tempvar raw_out_0 = out[0] - EXP31;
     assert [range_check_ptr] = raw_out_0;
-    // Assert that the limbs represent the number. Set the MSB of the most significant limb.
-    assert packed_values[0] = (
-        (out[7] + (2 ** 32 * out[6])) +
-        2 ** (32 * 2) * (out[5] + 2 ** 32 * out[4]) +
-        2 ** (32 * 4) * (out[3] + 2 ** 32 * out[2]) +
-        2 ** (32 * 6) * (out[1] + 2 ** 32 * raw_out_0)
-    );
+    // Assert that the limbs represent the number, after reverting the MSB of the most significant
+    // limb to 0.
+    tempvar curr_packed_value = raw_out_0 * limb_shift + out[1];
+    tempvar curr_packed_value = curr_packed_value * limb_shift + out[2];
+    tempvar curr_packed_value = curr_packed_value * limb_shift + out[3];
+    tempvar curr_packed_value = curr_packed_value * limb_shift + out[4];
+    tempvar curr_packed_value = curr_packed_value * limb_shift + out[5];
+    tempvar curr_packed_value = curr_packed_value * limb_shift + out[6];
+    assert packed_values[0] = curr_packed_value * limb_shift + out[7];
 
     tempvar out = &out[8];
     tempvar packed_values = &packed_values[1];
@@ -643,31 +647,33 @@ func encode_felt252_to_u32s{range_check_ptr: felt}(
     jmp loop;
 }
 
-const OP1_AP = 4;
-const BLAKE2S_OPCODE_EXT = 1;
-const BLAKE2S_FINALIZE_OPCODE_EXT = 2;
-const BLAKE2S_AP_FLAGS = OP1_AP * (2 ** 2);
-
-const OFF_MINUS_1 = 2 ** 15 - 1;
-const OFF_MINUS_2 = 2 ** 15 - 2;
-const OFF_MINUS_3 = 2 ** 15 - 3;
-const OFF_MINUS_4 = 2 ** 15 - 4;
-
-const COUNTER_OFFSET = 1;
-const STATE_OFFSET = 2 ** 16;
-const MESSAGE_OFFSET = 2 ** 32;
-const FLAGS_OFFSET = 2 ** 48;
-const OPCODE_EXT_OFFSET = 2 ** 63;
-
-const BLAKE2S_INSTRUCTION = OFF_MINUS_1 * COUNTER_OFFSET + OFF_MINUS_4 * STATE_OFFSET +
-    OFF_MINUS_3 * MESSAGE_OFFSET + BLAKE2S_AP_FLAGS * FLAGS_OFFSET + BLAKE2S_OPCODE_EXT *
-    OPCODE_EXT_OFFSET;
-const BLAKE2S_FINALIZE_INSTRUCTION = OFF_MINUS_1 * COUNTER_OFFSET + OFF_MINUS_3 * STATE_OFFSET +
-    OFF_MINUS_2 * MESSAGE_OFFSET + BLAKE2S_AP_FLAGS * FLAGS_OFFSET + BLAKE2S_FINALIZE_OPCODE_EXT *
-    OPCODE_EXT_OFFSET;
-
 // Computes blake2s of `input` of size `len` felts, representing 32 bits each.
 func blake_with_opcode{range_check_ptr}(len: felt, data: felt*, out: felt*) {
+    const OP1_AP = 4;
+    const BLAKE2S_OPCODE_EXT = 1;
+    const BLAKE2S_FINALIZE_OPCODE_EXT = 2;
+    const BLAKE2S_AP_FLAGS = OP1_AP * (2 ** 2);
+    const BLAKE2S_ADD_AP_FLAG = (2 ** 11);
+
+    const COUNTER_OFFSET = 2 ** 15 - 1;
+    const MESSAGE_OFFSET_FINALIZE = 2 ** 15 - 3;
+    const MESSAGE_OFFSET = 2 ** 15 - 3;
+    const STATE_OFFSET_FINALIZE = 2 ** 15 - 6;
+    const STATE_OFFSET = 2 ** 15 - 4;
+
+    const COUNTER_SHIFT = 1;
+    const STATE_SHIFT = 2 ** 16;
+    const MESSAGE_SHIFT = 2 ** 32;
+    const FLAGS_SHIFT = 2 ** 48;
+    const OPCODE_EXT_SHIFT = 2 ** 63;
+
+    const BLAKE2S_INSTRUCTION = COUNTER_OFFSET * COUNTER_SHIFT + STATE_OFFSET * STATE_SHIFT +
+        MESSAGE_OFFSET * MESSAGE_SHIFT + (BLAKE2S_AP_FLAGS + BLAKE2S_ADD_AP_FLAG) * FLAGS_SHIFT +
+        BLAKE2S_OPCODE_EXT * OPCODE_EXT_SHIFT;
+    const BLAKE2S_FINALIZE_INSTRUCTION = COUNTER_OFFSET * COUNTER_SHIFT + STATE_OFFSET_FINALIZE *
+        STATE_SHIFT + MESSAGE_OFFSET_FINALIZE * MESSAGE_SHIFT + (
+            BLAKE2S_AP_FLAGS + BLAKE2S_ADD_AP_FLAG
+        ) * FLAGS_SHIFT + BLAKE2S_FINALIZE_OPCODE_EXT * OPCODE_EXT_SHIFT;
     alloc_locals;
 
     let (local state: felt*) = alloc();
@@ -680,63 +686,91 @@ func blake_with_opcode{range_check_ptr}(len: felt, data: felt*, out: felt*) {
     assert state[6] = 0x1F83D9AB;
     assert state[7] = 0x5BE0CD19;
 
-    // Express the length in bytes, subtract the remainder for finalize.
-    local rem;
+    struct Locals {
+        u32s_in_last_block: felt,
+        blake_data_len_bytes: felt,
+        range_check_ptr: felt,
+        final_data: felt*,
+    }
+
+    local locals: Locals;
+    static_assert cast(fp + 1, Locals*) == &locals;
+
+    // Data length in bytes for non-finalize BLAKE.
     if (len == 0) {
-        assert rem = 0;
-        tempvar range_check_ptr = range_check_ptr;
+        assert locals.u32s_in_last_block = 0;
+        assert locals.range_check_ptr = range_check_ptr;
     } else {
         let (_, r) = unsigned_div_rem(len - 1, 16);
-        assert rem = r + 1;
-        tempvar range_check_ptr = range_check_ptr;
+        assert locals.u32s_in_last_block = r + 1;
+        assert locals.range_check_ptr = range_check_ptr;
     }
-
-    local len_in_bytes = (len - rem) * 4;
-
-    local range_check_ptr = range_check_ptr;
+    assert locals.blake_data_len_bytes = (len - locals.u32s_in_last_block) * 4;
+    let (final_data: felt*) = alloc();
+    locals.final_data = final_data;
 
     // Copy remaining data and pad with zeroes.
-    let (local final_data: felt*) = alloc();
-    memcpy(final_data, &data[len - rem], rem);
-    memset(&final_data[rem], 0, 16 - rem);
+    memcpy(final_data, &data[len - locals.u32s_in_last_block], locals.u32s_in_last_block);
+    memset(&final_data[locals.u32s_in_last_block], 0, 16 - locals.u32s_in_last_block);
 
-    tempvar counter = 0;
-    tempvar state = state;
-    tempvar data = data;
+    static_assert fp - 3 == &out;
+
+    struct LoopFrame {
+        counter: felt,
+        state: felt*,
+        data: felt*,
+    }
+    tempvar frame = LoopFrame(counter=0, state=state, data=data);
+    jmp check_if_done;
 
     loop:
-    if (counter - len_in_bytes == 0) {
-        // Add remainder bytes to counter.
-        tempvar counter = counter + (rem * 4);
-        [ap] = state, ap++;
-        [ap] = final_data, ap++;
-        [ap] = counter, ap++;
-        [ap] = out;
-        dw BLAKE2S_FINALIZE_INSTRUCTION;
-        // Increment AP after blake opcode.
-        ap += 1;
+    let frame = [cast(ap - LoopFrame.SIZE - 1, LoopFrame*)];
 
-        let range_check_ptr = [fp + 3];
-        return ();
-    }
-
-    tempvar counter = counter + 64;
-
+    tempvar counter = frame.counter + 64;
     // Blake output pointer / the next state.
-    [ap] = &state[8];
+    [ap] = &frame.state[8];
+    static_assert ap + COUNTER_OFFSET - 2 ** 15 == &counter;
+    static_assert ap + STATE_OFFSET - 2 ** 15 == &frame.state;
+    static_assert ap + MESSAGE_OFFSET - 2 ** 15 == &frame.data;
     dw BLAKE2S_INSTRUCTION;
 
-    let state = cast([ap - 4], felt*);
-    let data = cast([ap - 3], felt*);
-
-    // Increment AP after blake opcode.
-    ap += 1;
+    // Due to the use of `dw` the compiler invalidates the references.
+    let counter = cast([ap + COUNTER_OFFSET - 2 ** 15 - 1], felt);
+    let data = cast([ap + MESSAGE_OFFSET - 2 ** 15 - 1], felt*);
+    let new_state = cast([ap - 1], felt*);
 
     tempvar data = data + 16;
-    jmp loop;
+    static_assert ap - 3 == &counter;
+    static_assert ap - 2 == &new_state;
+    static_assert ap - 1 == &data;
+
+    check_if_done:
+    let frame = [cast(ap - LoopFrame.SIZE, LoopFrame*)];
+    let locals = [cast(fp + 1, Locals*)];
+
+    tempvar is_done = frame.counter - locals.blake_data_len_bytes;
+
+    jmp loop if is_done != 0;
+
+    tempvar data = locals.final_data;
+
+    // Add remainder bytes to counter.
+    tempvar counter = frame.counter + (locals.u32s_in_last_block * 4);
+
+    let out = cast([fp - 3], felt*);
+    [ap] = out;
+
+    static_assert ap + COUNTER_OFFSET - 2 ** 15 == &counter;
+    static_assert ap + STATE_OFFSET_FINALIZE - 2 ** 15 == &frame.state;
+    static_assert ap + MESSAGE_OFFSET_FINALIZE - 2 ** 15 == &data;
+    dw BLAKE2S_FINALIZE_INSTRUCTION;
+
+    // The `range_check_ptr` must be redefined since the `dw` instruction invalidates it.
+    let range_check_ptr = [fp + 3];
+    return ();
 }
 
-// Given `data_len` felt252s at `data`, encodes them as u32s as defined in `encode_felt252_to_u32s`
+// Given `data_len` felt252s at `data`, encodes them as u32s as defined in `encode_felt252s_to_u32s`
 // and computes the blake2s hash of the result using the dedicated opcodes.
 // The 256 bit result is then returned as a felt252 (i.e. modulo PRIME).
 func encode_felt252_data_and_calc_blake_hash{range_check_ptr: felt}(
@@ -744,7 +778,7 @@ func encode_felt252_data_and_calc_blake_hash{range_check_ptr: felt}(
 ) -> (hash: felt) {
     alloc_locals;
     let (local encoded_data: felt*) = alloc();
-    let encoded_data_len = encode_felt252_to_u32s(
+    let encoded_data_len = encode_felt252s_to_u32s(
         packed_values_len=data_len, packed_values=data, unpacked_u32s=encoded_data
     );
     let (local blake_output: felt*) = alloc();

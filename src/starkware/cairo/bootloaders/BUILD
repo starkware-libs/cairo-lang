@@ -84,3 +84,32 @@ pytest_test(
     srcs = ["aggregator_utils_test.py"],
     deps = [":aggregator_utils"],
 )
+
+py_library(
+    name = "cairo_hash_bootloaders_lib",
+    srcs = [
+        "hash_bootloaders.py",
+    ],
+    data = [
+
+        "//src/starkware/cairo/bootloaders/applicative_bootloader:applicative_bootloader_compiled.json",
+        "//src/starkware/cairo/bootloaders/simple_bootloader:simple_bootloader_compiled.json",
+        "//src/starkware/cairo/bootloaders/simple_bootloader:no_builtin_simulation_simple_bootloader_compiled.json",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//src/starkware/cairo/common:cairo_common_lib",
+        "//src/starkware/cairo/lang:cairo_version_lib",
+        "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
+        "//src/starkware/cairo/lang/vm:cairo_vm_crypto_lib",
+        "//src/starkware/python:starkware_python_utils_lib",
+    ],
+)
+
+py_exe(
+    name = "cairo_hash_bootloaders_exe",
+    module = "starkware.cairo.bootloaders.hash_bootloaders",
+    deps = [
+        "cairo_hash_bootloaders_lib",
+    ],
+)

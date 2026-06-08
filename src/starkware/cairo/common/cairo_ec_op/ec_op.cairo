@@ -1,47 +1,36 @@
-from src.starkware.cairo.common.ec import StarkCurve, assert_on_curve, ec_add
+from src.starkware.cairo.common.ec import StarkCurve, assert_on_curve, ec_add, ec_sub
 
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.cairo_builtins import EcOpBuiltin
 from starkware.cairo.common.ec_point import EcPoint
+from starkware.cairo.common.math import assert_not_zero
 from starkware.cairo.common.memset import memset
 
+// The maximal number of bits allowed in the scalar m.
 const M_MAX_BITS = 252;
-const FIRST_P_POWER = 251;
-const SECOND_P_POWER = 196;
-const THIRD_P_POWER = 192;
-const FOURTH_P_POWER = 0;
 
-func ec_mul_cairo{}(m: felt, p: EcPoint) -> (r: EcPoint) {
-    return cairo_ec_op(p=EcPoint(x=0, y=0), m=m, q=p);
-}
-
-// Computes p + m * q on the elliptic curve.
-// Because the simulate_builtin_ec_op_with_cairo function cannot handle inputs where additions of
-// points with the same x coordinate arise during the computation, this function adds and subtracts
-// a nondeterministic point s to the computation, so that regardless of input, the probability that
-// such additions arise will become negligibly small.
-// The precise computation is therefore:
-// ((p + s) + m * q) - s
-// so that the inputs to the builtin itself are (p + s), m, and q.
+// Computes m * p where m is a scalar and p is a point on the STARK elliptic curve.
 //
 // Arguments:
 //   ec_op_ptr - the ec_op builtin pointer.
 //   p - an EC point.
-//   m - the multiplication coefficient of Q.
-//   q - an EC point.
+//   m - the multiplication coefficient of p.
 //
 // Returns:
-//   r = p + m * q.
+//   r = m * p.
 //
 // Assumptions:
-//   p and q are valid points on the curve.
-func cairo_ec_op{}(p: EcPoint, m: felt, q: EcPoint) -> (r: EcPoint) {
+//   p is a valid point on the curve.
+func ec_mul_cairo(m: felt, p: EcPoint) -> (r: EcPoint) {
     alloc_locals;
 
     // (0, 0), which represents the point at infinity, is the only point with y = 0.
-    if (q.y == 0) {
+    if (p.y == 0) {
         return (r=p);
     }
+
+    // Define `q` for the following hint to work.
+    let q = p;
 
     local s: EcPoint;
     %{
@@ -56,27 +45,24 @@ func cairo_ec_op{}(p: EcPoint, m: felt, q: EcPoint) -> (r: EcPoint) {
         ids.s.x, ids.s.y = random_ec_point(FIELD_PRIME, ALPHA, BETA, seed)
     %}
     assert_on_curve(s);
-    let p_plus_s: EcPoint = ec_add(p, s);
 
-    let (r_plus_s) = simulate_builtin_ec_op_with_cairo(p=p_plus_s, m=m, q=q);
-    let r: EcPoint = ec_add(r_plus_s, EcPoint(x=s.x, y=-s.y));
+    let (r_plus_s) = simulate_builtin_ec_op_with_cairo(p=s, m=m, q=p);
+    let r: EcPoint = ec_sub(r_plus_s, s);
     return (r=r);
 }
 
 // Returns the result of the EC operation P + m * Q.
 // where P = (p_x, p_y), Q = (q_x, q_y) are points on the elliptic curve defined as
 // y^2 = x^3 + alpha * x + beta (mod prime).
-
+//
 // Mimics the operation of the AIR, so that this function fails whenever the builtin AIR
 // would not yield a correct result, i.e. when any part of the computation attempts to add
 // two points with the same x coordinate.
-func simulate_builtin_ec_op_with_cairo{}(p: EcPoint, m: felt, q: EcPoint) -> (r: EcPoint) {
+func simulate_builtin_ec_op_with_cairo(p: EcPoint, m: felt, q: EcPoint) -> (r: EcPoint) {
     alloc_locals;
     // Assert that the points are on the curve and are not the point at infinity.
-    tempvar rhs_p = (p.x * p.x + StarkCurve.ALPHA) * p.x + StarkCurve.BETA;
-    assert p.y * p.y = rhs_p;
-    tempvar rhs_q = (q.x * q.x + StarkCurve.ALPHA) * q.x + StarkCurve.BETA;
-    assert q.y * q.y = rhs_q;
+    assert p.y * p.y = (p.x * p.x + StarkCurve.ALPHA) * p.x + StarkCurve.BETA;
+    assert q.y * q.y = (q.x * q.x + StarkCurve.ALPHA) * q.x + StarkCurve.BETA;
 
     let (local m_bit_unpacking: felt*) = alloc();  // Starts from lsb.
     %{
@@ -87,7 +73,7 @@ func simulate_builtin_ec_op_with_cairo{}(p: EcPoint, m: felt, q: EcPoint) -> (r:
     %}
 
     // Verify that the bit unpacking is of a number num smaller than PRIME.
-    verify_bit_unpacking_is_reduced(num=m, unpacking=m_bit_unpacking);
+    verify_bit_unpacking_is_reduced(unpacking=m_bit_unpacking);
 
     // Compute the result.
     let result = _ec_op_inner(
@@ -101,17 +87,10 @@ func simulate_builtin_ec_op_with_cairo{}(p: EcPoint, m: felt, q: EcPoint) -> (r:
     return (r=result);
 }
 
-// Asserts that an EcOpBuiltin instance is valid.
-func verify_simulate_builtin_ec_op_with_cairo{}(input: EcOpBuiltin) {
-    let (r) = simulate_builtin_ec_op_with_cairo(p=input.p, m=input.m, q=input.q);
-    assert input.r = r;
-    return ();
-}
-
 // Computes the EC operation partial_sum + curr_m * doubled_point.
 // It is called recursively, with the recursion being terminated when the index reaches M_MAX_BITS.
 // The function also verifies that the bit unpacking is indeed of curr_m (modulo PRIME).
-func _ec_op_inner{}(
+func _ec_op_inner(
     partial_sum: EcPoint, doubled_point: EcPoint, m_bit_unpacking: felt*, index: felt, curr_m: felt
 ) -> EcPoint {
     alloc_locals;
@@ -120,24 +99,22 @@ func _ec_op_inner{}(
         return partial_sum;
     }
 
-    if (doubled_point.x == partial_sum.x) {
-        %{ assert False, "ec_op failed." %}
-        jmp rel 0;
-    }
+    tempvar x_diff = doubled_point.x - partial_sum.x;
+    assert_not_zero(x_diff);
 
-    if (m_bit_unpacking[0] == 1) {
+    if (m_bit_unpacking[0] == 0) {
+        tempvar partial_sum = partial_sum;
+    } else {
         // Inline ec_add for input p=partial_sum, q=doubled_point.
         // Note: no need to compare doubled_point.y to 0 since simulate_builtin_ec_op_with_cairo
         // has already verified that p is not the point at infinity and every time partial_sum
         // gets updated, it is the addition of two points with different x coordinates.
         // We also do not need to address the case where partial_sum.x == doubled_point.x because
         // we have already verified that it is not the case.
-        tempvar slope = (partial_sum.y - doubled_point.y) / (partial_sum.x - doubled_point.x);
+        assert m_bit_unpacking[0] = 1;
+        tempvar slope = (doubled_point.y - partial_sum.y) / x_diff;
         tempvar r_x = slope * slope - partial_sum.x - doubled_point.x;
         tempvar partial_sum = EcPoint(x=r_x, y=slope * (partial_sum.x - r_x) - partial_sum.y);
-    } else {
-        assert m_bit_unpacking[0] = 0;
-        tempvar partial_sum = partial_sum;
     }
 
     // Inline ec_double for input p=doubled_point.
@@ -152,19 +129,17 @@ func _ec_op_inner{}(
         x=r_x, y=slope * (doubled_point.x - r_x) - doubled_point.y
     );
 
-    if (doubled_point.x == partial_sum.x) {
-        %{ assert False, "ec_op failed." %}
-        jmp rel 0;
-    }
+    tempvar x_diff = doubled_point.x - partial_sum.x;
+    assert_not_zero(x_diff);
 
-    if (m_bit_unpacking[1] == 1) {
+    if (m_bit_unpacking[1] == 0) {
+        tempvar partial_sum = partial_sum;
+    } else {
         // Inline ec_add for input p=partial_sum, q=doubled_point.
-        tempvar slope = (partial_sum.y - doubled_point.y) / (partial_sum.x - doubled_point.x);
+        assert m_bit_unpacking[1] = 1;
+        tempvar slope = (doubled_point.y - partial_sum.y) / x_diff;
         tempvar r_x = slope * slope - partial_sum.x - doubled_point.x;
         tempvar partial_sum = EcPoint(x=r_x, y=slope * (partial_sum.x - r_x) - partial_sum.y);
-    } else {
-        assert m_bit_unpacking[1] = 0;
-        tempvar partial_sum = partial_sum;
     }
 
     // Inline ec_double for input p=doubled_point.
@@ -186,19 +161,25 @@ func _ec_op_inner{}(
 }
 
 // Asserts that the bit unpacking is of a number num smaller than PRIME.
-func verify_bit_unpacking_is_reduced{}(num: felt, unpacking: felt*) {
-    if (unpacking[FIRST_P_POWER] == 0) {
+func verify_bit_unpacking_is_reduced(unpacking: felt*) {
+    // The four bits set to one in binary representation of the Stone prime, from most significant
+    // to least significant.
+    const P_ONE_BIT_POS_1 = 251;
+    const P_ONE_BIT_POS_2 = 196;
+    const P_ONE_BIT_POS_3 = 192;
+    const P_ONE_BIT_POS_4 = 0;
+    if (unpacking[P_ONE_BIT_POS_1] == 0) {
         return ();
     }
-    memset(dst=unpacking + SECOND_P_POWER + 1, value=0, n=FIRST_P_POWER - SECOND_P_POWER - 1);
-    if (unpacking[SECOND_P_POWER] == 0) {
+    memset(dst=&unpacking[P_ONE_BIT_POS_2 + 1], value=0, n=P_ONE_BIT_POS_1 - P_ONE_BIT_POS_2 - 1);
+    if (unpacking[P_ONE_BIT_POS_2] == 0) {
         return ();
     }
-    memset(dst=unpacking + THIRD_P_POWER + 1, value=0, n=SECOND_P_POWER - THIRD_P_POWER - 1);
-    if (unpacking[THIRD_P_POWER] == 0) {
+    memset(dst=&unpacking[P_ONE_BIT_POS_3 + 1], value=0, n=P_ONE_BIT_POS_2 - P_ONE_BIT_POS_3 - 1);
+    if (unpacking[P_ONE_BIT_POS_3] == 0) {
         return ();
     }
-    memset(dst=unpacking + FOURTH_P_POWER + 1, value=0, n=THIRD_P_POWER - FOURTH_P_POWER - 1);
-    assert unpacking[FOURTH_P_POWER] = 0;
+    memset(dst=&unpacking[P_ONE_BIT_POS_4 + 1], value=0, n=P_ONE_BIT_POS_3 - P_ONE_BIT_POS_4 - 1);
+    assert unpacking[P_ONE_BIT_POS_4] = 0;
     return ();
 }
