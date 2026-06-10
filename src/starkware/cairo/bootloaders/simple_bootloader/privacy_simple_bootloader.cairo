@@ -5,7 +5,9 @@ from starkware.cairo.bootloaders.simple_bootloader.run_simple_bootloader import 
 )
 from starkware.cairo.bootloaders.simple_bootloader.verify_builtins import (
     create_ec_op_builtin_segment_if_needed,
+    create_keccak_builtin_segment_if_needed,
     verify_ec_op_builtin_if_needed,
+    verify_keccak_builtin_if_needed,
 )
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.cairo_blake2s.blake2s import encode_felt252_data_and_calc_blake_hash
@@ -111,6 +113,14 @@ func main{
     );
     local ec_op_start_ptr: EcOpBuiltin* = ec_op_ptr;
 
+    // Handle keccak builtin.
+    // See docstring of `create_keccak_builtin_segment_if_needed` for more info.
+    local keccak_ptr_orig: KeccakBuiltin* = keccak_ptr;
+    let (local keccak_ptr: KeccakBuiltin*) = create_keccak_builtin_segment_if_needed(
+        keccak_ptr=keccak_ptr
+    );
+    local keccak_start_ptr: KeccakBuiltin* = keccak_ptr;
+
     // Execute tasks.
     let (local simple_bl_output: felt*) = alloc();
     let simple_bl_output_start = simple_bl_output;
@@ -119,6 +129,12 @@ func main{
     // Verify the ec_op builtin. See docstring of `verify_ec_op_builtin_if_needed` for more info.
     let (local ec_op_ptr: EcOpBuiltin*) = verify_ec_op_builtin_if_needed(
         ec_op_ptr=ec_op_ptr, ec_op_ptr_orig=ec_op_ptr_orig, ec_op_start_ptr=ec_op_start_ptr
+    );
+
+    // Verify the keccak builtin. See docstring of `verify_keccak_builtin_if_needed` for more
+    // info.
+    let (local keccak_ptr: KeccakBuiltin*) = verify_keccak_builtin_if_needed(
+        keccak_ptr=keccak_ptr, keccak_ptr_orig=keccak_ptr_orig, keccak_start_ptr=keccak_start_ptr
     );
 
     // Invoke additional opcodes and builtins to make sure all needed components for the circuit

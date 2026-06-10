@@ -22,6 +22,7 @@ setuptools.setup(
     url="https://cairo-lang.org/",
     package_data={
         "starkware.cairo": ["builtin_selection/*.cairo"],
+        "starkware.cairo.bootloaders": ["simple_bootloader/*.cairo"],
         "starkware.cairo.common": ["*.cairo", "*/*.cairo"],
         "starkware.cairo.lang.compiler": ["cairo.ebnf", "lib/*.cairo"],
         "starkware.cairo.lang.migrators": ["*.ebnf"],
