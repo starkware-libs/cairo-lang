@@ -1,6 +1,7 @@
-import patricia.code.main
-import patricia.code_proof.strong_valid
 import patricia.code_proof.root_eq
+import patricia.code_proof.sorted
+import patricia.code_proof.strong_valid
+import patricia.code.main
 
 -- Top-level correctness: given an `old_tree` whose hash is `prev_root` and a successful run of
 -- `patricia_update_using_update_constants`,
@@ -223,3 +224,27 @@ theorem patricia_update_using_update_constants.deterministic {crypto: Crypto}
     have h_no_update₁ := h_no_updates₁ leaf h_leaf
     rw [valid₁.at_of_tree_at _ h_hash₁] at h_no_update₁
     exact h_no_update₁ ▸ h_no_update₀
+
+-- A successful run of `patricia_update_using_update_constants` implies that the keys of the updates
+-- are sorted in strictly increasing order.
+theorem patricia_update_using_update_constants.sorted {crypto: Crypto}
+    {n_steps height prev_root new_root: ℕ} {updates: List Update}
+    (h: patricia_update_using_update_constants crypto n_steps height prev_root new_root updates) :
+    List.SortedLT (updates.map Update.key) := by
+  unfold patricia_update_using_update_constants at h
+  split at h
+  case isTrue =>
+    rw [(List.length_eq_zero_iff.1 (by assumption) : updates = [])]
+    simp [List.SortedLT, StrictMono]
+  case isFalse h_n_updates =>
+    have ⟨_, _, h⟩ := h
+    unfold traverse_node at h
+    split at h
+    case isTrue h_traverse =>
+      have := h.sorted
+      simp only [List.map_map] at this
+      exact this
+    case isFalse h_traverse =>
+      have := h.sorted
+      simp only [List.map_map] at this
+      exact this

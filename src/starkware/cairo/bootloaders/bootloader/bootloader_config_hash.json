@@ -1,0 +1,5 @@
+{
+    "supported_simple_bootloader_hash_list_hash": "0x79c96592bca7fded3e2108bb43e5ad8c979af0e490d6b49f8cfe310db73b6f7",
+    "applicative_bootloader_config_program_hash": "0x5370f15cbd175708ac356a4f7215e951646162b0d04adeb5bb988ec2ad59ab2",
+    "supported_cairo_verifier_hash_list_hash": "0x5a32ca780db85cc5c51976b5d9dc746304db4292f29155e793cb5208f23eeef"
+}

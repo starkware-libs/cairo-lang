@@ -86,3 +86,51 @@ pytest_test(
     srcs = ["aggregator_utils_test.py"],
     deps = [":aggregator_utils"],
 )
+
+py_library(
+    name = "bootloaders_consts",
+    srcs = ["bootloaders_consts.py"],
+    data = [
+        "//src/starkware/cairo/bootloaders/applicative_bootloader:applicative_bootloader_compiled.json",
+        "//src/starkware/cairo/bootloaders/simple_bootloader:no_builtin_simulation_simple_bootloader_compiled.json",
+        "//src/starkware/cairo/bootloaders/simple_bootloader:simple_bootloader_compiled.json",
+    ],
+    visibility = ["//visibility:public"],
+    deps = ["//src/starkware/cairo/lang/compiler:cairo_compile_lib"],
+)
+
+py_library(
+    name = "supported_bootloaders_hash",
+    srcs = ["supported_bootloaders_hash.py"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":bootloaders_consts",
+        ":cairo_hash_program_lib",
+        "//src/starkware/cairo/common:cairo_common_lib",
+        "//src/starkware/cairo/lang/compiler:cairo_compile_lib",
+        "//src/starkware/cairo/lang/vm:cairo_vm_crypto_lib",
+    ],
+)
+
+pytest_test(
+    name = "supported_bootloaders_hash_test",
+    srcs = ["supported_bootloaders_hash_test.py"],
+    data = ["supported_bootloaders_hash.json"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":supported_bootloaders_hash",
+        "//src/starkware/python:starkware_python_utils_lib",
+    ],
+)
+
+py_exe(
+    name = "supported_bootloaders_hash_fix",
+    additional_srcs = ["supported_bootloaders_hash_test.py"],
+    args = ["--fix"],
+    data = ["supported_bootloaders_hash.json"],
+    module = "starkware.cairo.bootloaders.supported_bootloaders_hash_test",
+    deps = [
+        ":supported_bootloaders_hash",
+        "//src/starkware/python:starkware_python_utils_lib",
+    ],
+)
