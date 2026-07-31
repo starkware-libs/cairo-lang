@@ -57,3 +57,6 @@ Once the docker image is built, you can fetch the python package zip file using:
 > docker cp ${container_id}:/app/cairo-lang-0.14.3.tar.gz .
 > docker rm -v ${container_id}
 ```
+> Note: The Starknet compiler performs deterministic Cairo-to-Sierra
+> lowering. Any nondeterministic behavior indicates an upstream toolchain issue.
+
