@@ -11,7 +11,7 @@ import "starkware/solidity/libraries/NamedStorage8.sol";
 abstract contract GovernedFinalizable is MGovernance {
     event Finalized();
 
-    string constant STORAGE_TAG = "STARKWARE_CONTRACTS_GOVERENED_FINALIZABLE_1.0_TAG";
+    string constant STORAGE_TAG = "STARKWARE_CONTRACTS_GOVERNED_FINALIZABLE_1.0_TAG";
 
     function isFinalized() public view returns (bool) {
         return NamedStorage.getBoolValue(STORAGE_TAG);
