@@ -447,6 +447,22 @@ func uint256_pow2{range_check_ptr}(exp: Uint256) -> (res: Uint256) {
     }
 }
 
+// Computes modular inversion a^{-1} % div.
+func uint256_mod_inv{range_check_ptr: felt}(a: Uint256, div: Uint256) -> (res: Uint256) {
+    alloc_locals;
+    local res: Uint256;
+    %{
+        a = (ids.a.high << 128) + ids.a.low
+        div = (ids.div.high << 128) + ids.div.low
+        res = pow(a, -1, div)
+        ids.res.low = res & ((1 << 128) - 1)
+        ids.res.high = res >> 128
+    %}
+    let (quotient_low, quotient_high, remainder) = uint256_mul_div_mod(a,res,div);
+    assert Uint256(low=1,high=0) = (remainder);
+    return (res=res);
+}
+
 // Computes the logical left shift of a uint256 integer.
 func uint256_shl{range_check_ptr}(a: Uint256, b: Uint256) -> (res: Uint256) {
     let (c) = uint256_pow2(b);
