@@ -30,6 +30,8 @@ def pi_as_string(digits: int) -> str:
     """
     Returns pi as a string of decimal digits without the decimal point ("314...").
     """
+    if digits < 0:
+        raise ValueError("Negative number of digits")
     mpmath.mp.dps = digits  # Set number of digits.
     return "3" + str(mpmath.mp.pi)[2:]
 
