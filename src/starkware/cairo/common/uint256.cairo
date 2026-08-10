@@ -69,7 +69,6 @@ func felt_to_uint256{range_check_ptr}(value: felt) -> Uint256 {
 // Adds two integers. Returns the result as a 256-bit integer and the (1-bit) carry.
 func uint256_add{range_check_ptr}(a: Uint256, b: Uint256) -> (res: Uint256, carry: felt) {
     alloc_locals;
-    local res: Uint256;
     local carry_low: felt;
     local carry_high: felt;
     %{
@@ -79,14 +78,35 @@ func uint256_add{range_check_ptr}(a: Uint256, b: Uint256) -> (res: Uint256, carr
         ids.carry_high = 1 if sum_high >= ids.SHIFT else 0
     %}
 
-    assert carry_low * carry_low = carry_low;
-    assert carry_high * carry_high = carry_high;
-
-    assert res.low = a.low + b.low - carry_low * SHIFT;
-    assert res.high = a.high + b.high + carry_low - carry_high * SHIFT;
-    uint256_check(res);
-
-    return (res, carry_high);
+    if (carry_low != 0) {
+        if (carry_high != 0) {
+            tempvar range_check_ptr = range_check_ptr + 2;
+            tempvar res = Uint256(low=a.low + b.low - SHIFT, high=a.high + b.high + 1 - SHIFT);
+            assert [range_check_ptr - 2] = res.low;
+            assert [range_check_ptr - 1] = res.high;
+            return (res, 1);
+        } else {
+            tempvar range_check_ptr = range_check_ptr + 2;
+            tempvar res = Uint256(low=a.low + b.low - SHIFT, high=a.high + b.high + 1);
+            assert [range_check_ptr - 2] = res.low;
+            assert [range_check_ptr - 1] = res.high;
+            return (res, 0);
+        }
+    } else {
+        if (carry_high != 0) {
+            tempvar range_check_ptr = range_check_ptr + 2;
+            tempvar res = Uint256(low=a.low + b.low, high=a.high + b.high - SHIFT);
+            assert [range_check_ptr - 2] = res.low;
+            assert [range_check_ptr - 1] = res.high;
+            return (res, 1);
+        } else {
+            tempvar range_check_ptr = range_check_ptr + 2;
+            tempvar res = Uint256(low=a.low + b.low, high=a.high + b.high);
+            assert [range_check_ptr - 2] = res.low;
+            assert [range_check_ptr - 1] = res.high;
+            return (res, 0);
+        }
+    }
 }
 
 // Splits a field element in the range [0, 2^192) to its low 64-bit and high 128-bit parts.
