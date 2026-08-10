@@ -22,7 +22,7 @@ since it guarantees that all the dependencies
 are installed. Alternatively, you can try following the commands in the
 [docker file](https://github.com/starkware-libs/cairo-lang/blob/master/Dockerfile).
 
-## Building using the dockerfile
+## Building using the file dockerfile
 
 *Note*: This section is relevant only if you wish to build the Cairo python-package yourself,
 rather than downloading it.
