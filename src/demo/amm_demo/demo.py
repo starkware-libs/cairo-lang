@@ -213,7 +213,7 @@ def send_transaction(w3: Web3, transaction, sender_account: BaseAccount):
     return receipt
 
 
-def get_merkle_root(accounts: Dict[int, Balance]) -> int:
+def get_merkle_root(accounts: Dict[int, Account]) -> int:
     """
     Returns the merkle root given accounts state.
 
