@@ -2,12 +2,13 @@
 
 [Cairo](https://cairo-lang.org/) is a programming language for writing provable programs.
 
+**This repository contains the CairoZero compiler and the Starknet OS program. For the new compiler, see the [cairo repository](https://github.com/starkware-libs/cairo).**
+
 # Documentation
 
-The Cairo documentation consists of two parts: "Hello Cairo" and "How Cairo Works?".
-Both parts can be found in https://cairo-lang.org/docs/.
+The CairoZero documentation consists of two parts: "Hello Cairo" and "How Cairo Works?".
 
-We recommend starting from [Setting up the environment](https://cairo-lang.org/docs/quickstart.html).
+We recommend starting from [Setting up the environment](https://docs.cairo-lang.org/quickstart.html).
 
 # Installation instructions
 
