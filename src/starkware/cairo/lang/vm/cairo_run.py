@@ -120,6 +120,11 @@ def main():
         help="Output file name for the memory.",
     )
     parser.add_argument(
+        "--program_output_file",
+        type=argparse.FileType("wb"),
+        help="Output file name for the program output.",
+    )
+    parser.add_argument(
         "--trace_file",
         type=argparse.FileType("wb"),
         help="Output file name for the execution trace.",
@@ -441,6 +446,15 @@ def cairo_run(args):
     if memory_file is not None:
         field_bytes = math.ceil(program.prime.bit_length() / 8)
         write_binary_memory(memory_file, runner.relocated_memory, field_bytes)
+
+    if args.program_output_file is not None:
+        json.dump(
+            {
+                "output_memory": runner.get_output(),
+            },
+            args.program_output_file,
+            indent=4,
+        )
 
     if args.air_public_input is not None:
         rc_min, rc_max = runner.get_perm_range_check_limits()
