@@ -3,7 +3,9 @@ load("//src/starkware/cairo/lang:cairo_rules.bzl", "cairo_binary", "cairo_librar
 cairo_library(
     name = "simple_bootloader_lib",
     srcs = [
+        "component_exercises.cairo",
         "execute_task.cairo",
+        "leaf_simple_bootloader.cairo",
         "no_builtin_simulation_simple_bootloader.cairo",
         "privacy_simple_bootloader.cairo",
         "run_simple_bootloader.cairo",
@@ -17,6 +19,7 @@ cairo_library(
         "//src/starkware/cairo/common:ec_point.cairo",
         "//src/starkware/cairo/common:hash_chain.cairo",
         "//src/starkware/cairo/common:keccak_state.cairo",
+        "//src/starkware/cairo/common:modulo.cairo",
         "//src/starkware/cairo/common:poseidon_state.cairo",
         "//src/starkware/cairo/common:registers.cairo",
         "//src/starkware/cairo/common:sha256_state.cairo",
@@ -57,6 +60,17 @@ cairo_binary(
     ],
     compiled_program_name = "privacy_simple_bootloader_compiled.json",
     main = "privacy_simple_bootloader.cairo",
+    deps = [":simple_bootloader_lib"],
+)
+
+cairo_binary(
+    name = "leaf_simple_bootloader_program",
+    cairoopts = [
+        "--debug_info_with_source",
+        "--proof_mode",
+    ],
+    compiled_program_name = "leaf_simple_bootloader_compiled.json",
+    main = "leaf_simple_bootloader.cairo",
     deps = [":simple_bootloader_lib"],
 )
 

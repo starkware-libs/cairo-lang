@@ -1,4 +1,5 @@
 load("//bazel_utils:python.bzl", "py_exe")
+load("//bazel_utils:stamp.bzl", "git_commit_file")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -42,11 +43,15 @@ py_library(
         "extract_artifacts.py",
     ],
     visibility = ["//visibility:public"],
-    deps = [],
 )
 
 py_exe(
     name = "default_extract_artifacts_exe",
     module = "bazel_utils.extract_artifacts",
     deps = ["default_extract_artifacts_lib"],
+)
+
+# The git commit that sol_contract embeds in the contract artifacts' build_tag.
+git_commit_file(
+    name = "git_commit",
 )

@@ -10,9 +10,12 @@ func select_builtins(
     selected_ptrs: felt*,
 ) {
     %{ vm_enter_scope({'n_selected_builtins': ids.n_selected_builtins}) %}
+    // This wrapper does not need the "non-selected builtins did not advance" guarantee, so pass
+    // prev_ptrs=all_ptrs to make that assertion a tautology.
     let (selected_encodings_end) = inner_select_builtins(
         all_encodings=all_encodings,
         all_ptrs=all_ptrs,
+        prev_ptrs=all_ptrs,
         selected_encodings=selected_encodings,
         selected_ptrs=selected_ptrs,
         n_builtins=n_builtins,

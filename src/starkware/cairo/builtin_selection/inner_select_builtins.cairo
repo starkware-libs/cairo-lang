@@ -3,21 +3,30 @@
 // The caller needs to pass n_selected_builtins as a hint.
 // Returns a pointer to the next memory slot after the selected_encodings list, see "Assumptions".
 //
+// For builtins that are *not* selected, the function additionally asserts that the corresponding
+// pointer in all_ptrs equals the one in prev_ptrs (an array of the same length as all_ptrs).
+// This is used by the bootloader to enforce that builtins which are not used by a task do not
+// advance. Callers that do not need this guarantee can simply pass prev_ptrs = all_ptrs, making the
+// assertion a tautology.
+//
 // For example, given the following setup:
 //   - all_encodings points to ["output", "pedersen", "range-check"].
 //   - selected_encodings points to ["output", "range-check"]
 //   - all_ptrs points to [output_ptr, pedersen_ptr, range_check_ptr]
+//   - prev_ptrs points to [prev_output_ptr, prev_pedersen_ptr, prev_range_check_ptr]
 //   - The caller asserts that the return value is selected_encodings + n_selected_builtins(2).
-// The function will check that selected_encodings points to [output_ptr, range_check_ptr].
+// The function will check that selected_encodings points to [output_ptr, range_check_ptr], and
+// that pedersen_ptr (the non-selected builtin) equals prev_pedersen_ptr.
 //
 // n_builtins is the length of the list of *all pointers*.
 // Assumptions:
 // * The caller has to check that n_selected_builtins = selected_encodings_end - selected_encodings.
 // * All lists are sorted according to the order of builtins input in Cairo programs.
-// * len(selected_encodings) <= len(all_encodings) == len(all_ptrs).
+// * len(selected_encodings) <= len(all_encodings) == len(all_ptrs) == len(prev_ptrs).
 func inner_select_builtins(
     all_encodings: felt*,
     all_ptrs: felt*,
+    prev_ptrs: felt*,
     selected_encodings: felt*,
     selected_ptrs: felt*,
     n_builtins,
@@ -25,7 +34,7 @@ func inner_select_builtins(
     // Number of memory cells used when n_builtins = 0.
     const FUNC_MEMORY_NO_BUILTINS = 1;
     // Number of memory cells used *in a single iteration* when n_builtins > 0.
-    const FUNC_MEMORY_WITH_BUILTINS = 10;
+    const FUNC_MEMORY_WITH_BUILTINS = 11;
 
     if (n_builtins == 0) {
         // Return a pointer to the end of the selected_encodings list.
@@ -56,6 +65,10 @@ func inner_select_builtins(
         curr_builtin_encoding = [selected_encodings];
         // Copy the current builtin pointer between selected_ptrs and all_ptrs.
         curr_builtin_ptr = [selected_ptrs];
+    } else {
+        // The current builtin is not selected (unused). Verify that its pointer was not advanced,
+        // i.e., it equals the corresponding previous pointer.
+        curr_builtin_ptr = [prev_ptrs];
     }
 
     // Advance all list pointers accordingly and continue selection by calling inner_select_builtins
@@ -64,6 +77,7 @@ func inner_select_builtins(
     return inner_select_builtins(
         all_encodings=all_encodings + 1,
         all_ptrs=all_ptrs + 1,
+        prev_ptrs=prev_ptrs + 1,
         selected_encodings=selected_encodings + select_builtin,
         selected_ptrs=selected_ptrs + select_builtin,
         n_builtins=n_builtins - 1,

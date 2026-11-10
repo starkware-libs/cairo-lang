@@ -1,0 +1,273 @@
+{
+    "cairo_prover_params": {
+        "channel_hash": "blake2s",
+        "channel_salt": 0,
+        "fri_params": {
+            "pow_bits": 26,
+            "log_blowup_factor": 1,
+            "log_last_layer_degree_bound": 0,
+            "n_queries": 70,
+            "fold_step": 4
+        },
+        "preprocessed_trace": "canonical",
+        "store_polynomials_coefficients": false,
+        "include_all_preprocessed_columns": true,
+        "opt_n_id_to_big_components": 16,
+        "lifting_size_policy": "at_least_preprocessed"
+    },
+    "cairo_components": [
+        "add_opcode",
+        "add_opcode_small",
+        "add_ap_opcode",
+        "assert_eq_opcode",
+        "assert_eq_opcode_imm",
+        "assert_eq_opcode_double_deref",
+        "blake_compress_opcode",
+        "call_opcode_abs",
+        "call_opcode_rel_imm",
+        "generic_opcode",
+        "jnz_opcode_non_taken",
+        "jnz_opcode_taken",
+        "jump_opcode_abs",
+        "jump_opcode_double_deref",
+        "jump_opcode_rel",
+        "jump_opcode_rel_imm",
+        "mul_opcode",
+        "mul_opcode_small",
+        "qm_31_add_mul_opcode",
+        "ret_opcode",
+        "verify_instruction",
+        "blake_round",
+        "blake_g",
+        "blake_round_sigma",
+        "triple_xor_32",
+        "verify_bitwise_xor_12",
+        "add_mod_builtin",
+        "bitwise_builtin",
+        "mul_mod_builtin",
+        "pedersen_builtin",
+        "poseidon_builtin",
+        "range_check96_builtin",
+        "range_check_builtin",
+        "ec_op_builtin",
+        "partial_ec_mul_generic",
+        "pedersen_aggregator_window_bits_18",
+        "partial_ec_mul_window_bits_18",
+        "pedersen_points_table_window_bits_18",
+        "poseidon_aggregator",
+        "poseidon_3_partial_rounds_chain",
+        "poseidon_full_round_chain",
+        "cube_252",
+        "poseidon_round_keys",
+        "range_check_252_width_27",
+        "memory_address_to_id",
+        "memory_id_to_big",
+        "memory_id_to_big_1",
+        "memory_id_to_big_2",
+        "memory_id_to_big_3",
+        "memory_id_to_big_4",
+        "memory_id_to_big_5",
+        "memory_id_to_big_6",
+        "memory_id_to_big_7",
+        "memory_id_to_big_8",
+        "memory_id_to_big_9",
+        "memory_id_to_big_10",
+        "memory_id_to_big_11",
+        "memory_id_to_big_12",
+        "memory_id_to_big_13",
+        "memory_id_to_big_14",
+        "memory_id_to_big_15",
+        "memory_id_to_small",
+        "range_check_6",
+        "range_check_8",
+        "range_check_11",
+        "range_check_12",
+        "range_check_18",
+        "range_check_20",
+        "range_check_4_3",
+        "range_check_4_4",
+        "range_check_9_9",
+        "range_check_7_2_5",
+        "range_check_3_6_6_3",
+        "range_check_4_4_4_4",
+        "range_check_3_3_3_3_3",
+        "verify_bitwise_xor_4",
+        "verify_bitwise_xor_7",
+        "verify_bitwise_xor_8",
+        "verify_bitwise_xor_9"
+    ],
+    "circuit_proof_configs": {
+        "default": {
+            "fri_params": {
+                "pow_bits": 26,
+                "log_blowup_factor": 1,
+                "log_last_layer_degree_bound": 0,
+                "n_queries": 70,
+                "fold_step": 4
+            },
+            "component_log_sizes": {
+                "eq": 20,
+                "qm31_ops": 23,
+                "m31_to_u32": 20,
+                "triple_xor": 19,
+                "blake_g_gate": 23
+            }
+        }
+    },
+    "leaf_verifiers": [
+        {
+            "config": "default",
+            "trace_log_size": 25,
+            "preprocessed_root": [
+                "0x17dc0cff",
+                "0x657837af",
+                "0xf9cc26d9",
+                "0x2c18a4a5",
+                "0xb98c2c44",
+                "0xb874053b",
+                "0xbce44a70",
+                "0xd16b03ea"
+            ],
+            "circuit_hash": [
+                "0x3b46efbf",
+                "0xd4e8f43f",
+                "0xd01a5498",
+                "0x9c50548b",
+                "0x5befa9bf",
+                "0x53a55159",
+                "0x603e9a69",
+                "0xc0128c73"
+            ],
+            "zk_blinding": false
+        },
+        {
+            "config": "default",
+            "trace_log_size": 26,
+            "preprocessed_root": [
+                "0x3c747202",
+                "0x4030990c",
+                "0x80b3f0f5",
+                "0xf1c70a41",
+                "0x539efdbb",
+                "0x4bc96a4a",
+                "0x190ab648",
+                "0x2566cbcf"
+            ],
+            "circuit_hash": [
+                "0x156cff49",
+                "0x2fdff2a3",
+                "0x1382ff83",
+                "0xc46e0ebc",
+                "0x8132a2e8",
+                "0x6f97e213",
+                "0xc12112d7",
+                "0xd7fd2a11"
+            ],
+            "zk_blinding": false
+        },
+        {
+            "config": "default",
+            "trace_log_size": 27,
+            "preprocessed_root": [
+                "0x8ed78c7a",
+                "0xd1ea6d14",
+                "0xb1898838",
+                "0x73dfc5ca",
+                "0x3eb189b4",
+                "0xc595e659",
+                "0x97eb68ed",
+                "0x2288aff0"
+            ],
+            "circuit_hash": [
+                "0x518a8295",
+                "0x67bbc81d",
+                "0x38ee3516",
+                "0x58a8f146",
+                "0x2bad52b2",
+                "0x2ac301ce",
+                "0x3179b6ec",
+                "0x3b99ef35"
+            ],
+            "zk_blinding": false
+        },
+        {
+            "config": "default",
+            "trace_log_size": 28,
+            "preprocessed_root": [
+                "0xd7361ad7",
+                "0x222d84c6",
+                "0x8dd33ad0",
+                "0x2b3a36b0",
+                "0xe9e5c2ce",
+                "0xe38bb255",
+                "0x4f2add27",
+                "0x0dc1d6d0"
+            ],
+            "circuit_hash": [
+                "0xd0f07483",
+                "0xb630b378",
+                "0x07ff492e",
+                "0xace67578",
+                "0x06b29e45",
+                "0x73b3c89b",
+                "0x20abcdd3",
+                "0x5d127caa"
+            ],
+            "zk_blinding": false
+        },
+        {
+            "config": "default",
+            "trace_log_size": 29,
+            "preprocessed_root": [
+                "0x72576ddf",
+                "0x205cc77d",
+                "0x1463bb91",
+                "0x2e290e71",
+                "0xbccbe225",
+                "0xc94bde46",
+                "0xb078a6c7",
+                "0xc10efd1d"
+            ],
+            "circuit_hash": [
+                "0x590b82bb",
+                "0xd33521c2",
+                "0xae445bf2",
+                "0x7305889b",
+                "0x9846edcb",
+                "0xce40022e",
+                "0x3904242c",
+                "0x0c134b14"
+            ],
+            "zk_blinding": false
+        }
+    ],
+    "multiverifiers": [
+        {
+            "config": "default",
+            "input_configs": [
+                "default",
+                "default"
+            ],
+            "preprocessed_root": [
+                "0x81ca3918",
+                "0xed3a15d4",
+                "0xc6ba7170",
+                "0xbf9729c2",
+                "0x6e958374",
+                "0x439a459a",
+                "0xb049aeeb",
+                "0xcacc3265"
+            ],
+            "circuit_hash": [
+                "0x68c21aad",
+                "0x84c59d7d",
+                "0x0016f0b5",
+                "0x5c56dace",
+                "0x6545778e",
+                "0x3889bf01",
+                "0x31a233ed",
+                "0xe23e96b7"
+            ]
+        }
+    ]
+}

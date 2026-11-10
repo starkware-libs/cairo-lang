@@ -257,6 +257,16 @@ class DBObject(Serializable):
         return cls.prefix() + b":" + suffix
 
     @classmethod
+    async def _deserialize_value(cls: Type[TDBObject], data: bytes) -> TDBObject:
+        """
+        Deserializes a stored value, offloading large objects to a thread to avoid blocking the
+        event loop.
+        """
+        if len(data) > MAX_OBJECT_SIZE_FOR_LOADING_IN_MAIN_THREAD:
+            return await asyncio.get_event_loop().run_in_executor(None, cls.deserialize, data)
+        return cls.deserialize(data=data)
+
+    @classmethod
     async def get(cls: Type[TDBObject], storage: Storage, suffix: bytes) -> Optional[TDBObject]:
         """
         Returns the value under key cls.db_key(suffix) in the storage.
@@ -267,10 +277,7 @@ class DBObject(Serializable):
         if result is None:
             return None
 
-        if len(result) > MAX_OBJECT_SIZE_FOR_LOADING_IN_MAIN_THREAD:
-            return await asyncio.get_event_loop().run_in_executor(None, cls.deserialize, result)
-        else:
-            return cls.deserialize(data=result)
+        return await cls._deserialize_value(data=result)
 
     @classmethod
     async def has_key(cls: Type[TDBObject], storage: Storage, suffix: bytes) -> bool:
@@ -285,10 +292,7 @@ class DBObject(Serializable):
         db_key = cls.db_key(suffix=suffix)
         result = await storage.get_value_or_fail(key=db_key)
 
-        if len(result) > MAX_OBJECT_SIZE_FOR_LOADING_IN_MAIN_THREAD:
-            return await asyncio.get_event_loop().run_in_executor(None, cls.deserialize, result)
-        else:
-            return cls.deserialize(data=result)
+        return await cls._deserialize_value(data=result)
 
     async def set(self, storage: Storage, suffix: bytes):
         serialized = await asyncio.get_event_loop().run_in_executor(None, self.serialize)
@@ -466,6 +470,40 @@ class IndexedDBObject(DBObject):
 
         return db_object_or_aborted
 
+    @classmethod
+    async def get_objs(
+        cls: Type[TIndexedDBObject],
+        storage: Storage,
+        indices: Sequence[Union[int, ObjectId]],
+    ) -> Tuple[Optional[TIndexedDBObject], ...]:
+        """
+        Batch variant of `get_obj`: reads all given indices in a single `storage.mget` call and
+        returns one optional object per index (None for a missing index), in the same order.
+        """
+        indices = list(indices)
+        values = await storage.mget(keys=[cls.key(index=index) for index in indices])
+        return tuple(
+            [
+                None if value is None else await cls._deserialize_value(data=value)
+                for value in values
+            ]
+        )
+
+    @classmethod
+    async def get_objs_or_fail(
+        cls: Type[TIndexedDBObject],
+        storage: Storage,
+        indices: Sequence[Union[int, ObjectId]],
+    ) -> Tuple[TIndexedDBObject, ...]:
+        """Like `get_objs`, but asserts that every index resolves to an existing object."""
+        indices = list(indices)
+        objs = await cls.get_objs(storage=storage, indices=indices)
+        for index, obj in zip(indices, objs):
+            assert (
+                obj is not None
+            ), f"{cls.__name__} at index {int(index)} does not exist in storage, or is aborted."
+        return cast(Tuple[TIndexedDBObject, ...], objs)
+
     async def set_obj(self, storage: Storage, index: Union[int, ObjectId]):
         """
         Stores object in storage with given index.
@@ -602,6 +640,12 @@ class LockManager(ABC):
     async def lock_exists(self, name: str) -> bool:
         """
         Returns True iff lock object is exists.
+        """
+
+    @abstractmethod
+    async def locks_exist(self, names: List[str]) -> Dict[str, bool]:
+        """
+        Returns a mapping from each input name to whether a lock with that name exists.
         """
 
     @abstractmethod

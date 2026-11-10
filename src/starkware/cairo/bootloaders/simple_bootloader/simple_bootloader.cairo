@@ -48,7 +48,7 @@ func main{
     let (local keccak_ptr: KeccakBuiltin*) = create_keccak_builtin_segment_if_needed(
         keccak_ptr=keccak_ptr
     );
-    local keccak_start_ptr: KeccakBuiltin* = keccak_ptr;
+    let keccak_start_ptr: KeccakBuiltin* = keccak_ptr;
 
     // Handle ecdsa builtin.
     // See docstring of `create_ecdsa_builtin_segment_if_needed` for more info.
@@ -56,7 +56,7 @@ func main{
     let (local ecdsa_ptr: SignatureBuiltin*) = create_ecdsa_builtin_segment_if_needed(
         ecdsa_ptr=ecdsa_ptr
     );
-    local ecdsa_start_ptr: SignatureBuiltin* = ecdsa_ptr;
+    let ecdsa_start_ptr: SignatureBuiltin* = ecdsa_ptr;
 
     // Execute tasks.
     run_simple_bootloader();

@@ -1,5 +1,6 @@
 {
-    "supported_simple_bootloader_hash_list_hash": "0x79c96592bca7fded3e2108bb43e5ad8c979af0e490d6b49f8cfe310db73b6f7",
-    "applicative_bootloader_config_program_hash": "0x5370f15cbd175708ac356a4f7215e951646162b0d04adeb5bb988ec2ad59ab2",
-    "supported_cairo_verifier_hash_list_hash": "0x5a32ca780db85cc5c51976b5d9dc746304db4292f29155e793cb5208f23eeef"
+    "supported_simple_bootloader_hash_list_hash": "0x1826c6e1f9d31e33146cb562066d6bfc89fad8ee7d2d05d6a529e602ef9ccf2",
+    "circuit_applicative_bootloader_config_program_hash": "0xbaaafc209ee9d712349e76a82273e8436da3601908015e03a4fcefd69f0652",
+    "circuit_applicative_config_commitment": "0x372eae6f9e2fb2baa6c74cc789e9d5f468064da4ee76f5e77137e3fbed61d94",
+    "supported_cairo_verifier_hash_list_hash": "0x97a72ad41ad223b78d092ee7d9ad587fe16e1a49fcea67579e9fe0921f9cbc"
 }

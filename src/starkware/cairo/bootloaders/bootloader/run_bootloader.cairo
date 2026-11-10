@@ -3,6 +3,7 @@ from starkware.cairo.bootloaders.simple_bootloader.run_simple_bootloader import 
     run_simple_bootloader,
 )
 from starkware.cairo.cairo_verifier.objects import CairoVerifierHashedOutput
+from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.builtin_poseidon.poseidon import poseidon_hash_many
 from starkware.cairo.common.cairo_blake2s.blake2s import encode_felt252_data_and_calc_blake_hash
 from starkware.cairo.common.cairo_builtins import (
@@ -33,8 +34,17 @@ struct BootloaderConfig {
     // The hashes of the supported (Cairo) programs that verify a STARK proof for the Cairo machine.
     supported_cairo_verifier_program_hashes_len: felt,
     supported_cairo_verifier_program_hashes: felt*,
-    // The hash of the applicative bootloader program.
-    applicative_bootloader_program_hash: felt,
+    // The hash of the circuit-unpacking applicative bootloader program.
+    circuit_applicative_bootloader_program_hash: felt,
+    // A Pedersen hash over the circuit verifier program hash and the supported circuit hashes. See
+    // compute_circuit_applicative_bootloader_config_commitment in config_commitment.cairo.
+    circuit_applicative_config_commitment: felt,
+}
+
+// The circuit applicative bootloader's output prefix.
+struct CircuitApplicativeOutputPrefix {
+    modified_aggregator_program_hash: felt,
+    config_commitment: felt,
 }
 
 struct TaskOutputHeader {
@@ -52,16 +62,18 @@ struct TaskOutputHeader {
 //   Guesses the output of its children (using `packed_outputs`), and verifies that it
 //   matches the output hash given in the cairo verifier output using the appropriate hash function
 //   (flagged by `unpacking_mode`). Then, unpacks each child recursively.
-// Moreover, if a non-recursive task has the program hash of the applicative bootloader, then it
-// verifies that it used the correct bootloader config and outputs the modified aggregator hash and
-// the aggregated output, instead of the applicative bootloader hash and output.
+// Moreover, if a non-recursive task has the program hash of the circuit applicative bootloader,
+// then it verifies that it used the trusted config (by checking the config commitment it outputs)
+// and outputs the modified aggregator hash and the aggregated output, instead of the circuit
+// applicative bootloader hash and output.
 //
 // Hint arguments:
 // bootloader_input - contains the following:
 // - tasks: The tasks to execute.
 // - packed_outputs: The packed outputs of the tasks, used for unpacking recursive tasks.
-// - bootloader_config: The bootloader config, consisting of the simple bootloader program hash, the
-//   applicative bootloader program hash, and the hash of the supported Cairo verifier programs.
+// - bootloader_config: The bootloader config, consisting of the supported simple bootloader
+//   program hashes, the supported Cairo verifier program hashes, and the circuit applicative
+//   bootloader program hash together with its trusted config commitment.
 //
 // Returns (written to output_ptr):
 // - The bootloader config.
@@ -133,13 +145,13 @@ func run_bootloader{
                 bootloader_config.supported_simple_bootloader_hash_list,
                 len(bootloader_config.supported_cairo_verifier_program_hashes),
                 bootloader_config.supported_cairo_verifier_program_hashes,
-                bootloader_config.applicative_bootloader_program_hash,
+                bootloader_config.circuit_applicative_bootloader_program_hash,
+                bootloader_config.circuit_applicative_config_commitment,
             ],
         )
     %}
 
     // The bootloader config appears at the beginning of the output.
-    local bootloader_config_output_start: felt* = output_ptr;
     serialize_bootloader_config(bootloader_config=bootloader_config);
 
     // Increment output_ptr to save place for n_total_tasks.
@@ -160,7 +172,6 @@ func run_bootloader{
         parse_tasks{subtasks_output=simple_bootloader_output_ptr}(
             bootloader_config=bootloader_config,
             n_subtasks=n_subtasks,
-            bootloader_config_output_start=bootloader_config_output_start,
             unpacking_mode=unpacking_mode,
         );
     }
@@ -181,7 +192,6 @@ func run_bootloader{
 // Arguments:
 // n_subtasks - Number of direct subtasks to unfold.
 // bootloader_config.
-// bootloader_config_output_start - A pointer to the start of the bootloader config in the output.
 // unpacking_mode - The unpacking mode to use for composite packed tasks.
 //
 // Hint arguments:
@@ -199,12 +209,7 @@ func parse_tasks{
     range_check_ptr,
     n_total_tasks: felt,
     subtasks_output: felt*,
-}(
-    bootloader_config: BootloaderConfig*,
-    n_subtasks: felt,
-    bootloader_config_output_start: felt*,
-    unpacking_mode: felt,
-) {
+}(bootloader_config: BootloaderConfig*, n_subtasks: felt, unpacking_mode: felt) {
     if (n_subtasks == 0) {
         return ();
     }
@@ -229,17 +234,12 @@ func parse_tasks{
 
     if (nondet %{ isinstance(packed_output, PlainPackedOutput) %} != 0) {
         // Handle plain packed task.
-        unpack_plain_packed_task{task_output=subtasks_output}(
-            bootloader_config=bootloader_config,
-            bootloader_config_output_start=bootloader_config_output_start,
-        );
+        unpack_plain_packed_task{task_output=subtasks_output}(bootloader_config=bootloader_config);
     } else {
         // Handle composite packed task.
         %{ assert isinstance(packed_output, CompositePackedOutput) %}
         unpack_composite_packed_task{task_output=subtasks_output}(
-            bootloader_config=bootloader_config,
-            bootloader_config_output_start=bootloader_config_output_start,
-            unpacking_mode=unpacking_mode,
+            bootloader_config=bootloader_config, unpacking_mode=unpacking_mode
         );
     }
 
@@ -249,34 +249,47 @@ func parse_tasks{
     return parse_tasks(
         bootloader_config=bootloader_config,
         n_subtasks=n_subtasks - 1,
-        bootloader_config_output_start=bootloader_config_output_start,
         unpacking_mode=unpacking_mode,
     );
 }
 
-// Serializes the bootloader config.
+// Serializes the bootloader config as a single felt: the hash of the four config sub-hashes.
+// This keeps the on-chain verifier structure independent of the number of config fields - only
+// the single stored config hash changes when fields are added.
 //
 // Arguments:
 // bootloader_config - A pointer to the bootloader config.
 func serialize_bootloader_config{output_ptr: felt*, pedersen_ptr: HashBuiltin*}(
     bootloader_config: BootloaderConfig*
 ) {
-    static_assert BOOTLOADER_CONFIG_SIZE == 3;
+    alloc_locals;
+    static_assert BOOTLOADER_CONFIG_SIZE == 1;
+    // Collect the four config sub-hashes. Their order must match
+    // combine_bootloader_config_hash in supported_bootloaders_hash.py.
+    let (local config_elements: felt*) = alloc();
+
     // Compute the hash of the supported simple bootloader hash list.
     let (supported_simple_bootloader_hash_list_hash) = hash_felts{hash_ptr=pedersen_ptr}(
         data=bootloader_config.supported_simple_bootloader_hash_list,
         length=bootloader_config.supported_simple_bootloader_hash_list_len,
     );
-    assert [output_ptr] = supported_simple_bootloader_hash_list_hash;
-    assert [output_ptr + 1] = bootloader_config.applicative_bootloader_program_hash;
+    assert config_elements[0] = supported_simple_bootloader_hash_list_hash;
+    assert config_elements[1] = bootloader_config.circuit_applicative_bootloader_program_hash;
+    assert config_elements[2] = bootloader_config.circuit_applicative_config_commitment;
 
     // Compute the hash of the supported Cairo verifiers.
     let (supported_cairo_verifiers_hash) = hash_felts{hash_ptr=pedersen_ptr}(
         data=bootloader_config.supported_cairo_verifier_program_hashes,
         length=bootloader_config.supported_cairo_verifier_program_hashes_len,
     );
-    assert [output_ptr + 2] = supported_cairo_verifiers_hash;
-    let output_ptr = output_ptr + 3;
+    assert config_elements[3] = supported_cairo_verifiers_hash;
+
+    // Hash the sub-hashes into a single felt.
+    let (bootloader_config_hash) = hash_felts{hash_ptr=pedersen_ptr}(
+        data=config_elements, length=4
+    );
+    assert [output_ptr] = bootloader_config_hash;
+    let output_ptr = output_ptr + BOOTLOADER_CONFIG_SIZE;
     return ();
 }
 
@@ -368,7 +381,6 @@ func handle_unpacking_flow{task_output: felt*, range_check_ptr, poseidon_ptr: Po
 //
 // Arguments:
 // bootloader_config.
-// bootloader_config_output_start - A pointer to the start of the bootloader config in the output.
 // unpacking_mode - The unpacking mode to use for composite packed tasks.
 //
 // Implicit arguments:
@@ -387,11 +399,7 @@ func unpack_composite_packed_task{
     range_check_ptr,
     n_total_tasks: felt,
     task_output: felt*,
-}(
-    bootloader_config: BootloaderConfig*,
-    bootloader_config_output_start: felt*,
-    unpacking_mode: felt,
-) {
+}(bootloader_config: BootloaderConfig*, unpacking_mode: felt) {
     ap += SIZEOF_LOCALS;
 
     let (local task_header: TaskOutputHeader*) = parse_task_header();
@@ -429,7 +437,6 @@ func unpack_composite_packed_task{
         parse_tasks{subtasks_output=nested_subtasks_output}(
             bootloader_config=bootloader_config,
             n_subtasks=n_subtasks,
-            bootloader_config_output_start=bootloader_config_output_start,
             unpacking_mode=unpacking_mode,
         );
     }
@@ -456,7 +463,7 @@ func unpack_plain_packed_task{
     range_check_ptr,
     n_total_tasks: felt,
     task_output: felt*,
-}(bootloader_config: BootloaderConfig*, bootloader_config_output_start: felt*) {
+}(bootloader_config: BootloaderConfig*) {
     ap += SIZEOF_LOCALS;
 
     // Parse task output header.
@@ -465,19 +472,23 @@ func unpack_plain_packed_task{
     local task_output: felt* = task_output;
     local updated_task_output_header: TaskOutputHeader;
     local task_output_offset: felt;
-    if (task_header.program_hash == bootloader_config.applicative_bootloader_program_hash) {
-        // Adjust the task output pointer to skip the bootloader config and the aggregator hash.
-        assert task_output_offset = BOOTLOADER_CONFIG_SIZE + 1;
+    if (task_header.program_hash == bootloader_config.circuit_applicative_bootloader_program_hash) {
+        // Adjust the task output pointer to skip the output prefix.
+        let output_prefix = cast(task_output, CircuitApplicativeOutputPrefix*);
+        assert task_output_offset = CircuitApplicativeOutputPrefix.SIZE;
 
-        // If the program is the applicative bootloader, adjust the header size to skip the
-        // bootloader config and the aggregator hash. Also, output the modified aggregator hash
-        // instead of the applicative bootloader hash.
+        // If the program is the circuit applicative bootloader, adjust the header size to skip
+        // the output prefix. Also, output the modified aggregator hash instead of the circuit
+        // applicative bootloader hash.
         assert updated_task_output_header = TaskOutputHeader(
-            size=task_header.size - task_output_offset, program_hash=task_output[0]
+            size=task_header.size - task_output_offset,
+            program_hash=output_prefix.modified_aggregator_program_hash,
         );
 
-        // Assert that the bootloader_config used by the applicative bootloader is correct.
-        memcpy(dst=&task_output[1], src=bootloader_config_output_start, len=BOOTLOADER_CONFIG_SIZE);
+        // Assert that the config used by the circuit applicative bootloader is the trusted one.
+        assert output_prefix.config_commitment = (
+            bootloader_config.circuit_applicative_config_commitment
+        );
     } else {
         // Otherwise, output the task as is.
         assert updated_task_output_header = [task_header];

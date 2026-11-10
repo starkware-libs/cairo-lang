@@ -59,6 +59,7 @@ py_exe(
     deps = [
         ":supported_program_hashes_utils",
         "//src/starkware/cairo/bootloaders:supported_bootloaders_hash",
+        "//src/starkware/cairo/bootloaders/circuit_applicative_bootloader:circuit_applicative_bootloader_config_commitment_lib",
         "//src/starkware/cairo/common:cairo_common_lib",
         "//src/starkware/python:starkware_python_utils_lib",
     ],
@@ -80,6 +81,7 @@ pytest_test(
     deps = [
         ":supported_program_hashes_utils",
         "//src/starkware/cairo/bootloaders:supported_bootloaders_hash",
+        "//src/starkware/cairo/bootloaders/circuit_applicative_bootloader:circuit_applicative_bootloader_config_commitment_lib",
         "//src/starkware/cairo/common:cairo_common_lib",
         "//src/starkware/python:starkware_python_utils_lib",
     ],

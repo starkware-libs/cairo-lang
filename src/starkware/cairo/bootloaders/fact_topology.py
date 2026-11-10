@@ -82,7 +82,8 @@ def get_page_sizes_from_page_dict(output_size: int, pages: dict) -> List[int]:
         (int(page_id_str), page_start, page_size)
         for page_id_str, (page_start, page_size) in pages.items()
     ]
-    for page_id, page_start, page_size in sorted(pages_list):
+    sorted_page_list = sorted(pages_list)
+    for page_id, page_start, page_size in sorted_page_list:
         assert page_id == expected_page_id, f"Expected page id {expected_page_id}, found {page_id}."
         if page_id == 1:
             assert (
@@ -106,8 +107,7 @@ def get_page_sizes_from_page_dict(output_size: int, pages: dict) -> List[int]:
             "Pages must cover the entire program output."
             + f" Expected size of {expected_page_start}, found {output_size}."
         )
-
-    return [page0_size] + [page_size for _, (_, page_size) in sorted(pages.items())]
+    return [page0_size] + [page_size for _, _, page_size in sorted_page_list]
 
 
 def get_fact_topology_from_additional_data(

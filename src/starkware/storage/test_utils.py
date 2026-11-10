@@ -1,7 +1,7 @@
 import asyncio
 import hashlib
 from contextlib import contextmanager
-from typing import Mapping, Optional, Sequence, Tuple
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 from starkware.storage.storage import (
     HASH_BYTES,
@@ -45,6 +45,9 @@ class DummyLockManager(LockManager):
 
     async def lock_exists(self, name: str) -> bool:
         return name in self.locked.keys()
+
+    async def locks_exist(self, names: List[str]) -> Dict[str, bool]:
+        return {name: await self.lock_exists(name=name) for name in names}
 
     async def lock(self, name: str) -> DummyLockObject:
         while name in self.locked:
@@ -95,6 +98,34 @@ class MockStorage(Storage):
             del self.db[key]
         except KeyError:
             pass
+
+
+class FaultInjectingMockStorage(MockStorage):
+    """
+    MockStorage variant for cache and concurrency tests: counts reads and setnx writes, can be
+    made to fail either on demand, and yields control on reads the way real I/O would (so tests
+    exercise concurrent-read windows, e.g. single-flight logic).
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.fail_on_get = False
+        self.fail_on_setnx = False
+        self.get_count = 0
+        self.setnx_count = 0
+
+    async def get_value(self, key: bytes) -> Optional[bytes]:
+        self.get_count += 1
+        await asyncio.sleep(0)
+        if self.fail_on_get:
+            raise RuntimeError("storage unavailable")
+        return await super().get_value(key)
+
+    async def setnx_value(self, key: bytes, value: bytes) -> bool:
+        self.setnx_count += 1
+        if self.fail_on_setnx:
+            raise RuntimeError("storage unavailable")
+        return await super().setnx_value(key, value)
 
 
 class DelayedStorage(Storage):

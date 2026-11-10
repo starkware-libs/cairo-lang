@@ -11,7 +11,7 @@ func select_input_builtins(
     n_selected_builtins,
 ) {
     // Number of memory cells used, without taking the inner function memory into account.
-    const FUNC_MEMORY_WITHOUT_INNER_FUNC = 11;
+    const FUNC_MEMORY_WITHOUT_INNER_FUNC = 12;
     const INNER_FUNC_MEMORY_PER_ITERATION = inner_select_builtins.FUNC_MEMORY_WITH_BUILTINS;
     const INNER_FUNC_MEMORY_FINAL_ITERATION = inner_select_builtins.FUNC_MEMORY_NO_BUILTINS;
     // 'inner_select_builtins' has n_all_builtins iterations, until the final halting one, when
@@ -24,9 +24,13 @@ func select_input_builtins(
     // The selected builtin pointers are the return values at the end of the function memory.
     let selected_ptrs = frame.fp_val + total_func_memory;
     %{ vm_enter_scope({'n_selected_builtins': ids.n_selected_builtins}) %}
+    // This wrapper only distributes input builtin pointers and does not need the "non-selected
+    // builtins did not advance" guarantee, so pass prev_ptrs=all_ptrs to make that assertion a
+    // tautology.
     let inner_ret = inner_select_builtins(
         all_encodings=all_encodings,
         all_ptrs=all_ptrs,
+        prev_ptrs=all_ptrs,
         selected_encodings=selected_encodings,
         selected_ptrs=selected_ptrs,
         n_builtins=n_all_builtins,

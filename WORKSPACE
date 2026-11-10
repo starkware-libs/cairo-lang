@@ -122,6 +122,10 @@ pip_parse(
     extra_pip_args = [
         "--retries=100",
         "--timeout=3000",
+        # cytoolz 0.12.2 has no pp39 wheel, and the module pip builds from its sdist with Cython
+        # 3.3.1 segfaults on import under PyPy 7.3.11. A release without a wheel must fail the
+        # fetch instead of being compiled.
+        "--only-binary=cytoolz",
     ],
     python_interpreter_target = "@pypy3.9//:bin/pypy3",
     requirements_lock = "//scripts:pypy-requirements.txt",

@@ -91,7 +91,8 @@ py_library(
     name = "bootloaders_consts",
     srcs = ["bootloaders_consts.py"],
     data = [
-        "//src/starkware/cairo/bootloaders/applicative_bootloader:applicative_bootloader_compiled.json",
+        "//src/starkware/cairo/bootloaders/circuit_applicative_bootloader:circuit_applicative_bootloader_compiled.json",
+        "//src/starkware/cairo/bootloaders/simple_bootloader:leaf_simple_bootloader_compiled.json",
         "//src/starkware/cairo/bootloaders/simple_bootloader:no_builtin_simulation_simple_bootloader_compiled.json",
         "//src/starkware/cairo/bootloaders/simple_bootloader:simple_bootloader_compiled.json",
     ],

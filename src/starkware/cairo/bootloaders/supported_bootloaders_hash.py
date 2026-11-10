@@ -2,7 +2,7 @@ import functools
 from typing import Dict, List
 
 from starkware.cairo.bootloaders.bootloaders_consts import (
-    get_applicative_bootloader_program,
+    get_circuit_applicative_bootloader_program,
     get_no_builtin_simulation_simple_bootloader_program,
     get_simple_bootloader_program,
 )
@@ -42,25 +42,47 @@ def calculate_supported_simple_bootloader_hash_list() -> List[int]:
 
 
 @functools.lru_cache(None)
-def calculate_applicative_bootloader_program_hash(
+def calculate_circuit_applicative_bootloader_program_hash(
     program_hash_function: HashFunction = HashFunction.BLAKE,
 ) -> int:
-    applicative_bootloader_program = get_applicative_bootloader_program()
+    circuit_applicative_bootloader_program = get_circuit_applicative_bootloader_program()
     return compute_program_hash_chain(
-        program=applicative_bootloader_program, program_hash_function=program_hash_function
+        program=circuit_applicative_bootloader_program, program_hash_function=program_hash_function
     )
 
 
 def calculate_supported_bootloaders_hash_dict() -> Dict[str, str]:
     """
     Computes the supported-bootloaders hashes: the simple bootloader hash list hash and the
-    applicative bootloader program hash.
+    circuit applicative bootloader program hash.
     """
     return {
         "supported_simple_bootloader_hash_list_hash": hex(
             compute_hash_on_elements(data=calculate_supported_simple_bootloader_hash_list())
         ),
-        "applicative_bootloader_config_program_hash": hex(
-            calculate_applicative_bootloader_program_hash()
+        "circuit_applicative_bootloader_config_program_hash": hex(
+            calculate_circuit_applicative_bootloader_program_hash()
         ),
     }
+
+
+def combine_bootloader_config_hash(
+    supported_simple_bootloader_hash_list_hash: int,
+    circuit_applicative_bootloader_program_hash: int,
+    circuit_applicative_config_commitment: int,
+    supported_cairo_verifiers_hash: int,
+) -> int:
+    """
+    Folds the four bootloader-config sub-hashes into the single felt that the bootloader outputs
+    (see serialize_bootloader_config in run_bootloader.cairo) and that the verifier contract stores
+    on-chain. The element order MUST match the Cairo side. compute_hash_on_elements is the Pedersen
+    length-suffixed hash chain, identical to Cairo's hash_felts.
+    """
+    return compute_hash_on_elements(
+        data=[
+            supported_simple_bootloader_hash_list_hash,
+            circuit_applicative_bootloader_program_hash,
+            circuit_applicative_config_commitment,
+            supported_cairo_verifiers_hash,
+        ]
+    )

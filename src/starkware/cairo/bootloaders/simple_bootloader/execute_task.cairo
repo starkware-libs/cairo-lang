@@ -276,6 +276,7 @@ func execute_task{
     let select_builtins_ret = inner_select_builtins(
         all_encodings=builtin_encodings,
         all_ptrs=&return_builtin_ptrs,
+        prev_ptrs=&pre_execution_builtin_ptrs,
         selected_encodings=builtin_list,
         selected_ptrs=used_builtins_addr,
         n_builtins=BuiltinData.SIZE,

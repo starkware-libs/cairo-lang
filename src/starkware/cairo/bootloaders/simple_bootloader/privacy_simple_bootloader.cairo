@@ -1,5 +1,12 @@
 %builtins output pedersen range_check ecdsa bitwise ec_op keccak poseidon range_check96 add_mod mul_mod
 
+from starkware.cairo.bootloaders.simple_bootloader.component_exercises import (
+    big_int_ops,
+    do_bitwise,
+    jump_abs,
+    jump_abs_double_deref,
+    jump_rel,
+)
 from starkware.cairo.bootloaders.simple_bootloader.run_simple_bootloader import (
     run_simple_bootloader,
 )
@@ -10,7 +17,7 @@ from starkware.cairo.bootloaders.simple_bootloader.verify_builtins import (
     verify_keccak_builtin_if_needed,
 )
 from starkware.cairo.common.alloc import alloc
-from starkware.cairo.common.cairo_blake2s.blake2s import encode_felt252_data_and_calc_blake_hash
+from starkware.cairo.common.cairo_blake2s.blake2s import encode_felt252_data_and_calc_blake2s
 from starkware.cairo.common.cairo_builtins import (
     BitwiseBuiltin,
     EcOpBuiltin,
@@ -20,71 +27,7 @@ from starkware.cairo.common.cairo_builtins import (
     PoseidonBuiltin,
     SignatureBuiltin,
 )
-from starkware.cairo.common.registers import get_fp_and_pc
-
-// Exercises the `jmp abs [[reg] + offset]` (double-dereference) opcode.
-func jump_abs_double_deref() {
-    alloc_locals;
-    let (_, local __pc__) = get_fp_and_pc();
-    local x = cast(__pc__ + 8, felt);
-    call rel 2;
-    jmp abs [[ap - 2] + 1];
-    [ap] = 5, ap++;
-    ret;
-}
-
-// Exercises the `jmp rel [reg + offset]` opcode.
-func jump_rel() {
-    [ap] = 1, ap++;
-    jmp rel [ap - 1];
-    ret;
-}
-
-// Exercises the `jmp abs [reg + offset]` opcode.
-func jump_abs() {
-    call rel 2;
-    [ap] = [ap - 1] + 3;
-    jmp abs [ap];
-    ret;
-}
-
-// Exercises a "big add" — an add opcode is considered "small" if all its operands (mod P) are
-// within [-2^29 - 1, 2^29 - 1], and "big" otherwise. Here we produce a result of 2^29 to ensure
-// at least one operand falls outside that range.
-func add_big() {
-    call rel 2;
-    [ap] = 536870910, ap++;
-    [ap] = 1, ap++;
-    // 536870910 + 1 = 2^29 - 1.
-    [ap] = [fp] + [ap - 1], ap++;
-    // add 1 to the result to get 2^29.
-    [ap] = [ap - 1] + 1, ap++;
-    [ap] = 1, ap++;
-    ret;
-}
-
-// Exercises a "big mul" — a multiplication where at least one factor is >= 2^36.
-func mul_big() {
-    [ap] = 8, ap++;
-    // 2^36 is the minimal factor value for a big mul.
-    [ap] = 262144, ap++;
-    [ap] = [ap - 1] * 262144, ap++;  // (2^18)^2 = 2^36.
-    [ap] = [ap - 1] * [ap - 3], ap++;  // 2^36 * 8 => mul_big is invoked here.
-    [ap] = [ap - 2] * 2, ap++;
-    [ap] = 1, ap++;
-    ret;
-}
-
-// Exercises the bitwise builtin by computing AND, XOR, and OR of two known values (3 and 6).
-func do_bitwise{bitwise_ptr: BitwiseBuiltin*}() {
-    assert bitwise_ptr.x = 3;  // Binary representation 0b011.
-    assert bitwise_ptr.y = 6;  // Binary representation 0b110.
-    assert 0x2 = bitwise_ptr.x_and_y;  // Calculate 0b011 & 0b110 = 0b010 = 0x2.
-    assert 0x5 = bitwise_ptr.x_xor_y;  // Calculate 0b011 ^ 0b110 = 0b101 = 0x5.
-    assert 0x7 = bitwise_ptr.x_or_y;  // Calculate 0b011 & 0b110 = 0b111 = 0x7.
-    let bitwise_ptr = bitwise_ptr + BitwiseBuiltin.SIZE;
-    return ();
-}
+from starkware.cairo.common.uint256 import Uint256
 
 // For documentation of the simple bootloader, see the docstring of `run_simple_bootloader'.
 // Hint arguments:
@@ -144,19 +87,17 @@ func main{
     // - ECDSA, keccak, range_check96, add_mod and mul_mod builtins won't ever be present.
     // - Pedersen and Poseidon builtins will be present in the input task(s).
     jump_abs();
-    ap += 1;
     jump_abs_double_deref();
     jump_rel();
-    add_big();
-    mul_big();
+    big_int_ops();
     do_bitwise();
 
     %{ DUMP_PRIVACY_SIMPLE_BOOTLOADER_OUTPUT_PREIMAGE %}
 
-    let (output_hash: felt) = encode_felt252_data_and_calc_blake_hash(
+    let output_hash = encode_felt252_data_and_calc_blake2s(
         data_len=simple_bl_output - simple_bl_output_start, data=simple_bl_output_start
     );
-    assert output_ptr[0] = output_hash;
-    let output_ptr = output_ptr + 1;
+    assert [cast(output_ptr, Uint256*)] = output_hash;
+    let output_ptr = output_ptr + Uint256.SIZE;
     return ();
 }

@@ -171,3 +171,26 @@ async def test_union_typing():
         await different_obj.setnx_or_fail_obj(storage=storage, index=5)
     with pytest.raises(StorageConflictError):
         await different_obj.setnx_or_fail_obj(storage=storage, index=TestId(4))
+
+
+@pytest.mark.asyncio
+async def test_indexed_db_object_get_objs():
+    """`get_objs` batch-reads objects by index, preserving order with None for missing indices."""
+    storage = TestStorage()
+    await TestIndexedDBObject(value="zero").set_obj(storage=storage, index=0)
+    await TestIndexedDBObject(value="two").set_obj(storage=storage, index=2)
+
+    indices = [0, 1, 2]
+    objs = await TestIndexedDBObject.get_objs(storage=storage, indices=indices)
+    assert objs == (
+        TestIndexedDBObject(value="zero"),
+        None,  # Missing index.
+        TestIndexedDBObject(value="two"),
+    )
+    # Matches per-index get_obj.
+    assert objs == tuple(
+        [await TestIndexedDBObject.get_obj(storage=storage, index=i) for i in indices]
+    )
+
+    with pytest.raises(AssertionError, match="does not exist in storage"):
+        await TestIndexedDBObject.get_objs_or_fail(storage=storage, indices=[0, 1])

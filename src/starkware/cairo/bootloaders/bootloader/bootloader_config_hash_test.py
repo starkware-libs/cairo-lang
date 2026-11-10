@@ -2,7 +2,11 @@ import json
 import os
 
 from starkware.cairo.bootloaders.bootloader.supported_program_hashes_utils import (
+    get_circuit_applicative_config_commitment,
     get_supported_cairo_verifier_hash_list,
+)
+from starkware.cairo.bootloaders.circuit_applicative_bootloader.config_commitment import (
+    compute_committed_circuit_applicative_config_commitment,
 )
 from starkware.cairo.bootloaders.supported_bootloaders_hash import (
     calculate_supported_bootloaders_hash_dict,
@@ -24,8 +28,20 @@ def run_bootloader_config_hash_test(fix: bool):
     supported_cairo_verifier_hash_list_hash = hex(
         compute_hash_on_elements(data=get_supported_cairo_verifier_hash_list())
     )
+    # Recomputed from the committed circuit verifier program hash and circuit registry. The
+    # bootloader input carries the same commitment in the supported program hashes; the two must
+    # agree, or the bootloader would reject the trusted config.
+    circuit_applicative_config_commitment = (
+        compute_committed_circuit_applicative_config_commitment()
+    )
+    assert circuit_applicative_config_commitment == get_circuit_applicative_config_commitment(), (
+        "The circuit applicative config commitment in the supported program hashes does not match "
+        "the one recomputed from the committed circuit verifier program hash and circuit registry. "
+        "Run supported_program_hashes_fix first, then this fix."
+    )
     computed_bootloader_config_hash_dict = {
         **calculate_supported_bootloaders_hash_dict(),
+        "circuit_applicative_config_commitment": hex(circuit_applicative_config_commitment),
         "supported_cairo_verifier_hash_list_hash": supported_cairo_verifier_hash_list_hash,
     }
 

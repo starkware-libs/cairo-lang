@@ -77,6 +77,7 @@ def _sol_contract_impl(ctx):
             "/".join([combined_json.root.path, ctx.label.workspace_root, ctx.label.package])
         )
     outputs = [ctx.actions.declare_file(f) for f in ctx.attr.contracts]
+    git_commit = ctx.file._git_commit
     ctx.actions.run(
         executable = ctx.executable.extract_artifacts_exe,
         arguments = [
@@ -86,9 +87,11 @@ def _sol_contract_impl(ctx):
             current_dir,
             "--source_dir",
             ctx.label.package,
+            "--build_tag_file",
+            git_commit.path,
             "--contracts",
         ] + ctx.attr.contracts,
-        inputs = [combined_json],
+        inputs = [combined_json, git_commit],
         outputs = outputs,
     )
     return [DefaultInfo(files = depset(outputs), runfiles = ctx.runfiles(files = outputs))]
@@ -114,6 +117,12 @@ sol_contract = rule(
             executable = True,
             # See https://bazel.build/rules/rules#configurations.
             cfg = "exec",
+        ),
+        # The git commit is recorded in the artifacts' build_tag; it cannot be read by the
+        # extract action itself, which has no access to the .git directory.
+        "_git_commit": attr.label(
+            default = Label("//bazel_utils:git_commit"),
+            allow_single_file = True,
         ),
         "extract_artifacts_exe": attr.label(
             default = Label("//bazel_utils:default_extract_artifacts_exe"),

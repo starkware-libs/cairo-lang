@@ -1,4 +1,4 @@
 {
-    "supported_simple_bootloader_hash_list_hash": "0x79c96592bca7fded3e2108bb43e5ad8c979af0e490d6b49f8cfe310db73b6f7",
-    "applicative_bootloader_config_program_hash": "0x5370f15cbd175708ac356a4f7215e951646162b0d04adeb5bb988ec2ad59ab2"
+    "supported_simple_bootloader_hash_list_hash": "0x1826c6e1f9d31e33146cb562066d6bfc89fad8ee7d2d05d6a529e602ef9ccf2",
+    "circuit_applicative_bootloader_config_program_hash": "0xbaaafc209ee9d712349e76a82273e8436da3601908015e03a4fcefd69f0652"
 }

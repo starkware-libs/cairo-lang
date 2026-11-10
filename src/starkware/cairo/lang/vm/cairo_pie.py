@@ -287,6 +287,14 @@ class ExecutionResourcesStwo(ExecutionResources):
     verify_instruction: int = field(
         metadata=additional_metadata(marshmallow_field=mfields.Integer(load_default=0))
     )
+    unique_aggregator_inputs: Dict[str, int] = field(
+        default_factory=dict,
+        metadata=additional_metadata(
+            marshmallow_field=mfields.Dict(
+                keys=mfields.String(), values=mfields.Integer(), load_default=dict
+            )
+        ),
+    )
 
     def __post_init__(self):
         """
@@ -343,7 +351,14 @@ class ExecutionResourcesStwo(ExecutionResources):
         assert isinstance(self.memory_tables_sizes, dict) and all(
             isinstance(size, int) and size >= 0 for size in self.memory_tables_sizes.values()
         ), "Invalid memory_tables_sizes."
+        assert isinstance(self.unique_aggregator_inputs, dict) and all(
+            isinstance(count, int) and count >= 0
+            for count in self.unique_aggregator_inputs.values()
+        ), "Invalid unique_aggregator_inputs."
 
+    # Note: the arithmetic operators below (and `empty`) intentionally drop
+    # unique_aggregator_inputs; combined resources fall back to the (safe) instance-count
+    # upper bound.
     def __add__(self, other: ExecutionResources) -> "ExecutionResourcesStwo":
         assert isinstance(other, ExecutionResourcesStwo), "Invalid type for other."
         total_builtin_instance_counter = add_counters(
@@ -429,6 +444,9 @@ class ExecutionResourcesStwo(ExecutionResources):
     def copy(self) -> "ExecutionResourcesStwo":
         return copy.deepcopy(self)
 
+    # Note: `unique_aggregator_inputs` is intentionally omitted. This is safe because consumers
+    # of this mapping compare its contents on a per-component basis, so its omission only causes
+    # them to fall back to the instance-count upper bound.
     def to_dict(self) -> Dict[str, int]:
         return dict(
             **self.builtin_instance_counter,
